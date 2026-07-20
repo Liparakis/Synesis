@@ -2,28 +2,26 @@
 
 ## Identity
 
-- Task ID: SL-012
+- Task ID: SL-013
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0036; latest checkpoint CP-0050
+- Started checkpoint: CP-0052; latest checkpoint CP-0056
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009
+- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010
 
 ## Objective
 
-Implement zero-configuration terminal onboarding above the existing Link
-transport without changing the diagnostic DemoCli path or implementing SL-009.
+Move terminal command ownership and development distribution into `:cli` while
+preserving Link as the owner of onboarding/network orchestration through one
+minimal typed façade. Physical generated-launcher onboarding remains a
+completion gate.
 
 ## Work completed
 
-Implemented the bounded onboarding orchestrator above the existing transport:
-automatic identity reuse/creation, listener-first candidate and invitation
-creation, signed capability admission with 15-second reservation expiry,
-ephemeral transport TLS, terminal share link plus compact Unicode QR, and `host`,
-`join`, and `identity show` commands. The cleanup renamed the QR renderer,
-added width- and output-charset-aware skipping, and removed dead onboarding code without changing
-invitation bytes or handshake/admission semantics. `DemoCli` remains unchanged
-as a diagnostic fallback. Identity regeneration is deferred.
+SL-012 onboarding is the existing baseline. SL-013 now has a standalone
+Picocli/Application distribution, typed Link façade, terminal renderer, exit
+mapping, doctor, generated launcher smoke tests, and generated two-profile
+host/join coverage. Physical generated-launcher onboarding remains unrecorded.
 
 ## Verification
 
@@ -49,12 +47,30 @@ as a diagnostic fallback. Identity regeneration is deferred.
   remains unclaimed.
 - Unicode-capability renderer test: PASS; legacy output charsets now produce
   `QR_SKIPPED=UNICODE_UNSUPPORTED` instead of corrupted glyphs.
+- `:cli:installDist --dependency-verification=strict`: PASS; both generated
+  launchers exist.
+- Generated launcher `--help`, `--version`, `identity show`, and `doctor`: PASS;
+  all exit `0`.
+- Generated launcher two-profile host/join process test: PASS; exact invitation
+  handoff, control readiness, liveness, work result, cleanup, and zero exits
+  are asserted without logging the full link in failures.
+- `:link:dependencies` contains no Picocli: PASS.
+- Root `clean check --dependency-verification=strict`: PASS for `:link` and
+  `:cli`.
+- Generated launcher doctor/failure checks: valid profile exit `0`, corrupt
+  identity exit `10`, invalid invitation exit `11`; all outputs were sanitized.
+- Generated launcher onboarding rerun after graceful close: PASS as a fresh
+  new session. Transparent reconnect remains deferred.
+- Link-level abrupt-loss and wrong-identity tests: PASS. A generated launcher
+  early-kill attempt did not reach a bounded terminal status and is not claimed
+  as generated abrupt-loss evidence.
 
 ## Current failures
 
-- Physical Scenario A normal operation is verified on two computers.
-- Physical abrupt-loss and wrong-identity scenarios remain unverified and must
-  not be claimed.
+- Physical diagnostic `DemoCli` Scenario A normal operation is verified on two
+  computers; physical generated-launcher onboarding is not verified.
+- Physical generated-launcher abrupt-loss and wrong-identity scenarios remain
+  unverified and must not be claimed.
 
 ## Known limitations
 
@@ -65,6 +81,6 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Perform the documented two-machine onboarding validation when two physical
-computers are available; until then preserve the explicit no-physical-claim
-boundary.
+Run the documented physical generated-launcher onboarding scenario on two
+computers and record sanitized results in
+`docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; do not claim it from process tests.

@@ -71,6 +71,36 @@ public final class IdentityBootstrap {
         return new Result(loaded, false);
     }
 
+    /**
+     * Inspects profile and existing identity state without creating or changing
+     * any path or file.
+     *
+     * @return read-only inspection result with redacted detail
+     */
+    public Inspection inspect() {
+        Path absolute = directory.toAbsolutePath();
+        try {
+            if (Files.notExists(absolute)) {
+                Path parent = absolute.getParent();
+                boolean accessible = parent != null && Files.isDirectory(parent)
+                        && Files.isReadable(parent) && Files.isWritable(parent);
+                return new Inspection(accessible, false, true, "", "IDENTITY_MISSING");
+            }
+            if (!Files.isDirectory(absolute) || !Files.isReadable(absolute) || !Files.isWritable(absolute)) {
+                return new Inspection(false, false, false, "", "PROFILE_INACCESSIBLE");
+            }
+            Path privatePath = absolute.resolve(PRIVATE_FILE);
+            if (Files.notExists(privatePath)) {
+                return new Inspection(true, false, true, "", "IDENTITY_MISSING");
+            }
+            NodeIdentity identity = new FileIdentityStore(privatePath).load();
+            validateExistingPublicMetadata(identity);
+            return new Inspection(true, true, true, identity.nodeId(), "IDENTITY_VALID");
+        } catch (Exception failure) {
+            return new Inspection(true, true, false, "", "IDENTITY_CORRUPT");
+        }
+    }
+
     /** Returns the private identity file path for diagnostics without exposing key bytes.
      * @return private identity path
      */
@@ -98,6 +128,15 @@ public final class IdentityBootstrap {
         if (!expected.equals(value)) throw new IOException("local identity metadata is inconsistent");
     }
 
+    private void validateExistingPublicMetadata(NodeIdentity identity) throws IOException {
+        Path path = directory.resolve(PUBLIC_FILE);
+        if (Files.notExists(path)) throw new IOException("local identity metadata is missing");
+        String value = Files.readString(path, StandardCharsets.US_ASCII);
+        String expected = "version=1\nnodeId=" + identity.nodeId() + "\npublicKey="
+                + HexFormat.of().formatHex(identity.publicKeyEncoded()) + "\n";
+        if (!expected.equals(value)) throw new IOException("local identity metadata is inconsistent");
+    }
+
     /** Result of one load-or-create operation.
      * @param identity loaded or created identity
      * @param created whether the identity was created during this operation
@@ -106,6 +145,24 @@ public final class IdentityBootstrap {
         /** Validates the non-null identity result. */
         public Result {
             Objects.requireNonNull(identity, "identity");
+        }
+    }
+
+    /**
+     * Read-only profile inspection with no secret material.
+     *
+     * @param profileAccessible whether the profile can support local access
+     * @param identityPresent whether a private identity file exists
+     * @param identityValid whether existing identity and public metadata agree
+     * @param nodeId validated node ID, or an empty string
+     * @param detail stable diagnostic detail
+     */
+    public record Inspection(boolean profileAccessible, boolean identityPresent, boolean identityValid,
+            String nodeId, String detail) {
+        /** Validates non-null safe inspection values. */
+        public Inspection {
+            Objects.requireNonNull(nodeId, "nodeId");
+            Objects.requireNonNull(detail, "detail");
         }
     }
 }

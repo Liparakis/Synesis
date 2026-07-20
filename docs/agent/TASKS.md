@@ -176,7 +176,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SL-012
 - Priority: P0
 - Title: Zero-configuration terminal onboarding
-- Status: ACTIVE
+- Status: VERIFYING
 - Purpose: Add automatic local identity bootstrap and signed single-use terminal invitations above the existing Link transport while preserving the diagnostic `DemoCli` path.
 - Dependencies: SL-005, SL-006, SL-007, SL-008
 - Acceptance criteria: `host` binds before invitation creation; `join <link>` verifies a bounded signed invitation; identity creation/reuse is automatic; capability admission is single-use with bounded reservation; existing mutual identity binding remains mandatory; control readiness, liveness, demo work, and graceful close complete through the existing path; QR and link encode the same invitation; no physical two-machine claim is made until executed.
@@ -189,6 +189,35 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   handshake semantics, identity behavior, admission/replay semantics, and
   physical claim boundaries are unchanged. Physical two-machine onboarding is
   not claimed.
+
+## SL-013
+
+- ID: SL-013
+- Priority: P0
+- Title: Standalone Synesis CLI and development distribution
+- Status: ACTIVE
+- Purpose: Move terminal command ownership and Gradle development distribution
+  into an outer `cli` module while Link retains onboarding/network orchestration
+  behind one minimal public façade.
+- Dependencies: SL-012 implementation and documented onboarding validation;
+  physical generated-launcher validation remains an explicit completion
+  gate until recorded.
+- Acceptance criteria: `:cli` owns Picocli, command adapters, terminal output,
+  exit mapping, and Gradle Application distributions; `link` has no Picocli or
+  CLI dependency; Link exposes only the typed onboarding façade; host, join,
+  identity show, and doctor work through generated launchers with stable labels
+  and numeric exits; QR rendering remains byte-identical to the exact
+  invitation link; strict verification and isolated launcher onboarding pass;
+  physical launcher onboarding is recorded before completion is claimed.
+- Required tests: CLI parsing, command adapters, read-only readiness inspection,
+  generated launcher smoke tests, local generated host/join, existing Link
+  protocol tests, and physical generated-launcher evidence.
+- Required documentation: ADR-0010, distribution and physical CLI evidence,
+  README/demo/operations command updates, and durable state reconciliation.
+- Evidence: `:cli:installDist`, strict root check, generated launcher smoke,
+  generated two-profile onboarding, façade tests, parsing tests, doctor tests,
+  and `:link:dependencies` Picocli boundary PASS. Physical launcher evidence
+  remains unclaimed.
 
 ## SL-010
 

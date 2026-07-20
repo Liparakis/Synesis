@@ -8,8 +8,8 @@ identity binding, bounded control/liveness behavior, candidate selection, and
 a demo-only authenticated work exchange. It does not claim that every pair of
 computers can connect directly.
 
-The Link implementation and tests live under `link/`; the root Gradle build
-delegates verification to that subproject.
+The Link implementation and tests live under `link/`; the standalone terminal
+CLI and development distribution live under `cli/`.
 
 ## Build
 
@@ -17,22 +17,36 @@ delegates verification to that subproject.
 ./gradlew.bat clean check --dependency-verification=strict
 ```
 
-Java 25 is required. Link-only tasks use the `:link:` path, for example:
+Java 25 is required. Build the development distribution with:
 
 ```powershell
-./gradlew.bat :link:demoCli --args="--help"
+./gradlew.bat :cli:installDist --dependency-verification=strict
+& ".\cli\build\install\synesis\bin\synesis.bat" --help
+& ".\cli\build\install\synesis\bin\synesis.bat" --version
+& ".\cli\build\install\synesis\bin\synesis.bat" identity show
+```
+
+For the current PowerShell session only, optionally prepend the generated
+launcher directory to PATH:
+
+```powershell
+$env:Path = "$(Resolve-Path .\cli\build\install\synesis\bin);$env:Path"
+synesis --help
 ```
 
 The physical demonstration procedure is [`docs/demo/FIRST_DEMO.md`](docs/demo/FIRST_DEMO.md).
 Unsupported networking and product capabilities are tracked in
 [`docs/agent/DEFERRED.md`](docs/agent/DEFERRED.md).
 
-The zero-configuration source-run onboarding commands are:
+The generated launcher owns zero-configuration onboarding:
 
 ```powershell
-./gradlew.bat :link:synesisCli --args="host"
-./gradlew.bat :link:synesisCli --args="join \"synesis://join/<share-link>\""
+synesis host
+synesis join "synesis://join/<share-link>"
+synesis doctor
 ```
 
-`DemoCli` remains the explicit diagnostic fallback. The onboarding path is
-two-process tested; it is not a two-machine claim until physically exercised.
+Quote the full invitation as one argument on Windows. `DemoCli` remains a
+documented Gradle-only diagnostic fallback. Generated-launcher onboarding is
+two-process tested; physical launcher onboarding is not claimed until recorded
+in [`docs/evidence/PHYSICAL-CLI-ONBOARDING.md`](docs/evidence/PHYSICAL-CLI-ONBOARDING.md).

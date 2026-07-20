@@ -3,7 +3,7 @@
 ## Repository state
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
-SL-012 is the only ACTIVE task; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is complete and SL-009 is
+SL-012 is VERIFYING and SL-013 is the only ACTIVE task; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is complete and SL-009 is
 deferred. The repository is a Synesis root with Link as the first implemented
 transport/session subproject.
 
@@ -14,8 +14,10 @@ candidate descriptors and single-use invitations, direct candidate
 providers/racing, authenticated QUIC sessions, control readiness, graceful
 close, heartbeat/liveness, compact terminal QR rendering, and the demo-only authenticated
 `synesis-demo-work/1` request/result stream. `DemoCli` remains the diagnostic
-fallback; `SynesisCli` is the source-run onboarding path. Neither is a
-packaged production management CLI.
+fallback. The standalone `cli` module owns Picocli, terminal rendering, exit
+mapping, doctor, QR rendering, and Gradle Application distributions; Link owns
+onboarding through the typed `Onboarding` façade. Production installation
+remains out of scope.
 
 ## Verification state
 
@@ -32,16 +34,21 @@ packaged production management CLI.
 - Compact QR output skips safely when the process output charset cannot encode
   the Unicode glyphs; the copyable share link is always retained.
 - Resume, doctor, and fixture validation: PASS.
-- Physical two-machine Scenario A normal operation: `TWO_MACHINE_VERIFIED`;
-  evidence is in `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`.
+- Physical two-machine diagnostic `DemoCli` Scenario A normal operation:
+  `TWO_MACHINE_VERIFIED`; evidence is in
+  `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`. Physical source-run onboarding
+  remains unverified and is not covered by that evidence.
 - Physical abrupt-loss and wrong-identity scenarios: NOT CLAIMED.
-- Physical zero-configuration onboarding: NOT CLAIMED.
+- Physical zero-configuration onboarding: NOT CLAIMED; this remains an SL-013
+  completion gate.
+- Generated launcher two-profile onboarding: PASS; evidence is
+  `docs/evidence/CLI-DISTRIBUTION-VALIDATION.md`.
 
 ## Honest limitations
 
 NAT traversal, router mappings, STUN/TURN, hole punching, CGNAT, relays,
 rendezvous, production discovery, physical path migration, reconnect,
 resumption, physical IPv6/public IPv4, temporary application-silence recovery,
-all-firewall operation, packaging, GUI, and production Synesis semantics are
-not claimed. Abrupt child-process loss remains classified only as the documented
-transport-failure or liveness-expiry category.
+all-firewall operation, production installation/signing, GUI, and production
+Synesis semantics are not claimed. Abrupt child-process loss remains classified
+only as the documented transport-failure or liveness-expiry category.

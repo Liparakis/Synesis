@@ -2,7 +2,7 @@
 
 - Product: Synesis, with Synesis Link as the first implemented transport/session module
 - Repository type: modular-monolith Gradle project
-- Current phase: SL-012 zero-configuration terminal onboarding; SL-DEMO-001 remains VERIFYING and SL-009 deferred
+- Current phase: SL-013 standalone CLI and development distribution; SL-012 is VERIFYING, SL-DEMO-001 remains VERIFYING, and SL-009 is deferred
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope until explicitly tasked
 - Goal revision: 2

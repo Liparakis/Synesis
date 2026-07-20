@@ -14,6 +14,9 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   signed invitations with one-use capability admission, authentication-time
   consumption, bounded pre-auth reservation release, ephemeral transport TLS,
   automatic identity reuse/creation, and `DemoCli` retained as fallback.
+- ADR-0010: Standalone CLI and development distribution — accepted; `cli` owns
+  Picocli, terminal output, exit mapping, QR rendering, and Gradle Application
+  distributions while Link owns onboarding through typed events and failures.
 
 - ADR-0008: Synesis root with Link transport module — accepted; the existing Link implementation moves to `link/` while the root remains a small modular monolith.
 

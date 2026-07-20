@@ -352,3 +352,37 @@ Append-only operational history.
 - Exact continuation: perform the documented two-machine onboarding validation
   when two physical computers are available; do not claim it from process
   evidence.
+## 2026-07-20 — standalone CLI development distribution
+
+- Task: SL-013.
+- Completed: promoted SL-013; added ADR-0010; added `:cli` with Picocli,
+  Application distributions, typed commands, terminal output, QR rendering,
+  exit mapping, doctor, and launcher tests; extracted Link onboarding into
+  typed `Onboarding` events/failures; removed the legacy `:link:synesisCli` and
+  Link-side ZXing/QR path while retaining `DemoCli`.
+- Verification: `./gradlew.bat clean check --dependency-verification=strict`,
+  `:cli:installDist`, generated launcher smoke, and generated two-profile
+  onboarding all PASS.
+- Remaining: physical generated-launcher onboarding and physical abrupt-loss/
+  wrong-identity scenarios are not claimed.
+
+## 2026-07-20 — SL-013 local generated-launcher validation
+
+- Task: SL-013; validation scope CP-0054.
+- Commands: `gradlew.bat clean check --dependency-verification=strict` and
+  `gradlew.bat :cli:installDist --dependency-verification=strict` — PASS.
+- Generated launcher: `--help`, `--version`, `identity show`, and valid
+  `doctor` exited `0`; corrupt identity `doctor` exited `10`; invalid join
+  exited `11` with `FAILURE=INVITE_INVALID`.
+- Two-profile onboarding: generated `.bat` host/join completed authenticated
+  control readiness, liveness, work result, and graceful close; a fresh second
+  session also passed. This is one-machine process evidence, not physical
+  two-machine evidence.
+- Link-level negative paths: abrupt process loss and wrong identity tests PASS.
+  Generated early-kill was attempted but did not reach a bounded host terminal
+  status, so it is not claimed as generated-launcher abrupt-loss evidence.
+- Reconnect: transparent reconnect is deferred; only fresh-session restart was
+  observed.
+- Next action: review the complete diff for secrets/artifacts, checkpoint, and
+  commit the current SL-013/CP-0054 workspace changes without claiming
+  physical generated-launcher validation.

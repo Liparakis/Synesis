@@ -1,4 +1,4 @@
-package org.synesis.link.transport;
+package org.synesis.cli.terminal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,15 +9,14 @@ import com.google.zxing.qrcode.QRCodeWriter;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies exact-link QR encoding, compact dimensions, and narrow terminals. */
+/** Verifies exact-link QR encoding, dimensions, and terminal skip behavior. */
 final class CompactQrRendererTest {
     @Test
     void rendersTheExactZxingMatrixForTheOriginalLink() throws Exception {
         String link = "synesis://join/SYN1-exact-link";
         BitMatrix expected = new QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 1, 1);
-        String[] rows = new CompactQrRenderer(200).render(link).split("\\R");
+        String[] rows = new CompactQrRenderer(200, true).render(link).split("\\R");
         int border = 2;
-
         assertEquals(expected.getWidth() + border * 2, rows[0].length());
         assertEquals((expected.getHeight() + border * 2 + 1) / 2, rows.length);
         for (int row = 0; row < rows.length; row++) {
@@ -31,19 +30,15 @@ final class CompactQrRendererTest {
     }
 
     @Test
-    void skipsBeforeRenderingWhenTheTerminalCannotFitTheQr() {
+    void skipsNarrowAndUnsupportedTerminals() {
         String link = "synesis://join/SYN1-narrow";
         BitMatrix expected = encode(link);
-        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> new CompactQrRenderer(expected.getWidth() + 3).render(link));
-        assertEquals("TERMINAL_TOO_NARROW", failure.getMessage());
-    }
-
-    @Test
-    void skipsBeforeRenderingWhenUnicodeCannotBeEncoded() {
-        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+        IllegalArgumentException narrow = assertThrows(IllegalArgumentException.class,
+                () -> new CompactQrRenderer(expected.getWidth() + 3, true).render(link));
+        assertEquals("TERMINAL_TOO_NARROW", narrow.getMessage());
+        IllegalArgumentException unicode = assertThrows(IllegalArgumentException.class,
                 () -> new CompactQrRenderer(200, false).render("synesis://join/SYN1-unicode"));
-        assertEquals("UNICODE_UNSUPPORTED", failure.getMessage());
+        assertEquals("UNICODE_UNSUPPORTED", unicode.getMessage());
     }
 
     private static BitMatrix encode(String link) {
@@ -55,7 +50,6 @@ final class CompactQrRendererTest {
     }
 
     private static boolean upper(char glyph) { return glyph == '█' || glyph == '▀'; }
-
     private static boolean lower(char glyph) { return glyph == '█' || glyph == '▄'; }
 
     private static boolean black(BitMatrix matrix, int x, int y) {

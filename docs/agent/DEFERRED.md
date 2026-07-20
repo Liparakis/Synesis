@@ -479,7 +479,9 @@ permanent scope decision and record the reason.
 
 **Status:** DEFERRED
 **Area:** Release operations
-**Current verified capability:** Source/Gradle execution is available; no installer or distribution package.
+**Current verified capability:** Gradle Application development distribution
+with generated Windows and Unix launchers is verified; no production installer
+or supported package is claimed.
 **Missing capability:** Signed, supported installation/distribution workflow.
 **Reason deferred:** First demo uses reproducible local Java/Gradle commands.
 **Dependencies:** Physical demo evidence and release ownership.
@@ -490,7 +492,7 @@ permanent scope decision and record the reason.
 **Operational questions:** Platform matrix, support, and uninstall.
 **Public-claims impact:** No packaged production client claim.
 **Potential future task:** Unassigned
-**Related ADRs:** None
+**Related ADRs:** ADR-0010
 **Related documents:** `docs/demo/FIRST_DEMO.md`
 **Code extension seams:** Gradle application packaging only if promoted.
 **Last reviewed:** CP-0030

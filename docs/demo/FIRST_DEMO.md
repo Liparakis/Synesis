@@ -1,12 +1,13 @@
 # First Synesis Link Demonstration
 
-## Zero-configuration onboarding (source-run)
+## Zero-configuration onboarding (generated launcher)
 
 On clean profiles the normal LAN flow is:
 
 ```powershell
-./gradlew.bat :link:synesisCli --args="host"
-./gradlew.bat :link:synesisCli --args="join \"synesis://join/<share-link>\""
+./gradlew.bat :cli:installDist --dependency-verification=strict
+& ".\cli\build\install\synesis\bin\synesis.bat" host
+& ".\cli\build\install\synesis\bin\synesis.bat" join "synesis://join/<share-link>"
 ```
 
 The host automatically creates or reuses its local identity, binds its listener
@@ -27,9 +28,15 @@ QR output is optional: `QR_RENDERED=COMPACT` means it fit the terminal;
 `QR_SKIPPED=TERMINAL_TOO_NARROW` or `QR_SKIPPED=UNICODE_UNSUPPORTED` means the
 copyable `SHARE_LINK` remains the complete onboarding path.
 
-The source-run command is not an installed `synesis` package; packaging remains
-deferred under `SL-D-024`. The existing manual `DemoCli` procedure below stays
-available as a diagnostic fallback and is not replaced by onboarding.
+The generated launcher is a development distribution, not a production
+installer. Signing, permanent PATH changes, MSI, native image, publishing,
+upgrade, rollback, and production support remain deferred under `SL-D-024`.
+The existing manual `DemoCli` procedure below stays available as a diagnostic
+fallback.
+
+On Windows, pass the full invitation as one quoted argument. The generated
+launcher flow is locally two-process tested. Physical launcher evidence must be
+recorded separately in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`.
 
 This is a source-run validation demo, not a production installer or a general
 Synesis cooperation protocol. It proves one authenticated, control-ready,

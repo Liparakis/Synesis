@@ -65,8 +65,18 @@
 | Automatic identity create/reuse and corruption rejection | unit tests | `IdentityBootstrapTest` | pass | PASS | SL-012 |
 | Signed invitation canonical encoding, tamper, expiry, and bounded link | unit tests | `SessionInvitationTest` | pass | PASS | SL-012 |
 | Single-use capability admission and pre-auth release | unit tests | `InvitationAdmissionTest` | pass | PASS | SL-012 |
-| Compact QR output preserves the exact share-link matrix and bounded dimensions | unit test | `CompactQrRendererTest` | pass | PASS | SL-012 |
-| Narrow terminals skip QR without wrapping | unit test | `CompactQrRendererTest` | pass | PASS | SL-012 |
-| Unsupported output charset skips QR without corrupted glyphs | unit test | `CompactQrRendererTest` | pass | PASS | SL-012 |
+| Compact QR output preserves the exact share-link matrix and bounded dimensions | unit test | `cli/.../CompactQrRendererTest` | pass | PASS | SL-013 |
+| Narrow terminals skip QR without wrapping | unit test | `cli/.../CompactQrRendererTest` | pass | PASS | SL-013 |
+| Unsupported output charset skips QR without corrupted glyphs | unit test | `cli/.../CompactQrRendererTest` | pass | PASS | SL-013 |
 | Listener-first two-profile host/join onboarding | process integration | `docs/evidence/ONBOARDING-PROCESS-2026-07-20.md` | pass | PASS | SL-012 |
 | Physical zero-configuration onboarding | manual/network evidence | not run in this slice | explicit limitation | NOT CLAIMED | SL-012 |
+| Link onboarding façade preserves typed lifecycle and failure classification | unit/integration tests | `OnboardingTest` | pass | PASS | SL-013 |
+| Picocli parsing and numeric usage exits | CLI unit test | `SynesisCliParsingTest` | pass | PASS | SL-013 |
+| Adapter rendering and typed failure mapping without global console mutation | CLI unit test | `CommandAdapterTest` | pass | PASS | SL-013 |
+| Read-only doctor outcomes | CLI unit test | `ReadinessInspectorTest` | pass | PASS | SL-013 |
+| Generated launcher help/version/identity smoke | launcher process test | `DistributionLauncherTest` | pass | PASS | SL-013 |
+| Generated launcher two-profile host/join | bounded launcher integration | `GeneratedOnboardingTest` | pass | PASS | SL-013 |
+| Generated launcher doctor and failure exits | launcher process validation | corrupt doctor and invalid join scenarios | pass | PASS | SL-013 |
+| Fresh generated session after graceful close | bounded launcher integration | repeated `GeneratedOnboardingTest` run | pass | PASS | SL-013 |
+| Transparent reconnect | protocol/manual validation | deferred capability | explicit limitation | NOT CLAIMED | SL-D-024 |
+| Physical generated-launcher onboarding | manual/network evidence | `PHYSICAL-CLI-ONBOARDING.md` | pass | NOT CLAIMED | SL-013 |
