@@ -124,12 +124,16 @@ public final class SynesisCli {
                     descriptor.issuedAt(), descriptor.expiresAt(), capability, descriptor);
             System.out.println("DESCRIPTOR_CREATED");
             System.out.println("INVITE_CREATED");
-            System.out.println("SHARE_LINK=" + invitation.shareLink());
+            String shareLink = invitation.shareLink();
+            System.out.println("SHARE_LINK=" + shareLink);
             try {
-                System.out.println("QR_RENDERED");
-                System.out.println(new AsciiQrRenderer().render(invitation.shareLink()));
-            } catch (RuntimeException unsupported) {
-                System.out.println("QR_SKIPPED");
+                String qr = new CompactQrRenderer().render(shareLink);
+                System.out.println("QR_RENDERED=COMPACT");
+                System.out.println(qr);
+            } catch (IllegalArgumentException unsupported) {
+                String reason = "TERMINAL_TOO_NARROW".equals(unsupported.getMessage())
+                        ? "TERMINAL_TOO_NARROW" : "UNAVAILABLE";
+                System.out.println("QR_SKIPPED=" + reason);
             }
             System.out.println("Waiting for peer...");
             PeerSession session = established.get(SessionInvitation.DEFAULT_LIFETIME.toSeconds() + 30,

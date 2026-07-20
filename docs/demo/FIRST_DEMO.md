@@ -11,7 +11,8 @@ On clean profiles the normal LAN flow is:
 
 The host automatically creates or reuses its local identity, binds its listener
 before gathering candidates, signs a ten-minute single-use invitation, and
-prints the copyable link plus an ASCII QR. The joiner verifies the invitation,
+prints the copyable link plus a compact Unicode QR when the terminal fits it.
+The joiner verifies the invitation,
 creates or reuses its own identity, gathers candidates, authenticates both
 identities through the existing Link handshake, exercises control/liveness and
 the bounded demo request, then closes gracefully.
@@ -21,6 +22,10 @@ Stable terminal failure lines use `FAILURE=...`; common bounded outcomes are
 `HOST_IDENTITY_MISMATCH`, and `HOST_TIMEOUT`. A failure before identity
 authentication releases the host's short reservation; authenticated admission
 is consumed even if later control work fails.
+
+QR output is optional: `QR_RENDERED=COMPACT` means it fit the terminal;
+`QR_SKIPPED=TERMINAL_TOO_NARROW` means the copyable `SHARE_LINK` remains the
+complete onboarding path.
 
 The source-run command is not an installed `synesis` package; packaging remains
 deferred under `SL-D-024`. The existing manual `DemoCli` procedure below stays

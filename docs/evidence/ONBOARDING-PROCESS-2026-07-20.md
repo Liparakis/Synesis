@@ -5,7 +5,7 @@
   `SYNESIS_LINK_PROFILE` directories; this is not two-machine evidence.
 - Host observed: `IDENTITY_CREATED`, `SESSION_CREATED`, `LISTENER_READY`,
   `CANDIDATES_GATHERED=10`, `DESCRIPTOR_CREATED`, `INVITE_CREATED`,
-  `SHARE_LINK`, `QR_RENDERED`, `PEER_CONNECTED`, `PEER_IDENTITY_VERIFIED`,
+  `SHARE_LINK`, `QR_RENDERED=COMPACT`, `PEER_CONNECTED`, `PEER_IDENTITY_VERIFIED`,
   `CONTROL_READY=true`, `LIVENESS=LIVE`, `SESSION_CLOSED`; exit code 0.
 - Join observed: `INVITE_PARSED`, `INVITE_VERIFIED`, `IDENTITY_CREATED`,
   `HOST_IDENTITY_PINNED`, `LOCAL_DESCRIPTOR_CREATED`, `CANDIDATES_GATHERED=10`,
@@ -17,3 +17,16 @@
   capability was consumed at authenticated binding, before control readiness.
 - Claim boundary: no physical onboarding, NAT traversal, relay, or packaging
   claim follows from this process evidence.
+
+## Cleanup rerun
+
+- Scope: two local Java processes with separate temporary profiles and
+  `COLUMNS=40` on the host to force the narrow-terminal path.
+- Host observed: `QR_SKIPPED=TERMINAL_TOO_NARROW`, `PEER_CONNECTED`,
+  `CONTROL_READY=true`, `LIVENESS=LIVE`, `SESSION_CLOSED`; exit code 0.
+- Join observed: `INVITE_PARSED`, `INVITE_VERIFIED`, `PEER_CONNECTED`,
+  `CONTROL_READY=true`, `LIVENESS=LIVE`, `WORK_RESULT=OK`,
+  `SESSION_CLOSED`; exit code 0.
+- Behavior preserved: invitation bytes, host identity pinning, handshake
+  semantics, admission/replay timing, identity bootstrap, liveness, work
+  exchange, and graceful close were unchanged.

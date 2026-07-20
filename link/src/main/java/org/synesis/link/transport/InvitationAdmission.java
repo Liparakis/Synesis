@@ -26,10 +26,6 @@ final class InvitationAdmission implements AutoCloseable {
     private final AtomicReference<State> state = new AtomicReference<>(State.AVAILABLE);
     private volatile ScheduledFuture<?> expiry;
 
-    InvitationAdmission(SessionInvitation invitation) {
-        this(invitation.sessionId(), invitation.capability());
-    }
-
     InvitationAdmission(UUID sessionId, byte[] capability) {
         this.sessionId = sessionId;
         this.capability = capability.clone();

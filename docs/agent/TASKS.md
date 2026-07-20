@@ -184,7 +184,10 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: onboarding protocol/wire format, threat model, CLI operations, ADR for invitation/transcript changes, test matrix, state, and checkpoint evidence.
 - Evidence: implementation compiled; focused invitation/bootstrap/admission/QR
   tests PASS; strict full verification and two-profile two-process onboarding
-  PASS. Physical two-machine onboarding is not claimed.
+  PASS, including the cleanup narrow-terminal rerun. Invitation bytes,
+  handshake semantics, identity behavior, admission/replay semantics, and
+  physical claim boundaries are unchanged. Physical two-machine onboarding is
+  not claimed.
 
 ## SL-010
 

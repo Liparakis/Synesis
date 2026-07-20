@@ -12,7 +12,7 @@ transport/session subproject.
 The project contains bounded identity, automatic identity bootstrap, signed
 candidate descriptors and single-use invitations, direct candidate
 providers/racing, authenticated QUIC sessions, control readiness, graceful
-close, heartbeat/liveness, and the demo-only authenticated
+close, heartbeat/liveness, compact terminal QR rendering, and the demo-only authenticated
 `synesis-demo-work/1` request/result stream. `DemoCli` remains the diagnostic
 fallback; `SynesisCli` is the source-run onboarding path. Neither is a
 packaged production management CLI.

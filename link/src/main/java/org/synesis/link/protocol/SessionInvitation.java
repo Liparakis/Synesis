@@ -8,7 +8,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
@@ -21,7 +20,6 @@ import java.util.Base64;
 import java.util.Objects;
 import java.util.UUID;
 
-import org.synesis.link.SynesisLink;
 import org.synesis.link.candidate.CandidateDescriptor;
 import org.synesis.link.identity.NodeIdentity;
 

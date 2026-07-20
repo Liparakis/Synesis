@@ -5,7 +5,7 @@
 - Task ID: SL-012
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0036; latest checkpoint CP-0047
+- Started checkpoint: CP-0036; latest checkpoint CP-0048
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009
 
@@ -19,9 +19,11 @@ transport without changing the diagnostic DemoCli path or implementing SL-009.
 Implemented the bounded onboarding orchestrator above the existing transport:
 automatic identity reuse/creation, listener-first candidate and invitation
 creation, signed capability admission with 15-second reservation expiry,
-ephemeral transport TLS, terminal share link plus ASCII QR, and `host`,
-`join`, and `identity show` commands. `DemoCli` remains unchanged as a
-diagnostic fallback. Identity regeneration is deferred.
+ephemeral transport TLS, terminal share link plus compact Unicode QR, and `host`,
+`join`, and `identity show` commands. The cleanup renamed the QR renderer,
+added width-aware skipping, and removed dead onboarding code without changing
+invitation bytes or handshake/admission semantics. `DemoCli` remains unchanged
+as a diagnostic fallback. Identity regeneration is deferred.
 
 ## Verification
 
@@ -42,6 +44,9 @@ diagnostic fallback. Identity regeneration is deferred.
   physical two-machine onboarding remains unverified.
 - `gradlew.bat clean check --dependency-verification=strict` after the final
   admission/failure-state changes: PASS.
+- Cleanup two-profile rerun with forced narrow terminal: PASS; evidence is
+  `docs/evidence/ONBOARDING-PROCESS-2026-07-20.md` and physical onboarding
+  remains unclaimed.
 
 ## Current failures
 

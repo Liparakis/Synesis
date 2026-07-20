@@ -23,7 +23,8 @@ replaces identity authentication.
 
 Long-term identities are created once in the per-user local profile and reused;
 transport TLS material is generated ephemerally per host session and deleted at
-cleanup. QR output is only an ASCII rendering of the exact copyable link.
+cleanup. QR output is an optional compact Unicode rendering of the exact
+copyable link; the link remains authoritative when the terminal is too narrow.
 
 ## Consequences
 

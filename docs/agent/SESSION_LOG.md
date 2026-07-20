@@ -308,7 +308,8 @@ Append-only operational history.
 - Completed work: Added automatic identity bootstrap, bounded signed
   listener-first invitations, transcript capability binding, single-use
   admission with 15-second reservation expiry, ephemeral QUIC TLS material,
-  source-run `SynesisCli`, and ASCII QR rendering while preserving `DemoCli`.
+  source-run `SynesisCli`, and compact Unicode QR rendering while preserving
+  `DemoCli`.
 - Verification: invitation/bootstrap/admission/QR tests PASS; prior strict
   clean check PASS; two isolated-profile host/join processes completed control,
   liveness, demo work, and close. Physical onboarding is not claimed.
@@ -316,3 +317,21 @@ Append-only operational history.
   scenarios remain unverified.
 - Exact continuation: perform the documented two-machine onboarding validation
   when two physical computers are available.
+
+## 2026-07-20 — SL-012 behavior-preserving cleanup
+
+- Checkpoint: CP-0048
+- Active task: SL-012
+- Completed work: Replaced oversized doubled-width ASCII QR output with
+  compact Unicode half-block rendering, terminal-width skipping, focused exact
+  matrix/dimension tests, and a clearer renderer name. No package moves were
+  made because transport classes share package-private handshake ownership.
+- Verification: focused QR/protocol/admission tests PASS; forced narrow-terminal
+  two-profile onboarding PASS with authenticated control, liveness, work, and
+  graceful close. Invitation bytes, handshake, identity, admission/replay,
+  and stable onboarding semantics remain unchanged.
+- Physical status: physical SL-012 onboarding remains unclaimed; existing
+  physical `DemoCli` Scenario A evidence remains valid.
+- Exact continuation: perform the documented two-machine onboarding validation
+  when two physical computers are available; do not claim it from process
+  evidence.
