@@ -2,26 +2,28 @@
 
 ## Identity
 
-- Task ID: SL-013
+- Task ID: SL-014
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0052; latest checkpoint CP-0056
+- Started checkpoint: CP-0059; latest checkpoint CP-0059
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010
 
 ## Objective
 
-Move terminal command ownership and development distribution into `:cli` while
-preserving Link as the owner of onboarding/network orchestration through one
-minimal typed façade. Physical generated-launcher onboarding remains a
-completion gate.
+Expose one bounded transport-neutral authenticated application-stream seam in
+Link. Keep Link responsible for framing, limits, deadlines, liveness, and
+cleanup; expose authenticated remote identity and readiness; do not add any
+project, record, owner, sync, or CLI behavior.
 
 ## Work completed
 
-SL-012 onboarding is the existing baseline. SL-013 now has a standalone
-Picocli/Application distribution, typed Link façade, terminal renderer, exit
-mapping, doctor, generated launcher smoke tests, and generated two-profile
-host/join coverage. Physical generated-launcher onboarding remains unrecorded.
+SL-013 is complete and frozen at CP-0054 as the standalone
+Picocli/Application distribution baseline. Physical generated-launcher
+onboarding remains unclaimed by explicit scope decision.
+
+ADR-0011 is approved for its required prerequisite. `SYN-001` remains blocked
+on this task and no record storage or sync may begin.
 
 ## Verification
 
@@ -71,6 +73,7 @@ host/join coverage. Physical generated-launcher onboarding remains unrecorded.
   computers; physical generated-launcher onboarding is not verified.
 - Physical generated-launcher abrupt-loss and wrong-identity scenarios remain
   unverified and must not be claimed.
+- SL-014 seam implementation and verification are pending.
 
 ## Known limitations
 
@@ -81,6 +84,4 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Run the documented physical generated-launcher onboarding scenario on two
-computers and record sanitized results in
-`docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; do not claim it from process tests.
+Implement the SL-014 application-stream binding, then run its focused tests before any record work.

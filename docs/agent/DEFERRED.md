@@ -461,19 +461,28 @@ permanent scope decision and record the reason.
 **Area:** Application semantics
 **Current verified capability:** Demo-only bounded `synesis-demo-work/1` request/result path is the current scope.
 **Missing capability:** Project synchronization, ownership, task delegation, leases, patch governance, or agent authority.
-**Reason deferred:** These belong to higher-level Synesis slices.
-**Dependencies:** First physical Link demonstration and explicit product contract.
-**Activation trigger:** Higher-level cooperation task is explicitly promoted.
-**Evidence required before planning:** Product invariants, authority model, and conflict/failure tests.
+**Reason deferred:** These belong to higher-level Synesis slices. A planning-only
+proposal now isolates one decision-record proof, but Link and CLI are frozen
+and Link exposes only fixed demo work.
+**Dependencies:** First physical Link demonstration, explicit product contract,
+and an approved transport-neutral bounded Link application-stream seam.
+**Activation trigger:** User approves ADR-0011 and promotes `SYN-001` after the
+Link prerequisite is separately scoped and verified.
+**Evidence required before planning:** Product invariants, authority model, and
+conflict/failure tests. The planning inputs are now in
+`docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`; implementation evidence
+is still absent.
 **Security questions:** Authorization, delegation, leases, fencing, and replay.
 **Privacy questions:** Project/task data and participant visibility.
 **Operational questions:** Recovery, ownership, and audit.
 **Public-claims impact:** Demo messages are not production agent cooperation.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/agent/CONTRACT.md`, `docs/demo/FIRST_DEMO.md`
-**Code extension seams:** Demo request/result API only.
-**Last reviewed:** CP-0030
+**Potential future task:** SYN-001 (BLOCKED; planning only)
+**Related ADRs:** ADR-0006, ADR-0011 (proposed)
+**Related documents:** `docs/agent/CONTRACT.md`, `docs/demo/FIRST_DEMO.md`,
+`docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`
+**Code extension seams:** A future transport-neutral Link application-stream
+seam; do not expand the demo request/result API with project semantics.
+**Last reviewed:** 2026-07-21 planning review
 
 ## SL-D-024 â€” CLI packaging, installation, and distribution
 

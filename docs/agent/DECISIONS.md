@@ -18,6 +18,13 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   Picocli, terminal output, exit mapping, QR rendering, and Gradle Application
   distributions while Link owns onboarding through typed events and failures.
 
+- ADR-0011: First signed shared decision record — approved for its required
+  Link prerequisite only; SYN-001 remains blocked until SL-014 verifies the
+  seam. Record storage and sync are not authorized.
+- ADR-0012: Bounded authenticated Link application-stream seam — accepted for
+  SL-014; transport-neutral bytes only, with Link retaining identity,
+  readiness, framing, limits, deadlines, liveness, and cleanup.
+
 - ADR-0008: Synesis root with Link transport module — accepted; the existing Link implementation moves to `link/` while the root remains a small modular monolith.
 
 - ADR-0007: Demo-only bounded work exchange — accepted for one authenticated `synesis-demo-work/1` request/result operation; no RPC, project semantics, authority, or reconnect behavior.

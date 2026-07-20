@@ -1,12 +1,12 @@
 # Next Session
 
-- Active task: SL-013
+- Active task: SL-014
 - Repository branch: master
-- Last checkpoint: CP-0056
+- Last checkpoint: CP-0059
 - Last passing command: `gradlew.bat clean check --dependency-verification=strict`
 - Last failing command: none; the first full run had a transient test class-loading failure and the immediate rerun passed
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next code action: Run the documented physical generated-launcher onboarding scenario on two computers and record sanitized results in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; do not claim it from process tests.
+- Exact next code action: Implement the bounded transport-neutral Link application-stream binding and focused SL-014 tests; do not add record storage, sync, project terminology, or `:cli` changes.
 - Unresolved blockers: physical generated-launcher onboarding remains pending;
   generated early-kill did not reach a bounded terminal status, while Link-level
   abrupt-loss and wrong-identity tests pass; no physical claim is permitted.

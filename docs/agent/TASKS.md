@@ -195,20 +195,19 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SL-013
 - Priority: P0
 - Title: Standalone Synesis CLI and development distribution
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Move terminal command ownership and Gradle development distribution
   into an outer `cli` module while Link retains onboarding/network orchestration
   behind one minimal public façade.
-- Dependencies: SL-012 implementation and documented onboarding validation;
-  physical generated-launcher validation remains an explicit completion
-  gate until recorded.
+- Dependencies: SL-012 implementation and documented onboarding validation.
 - Acceptance criteria: `:cli` owns Picocli, command adapters, terminal output,
   exit mapping, and Gradle Application distributions; `link` has no Picocli or
   CLI dependency; Link exposes only the typed onboarding façade; host, join,
   identity show, and doctor work through generated launchers with stable labels
   and numeric exits; QR rendering remains byte-identical to the exact
   invitation link; strict verification and isolated launcher onboarding pass;
-  physical launcher onboarding is recorded before completion is claimed.
+  physical launcher onboarding remains explicitly unclaimed and is outside
+  this frozen development-distribution baseline.
 - Required tests: CLI parsing, command adapters, read-only readiness inspection,
   generated launcher smoke tests, local generated host/join, existing Link
   protocol tests, and physical generated-launcher evidence.
@@ -216,8 +215,31 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   README/demo/operations command updates, and durable state reconciliation.
 - Evidence: `:cli:installDist`, strict root check, generated launcher smoke,
   generated two-profile onboarding, façade tests, parsing tests, doctor tests,
-  and `:link:dependencies` Picocli boundary PASS. Physical launcher evidence
-  remains unclaimed.
+  and `:link:dependencies` Picocli boundary PASS. Frozen at CP-0054; physical
+  launcher evidence remains unclaimed and is not a completion claim.
+
+## SL-014
+
+- ID: SL-014
+- Priority: P0
+- Title: Bounded authenticated Link application-stream seam
+- Status: ACTIVE
+- Purpose: Expose one transport-neutral, bounded application-stream binding
+  above Link so a future higher-level module can exchange bytes only after an
+  authenticated control-ready session exists.
+- Dependencies: SL-013 frozen completion; ADR-0011 approval; ADR-0012.
+- Acceptance criteria: the Link API exposes authenticated remote identity and
+  readiness; pre-ready, over-limit, terminal-session, and cleanup behavior is
+  deterministic; two isolated processes exchange bounded bytes over the
+  authenticated stream; Link retains framing, limits, deadlines, liveness, and
+  cleanup ownership; no project/record/sync vocabulary or `:cli` dependency is
+  introduced.
+- Required tests: pre-ready rejection, frame-size/bounds rejection, terminal
+  session rejection, stream cleanup on success/failure/cancellation, and
+  two-profile byte exchange with remote identity assertions.
+- Required documentation: ADR-0012, protocol/state/security boundary notes,
+  test matrix, evidence, and checkpoint state.
+- Evidence: pending implementation and verification.
 
 ## SL-010
 
@@ -231,6 +253,32 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required tests: fuzz/property, saturation, repeated-cycle, leak tests.
 - Required documentation: threat model reconciled with implementation.
 - Evidence: pending.
+
+## SYN-001
+
+- ID: SYN-001
+- Priority: P0
+- Title: First signed shared decision-record proof
+- Status: BLOCKED
+- Purpose: Prove that two isolated configured profiles can authenticate,
+  publish, persist, inspect, and synchronize exactly one signed decision
+  record above Link, while detecting duplicates, conflicts, and stale state.
+- Dependencies: frozen SL-013/CP-0054 baseline; approved ADR-0011; and
+  separately verified SL-014 transport-neutral bounded Link application-stream
+  seam. The existing fixed demo stream is not a substitute.
+- Acceptance criteria: the complete criteria in
+  `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md` are met, including
+  stable identity/version/provenance/owner/status/evidence, authenticated
+  transfer, deterministic duplicate/conflict/staleness results, durable local
+  revision storage, and readable safe inspection.
+- Required tests: canonical record/signature/store/conflict tests; Link-seam
+  authentication/bounds/cleanup tests; isolated two-profile publish/sync test;
+  CLI-inspection test; unchanged Link/CLI regressions.
+- Required documentation: accepted ADR-0011, record protocol/storage/threat
+  documentation, test matrix, deferred reconciliation, and sanitized evidence.
+- Evidence: planning only; no implementation or verification evidence exists.
+- Blocker: SL-014 must complete before this task can be promoted. Record
+  storage and sync remain prohibited during SL-014.
 
 ## Deferred capability register
 

@@ -3,9 +3,10 @@
 ## Repository state
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
-SL-012 is VERIFYING and SL-013 is the only ACTIVE task; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is complete and SL-009 is
-deferred. The repository is a Synesis root with Link as the first implemented
-transport/session subproject.
+SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, and SL-014 is the
+only ACTIVE task; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is complete and SL-009
+is deferred. The repository is a Synesis root with Link as the first
+implemented transport/session subproject.
 
 ## Implementation state
 
@@ -18,6 +19,14 @@ fallback. The standalone `cli` module owns Picocli, terminal rendering, exit
 mapping, doctor, QR rendering, and Gradle Application distributions; Link owns
 onboarding through the typed `Onboarding` façade. Production installation
 remains out of scope.
+
+## Planning boundary
+
+The CAF Phase 1 map and first signed-decision-record proposal are recorded in
+`docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md` and ADR-0011. ADR-0011 is
+approved only for the SL-014 Link seam prerequisite; SYN-001 remains blocked.
+No record storage, sync, second transport, shared-Markdown authority, project
+behavior, or CLI change is allowed in SL-014.
 
 ## Verification state
 

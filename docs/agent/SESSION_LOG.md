@@ -386,3 +386,31 @@ Append-only operational history.
 - Next action: review the complete diff for secrets/artifacts, checkpoint, and
   commit the current SL-013/CP-0054 workspace changes without claiming
   physical generated-launcher validation.
+
+## 2026-07-21 — CAF Phase 1 planning review
+
+- Active task: SL-013 remains ACTIVE but frozen by the user's planning-only
+  instruction; no implementation was performed.
+- Completed work: Read the CAF concept PDF, current roadmap/task/evidence
+  records, ADRs, deferred register, protocol/security documents, and the
+  actual Link/CLI surfaces. Added the CAF phase map, proposed ADR-0011, and
+  blocked `SYN-001` plan for one signed shared decision record.
+- Finding: Link's public `PeerSession` permits only fixed demo work and
+  `Onboarding` retains the session lifecycle. Authenticated record sync above
+  Link cannot be implemented while Link is frozen. Recreating transport or
+  treating Markdown as canonical state is rejected.
+- Remaining work: user review must choose whether to keep the freeze or permit
+  the one transport-neutral Link application-stream prerequisite described in
+  ADR-0011. CLI remains frozen in either choice.
+- Exact continuation: review `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`
+  and ADR-0011 before any task promotion.
+
+## 2026-07-21 — SL-014 activation
+
+- User approved ADR-0011's required Link prerequisite.
+- SL-013/CP-0054 is frozen and marked DONE; `:cli` remains unchanged.
+- `SL-014` is now the only ACTIVE task. `SYN-001` remains BLOCKED on it.
+- Scope is limited to one bounded transport-neutral authenticated application
+  stream. No project, record, owner, sync, storage, or CLI work is permitted.
+- Exact continuation: implement and verify the SL-014 seam, then checkpoint;
+  do not begin SYN-001.
