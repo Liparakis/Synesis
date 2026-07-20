@@ -90,6 +90,6 @@
 | Valid divergent revision quarantines without replacing head | CP-R4 process/store evidence | `ProjectRecordSyncProcessTest`; `DecisionStore.applyRemote` | pass | PASS | SYN-001 |
 | Connection closes before result reports UNKNOWN | CP-R4 Link seam contract | application-stream completion mapping | pass | PASS | SYN-001 |
 | Physical two-profile decision-record transfer claim | CP-R5 physical validation | `SL-D-028`; no physical run | deferred | NOT CLAIMED | SYN-001-CP-R5 |
-| Searchable view bounded query grammar and deterministic ordering | SYN-002 planning gate | ADR-0013; implementation not started | planned | NOT RUN | SYN-002 |
-| Searchable view returns only verified heads and fails closed on corruption | SYN-002 planning gate | ADR-0013; implementation not started | planned | NOT RUN | SYN-002 |
-| Searchable view performs no mutation and remains restart-equivalent | SYN-002 planning gate | ADR-0013; implementation not started | planned | NOT RUN | SYN-002 |
+| Searchable view bounded query grammar and deterministic ordering | SYN-002 | `DecisionSearchTest` | pass | PASS | SYN-002 |
+| Searchable view returns only verified heads and fails closed on corruption | SYN-002 | `DecisionSearchTest`; `DecisionStore.verifiedHeads` | pass | PASS | SYN-002 |
+| Searchable view performs no mutation and remains restart-equivalent | SYN-002 | `DecisionSearchTest` | pass | PASS | SYN-002 |

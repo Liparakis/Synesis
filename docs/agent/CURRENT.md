@@ -5,16 +5,15 @@
 - Task ID: SYN-002
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0073; latest checkpoint CP-0073
+- Started checkpoint: CP-0073; latest checkpoint CP-0074
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013
 
 ## Objective
 
-Planning only: define the smallest read-only searchable project view over
-existing verified decision heads. Compare it with adding a second record type,
-freeze Link and `:project-record` except for proven blockers, and do not
-implement production code, new wire messages, background sync, reconnect,
+Implement only the bounded read-only searchable project view over existing
+verified decision heads. Keep Link and the CP-R4 protocol frozen; do not add
+production networking, new wire messages, background sync, reconnect,
 discovery, membership, retries, workers, leases, autonomy, federation,
 Obsidian, physical claims, or `:cli` changes.
 
@@ -26,7 +25,8 @@ onboarding remains unclaimed by explicit scope decision.
 
 ADR-0011's required prerequisite is complete as SL-014. SL-015 is DONE and
 SYN-001 is closed as DONE at CP-R4. CP-R5 physical validation is deferred;
-SYN-002 is active for planning only and proposes a minimal searchable view.
+SYN-002 implementation is complete and remains active only for review/closure;
+it adds a minimal searchable view inside `:project-record`.
 
 ## Verification
 
@@ -73,8 +73,12 @@ SYN-002 is active for planning only and proposes a minimal searchable view.
   publish/sync, deterministic outcomes, quarantine, and isolated two-profile
   process evidence: PASS; evidence is `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`.
 - SYN-002 planning comparison of a second record type against a read-only
-  searchable decision view: recorded in ADR-0013 and the phase map; no code
-  implementation started.
+  searchable decision view: recorded in ADR-0013 and the phase map.
+- SYN-002 read-only view: `DecisionSearch` scans only fully validated current
+  heads with bounded queries, deterministic rendering, and safe corruption
+  errors; evidence is `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`.
+- `gradlew.bat clean check --dependency-verification=strict`: PASS after
+  SYN-002 implementation; Link and CLI regressions remain green.
 
 ## Current failures
 
@@ -94,5 +98,5 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Review ADR-0013 and approve or revise the SYN-002 planning contract before any
-implementation; do not change production code in this session.
+Review the committed SYN-002 view and close the task after confirming its
+evidence; do not begin a new CAF slice.

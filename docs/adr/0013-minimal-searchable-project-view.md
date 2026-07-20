@@ -2,8 +2,8 @@
 
 ## Status
 
-PROPOSED FOR REVIEW - 2026-07-21. SYN-001 is DONE at CP-R4; no
-implementation is authorized by this ADR.
+ACCEPTED AND VERIFIED FOR SYN-002 - 2026-07-21. SYN-001 is DONE at CP-R4;
+the implementation is limited to `:project-record` and remains read-only.
 
 ## Context
 
@@ -19,7 +19,7 @@ cases, inspection output, and compatibility surface before a second consumer
 exists. A view over existing decisions exercises the user-facing value with
 less irreversible surface.
 
-## Decision for review
+## Decision
 
 Select the smallest next slice as a read-only searchable project view over
 existing verified `decision` heads. It is a derived query, not a new record
@@ -37,8 +37,8 @@ mutation and persists no search index in the first slice.
 
 - `:project-record` remains the owner of canonical bytes, signature
   verification, revision storage, heads, quarantine, and project identity.
-- A future view adapter owns query parsing, bounded matching, deterministic
-  ordering, and safe human-readable projection.
+- `DecisionSearch` owns query parsing, bounded matching, deterministic ordering,
+  and safe human-readable projection.
 - Link and the frozen CLI are unchanged. No network, sync, retry, worker,
   lease, background, Obsidian, or federation behavior is introduced.
 - The adapter may consume a read-only enumeration API only if a proven blocker
@@ -60,11 +60,10 @@ mutation and persists no search index in the first slice.
 ## Storage and protocol impact
 
 No new record files, head format, wire message, signature rule, or sync result
-is required. The first implementation scans verified current heads on demand;
-an index is deferred until measured query cost justifies one. If enumeration
-is impossible through existing public APIs, the only allowed blocker is a
-minimal read-only `:project-record` accessor with no format or ownership
-change.
+is required. The implementation scans verified current heads on demand; an
+index is deferred until measured query cost justifies one. The only storage
+extension is `DecisionStore.verifiedHeads`, which validates the complete chain
+and current tip without exposing private storage paths to the view.
 
 ## Alternatives
 
@@ -77,14 +76,13 @@ change.
 
 ## Checkpoints and acceptance gates
 
-- **CP-R6 planning gate:** review this ADR, the bounded query contract, and
-  the proof that existing storage APIs suffice or identify one blocker.
-- **CP-R7 implementation gate:** only if CP-R6 is approved, implement the
-  read-only view and its deterministic unit/fixture tests; no production
-  networking or record-schema changes.
-- **CP-R8 evidence gate:** strict verification, corruption/no-mutation tests,
-  restart-equivalence evidence, and safe inspection review; then decide
-  whether a second record type is still needed.
+- **CP-R6 planning gate:** completed; this ADR and the bounded query contract
+  were reviewed, and the only storage extension is a read-only validated-head
+  snapshot.
+- **CP-R7 implementation gate:** completed; `DecisionSearch` and focused tests
+  are inside `:project-record`, with no networking or record-schema changes.
+- **CP-R8 evidence gate:** completed by focused and full strict verification;
+  a second record type remains deferred.
 
 ## Non-claims and invalidation
 

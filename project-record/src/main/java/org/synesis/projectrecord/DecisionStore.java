@@ -28,6 +28,9 @@ import java.util.UUID;
  * durable revisions. Corrupt bytes fail recovery rather than being guessed.
  */
 public final class DecisionStore {
+    /** Maximum head entries accepted by one read-only snapshot. */
+    public static final int MAX_HEAD_SNAPSHOT = 1_024;
+    private static final int MAX_REVISIONS_PER_RECORD = 64;
     /** Result of attempting to append one revision. */
     public enum SaveResult {
         /** The revision and head were durably advanced. */
@@ -220,6 +223,35 @@ public final class DecisionStore {
         return Optional.ofNullable(readHead(Objects.requireNonNull(recordId, "record ID")));
     }
 
+    /**
+     * Reads a bounded snapshot of fully validated current decision heads.
+     * Temporary files, conflicts, orphan revisions, and stale head pointers
+     * are not returned. Any invalid state fails the complete snapshot.
+     *
+     * @param maxHeads maximum number of head entries to scan
+     * @return deterministic record snapshot ordered by record identity
+     * @throws IOException if a head, revision chain, or bound is invalid
+     */
+    public synchronized java.util.List<DecisionRecord> verifiedHeads(int maxHeads) throws IOException {
+        if (maxHeads <= 0 || maxHeads > MAX_HEAD_SNAPSHOT) throw new IllegalArgumentException("invalid head bound");
+        java.util.List<Path> files;
+        try (var stream = Files.list(heads)) {
+            files = stream.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".head"))
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                    .toList();
+        }
+        if (files.size() > maxHeads) throw new IOException("head scan exceeds bound");
+        java.util.List<DecisionRecord> result = new java.util.ArrayList<>(files.size());
+        for (Path file : files) {
+            UUID recordId = parseHeadName(file);
+            Head head = readHead(recordId);
+            if (head == null) throw new IOException("missing decision head");
+            result.add(validateCurrentChain(recordId, head));
+        }
+        return result.stream().sorted(Comparator.comparing(record -> record.recordId().toString())).toList();
+    }
+
     private void recover() throws IOException {
         try (var recordDirs = Files.list(decisions)) {
             for (Path recordDir : recordDirs.filter(Files::isDirectory).toList()) {
@@ -261,6 +293,64 @@ public final class DecisionStore {
                 Head existing = readHead(recordId);
                 if (!recovered.equals(existing)) atomicWrite(headPath(recordId), encodeHead(recovered));
             }
+        }
+    }
+
+    private DecisionRecord validateCurrentChain(UUID recordId, Head head) throws IOException {
+        Path directory = decisions.resolve(recordId.toString());
+        if (!Files.isDirectory(directory)) throw new IOException("missing decision revisions");
+        java.util.List<Path> files;
+        try (var stream = Files.list(directory)) {
+            files = stream.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".sdr"))
+                    .sorted(Comparator.comparingLong(path -> revisionNumber(path)))
+                    .toList();
+        }
+        if (files.isEmpty() || files.size() > MAX_REVISIONS_PER_RECORD) {
+            throw new IOException("decision revision bound is invalid");
+        }
+        DecisionRecord previous = null;
+        for (Path file : files) {
+            DecisionRecord record = readRevisionFile(file);
+            long revision = parseRevisionName(file);
+            if (revision != record.revision() || !recordId.equals(record.recordId())
+                    || !projectId.equals(record.projectId())) {
+                throw new IOException("decision identity is invalid");
+            }
+            try {
+                if (!record.verify()) throw new IOException("decision signature is invalid");
+            } catch (GeneralSecurityException exception) {
+                throw new IOException("decision signature is invalid", exception);
+            }
+            if (previous == null) {
+                if (record.revision() != 1 || record.previousDigest() != null) {
+                    throw new IOException("decision chain is invalid");
+                }
+            } else if (record.revision() != previous.revision() + 1
+                    || !Arrays.equals(record.previousDigest(), previous.digest())) {
+                throw new IOException("decision chain is invalid");
+            }
+            previous = record;
+        }
+        Head tip = new Head(previous.revision(), previous.digest());
+        if (!tip.equals(head)) throw new IOException("decision head is stale");
+        return previous;
+    }
+
+    private static long revisionNumber(Path path) {
+        try {
+            return parseRevisionName(path);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("invalid revision filename", exception);
+        }
+    }
+
+    private static UUID parseHeadName(Path path) throws IOException {
+        String name = path.getFileName().toString();
+        try {
+            return UUID.fromString(name.substring(0, name.length() - ".head".length()));
+        } catch (RuntimeException exception) {
+            throw new IOException("invalid decision head filename", exception);
         }
     }
 

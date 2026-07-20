@@ -8,9 +8,9 @@ current repository decisions and verification evidence remain authoritative
 over the supplied Collaborative Agent Fabric (CAF) concept PDF. Link and
 `:cli` remain unchanged.
 
-`SYN-001` is DONE at CP-R4. The verified Link seam and `:project-record` are
-frozen except for proven blockers. `SYN-002` is the planning-only next slice;
-this checkpoint stops before implementation.
+`SYN-001` is DONE at CP-R4. The verified Link seam and CP-R4 protocol remain
+frozen. `SYN-002` implements only the bounded local searchable view inside
+`:project-record`; this checkpoint stops after SYN-002.
 
 ## Evidence ledger
 
@@ -27,7 +27,7 @@ this checkpoint stops before implementation.
 | CAF phase | Required outcome in the PDF | Current Synesis evidence | Classification | Next boundary |
 |---|---|---|---|---|
 | 0 - specification | Record schemas, freshness rules, threat model, ownership semantics | Link has ADRs, wire formats, threat model, task memory, and a deferred register. It has no project-record schema or project trust policy. | PARTIAL | This document and proposed ADR-0011 define the first record contract only. |
-| 1 - shared project brain | Canonical event log and structured knowledge store; decisions/failures searchable | CP-R4 proves one signed decision type and local immutable storage/sync; no canonical event log, second record type, or searchable view exists. | PARTIAL | `SYN-002`: minimal read-only searchable view over verified decision heads. |
+| 1 - shared project brain | Canonical event log and structured knowledge store; decisions/failures searchable | CP-R4 proves one signed decision type and local immutable storage/sync; SYN-002 adds only a local read-only view, not an event log or second record type. | PARTIAL | Keep failed-experiment type and canonical log deferred. |
 | 2 - two human nodes | Two local supervisors synchronize context and status | Two independent profiles exchange one signed decision through Link; no physical claim, supervisor, or continuous sync exists. | PAIRWISE PROOF ONLY | Keep CP-R5 deferred; do not add supervision or background behavior. |
 | 3 - isolated workers | Worktrees and worker publication | No workers or worktrees. | DEFERRED | Do not introduce before a shared-record proof is stable. |
 | 4 - ownership and leases | Semantic ownership, leases, contention paths | Link has no project ownership. Task documents have a human-maintained active-task rule only. | DEFERRED | Record owner is immutable signer authority, not a lease system. |
@@ -68,7 +68,7 @@ Compare the two plausible ways to extend the shared signed-decision proof:
 | Add a `failed-experiment` record type | New canonical schema, lifecycle, signature vectors, storage, sync, inspection, and compatibility rules | Proves a second schema but has no current consumer or invariant | DEFERRED |
 | Add a minimal searchable project view | Read-only derived query over existing verified decision heads; no wire or durable format | Proves that a human can find and compare signed project truth | SELECTED for SYN-002 planning |
 
-SYN-002 must remain read-only and local. It may query record ID, bounded title
+SYN-002 remains read-only and local. It queries record ID, bounded title
 or rationale text, status, owner/author, revision, and digest. Results must be
 bounded, deterministic, verified-head-only, and fail closed on corruption. It
 must not write an index or change Link, `:project-record`, or `:cli` unless a
@@ -266,9 +266,9 @@ durable milestones if the user later activates the work.
 | CP-R3 | Bounded transport-neutral Link application-stream seam | Link unit/integration checks for authentication, bounds, and cleanup; no project terminology in Link. |
 | CP-R4 | Record protocol, peer allowlist, publish/sync, duplicate/conflict/staleness handling | `ProjectRecordSyncProcessTest`, bounded codec/config tests, and strict build; PASS; SYN-001 DONE. |
 | CP-R5 | Physical two-profile record transfer claim | DEFERRED as `SL-D-027`; no physical claim is made. |
-| CP-R6 | Review SYN-002 query contract and prove whether existing read-only APIs suffice | ADR-0013, task/CURRENT agreement, and blocker review; planning only. |
-| CP-R7 | Minimal local searchable decision view, if CP-R6 is approved | Bounded query tests, corruption/no-mutation tests, and strict build; not activated. |
-| CP-R8 | Evidence and re-evaluation of second record type | Restart-equivalence and safe projection evidence; not activated. |
+| CP-R6 | Review SYN-002 query contract and prove whether existing read-only APIs suffice | ADR-0013, task/CURRENT agreement, and validated-head blocker review; PASS. |
+| CP-R7 | Minimal local searchable decision view | Bounded query tests, corruption/no-mutation tests, and strict build; PASS. |
+| CP-R8 | Evidence and re-evaluation of second record type | Restart-equivalence and safe projection evidence; second record remains deferred; PASS. |
 
 ## Deferred and explicitly unclaimed
 
@@ -288,6 +288,5 @@ profile will reconcile automatically.
 
 ## Decision recorded for review
 
-`SYN-001` is closed as DONE at CP-R4. CP-R5 is deferred. The next review
-question is whether ADR-0013's read-only searchable decision view should be
-activated at CP-R6; no implementation is authorized by this planning update.
+`SYN-001` is closed as DONE at CP-R4. CP-R5 is deferred. SYN-002 is verified
+and remains active only for review/closure; no new CAF slice is authorized.

@@ -466,3 +466,14 @@ Append-only operational history.
 - Added ADR-0013 and promoted `SYN-002` as planning-only. Link and
   `:project-record` remain frozen except for proven blockers; no production
   implementation was started.
+
+## 2026-07-21 — SYN-002 implementation verified
+
+- Implemented only the local `DecisionSearch` view inside `:project-record`.
+  It scans bounded fully validated current heads on demand and renders stable
+  safe results; it does not persist an index or mutate state.
+- Focused search tests and full strict root verification pass. Corrupt heads,
+  stale revisions, conflicts, temporary files, bounds, empty results, filters,
+  ordering, and restart equivalence are covered.
+- Evidence: `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`. Stop after
+  SYN-002 review/closure; no broader CAF slice is started.

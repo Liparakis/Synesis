@@ -29,7 +29,8 @@ and quarantine. Production installation remains out of scope.
 The CAF Phase 1 map and first signed-decision-record proposal are recorded in
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, ADR-0011, and ADR-0013.
 ADR-0011 is accepted and SYN-001 is DONE at CP-R4. CP-R5 is deferred. SYN-002
-is planning-only for a read-only searchable view; no background sync,
+implements only a read-only searchable view and remains active for review/
+closure; no background sync,
 reconnect, discovery, membership, retries, second transport, shared-Markdown
 authority, extra record types, physical two-machine claim, or CLI change is
 allowed.
@@ -66,7 +67,9 @@ allowed.
   outcomes, conflict quarantine, and two-profile process scenarios: PASS;
   evidence is `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`.
 - SYN-001 closure and SYN-002 planning comparison: PASS as documentation-only
-  state; ADR-0013 defines the proposed searchable-view boundary.
+  state; ADR-0013 defines the searchable-view boundary.
+- SYN-002 implementation: PASS; `DecisionSearch` and validated-head snapshot
+  remain local, on-demand, bounded, and non-mutating.
 
 ## Honest limitations
 

@@ -337,19 +337,22 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   project truth without adding another record type or protocol.
 - Dependencies: SYN-001 CP-R4 DONE; frozen Link seam; frozen
   `:project-record` storage and signature rules.
-- Acceptance criteria: planning contract, ownership boundary, bounded query
-  grammar, deterministic result order, corruption/failure behavior, and
-  evidence plan are reviewed before any implementation. Production code is
-  not authorized by this planning entry.
-- Required tests: planned only—query bounds/encoding, deterministic matching
-  and ordering, verified-head-only results, corruption fail-closed behavior,
-  no-mutation checks, and restart-equivalent results.
+- Acceptance criteria: bounded query grammar, deterministic result order,
+  corruption/failure behavior, verified-head-only reads, safe rendering, and
+  no-mutation behavior are implemented and verified inside `:project-record`.
+  The task remains ACTIVE only for review/closure; no further production scope
+  is open.
+- Required tests: query bounds/encoding, deterministic matching and ordering,
+  verified-head-only results, corruption fail-closed behavior, no-mutation
+  checks, conflicts, stale revisions, temporary files, and restart-equivalent
+  results.
 - Required documentation: ADR-0013, phase-map update, test matrix, deferred
   reconciliation, and a planning checkpoint.
 - Scope boundary: no new signed record type, wire message, sync behavior,
   background process, Link change, `:cli` change, index persistence, or
   Obsidian integration.
-- Evidence: planning-only; implementation remains unstarted.
+- Evidence: `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`; focused
+  `DecisionSearchTest` and full strict verification PASS.
 
 ## Deferred capability register
 
