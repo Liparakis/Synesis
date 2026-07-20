@@ -5,24 +5,33 @@ import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
+import java.nio.charset.Charset;
+
 /** Renders an exact share link as a compact Unicode QR for terminals. */
 final class CompactQrRenderer implements QrRenderer {
     private static final int BORDER_MODULES = 2;
     private static final int DEFAULT_TERMINAL_WIDTH = 120;
     private final int terminalWidth;
+    private final boolean unicodeSupported;
 
     CompactQrRenderer() {
-        this(detectTerminalWidth());
+        this(detectTerminalWidth(), detectUnicodeSupport());
     }
 
     CompactQrRenderer(int terminalWidth) {
+        this(terminalWidth, true);
+    }
+
+    CompactQrRenderer(int terminalWidth, boolean unicodeSupported) {
         if (terminalWidth < 1) throw new IllegalArgumentException("terminal width must be positive");
         this.terminalWidth = terminalWidth;
+        this.unicodeSupported = unicodeSupported;
     }
 
     @Override
     public String render(String link) {
         if (link == null || link.isBlank()) throw new IllegalArgumentException("share link is blank");
+        if (!unicodeSupported) throw new IllegalArgumentException("UNICODE_UNSUPPORTED");
         try {
             BitMatrix matrix = new QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 1, 1);
             int width = matrix.getWidth() + BORDER_MODULES * 2;
@@ -51,6 +60,13 @@ final class CompactQrRenderer implements QrRenderer {
             } catch (NumberFormatException ignored) { }
         }
         return DEFAULT_TERMINAL_WIDTH;
+    }
+
+    private static boolean detectUnicodeSupport() {
+        String configured = System.getProperty("synesis.link.qr.unicode");
+        if (configured != null && !configured.isBlank()) return Boolean.parseBoolean(configured);
+        Charset charset = System.out.charset();
+        return charset.newEncoder().canEncode("█▀▄");
     }
 
     private static char glyph(boolean upper, boolean lower) {

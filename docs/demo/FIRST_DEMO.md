@@ -24,8 +24,8 @@ authentication releases the host's short reservation; authenticated admission
 is consumed even if later control work fails.
 
 QR output is optional: `QR_RENDERED=COMPACT` means it fit the terminal;
-`QR_SKIPPED=TERMINAL_TOO_NARROW` means the copyable `SHARE_LINK` remains the
-complete onboarding path.
+`QR_SKIPPED=TERMINAL_TOO_NARROW` or `QR_SKIPPED=UNICODE_UNSUPPORTED` means the
+copyable `SHARE_LINK` remains the complete onboarding path.
 
 The source-run command is not an installed `synesis` package; packaging remains
 deferred under `SL-D-024`. The existing manual `DemoCli` procedure below stays

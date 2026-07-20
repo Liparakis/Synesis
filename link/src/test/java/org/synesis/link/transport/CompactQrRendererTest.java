@@ -39,6 +39,13 @@ final class CompactQrRendererTest {
         assertEquals("TERMINAL_TOO_NARROW", failure.getMessage());
     }
 
+    @Test
+    void skipsBeforeRenderingWhenUnicodeCannotBeEncoded() {
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> new CompactQrRenderer(200, false).render("synesis://join/SYN1-unicode"));
+        assertEquals("UNICODE_UNSUPPORTED", failure.getMessage());
+    }
+
     private static BitMatrix encode(String link) {
         try {
             return new QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 1, 1);

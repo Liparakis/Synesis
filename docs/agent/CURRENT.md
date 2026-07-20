@@ -5,7 +5,7 @@
 - Task ID: SL-012
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0036; latest checkpoint CP-0048
+- Started checkpoint: CP-0036; latest checkpoint CP-0050
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009
 
@@ -21,7 +21,7 @@ automatic identity reuse/creation, listener-first candidate and invitation
 creation, signed capability admission with 15-second reservation expiry,
 ephemeral transport TLS, terminal share link plus compact Unicode QR, and `host`,
 `join`, and `identity show` commands. The cleanup renamed the QR renderer,
-added width-aware skipping, and removed dead onboarding code without changing
+added width- and output-charset-aware skipping, and removed dead onboarding code without changing
 invitation bytes or handshake/admission semantics. `DemoCli` remains unchanged
 as a diagnostic fallback. Identity regeneration is deferred.
 
@@ -47,6 +47,8 @@ as a diagnostic fallback. Identity regeneration is deferred.
 - Cleanup two-profile rerun with forced narrow terminal: PASS; evidence is
   `docs/evidence/ONBOARDING-PROCESS-2026-07-20.md` and physical onboarding
   remains unclaimed.
+- Unicode-capability renderer test: PASS; legacy output charsets now produce
+  `QR_SKIPPED=UNICODE_UNSUPPORTED` instead of corrupted glyphs.
 
 ## Current failures
 

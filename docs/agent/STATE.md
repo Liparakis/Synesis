@@ -29,6 +29,8 @@ packaged production management CLI.
 - Invitation, identity-bootstrap, admission, QR, and strict Javadoc checks: PASS.
 - Two-profile two-process host/join onboarding, including work exchange and
   graceful close: PASS; this is not physical two-machine evidence.
+- Compact QR output skips safely when the process output charset cannot encode
+  the Unicode glyphs; the copyable share link is always retained.
 - Resume, doctor, and fixture validation: PASS.
 - Physical two-machine Scenario A normal operation: `TWO_MACHINE_VERIFIED`;
   evidence is in `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`.

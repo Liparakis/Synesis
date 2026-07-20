@@ -131,8 +131,9 @@ public final class SynesisCli {
                 System.out.println("QR_RENDERED=COMPACT");
                 System.out.println(qr);
             } catch (IllegalArgumentException unsupported) {
-                String reason = "TERMINAL_TOO_NARROW".equals(unsupported.getMessage())
-                        ? "TERMINAL_TOO_NARROW" : "UNAVAILABLE";
+                String message = unsupported.getMessage();
+                String reason = "TERMINAL_TOO_NARROW".equals(message)
+                        || "UNICODE_UNSUPPORTED".equals(message) ? message : "UNAVAILABLE";
                 System.out.println("QR_SKIPPED=" + reason);
             }
             System.out.println("Waiting for peer...");

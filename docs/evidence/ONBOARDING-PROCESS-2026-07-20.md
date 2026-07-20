@@ -30,3 +30,8 @@
 - Behavior preserved: invitation bytes, host identity pinning, handshake
   semantics, admission/replay timing, identity bootstrap, liveness, work
   exchange, and graceful close were unchanged.
+
+The renderer now reports `QR_SKIPPED=UNICODE_UNSUPPORTED` when the process
+output charset cannot encode the compact Unicode glyphs, preventing a legacy
+Windows console from displaying a corrupted QR. The copyable share link is
+still emitted.

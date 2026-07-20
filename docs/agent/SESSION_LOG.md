@@ -335,3 +335,20 @@ Append-only operational history.
 - Exact continuation: perform the documented two-machine onboarding validation
   when two physical computers are available; do not claim it from process
   evidence.
+
+## 2026-07-20 â€” SL-012 terminal QR compatibility fix
+
+- Checkpoint: CP-0050
+- Active task: SL-012
+- Completed work: Detect whether the process output charset can encode the
+  compact Unicode QR glyphs. Unsupported consoles now emit the explicit
+  `QR_SKIPPED=UNICODE_UNSUPPORTED` status while preserving `SHARE_LINK`; the
+  existing narrow-terminal skip remains unchanged.
+- Verification: focused QR tests and `gradlew.bat clean check
+  --dependency-verification=strict` PASS; no invitation or transport bytes
+  changed.
+- Remaining work: physical onboarding and deferred demo negative-path
+  scenarios remain unverified.
+- Exact continuation: perform the documented two-machine onboarding validation
+  when two physical computers are available; do not claim it from process
+  evidence.
