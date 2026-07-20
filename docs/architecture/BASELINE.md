@@ -2,11 +2,16 @@
 
 ## Mode
 
-GREENFIELD. The repository contains only persistence documents; no existing product architecture is available to preserve.
+EVOLUTION. The repository now has a Synesis root and one implemented Link
+transport/session subproject; no other product module is available to preserve.
 
 ## Selected baseline
 
-One Gradle project with explicit Java package boundaries. Public Synesis Link APIs remain transport-independent; an internal QUIC adapter owns Netty/native types. Identity, candidate, protocol, session, liveness, transport, observability, and test support are packages, not Gradle subprojects.
+One modular-monolith Gradle root with an explicit `link/` subproject. Public
+Synesis Link APIs remain transport-independent; an internal QUIC adapter owns
+Netty/native types. Identity, candidate, protocol, session, liveness,
+transport, observability, and test support remain packages inside Link, not
+additional Gradle subprojects.
 
 The baseline has one local process, no authoritative server, no database, no broker, and no mandatory rendezvous or relay. Direct connectivity is attempted from caller-supplied and locally gathered candidates; failure is diagnostic.
 
@@ -33,7 +38,7 @@ Every candidate attempt and handshake has a deadline and cancellation path. Retr
 
 ## Rejected alternatives
 
-- Multiple Gradle modules: rejected because no independent release, ownership, scaling, or storage boundary is evidenced.
+- Additional Gradle modules: rejected because no independent release, ownership, scaling, or storage boundary is evidenced. The single Link subproject is the repository's current implementation boundary.
 - Mandatory rendezvous/relay: rejected because direct-first and serverless operation are product invariants.
 - Custom QUIC/TLS: rejected because it expands security and maintenance risk without product value.
 - HTTP/3 as the public abstraction: rejected because Synesis Link needs raw bidirectional streams and its own control protocol.

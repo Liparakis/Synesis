@@ -1,18 +1,28 @@
-# Synesis Link
+# Synesis
 
-Standalone Java library for direct peer-to-peer QUIC sessions authenticated by long-term Synesis node identities.
+Synesis is a modular-monolith repository. The first implemented module is
+[`link/`](link/), the Synesis Link transport and authenticated session layer.
 
-The implementation is in progress. The active contract and durable task state are under [`docs/agent/`](docs/agent/). Direct connectivity is attempted when network conditions permit it; Synesis Link does not claim that every pair of computers can connect.
+Link provides local-first direct peer-to-peer QUIC sessions, long-term node
+identity binding, bounded control/liveness behavior, candidate selection, and
+a demo-only authenticated work exchange. It does not claim that every pair of
+computers can connect directly.
 
-The source-only validation CLI is run with `./gradlew.bat demoCli --args="--help"`.
-The two-machine procedure is [`docs/demo/FIRST_DEMO.md`](docs/demo/FIRST_DEMO.md);
-unsupported networking and product capabilities are tracked in
-[`docs/agent/DEFERRED.md`](docs/agent/DEFERRED.md).
+The Link implementation and tests live under `link/`; the root Gradle build
+delegates verification to that subproject.
 
 ## Build
 
 ```powershell
-./gradlew clean check
+./gradlew.bat clean check --dependency-verification=strict
 ```
 
-Java 25 is required. Native QUIC dependencies are introduced only after the transport slice validates their platform and packaging behavior.
+Java 25 is required. Link-only tasks use the `:link:` path, for example:
+
+```powershell
+./gradlew.bat :link:demoCli --args="--help"
+```
+
+The physical demonstration procedure is [`docs/demo/FIRST_DEMO.md`](docs/demo/FIRST_DEMO.md).
+Unsupported networking and product capabilities are tracked in
+[`docs/agent/DEFERRED.md`](docs/agent/DEFERRED.md).

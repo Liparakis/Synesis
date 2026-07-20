@@ -145,6 +145,19 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: state-machine and operations updates.
 - Evidence: Deferred after CP-0030; reconnect/path behavior is intentionally postponed until after the first physical cooperation demonstration. See `docs/agent/DEFERRED.md` entries SL-D-012 through SL-D-016.
 
+## SL-ARCH-001
+
+- ID: SL-ARCH-001
+- Priority: P0
+- Title: Move Link into the Synesis root module layout
+- Status: DONE
+- Purpose: Make the repository root Synesis and place the existing Link transport/session implementation in the `link/` Gradle subproject without inventing wider Synesis functionality.
+- Dependencies: SL-001 through SL-DEMO-001 automated readiness
+- Acceptance criteria: root `clean check` delegates to `:link:check`; Link source, tests, module build, and module lockfile live under `link/`; root docs/scripts remain runnable; strict dependency verification passes; no placeholder sibling modules are added.
+- Required tests: root strict clean check, root resume/doctor/fixture/deferred validators, and Link CLI help.
+- Required documentation: ADR-0008, architecture baseline, contract, goal, state, current task, next session, README, and command-path updates.
+- Evidence: PASS — root `projects` discovery, root `clean check --dependency-verification=strict`, `:link:demoCli --args=--help`, resume, doctor, fixture validator, and deferred validator after migration; ADR-0008.
+
 ## SL-DEMO-001
 
 - ID: SL-DEMO-001

@@ -55,7 +55,7 @@
 | Demo work rejected before control readiness and delegated only after readiness | unit tests | `DemoWorkBindingTest` | pass | PASS | SL-DEMO-001 |
 | Real local QUIC demo request/result exchange | integration test | `NettyQuicLoopbackTest.establishesIdentityBoundSessionOnLocalQuicControlStream` | pass | PASS | SL-DEMO-001 |
 | Two-process demo request/result exchange | process integration test | `NettyQuicLoopbackTest.connectsTwoSeparateJavaProcesses` | pass | PASS | SL-DEMO-001 |
-| Source CLI help and safe identity creation | CLI test | `DemoCliTest`; `gradlew.bat demoCli --args=--help` | pass | PASS | SL-DEMO-001 |
+| Source CLI help and safe identity creation | CLI test | `DemoCliTest`; `gradlew.bat :link:demoCli --args=--help` | pass | PASS | SL-DEMO-001 |
 | Two-machine normal, abrupt-loss, and invalid-identity demonstration | physical validation | `docs/demo/FIRST_DEMO.md` | requires two computers | NOT CLAIMED | SL-DEMO-001 |
 | Candidate normalization, mapped-address handling, privacy filtering, and deterministic compatible pairs | deterministic unit tests | CandidateNormalizationTest | pass | PASS | SL-008 |
 | Concurrent provider gathering, failure isolation, timeout, cancellation, and diagnostics | deterministic unit tests | CandidateGathererTest | pass | PASS | SL-008 |

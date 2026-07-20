@@ -29,14 +29,14 @@ On A:
 
 ```powershell
 New-Item -ItemType Directory -Force demo | Out-Null
-./gradlew.bat demoCli --args="identity --identity demo\node-a.identity"
+./gradlew.bat :link:demoCli --args="identity --identity demo\node-a.identity"
 ```
 
 On B:
 
 ```powershell
 New-Item -ItemType Directory -Force demo | Out-Null
-./gradlew.bat demoCli --args="identity --identity demo\node-b.identity"
+./gradlew.bat :link:demoCli --args="identity --identity demo\node-b.identity"
 ```
 
 Record only the printed `NODE_ID` values. Never record identity files,
@@ -48,7 +48,7 @@ On A, replace `<NODE_B_ID>` and choose a UDP port allowed by the host firewall:
 
 ```powershell
 $env:SYNESIS_DEMO_TLS_PASSWORD = 'changeit'
-./gradlew.bat demoCli --args="server --identity demo\node-a.identity --descriptor demo\node-a.descriptor --expected-client <NODE_B_ID> --tls-keystore $env:TEMP\synesis-demo.p12 --tls-password-env SYNESIS_DEMO_TLS_PASSWORD --port 4433"
+./gradlew.bat :link:demoCli --args="server --identity demo\node-a.identity --descriptor demo\node-a.descriptor --expected-client <NODE_B_ID> --tls-keystore $env:TEMP\synesis-demo.p12 --tls-password-env SYNESIS_DEMO_TLS_PASSWORD --port 4433"
 ```
 
 Copy `demo\node-a.descriptor` from A to B using the agreed out-of-band method.
@@ -57,7 +57,7 @@ Copy the printed A `NODE_ID` separately. Do not copy A's identity or keystore.
 On B, replace `<NODE_A_ID>`:
 
 ```powershell
-./gradlew.bat demoCli --args="client --identity demo\node-b.identity --descriptor demo\node-a.descriptor --expected-node <NODE_A_ID>"
+./gradlew.bat :link:demoCli --args="client --identity demo\node-b.identity --descriptor demo\node-a.descriptor --expected-node <NODE_A_ID>"
 ```
 
 Expected safe output includes `AUTHENTICATED_REMOTE=<NODE_A_ID>`,
@@ -90,7 +90,7 @@ Copy a fresh descriptor to B and provide an intentionally wrong, well-formed
 node ID:
 
 ```powershell
-./gradlew.bat demoCli --args="client --identity demo\node-b.identity --descriptor demo\node-a.descriptor --expected-node sl1-0000000000000000000000000000000000000000000000000000000000000000"
+./gradlew.bat :link:demoCli --args="client --identity demo\node-b.identity --descriptor demo\node-a.descriptor --expected-node sl1-0000000000000000000000000000000000000000000000000000000000000000"
 ```
 
 Expected result is a non-zero failure before a usable session or `LIVE` state is

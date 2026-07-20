@@ -5,9 +5,9 @@
 - Task ID: SL-DEMO-001
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0035
+- Started checkpoint: CP-0036
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007
+- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008
 
 ## Objective
 
@@ -16,24 +16,16 @@ implementing broad SL-009 reconnect/path behavior or deferred networking.
 
 ## Work completed
 
-Created the authoritative 27-entry deferred register and validator; deferred
-SL-009; added the demo gap analysis; implemented the bounded
-`synesis-demo-work/1` request/result records and strict UTF-8 codec; bound the
-demo exchange to authenticated control-ready `PeerSession`; added bounded
-internal QUIC application streams; added the source-run identity/server/client
-CLI; added local/two-process demo exchange tests; documented the exact
-two-machine procedure and release boundary; and completed the Netty source
-artifact verification allowlist, including the six test-classpath source JARs.
+The Link implementation now lives in `link/` as the first Synesis Gradle
+subproject. Root Gradle orchestration, command paths, ADR-0008, and durable
+documentation have been updated; automated demo readiness remains complete.
 
 ## Verification
 
-- `gradlew.bat clean check --dependency-verification=strict`: PASS.
-- Netty, JUnit, Gradle, and Kotlin artifact hashes: PASS against published sidecars or byte-identical cross-repository copies.
-- `DemoWorkProtocolTest`, `DemoWorkBindingTest`: PASS.
-- Local QUIC demo request/result: PASS.
-- Two-process demo request/result: PASS.
-- `DemoCliTest`: PASS.
-- `gradlew.bat demoCli --args=--help`: PASS.
+- Root `gradlew.bat projects --dependency-verification=strict`: PASS; root and `:link` discovered.
+- Root `gradlew.bat clean check --dependency-verification=strict`: PASS; `:link:check` executed.
+- Root `gradlew.bat :link:demoCli --args=--help --dependency-verification=strict`: PASS.
+- Resume, doctor, fixture, and deferred validators: PASS.
 - `scripts/agent-validate-deferred.ps1`: PASS; 27 entries.
 - `scripts/agent-validate-fixtures.ps1`: PASS.
 - `scripts/agent-doctor.ps1`: PASS.
@@ -55,5 +47,5 @@ and production Synesis cooperation remain deferred or unverified.
 ## Immediate next action
 
 Run `docs/demo/FIRST_DEMO.md` on two independent computers, record sanitized
-normal/abrupt/wrong-identity evidence, and classify it as
-`TWO_MACHINE_VERIFIED` only if those runs actually pass.
+normal/abrupt/wrong-identity evidence, and classify it as `TWO_MACHINE_VERIFIED`
+only if those runs actually pass.

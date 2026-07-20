@@ -4,7 +4,7 @@
 - Contract status: ACTIVE
 - Implementation permitted: YES
 
-You are the principal protocol and networking engineer responsible for designing and materializing Synesis Link v1 as a production-quality standalone Java project.
+You are the principal protocol and networking engineer responsible for designing and materializing Synesis Link v1 as the first production-quality transport/session module in the Synesis repository.
 
 Work autonomously in small, verified vertical slices.
 
@@ -88,17 +88,16 @@ Do not create or implement the wider Synesis platform.
 
 # Product
 
-The only product is:
+The current implemented product boundary is:
 
 # Synesis Link
 
 Synesis Link is a standalone, local-first, direct peer-to-peer networking and authenticated session-liveness library built on QUIC.
 
-The repository itself is `synesis-link`.
+The repository is `synesis`; Synesis Link is the `link/` transport/session module.
 
-Do not create:
+Do not create in this slice:
 
-- a parent Synesis repository;
 - sibling Synesis projects;
 - placeholder Synesis modules;
 - a project-coordination system;
@@ -326,9 +325,10 @@ Do not hide protocol logic inside untestable transport callbacks.
 
 ## Proportional architecture
 
-Start as one Gradle project.
+Keep the Synesis root as a modular monolith; Link is the first Gradle
+subproject and remains internally package-bounded.
 
-Use package boundaries before Gradle subprojects.
+Use package boundaries inside Link before adding any further Gradle subprojects.
 
 Do not split merely because these names sound clean:
 
@@ -405,11 +405,13 @@ Never use Java object serialization for network data.
 
 # Repository shape
 
-Begin as one Gradle project.
+Use a modular-monolith Synesis root with the existing Link implementation as
+the first Gradle subproject. Do not invent additional product modules until
+their capabilities and ownership are real.
 
 Use a structure similar to:
 
-synesis-link/
+synesis/
 â”œâ”€â”€ AGENTS.md
 â”œâ”€â”€ README.md
 â”œâ”€â”€ LICENSE
@@ -456,6 +458,11 @@ synesis-link/
     â””â”€â”€ cli/
 
 Adapt this only when evidence supports a cleaner structure.
+
+The current implementation-specific correction is that Link's `src/`,
+`build.gradle.kts`, and `gradle.lockfile` live under `link/`; the root owns the
+Synesis wrapper, settings, dependency catalog/verification, documentation, and
+delegating build.
 
 Every Java package must contain `package-info.java`.
 

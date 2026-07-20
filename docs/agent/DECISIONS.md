@@ -10,6 +10,8 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 
 ## Product ADRs
 
+- ADR-0008: Synesis root with Link transport module — accepted; the existing Link implementation moves to `link/` while the root remains a small modular monolith.
+
 - ADR-0007: Demo-only bounded work exchange — accepted for one authenticated `synesis-demo-work/1` request/result operation; no RPC, project semantics, authority, or reconnect behavior.
 
 - ADR-0006: Bounded direct candidate gathering and racing — accepted for manual/local candidates, deterministic normalization and ranking, and authenticated control-ready winner selection; router discovery, relays, and reconnection remain out of scope.

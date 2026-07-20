@@ -3,9 +3,9 @@
 ## Repository state
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
-SL-DEMO-001 is the only ACTIVE task and SL-009 is deferred. The repository
-remains a standalone Synesis Link project with no wider Synesis code and no Git
-metadata.
+SL-DEMO-001 is the only ACTIVE task; SL-ARCH-001 is complete and SL-009 is
+deferred. The repository is a Synesis root with Link as the first implemented
+transport/session subproject.
 
 ## Implementation state
 

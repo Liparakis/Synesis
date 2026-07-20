@@ -1,6 +1,6 @@
-# Synesis Link Agent Contract
+# Synesis Agent Contract
 
-This repository contains only Synesis Link. Conversational context is temporary and untrusted; repository state and verification evidence are authoritative.
+This repository contains Synesis. The implemented `link/` module is the Synesis Link transport/session layer. Conversational context is temporary and untrusted; repository state and verification evidence are authoritative.
 
 ## Startup
 

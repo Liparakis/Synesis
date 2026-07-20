@@ -201,6 +201,19 @@ Append-only operational history.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
 
+## 2026-07-20 — Synesis root and Link module migration
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0036
+- Active task: SL-DEMO-001 after completing SL-ARCH-001.
+- Completed work: Moved Link `src/`, module `build.gradle.kts`, and module lockfile into `link/`; added root Synesis settings and build delegation; updated Link CLI commands and durable architecture/contract state; added ADR-0008.
+- Commands run: `gradlew.bat projects --dependency-verification=strict`; `gradlew.bat clean check --dependency-verification=strict`; `gradlew.bat :link:demoCli --args=--help --dependency-verification=strict`; resume; doctor; fixture validator; deferred validator.
+- Results: PASS; root discovery shows `synesis` and `:link`; root check executes `:link:check`; CLI and durable validators pass.
+- Decisions: Keep one root modular monolith with Link as the first subproject; do not invent placeholder Synesis modules.
+- Failed attempts: None.
+- Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
+- Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
+
 ## 2026-07-20 â€” Gradle and Kotlin tooling verification repair
 
 - Timestamp: 2026-07-20 Europe/Athens
