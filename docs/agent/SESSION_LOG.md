@@ -1,0 +1,241 @@
+# Session Log
+
+Append-only operational history.
+
+## Entry format
+
+- Timestamp:
+- Checkpoint:
+- Active task:
+- Completed work:
+- Files changed:
+- Commands run:
+- Results:
+- Decisions:
+- Failed attempts:
+- Remaining work:
+- Exact continuation:
+
+## 2026-07-20 — persistence installation
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0002
+- Active task: SL-SETUP-002
+- Completed work: Installed and validated durable memory, scripts, and fixtures.
+- Files changed: AGENTS.md, docs/agent/*, scripts/*, src/test/resources/agent-persistence-fixtures/*
+- Commands run: `powershell -ExecutionPolicy Bypass -File scripts/agent-validate-fixtures.ps1`; resume; doctor; checkpoint
+- Results: PASS; invalid fixtures rejected; valid fixture accepted; checkpoint written.
+- Decisions: No product architecture decisions.
+- Failed attempts: None.
+- Remaining work: Install complete v1 contract.
+- Exact continuation: Install the complete contract into `docs/agent/CONTRACT.md`, reconcile `GOAL.md`, create the initial product task graph, and unblock `SL-001`.
+
+## 2026-07-20 — contract and architecture installation
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0005
+- Active task: SL-001
+- Completed work: Installed the complete contract verbatim at revision 1, ran the constraint-driven architecture pass, recorded the modular-monolith and Netty QUIC decisions, created the initial protocol/security/operations documentation, and activated Slice 1.
+- Files changed: `docs/agent/CONTRACT.md`, `docs/agent/GOAL.md`, `docs/agent/STATE.md`, `docs/agent/TASKS.md`, `docs/agent/CURRENT.md`, `docs/agent/DECISIONS.md`, `docs/agent/TEST_MATRIX.md`, `docs/agent/NEXT_SESSION.md`, `docs/architecture/`, `docs/adr/`, `docs/protocol/`, `docs/security/`, `docs/operations/`.
+- Commands run: resume; durable-memory read; Java 25 check; architecture skill/reference review; primary-source QUIC research; checkpoint.
+- Results: Contract and architecture gates pass; product build not yet run.
+- Decisions: One Gradle project; Netty 4.2 native QUIC behind an internal adapter, pending build validation.
+- Failed attempts: None.
+- Remaining work: Materialize the Gradle project and first passing test.
+- Exact continuation: Create `settings.gradle.kts`, `build.gradle.kts`, and `gradle/libs.versions.toml` for the single Java 25 project, without adding production networking code.
+
+## 2026-07-20 — build and identity slices
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0006
+- Active task: SL-003
+- Completed work: Added Gradle Wrapper, Java 25 build, strict compile/Javadocs/tests, formatting/package/static checks, dependency locking and verification, protocol ALPN marker, Ed25519 identity generation/signing/verification, bounded file persistence, and tests.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS.
+- Decisions: JDK Ed25519 identity with SHA-256 lowercase hexadecimal `sl1-` node IDs; file storage refuses overwrite and uses atomic sibling moves.
+- Failed attempts: JUnit launcher was initially absent; adding the explicit JUnit Platform launcher fixed the test runtime. Provider key algorithm reports `EdDSA`; the implementation accepts the provider alias while generating with `Ed25519`.
+- Remaining work: Candidate descriptors.
+- Exact continuation: Create `package-info.java`, `Candidate`, and `CandidateDescriptor` under `src/main/java/org/synesis/link/candidate/` with bounded canonical encoding and signature verification.
+
+## 2026-07-20 — candidate descriptor slice
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0007
+- Active task: SL-004
+- Completed work: Added bounded immutable candidates, deterministic normalization, versioned canonical descriptor encoding, Ed25519 signing/verification, expiry and clock-skew checks, parser limits, and tests.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS.
+- Decisions: Descriptor signatures cover canonical unsigned bytes; routes remain distinct from identity.
+- Failed attempts: Javadocs initially failed on missing `@return` tags for descriptor accessors; tags were added and the gate passed.
+- Remaining work: First real local QUIC connection.
+- Exact continuation: Resolve `io.netty:netty-codec-native-quic:4.2.16.Final` with the local platform classifier and add only an internal transport adapter package; do not expose Netty types publicly.
+
+## 2026-07-20 — QUIC transport validation slice
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0007
+- Active task: SL-004
+- Completed work: Added Netty 4.2.16 native QUIC dependency with Windows runtime classifier, updated locks and verification metadata, enabled explicit native access for tests, and passed a real local QUIC loopback handshake and deterministic close.
+- Commands run: `gradlew.bat dependencies --write-locks --write-verification-metadata sha256`; `gradlew.bat clean check --dependency-verification=strict`; targeted `NettyQuicLoopbackTest`.
+- Results: PASS for dependency resolution and in-process QUIC loopback; two-process and identity binding remain unverified.
+- Decisions: Keep Netty types internal; use insecure TLS trust only in the pre-identity transport test and replace it in Slice 5.
+- Failed attempts: Initial JUnit runtime lacked the launcher; deprecated Netty test certificate failed on Java 25; missing QUIC token/connection handlers caused handshake setup failures; each was corrected with explicit launcher, keytool-generated test TLS material, token handler, and connection handlers.
+- Remaining work: Production-internal adapter and two-process local harness.
+- Exact continuation: Move the passing loopback path into a production-internal transport adapter and add a two-process local integration harness; do not expose Netty types publicly.
+
+## 2026-07-20 - QUIC authenticated control stream
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: pending
+- Active task: SL-005
+- Completed work: Added bounded `SLH1` handshake envelopes, Netty length framing, internal client/server stream handlers, and a real local QUIC test proving both sides receive an authenticated `PeerSession` only after transcript proofs pass.
+- Commands run: targeted `NettyQuicLoopbackTest.establishesIdentityBoundSessionOnLocalQuicControlStream`.
+- Results: PASS.
+- Decisions: Keep the stream adapter package-private and retain insecure TLS trust only inside the test fixture; application identity is established by the signed transcript proofs.
+- Remaining work: Advertised-version negotiation, wrong-identity transport rejection, and authenticated two-process evidence.
+- Exact continuation: Extend the control exchange with version offers and update the two-process harness to exchange persistent node identities.
+
+## 2026-07-20 - SL-005 completion
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Active task: SL-005 completed; SL-006 is handoff-only.
+- Results: PASS. Repeated independent JVMs authenticated expected identities and agreed on version 1/session ID; real-QUIC wrong-identity and no-common-version cases returned categorized failures without `PeerSession`; transcript version tampering was rejected; strict clean verification passed.
+- Evidence: `NettyQuicLoopbackTest`, `SessionAuthenticatorTest`, `gradlew.bat clean check --dependency-verification=strict`.
+- Handoff: No SL-006 code was implemented.
+
+## 2026-07-20 - SL-006 completion
+
+- Active task: SL-006 completed; SL-007 is handoff-only.
+- Completed work: Added bounded SLH1 control frames, CONTROL_READY gating, one-control-stream ownership, protocol-error closure, GOODBYE/GOODBYE_ACK, categorized close reasons, exactly-once terminal completion, idempotent graceful close, duplicate-stream rejection, malformed/oversized parser tests, large non-control stream isolation, and process-level graceful close.
+- Results: PASS — `ControlFrameTest`, local QUIC control integration, repeated process test, and `gradlew.bat clean check --dependency-verification=strict`.
+- Handoff: No heartbeat, liveness, reconnect, candidate, or application protocol behavior was implemented.
+
+## 2026-07-20 - SL-007 completion
+
+- Checkpoint: CP-0027
+- Active task: SL-007 completed; SL-008 is handoff-only.
+- Completed work: Added fixed-size versioned HEARTBEAT/HEARTBEAT_ACK payloads, sequence and session binding validation, control-ready liveness start, manual-clock LIVE/SUSPECT/EXPIRED state machine with recovery and delayed-expiry history, public liveness state/metrics/listener API, bounded callback dispatch, terminal precedence and cleanup, local QUIC heartbeat evidence, healthy two-process heartbeat evidence, golden vectors, ADR-0005, protocol state/wire/security updates, and durable-memory reconciliation.
+- Files changed: `src/main/java/org/synesis/link/session/`, `src/main/java/org/synesis/link/transport/`, affected tests, `docs/adr/0005-heartbeat-liveness.md`, `docs/protocol/`, `docs/security/`, `docs/agent/`.
+- Commands run: targeted codec/liveness tests; local QUIC and two-process tests; `gradlew.bat clean check --dependency-verification=strict`; fixture validator; doctor; resume; checkpoint.
+- Results: PASS. Abrupt child-process loss is classified within the documented transport-failure/liveness-expiry bound; physical migration, temporary application silence, and QUIC idle-timeout tuning remain explicitly unverified.
+- Decisions: newest valid current-session heartbeat/ACK is the only v1 liveness refresh; duplicates/stale messages do not refresh; first terminal reason wins; expiry is irreversible; transport closure before expiry remains transport failure.
+- Failed attempts: initial RED compile failure before liveness production types; one malformed test assumption about heartbeat type binding; one process assertion race fixed with a readiness marker. No failed approach was repeated.
+- Remaining work: SL-008 candidate providers and racing.
+- Exact continuation: Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, read durable memory, and inspect candidate boundaries; do not implement SL-008 in the handoff.
+
+## 2026-07-20 — SL-008 completion
+
+- Checkpoint: CP-0030
+- Active task: SL-008 completed; SL-009 is handoff-only.
+- Completed work: Added bounded manual and local-interface providers, explicit provider policy and diagnostics, cancellable concurrent gathering, normalization and privacy filtering, deterministic same-family pair ranking, bounded staggered racing, exact authenticated expected-identity/control-ready winner selection, loser cancellation and late-session cleanup, redacted diagnostics, ADR-0006, protocol/state/wire/security/operations documentation, and local/two-process QUIC candidate-pair integration evidence.
+- Files changed: `src/main/java/org/synesis/link/candidate/`, candidate tests, QUIC integration harnesses, `docs/protocol/`, `docs/security/`, `docs/operations/`, `docs/adr/ADR-0006-bounded-direct-candidates.md`, and `docs/agent/`.
+- Commands run: targeted candidate tests; `NettyQuicLoopbackTest`; `gradlew.bat clean check --dependency-verification=strict`; fixture validator; doctor; resume; checkpoint.
+- Results: PASS. Unsupported router discovery, relays, NAT traversal, physical reachability, path migration, reconnect, and temporary liveness-suppression recovery remain explicitly unverified or out of scope.
+- Decisions: direct-only manual/local providers; no fake PCP/NAT-PMP/UPnP/STUN/TURN support; only authenticated control-ready sessions win; deterministic bounded cleanup is required.
+- Failed attempts: one combined documentation patch failed due to an exact-text/encoding mismatch and made no changes; smaller exact patches succeeded. No product code was reverted.
+- Remaining work: SL-009 reconnect and path behavior, not started here.
+- Exact continuation: Read CP-0030 and the SL-009 contract; do not infer SL-009 implementation from this handoff.
+
+## 2026-07-20 — SL-DEMO-001 automated readiness
+
+- Checkpoint: CP-0031
+- Active task: SL-DEMO-001; SL-009 deferred.
+- Completed work: Added the 27-entry deferred register and validator enforcement in resume, doctor, fixtures, and checkpoints; added demo-gap analysis; implemented bounded `synesis-demo-work/1` request/result records, strict codec, authenticated control-ready binding, bounded QUIC application streams, source-run identity/server/client CLI, local/two-process exchange evidence, first-demo procedure, threat/protocol/release documentation, and ADR-0007.
+- Files changed: `docs/agent/DEFERRED.md`, `docs/agent/DEMO_GAP_ANALYSIS.md`, `scripts/agent-validate-deferred.ps1`, durable scripts/docs, `src/main/java/org/synesis/link/demo/`, `PeerSession`, transport demo stream/CLI, tests, `docs/demo/FIRST_DEMO.md`, and release readiness draft.
+- Commands run: deferred validator; resume; doctor; fixture validator; RED demo tests; targeted demo/local/process tests; `gradlew.bat demoCli --args=--help`; `gradlew.bat check --dependency-verification=strict`.
+- Results: PASS. Physical two-machine normal, abrupt-loss, and wrong-identity runs are not available in this workspace and remain unclaimed.
+- Decisions: Keep SL-009 reconnect/path behavior deferred; ship only one fixed demo operation; no NAT/router/STUN/relay/discovery work; preserve two-process versus two-machine evidence distinction.
+- Failed attempts: Initial deferred validator invocation needed explicit `$LASTEXITCODE` initialization under PowerShell strict mode; initial application stream ordering incorrectly classified app frames as duplicate control and was fixed at the shared responder boundary. Both were retested.
+- Remaining work: Execute and record `docs/demo/FIRST_DEMO.md` on two independent computers; do not add transport features.
+- Exact continuation: Run the physical normal, abrupt-loss, and invalid-identity scenarios with sanitized evidence, then update `TEST_MATRIX.md`, `CURRENT.md`, and the checkpoint without claiming unsupported capabilities.
+
+## 2026-07-20 — authenticated session core
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: pending
+- Active task: SL-005
+- Completed work: Added canonical bounded handshake transcripts, role-specific transcript challenges, Ed25519 proof creation/verification, bounded process-local replay protection, and an immutable transport-neutral `PeerSession`.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS. Unit tests cover transcript round trips, role binding, expected-identity rejection, cross-connection proof substitution, and replay rejection.
+- Decisions: The transcript binds ALPN, version, session ID, both role identities, both nonces, and both epochs. QUIC stream integration is still required before calling the session authenticated over transport.
+- Failed attempts: Strict Javadocs initially failed because new public accessors lacked `@return` tags; corrected and reran the full gate.
+- Remaining work: Exchange transcript/proofs through a bounded bidirectional QUIC control stream and prove wrong-identity rejection with a real transport.
+- Exact continuation: Add the internal QUIC control-stream handshake adapter; do not expose Netty types publicly or publish `PeerSession` before authentication completes.
+
+## 2026-07-20 — two-process QUIC slice
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0009
+- Active task: SL-005
+- Completed work: Added test-only keytool TLS material, a process entry point, and a separate-process integration test. Two Java processes now establish and close a real local Netty QUIC connection using `synesis-link/1`.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS.
+- Decisions: The proof is transport-only and uses test-only insecure TLS trust; identity binding is explicitly deferred to Slice 5.
+- Failed attempts: Process launch initially shadowed the `java` package name; the executable variable was renamed.
+- Remaining work: Identity-bound handshake and PeerSession.
+- Exact continuation: Create `package-info.java`, `ProtocolVersion`, and a bounded signed handshake transcript under `src/main/java/org/synesis/link/protocol/`; do not expose Netty types publicly.
+
+## 2026-07-20 — internal transport adapter
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: pending
+- Active task: SL-004
+- Completed work: Moved Netty codec construction behind package-private `NettyQuicTransport`; the public API remains Netty-free.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS.
+- Decisions: Insecure QUIC token handling remains test-only; production adapter accepts a token handler supplied by the future transport configuration.
+- Failed attempts: A client builder was incorrectly given connection handlers; Netty 4.2 requires those handlers on `QuicChannel` bootstrap, so the adapter now owns codec construction only.
+- Remaining work: Two-process local integration and later identity-bound TLS/session handshake.
+- Exact continuation: Move the passing loopback path into a production-internal transport adapter and add a two-process local integration harness; do not expose Netty types publicly.
+
+## 2026-07-20 â€” dependency verification repair
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0032
+- Active task: SL-DEMO-001
+- Completed work: Added SHA-256 verification entries for the nine Netty 4.2.16.Final source JARs named by the failing Gradle verification report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS; all eight verification tasks completed successfully.
+- Decisions: Keep strict dependency verification enabled; do not use `--offline`, disable verification, or record unverified local hashes.
+- Failed attempts: None.
+- Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
+- Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
+
+## 2026-07-20 â€” Gradle and Kotlin tooling verification repair
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0035
+- Active task: SL-DEMO-001
+- Completed work: Added verification entries for the Gradle 9.0.0 source distribution and four Kotlin 2.2.0 artifacts named by the failing compile classpath report. The Gradle ZIP matched its official SHA-256 sidecar; Kotlin artifacts were byte-identical between the Gradle Plugin Portal and Maven Central.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS; all eight verification tasks completed successfully.
+- Decisions: Keep strict dependency verification enabled; do not disable verification or record unverified local hashes.
+- Failed attempts: Kotlin repository `.sha256` sidecar URLs returned 404; exact artifact bytes were independently compared with Maven Central before recording hashes.
+- Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
+- Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
+
+## 2026-07-20 â€” test runtime dependency verification repair
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0034
+- Active task: SL-DEMO-001
+- Completed work: Added SHA-256 verification entries for the three JUnit engine/runtime source JARs named by the failing `testRuntimeClasspath` report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS; main, test compile, and test runtime classpaths now pass strict verification and all eight verification tasks completed successfully.
+- Decisions: Keep strict dependency verification enabled; source artifacts remain allowlisted only by exact module/version/artifact/hash.
+- Failed attempts: None.
+- Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
+- Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
+
+## 2026-07-20 â€” test dependency verification repair
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0033
+- Active task: SL-DEMO-001
+- Completed work: Added SHA-256 verification entries for the six JUnit-related source JARs named by the failing `testCompileClasspath` report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS; main and test classpaths now pass strict verification and all eight verification tasks completed successfully.
+- Decisions: Keep strict dependency verification enabled; source artifacts are allowlisted only by exact module/version/artifact/hash.
+- Failed attempts: The first PowerShell hash-collection command used an unescaped colon in an interpolated variable name and failed before downloading; the corrected command succeeded with no repository impact.
+- Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
+- Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.

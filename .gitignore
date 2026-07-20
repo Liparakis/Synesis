@@ -1,0 +1,67 @@
+# Gradle and build output
+.gradle/
+build/
+out/
+
+# IDE and editor state
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Java and JVM artifacts
+*.class
+*.jar
+*.war
+*.ear
+!gradle/wrapper/gradle-wrapper.jar
+hs_err_pid*
+replay_pid*
+
+# Test and coverage output
+coverage/
+jacoco/
+.scannerwork/
+*.exec
+*.hprof
+
+# Local tooling and generated analysis output
+graphify-out/
+.codex/
+.agents/
+
+# Operating-system and editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.secrets
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.pem
+*.key
+id_rsa
+id_rsa.*
+credentials.json
+secrets.json
+service-account*.json
+
+# Keep generated evidence intentional: sanitized evidence may be committed
+# under docs/evidence/ when it is explicitly reviewed.
