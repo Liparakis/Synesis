@@ -249,18 +249,18 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SL-015
 - Priority: P0
 - Title: Review SYN-001 activation after Link seam verification
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Review the verified SL-014 boundary and decide whether the blocked
-  higher-level record task may be explicitly promoted; no record code is
-  implemented in this gate.
-- Dependencies: SL-014 DONE; SYN-001 remains BLOCKED until explicit review.
-- Acceptance criteria: SL-014 evidence and ADR-0012 are reviewed; the user
-  explicitly chooses whether to promote SYN-001; no record storage, sync,
-  project terminology, or `:cli` change occurs in this task.
+  higher-level record task may be explicitly promoted.
+- Dependencies: SL-014 DONE; SL-015 review gate completed; CP-R2 active.
+- Acceptance criteria: SL-014 evidence and ADR-0012 were reviewed; the user
+  explicitly approved promotion of SYN-001; no record storage, sync, project
+  terminology, or `:cli` change occurred in this gate.
 - Required tests: resume, fixture, deferred-register, and doctor validators.
 - Required documentation: review decision, task-state reconciliation, and a
   checkpoint recording the choice.
-- Evidence: pending user review.
+- Evidence: user approval recorded in `SESSION_LOG.md`; CP-R2 is the active
+  SYN-001 implementation checkpoint.
 
 ## SL-010
 
@@ -280,7 +280,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-001
 - Priority: P0
 - Title: First signed shared decision-record proof
-- Status: BLOCKED
+- Status: ACTIVE
 - Purpose: Prove that two isolated configured profiles can authenticate,
   publish, persist, inspect, and synchronize exactly one signed decision
   record above Link, while detecting duplicates, conflicts, and stale state.
@@ -297,9 +297,12 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   CLI-inspection test; unchanged Link/CLI regressions.
 - Required documentation: accepted ADR-0011, record protocol/storage/threat
   documentation, test matrix, deferred reconciliation, and sanitized evidence.
-- Evidence: planning only; no implementation or verification evidence exists.
-- Blocker: SL-015 explicit review and promotion decision are still required;
-  record storage and sync remain prohibited until that gate promotes SYN-001.
+- Scope now active: CP-R2 canonical decision model, signing, immutable local
+  revision/head storage, restart recovery, and the JDK-only inspection launcher.
+  CP-R4 networking/sync remains deferred.
+- Evidence: `docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`; focused
+  CP-R2 tests and full strict root verification PASS.
+- Blocker: none for CP-R2; CP-R4 publish/sync remains explicitly deferred.
 
 ## Deferred capability register
 

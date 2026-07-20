@@ -3,8 +3,8 @@
 ## Repository state
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
-SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 is DONE, and
-SL-015 is the only ACTIVE task; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
+SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
+are DONE, and SYN-001 is the only ACTIVE task at CP-R2; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
 implemented transport/session subproject.
 
@@ -17,17 +17,17 @@ close, heartbeat/liveness, compact terminal QR rendering, and the demo-only auth
 `synesis-demo-work/1` request/result stream. `DemoCli` remains the diagnostic
 fallback. The standalone `cli` module owns Picocli, terminal rendering, exit
 mapping, doctor, QR rendering, and Gradle Application distributions; Link owns
-onboarding through the typed `Onboarding` façade. Production installation
-remains out of scope.
+onboarding through the typed `Onboarding` façade. `:project-record` now owns
+the CP-R2 canonical signed decision model, immutable local store, recovery, and
+JDK-only inspection launcher. Production installation remains out of scope.
 
 ## Planning boundary
 
 The CAF Phase 1 map and first signed-decision-record proposal are recorded in
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md` and ADR-0011. ADR-0011 is
-approved only for the now-verified SL-014 Link seam prerequisite; SYN-001
-remains blocked pending SL-015 review.
-No record storage, sync, second transport, shared-Markdown authority, project
-behavior, or CLI change is allowed in SL-014.
+approved and SYN-001 is active for CP-R2. No networking, sync, second
+transport, shared-Markdown authority, extra record types, background behavior,
+or CLI change is allowed in CP-R2.
 
 ## Verification state
 
@@ -53,6 +53,9 @@ behavior, or CLI change is allowed in SL-014.
   SL-013 development-distribution baseline.
 - Generated launcher two-profile onboarding: PASS; evidence is
   `docs/evidence/CLI-DISTRIBUTION-VALIDATION.md`.
+- CP-R2 local decision record encoding, signing, storage, recovery, and
+  inspection: PASS; evidence is
+  `docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`.
 
 ## Honest limitations
 

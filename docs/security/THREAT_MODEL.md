@@ -112,3 +112,15 @@ resources. Invalid markers, versions, oversized input, missing handlers,
 terminal use, and handler failure close the stream without changing liveness or
 publishing a session. Link does not interpret, persist, authorize, or retry the
 payload; those risks belong to a later consumer.
+
+## CP-R2 decision-record mitigations
+
+`SDR1` is bounded before field allocation, uses strict UTF-8 and fixed status
+values, and signs every canonical field. The embedded Ed25519 public key must
+derive the declared owner ID; author and owner are equal in v1. SHA-256
+predecessor digests make revision chains explicit. Revision bytes are
+immutable and forced before an atomic head replacement. Startup validates the
+whole local chain and rejects corrupt bytes rather than guessing a head.
+The inspection launcher prints no private key or endpoint. Networking,
+allowlist authorization, replay, and sync failure behavior are intentionally
+not claimed until CP-R4.

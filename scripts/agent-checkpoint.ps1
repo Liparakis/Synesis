@@ -21,7 +21,7 @@ foreach ($f in $must)
     }
 }
 $tasks = Get-Content -Raw 'docs/agent/TASKS.md'; $current = Get-Content -Raw 'docs/agent/CURRENT.md'; $next = Get-Content -Raw 'docs/agent/NEXT_SESSION.md'; $contract = Get-Content -Raw 'docs/agent/CONTRACT.md'; $goal = Get-Content -Raw 'docs/agent/GOAL.md'
-$active = [regex]::Matches($tasks, '(?ms)^##\s+(SL-[A-Z0-9-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*ACTIVE\s*$'); if ($active.Count -ne 1)
+$active = [regex]::Matches($tasks, '(?ms)^##\s+((?:SL|SYN)-[A-Z0-9-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*ACTIVE\s*$'); if ($active.Count -ne 1)
 {
     Fail "Expected one ACTIVE task"
 }; $id = $active[0].Groups[1].Value

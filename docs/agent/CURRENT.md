@@ -2,18 +2,20 @@
 
 ## Identity
 
-- Task ID: SL-015
+- Task ID: SYN-001
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0061; latest checkpoint CP-0064
+- Started checkpoint: CP-0065; latest checkpoint CP-0066
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012
 
 ## Objective
 
-Review the verified SL-014 application-stream seam and decide whether the
-blocked SYN-001 record task may be promoted. Do not implement record storage,
-sync, project terminology, or CLI changes.
+Implement CP-R2 only: one canonical signed `decision` record v1, deterministic
+encoding/digest/signature/bounds, immutable per-profile revision storage with
+atomic heads, restart recovery, and a JDK-only inspection launcher owned by
+`:project-record`. Do not implement networking, sync, extra record types,
+background behavior, or `:cli` changes.
 
 ## Work completed
 
@@ -21,9 +23,9 @@ SL-013 is complete and frozen at CP-0054 as the standalone
 Picocli/Application distribution baseline. Physical generated-launcher
 onboarding remains unclaimed by explicit scope decision.
 
-ADR-0011's required prerequisite is complete as SL-014. The seam's focused and
-full strict verification evidence is recorded; `SYN-001` remains blocked and
-no record storage or sync may begin.
+ADR-0011's required prerequisite is complete as SL-014. The user approved
+promotion of SYN-001; CP-R2 is the only active implementation scope. CP-R4
+networking and synchronization remain deferred.
 
 ## Verification
 
@@ -73,8 +75,9 @@ no record storage or sync may begin.
   computers; physical generated-launcher onboarding is not verified.
 - Physical generated-launcher abrupt-loss and wrong-identity scenarios remain
   unverified and must not be claimed.
-- No SL-014 verification failures remain. SYN-001 activation review is
-  pending.
+- No SL-014 verification failures remain. CP-R2 focused
+  `:project-record:check` and full root strict verification pass;
+  evidence is recorded in `docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`.
 
 ## Known limitations
 
@@ -85,4 +88,4 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Review `docs/evidence/APPLICATION-STREAM-SEAM-2026-07-21.md` and decide whether to promote SYN-001; do not implement record storage or sync.
+Keep CP-R2 complete and do not begin CP-R4 networking or sync until explicitly reviewed.

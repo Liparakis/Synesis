@@ -424,3 +424,22 @@ Append-only operational history.
 - Evidence: `docs/evidence/APPLICATION-STREAM-SEAM-2026-07-21.md`.
 - `SL-014` is DONE. `SL-015` is the only ACTIVE review gate; `SYN-001`
   remains BLOCKED. No record storage or sync was implemented.
+
+## 2026-07-21 — SYN-001 CP-R2 activation
+
+- User approved closing `SL-015` as DONE and promoting `SYN-001`.
+- Active scope is CP-R2 only: canonical signed `decision` v1, bounded
+  deterministic encoding, immutable local revision/head storage, restart
+  recovery, and a JDK-only inspection launcher in `:project-record`.
+- CP-R4 networking, synchronization, extra record types, background behavior,
+  and `:cli` changes remain deferred.
+
+## 2026-07-21 — SYN-001 CP-R2 verified
+
+- Added the JDK-only `:project-record` module with canonical bounded `SDR1`
+  decisions, Ed25519 signatures, immutable revision/head storage, recovery,
+  and local inspection.
+- Duplicate, stale-base, conflict, signature/corruption, and restart-recovery
+  tests pass; `:cli` and Link sources are unchanged.
+- `gradlew.bat clean check --dependency-verification=strict` passed for all
+  three modules. Stop before CP-R4 networking or sync.

@@ -80,8 +80,8 @@
 | Fresh generated session after graceful close | bounded launcher integration | repeated `GeneratedOnboardingTest` run | pass | PASS | SL-013 |
 | Transparent reconnect | protocol/manual validation | deferred capability | explicit limitation | NOT CLAIMED | SL-D-024 |
 | Physical generated-launcher onboarding | manual/network evidence | `PHYSICAL-CLI-ONBOARDING.md` | pass | NOT CLAIMED | SL-013 |
-| Signed decision canonical encoding, signature, provenance, and evidence bounds | proposed unit/vector tests | `DecisionRecordTest` | pass | NOT RUN - planning only | SYN-001 |
-| Immutable local decision revision/head storage and crash-safe recovery | proposed store tests | `DecisionStoreTest` | pass | NOT RUN - planning only | SYN-001 |
-| Duplicate, stale, gap, and divergent decision revisions never overwrite a head | proposed deterministic tests | `DecisionSyncRulesTest` | pass | NOT RUN - planning only | SYN-001 |
+| Signed decision canonical encoding, signature, provenance, and evidence bounds | CP-R2 unit/vector tests | `DecisionRecordTest` | pass | PASS | SYN-001 |
+| Immutable local decision revision/head storage and crash-safe recovery | CP-R2 store tests | `DecisionStoreTest` | pass | PASS | SYN-001 |
+| Duplicate, stale, gap, and divergent decision revisions never overwrite a head | CP-R2 deterministic store tests | `DecisionStoreTest` | pass | PASS | SYN-001 |
 | Authenticated bounded application-stream seam without project semantics | Link unit/integration tests | `ApplicationStreamBindingTest`, `ApplicationStreamCodecTest`, focused `NettyQuicLoopbackTest` | pass | PASS | SL-014 |
-| Two configured profiles publish and inspect one matching decision record | proposed process integration | future isolated-profile record sync test | pass | NOT RUN - blocked by SL-014 completion | SYN-001 |
+| Two configured profiles publish and inspect one matching decision record | CP-R4 process integration | future isolated-profile record sync test | pass | DEFERRED - CP-R4 | SYN-001 |

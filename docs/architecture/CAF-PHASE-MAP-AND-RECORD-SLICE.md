@@ -2,15 +2,13 @@
 
 ## Status
 
-Planning proposal only - 2026-07-21. No production code, Link protocol, or
-existing `:cli` code is authorized by this document. The current repository
-decisions and verification evidence remain authoritative over the supplied
-Collaborative Agent Fabric (CAF) concept PDF.
+Planning baseline with CP-R2 implementation activated - 2026-07-21. The
+current repository decisions and verification evidence remain authoritative
+over the supplied Collaborative Agent Fabric (CAF) concept PDF. Link and
+`:cli` remain unchanged.
 
-The proposed task is `SYN-001`, which is deliberately `BLOCKED`. The stated
-freeze of Link and CLI makes authenticated project-record sync impossible with
-the current public surface. This is a useful constraint discovery, not a
-reason to create a second transport or silently weaken authentication.
+`SYN-001` is promoted for CP-R2. The verified Link seam is reused later by
+CP-R4; this checkpoint deliberately stops before networking and sync.
 
 ## Evidence ledger
 

@@ -2,8 +2,8 @@
 
 ## Status
 
-ACCEPTED FOR PREREQUISITE ONLY - 2026-07-21. The record task remains blocked
-until SL-014 is verified.
+ACCEPTED FOR CP-R2 - 2026-07-21. SYN-001 is promoted; CP-R4 networking and
+sync remain deferred.
 
 ## Context
 
@@ -13,7 +13,7 @@ has verified authenticated Link sessions but no project record store or
 application-stream API usable by a higher-level module. `:link` and `:cli`
 are frozen by the current planning request.
 
-## Proposed decision
+## Decision
 
 When explicitly activated, add exactly one application record type,
 `decision`, in a new `:project-record` module. A decision has a stable UUID,
@@ -30,13 +30,18 @@ The existing CLI stays unchanged. The new module may own a fixed JDK-only
 development launcher for record creation, one-shot sync, and readable
 inspection.
 
+CP-R2 implements only the canonical `SDR1` decision bytes, Ed25519 signing,
+bounded evidence, immutable per-profile revision files, atomic head pointers,
+restart recovery, and local inspection. Networking, one-shot sync, and peer
+allowlist enforcement remain CP-R4 work.
+
 ## Required predecessor
 
 The user approved a separate SL-014 Link task to expose the smallest
 transport-neutral, bounded authenticated application-stream seam. It must
 contain no project or decision vocabulary and retain Link's identity,
 readiness, liveness, framing, limits, deadlines, and cleanup ownership. SL-014
-does not authorize record storage or sync.
+is verified; CP-R2 itself performs no networking or sync.
 
 ## Rejected alternatives
 
