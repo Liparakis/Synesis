@@ -298,8 +298,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: accepted ADR-0011, record protocol/storage/threat
   documentation, test matrix, deferred reconciliation, and sanitized evidence.
 - Evidence: planning only; no implementation or verification evidence exists.
-- Blocker: SL-014 must complete before this task can be promoted. Record
-  storage and sync remain prohibited during SL-014.
+- Blocker: SL-015 explicit review and promotion decision are still required;
+  record storage and sync remain prohibited until that gate promotes SYN-001.
 
 ## Deferred capability register
 
