@@ -70,6 +70,22 @@ cancelled and late sessions are locally closed. Router discovery, STUN/TURN,
 relays, hole punching, physical reachability, and path migration remain
 unverified or unsupported rather than being represented as successful paths.
 
+## Invitation and bootstrap mitigations
+
+Invitations are bounded, canonical, signed by the host identity, expire after
+ten minutes, and carry a random 32-byte capability. Parsing and descriptor
+verification precede candidate use. The capability is bound into the existing
+identity-proof transcript rather than treated as peer identity. A process-local
+atomic admission reservation prevents concurrent reuse; reservations expire
+after 15 seconds, release only before authentication, and are consumed after
+mutual identity binding. The capability creates no permanent trust.
+
+Long-term private identity material is stored through the atomic, overwrite-
+preventing file store with restrictive permissions where supported. Public
+metadata is separately checked against the loaded key. QUIC TLS keys are
+ephemeral transport material and are deleted during host cleanup. QR output is
+only another representation of the same link and has no separate trust path.
+
 ## Demo application mitigations
 
 The example application stream is opened only from a usable authenticated

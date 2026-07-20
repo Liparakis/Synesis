@@ -26,14 +26,14 @@ public final class SessionAuthenticator {
     /**
      * Creates the local proof for the supplied transcript and role.
      *
-     * @param identity local signing identity
+     * @param identity   local signing identity
      * @param transcript complete shared transcript
-     * @param role local role
+     * @param role       local role
      * @return signed proof
      * @throws GeneralSecurityException if signing fails
      */
     public static HandshakeProof createProof(NodeIdentity identity, HandshakeTranscript transcript,
-            HandshakeRole role) throws GeneralSecurityException {
+                                             HandshakeRole role) throws GeneralSecurityException {
         Objects.requireNonNull(transcript, "transcript");
         Objects.requireNonNull(role, "role");
         return HandshakeProof.create(identity, transcript.version(), transcript.sessionId(),
@@ -43,23 +43,22 @@ public final class SessionAuthenticator {
     /**
      * Authenticates both role proofs and publishes the resulting session.
      *
-     * @param localIdentity local signing identity
+     * @param localIdentity        local signing identity
      * @param expectedRemoteNodeId required trusted remote node ID
-     * @param transcript complete shared transcript
-     * @param localProof local role proof
-     * @param remoteProof remote role proof
-     * @param replayGuard bounded replay guard
-     * @param establishedAt local establishment time
+     * @param transcript           complete shared transcript
+     * @param localProof           local role proof
+     * @param remoteProof          remote role proof
+     * @param replayGuard          bounded replay guard
+     * @param establishedAt        local establishment time
      * @return immutable authenticated session
      * @throws GeneralSecurityException if proof verification fails
      * @throws IllegalArgumentException if identity, ALPN, or transcript bindings fail
-     * @throws IllegalStateException if the transcript was already accepted
+     * @throws IllegalStateException    if the transcript was already accepted
      */
     public static PeerSession establish(NodeIdentity localIdentity, String expectedRemoteNodeId,
-            HandshakeTranscript transcript, HandshakeProof localProof, HandshakeProof remoteProof,
-            ReplayGuard replayGuard, Instant establishedAt) throws GeneralSecurityException {
+                                        HandshakeTranscript transcript, HandshakeProof localProof, HandshakeProof remoteProof,
+                                        ReplayGuard replayGuard, Instant establishedAt) throws GeneralSecurityException {
         Objects.requireNonNull(localIdentity, "local identity");
-        Objects.requireNonNull(expectedRemoteNodeId, "expected remote node ID");
         Objects.requireNonNull(transcript, "transcript");
         Objects.requireNonNull(localProof, "local proof");
         Objects.requireNonNull(remoteProof, "remote proof");
@@ -69,7 +68,7 @@ public final class SessionAuthenticator {
         HandshakeRole localRole = roleFor(transcript, localIdentity.nodeId());
         HandshakeRole remoteRole = localRole.opposite();
         String remoteNodeId = transcript.nodeId(remoteRole);
-        if (!remoteNodeId.equals(expectedRemoteNodeId)) {
+        if (expectedRemoteNodeId != null && !remoteNodeId.equals(expectedRemoteNodeId)) {
             throw new IllegalArgumentException("expected remote identity does not match transcript");
         }
         if (!transcript.alpn().equals(org.synesis.link.SynesisLink.ALPN)) {
@@ -81,7 +80,7 @@ public final class SessionAuthenticator {
         }
         verifyProof(localProof, transcript, localRole);
         verifyProof(remoteProof, transcript, remoteRole);
-        if (!remoteProof.nodeId().equals(expectedRemoteNodeId)
+        if (expectedRemoteNodeId != null && !remoteProof.nodeId().equals(expectedRemoteNodeId)
                 || !java.util.Arrays.equals(remoteProof.publicKeyEncoded(), transcript.publicKeyEncoded(remoteRole))) {
             throw new IllegalArgumentException("remote identity proof does not match expectation");
         }

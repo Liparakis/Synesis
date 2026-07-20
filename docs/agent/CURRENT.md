@@ -2,23 +2,26 @@
 
 ## Identity
 
-- Task ID: SL-DEMO-001
+- Task ID: SL-012
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0036; latest checkpoint CP-0042
+- Started checkpoint: CP-0036; latest checkpoint CP-0047
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008
+- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009
 
 ## Objective
 
-Prepare the first physical Synesis Link cooperation demonstration without
-implementing broad SL-009 reconnect/path behavior or deferred networking.
+Implement zero-configuration terminal onboarding above the existing Link
+transport without changing the diagnostic DemoCli path or implementing SL-009.
 
 ## Work completed
 
-The Link implementation now lives in `link/` as the first Synesis Gradle
-subproject. Root Gradle orchestration, command paths, ADR-0008, and durable
-documentation have been updated; automated demo readiness remains complete.
+Implemented the bounded onboarding orchestrator above the existing transport:
+automatic identity reuse/creation, listener-first candidate and invitation
+creation, signed capability admission with 15-second reservation expiry,
+ephemeral transport TLS, terminal share link plus ASCII QR, and `host`,
+`join`, and `identity show` commands. `DemoCli` remains unchanged as a
+diagnostic fallback. Identity regeneration is deferred.
 
 ## Verification
 
@@ -33,6 +36,12 @@ documentation have been updated; automated demo readiness remains complete.
 - `scripts/agent-validate-fixtures.ps1`: PASS.
 - `scripts/agent-doctor.ps1`: PASS.
 - `scripts/agent-resume.ps1`: PASS.
+- Focused invitation/bootstrap/admission/QR tests: PASS.
+- Two-profile two-process onboarding with control, liveness, work exchange,
+  and close: PASS; evidence is `docs/evidence/ONBOARDING-PROCESS-2026-07-20.md`;
+  physical two-machine onboarding remains unverified.
+- `gradlew.bat clean check --dependency-verification=strict` after the final
+  admission/failure-state changes: PASS.
 
 ## Current failures
 
@@ -49,5 +58,6 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Repeat the demo for Scenario B abrupt process loss and Scenario C wrong expected
-identity; record only the results that actually occur.
+Perform the documented two-machine onboarding validation when two physical
+computers are available; until then preserve the explicit no-physical-claim
+boundary.

@@ -15,6 +15,7 @@ java {
 
 dependencies {
     implementation(libs.netty.codec.native.quic)
+    implementation(libs.zxing.core)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -54,6 +55,15 @@ tasks.register<JavaExec>("demoCli") {
     description = "Runs the source-only physical Synesis Link demonstration CLI."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass = "org.synesis.link.transport.DemoCli"
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+}
+
+
+tasks.register<JavaExec>("synesisCli") {
+    group = "application"
+    description = "Runs the zero-configuration Synesis terminal onboarding CLI."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "org.synesis.link.transport.SynesisCli"
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 

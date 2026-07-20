@@ -301,3 +301,18 @@ Append-only operational history.
 - Failed attempts: The first PowerShell hash-collection command used an unescaped colon in an interpolated variable name and failed before downloading; the corrected command succeeded with no repository impact.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
+## 2026-07-20 — SL-012 zero-configuration onboarding slice
+
+- Checkpoint: CP-0047
+- Active task: SL-012
+- Completed work: Added automatic identity bootstrap, bounded signed
+  listener-first invitations, transcript capability binding, single-use
+  admission with 15-second reservation expiry, ephemeral QUIC TLS material,
+  source-run `SynesisCli`, and ASCII QR rendering while preserving `DemoCli`.
+- Verification: invitation/bootstrap/admission/QR tests PASS; prior strict
+  clean check PASS; two isolated-profile host/join processes completed control,
+  liveness, demo work, and close. Physical onboarding is not claimed.
+- Remaining work: physical onboarding and deferred demo negative-path
+  scenarios remain unverified.
+- Exact continuation: perform the documented two-machine onboarding validation
+  when two physical computers are available.

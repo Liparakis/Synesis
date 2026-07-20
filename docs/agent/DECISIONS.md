@@ -10,6 +10,11 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 
 ## Product ADRs
 
+- ADR-0009: Zero-configuration terminal onboarding — accepted; listener-first
+  signed invitations with one-use capability admission, authentication-time
+  consumption, bounded pre-auth reservation release, ephemeral transport TLS,
+  automatic identity reuse/creation, and `DemoCli` retained as fallback.
+
 - ADR-0008: Synesis root with Link transport module — accepted; the existing Link implementation moves to `link/` while the root remains a small modular monolith.
 
 - ADR-0007: Demo-only bounded work exchange — accepted for one authenticated `synesis-demo-work/1` request/result operation; no RPC, project semantics, authority, or reconnect behavior.

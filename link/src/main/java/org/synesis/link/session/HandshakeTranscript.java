@@ -28,6 +28,8 @@ public final class HandshakeTranscript {
 
     /** Maximum nonce size. */
     public static final int MAX_NONCE_BYTES = 64;
+    /** Maximum invitation-capability size carried by a transcript. */
+    public static final int MAX_INVITATION_CAPABILITY_BYTES = 64;
     /** Maximum encoded transcript size. */
     public static final int MAX_BYTES = 4_096;
 
@@ -43,6 +45,7 @@ public final class HandshakeTranscript {
     private final long responderEpoch;
     private final byte[] initiatorNonce;
     private final byte[] responderNonce;
+    private final byte[] invitationCapability;
     private final String initiatorNodeId;
     private final byte[] initiatorPublicKey;
     private final String responderNodeId;
@@ -51,6 +54,7 @@ public final class HandshakeTranscript {
 
     private HandshakeTranscript(ProtocolVersion version, String alpn, UUID sessionId,
             long initiatorEpoch, long responderEpoch, byte[] initiatorNonce, byte[] responderNonce,
+            byte[] invitationCapability,
             String initiatorNodeId, byte[] initiatorPublicKey, String responderNodeId,
             byte[] responderPublicKey) {
         this.version = Objects.requireNonNull(version, "version");
@@ -63,6 +67,7 @@ public final class HandshakeTranscript {
         this.responderEpoch = responderEpoch;
         this.initiatorNonce = copyNonce(initiatorNonce);
         this.responderNonce = copyNonce(responderNonce);
+        this.invitationCapability = copyCapability(invitationCapability);
         this.initiatorNodeId = requireText(initiatorNodeId, MAX_NODE_ID_BYTES, "initiator node ID");
         this.initiatorPublicKey = copyBounded(initiatorPublicKey, MAX_KEY_BYTES, "initiator public key");
         this.responderNodeId = requireText(responderNodeId, MAX_NODE_ID_BYTES, "responder node ID");
@@ -94,9 +99,35 @@ public final class HandshakeTranscript {
             long initiatorEpoch, long responderEpoch, byte[] initiatorNonce, byte[] responderNonce,
             String initiatorNodeId, byte[] initiatorPublicKey, String responderNodeId,
             byte[] responderPublicKey) {
+        return create(version, alpn, sessionId, initiatorEpoch, responderEpoch, initiatorNonce, responderNonce,
+                new byte[0], initiatorNodeId, initiatorPublicKey, responderNodeId, responderPublicKey);
+    }
+
+    /**
+     * Creates a transcript with an optional invitation capability bound into
+     * the signed proof challenge.
+     *
+     * @param version protocol version
+     * @param alpn negotiated application protocol
+     * @param sessionId fresh session ID
+     * @param initiatorEpoch initiator session epoch
+     * @param responderEpoch responder session epoch
+     * @param initiatorNonce fresh initiator nonce
+     * @param responderNonce fresh responder nonce
+     * @param invitationCapability bearer capability, or empty for ordinary sessions
+     * @param initiatorNodeId initiator node ID
+     * @param initiatorPublicKey initiator X.509 public key
+     * @param responderNodeId responder node ID
+     * @param responderPublicKey responder X.509 public key
+     * @return immutable canonical transcript
+     */
+    public static HandshakeTranscript create(ProtocolVersion version, String alpn, UUID sessionId,
+            long initiatorEpoch, long responderEpoch, byte[] initiatorNonce, byte[] responderNonce,
+            byte[] invitationCapability, String initiatorNodeId, byte[] initiatorPublicKey,
+            String responderNodeId, byte[] responderPublicKey) {
         return new HandshakeTranscript(version, alpn, sessionId, initiatorEpoch, responderEpoch,
-                initiatorNonce, responderNonce, initiatorNodeId, initiatorPublicKey, responderNodeId,
-                responderPublicKey);
+                initiatorNonce, responderNonce, invitationCapability, initiatorNodeId, initiatorPublicKey,
+                responderNodeId, responderPublicKey);
     }
 
     /**
@@ -145,6 +176,7 @@ public final class HandshakeTranscript {
             long responderEpoch = input.readLong();
             byte[] initiatorNonce = readBytes(input, MAX_NONCE_BYTES);
             byte[] responderNonce = readBytes(input, MAX_NONCE_BYTES);
+            byte[] invitationCapability = readOptionalBytes(input, MAX_INVITATION_CAPABILITY_BYTES);
             String initiatorNodeId = readString(input, MAX_NODE_ID_BYTES);
             byte[] initiatorPublicKey = readBytes(input, MAX_KEY_BYTES);
             String responderNodeId = readString(input, MAX_NODE_ID_BYTES);
@@ -153,8 +185,8 @@ public final class HandshakeTranscript {
                 throw new IOException("trailing handshake transcript bytes");
             }
             HandshakeTranscript transcript = create(version, alpn, sessionId, initiatorEpoch, responderEpoch,
-                    initiatorNonce, responderNonce, initiatorNodeId, initiatorPublicKey, responderNodeId,
-                    responderPublicKey);
+                    initiatorNonce, responderNonce, invitationCapability, initiatorNodeId, initiatorPublicKey,
+                    responderNodeId, responderPublicKey);
             if (!Arrays.equals(value, transcript.encoded)) {
                 throw new IOException("non-canonical handshake transcript");
             }
@@ -170,6 +202,13 @@ public final class HandshakeTranscript {
      * @return fresh encoded bytes
      */
     public byte[] encoded() { return encoded.clone(); }
+
+    /**
+     * Returns the invitation capability bound into this transcript.
+     *
+     * @return a copy, empty for ordinary non-invitation sessions
+     */
+    public byte[] invitationCapability() { return invitationCapability.clone(); }
 
     /**
      * Returns the role-specific bytes to be challenged by a proof.
@@ -254,6 +293,7 @@ public final class HandshakeTranscript {
                 output.writeLong(responderEpoch);
                 writeBytes(output, initiatorNonce);
                 writeBytes(output, responderNonce);
+                writeBytes(output, invitationCapability);
                 writeString(output, initiatorNodeId);
                 writeBytes(output, initiatorPublicKey);
                 writeString(output, responderNodeId);
@@ -279,6 +319,14 @@ public final class HandshakeTranscript {
 
     private static byte[] copyNonce(byte[] value) {
         return copyBounded(value, MAX_NONCE_BYTES, "nonce");
+    }
+
+    private static byte[] copyCapability(byte[] value) {
+        Objects.requireNonNull(value, "invitation capability");
+        if (value.length > MAX_INVITATION_CAPABILITY_BYTES) {
+            throw new IllegalArgumentException("invitation capability exceeds supported bound");
+        }
+        return Arrays.copyOf(value, value.length);
     }
 
     private static byte[] copyBounded(byte[] value, int max, String label) {
@@ -308,6 +356,14 @@ public final class HandshakeTranscript {
         int length = input.readUnsignedShort();
         if (length == 0 || length > max || length > input.available()) {
             throw new IOException("invalid bounded transcript field");
+        }
+        return input.readNBytes(length);
+    }
+
+    private static byte[] readOptionalBytes(DataInputStream input, int max) throws IOException {
+        int length = input.readUnsignedShort();
+        if (length > max || length > input.available()) {
+            throw new IOException("invalid optional transcript field");
         }
         return input.readNBytes(length);
     }

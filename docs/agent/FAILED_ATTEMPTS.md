@@ -1,6 +1,22 @@
 # Failed Attempts
 
-No failed attempts recorded.
+## 2026-07-20 — Java 25 ephemeral TLS certificate generation
+
+- Date: 2026-07-20
+- Task ID: SL-012
+- Attempted approach: Netty's deprecated `SelfSignedCertificate` helper for the
+  temporary QUIC transport certificate.
+- Expected result: Compile and run on the repository's Java 25 toolchain.
+- Observed result: javac failed inside the deprecated helper path with a Java
+  25 compiler/runtime error.
+- Command or evidence: `gradlew.bat :link:compileJava --dependency-verification=strict`.
+- Root cause: the helper's deprecated certificate-generation path is not
+  compatible with this Java 25 environment.
+- Retry prohibition: Do not restore the helper without a reproducible Java 25
+  compatibility fix.
+- Evidence required before retry: a passing Java 25 compile and host/join run.
+- Next hypothesis: keep the ephemeral transport certificate isolated behind a
+  small keytool-backed implementation; Synesis identity remains separate.
 
 ## 2026-07-20 — demo application stream classification
 

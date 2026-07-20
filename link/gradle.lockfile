@@ -1,6 +1,7 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
+com.google.zxing:core:3.5.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.netty:netty-buffer:4.2.16.Final=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.netty:netty-codec-base:4.2.16.Final=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.netty:netty-codec-classes-quic:4.2.16.Final=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

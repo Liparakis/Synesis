@@ -1,11 +1,37 @@
 # First Synesis Link Demonstration
 
+## Zero-configuration onboarding (source-run)
+
+On clean profiles the normal LAN flow is:
+
+```powershell
+./gradlew.bat :link:synesisCli --args="host"
+./gradlew.bat :link:synesisCli --args="join \"synesis://join/<share-link>\""
+```
+
+The host automatically creates or reuses its local identity, binds its listener
+before gathering candidates, signs a ten-minute single-use invitation, and
+prints the copyable link plus an ASCII QR. The joiner verifies the invitation,
+creates or reuses its own identity, gathers candidates, authenticates both
+identities through the existing Link handshake, exercises control/liveness and
+the bounded demo request, then closes gracefully.
+
+Stable terminal failure lines use `FAILURE=...`; common bounded outcomes are
+`INVITE_INVALID`, `NO_USABLE_CANDIDATE`, `CONNECTION_FAILED`,
+`HOST_IDENTITY_MISMATCH`, and `HOST_TIMEOUT`. A failure before identity
+authentication releases the host's short reservation; authenticated admission
+is consumed even if later control work fails.
+
+The source-run command is not an installed `synesis` package; packaging remains
+deferred under `SL-D-024`. The existing manual `DemoCli` procedure below stays
+available as a diagnostic fallback and is not replaced by onboarding.
+
 This is a source-run validation demo, not a production installer or a general
 Synesis cooperation protocol. It proves one authenticated, control-ready,
 live QUIC session carrying one bounded `synesis-demo-work/1`
 `describe-session` request and correlated result.
 
-## Prerequisites
+## Diagnostic DemoCli prerequisites
 
 - Two separate computers, labeled A (listener) and B (client).
 - Java 25 and this repository on both computers.

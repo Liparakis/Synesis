@@ -26,3 +26,13 @@ Java 25 is required. Link-only tasks use the `:link:` path, for example:
 The physical demonstration procedure is [`docs/demo/FIRST_DEMO.md`](docs/demo/FIRST_DEMO.md).
 Unsupported networking and product capabilities are tracked in
 [`docs/agent/DEFERRED.md`](docs/agent/DEFERRED.md).
+
+The zero-configuration source-run onboarding commands are:
+
+```powershell
+./gradlew.bat :link:synesisCli --args="host"
+./gradlew.bat :link:synesisCli --args="join \"synesis://join/<share-link>\""
+```
+
+`DemoCli` remains the explicit diagnostic fallback. The onboarding path is
+two-process tested; it is not a two-machine claim until physically exercised.

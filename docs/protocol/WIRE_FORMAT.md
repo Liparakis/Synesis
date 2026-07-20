@@ -69,6 +69,23 @@ multicast, disallowed loopback/private scopes, and ambiguous link-local input
 before pair generation. Unsupported PCP, NAT-PMP, UPnP, STUN, TURN, and DHT
 discovery do not produce wire claims or placeholder candidates.
 
+## `synesis://join/SYN1-...` invitation
+
+The share link is URL-safe base64 without padding over a bounded canonical
+binary invitation. The binary value contains magic `SIN1`, format version `1`,
+protocol major/minor, session UUID, issue and expiry epoch seconds, a 32-byte
+single-use capability, the complete signed candidate descriptor, and an Ed25519
+signature over every preceding field. Raw invitations are limited to 12,288
+bytes and links to 16,384 characters. Private keys, session keys, reusable
+authority, and Java object serialization are forbidden.
+
+The descriptor and invitation signatures are verified before candidate use. The
+invitation expiry is ten minutes by default with the existing bounded clock-skew
+policy. The capability is copied into the existing signed handshake transcript;
+the host reserves it for at most 15 seconds and consumes it after mutual
+identity proof verification. A valid invitation pins the host identity, while
+the bearer capability authorizes one admission attempt only.
+
 ## `synesis-demo-work/1` application frame
 
 The demo frame is not part of the SLH1 control stream. It is length-prefixed by

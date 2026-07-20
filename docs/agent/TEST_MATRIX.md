@@ -62,3 +62,9 @@
 | Bounded race, authenticated/control-ready winner, wrong identity rejection, and loser cleanup | deterministic unit test | CandidateRacerTest | pass | PASS | SL-008 |
 | Candidate pair selection feeding real local and two-process QUIC harnesses | integration/process tests | NettyQuicLoopbackTest | pass | PASS | SL-008 |
 | PCP/NAT-PMP/UPnP/STUN/TURN/relay/hole-punching/physical reachability/path migration | manual/network evidence | not implemented or not run | explicit limitation | NOT CLAIMED | SL-008 |
+| Automatic identity create/reuse and corruption rejection | unit tests | `IdentityBootstrapTest` | pass | PASS | SL-012 |
+| Signed invitation canonical encoding, tamper, expiry, and bounded link | unit tests | `SessionInvitationTest` | pass | PASS | SL-012 |
+| Single-use capability admission and pre-auth release | unit tests | `InvitationAdmissionTest` | pass | PASS | SL-012 |
+| QR output is derived from the exact share-link string | unit test | `AsciiQrRendererTest` | pass | PASS | SL-012 |
+| Listener-first two-profile host/join onboarding | process integration | `docs/evidence/ONBOARDING-PROCESS-2026-07-20.md` | pass | PASS | SL-012 |
+| Physical zero-configuration onboarding | manual/network evidence | not run in this slice | explicit limitation | NOT CLAIMED | SL-012 |

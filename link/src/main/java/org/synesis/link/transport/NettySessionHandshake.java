@@ -9,6 +9,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.codec.quic.QuicStreamChannel;
+import io.netty.util.AttributeKey;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -20,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.HandshakeEnvelope;
@@ -37,6 +39,8 @@ import org.synesis.link.session.SessionAuthenticator;
 
 /** Internal Netty adapter for the bounded authenticated control exchange. */
 final class NettySessionHandshake {
+
+    private static final AttributeKey<StreamState> SERVER_STATE = AttributeKey.valueOf("synesis-link-server-state");
 
     private NettySessionHandshake() {
     }
@@ -59,7 +63,7 @@ final class NettySessionHandshake {
             List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript, HandshakeProof localProof,
             ReplayGuard replayGuard, CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration) {
         return streamInitializer(new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-                localProof, replayGuard, result, HandshakeRole.INITIATOR, livenessConfiguration));
+                localProof, replayGuard, result, HandshakeRole.INITIATOR, livenessConfiguration, null));
     }
 
     static ChannelHandler serverStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
@@ -85,13 +89,30 @@ final class NettySessionHandshake {
             List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
             ReplayGuard replayGuard, CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration) {
         return streamInitializer(new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration));
+                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, null));
+    }
+
+    static ChannelHandler serverInvitationStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
+            List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
+            LivenessConfiguration livenessConfiguration, InvitationAdmission admission) {
+        return streamInitializer(() -> new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
+                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, admission));
     }
 
     private static ChannelHandler streamInitializer(StreamState state) {
+        return streamInitializer(() -> state);
+    }
+
+    private static ChannelHandler streamInitializer(Supplier<StreamState> stateFactory) {
         return new ChannelInitializer<QuicStreamChannel>() {
             @Override
             protected void initChannel(QuicStreamChannel channel) {
+                StreamState state = stateFactory.get();
+                if (state.localRole == HandshakeRole.RESPONDER) {
+                    var attribute = channel.parent().attr(SERVER_STATE);
+                    StreamState prior = attribute.get();
+                    if (prior == null) attribute.set(state); else state = prior;
+                }
                 channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(
                         HandshakeEnvelope.MAX_BYTES + Integer.BYTES, 0, Integer.BYTES, 0, Integer.BYTES));
                 channel.pipeline().addLast(new LengthFieldPrepender(Integer.BYTES));
@@ -114,14 +135,17 @@ final class NettySessionHandshake {
         private volatile PeerSession session;
         private final Set<UUID> demoRequests = ConcurrentHashMap.newKeySet();
         private final AtomicInteger demoStreams = new AtomicInteger();
+        private final InvitationAdmission admission;
+        private boolean admissionReserved;
+        private boolean identityAuthenticated;
 
         private StreamState(NodeIdentity localIdentity, String expectedRemoteNodeId,
                 List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
                 HandshakeProof localProof, ReplayGuard replayGuard,
                 CompletableFuture<PeerSession> result, HandshakeRole localRole,
-                LivenessConfiguration livenessConfiguration) {
+                LivenessConfiguration livenessConfiguration, InvitationAdmission admission) {
             this.localIdentity = Objects.requireNonNull(localIdentity, "local identity");
-            this.expectedRemoteNodeId = Objects.requireNonNull(expectedRemoteNodeId, "expected remote node ID");
+            this.expectedRemoteNodeId = expectedRemoteNodeId;
             this.supportedVersions = List.copyOf(supportedVersions);
             this.transcript = transcript;
             this.localProof = localProof;
@@ -129,6 +153,7 @@ final class NettySessionHandshake {
             this.result = Objects.requireNonNull(result, "result");
             this.localRole = Objects.requireNonNull(localRole, "local role");
             this.livenessConfiguration = Objects.requireNonNull(livenessConfiguration, "liveness configuration");
+            this.admission = admission;
         }
     }
 
@@ -187,8 +212,15 @@ final class NettySessionHandshake {
                     throw new HandshakeException(HandshakeFailureCode.UNSUPPORTED_PROTOCOL_VERSION);
                 }
                 state.transcript = envelope.transcript();
+                if (state.admission != null) {
+                    if (!state.admission.reserve(state.transcript)) {
+                        throw new HandshakeException(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED);
+                    }
+                    state.admissionReserved = true;
+                }
                 HandshakeRole remoteRole = state.localRole.opposite();
-                if (!state.expectedRemoteNodeId.equals(state.transcript.nodeId(remoteRole))) {
+                if (state.expectedRemoteNodeId != null
+                        && !state.expectedRemoteNodeId.equals(state.transcript.nodeId(remoteRole))) {
                     throw new HandshakeException(HandshakeFailureCode.IDENTITY_MISMATCH);
                 }
                 if (!state.localIdentity.nodeId().equals(state.transcript.nodeId(state.localRole))
@@ -231,6 +263,8 @@ final class NettySessionHandshake {
             try {
                 PeerSession session = SessionAuthenticator.establish(state.localIdentity, state.expectedRemoteNodeId,
                         state.transcript, localProof, remoteProof, state.replayGuard, Instant.now());
+                state.identityAuthenticated = true;
+                if (state.admission != null) state.admission.authenticated();
                 state.session = session;
                 NettyControlStream control = NettyControlStream.create(session, state.result,
                         () -> state.controlClaimed.set(true), state.livenessConfiguration);
@@ -253,9 +287,16 @@ final class NettySessionHandshake {
         }
 
         private void fail(ChannelHandlerContext context, Throwable failure) {
+            if (state.admissionReserved && !state.identityAuthenticated) {
+                state.admission.releaseBeforeAuthentication();
+            }
             HandshakeException exception = failure instanceof HandshakeException value
                     ? value : new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE);
-            state.result.completeExceptionally(exception);
+            // Invitation admission is per-attempt: a malformed or wrong-capability
+            // connection must not terminate the host's shared wait for the real joiner.
+            if (state.admission == null) {
+                state.result.completeExceptionally(exception);
+            }
             if (context.channel().isOpen()) {
                 context.writeAndFlush(Unpooled.wrappedBuffer(HandshakeFailure.create(exception.code()).encoded()))
                         .addListener(future -> context.close());
