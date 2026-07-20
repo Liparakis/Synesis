@@ -3,9 +3,9 @@
 ## Repository state
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
-SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, and SL-014 is the
-only ACTIVE task; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is complete and SL-009
-is deferred. The repository is a Synesis root with Link as the first
+SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 is DONE, and
+SL-015 is the only ACTIVE task; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
+complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
 implemented transport/session subproject.
 
 ## Implementation state
@@ -24,7 +24,8 @@ remains out of scope.
 
 The CAF Phase 1 map and first signed-decision-record proposal are recorded in
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md` and ADR-0011. ADR-0011 is
-approved only for the SL-014 Link seam prerequisite; SYN-001 remains blocked.
+approved only for the now-verified SL-014 Link seam prerequisite; SYN-001
+remains blocked pending SL-015 review.
 No record storage, sync, second transport, shared-Markdown authority, project
 behavior, or CLI change is allowed in SL-014.
 
@@ -48,8 +49,8 @@ behavior, or CLI change is allowed in SL-014.
   `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`. Physical source-run onboarding
   remains unverified and is not covered by that evidence.
 - Physical abrupt-loss and wrong-identity scenarios: NOT CLAIMED.
-- Physical zero-configuration onboarding: NOT CLAIMED; this remains an SL-013
-  completion gate.
+- Physical zero-configuration onboarding: NOT CLAIMED; it is outside the frozen
+  SL-013 development-distribution baseline.
 - Generated launcher two-profile onboarding: PASS; evidence is
   `docs/evidence/CLI-DISTRIBUTION-VALIDATION.md`.
 

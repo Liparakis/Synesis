@@ -414,3 +414,13 @@ Append-only operational history.
   stream. No project, record, owner, sync, storage, or CLI work is permitted.
 - Exact continuation: implement and verify the SL-014 seam, then checkpoint;
   do not begin SYN-001.
+
+## 2026-07-21 — SL-014 verified
+
+- SL-014 implemented the bounded opaque `SLA1` application-stream seam; Link
+  retains framing, bounds, deadlines, liveness, and cleanup, and `:cli` is
+  unchanged.
+- Focused unit/integration/two-JVM tests and the full strict root check passed.
+- Evidence: `docs/evidence/APPLICATION-STREAM-SEAM-2026-07-21.md`.
+- `SL-014` is DONE. `SL-015` is the only ACTIVE review gate; `SYN-001`
+  remains BLOCKED. No record storage or sync was implemented.

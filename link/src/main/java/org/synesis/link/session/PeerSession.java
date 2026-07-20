@@ -23,6 +23,30 @@ import org.synesis.link.demo.DemoWorkResult;
  */
 public final class PeerSession {
 
+    /** Transport-neutral callback for one bounded application payload. */
+    @FunctionalInterface
+    public interface ApplicationStreamHandler {
+        /**
+         * Handles one payload after authentication and control readiness.
+         *
+         * @param remoteNodeId authenticated remote node ID
+         * @param payload bounded opaque payload
+         * @return bounded response payload
+         */
+        CompletionStage<byte[]> handle(String remoteNodeId, byte[] payload);
+    }
+
+    /** Transport-neutral binding for one bounded application-stream exchange. */
+    public interface ApplicationStreamBinding {
+        /**
+         * Sends one bounded payload on an authenticated application stream.
+         *
+         * @param payload opaque payload
+         * @return bounded response or failure
+         */
+        CompletionStage<byte[]> exchange(byte[] payload);
+    }
+
     /** Transport-neutral owner for the bounded demo-only work exchange. */
     public interface DemoWorkBinding {
         /**
@@ -52,6 +76,13 @@ public final class PeerSession {
          * @return application binding, or {@code null} when no demo stream is installed
          */
         default DemoWorkBinding demoWorkBinding() { return null; }
+
+        /**
+         * Returns the optional bounded application-stream binding.
+         *
+         * @return application binding, or {@code null} when unavailable
+         */
+        default ApplicationStreamBinding applicationStreamBinding() { return null; }
 
         /**
          * Requests one shared graceful close operation.
@@ -114,6 +145,7 @@ public final class PeerSession {
     private final Instant establishedAt;
     private volatile ControlBinding control;
     private volatile DemoWorkBinding demoWork;
+    private volatile ApplicationStreamBinding applicationStream;
 
     PeerSession(String localNodeId, String remoteNodeId, byte[] remotePublicKey, UUID sessionId,
             long localEpoch, long remoteEpoch, ProtocolVersion version, Instant establishedAt) {
@@ -206,6 +238,7 @@ public final class PeerSession {
         }
         control = binding;
         demoWork = binding.demoWorkBinding();
+        applicationStream = binding.applicationStreamBinding();
     }
 
     /**
@@ -235,6 +268,25 @@ public final class PeerSession {
             throw new IllegalStateException("demo work requires a control-ready session");
         }
         return binding.request(Objects.requireNonNull(request, "request"));
+    }
+
+    /**
+     * Sends one bounded opaque payload after reciprocal control readiness.
+     *
+     * <p>Link does not interpret, persist, retry, or authorize the payload.
+     * The transport binding owns framing, limits, deadlines, and cleanup.
+     *
+     * @param payload opaque bounded payload
+     * @return bounded response completion
+     * @throws IllegalStateException if the session is not usable or has no
+     *                               application-stream binding
+     */
+    public CompletionStage<byte[]> requestApplication(byte[] payload) {
+        ApplicationStreamBinding binding = applicationStream;
+        if (!isUsable() || binding == null) {
+            throw new IllegalStateException("application stream requires a control-ready session");
+        }
+        return binding.exchange(Objects.requireNonNull(payload, "payload"));
     }
 
     /**

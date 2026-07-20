@@ -64,3 +64,14 @@ The stream is rejected before authentication or control readiness, accepts one
 fixed operation, rejects malformed/oversized/invalid-UTF-8 frames, correlates
 the result by UUID, and closes deterministically. It cannot reopen after close
 begins and does not retry work across sessions.
+
+## Opaque application stream
+
+The SL-014 path is:
+`CONTROL_READY -> APPLICATION_STREAM_OPEN -> OPAQUE_PAYLOAD_RECEIVED ->
+OPAQUE_RESPONSE_SENT -> APPLICATION_STREAM_CLOSED`.
+
+Opening before control readiness, a payload over the bound, an invalid `SLA1`
+frame, a missing receiver, a timeout, or a terminal session selects a bounded
+stream failure and closes that stream. The session's liveness and terminal
+state remain authoritative; the stream cannot reconnect or revive the session.

@@ -53,6 +53,14 @@ final class NettySessionHandshake {
     }
 
     static ChannelHandler clientStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
+            HandshakeTranscript transcript, HandshakeProof localProof, ReplayGuard replayGuard,
+            CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
+        return clientStreamHandler(localIdentity, expectedRemoteNodeId, List.of(ProtocolVersion.V1), transcript,
+                localProof, replayGuard, result, livenessConfiguration, applicationHandler);
+    }
+
+    static ChannelHandler clientStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript, HandshakeProof localProof,
             ReplayGuard replayGuard, CompletableFuture<PeerSession> result) {
         return clientStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript, localProof,
@@ -62,8 +70,17 @@ final class NettySessionHandshake {
     static ChannelHandler clientStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript, HandshakeProof localProof,
             ReplayGuard replayGuard, CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration) {
+        return clientStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript, localProof,
+                replayGuard, result, livenessConfiguration, null);
+    }
+
+    static ChannelHandler clientStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
+            List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript, HandshakeProof localProof,
+            ReplayGuard replayGuard, CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
         return streamInitializer(new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-                localProof, replayGuard, result, HandshakeRole.INITIATOR, livenessConfiguration, null));
+                localProof, replayGuard, result, HandshakeRole.INITIATOR, livenessConfiguration, null,
+                applicationHandler));
     }
 
     static ChannelHandler serverStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
@@ -79,6 +96,14 @@ final class NettySessionHandshake {
     }
 
     static ChannelHandler serverStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
+            List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard,
+            CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
+        return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, null, replayGuard,
+                result, livenessConfiguration, applicationHandler);
+    }
+
+    static ChannelHandler serverStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
             ReplayGuard replayGuard, CompletableFuture<PeerSession> result) {
         return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript, replayGuard,
@@ -88,15 +113,24 @@ final class NettySessionHandshake {
     static ChannelHandler serverStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
             ReplayGuard replayGuard, CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration) {
+        return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript, replayGuard,
+                result, livenessConfiguration, null);
+    }
+
+    static ChannelHandler serverStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
+            List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
+            ReplayGuard replayGuard, CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
         return streamInitializer(new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, null));
+                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, null,
+                applicationHandler));
     }
 
     static ChannelHandler serverInvitationStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
             LivenessConfiguration livenessConfiguration, InvitationAdmission admission) {
         return streamInitializer(() -> new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
-                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, admission));
+                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, admission, null));
     }
 
     private static ChannelHandler streamInitializer(StreamState state) {
@@ -131,10 +165,12 @@ final class NettySessionHandshake {
         private final CompletableFuture<PeerSession> result;
         private final HandshakeRole localRole;
         private final LivenessConfiguration livenessConfiguration;
+        private final PeerSession.ApplicationStreamHandler applicationHandler;
         private final AtomicBoolean controlClaimed = new AtomicBoolean();
         private volatile PeerSession session;
         private final Set<UUID> demoRequests = ConcurrentHashMap.newKeySet();
         private final AtomicInteger demoStreams = new AtomicInteger();
+        private final AtomicInteger applicationStreams = new AtomicInteger();
         private final InvitationAdmission admission;
         private boolean admissionReserved;
         private boolean identityAuthenticated;
@@ -143,7 +179,8 @@ final class NettySessionHandshake {
                 List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
                 HandshakeProof localProof, ReplayGuard replayGuard,
                 CompletableFuture<PeerSession> result, HandshakeRole localRole,
-                LivenessConfiguration livenessConfiguration, InvitationAdmission admission) {
+                LivenessConfiguration livenessConfiguration, InvitationAdmission admission,
+                PeerSession.ApplicationStreamHandler applicationHandler) {
             this.localIdentity = Objects.requireNonNull(localIdentity, "local identity");
             this.expectedRemoteNodeId = expectedRemoteNodeId;
             this.supportedVersions = List.copyOf(supportedVersions);
@@ -154,6 +191,7 @@ final class NettySessionHandshake {
             this.localRole = Objects.requireNonNull(localRole, "local role");
             this.livenessConfiguration = Objects.requireNonNull(livenessConfiguration, "liveness configuration");
             this.admission = admission;
+            this.applicationHandler = applicationHandler;
         }
     }
 
@@ -184,8 +222,13 @@ final class NettySessionHandshake {
                         return;
                     }
                     try {
-                        DemoWorkTransport.accept(context, this, state.session, state.demoRequests,
-                                state.demoStreams, bytes);
+                        if (ApplicationStreamCodec.looksLike(bytes)) {
+                            ApplicationStreamTransport.accept(context, this, state.session,
+                                    state.applicationHandler, state.applicationStreams, bytes);
+                        } else {
+                            DemoWorkTransport.accept(context, this, state.session, state.demoRequests,
+                                    state.demoStreams, bytes);
+                        }
                     } catch (RuntimeException exception) { context.close(); }
                     return;
                 }
@@ -267,7 +310,7 @@ final class NettySessionHandshake {
                 if (state.admission != null) state.admission.authenticated();
                 state.session = session;
                 NettyControlStream control = NettyControlStream.create(session, state.result,
-                        () -> state.controlClaimed.set(true), state.livenessConfiguration);
+                        () -> state.controlClaimed.set(true), state.livenessConfiguration, state.applicationHandler);
                 context.pipeline().replace(this, "synesis-control", control);
                 control.channelActive(context);
             } catch (IllegalStateException exception) {

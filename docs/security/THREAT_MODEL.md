@@ -100,3 +100,15 @@ The CLI prints node IDs, session IDs, counts, statuses, and redacted pair IDs,
 never private keys, proofs, full descriptors, passwords, or personal paths.
 This protocol is not safe arbitrary agent execution and has no authority,
 ownership, project, or task semantics.
+
+## Opaque application-stream mitigations
+
+The SL-014 seam accepts bytes only from an authenticated control-ready Link
+session. The session's verified remote node ID is available to the higher-level
+handler; addresses and TLS success are not substitutes. `SLA1`, explicit outer
+length framing, a 4,096-byte payload bound, a five-second deadline, a four
+stream limit, and idempotent release constrain memory, time, and native
+resources. Invalid markers, versions, oversized input, missing handlers,
+terminal use, and handler failure close the stream without changing liveness or
+publishing a session. Link does not interpret, persist, authorize, or retry the
+payload; those risks belong to a later consumer.

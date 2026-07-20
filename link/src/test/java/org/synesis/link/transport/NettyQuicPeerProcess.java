@@ -103,6 +103,14 @@ final class NettyQuicPeerProcess {
             PeerSession established = session.get(20, TimeUnit.SECONDS);
             awaitHeartbeat(established);
             writeResult(resultFile, established);
+            byte[] applicationPayload = new byte[] {4, 5, 6};
+            byte[] applicationResponse = established.requestApplication(applicationPayload)
+                    .toCompletableFuture().get(5, TimeUnit.SECONDS);
+            if (!java.util.Arrays.equals(applicationPayload, applicationResponse)) {
+                throw new IllegalStateException("application payload did not round trip");
+            }
+            Files.writeString(resultFile, "|APP|" + Base64.getEncoder().encodeToString(applicationResponse),
+                    StandardOpenOption.APPEND);
             var work = established.requestDemoWork(new DemoWorkRequest(UUID.randomUUID(),
                     DemoWorkRequest.DESCRIBE_SESSION)).toCompletableFuture().get(5, TimeUnit.SECONDS);
             Files.writeString(resultFile, "|WORK|" + work.status() + "|" + work.requestId(),
@@ -142,8 +150,10 @@ final class NettyQuicPeerProcess {
                                 public void channelActive(ChannelHandlerContext context) {
                                     accepted.complete((QuicChannel) context.channel());
                                 }
-                            }, NettySessionHandshake.serverStreamHandler(identity, expectedClient,
-                                    List.of(ProtocolVersion.V1), new ReplayGuard(), session)))
+                    }, NettySessionHandshake.serverStreamHandler(identity, expectedClient,
+                                    List.of(ProtocolVersion.V1), new ReplayGuard(), session,
+                                    org.synesis.link.session.LivenessConfiguration.DEFAULT,
+                                    (remoteNodeId, payload) -> CompletableFuture.completedFuture(payload))))
                     .bind(NetUtil.LOCALHOST4, 0).sync().channel();
             Files.write(serverReady, List.of(Integer.toString(((java.net.InetSocketAddress) udp.localAddress()).getPort()),
                     identity.nodeId(), Base64.getEncoder().encodeToString(identity.publicKeyEncoded())));

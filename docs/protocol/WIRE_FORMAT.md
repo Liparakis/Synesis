@@ -105,3 +105,20 @@ Requests allow only `describe-session`; result statuses are `OK`,
 `DUPLICATE_REQUEST`, `UNSUPPORTED_OPERATION`, and `MALFORMED`. No object
 serialization or arbitrary method names are accepted. The frame is legal only
 on an authenticated control-ready session.
+
+## Bounded opaque application stream
+
+The SL-014 seam uses the existing four-byte outer stream length prefix and an
+inner bounded `SLA1` marker so the responder can distinguish an application
+stream from the control handshake and the demo fixture:
+
+| Offset | Width | Field |
+|---:|---:|---|
+| 0 | 4 | ASCII magic `SLA1` |
+| 4 | 1 | frame version `1` |
+| 5 | N | opaque payload, `0..4096` bytes |
+
+The complete inner frame is at most 4,101 bytes. It is legal only after
+reciprocal `CONTROL_READY`; it carries no project or application semantics.
+Unknown versions, malformed markers, oversized payloads, missing handlers, and
+terminal streams are rejected without publishing or reviving a session.

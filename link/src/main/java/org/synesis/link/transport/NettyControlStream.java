@@ -34,7 +34,8 @@ import org.synesis.link.demo.DemoWorkResult;
 
 /** Internal bounded control-stream owner, heartbeat loop, and close state machine. */
 final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
-        implements PeerSession.ControlBinding, PeerSession.DemoWorkBinding {
+        implements PeerSession.ControlBinding, PeerSession.DemoWorkBinding,
+        PeerSession.ApplicationStreamBinding {
 
     static final int MAX_CLOSE_MILLIS = 2_000;
     private static final int READY_BYTES = 20;
@@ -45,11 +46,13 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     private final Runnable claim;
     private final UUID sessionId;
     private final LivenessConfiguration livenessConfiguration;
+    private final PeerSession.ApplicationStreamHandler applicationHandler;
     private final AtomicBoolean ready = new AtomicBoolean();
     private final AtomicBoolean goodbyeSent = new AtomicBoolean();
     private final AtomicBoolean terminalOnce = new AtomicBoolean();
     private final AtomicReference<SessionCloseReason> reason = new AtomicReference<>();
     private final AtomicInteger activeDemoStreams = new AtomicInteger();
+    private final AtomicInteger activeApplicationStreams = new AtomicInteger();
     private final CompletableFuture<Void> terminal = new CompletableFuture<>();
     private final EventDispatcher events = new EventDispatcher();
     private ChannelHandlerContext context;
@@ -61,12 +64,14 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     private long lastHeartbeatMarker;
 
     private NettyControlStream(PeerSession session, CompletableFuture<PeerSession> established,
-            Runnable claim, LivenessConfiguration livenessConfiguration) {
+            Runnable claim, LivenessConfiguration livenessConfiguration,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
         this.session = session;
         this.established = established;
         this.claim = claim;
         this.sessionId = session.sessionId();
         this.livenessConfiguration = livenessConfiguration;
+        this.applicationHandler = applicationHandler;
     }
 
     static NettyControlStream create(PeerSession session, CompletableFuture<PeerSession> established,
@@ -76,7 +81,13 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
 
     static NettyControlStream create(PeerSession session, CompletableFuture<PeerSession> established,
             Runnable claim, LivenessConfiguration livenessConfiguration) {
-        return new NettyControlStream(session, established, claim, livenessConfiguration);
+        return create(session, established, claim, livenessConfiguration, null);
+    }
+
+    static NettyControlStream create(PeerSession session, CompletableFuture<PeerSession> established,
+            Runnable claim, LivenessConfiguration livenessConfiguration,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
+        return new NettyControlStream(session, established, claim, livenessConfiguration, applicationHandler);
     }
 
     @Override
@@ -274,12 +285,24 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     public PeerSession.DemoWorkBinding demoWorkBinding() { return this; }
 
     @Override
+    public PeerSession.ApplicationStreamBinding applicationStreamBinding() { return this; }
+
+    @Override
     public CompletionStage<DemoWorkResult> request(DemoWorkRequest request) {
         if (!isReady() || terminal.isDone()) {
             return CompletableFuture.failedFuture(new IllegalStateException(
                     "demo work requires a live control stream"));
         }
         return DemoWorkTransport.open(context, request, activeDemoStreams);
+    }
+
+    @Override
+    public CompletionStage<byte[]> exchange(byte[] payload) {
+        if (!isReady() || terminal.isDone()) {
+            return CompletableFuture.failedFuture(new IllegalStateException(
+                    "application stream requires a live control stream"));
+        }
+        return ApplicationStreamTransport.open(context, payload, activeApplicationStreams);
     }
 
     @Override

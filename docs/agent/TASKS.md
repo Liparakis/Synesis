@@ -209,8 +209,9 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   physical launcher onboarding remains explicitly unclaimed and is outside
   this frozen development-distribution baseline.
 - Required tests: CLI parsing, command adapters, read-only readiness inspection,
-  generated launcher smoke tests, local generated host/join, existing Link
-  protocol tests, and physical generated-launcher evidence.
+  generated launcher smoke tests, local generated host/join, and existing Link
+  protocol tests. Physical generated-launcher evidence is explicitly unclaimed
+  by the frozen baseline.
 - Required documentation: ADR-0010, distribution and physical CLI evidence,
   README/demo/operations command updates, and durable state reconciliation.
 - Evidence: `:cli:installDist`, strict root check, generated launcher smoke,
@@ -223,7 +224,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SL-014
 - Priority: P0
 - Title: Bounded authenticated Link application-stream seam
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Expose one transport-neutral, bounded application-stream binding
   above Link so a future higher-level module can exchange bytes only after an
   authenticated control-ready session exists.
@@ -239,7 +240,27 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   two-profile byte exchange with remote identity assertions.
 - Required documentation: ADR-0012, protocol/state/security boundary notes,
   test matrix, evidence, and checkpoint state.
-- Evidence: pending implementation and verification.
+- Evidence: `docs/evidence/APPLICATION-STREAM-SEAM-2026-07-21.md`; focused
+  seam tests and `gradlew.bat clean check --dependency-verification=strict`
+  PASS.
+
+## SL-015
+
+- ID: SL-015
+- Priority: P0
+- Title: Review SYN-001 activation after Link seam verification
+- Status: ACTIVE
+- Purpose: Review the verified SL-014 boundary and decide whether the blocked
+  higher-level record task may be explicitly promoted; no record code is
+  implemented in this gate.
+- Dependencies: SL-014 DONE; SYN-001 remains BLOCKED until explicit review.
+- Acceptance criteria: SL-014 evidence and ADR-0012 are reviewed; the user
+  explicitly chooses whether to promote SYN-001; no record storage, sync,
+  project terminology, or `:cli` change occurs in this task.
+- Required tests: resume, fixture, deferred-register, and doctor validators.
+- Required documentation: review decision, task-state reconciliation, and a
+  checkpoint recording the choice.
+- Evidence: pending user review.
 
 ## SL-010
 

@@ -2,19 +2,18 @@
 
 ## Identity
 
-- Task ID: SL-014
+- Task ID: SL-015
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0059; latest checkpoint CP-0059
+- Started checkpoint: CP-0061; latest checkpoint CP-0063
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010
+- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012
 
 ## Objective
 
-Expose one bounded transport-neutral authenticated application-stream seam in
-Link. Keep Link responsible for framing, limits, deadlines, liveness, and
-cleanup; expose authenticated remote identity and readiness; do not add any
-project, record, owner, sync, or CLI behavior.
+Review the verified SL-014 application-stream seam and decide whether the
+blocked SYN-001 record task may be promoted. Do not implement record storage,
+sync, project terminology, or CLI changes.
 
 ## Work completed
 
@@ -22,13 +21,14 @@ SL-013 is complete and frozen at CP-0054 as the standalone
 Picocli/Application distribution baseline. Physical generated-launcher
 onboarding remains unclaimed by explicit scope decision.
 
-ADR-0011 is approved for its required prerequisite. `SYN-001` remains blocked
-on this task and no record storage or sync may begin.
+ADR-0011's required prerequisite is complete as SL-014. The seam's focused and
+full strict verification evidence is recorded; `SYN-001` remains blocked and
+no record storage or sync may begin.
 
 ## Verification
 
 - Root `gradlew.bat projects --dependency-verification=strict`: PASS; root and `:link` discovered.
-- Root `gradlew.bat clean check --dependency-verification=strict`: PASS; `:link:check` and all 40 tests executed.
+- Root `gradlew.bat clean check --dependency-verification=strict`: PASS; `:link:check` and `:cli:check` executed, including the SL-014 seam tests.
 - Package-info files and `packageInfoCheck`: intentionally removed at the user's request; the strict build now verifies compilation, Javadocs, formatting, static analysis, and tests without that gate.
 - Root `gradlew.bat :link:demoCli --args=--help --dependency-verification=strict`: PASS.
 - Candidate provider regression check: PASS; skipping down interfaces restores live candidates (`10` on this host).
@@ -73,7 +73,8 @@ on this task and no record storage or sync may begin.
   computers; physical generated-launcher onboarding is not verified.
 - Physical generated-launcher abrupt-loss and wrong-identity scenarios remain
   unverified and must not be claimed.
-- SL-014 seam implementation and verification are pending.
+- No SL-014 verification failures remain. SYN-001 activation review is
+  pending.
 
 ## Known limitations
 
@@ -84,4 +85,4 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Implement the SL-014 application-stream binding, then run its focused tests before any record work.
+Review `docs/evidence/APPLICATION-STREAM-SEAM-2026-07-21.md` and decide whether to promote SYN-001; do not implement record storage or sync.

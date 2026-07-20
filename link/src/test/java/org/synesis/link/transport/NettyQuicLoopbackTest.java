@@ -1,6 +1,7 @@
 package org.synesis.link.transport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -31,6 +32,7 @@ import java.security.cert.X509Certificate;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.synesis.link.SynesisLink;
 import org.synesis.link.candidate.Candidate;
@@ -131,6 +133,7 @@ final class NettyQuicLoopbackTest {
                 initiatorIdentity, responderIdentity);
         CompletableFuture<PeerSession> clientSession = new CompletableFuture<>();
         CompletableFuture<PeerSession> serverSession = new CompletableFuture<>();
+        AtomicReference<String> applicationRemote = new AtomicReference<>();
         Channel serverUdp = null;
         Channel clientUdp = null;
         QuicChannel client = null;
@@ -146,7 +149,12 @@ final class NettyQuicLoopbackTest {
                                 }
                     }, NettySessionHandshake.serverStreamHandler(responderIdentity,
                                     initiatorIdentity.nodeId(), java.util.List.of(ProtocolVersion.V1),
-                                    new ReplayGuard(), serverSession)))
+                                    new ReplayGuard(), serverSession,
+                                    org.synesis.link.session.LivenessConfiguration.DEFAULT,
+                                    (remoteNodeId, payload) -> {
+                                        applicationRemote.set(remoteNodeId);
+                                        return CompletableFuture.completedFuture(payload);
+                                    })))
                     .bind(new InetSocketAddress(NetUtil.LOCALHOST4, 0)).sync().channel();
             QuicSslContext clientSsl = QuicSslContextBuilder.forClient()
                     .trustManager(InsecureTrustManagerFactory.INSTANCE)
@@ -163,7 +171,8 @@ final class NettyQuicLoopbackTest {
                     HandshakeRole.INITIATOR);
             QuicStreamChannel stream = client.createStream(QuicStreamType.BIDIRECTIONAL,
                     NettySessionHandshake.clientStreamHandler(initiatorIdentity, responderIdentity.nodeId(),
-                            transcript, localProof, new ReplayGuard(), clientSession)).sync().getNow();
+                            transcript, localProof, new ReplayGuard(), clientSession,
+                            org.synesis.link.session.LivenessConfiguration.DEFAULT, null)).sync().getNow();
             assertNotNull(stream);
             PeerSession clientResult = clientSession.get(10, TimeUnit.SECONDS);
             PeerSession serverResult = serverSession.get(10, TimeUnit.SECONDS);
@@ -184,6 +193,14 @@ final class NettyQuicLoopbackTest {
                     DemoWorkRequest.DESCRIBE_SESSION)).toCompletableFuture().get(5, TimeUnit.SECONDS);
             assertEquals(DemoWorkStatus.OK, work.status());
             assertEquals("accepted", work.message());
+            byte[] applicationPayload = new byte[] {0, 7, (byte) 255};
+            assertArrayEquals(applicationPayload, clientResult.requestApplication(applicationPayload)
+                    .toCompletableFuture().get(5, TimeUnit.SECONDS));
+            assertEquals(initiatorIdentity.nodeId(), applicationRemote.get());
+            for (int index = 0; index < 8; index++) {
+                assertArrayEquals(applicationPayload, clientResult.requestApplication(applicationPayload)
+                        .toCompletableFuture().get(5, TimeUnit.SECONDS));
+            }
             CompletableFuture<PeerSession> duplicate = new CompletableFuture<>();
             client.createStream(QuicStreamType.BIDIRECTIONAL,
                     NettySessionHandshake.clientStreamHandler(initiatorIdentity, responderIdentity.nodeId(),
@@ -247,6 +264,7 @@ final class NettyQuicLoopbackTest {
             assertEquals(0, client.exitValue(), readProcessOutput(client));
             assertEquals(0, server.exitValue(), readProcessOutput(server));
             assertEquals("OK", Files.readString(clientResult).split("\\|", -1)[0]);
+            assertTrue(Files.readString(clientResult).contains("|APP|BAUG"));
             assertTrue(Files.readString(clientResult).contains("|WORK|OK|"));
             assertEquals("OK", Files.readString(serverResult).split("\\|", -1)[0]);
             String[] clientFields = Files.readString(clientResult).split("\\|", -1);

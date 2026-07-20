@@ -83,5 +83,5 @@
 | Signed decision canonical encoding, signature, provenance, and evidence bounds | proposed unit/vector tests | `DecisionRecordTest` | pass | NOT RUN - planning only | SYN-001 |
 | Immutable local decision revision/head storage and crash-safe recovery | proposed store tests | `DecisionStoreTest` | pass | NOT RUN - planning only | SYN-001 |
 | Duplicate, stale, gap, and divergent decision revisions never overwrite a head | proposed deterministic tests | `DecisionSyncRulesTest` | pass | NOT RUN - planning only | SYN-001 |
-| Authenticated bounded application-stream seam without project semantics | Link unit/integration tests | future Link stream tests | pass | NOT RUN - SL-014 | SL-014 |
-| Two configured profiles publish and inspect one matching decision record | proposed process integration | future isolated-profile record sync test | pass | NOT RUN - blocked by Link freeze | SYN-001 |
+| Authenticated bounded application-stream seam without project semantics | Link unit/integration tests | `ApplicationStreamBindingTest`, `ApplicationStreamCodecTest`, focused `NettyQuicLoopbackTest` | pass | PASS | SL-014 |
+| Two configured profiles publish and inspect one matching decision record | proposed process integration | future isolated-profile record sync test | pass | NOT RUN - blocked by SL-014 completion | SYN-001 |
