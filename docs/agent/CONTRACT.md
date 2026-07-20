@@ -464,8 +464,6 @@ The current implementation-specific correction is that Link's `src/`,
 Synesis wrapper, settings, dependency catalog/verification, documentation, and
 delegating build.
 
-Every Java package must contain `package-info.java`.
-
 # Persistent working loop
 
 At the beginning of every execution:
@@ -568,7 +566,7 @@ Write meaningful Javadocs for every:
 - protected constructor;
 - protected method;
 - protected field;
-- package through `package-info.java`.
+- public/protected API elements through Javadoc.
 
 Package-private and private elements must also be documented when they contain non-obvious:
 
@@ -697,7 +695,6 @@ fail on meaningful warnings;
 fail on missing public and protected documentation;
 fail on invalid tags;
 fail on broken links;
-verify every package has package-info.java;
 verify public APIs do not expose undocumented implementation types.
 
 Record tooling limitations honestly.
@@ -1312,7 +1309,6 @@ Repeated cycles do not leak native resources.
 Golden vectors remain stable.
 Javadocs generate without warnings.
 Every public and protected API element is documented.
-Every package has package-info.java.
 Dependency verification passes.
 The reference CLI connects two peers through public APIs only.
 
@@ -1629,7 +1625,6 @@ a clean checkout builds;
 all mandatory automated tests pass;
 strict Javadocs pass without warnings;
 every public and protected element is documented;
-every package has package-info.java;
 important internal protocol and concurrency behavior is documented;
 two local processes establish a real authenticated QUIC session;
 two physical computers establish a session under at least one documented direct-network scenario;

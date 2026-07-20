@@ -5,7 +5,7 @@ computer are `TWO_PROCESS_VERIFIED`, not `TWO_MACHINE_VERIFIED`.
 
 | Capability | Classification | Evidence / gap |
 |---|---|---|
-| Two genuinely separate physical computers | REQUIRES_PHYSICAL_VALIDATION | No physical run recorded. See SL-D-021. |
+| Two genuinely separate physical computers | TWO_MACHINE_VERIFIED for Scenario A | Normal-operation LAN evidence recorded in `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`; abrupt-loss and wrong-identity scenarios remain pending. |
 | Independent long-term node identities | READY | `NodeIdentity` and `FileIdentityStore` are implemented and tested. |
 | Separate JVM/process state | READY | Existing two-process harness passes. |
 | Manual/LAN candidate exchange | READY | Candidate providers, descriptors, and pair ranking pass. |

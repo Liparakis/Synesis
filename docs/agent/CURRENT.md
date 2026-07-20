@@ -5,7 +5,7 @@
 - Task ID: SL-DEMO-001
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0036
+- Started checkpoint: CP-0036; latest checkpoint CP-0042
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008
 
@@ -23,8 +23,11 @@ documentation have been updated; automated demo readiness remains complete.
 ## Verification
 
 - Root `gradlew.bat projects --dependency-verification=strict`: PASS; root and `:link` discovered.
-- Root `gradlew.bat clean check --dependency-verification=strict`: PASS; `:link:check` executed.
+- Root `gradlew.bat clean check --dependency-verification=strict`: PASS; `:link:check` and all 40 tests executed.
+- Package-info files and `packageInfoCheck`: intentionally removed at the user's request; the strict build now verifies compilation, Javadocs, formatting, static analysis, and tests without that gate.
 - Root `gradlew.bat :link:demoCli --args=--help --dependency-verification=strict`: PASS.
+- Candidate provider regression check: PASS; skipping down interfaces restores live candidates (`10` on this host).
+- Targeted `CandidateGathererTest` and `CandidateNormalizationTest`: PASS.
 - Resume, doctor, fixture, and deferred validators: PASS.
 - `scripts/agent-validate-deferred.ps1`: PASS; 27 entries.
 - `scripts/agent-validate-fixtures.ps1`: PASS.
@@ -33,9 +36,9 @@ documentation have been updated; automated demo readiness remains complete.
 
 ## Current failures
 
-- No second independent physical computer is available in this workspace;
-  physical normal-operation, abrupt-loss, and wrong-identity evidence cannot
-  be honestly recorded here.
+- Physical Scenario A normal operation is verified on two computers.
+- Physical abrupt-loss and wrong-identity scenarios remain unverified and must
+  not be claimed.
 
 ## Known limitations
 
@@ -46,6 +49,5 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Run `docs/demo/FIRST_DEMO.md` on two independent computers, record sanitized
-normal/abrupt/wrong-identity evidence, and classify it as `TWO_MACHINE_VERIFIED`
-only if those runs actually pass.
+Repeat the demo for Scenario B abrupt process loss and Scenario C wrong expected
+identity; record only the results that actually occur.

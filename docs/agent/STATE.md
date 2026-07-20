@@ -18,13 +18,17 @@ management CLI or application protocol.
 
 ## Verification state
 
-- Strict clean verification: PASS.
+- Strict clean verification after removing the package-info gate: PASS.
+- Package-info files and the package-info verification task were intentionally removed at the user's request; strict Javadocs for public/protected API elements remain enabled.
+- Latest candidate-provider fix: targeted PASS; full strict check PASS.
 - Source/tooling artifact verification metadata: PASS; twenty-three exact SHA-256 entries cover main, test, Gradle, and Kotlin resolution.
 - Deferred register validation: PASS, 27 entries.
 - Local and two-process demo request/result: PASS.
 - CLI help and identity creation: PASS.
 - Resume, doctor, and fixture validation: PASS.
-- Physical two-machine evidence: NOT CLAIMED.
+- Physical two-machine Scenario A normal operation: `TWO_MACHINE_VERIFIED`;
+  evidence is in `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`.
+- Physical abrupt-loss and wrong-identity scenarios: NOT CLAIMED.
 
 ## Honest limitations
 

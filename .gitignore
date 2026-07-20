@@ -65,3 +65,5 @@ service-account*.json
 
 # Keep generated evidence intentional: sanitized evidence may be committed
 # under docs/evidence/ when it is explicitly reviewed.
+/demo/
+/link/demo/

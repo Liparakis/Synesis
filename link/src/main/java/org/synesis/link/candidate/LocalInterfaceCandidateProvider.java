@@ -40,7 +40,8 @@ public final class LocalInterfaceCandidateProvider implements CandidateProvider 
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces != null && interfaces.hasMoreElements()) {
                 NetworkInterface network = interfaces.nextElement();
-                if (cancellation.isCancelled() || !network.isUp()) break;
+                if (cancellation.isCancelled()) break;
+                if (!network.isUp()) continue;
                 for (InetAddress address : java.util.Collections.list(network.getInetAddresses())) {
                     if (cancellation.isCancelled()) break;
                     if (address.isAnyLocalAddress() || address.isMulticastAddress()

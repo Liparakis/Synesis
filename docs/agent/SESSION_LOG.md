@@ -201,6 +201,55 @@ Append-only operational history.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
 
+## 2026-07-20 — candidate scan bug fix
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0037
+- Active task: SL-DEMO-001
+- Completed work: Changed the local interface provider to skip down adapters instead of terminating the scan. Added `demo/` protection to `.gitignore`.
+- Commands run: direct Java candidate gather check; `gradlew.bat :link:test --tests org.synesis.link.candidate.CandidateGathererTest --tests org.synesis.link.candidate.CandidateNormalizationTest --dependency-verification=strict`; full `gradlew.bat clean check --dependency-verification=strict`.
+- Results: Direct gather returned 10 candidates; targeted tests PASS. Full check remains blocked by seven package-info files removed in the user commit `0cc4d3a`.
+- Decisions: Keep the minimal `continue` fix; do not add interface-specific or VPN-specific filtering.
+- Failed attempts: None in the fix; the original failure was the provider’s premature `break`.
+- Remaining work: Restore package-info files before a clean gate; rerun the physical demo with a fresh descriptor.
+- Exact continuation: Restore the seven required `package-info.java` files, rerun strict check, then restart the server and recopy `demo\node-a.descriptor`.
+
+## 2026-07-20 — package metadata restoration and strict verification
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0038
+- Active task: SL-DEMO-001
+- Completed work: Restored the seven required package-info.java files from the last valid commit.
+- Commands run: `gradlew.bat :link:packageInfoCheck --dependency-verification=strict`; `gradlew.bat clean check --dependency-verification=strict`.
+- Results: Focused package check PASS. First full run had one `NettyQuicLoopbackTest` NoClassDefFoundError; targeted rerun PASS and immediate full rerun PASS with all 40 tests.
+- Decisions: No test or production workaround for the transient class-loading failure; retain the strict suite unchanged.
+- Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
+- Exact continuation: Restart the server with the candidate-provider fix and recopy the fresh descriptor.
+
+## 2026-07-20 — first physical normal-operation demo
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0041
+- Active task: SL-DEMO-001
+- Completed work: Recorded a successful two-computer same-LAN normal-operation run.
+- Evidence: `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`.
+- Results: Host A advertised 10 candidates; Host B gathered 6 and generated 8 compatible pairs; direct LAN pair selected; both sides authenticated the expected node, reached `CONTROL_READY=true` and `LIVENESS=LIVE`, returned `WORK_RESULT=OK`, closed cleanly, and reported cleanup.
+- Claim boundary: Classify only Scenario A as `TWO_MACHINE_VERIFIED`; abrupt process loss and wrong expected identity remain unverified.
+- Remaining work: Execute and record Scenario B and Scenario C if physical evidence for those cases is required.
+- Exact continuation: Repeat the demo for abrupt process loss, then wrong expected identity.
+
+## 2026-07-20 — package-info gate removed by user request
+
+- Timestamp: 2026-07-20 Europe/Athens
+- Checkpoint: CP-0042
+- Active task: SL-DEMO-001
+- Completed work: Removed the seven package-info.java files, removed the `packageInfoCheck` Gradle task from `:link:check`, and removed the corresponding active-contract requirements.
+- Commands run: `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS; compilation, strict Javadocs, formatting, static analysis, and all 40 tests passed.
+- Decision: Package-level `package-info.java` documentation is intentionally out of scope by explicit user direction; public/protected API Javadocs remain required.
+- Remaining work: Physical abrupt-loss and wrong-identity demo scenarios remain pending.
+- Exact continuation: Repeat the demo for Scenario B abrupt process loss and Scenario C wrong expected identity.
+
 ## 2026-07-20 — Synesis root and Link module migration
 
 - Timestamp: 2026-07-20 Europe/Athens

@@ -80,17 +80,6 @@ tasks.register("formatCheck") {
     }
 }
 
-tasks.register("packageInfoCheck") {
-    group = "verification"
-    description = "Ensures every production Java package has package-info.java."
-    doLast {
-        val packageDirectories = fileTree("src/main/java").matching { include("**/*.java") }
-            .files.map { it.parentFile }.distinct()
-        val missing = packageDirectories.filter { !it.resolve("package-info.java").isFile }
-        require(missing.isEmpty()) { "Missing package-info.java: ${missing.joinToString()}" }
-    }
-}
-
 tasks.register("staticAnalysis") {
     group = "verification"
     description = "Runs strict compiler diagnostics as the initial static analysis gate."
@@ -98,5 +87,5 @@ tasks.register("staticAnalysis") {
 }
 
 tasks.check {
-    dependsOn(tasks.javadoc, "formatCheck", "packageInfoCheck", "staticAnalysis")
+    dependsOn(tasks.javadoc, "formatCheck", "staticAnalysis")
 }
