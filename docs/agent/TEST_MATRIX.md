@@ -84,4 +84,8 @@
 | Immutable local decision revision/head storage and crash-safe recovery | CP-R2 store tests | `DecisionStoreTest` | pass | PASS | SYN-001 |
 | Duplicate, stale, gap, and divergent decision revisions never overwrite a head | CP-R2 deterministic store tests | `DecisionStoreTest` | pass | PASS | SYN-001 |
 | Authenticated bounded application-stream seam without project semantics | Link unit/integration tests | `ApplicationStreamBindingTest`, `ApplicationStreamCodecTest`, focused `NettyQuicLoopbackTest` | pass | PASS | SL-014 |
-| Two configured profiles publish and inspect one matching decision record | CP-R4 process integration | future isolated-profile record sync test | pass | DEFERRED - CP-R4 | SYN-001 |
+| Project config projectId and explicit peer allowlist bounds/round trip | CP-R4 unit test | `ProjectConfigTest` | pass | PASS | SYN-001 |
+| SYNC_REQUEST/RECORD/RESULT/ERROR deterministic bounded framing | CP-R4 unit test | `RecordMessageTest` | pass | PASS | SYN-001 |
+| Two isolated profiles publish initial, duplicate, successor, stale, and conflict outcomes | CP-R4 process integration | `ProjectRecordSyncProcessTest` | pass | PASS | SYN-001 |
+| Valid divergent revision quarantines without replacing head | CP-R4 process/store evidence | `ProjectRecordSyncProcessTest`; `DecisionStore.applyRemote` | pass | PASS | SYN-001 |
+| Connection closes before result reports UNKNOWN | CP-R4 Link seam contract | application-stream completion mapping | pass | PASS | SYN-001 |

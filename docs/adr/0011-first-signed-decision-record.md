@@ -2,8 +2,8 @@
 
 ## Status
 
-ACCEPTED FOR CP-R2 - 2026-07-21. SYN-001 is promoted; CP-R4 networking and
-sync remain deferred.
+ACCEPTED FOR CP-R4 - 2026-07-21. CP-R2 and the required SL-014 Link seam are
+verified; SYN-001 is promoted through the bounded one-shot exchange only.
 
 ## Context
 
@@ -30,10 +30,20 @@ The existing CLI stays unchanged. The new module may own a fixed JDK-only
 development launcher for record creation, one-shot sync, and readable
 inspection.
 
-CP-R2 implements only the canonical `SDR1` decision bytes, Ed25519 signing,
-bounded evidence, immutable per-profile revision files, atomic head pointers,
-restart recovery, and local inspection. Networking, one-shot sync, and peer
-allowlist enforcement remain CP-R4 work.
+CP-R2 implements the canonical `SDR1` decision bytes, Ed25519 signing, bounded
+evidence, immutable per-profile revision files, atomic head pointers, restart
+recovery, and local inspection. CP-R4 adds a local project configuration with
+an explicit peer allowlist and exactly four bounded message kinds:
+`SYNC_REQUEST`, `RECORD`, `RESULT`, and `ERROR`. A one-shot exchange first
+checks Link-authenticated remote identity and readiness, then validates
+project ID, owner/author binding, signature, size, revision, and predecessor
+digest before any head mutation. Results are deterministic (`DUPLICATE`,
+`REMOTE_STALE`, `CONFLICT`, `REJECTED`, `APPLIED`); valid divergent records are
+quarantined, and a close before a result is reported as `UNKNOWN`.
+
+CP-R4 deliberately excludes background sync, reconnect, discovery, membership,
+retries, additional record types, physical two-machine claims, and `:cli`
+changes.
 
 ## Required predecessor
 
@@ -41,7 +51,8 @@ The user approved a separate SL-014 Link task to expose the smallest
 transport-neutral, bounded authenticated application-stream seam. It must
 contain no project or decision vocabulary and retain Link's identity,
 readiness, liveness, framing, limits, deadlines, and cleanup ownership. SL-014
-is verified; CP-R2 itself performs no networking or sync.
+is verified; CP-R4 uses only that seam and leaves framing, limits, deadlines,
+liveness, and cleanup in Link.
 
 ## Rejected alternatives
 

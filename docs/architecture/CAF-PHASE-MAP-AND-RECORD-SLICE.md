@@ -2,13 +2,14 @@
 
 ## Status
 
-Planning baseline with CP-R2 implementation activated - 2026-07-21. The
+Planning baseline with CP-R4 implementation verified - 2026-07-21. The
 current repository decisions and verification evidence remain authoritative
 over the supplied Collaborative Agent Fabric (CAF) concept PDF. Link and
 `:cli` remain unchanged.
 
-`SYN-001` is promoted for CP-R2. The verified Link seam is reused later by
-CP-R4; this checkpoint deliberately stops before networking and sync.
+`SYN-001` is promoted through CP-R4. The verified Link seam carries only one
+bounded, operator-invoked exchange; this checkpoint stops before CP-R5 and
+broader CAF functionality.
 
 ## Evidence ledger
 
@@ -247,7 +248,7 @@ durable milestones if the user later activates the work.
 | CP-R1 | Approve ADR-0011, promote the one Link stream prerequisite, record no-change compatibility rules | ADR, task/CURRENT agreement, Link API contract review. |
 | CP-R2 | Canonical decision model, signature, local immutable store, and inspection launcher | Unit/store tests, strict build, storage recovery evidence. |
 | CP-R3 | Bounded transport-neutral Link application-stream seam | Link unit/integration checks for authentication, bounds, and cleanup; no project terminology in Link. |
-| CP-R4 | Record protocol, peer allowlist, publish/sync, duplicate/conflict/staleness handling | Focused two-profile process test and strict build. |
+| CP-R4 | Record protocol, peer allowlist, publish/sync, duplicate/conflict/staleness handling | `ProjectRecordSyncProcessTest`, bounded codec/config tests, and strict build; PASS. |
 | CP-R5 | Reviewable physical two-profile record transfer if a real two-computer claim is desired | Sanitized evidence; otherwise retain the claim as two-process only. |
 
 ## Deferred and explicitly unclaimed

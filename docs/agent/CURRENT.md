@@ -5,17 +5,18 @@
 - Task ID: SYN-001
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0065; latest checkpoint CP-0068
+- Started checkpoint: CP-0065; latest checkpoint CP-0072
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012
 
 ## Objective
 
-Implement CP-R2 only: one canonical signed `decision` record v1, deterministic
-encoding/digest/signature/bounds, immutable per-profile revision storage with
-atomic heads, restart recovery, and a JDK-only inspection launcher owned by
-`:project-record`. Do not implement networking, sync, extra record types,
-background behavior, or `:cli` changes.
+Implement CP-R4 only: configured project namespaces and explicit peer
+allowlists, bounded one-shot decision publish/sync over the verified Link
+application-stream seam, deterministic outcomes, authenticated record
+validation, and conflict quarantine. Do not add background sync, reconnect,
+discovery, membership, retries, extra record types, physical claims, or `:cli`
+changes.
 
 ## Work completed
 
@@ -23,9 +24,9 @@ SL-013 is complete and frozen at CP-0054 as the standalone
 Picocli/Application distribution baseline. Physical generated-launcher
 onboarding remains unclaimed by explicit scope decision.
 
-ADR-0011's required prerequisite is complete as SL-014. The user approved
-promotion of SYN-001; CP-R2 is the only active implementation scope. CP-R4
-networking and synchronization remain deferred.
+ADR-0011's required prerequisite is complete as SL-014. SL-015 is DONE and the
+user promoted SYN-001 through CP-R4. CP-R2 remains complete; this slice adds
+only the bounded one-shot application exchange above Link.
 
 ## Verification
 
@@ -68,6 +69,9 @@ networking and synchronization remain deferred.
 - Link-level abrupt-loss and wrong-identity tests: PASS. A generated launcher
   early-kill attempt did not reach a bounded terminal status and is not claimed
   as generated abrupt-loss evidence.
+- CP-R4 project configuration, bounded message codec, authenticated one-shot
+  publish/sync, deterministic outcomes, quarantine, and isolated two-profile
+  process evidence: PASS; evidence is `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`.
 
 ## Current failures
 
@@ -75,9 +79,8 @@ networking and synchronization remain deferred.
   computers; physical generated-launcher onboarding is not verified.
 - Physical generated-launcher abrupt-loss and wrong-identity scenarios remain
   unverified and must not be claimed.
-- No SL-014 verification failures remain. CP-R2 focused
-  `:project-record:check` and full root strict verification pass;
-  evidence is recorded in `docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`.
+- No CP-R4 verification failures remain. Full strict verification and the
+  isolated two-profile process scenarios pass.
 
 ## Known limitations
 
@@ -88,4 +91,5 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Keep CP-R2 complete and do not begin CP-R4 networking or sync until explicitly reviewed.
+Commit the verified CP-R4 implementation and planning state, then stop before
+CP-R5 or broader CAF functionality.

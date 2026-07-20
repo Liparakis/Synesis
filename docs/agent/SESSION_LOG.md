@@ -443,3 +443,15 @@ Append-only operational history.
   tests pass; `:cli` and Link sources are unchanged.
 - `gradlew.bat clean check --dependency-verification=strict` passed for all
   three modules. Stop before CP-R4 networking or sync.
+
+## 2026-07-21 — SYN-001 CP-R4 verified
+
+- Activated only CP-R4 above the verified SL-014 seam; `:cli` remains
+  unchanged and SL-013/SL-015 remain frozen DONE.
+- Added strict local project configuration, bounded `SRP1` messages, one-shot
+  authenticated publish/sync, deterministic outcomes, and conflict quarantine.
+- Two isolated JVM profiles prove initial publish, duplicate retry, valid
+  successor, stale detection, same-version conflict, and a head-preserving
+  quarantine; a sync request observes the shared head.
+- Focused project-record check and full strict root verification pass. Stop
+  before CP-R5 and broader CAF functionality.

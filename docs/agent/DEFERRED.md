@@ -17,7 +17,7 @@ permanent scope decision and record the reason.
 
 ## SL-D-001 â€” NAT traversal
 
-**Status:** DEFERRED
+**Status:** SUPERSEDED
 **Area:** Connectivity
 **Current verified capability:** Bounded direct connectivity using manual and eligible local-interface candidates, normalization, compatible pairing, and racing.
 **Missing capability:** General reachability through NATs and firewalls.
@@ -459,32 +459,35 @@ permanent scope decision and record the reason.
 
 **Status:** DEFERRED
 **Area:** Application semantics
-**Current verified capability:** CP-R2 has one local canonical signed decision
-record, immutable revision storage, recovery, and safe inspection; Link still
-provides only the bounded transport seam.
-**Missing capability:** Project synchronization, peer authorization, task delegation, leases, patch governance, or agent authority.
-**Reason deferred:** These belong to higher-level Synesis slices. CP-R2 proves
-only local signed decision bytes and storage; Link and CLI remain frozen and
-Link exposes only the bounded transport seam.
+**Current verified capability:** CP-R4 adds configured peer authorization,
+bounded one-shot decision publish/sync, deterministic outcomes, and conflict
+quarantine above the verified Link seam.
+**Missing capability:** Background synchronization, reconnect, discovery,
+membership, retries, task delegation, leases, patch governance, or agent
+authority.
+**Reason deferred:** These remain higher-level CAF slices. CP-R4 is pairwise,
+one-shot, and local-process evidence only; Link and CLI remain frozen.
 **Dependencies:** First physical Link demonstration, explicit product contract,
 and an approved transport-neutral bounded Link application-stream seam.
 **Activation trigger:** User approval of ADR-0011 and promotion of `SYN-001`
-after the Link prerequisite is separately scoped and verified (satisfied for
-CP-R2 on 2026-07-21).
-**Evidence required before planning:** Product invariants, authority model, and
-publish/sync conflict and failure tests for CP-R4. CP-R2 evidence is in
-`docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`.
+after the Link prerequisite was separately scoped and verified (satisfied;
+CP-R4 is now verified).
+**Evidence:** `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md` and the
+CP-R4 process/unit tests.
+**Evidence required before planning:** Any future background or multi-peer CAF
+slice requires a new explicit task, authority model, and failure evidence.
 **Security questions:** Authorization, delegation, leases, fencing, and replay.
 **Privacy questions:** Project/task data and participant visibility.
 **Operational questions:** Recovery, ownership, and audit.
 **Public-claims impact:** Demo messages are not production agent cooperation.
-**Potential future task:** SYN-001 (ACTIVE; CP-R2 only; CP-R4 sync remains deferred)
+**Superseded by:** SYN-001 CP-R4 completion; broader CAF work remains deferred.
+**Potential future task:** A new explicitly activated CAF task after CP-R4.
 **Related ADRs:** ADR-0006, ADR-0011
 **Related documents:** `docs/agent/CONTRACT.md`, `docs/demo/FIRST_DEMO.md`,
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`
-**Code extension seams:** A future transport-neutral Link application-stream
-seam; do not expand the demo request/result API with project semantics.
-**Last reviewed:** 2026-07-21 CP-R2 activation
+**Code extension seams:** No background or broader CAF behavior is activated;
+future slices must add explicit tasks and evidence.
+**Last reviewed:** 2026-07-21 CP-R4 completion
 
 ## SL-D-024 â€” CLI packaging, installation, and distribution
 

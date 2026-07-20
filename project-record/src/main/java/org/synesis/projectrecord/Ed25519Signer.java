@@ -1,5 +1,7 @@
 package org.synesis.projectrecord;
 
+import org.synesis.link.identity.NodeIdentity;
+
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -19,6 +21,7 @@ public final class Ed25519Signer {
     private static final int MAX_KEY_BYTES = 256;
 
     private final PrivateKey privateKey;
+    private final SigningOperation signingOperation;
     private final byte[] publicKey;
     private final String nodeId;
 
@@ -34,6 +37,14 @@ public final class Ed25519Signer {
             throw new IllegalArgumentException("key encoding exceeds the supported bound");
         }
         this.nodeId = deriveNodeId(publicKey);
+        this.signingOperation = message -> signWithKey(privateKey, message);
+    }
+
+    private Ed25519Signer(byte[] publicKeyEncoded, String nodeId, SigningOperation operation) {
+        this.privateKey = null;
+        this.publicKey = publicKeyEncoded.clone();
+        this.nodeId = nodeId;
+        this.signingOperation = Objects.requireNonNull(operation, "signing operation");
     }
 
     /** Generates a signer using the JDK secure provider.
@@ -66,6 +77,17 @@ public final class Ed25519Signer {
                 factory.generatePrivate(new PKCS8EncodedKeySpec(privateKeyEncoded))));
     }
 
+    /**
+     * Adapts the authenticated Link identity for signing project records.
+     *
+     * @param identity Link identity whose node ID and key sign records
+     * @return signer backed by the identity's private key
+     */
+    public static Ed25519Signer from(NodeIdentity identity) {
+        Objects.requireNonNull(identity, "identity");
+        return new Ed25519Signer(identity.publicKeyEncoded(), identity.nodeId(), message -> identity.sign(message));
+    }
+
     /** Returns the stable lowercase node identifier derived from the public key.
      * @return node identifier
      */
@@ -85,10 +107,19 @@ public final class Ed25519Signer {
      */
     public byte[] sign(byte[] message) throws GeneralSecurityException {
         Objects.requireNonNull(message, "message");
+        return signingOperation.sign(message);
+    }
+
+    private static byte[] signWithKey(PrivateKey key, byte[] message) throws GeneralSecurityException {
         Signature signature = Signature.getInstance(ALGORITHM);
-        signature.initSign(privateKey);
+        signature.initSign(key);
         signature.update(message);
         return signature.sign();
+    }
+
+    @FunctionalInterface
+    private interface SigningOperation {
+        byte[] sign(byte[] message) throws GeneralSecurityException;
     }
 
     static boolean verify(byte[] publicKeyBytes, byte[] message, byte[] signatureBytes)

@@ -81,6 +81,7 @@ public final class DecisionStore {
     private final UUID projectId;
     private final Path decisions;
     private final Path heads;
+    private final Path conflicts;
 
     /**
      * Opens or creates one profile-local store and performs crash recovery.
@@ -94,8 +95,10 @@ public final class DecisionStore {
         this.projectId = Objects.requireNonNull(projectId, "project ID");
         this.decisions = root.resolve("decisions");
         this.heads = root.resolve("heads");
+        this.conflicts = root.resolve("conflicts");
         Files.createDirectories(decisions);
         Files.createDirectories(heads);
+        Files.createDirectories(conflicts);
         recover();
     }
 
@@ -134,6 +137,63 @@ public final class DecisionStore {
         atomicWrite(revisionPath, record.encoded());
         atomicWrite(headPath(record.recordId()), encodeHead(new Head(record.revision(), record.digest())));
         return SaveResult.APPLIED;
+    }
+
+    /**
+     * Classifies and, when safe, applies a remote immutable revision.
+     * Divergent but authentic revisions are quarantined without changing the
+     * local head.
+     *
+     * @param record authenticated candidate revision
+     * @return deterministic remote classification
+     * @throws IOException if validation or quarantine storage fails
+     */
+    public synchronized SaveResult applyRemote(DecisionRecord record) throws IOException {
+        Objects.requireNonNull(record, "record");
+        if (!projectId.equals(record.projectId())) return SaveResult.CORRUPT;
+        try {
+            if (!record.verify()) return SaveResult.CORRUPT;
+        } catch (GeneralSecurityException exception) {
+            return SaveResult.CORRUPT;
+        }
+        Head current = readHead(record.recordId());
+        if (current == null) {
+            if (record.revision() == 1 && record.previousDigest() == null) {
+                return save(record, null);
+            }
+            quarantine(record);
+            return SaveResult.CONFLICT;
+        }
+        if (Arrays.equals(current.digest(), record.digest())) return SaveResult.DUPLICATE;
+        if (record.revision() <= current.revision()) {
+            quarantine(record);
+            return record.revision() < current.revision() ? SaveResult.STALE_BASE : SaveResult.CONFLICT;
+        }
+        if (record.revision() == current.revision() + 1
+                && Arrays.equals(record.previousDigest(), current.digest())) {
+            return save(record, current);
+        }
+        quarantine(record);
+        return SaveResult.CONFLICT;
+    }
+
+    /**
+     * Stores one valid divergent revision under the profile quarantine area.
+     *
+     * @param record valid same-project signed revision
+     * @throws IOException if the candidate is invalid or cannot be stored
+     */
+    public synchronized void quarantine(DecisionRecord record) throws IOException {
+        Objects.requireNonNull(record, "record");
+        if (!projectId.equals(record.projectId())) throw new IOException("project mismatch");
+        try {
+            if (!record.verify()) throw new IOException("invalid remote signature");
+        } catch (GeneralSecurityException exception) {
+            throw new IOException("invalid remote signature", exception);
+        }
+        Path directory = conflicts.resolve(record.recordId().toString());
+        Path target = directory.resolve(record.revision() + "-" + record.digestHex() + ".sdr");
+        if (!Files.exists(target)) atomicWrite(target, record.encoded());
     }
 
     /**

@@ -64,3 +64,27 @@ synesis-project-record inspect <profile-dir> <project-id> <record-id>
 It prints stable IDs, revision, digest, status, provenance, bounded text,
 evidence count, and signature validity. It never prints private key material,
 network endpoints, or an absolute profile path.
+
+## CP-R4 bounded exchange
+
+Project configuration is strict UTF-8 text containing one `projectId=<uuid>`
+line and zero or more `peer=<sl1-node-id>` lines, capped at 4,096 bytes and 32
+peers. The Link application-stream payload is one canonical `SRP1` message,
+also capped at 4,096 bytes. Its only kinds are:
+
+```text
+SYNC_REQUEST: project UUID, record UUID, known revision, optional 32-byte digest
+RECORD: unsigned-16 length and canonical SDR1 bytes
+RESULT: outcome, record UUID, resulting revision, optional 32-byte digest
+ERROR: error class and strict UTF-8 text capped at 256 bytes
+```
+
+The exchange is one-shot. The receiver first checks the authenticated Link
+remote node against the explicit allowlist, then checks project ID, owner and
+author binding, signature, bounds, revision, and predecessor digest before
+mutating its local head. Equal signed bytes produce `DUPLICATE`; a lower
+revision produces `REMOTE_STALE`; a valid divergent same-version or gap record
+produces `CONFLICT` and is stored below `conflicts/` without changing the head.
+Trust or project failures produce `REJECTED`. A transport close before a
+result is observed produces `UNKNOWN`; no retry or background behavior is
+implied.

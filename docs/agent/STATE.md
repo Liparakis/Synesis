@@ -4,7 +4,7 @@
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
-are DONE, and SYN-001 is the only ACTIVE task at CP-R2; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
+are DONE, and SYN-001 is the only ACTIVE task at CP-R4; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
 implemented transport/session subproject.
 
@@ -19,15 +19,17 @@ fallback. The standalone `cli` module owns Picocli, terminal rendering, exit
 mapping, doctor, QR rendering, and Gradle Application distributions; Link owns
 onboarding through the typed `Onboarding` façade. `:project-record` now owns
 the CP-R2 canonical signed decision model, immutable local store, recovery, and
-JDK-only inspection launcher. Production installation remains out of scope.
+JDK-only inspection launcher. CP-R4 adds only configured peer authorization,
+bounded one-shot messages, authenticated validation, deterministic outcomes,
+and quarantine. Production installation remains out of scope.
 
 ## Planning boundary
 
 The CAF Phase 1 map and first signed-decision-record proposal are recorded in
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md` and ADR-0011. ADR-0011 is
-approved and SYN-001 is active for CP-R2. No networking, sync, second
-transport, shared-Markdown authority, extra record types, background behavior,
-or CLI change is allowed in CP-R2.
+approved and SYN-001 is active for CP-R4. No background sync, reconnect,
+discovery, membership, retries, second transport, shared-Markdown authority,
+extra record types, physical two-machine claim, or CLI change is allowed.
 
 ## Verification state
 
@@ -56,6 +58,10 @@ or CLI change is allowed in CP-R2.
 - CP-R2 local decision record encoding, signing, storage, recovery, and
   inspection: PASS; evidence is
   `docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`.
+- CP-R4 configured peer authorization, bounded messages, one-shot publish/sync,
+  authenticated owner/signature/project/predecessor checks, deterministic
+  outcomes, conflict quarantine, and two-profile process scenarios: PASS;
+  evidence is `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`.
 
 ## Honest limitations
 

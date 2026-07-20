@@ -121,6 +121,20 @@ derive the declared owner ID; author and owner are equal in v1. SHA-256
 predecessor digests make revision chains explicit. Revision bytes are
 immutable and forced before an atomic head replacement. Startup validates the
 whole local chain and rejects corrupt bytes rather than guessing a head.
-The inspection launcher prints no private key or endpoint. Networking,
-allowlist authorization, replay, and sync failure behavior are intentionally
-not claimed until CP-R4.
+The inspection launcher prints no private key or endpoint.
+
+## CP-R4 decision-exchange mitigations
+
+Project configuration is strict, bounded, atomically replaced, and uses an
+explicit authenticated-node allowlist; there is no implicit membership. The
+`SRP1` envelope has four message kinds, strict lengths/UTF-8, no trailing
+bytes, and a 4,096-byte application bound. Every received record is checked
+against the Link-authenticated remote node, project namespace, owner/author
+binding, canonical signature, revision, and predecessor digest before storage.
+Exact repeats are deterministic duplicates; stale and divergent revisions do
+not replace the head. Valid divergent bytes are quarantined for inspection,
+while invalid or unauthorized bytes are rejected. A stream completion without
+a result is reported as `UNKNOWN`; there are no retries, reconnects, or
+background workers. These controls provide pairwise two-process evidence only,
+not replay protection across a future synchronization protocol or physical
+network claims.

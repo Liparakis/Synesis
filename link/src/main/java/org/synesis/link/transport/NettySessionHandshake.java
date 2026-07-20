@@ -129,8 +129,17 @@ final class NettySessionHandshake {
     static ChannelHandler serverInvitationStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
             LivenessConfiguration livenessConfiguration, InvitationAdmission admission) {
+        return serverInvitationStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, replayGuard,
+                result, livenessConfiguration, admission, null);
+    }
+
+    static ChannelHandler serverInvitationStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
+            List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
+            LivenessConfiguration livenessConfiguration, InvitationAdmission admission,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
         return streamInitializer(() -> new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
-                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, admission, null));
+                null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, admission,
+                applicationHandler));
     }
 
     private static ChannelHandler streamInitializer(StreamState state) {

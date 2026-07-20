@@ -297,12 +297,15 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   CLI-inspection test; unchanged Link/CLI regressions.
 - Required documentation: accepted ADR-0011, record protocol/storage/threat
   documentation, test matrix, deferred reconciliation, and sanitized evidence.
-- Scope now active: CP-R2 canonical decision model, signing, immutable local
-  revision/head storage, restart recovery, and the JDK-only inspection launcher.
-  CP-R4 networking/sync remains deferred.
-- Evidence: `docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`; focused
-  CP-R2 tests and full strict root verification PASS.
-- Blocker: none for CP-R2; CP-R4 publish/sync remains explicitly deferred.
+- Scope now active: CP-R4 project configuration and explicit peer allowlists,
+  bounded SYNC_REQUEST/RECORD/RESULT/ERROR messages, one-shot authenticated
+  publish/sync, deterministic duplicate/stale/conflict/rejected/applied/
+  unknown outcomes, and valid divergent-record quarantine. No background
+  behavior, retries, discovery, membership, extra record types, physical
+  claims, or `:cli` changes.
+- Evidence: `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`; focused
+  CP-R4 tests and full strict root verification PASS.
+- Blocker: none for CP-R4; stop before CP-R5 or broader CAF functionality.
 
 ## Deferred capability register
 
