@@ -2,21 +2,21 @@
 
 ## Identity
 
-- Task ID: SYN-001
+- Task ID: SYN-002
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0065; latest checkpoint CP-0072
+- Started checkpoint: CP-0073; latest checkpoint CP-0073
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012
+- Related decisions: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013
 
 ## Objective
 
-Implement CP-R4 only: configured project namespaces and explicit peer
-allowlists, bounded one-shot decision publish/sync over the verified Link
-application-stream seam, deterministic outcomes, authenticated record
-validation, and conflict quarantine. Do not add background sync, reconnect,
-discovery, membership, retries, extra record types, physical claims, or `:cli`
-changes.
+Planning only: define the smallest read-only searchable project view over
+existing verified decision heads. Compare it with adding a second record type,
+freeze Link and `:project-record` except for proven blockers, and do not
+implement production code, new wire messages, background sync, reconnect,
+discovery, membership, retries, workers, leases, autonomy, federation,
+Obsidian, physical claims, or `:cli` changes.
 
 ## Work completed
 
@@ -24,9 +24,9 @@ SL-013 is complete and frozen at CP-0054 as the standalone
 Picocli/Application distribution baseline. Physical generated-launcher
 onboarding remains unclaimed by explicit scope decision.
 
-ADR-0011's required prerequisite is complete as SL-014. SL-015 is DONE and the
-user promoted SYN-001 through CP-R4. CP-R2 remains complete; this slice adds
-only the bounded one-shot application exchange above Link.
+ADR-0011's required prerequisite is complete as SL-014. SL-015 is DONE and
+SYN-001 is closed as DONE at CP-R4. CP-R5 physical validation is deferred;
+SYN-002 is active for planning only and proposes a minimal searchable view.
 
 ## Verification
 
@@ -72,6 +72,9 @@ only the bounded one-shot application exchange above Link.
 - CP-R4 project configuration, bounded message codec, authenticated one-shot
   publish/sync, deterministic outcomes, quarantine, and isolated two-profile
   process evidence: PASS; evidence is `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`.
+- SYN-002 planning comparison of a second record type against a read-only
+  searchable decision view: recorded in ADR-0013 and the phase map; no code
+  implementation started.
 
 ## Current failures
 
@@ -91,5 +94,5 @@ and production Synesis cooperation remain deferred or unverified.
 
 ## Immediate next action
 
-Commit the verified CP-R4 implementation and planning state, then stop before
-CP-R5 or broader CAF functionality.
+Review ADR-0013 and approve or revise the SYN-002 planning contract before any
+implementation; do not change production code in this session.

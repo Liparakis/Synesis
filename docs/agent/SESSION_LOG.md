@@ -455,3 +455,14 @@ Append-only operational history.
   quarantine; a sync request observes the shared head.
 - Focused project-record check and full strict root verification pass. Stop
   before CP-R5 and broader CAF functionality.
+
+## 2026-07-21 — SYN-001 closure and SYN-002 planning
+
+- Closed `SYN-001` as DONE at CP-R4; recorded CP-R5 physical decision-record
+  transfer as deferred under `SL-D-027`.
+- Compared a second `failed-experiment` record with a minimal read-only
+  searchable decision view. Selected the view for planning because it reuses
+  verified signed decisions without adding schema, sync, or authority surface.
+- Added ADR-0013 and promoted `SYN-002` as planning-only. Link and
+  `:project-record` remain frozen except for proven blockers; no production
+  implementation was started.

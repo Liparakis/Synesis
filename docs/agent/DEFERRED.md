@@ -489,6 +489,38 @@ slice requires a new explicit task, authority model, and failure evidence.
 future slices must add explicit tasks and evidence.
 **Last reviewed:** 2026-07-21 CP-R4 completion
 
+## SL-D-028 — CP-R5 physical decision-record transfer claim
+
+**Status:** DEFERRED
+**Area:** Physical validation and operations
+**Current verified capability:** CP-R4 proves one-shot decision publish/sync
+between two isolated JVM profiles on the same host.
+**Missing capability:** Physical two-machine evidence for the existing CP-R4
+initial publish, duplicate, successor, stale, conflict, and cleanup cases.
+**Reason deferred:** The current product slice does not require a physical
+record-transfer claim; two-process evidence is sufficient and safer to keep
+reproducible.
+**Dependencies:** Explicit operator demand, two physical profiles, network
+security review, and sanitized evidence capture.
+**Activation trigger:** A documented need to make a physical record-transfer
+claim, followed by explicit promotion of SYN-001-CP-R5.
+**Evidence required before planning:** Network topology, identity handling,
+failure/cleanup plan, and a test matrix covering all CP-R4 outcomes.
+**Security questions:** Physical endpoint exposure, identity pinning, replay,
+and evidence redaction.
+**Privacy questions:** Profile paths, node identifiers, project content, and
+network metadata in captured evidence.
+**Operational questions:** Clock skew, firewall behavior, cleanup, and repeatability.
+**Public-claims impact:** No physical project-record transfer or reachability
+claim is made.
+**Potential future task:** SYN-001-CP-R5.
+**Related ADRs:** ADR-0011, ADR-0012.
+**Related documents:** `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`,
+`docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`.
+**Code extension seams:** Existing Link seam and `:project-record` CP-R4
+exchange; no new transport or protocol is implied.
+**Last reviewed:** 2026-07-21 CP-R4 closure.
+
 ## SL-D-024 â€” CLI packaging, installation, and distribution
 
 **Status:** DEFERRED

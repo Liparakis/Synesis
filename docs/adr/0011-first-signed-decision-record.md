@@ -3,7 +3,7 @@
 ## Status
 
 ACCEPTED FOR CP-R4 - 2026-07-21. CP-R2 and the required SL-014 Link seam are
-verified; SYN-001 is promoted through the bounded one-shot exchange only.
+verified; SYN-001 is DONE at CP-R4. CP-R5 physical validation is deferred.
 
 ## Context
 
@@ -69,9 +69,11 @@ liveness, and cleanup in Link.
 
 The first shared record proof remains deliberately pairwise and owner-writes
 only. It establishes no global order, consensus, remote availability, or
-general multi-writer merge policy. Reopen this ADR when a second record type,
-multi-writer authority, record-size pressure, continuous sync, or independent
-release/ownership evidence makes the chosen module and file store insufficient.
+general multi-writer merge policy. SYN-001 is closed; ADR-0013 proposes the
+next read-only searchable view without changing this record contract. Reopen
+this ADR when a second record type, multi-writer authority, record-size
+pressure, continuous sync, or independent release/ownership evidence makes
+the chosen module and file store insufficient.
 
 ## Fitness functions
 

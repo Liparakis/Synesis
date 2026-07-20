@@ -280,7 +280,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-001
 - Priority: P0
 - Title: First signed shared decision-record proof
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Prove that two isolated configured profiles can authenticate,
   publish, persist, inspect, and synchronize exactly one signed decision
   record above Link, while detecting duplicates, conflicts, and stale state.
@@ -297,15 +297,59 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   CLI-inspection test; unchanged Link/CLI regressions.
 - Required documentation: accepted ADR-0011, record protocol/storage/threat
   documentation, test matrix, deferred reconciliation, and sanitized evidence.
-- Scope now active: CP-R4 project configuration and explicit peer allowlists,
+- Scope completed: CP-R4 project configuration and explicit peer allowlists,
   bounded SYNC_REQUEST/RECORD/RESULT/ERROR messages, one-shot authenticated
   publish/sync, deterministic duplicate/stale/conflict/rejected/applied/
   unknown outcomes, and valid divergent-record quarantine. No background
   behavior, retries, discovery, membership, extra record types, physical
   claims, or `:cli` changes.
 - Evidence: `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`; focused
-  CP-R4 tests and full strict root verification PASS.
-- Blocker: none for CP-R4; stop before CP-R5 or broader CAF functionality.
+  CP-R4 tests and full strict root verification PASS. Closed at CP-R4.
+- CP-R5 physical two-profile record transfer is explicitly deferred; see
+  `SL-D-028`.
+
+## SYN-001-CP-R5
+
+- ID: SYN-001-CP-R5
+- Priority: P1
+- Title: Physical two-profile decision-record transfer claim
+- Status: DEFERRED
+- Purpose: Validate the existing CP-R4 one-shot decision exchange across two
+  physical machines only if a real two-machine claim becomes necessary.
+- Dependencies: SYN-001 CP-R4 DONE; explicit operator demand for a physical
+  record-transfer claim; network/security evidence.
+- Acceptance criteria: two physical profiles complete the existing CP-R4
+  scenarios with sanitized evidence, or the claim remains explicitly absent.
+- Required tests: physical initial publish, duplicate retry, successor,
+  stale, conflict, and cleanup; no protocol expansion is implied.
+- Required documentation: `SL-D-027`, physical evidence, threat review, and
+  checkpoint state.
+- Evidence: deferred; no physical record-transfer claim is made.
+
+## SYN-002
+
+- ID: SYN-002
+- Priority: P1
+- Title: Minimal searchable project view over signed decisions
+- Status: ACTIVE
+- Purpose: Define and, only after review, expose a bounded read-only view of
+  existing verified decision heads so a human can find and compare shared
+  project truth without adding another record type or protocol.
+- Dependencies: SYN-001 CP-R4 DONE; frozen Link seam; frozen
+  `:project-record` storage and signature rules.
+- Acceptance criteria: planning contract, ownership boundary, bounded query
+  grammar, deterministic result order, corruption/failure behavior, and
+  evidence plan are reviewed before any implementation. Production code is
+  not authorized by this planning entry.
+- Required tests: planned only—query bounds/encoding, deterministic matching
+  and ordering, verified-head-only results, corruption fail-closed behavior,
+  no-mutation checks, and restart-equivalent results.
+- Required documentation: ADR-0013, phase-map update, test matrix, deferred
+  reconciliation, and a planning checkpoint.
+- Scope boundary: no new signed record type, wire message, sync behavior,
+  background process, Link change, `:cli` change, index persistence, or
+  Obsidian integration.
+- Evidence: planning-only; implementation remains unstarted.
 
 ## Deferred capability register
 
