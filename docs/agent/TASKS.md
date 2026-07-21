@@ -418,6 +418,19 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: Design document `docs/agent/SYN_004_DESIGN.md`, updated demo flow document `docs/demo/FIRST_TWO_PERSON_PROJECT_DEMO.md`, and CP-W4 evidence.
 - Evidence: CP-0083; WorkspaceSyncProcessTest; full strict check PASS.
 
+## SYN-005
+
+- ID: SYN-005
+- Priority: P0
+- Title: Project-wide reconciliation over one authenticated session
+- Status: ACTIVE
+- Purpose: Design and implement the smallest bounded bidirectional reconciliation protocol over a single Link session to synchronize all missing or divergent verified record heads.
+- Dependencies: SYN-004 DONE
+- Acceptance criteria: Design and implement a new batch reconciliation protocol over the existing authenticated Link stream seam. The protocol must exchange inventories, transfer contiguous missing revisions, prevent deletion/overwriting of divergent heads, quarantine conflict heads, verify every revision independently before storage, enforce bounds on size/records, and report per-record and project-level outcomes. Clean error exit code `10` with contextual stderr `HINT=` messages must be integrated with the workspace launcher commands. Standalone CLI remains unmodified.
+- Required tests: Unit tests for inventory exchange and matrix reconciliation logic; integration process tests verifying APPLIED, DUPLICATE, tampered host rejection, missing fingerprint rejection, and multi-revision chain catch-up.
+- Required documentation: Design document `docs/agent/SYN_005_DESIGN.md` and checkpoint CP-0086.
+- Evidence: pending.
+
 ## Deferred capability register
 
 Deliberately postponed, unsupported, partially verified, and physically
@@ -437,7 +450,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SL-011
 - Priority: P0
 - Title: CLI and release verification
-- Status: ACTIVE
+- Status: READY
 - Purpose: Deliver the public-API-only two-peer CLI and release evidence.
 - Dependencies: SL-010
 - Acceptance criteria: clean build, CLI workflow, generated Javadocs, protocol docs, vectors, release notes/checklist, and two-machine evidence.

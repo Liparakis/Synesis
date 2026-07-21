@@ -2,29 +2,29 @@
 
 ## Identity
 
-- Task ID: SL-011
+- Task ID: SYN-005
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0083
-- Latest checkpoint: CP-0083
+- Started checkpoint: CP-0085
+- Latest checkpoint: CP-0085
 - Responsible agent: fresh coding agent
 - Related decisions: none
 
 ## Objective
 
-Deliver the public-API-only two-peer CLI and release evidence.
+Design and implement project-wide reconciliation over one authenticated session.
 
 ## Planning state
 
-SL-011 is promoted as the next active task. SYN-004 is completed.
+SYN-005 planning is active. We are designing the bulk reconciliation protocol in `docs/agent/SYN_005_DESIGN.md`.
 
 ## Work completed
 
-None.
+None (planning phase).
 
 ## Verification
 
-None.
+None (planning phase).
 
 ## Current failures
 
@@ -32,4 +32,4 @@ None.
 
 ## Immediate next action
 
-Review release checklist and draft release notes.
+Submit SYN-005 design document for operator review.
