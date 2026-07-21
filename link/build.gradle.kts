@@ -47,7 +47,7 @@ tasks.withType<Javadoc>().configureEach {
 tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
-    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 4).coerceAtLeast(2)
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(4)
 }
 
 tasks.register<JavaExec>("demoCli") {
