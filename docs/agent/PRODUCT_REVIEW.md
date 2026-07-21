@@ -55,8 +55,8 @@ Build a wizard-based interactive setup inside the CLI. Instead of copy-pasting r
 ### Milestone B: Bulk Sync / Richer Project State
 Upgrade the synchronization endpoint and message schema to support bulk synchronization of *all* mismatched decision heads under a project. A single join command would reconcile the entire local store with the remote peer's store, resolving history gaps automatically.
 
-### Milestone C: First Isolated Agent-Work Flow
-Introduce an autonomous worker loop that scans the local decision store for proposed decisions. The agent executes the specified task, generates verification evidence, creates a successor decision (`ACCEPTED` or `REJECTED`), signs it, and writes it back to the store, demonstrating an automated agent-human cooperation loop.
+### Milestone C: First Isolated Agent-Alignment Flow
+Introduce an autonomous agent loop that monitors project decisions for changes in declarative state or configuration (e.g. policy changes, allowlist updates, or tool version approvals). The agent aligns its local constraints and external actions to match this declared state, writing back verification evidence as a signed status/log record if needed. The decision records themselves remain strictly declarative metadata of project truth, never executable work units, task scripts, or job queues.
 
 ---
 

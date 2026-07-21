@@ -397,12 +397,25 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-PRODUCT-REVIEW
 - Priority: P0
 - Title: Product review and future planning through CP-0079
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Evaluate the product value of Synesis through CP-0079, identify friction points, outline future milestones, and recommend the next step.
 - Dependencies: SYN-003 DONE
 - Acceptance criteria: A complete product review document under `docs/agent/PRODUCT_REVIEW.md` is committed and checkpointed.
 - Required tests: resume, doctor, checkpoint, fixture validators.
 - Required documentation: `docs/agent/PRODUCT_REVIEW.md`, tasks, state, current, next session.
+- Evidence: `docs/agent/PRODUCT_REVIEW.md` and checkpoint CP-0080.
+
+## SYN-004
+
+- ID: SYN-004
+- Priority: P0
+- Title: Minimal guided workspace demo flow
+- Status: ACTIVE
+- Purpose: Reduce the two-person workspace demo to the fewest safe operator steps while preserving host Node ID pinning and cryptographic identity verification.
+- Dependencies: SYN-PRODUCT-REVIEW DONE, SYN-003 DONE
+- Acceptance criteria: Update `:workspace` CLI commands: `sync host` takes optional `--project` and `--record` arguments and outputs a parameterized invitation link; `sync join` accepts a single invitation link, parses the project/record/host parameters, verifies the local configuration, pins the connection to the host Node ID, and runs sync. Clean error exit code `10` is accompanied by stderr contextual `HINT:` messages. No change to wire protocol formats or storage.
+- Required tests: Unit tests for URI validation and query param extraction; integration process tests verifying the single-link flow, wrong host pinning rejection, and contextual next-action hints.
+- Required documentation: Design document `docs/agent/SYN_004_DESIGN.md`, updated demo flow document `docs/demo/FIRST_TWO_PERSON_PROJECT_DEMO.md`, and CP-W4 evidence.
 
 ## Deferred capability register
 

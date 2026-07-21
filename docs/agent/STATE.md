@@ -82,6 +82,7 @@ allowed.
   `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`, and
   `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.
 - SYN-PRODUCT-REVIEW: PASS; completed the product review and roadmap planning through CP-0079. The review is recorded in `docs/agent/PRODUCT_REVIEW.md`.
+- SYN-004 planning: PASS; completed the minimal guided workspace demo flow design and task promotion under CP-0081. Detailed design is in `docs/agent/SYN_004_DESIGN.md`.
 
 ## Honest limitations
 

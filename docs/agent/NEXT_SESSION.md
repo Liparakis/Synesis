@@ -1,11 +1,11 @@
 # Next Session
 
-- Active task: SYN-PRODUCT-REVIEW
+- Active task: SYN-004
 - Repository branch: master
-- Last checkpoint: CP-0079
+- Last checkpoint: CP-0081
 - Last passing command: `gradlew.bat clean check --dependency-verification=strict`
 - Last failing command: none
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next documentation action: complete the product review checkpoint and commit, then stop for review.
+- Exact next code action: implement connection link parsing, parameter extraction, and validation in `WorkspaceCli.java`.
 - Unresolved blockers: none
-- Facts that must not be forgotten: CP-W3 is complete, and this session is planning-only; do not modify product code or write new tests.
+- Facts that must not be forgotten: No changes to Link wire protocols (SDR1, SRP1); the single invitation URI format query parameters are project, record, host; the host Node ID is extracted from the URI and cryptographically pinned; failure exit codes must match 10 and print next-action hints to stderr; decision records must never be treated as executable tasks.

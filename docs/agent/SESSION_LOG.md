@@ -520,3 +520,11 @@ Append-only operational history.
 - Outputs for search and inspect are stable, safe, and byte-stable. Standard CLI exit codes are preserved (0 for success, 10 for failure).
 - Generated-launcher integration tests verify APPLIED, DUPLICATE, restart stability, empty search, malformed filters, missing records, corruption, conflicts, and stale revisions. Full strict check and validators pass.
 - Evidence: `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.
+
+## 2026-07-21 — SYN-004 planning and activation
+
+- User requested SYN-004 minimal guided workspace demo flow design.
+- Analyzed the two-person demo. Determined that a single copyable URI can safely embed the Link invitation payload, project ID, record ID, and host Node ID parameters while preserving cryptographic host pinning.
+- Corrected the roadmap in `PRODUCT_REVIEW.md` to ensure decision records are treated as declarative policies/metadata, never as executable tasks or job scripts.
+- Documented the exact operator commands, security guarantees, command contracts, failure behavior, hints, and test matrix in `docs/agent/SYN_004_DESIGN.md`.
+- Closed the planning/review task and promoted `SYN-004` as the ACTIVE task. All validators and checkpoint pass.

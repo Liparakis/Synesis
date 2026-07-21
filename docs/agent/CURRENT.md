@@ -2,25 +2,25 @@
 
 ## Identity
 
-- Task ID: SYN-PRODUCT-REVIEW
+- Task ID: SYN-004
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0079
-- Latest checkpoint: CP-0079
+- Started checkpoint: CP-0081
+- Latest checkpoint: CP-0081
 - Responsible agent: fresh coding agent
 - Related decisions: none
 
 ## Objective
 
-Review Synesis through CP-0079 as a product, not as an architecture exercise. Produce product capabilities summary, demo usability review, top five friction points, three milestones, recommendation, and explicit deferred list in `docs/agent/PRODUCT_REVIEW.md`.
+Reduce the two-person workspace demo to the fewest safe operator steps. Update the CLI: `sync host` takes optional `--project` and `--record` and outputs a query-parameterized invitation link; `sync join` parses the link, pins the connection to the host Node ID, and runs sync. Clean error exit code `10` is accompanied by stderr contextual `HINT:` messages. No change to wire protocols, record schemas, or storage.
 
 ## Planning state
 
-SYN-003 is DONE at CP-0079. Planning is ACTIVE.
+SYN-PRODUCT-REVIEW is DONE at CP-0080. Design is complete in `docs/agent/SYN_004_DESIGN.md`.
 
 ## Work completed
 
-Product evaluation is written in `docs/agent/PRODUCT_REVIEW.md`.
+None yet (this session is planning-only).
 
 ## Verification
 
@@ -32,4 +32,4 @@ None.
 
 ## Immediate next action
 
-Checkpoint and commit the product review, then stop.
+Implement connection link parsing and validation unit tests.
