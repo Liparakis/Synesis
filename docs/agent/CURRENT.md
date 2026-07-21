@@ -52,5 +52,5 @@ not changed.
 
 ## Immediate next action
 
-Create CP-0077, commit the verified CP-W1 implementation and evidence, and
-stop before CP-W2 host/join or sync.
+Review CP-W1 evidence and approve or promote CP-W2 separately; do not implement
+host/join or sync.
