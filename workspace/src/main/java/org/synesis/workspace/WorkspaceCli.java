@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -33,8 +34,10 @@ import org.synesis.projectrecord.DecisionStore;
 import org.synesis.projectrecord.DecisionSearch;
 import org.synesis.projectrecord.Ed25519Signer;
 import org.synesis.projectrecord.ProjectConfig;
+import org.synesis.projectrecord.ProjectConstraint;
 import org.synesis.projectrecord.ProjectRecordSync;
 import org.synesis.projectrecord.ProjectReconciliationSync;
+import org.synesis.projectrecord.ScopeMatcher;
 
 /**
  * JDK-only bootstrap launcher for one isolated Synesis workspace profile.
@@ -92,8 +95,10 @@ public final class WorkspaceCli {
             case "identity" -> executeIdentity(parsed);
             case "project" -> executeProject(parsed);
             case "decision" -> executeDecision(parsed);
+            case "constraint" -> executeConstraint(parsed);
             case "sync" -> executeSync(parsed);
             case "check-action" -> executeCheckAction(parsed);
+            case "hook" -> executeHook(parsed);
             default -> throw failure("USAGE");
         };
     }
@@ -287,10 +292,79 @@ public final class WorkspaceCli {
         return 0;
     }
 
+    private static int executeConstraint(Parsed parsed) throws Exception {
+        if (!"create".equals(parsed.subcommand)) throw failure("USAGE");
+
+        requireOptions(parsed.options, "--title", "--rationale", "--scope");
+        String title = bounded(parsed.options.get("--title"), DecisionRecord.MAX_TITLE_BYTES, "title");
+        String rationale = bounded(parsed.options.get("--rationale"), DecisionRecord.MAX_RATIONALE_BYTES, "rationale");
+        String scope = bounded(parsed.options.get("--scope"), 1024, "scope");
+        String effectStr = parsed.options.getOrDefault("--effect", "block").toUpperCase(java.util.Locale.ROOT);
+
+        ProjectConstraint.Effect effect = "WARN".equals(effectStr) ? ProjectConstraint.Effect.WARN : ProjectConstraint.Effect.BLOCK;
+
+        Path configPath = parsed.profile.resolve(PROJECT_CONFIG);
+        ProjectConfig config;
+        try {
+            config = ProjectConfig.load(configPath);
+        } catch (Exception failure) {
+            throw failure("PROJECT_NOT_CONFIGURED");
+        }
+
+        NodeIdentity identity = identity(parsed.profile);
+        Ed25519Signer signer = Ed25519Signer.from(identity);
+        UUID recordId = UUID.randomUUID();
+
+        DecisionRecord record = ProjectConstraint.createTypedRecord(config.projectId(), recordId,
+                identity.nodeId(), effect, scope, title, rationale, signer);
+
+        DecisionStore store = new DecisionStore(parsed.profile.resolve("records"), config.projectId());
+        DecisionStore.SaveResult result = store.save(record, null);
+        if (result != DecisionStore.SaveResult.APPLIED && result != DecisionStore.SaveResult.DUPLICATE) {
+            throw failure("INVALID_RECORD");
+        }
+
+        System.out.println("NODE_ID=" + identity.nodeId());
+        System.out.println("PROJECT_ID=" + config.projectId());
+        System.out.println("RECORD_ID=" + record.recordId());
+        System.out.println("REVISION=" + record.revision());
+        System.out.println("DIGEST=" + record.digestHex());
+        System.out.println("STATUS=" + record.status().name());
+        System.out.println("CONSTRAINT_EFFECT=" + effect.name());
+        System.out.println("CONSTRAINT_SCOPE=" + ScopeMatcher.normalizePath(scope));
+        System.out.println("SIGNATURE_VALID=true");
+        return 0;
+    }
+
+    private static int executeHook(Parsed parsed) throws Exception {
+        if (!"claude-code".equals(parsed.subcommand)) throw failure("USAGE");
+
+        ClaudeCodeHookAdapter adapter = new ClaudeCodeHookAdapter(parsed.profile);
+        ClaudeCodeHookAdapter.Result result = adapter.processStream(System.in);
+
+        System.out.println(result.responseJson());
+        if (result.outcome() == ClaudeCodeHookAdapter.Outcome.BLOCKED) {
+            System.err.println("HINT=" + result.humanReason());
+            return 10;
+        } else if (result.outcome() == ClaudeCodeHookAdapter.Outcome.INVALID_INPUT) {
+            System.err.println("HINT=" + result.humanReason());
+            return 10;
+        }
+        return 0;
+    }
+
     private static int executeCheckAction(Parsed parsed) throws Exception {
         requireOptions(parsed.options, "--scope", "--action");
-        String scope = bounded(parsed.options.get("--scope"), 512, "scope");
+        String scopeRaw = bounded(parsed.options.get("--scope"), 1024, "scope");
         String action = bounded(parsed.options.get("--action"), 512, "action");
+
+        String scope;
+        try {
+            scope = ScopeMatcher.normalizePath(scopeRaw);
+        } catch (IllegalArgumentException e) {
+            System.err.println("HINT=Invalid scope path: " + e.getMessage());
+            return 2;
+        }
 
         Path configPath = parsed.profile.resolve(PROJECT_CONFIG);
         ProjectConfig config;
@@ -308,40 +382,46 @@ public final class WorkspaceCli {
             throw failure("RECORD_NOT_FOUND");
         }
 
-        DecisionRecord matchedConstraint = null;
+        List<ProjectConstraint> matched = new ArrayList<>();
         for (DecisionRecord record : heads) {
-            if (record.status() == DecisionStatus.PROPOSED || record.status() == DecisionStatus.ACCEPTED) {
-                String text = (record.title() + " " + record.rationale()).toLowerCase(java.util.Locale.ROOT);
-                boolean scopeMatch = false;
-                for (DecisionEvidence ev : record.evidence()) {
-                    if (ev.reference() != null) {
-                        String ref = ev.reference();
-                        int wildcardIdx = ref.indexOf('*');
-                        String prefix = wildcardIdx >= 0 ? ref.substring(0, wildcardIdx) : ref;
-                        if (!prefix.isEmpty() && (scope.startsWith(prefix) || prefix.startsWith(scope))) {
-                            scopeMatch = true;
-                            break;
-                        }
-                    }
-                }
-                if (scopeMatch || text.contains(scope.toLowerCase(java.util.Locale.ROOT)) || containsMatchingKeywords(text, action)) {
-                    matchedConstraint = record;
-                    break;
-                }
+            ProjectConstraint constraint = ProjectConstraint.fromRecord(record);
+            if (constraint != null && constraint.appliesTo(scope)) {
+                matched.add(constraint);
             }
         }
 
         System.out.println("PROJECT_ID=" + config.projectId());
-        if (matchedConstraint != null) {
-            System.out.println("ACTION_RESULT=BLOCKED");
-            System.out.println("MATCHED_CONSTRAINT_ID=" + matchedConstraint.recordId());
-            System.out.println("CONSTRAINT_TITLE=" + matchedConstraint.title());
-            System.out.println("CONSTRAINT_RATIONALE=" + matchedConstraint.rationale());
-            System.out.println("REASON=Action affecting scope '" + scope + "' collides with authoritative constraint.");
-            System.err.println("HINT=Action blocked by project constraint " + matchedConstraint.recordId() + ". Re-plan required.");
-            return 10;
+        if (!matched.isEmpty()) {
+            ProjectConstraint primaryBlock = matched.stream()
+                    .filter(c -> c.effect() == ProjectConstraint.Effect.BLOCK)
+                    .findFirst().orElse(null);
+
+            if (primaryBlock != null) {
+                System.out.println("ACTION_RESULT=BLOCKED");
+                System.out.println("MATCHED_CONSTRAINT_COUNT=" + matched.size());
+                System.out.println("MATCHED_CONSTRAINT_ID=" + primaryBlock.recordId());
+                System.out.println("CONSTRAINT_EFFECT=BLOCK");
+                System.out.println("CONSTRAINT_TITLE=" + primaryBlock.title());
+                System.out.println("CONSTRAINT_RATIONALE=" + primaryBlock.rationale());
+                System.out.println("MATCHED_SCOPE=" + scope);
+                System.out.println("REASON=Active project constraint blocks the proposed action.");
+                System.err.println("HINT=Action blocked by project constraint " + primaryBlock.recordId() + ". Re-plan required.");
+                return 10;
+            } else {
+                ProjectConstraint primaryWarn = matched.get(0);
+                System.out.println("ACTION_RESULT=WARNING");
+                System.out.println("MATCHED_CONSTRAINT_COUNT=" + matched.size());
+                System.out.println("MATCHED_CONSTRAINT_ID=" + primaryWarn.recordId());
+                System.out.println("CONSTRAINT_EFFECT=WARN");
+                System.out.println("CONSTRAINT_TITLE=" + primaryWarn.title());
+                System.out.println("CONSTRAINT_RATIONALE=" + primaryWarn.rationale());
+                System.out.println("MATCHED_SCOPE=" + scope);
+                System.out.println("REASON=Active project constraint emitted warning for proposed action.");
+                return 0;
+            }
         } else {
             System.out.println("ACTION_RESULT=ALLOWED");
+            System.out.println("MATCHED_CONSTRAINT_COUNT=0");
             System.out.println("REASON=No active project constraint collides with action.");
             return 0;
         }

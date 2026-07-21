@@ -42,12 +42,11 @@ final class WorkspaceSyncProcessTest {
         DemoState state = prepare();
         // Agent A creates an architectural constraint decision
         String digest = "1".repeat(64);
-        CommandResult constraint = run(state.host, "decision", "create",
-                "--title", "CONSTRAINT: Lock protocol wire format",
-                "--rationale", "Scope: src/protocol/** - Do not modify protocol formats.",
-                "--evidence-kind", "scope",
-                "--evidence-ref", "src/protocol/**",
-                "--evidence-sha256", digest);
+        CommandResult constraint = run(state.host, "constraint", "create",
+                "--title", "Lock protocol wire format",
+                "--rationale", "Protocol formats are frozen during compatibility testing.",
+                "--scope", "src/protocol/**",
+                "--effect", "block");
         assertEquals(0, constraint.exit);
 
         // Host runs project-wide reconciliation
@@ -72,7 +71,7 @@ final class WorkspaceSyncProcessTest {
                 "--action", "Modify wire format");
         assertEquals(10, blockedCheck.exit);
         assertTrue(blockedCheck.stdout.contains("ACTION_RESULT=BLOCKED"), blockedCheck.stdout);
-        assertTrue(blockedCheck.stdout.contains("CONSTRAINT_TITLE=CONSTRAINT: Lock protocol wire format"), blockedCheck.stdout);
+        assertTrue(blockedCheck.stdout.contains("CONSTRAINT_TITLE=Lock protocol wire format"), blockedCheck.stdout);
 
         // Agent B checks an unconstrained action -> ALLOWED (exit 0)
         CommandResult allowedCheck = run(state.join, "check-action",

@@ -41,7 +41,8 @@ tasks.withType<Javadoc>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
-    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(4)
+    val forkOverride = project.findProperty("synesisTestForks")?.toString()?.toIntOrNull()
+    maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
 
 tasks.register("formatCheck") {

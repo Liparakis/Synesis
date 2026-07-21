@@ -431,6 +431,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: Design document `docs/agent/SYN_005_DESIGN.md`, ADR-0015, `docs/development/current-state.md`, and checkpoint CP-0091.
 - Evidence: PASS — `ReconciliationMessageTest`, `ProjectReconciliationSyncProcessTest`, `WorkspaceSyncProcessTest`, and `gradlew.bat clean check --dependency-verification=strict`. Closed at CP-0091.
 
+## SYN-006
+
+- ID: SYN-006
+- Priority: P0
+- Title: Constraint Hardening and First Enforceable Harness Integration
+- Status: DONE
+- Purpose: Introduce typed project constraints, deterministic scope matching, portable Gradle settings, and a Claude Code pre-tool execution hook adapter.
+- Dependencies: SYN-005 DONE
+- Acceptance criteria: Implement ProjectConstraint typed model with LEGACY_INFERRED fallback, ScopeMatcher path normalization and wildcard matching engine, portable 2GB heap Gradle default with test fork controls, and ClaudeCodeHookAdapter pre-tool execution hook integration.
+- Required tests: ScopeMatcherTest, ProjectConstraintTest, ClaudeCodeHookAdapterTest, WorkspaceSyncProcessTest.
+- Required documentation: ADR-0016, current-state.md, and checkpoint CP-0092.
+- Evidence: PASS — `ScopeMatcherTest`, `ProjectConstraintTest`, `ClaudeCodeHookAdapterTest`, `WorkspaceSyncProcessTest`, `gradlew.bat clean check --dependency-verification=strict`.
+
+
 ## Deferred capability register
 
 Deliberately postponed, unsupported, partially verified, and physically
