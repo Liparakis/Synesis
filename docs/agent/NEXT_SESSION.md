@@ -2,7 +2,7 @@
 
 - Active task: SYN-002 (review/closure)
 - Repository branch: master
-- Last checkpoint: CP-0074
+- Last checkpoint: CP-0075
 - Last passing command: `gradlew.bat clean check --dependency-verification=strict`
 - Last failing command: none; the first full run had a transient test class-loading failure and the immediate rerun passed
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
