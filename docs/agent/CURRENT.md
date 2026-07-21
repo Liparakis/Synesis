@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0085
-- Latest checkpoint: CP-0085
+- Latest checkpoint: CP-0087
 - Responsible agent: fresh coding agent
 - Related decisions: none
 
@@ -16,15 +16,19 @@ Design and implement project-wide reconciliation over one authenticated session.
 
 ## Planning state
 
-SYN-005 planning is active. We are designing the bulk reconciliation protocol in `docs/agent/SYN_005_DESIGN.md`.
+SYN-005 planning is complete. The PRP1 reconciliation design is finalized under `docs/agent/SYN_005_DESIGN.md`.
 
 ## Work completed
 
-None (planning phase).
+- Implemented `ReconciliationMessage` binary codec under `:project-record` with magic bytes `0x50525031` (PRP1).
+- Implemented `ProjectReconciliationSync` protocol handler in `:project-record` with chunked inventory exchange, reconciliation plan computing, and download/upload sequences.
+- Added comprehensive unit and integration process tests verifying APPLIED, DUPLICATE, CONFLICT quarantining, and local corruption fail-safe behavior.
+- Strictly verified and compiled code. All tests passed.
 
 ## Verification
 
-None (planning phase).
+- Automated tests: `ReconciliationMessageTest`, `ProjectReconciliationSyncProcessTest` under `:project-record`.
+- Command: `.\gradlew.bat clean check --dependency-verification=strict`.
 
 ## Current failures
 
@@ -32,4 +36,4 @@ None.
 
 ## Immediate next action
 
-Submit SYN-005 design document for operator review.
+Integrate the PRP1 project reconciliation sync handler into `:workspace` commands (CP-W6).

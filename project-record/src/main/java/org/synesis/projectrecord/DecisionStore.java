@@ -105,6 +105,9 @@ public final class DecisionStore {
         recover();
     }
 
+    /** Returns the root path of this store. */
+    public Path rootPath() { return root; }
+
     /**
      * Appends one signed revision after validating the expected local base.
      *
@@ -354,7 +357,7 @@ public final class DecisionStore {
         }
     }
 
-    private DecisionRecord readRevision(UUID recordId, long revision) throws IOException {
+    public DecisionRecord readRevision(UUID recordId, long revision) throws IOException {
         Path path = revisionPath(recordId, revision);
         DecisionRecord record = readRevisionFile(path);
         if (record.revision() != revision || !projectId.equals(record.projectId())
