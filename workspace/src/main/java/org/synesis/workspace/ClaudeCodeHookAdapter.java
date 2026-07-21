@@ -5,23 +5,23 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 import org.synesis.projectrecord.DecisionRecord;
 import org.synesis.projectrecord.DecisionStore;
 import org.synesis.projectrecord.ProjectConfig;
 import org.synesis.projectrecord.ProjectConstraint;
+import org.synesis.projectrecord.ScopeMatcher;
 
 /**
- * Pre-action hook adapter translating Claude Code pre-tool-execution events
+ * Pre-action hook adapter translating official Claude Code PreToolUse hook events
  * into Synesis action-time constraint checks.
  *
  * <p>Enforces supported structured file-edit operations without modifying
- * target files. Shell commands and non-file tools pass through with a documented
- * limitation warning.
+ * target files. Preserves Claude Code's normal permission flow and exits with code 0.
  *
  * @since 1.0
  */
@@ -58,7 +58,7 @@ public final class ClaudeCodeHookAdapter {
      * Result container for adapter processing.
      *
      * @param outcome      check outcome
-     * @param responseJson Claude Code hook JSON response
+     * @param responseJson official Claude Code hook JSON response
      * @param humanReason  human readable explanation or hint
      */
     public record Result(Outcome outcome, String responseJson, String humanReason) {
@@ -95,6 +95,11 @@ public final class ClaudeCodeHookAdapter {
             return new Result(Outcome.INVALID_INPUT, denyJson("Empty input event"), "Empty input event");
         }
 
+        String eventName = extractJsonField(json, "hook_event_name");
+        if (eventName == null || eventName.isEmpty()) {
+            eventName = "PreToolUse";
+        }
+
         String toolName = extractJsonField(json, "tool_name");
         if (toolName == null || toolName.isEmpty()) {
             toolName = extractJsonField(json, "name");
@@ -104,12 +109,38 @@ public final class ClaudeCodeHookAdapter {
             String diagnostic = "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
                     + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
             System.err.println(diagnostic);
-            return new Result(Outcome.UNSUPPORTED, allowJson(), diagnostic);
+            return new Result(Outcome.UNSUPPORTED, emptyJson(), diagnostic);
         }
 
-        List<String> paths = extractTargetPaths(json);
-        if (paths.isEmpty()) {
+        String cwdStr = extractJsonField(json, "cwd");
+        Path projectRoot = profile;
+        if (cwdStr != null && !cwdStr.isBlank()) {
+            try {
+                projectRoot = Path.of(cwdStr).toAbsolutePath().normalize();
+            } catch (Exception ignored) {
+                projectRoot = profile;
+            }
+        }
+
+        List<String> rawPaths = extractTargetPaths(json);
+        if (rawPaths.isEmpty()) {
             return new Result(Outcome.INVALID_INPUT, denyJson("No target file path found in tool input"), "No target file path");
+        }
+
+        List<String> normalizedRelativePaths = new ArrayList<>();
+        for (String raw : rawPaths) {
+            try {
+                String rel = resolveRelativePath(projectRoot, raw);
+                if (rel != null) {
+                    normalizedRelativePaths.add(rel);
+                }
+            } catch (IllegalArgumentException e) {
+                return new Result(Outcome.INVALID_INPUT, denyJson("Path outside project root or invalid: " + raw), e.getMessage());
+            }
+        }
+
+        if (normalizedRelativePaths.isEmpty()) {
+            return new Result(Outcome.INVALID_INPUT, denyJson("No valid repository-relative target path could be resolved"), "No relative target path");
         }
 
         // Load project config and decision store
@@ -131,11 +162,12 @@ public final class ClaudeCodeHookAdapter {
                 activeConstraints.add(c);
             }
         }
+        activeConstraints = ProjectConstraint.filterEffectiveActive(activeConstraints);
 
         ProjectConstraint blockingConstraint = null;
         ProjectConstraint warningConstraint = null;
 
-        for (String path : paths) {
+        for (String path : normalizedRelativePaths) {
             for (ProjectConstraint c : activeConstraints) {
                 try {
                     if (c.appliesTo(path)) {
@@ -167,15 +199,42 @@ public final class ClaudeCodeHookAdapter {
             String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE=" + warningConstraint.title()
                     + "\nREASON=" + warningConstraint.rationale();
             System.err.println(warningDiag);
-            return new Result(Outcome.WARNING, allowJson(), warningDiag);
+            return new Result(Outcome.WARNING, warnJson(warningConstraint.title(), warningConstraint.rationale()), warningDiag);
         }
 
-        return new Result(Outcome.ALLOWED, allowJson(), "Allowed");
+        return new Result(Outcome.ALLOWED, emptyJson(), "Allowed");
+    }
+
+    /**
+     * Resolves a raw target path (absolute or relative) against the project root,
+     * verifying it remains inside the project boundary and converting to a canonical `/`-separated path.
+     *
+     * @param projectRoot project root directory
+     * @param rawPath     raw file path string from tool input
+     * @return normalized repository-relative path string
+     * @throws IllegalArgumentException if path lies outside project root or crosses drive boundaries
+     */
+    public static String resolveRelativePath(Path projectRoot, String rawPath) {
+        if (rawPath == null || rawPath.isBlank()) return null;
+        Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
+        Path target = Path.of(rawPath);
+        if (!target.isAbsolute()) {
+            target = root.resolve(target);
+        }
+        target = target.normalize();
+
+        if (!target.startsWith(root)) {
+            throw new IllegalArgumentException("Target path outside project root: " + rawPath);
+        }
+        Path relative = root.relativize(target);
+        return ScopeMatcher.normalizePath(relative.toString());
     }
 
     private static boolean isFileEditTool(String toolName) {
         String lower = toolName.toLowerCase(java.util.Locale.ROOT);
-        return lower.contains("edit") || lower.contains("write") || lower.contains("replace") || lower.contains("create");
+        return lower.equals("edit") || lower.equals("write") || lower.equals("str_replace_editor")
+                || lower.equals("write_file") || lower.equals("file_edit") || lower.equals("file_write")
+                || lower.equals("notebookedit");
     }
 
     private static List<String> extractTargetPaths(String json) {
@@ -213,11 +272,28 @@ public final class ClaudeCodeHookAdapter {
     }
 
     private static String denyJson(String reason) {
-        return "{\n  \"decision\": \"deny\",\n  \"reason\": \"" + escapeJson(reason) + "\"\n}";
+        return """
+                {
+                  "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": "%s"
+                  }
+                }""".formatted(escapeJson(reason));
     }
 
-    private static String allowJson() {
-        return "{\n  \"decision\": \"allow\"\n}";
+    private static String warnJson(String title, String rationale) {
+        return """
+                {
+                  "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": "Synesis Warning: Active constraint '%s' applies to this scope. Rationale: %s"
+                  }
+                }""".formatted(escapeJson(title), escapeJson(rationale));
+    }
+
+    private static String emptyJson() {
+        return "{}";
     }
 
     private static String escapeJson(String text) {

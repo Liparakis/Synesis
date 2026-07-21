@@ -53,7 +53,7 @@ public final class SynesisCli {
      *
      * @param arguments process arguments
      */
-    public static void main(String[] arguments) {
+    static void main(String[] arguments) {
         System.exit(execute(arguments, CliRuntime.defaults(new ConsoleTerminal())));
     }
 }

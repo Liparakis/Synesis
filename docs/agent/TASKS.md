@@ -457,6 +457,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: ADR-0017, baseline-vs-synesis-experiment.md, current-state.md, and checkpoint CP-0093.
 - Evidence: PASS — `DecisionRecordTest`, `ProjectConstraintTest`, `ClaudeCodeHookAdapterTest`, `WorkspaceSyncProcessTest`, `run-synesis-guardrail-experiment.ps1`, `gradlew.bat clean check --dependency-verification=strict`.
 
+## SYN-007.1
+
+- ID: SYN-007.1
+- Priority: P0
+- Title: Real Claude Code PreToolUse Contract Conformance
+- Status: DONE
+- Purpose: Align ClaudeCodeHookAdapter with official Claude Code v2.1+ PreToolUse hook contract (permissionDecision: deny, exit code 0, absolute-to-relative path resolution, additionalContext for warnings).
+- Dependencies: SYN-007 DONE
+- Acceptance criteria: Update ClaudeCodeHookAdapter and WorkspaceCli to exit code 0 on JSON denial responses; implement resolveRelativePath converting absolute CWD/path inputs to project-relative scopes; add docs/integration/claude-code-hook.json; verify supersession filtering in ProjectConstraint; update automated experiment script scripts/run-synesis-guardrail-experiment.ps1.
+- Required tests: ClaudeCodeHookAdapterTest, ProjectConstraintTest, WorkspaceSyncProcessTest, run-synesis-guardrail-experiment.ps1.
+- Required documentation: ADR-0018, current-state.md, and checkpoint CP-0094.
+- Evidence: PASS — `ClaudeCodeHookAdapterTest`, `ProjectConstraintTest`, `WorkspaceSyncProcessTest`, `run-synesis-guardrail-experiment.ps1`, `gradlew.bat clean check --dependency-verification=strict`.
+
+
 
 
 ## Deferred capability register

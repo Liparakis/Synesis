@@ -198,6 +198,24 @@ public final class ProjectConstraint {
     public List<UUID> supersedes() { return supersedes; }
 
     /**
+     * Filters a list of active constraints to exclude any constraint that is explicitly
+     * superseded by another active constraint in the list via its {@link #supersedes()} record IDs.
+     *
+     * @param constraints active constraints list
+     * @return effective active constraints excluding superseded ones
+     */
+    public static List<ProjectConstraint> filterEffectiveActive(List<ProjectConstraint> constraints) {
+        if (constraints == null || constraints.size() <= 1) return constraints == null ? List.of() : List.copyOf(constraints);
+        java.util.Set<UUID> supersededIds = new java.util.HashSet<>();
+        for (ProjectConstraint c : constraints) {
+            supersededIds.addAll(c.supersedes());
+        }
+        return constraints.stream()
+                .filter(c -> !supersededIds.contains(c.recordId()))
+                .toList();
+    }
+
+    /**
      * Evaluates whether this active constraint applies to a normalized target path using {@link ScopeMatcher}.
      *
      * @param targetPath repository-relative file path

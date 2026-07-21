@@ -343,12 +343,8 @@ public final class WorkspaceCli {
         ClaudeCodeHookAdapter.Result result = adapter.processStream(System.in);
 
         System.out.println(result.responseJson());
-        if (result.outcome() == ClaudeCodeHookAdapter.Outcome.BLOCKED) {
+        if (result.humanReason() != null && !result.humanReason().isEmpty()) {
             System.err.println("HINT=" + result.humanReason());
-            return 10;
-        } else if (result.outcome() == ClaudeCodeHookAdapter.Outcome.INVALID_INPUT) {
-            System.err.println("HINT=" + result.humanReason());
-            return 10;
         }
         return 0;
     }

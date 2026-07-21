@@ -2,35 +2,36 @@
 
 ## Identity
 
-- Task ID: SYN-007
+- Task ID: SYN-007.1
 - Status: DONE
 - Priority: P0
-- Started checkpoint: CP-0092
-- Latest checkpoint: CP-0093
+- Started checkpoint: CP-0093
+- Latest checkpoint: CP-0094
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0017
+- Related decisions: ADR-0018
 
 ## Objective
 
-Clean Typed Constraint Model and Baseline-vs-Synesis Validation (`SDR2`, `ConstraintPayload`, removal of legacy inference, baseline-vs-synesis experiment).
+Real Claude Code PreToolUse Contract Conformance (`PreToolUse` JSON framing, exit 0 denial output, absolute path boundary resolution).
 
 ## Planning state
 
-SYN-007 implementation, testing, verification, and documentation are complete.
+SYN-007.1 implementation, testing, verification, and documentation are complete.
 
 ## Work completed
 
-- Evolved canonical record format to `SDR2` (`MAGIC = 0x53445232`, `VERSION = 2`) with explicit `RecordType` (`DECISION` vs `PROJECT_CONSTRAINT`) and binary `ConstraintPayload`.
-- Removed all unreleased development legacy compatibility behavior (`LEGACY_INFERRED`, title-prefix matching `CONSTRAINT:`).
-- Updated `ProjectConstraint.fromRecord` to check explicit record typing and typed payloads. Added regression test proving title prefix records with type `DECISION` return `ALLOWED`.
-- Enhanced `ClaudeCodeHookAdapter` with observable `WARNING` and `UNSUPPORTED` diagnostics on stderr while allowing execution.
-- Created `scripts/run-synesis-guardrail-experiment.ps1` and `docs/validation/baseline-vs-synesis-experiment.md` proving protected file integrity preservation and zero false positives.
-- Created ADR-0017 and updated `docs/development/current-state.md`.
-- Verified build and test suite (`39 actionable tasks: 30 executed, 8 from cache, 1 up-to-date`).
+- Aligned `ClaudeCodeHookAdapter` with official Claude Code v2.1+ `PreToolUse` command hook contract: returns `hookSpecificOutput` with `permissionDecision: "deny"` and `permissionDecisionReason`.
+- Updated `WorkspaceCli` hook command to **exit with code 0** on JSON denial responses as required by Claude Code's hook engine.
+- Implemented `ClaudeCodeHookAdapter.resolveRelativePath` converting absolute CWD/path inputs into project-relative normalized paths while rejecting targets outside project boundaries or across Windows drive letters.
+- Implemented `ProjectConstraint.filterEffectiveActive` to exclude superseded active constraints prior to action checks.
+- Created `docs/integration/claude-code-hook.json` demonstrating project-local hook configuration.
+- Updated `ClaudeCodeHookAdapterTest` and `scripts/run-synesis-guardrail-experiment.ps1`.
+- Created ADR-0018 and updated `docs/development/current-state.md`.
+- Strictly verified build and test suite (`39 actionable tasks: 30 executed, 6 from cache, 3 up-to-date`).
 
 ## Verification
 
-- Automated tests: `DecisionRecordTest`, `ProjectConstraintTest`, `ClaudeCodeHookAdapterTest`, `WorkspaceSyncProcessTest`.
+- Automated tests: `ClaudeCodeHookAdapterTest`, `ProjectConstraintTest`, `WorkspaceSyncProcessTest`.
 - Automated experiment: `scripts/run-synesis-guardrail-experiment.ps1`.
 - Command: `.\gradlew.bat clean check --dependency-verification=strict`.
 
@@ -40,4 +41,4 @@ None.
 
 ## Immediate next action
 
-Record checkpoint CP-0093, set SYN-007 to DONE, and commit.
+Record checkpoint CP-0094, set SYN-007.1 to DONE, and commit.
