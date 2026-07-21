@@ -113,6 +113,169 @@ final class WorkspaceSyncProcessTest {
         assertTrue(joinOutput.toString().contains("SYNC_RESULT=UNKNOWN"), joinOutput.toString());
     }
 
+    @Test
+    void demoFlowAndRobustQueries() throws Exception {
+        Path root = Files.createTempDirectory("workspace-demo-flow-");
+        Path profileA = root.resolve("profileA");
+        Path profileB = root.resolve("profileB");
+
+        // 1. Identity bootstrap
+        CommandResult bIdentity = run(profileB, "identity", "show");
+        assertEquals(0, bIdentity.exit);
+        String bNodeId = value(bIdentity.stdout, "NODE_ID");
+
+        CommandResult aIdentity = run(profileA, "identity", "show");
+        assertEquals(0, aIdentity.exit);
+        String aNodeId = value(aIdentity.stdout, "NODE_ID");
+
+        // 2. Project create
+        CommandResult project = run(profileA, "project", "create", "--peer", bNodeId);
+        assertEquals(0, project.exit);
+        String projectId = value(project.stdout, "PROJECT_ID");
+
+        // 3. Decision create X
+        String digestX = "1111111111111111111111111111111111111111111111111111111111111111";
+        CommandResult decX = run(profileA, "decision", "create",
+                "--title", "Record X", "--rationale", "Rationale X",
+                "--evidence-kind", "text", "--evidence-ref", "refX", "--evidence-sha256", digestX);
+        assertEquals(0, decX.exit);
+        String recordXId = value(decX.stdout, "RECORD_ID");
+
+        // 4. Decision create Y
+        String digestY = "2222222222222222222222222222222222222222222222222222222222222222";
+        CommandResult decY = run(profileA, "decision", "create",
+                "--title", "Record Y", "--rationale", "Rationale Y",
+                "--evidence-kind", "text", "--evidence-ref", "refY", "--evidence-sha256", digestY);
+        assertEquals(0, decY.exit);
+        String recordYId = value(decY.stdout, "RECORD_ID");
+
+        // 5. Sync X (APPLIED)
+        DemoState state = new DemoState(root, profileA, profileB, aNodeId, bNodeId, projectId, recordXId);
+        SyncRun firstSync = sync(state, recordXId, projectId, aNodeId);
+        assertEquals(0, firstSync.joinExit);
+        assertEquals(0, firstSync.hostExit);
+        assertTrue(firstSync.joinOutput.contains("SYNC_RESULT=APPLIED"));
+
+        // 6. Matching search/inspect results after APPLIED sync
+        CommandResult searchA = run(profileA, "decision", "search");
+        assertEquals(0, searchA.exit);
+        assertTrue(searchA.stdout.contains("RECORD_ID=" + recordXId));
+        assertTrue(searchA.stdout.contains("RECORD_ID=" + recordYId));
+
+        CommandResult searchB = run(profileB, "decision", "search");
+        assertEquals(0, searchB.exit);
+        assertTrue(searchB.stdout.contains("RECORD_ID=" + recordXId));
+        assertFalse(searchB.stdout.contains("RECORD_ID=" + recordYId)); // Y not synced yet
+
+        CommandResult inspectXA = run(profileA, "decision", "inspect", "--record", recordXId);
+        assertEquals(0, inspectXA.exit);
+        CommandResult inspectXB = run(profileB, "decision", "inspect", "--record", recordXId);
+        assertEquals(0, inspectXB.exit);
+        assertEquals(inspectXA.stdout.trim(), inspectXB.stdout.trim()); // byte-stable match
+
+        // 7. DUPLICATE sync preserves identical output
+        SyncRun secondSync = sync(state, recordXId, projectId, aNodeId);
+        assertEquals(0, secondSync.joinExit);
+        assertEquals(0, secondSync.hostExit);
+        assertTrue(secondSync.joinOutput.contains("SYNC_RESULT=DUPLICATE"));
+
+        CommandResult inspectXBAfterDup = run(profileB, "decision", "inspect", "--record", recordXId);
+        assertEquals(0, inspectXBAfterDup.exit);
+        assertEquals(inspectXA.stdout.trim(), inspectXBAfterDup.stdout.trim());
+
+        // 8. Empty search
+        CommandResult emptySearchB = run(profileB, "decision", "search", "--text", "nonexistent");
+        assertEquals(0, emptySearchB.exit);
+        assertTrue(emptySearchB.stdout.contains("RESULTS=0"));
+
+        // 9. Malformed filters
+        CommandResult malformedStatus = run(profileA, "decision", "search", "--status", "INVALID_STATUS");
+        assertEquals(10, malformedStatus.exit);
+        assertTrue(malformedStatus.stdout.contains("ERROR=USAGE"));
+
+        CommandResult malformedLimit = run(profileA, "decision", "search", "--limit", "-5");
+        assertEquals(10, malformedLimit.exit);
+        assertTrue(malformedLimit.stdout.contains("ERROR=USAGE"));
+
+        // 10. Missing record inspect
+        CommandResult missingInspect = run(profileB, "decision", "inspect", "--record", recordYId);
+        assertEquals(10, missingInspect.exit);
+        assertTrue(missingInspect.stdout.contains("ERROR=RECORD_NOT_FOUND"));
+
+        // 11. Corruption
+        Path sdrYFile = profileA.resolve("records/decisions/" + recordYId + "/1.sdr");
+        Files.writeString(sdrYFile, "corrupted bytes here");
+
+        // Search fails closed because one record is corrupt
+        CommandResult searchCorrupt = run(profileA, "decision", "search");
+        assertEquals(10, searchCorrupt.exit);
+        assertTrue(searchCorrupt.stdout.contains("ERROR=LOCAL_STATE_INVALID"));
+
+        // Inspect Y fails
+        CommandResult inspectYCorrupt = run(profileA, "decision", "inspect", "--record", recordYId);
+        assertEquals(10, inspectYCorrupt.exit);
+        assertTrue(inspectYCorrupt.stdout.contains("ERROR=LOCAL_STATE_INVALID"));
+
+        // Inspect X still succeeds (isolation of inspection!)
+        CommandResult inspectXAStillOk = run(profileA, "decision", "inspect", "--record", recordXId);
+        assertEquals(0, inspectXAStillOk.exit);
+        assertEquals(inspectXA.stdout.trim(), inspectXAStillOk.stdout.trim());
+
+        // 12. Conflicts & Stale revisions
+        // Divergent files in conflicts/ are ignored by search/inspect
+        Path conflictPath = profileA.resolve("records/conflicts/" + recordXId + "/1-divergent.sdr");
+        Files.createDirectories(conflictPath.getParent());
+        Files.writeString(conflictPath, "divergent bytes");
+
+        CommandResult inspectWithConflict = run(profileA, "decision", "inspect", "--record", recordXId);
+        assertEquals(0, inspectWithConflict.exit); // conflict ignored
+
+        // Temp files are ignored
+        Path tempPath = profileA.resolve("records/decisions/" + recordXId + "/1.sdr.tmp-1234");
+        Files.writeString(tempPath, "temp bytes");
+
+        CommandResult inspectWithTemp = run(profileA, "decision", "inspect", "--record", recordXId);
+        assertEquals(0, inspectWithTemp.exit); // temp file ignored
+
+        // Stale revision: Z is created on B, then made stale by deleting its revisions while keeping head
+        CommandResult decZ = run(profileB, "decision", "create",
+                "--title", "Record Z", "--rationale", "Rationale Z",
+                "--evidence-kind", "text", "--evidence-ref", "refZ", "--evidence-sha256", digestX);
+        assertEquals(0, decZ.exit);
+        String recordZId = value(decZ.stdout, "RECORD_ID");
+
+        Path sdrZDir = profileB.resolve("records/decisions/" + recordZId);
+        try (var stream = Files.list(sdrZDir)) {
+            for (Path p : stream.toList()) Files.delete(p);
+        }
+        Files.delete(sdrZDir);
+
+        // Inspect Z fails
+        CommandResult inspectZStale = run(profileB, "decision", "inspect", "--record", recordZId);
+        assertEquals(10, inspectZStale.exit);
+        assertTrue(inspectZStale.stdout.contains("ERROR=LOCAL_STATE_INVALID"));
+
+        // Search fails
+        CommandResult searchStale = run(profileB, "decision", "search");
+        assertEquals(10, searchStale.exit);
+        assertTrue(searchStale.stdout.contains("ERROR=LOCAL_STATE_INVALID"));
+
+        // Inspect X still succeeds!
+        CommandResult inspectXStaleStore = run(profileB, "decision", "inspect", "--record", recordXId);
+        assertEquals(0, inspectXStaleStore.exit);
+    }
+
+    private static void writeHeadFile(Path path, long revision, byte[] digest) throws IOException {
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        try (java.io.DataOutputStream output = new java.io.DataOutputStream(bytes)) {
+            output.writeInt(0x53444831); // HEAD_MAGIC
+            output.writeByte(1); // HEAD_VERSION
+            output.writeLong(revision);
+            output.write(digest);
+        }
+        Files.write(path, bytes.toByteArray());
+    }
+
     private static DemoState prepare() throws Exception {
         Path root = Files.createTempDirectory("workspace-sync-");
         Path host = root.resolve("host");

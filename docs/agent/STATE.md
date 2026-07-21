@@ -74,12 +74,13 @@ allowed.
 - SYN-002 closure review: PASS at CP-0075; evidence is
   `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`.
 - SYN-003 planning: ADR-0014, first-demo script, task promotion, and CP-0076
-  are recorded; CP-W1 and CP-W2 implementations are verified.
-- SYN-003 CP-W1/CP-W2 implementation: PASS; `:workspace` provides bounded
+  are recorded; CP-W1, CP-W2, and CP-W3 implementations are verified.
+- SYN-003 CP-W1/CP-W2/CP-W3 implementation: PASS; `:workspace` provides bounded
   profile bootstrap, one-peer project creation, signed revision-1 decision
-  creation, and one-shot authenticated host/join sync. Evidence is
-  `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md` and
-  `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`.
+  creation, one-shot authenticated host/join sync, decision search, and single-record
+  inspection. Evidence is in `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`,
+  `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`, and
+  `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.
 
 ## Honest limitations
 

@@ -511,3 +511,12 @@ Append-only operational history.
   malformed invitation, project mismatch, missing record, and UNKNOWN on close
   before result. Full strict verification and validators pass.
 - Evidence: `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`. Stop before CP-W3.
+
+## 2026-07-21 — SYN-003 CP-W3 verified and closed
+
+- Implemented `:workspace` search and inspect subcommands, completing CP-W3 and closing SYN-003.
+- `decision search` composes the existing `DecisionSearch` API to scan only fully validated current heads.
+- `decision inspect --record <uuid>` implements a dedicated single-record validator that validates the head and revision chain of the requested record, isolating it from corruption in other records.
+- Outputs for search and inspect are stable, safe, and byte-stable. Standard CLI exit codes are preserved (0 for success, 10 for failure).
+- Generated-launcher integration tests verify APPLIED, DUPLICATE, restart stability, empty search, malformed filters, missing records, corruption, conflicts, and stale revisions. Full strict check and validators pass.
+- Evidence: `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.

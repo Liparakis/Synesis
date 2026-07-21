@@ -85,6 +85,90 @@ final class WorkspaceCliTest {
     }
 
     @Test
+    void searchAndInspectBehaveDeterministically() throws Exception {
+        Path root = Files.createTempDirectory("workspace-search-inspect-");
+        Path profile = root.resolve("a");
+        String peer = value(invoke("--profile", root.resolve("b").toString(), "identity", "show").stdout, "NODE_ID");
+
+        // Unconfigured search/inspect fails
+        Invocation unconfSearch = invoke("--profile", profile.toString(), "decision", "search");
+        assertEquals(10, unconfSearch.code);
+        assertEquals("ERROR=PROJECT_NOT_CONFIGURED", unconfSearch.stderr.trim());
+
+        Invocation unconfInspect = invoke("--profile", profile.toString(), "decision", "inspect", "--record", UUID.randomUUID().toString());
+        assertEquals(10, unconfInspect.code);
+        assertEquals("ERROR=PROJECT_NOT_CONFIGURED", unconfInspect.stderr.trim());
+
+        // Configure project
+        Invocation project = invoke("--profile", profile.toString(), "project", "create", "--peer", peer);
+        assertEquals(0, project.code);
+        String projectId = value(project.stdout, "PROJECT_ID");
+
+        // Empty search returns RESULTS=0
+        Invocation emptySearch = invoke("--profile", profile.toString(), "decision", "search");
+        assertEquals(0, emptySearch.code);
+        assertEquals("RESULTS=0", emptySearch.stdout.trim());
+
+        // Inspect missing record fails
+        UUID missingId = UUID.randomUUID();
+        Invocation inspectMissing = invoke("--profile", profile.toString(), "decision", "inspect", "--record", missingId.toString());
+        assertEquals(10, inspectMissing.code);
+        assertEquals("ERROR=RECORD_NOT_FOUND", inspectMissing.stderr.trim());
+
+        // Create a decision
+        String digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        Invocation decision = invoke("--profile", profile.toString(), "decision", "create",
+                "--title", "A search proof", "--rationale", "A signed local search test",
+                "--evidence-kind", "text", "--evidence-ref", "demo-note", "--evidence-sha256", digest);
+        assertEquals(0, decision.code);
+        String recordIdStr = value(decision.stdout, "RECORD_ID");
+        UUID recordId = UUID.fromString(recordIdStr);
+
+        // Search returns the result
+        Invocation search1 = invoke("--profile", profile.toString(), "decision", "search", "--text", "search proof");
+        assertEquals(0, search1.code);
+        assertTrue(search1.stdout.contains("RESULTS=1"));
+        assertTrue(search1.stdout.contains("RECORD_ID=" + recordIdStr));
+        assertTrue(search1.stdout.contains("TITLE=A search proof"));
+
+        // Search with non-matching filter returns RESULTS=0
+        Invocation searchNoMatch = invoke("--profile", profile.toString(), "decision", "search", "--text", "non-existent");
+        assertEquals(0, searchNoMatch.code);
+        assertEquals("RESULTS=0", searchNoMatch.stdout.trim());
+
+        // Search with owner node-id filter
+        String ownerNode = value(decision.stdout, "NODE_ID");
+        Invocation searchOwner = invoke("--profile", profile.toString(), "decision", "search", "--owner", ownerNode);
+        assertEquals(0, searchOwner.code);
+        assertTrue(searchOwner.stdout.contains("RESULTS=1"));
+
+        // Search with status filter
+        Invocation searchStatus = invoke("--profile", profile.toString(), "decision", "search", "--status", "PROPOSED");
+        assertEquals(0, searchStatus.code);
+        assertTrue(searchStatus.stdout.contains("RESULTS=1"));
+
+        // Search with malformed status fails
+        Invocation searchBadStatus = invoke("--profile", profile.toString(), "decision", "search", "--status", "INVALID");
+        assertEquals(10, searchBadStatus.code);
+        assertEquals("ERROR=USAGE", searchBadStatus.stderr.trim());
+
+        // Search with malformed limit fails
+        Invocation searchBadLimit = invoke("--profile", profile.toString(), "decision", "search", "--limit", "-1");
+        assertEquals(10, searchBadLimit.code);
+        assertEquals("ERROR=USAGE", searchBadLimit.stderr.trim());
+
+        // Inspect returns details in stable byte order
+        Invocation inspect = invoke("--profile", profile.toString(), "decision", "inspect", "--record", recordIdStr);
+        assertEquals(0, inspect.code);
+        assertEquals(projectId, value(inspect.stdout, "PROJECT_ID"));
+        assertEquals(recordIdStr, value(inspect.stdout, "RECORD_ID"));
+        assertEquals("1", value(inspect.stdout, "VERSION"));
+        assertEquals("1", value(inspect.stdout, "REVISION"));
+        assertEquals(digest, value(inspect.stdout, "EVIDENCE_DIGEST"));
+        assertEquals("true", value(inspect.stdout, "SIGNATURE_VALID"));
+    }
+
+    @Test
     void boundsAndSensitiveOutputFailSafely() throws Exception {
         Path profile = Files.createTempDirectory("workspace-bounds-").resolve("a");
         String tooLong = "x".repeat(513);

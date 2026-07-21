@@ -1,31 +1,13 @@
 # First two-person project demo
 
-This is the planned CP-W1/CP-W2 operator path. It uses two isolated local
+This is the planned CP-W1/CP-W2/CP-W3 operator path. It uses two isolated local
 profiles and makes no physical two-machine claim.
 
-## Current commands and stopping point
+## CP-W1/CP-W2/CP-W3 operator steps
 
-The current generated launcher can run:
+### 1. Preparation
 
-```powershell
-$env:SYNESIS_LINK_PROFILE = '<profile>\link'
-synesis identity show
-synesis host --expect-peer <node-id>
-synesis join <signed-invitation>
-```
-
-Those commands authenticate Link and run the fixed demo-work exchange. They do
-not create `project.conf`, create a signed decision, invoke CP-R4 sync, or
-search a record. The existing inspection launcher only works after code has
-already created a record:
-
-```powershell
-synesis-project-record inspect <records-dir> <project-id> <record-id>
-```
-
-The current human flow therefore stops after onboarding.
-
-## CP-W1 operator steps
+Build the distribution and resolve the batch launcher path:
 
 ```powershell
 gradlew.bat :workspace:installDist --dependency-verification=strict
@@ -34,20 +16,38 @@ $profileA = Join-Path $env:TEMP 'synesis-demo-a'
 $profileB = Join-Path $env:TEMP 'synesis-demo-b'
 ```
 
-Operator B creates an identity and gives A the printed node ID:
+### 2. Node identity bootstrap
+
+Operator B bootstraps their profile identity and shares the printed Node ID with Operator A:
 
 ```powershell
 & $ws --profile $profileB identity show
 ```
 
-Operator A creates the project with B explicitly allowed:
-
-```powershell
-& $ws --profile $profileA project create --peer <B_NODE_ID>
+Output:
+```text
+NODE_ID=sl1-<B_NODE_ID_HEX>
 ```
 
-A then creates one signed decision, retaining the printed record ID and
-digest:
+### 3. Project Configuration
+
+Operator A creates the project configuration allowlisting Operator B's Node ID:
+
+```powershell
+& $ws --profile $profileA project create --peer sl1-<B_NODE_ID_HEX>
+```
+
+Output:
+```text
+NODE_ID=sl1-<A_NODE_ID_HEX>
+PROJECT_ID=<PROJECT_UUID>
+PEER_NODE_ID=sl1-<B_NODE_ID_HEX>
+PROJECT_CONFIGURED=true
+```
+
+### 4. Create Decision
+
+Operator A creates a signed decision, retaining the printed record ID and digest:
 
 ```powershell
 $hash = (Get-FileHash -Algorithm SHA256 .\README.md).Hash.ToLowerInvariant()
@@ -57,19 +57,94 @@ $hash = (Get-FileHash -Algorithm SHA256 .\README.md).Hash.ToLowerInvariant()
   --evidence-kind file --evidence-ref README.md --evidence-sha256 $hash
 ```
 
-Host/join and sync are deliberately deferred to CP-W2. After CP-W2, B will
-join one authenticated session, receive the record once, and both profiles
-will use the bounded local search and inspection views.
+Output:
+```text
+NODE_ID=sl1-<A_NODE_ID_HEX>
+PROJECT_ID=<PROJECT_UUID>
+RECORD_ID=<RECORD_UUID>
+REVISION=1
+DIGEST=<RECORD_DIGEST_HEX>
+STATUS=PROPOSED
+SIGNATURE_VALID=true
+```
+
+### 5. Host and Sync
+
+Operator A starts the sync host, allowing Operator B to connect and request the record:
+
+```powershell
+& $ws --profile $profileA sync host
+```
+
+Output:
+```text
+INVITATION=synesis://join/<signed-invitation-link>
+```
+
+Operator B joins the host and syncs the record by passing the invitation link, project ID, record ID, and host Node ID:
+
+```powershell
+& $ws --profile $profileB sync join `
+  --project <PROJECT_UUID> `
+  --record <RECORD_UUID> `
+  --expect-host sl1-<A_NODE_ID_HEX> `
+  'synesis://join/<signed-invitation-link>'
+```
+
+Output:
+```text
+AUTHENTICATED_REMOTE=sl1-<A_NODE_ID_HEX>
+PROJECT_ID=<PROJECT_UUID>
+RECORD_ID=<RECORD_UUID>
+SYNC_RESULT=APPLIED
+```
+
+### 6. Search and Inspect
+
+Operator B can now search and inspect the verified synced record locally:
+
+```powershell
+& $ws --profile $profileB decision search --text 'truth'
+```
+
+Output:
+```text
+RESULTS=1
+RECORD_ID=<RECORD_UUID>
+REVISION=1
+DIGEST=<RECORD_DIGEST_HEX>
+OWNER_NODE_ID=sl1-<A_NODE_ID_HEX>
+STATUS=PROPOSED
+TITLE=Use signed decisions as shared project truth
+RATIONALE=This is the smallest trustworthy shared record.
+```
+
+And inspect details of the specific record:
+
+```powershell
+& $ws --profile $profileB decision inspect --record <RECORD_UUID>
+```
+
+Output:
+```text
+PROJECT_ID=<PROJECT_UUID>
+RECORD_ID=<RECORD_UUID>
+VERSION=1
+REVISION=1
+DIGEST=<RECORD_DIGEST_HEX>
+OWNER=sl1-<A_NODE_ID_HEX>
+OWNER_NODE_ID=sl1-<A_NODE_ID_HEX>
+AUTHOR=sl1-<A_NODE_ID_HEX>
+AUTHOR_NODE_ID=sl1-<A_NODE_ID_HEX>
+STATUS=PROPOSED
+EVIDENCE_DIGEST=<README_SHA256_HEX>
+SIGNATURE_VALID=true
+```
 
 ## Safe output
 
-Normal successful output contains stable labels such as `NODE_ID`,
-`PROJECT_ID`, `RECORD_ID`, and `DIGEST`. It does not expose private keys,
-absolute paths, endpoints, or stack traces. Evidence references are recorded
-as logical references only; this slice does not fetch or validate their files.
+Normal successful output contains stable labels such as `NODE_ID`, `PROJECT_ID`, `RECORD_ID`, `DIGEST`, `VERSION`, `REVISION`, `EVIDENCE_DIGEST`, and `SIGNATURE_VALID`. It does not expose private keys, absolute paths, endpoints, or stack traces. Evidence references are recorded as logical references only; this slice does not fetch or validate their files.
 
 ## Deferred work
 
-No host/join, networking, sync, retries, reconnect, discovery, membership,
-workers, leases, autonomy, federation, Obsidian, background process, or
-physical-machine claim is included.
+No background sync, retries, reconnect, discovery, membership, workers, leases, autonomy, federation, Obsidian integration, or physical-machine claims are included in this module.

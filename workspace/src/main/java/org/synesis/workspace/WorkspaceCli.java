@@ -5,13 +5,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.io.IOException;
+import java.io.DataInputStream;
+import java.io.ByteArrayInputStream;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
@@ -25,6 +32,7 @@ import org.synesis.projectrecord.DecisionEvidence;
 import org.synesis.projectrecord.DecisionRecord;
 import org.synesis.projectrecord.DecisionStatus;
 import org.synesis.projectrecord.DecisionStore;
+import org.synesis.projectrecord.DecisionSearch;
 import org.synesis.projectrecord.Ed25519Signer;
 import org.synesis.projectrecord.ProjectConfig;
 import org.synesis.projectrecord.ProjectRecordSync;
@@ -127,7 +135,15 @@ public final class WorkspaceCli {
     }
 
     private static int executeDecision(Parsed parsed) throws Exception {
-        if (!"create".equals(parsed.subcommand)) throw failure("USAGE");
+        return switch (parsed.subcommand) {
+            case "create" -> executeDecisionCreate(parsed);
+            case "search" -> executeDecisionSearch(parsed);
+            case "inspect" -> executeDecisionInspect(parsed);
+            default -> throw failure("USAGE");
+        };
+    }
+
+    private static int executeDecisionCreate(Parsed parsed) throws Exception {
         requireOptions(parsed.options, "--title", "--rationale", "--evidence-kind",
                 "--evidence-ref", "--evidence-sha256");
         String title = bounded(parsed.options.get("--title"), DecisionRecord.MAX_TITLE_BYTES, "title");
@@ -168,6 +184,207 @@ public final class WorkspaceCli {
         System.out.println("STATUS=" + record.status());
         System.out.println("SIGNATURE_VALID=" + record.verify());
         return 0;
+    }
+
+    private static int executeDecisionSearch(Parsed parsed) throws Exception {
+        for (String key : parsed.options.keySet()) {
+            if (!key.equals("--text") && !key.equals("--record") && !key.equals("--status")
+                    && !key.equals("--owner") && !key.equals("--limit")) {
+                throw failure("USAGE");
+            }
+        }
+        Path configPath = parsed.profile.resolve(PROJECT_CONFIG);
+        ProjectConfig config;
+        try {
+            config = ProjectConfig.load(configPath);
+        } catch (Exception failure) {
+            throw failure("PROJECT_NOT_CONFIGURED");
+        }
+        String text = parsed.options.getOrDefault("--text", "");
+        UUID recordId = null;
+        if (parsed.options.containsKey("--record")) {
+            recordId = parseUuid(parsed.options.get("--record"), "RECORD_INVALID");
+        }
+        DecisionStatus status = null;
+        if (parsed.options.containsKey("--status")) {
+            String val = parsed.options.get("--status");
+            try {
+                status = DecisionStatus.valueOf(val);
+            } catch (IllegalArgumentException e) {
+                throw failure("USAGE");
+            }
+        }
+        String owner = null;
+        if (parsed.options.containsKey("--owner")) {
+            owner = parsed.options.get("--owner");
+            if (owner == null || !owner.matches("sl1-[0-9a-f]{64}")) {
+                throw failure("USAGE");
+            }
+        }
+        int limit = DecisionSearch.MAX_RESULTS;
+        if (parsed.options.containsKey("--limit")) {
+            try {
+                limit = Integer.parseInt(parsed.options.get("--limit"));
+                if (limit <= 0 || limit > DecisionSearch.MAX_RESULTS) {
+                    throw failure("USAGE");
+                }
+            } catch (NumberFormatException e) {
+                throw failure("USAGE");
+            }
+        }
+        DecisionStore store;
+        try {
+            store = new DecisionStore(parsed.profile.resolve("records"), config.projectId());
+        } catch (Exception e) {
+            throw failure("LOCAL_STATE_INVALID");
+        }
+        DecisionSearch search = new DecisionSearch(store);
+        DecisionSearch.Query query;
+        try {
+            query = new DecisionSearch.Query(text, recordId, status, owner, limit);
+        } catch (IllegalArgumentException e) {
+            throw failure("USAGE");
+        }
+        DecisionSearch.SearchResult result = search.search(query);
+        if (!result.isSuccessful()) {
+            throw failure(result.errorCode().name());
+        }
+        System.out.print(result.render());
+        return 0;
+    }
+
+    private static int executeDecisionInspect(Parsed parsed) throws Exception {
+        if (!parsed.options.containsKey("--record") || parsed.options.size() != 1) {
+            throw failure("USAGE");
+        }
+        UUID recordId = parseUuid(parsed.options.get("--record"), "RECORD_INVALID");
+        Path configPath = parsed.profile.resolve(PROJECT_CONFIG);
+        ProjectConfig config;
+        try {
+            config = ProjectConfig.load(configPath);
+        } catch (Exception failure) {
+            throw failure("PROJECT_NOT_CONFIGURED");
+        }
+        DecisionRecord record = validateSingleRecord(parsed.profile, config.projectId(), recordId);
+        System.out.println("PROJECT_ID=" + record.projectId());
+        System.out.println("RECORD_ID=" + record.recordId());
+        System.out.println("VERSION=" + record.revision());
+        System.out.println("REVISION=" + record.revision());
+        System.out.println("DIGEST=" + record.digestHex());
+        System.out.println("OWNER=" + record.ownerNodeId());
+        System.out.println("OWNER_NODE_ID=" + record.ownerNodeId());
+        System.out.println("AUTHOR=" + record.authorNodeId());
+        System.out.println("AUTHOR_NODE_ID=" + record.authorNodeId());
+        System.out.println("STATUS=" + record.status());
+        String evidenceDigest = record.evidence().isEmpty() ? "" : record.evidence().get(0).digestHex();
+        System.out.println("EVIDENCE_DIGEST=" + evidenceDigest);
+        boolean valid;
+        try {
+            valid = record.verify();
+        } catch (Exception e) {
+            valid = false;
+        }
+        System.out.println("SIGNATURE_VALID=" + valid);
+        return 0;
+    }
+
+    private static DecisionRecord validateSingleRecord(Path profile, UUID projectId, UUID recordId) throws Exception {
+        Path recordsDir = profile.resolve("records");
+        Path decisionsDir = recordsDir.resolve("decisions").resolve(recordId.toString());
+        Path headsDir = recordsDir.resolve("heads");
+        Path headPath = headsDir.resolve(recordId + ".head");
+        if (!Files.exists(headPath)) {
+            throw failure("RECORD_NOT_FOUND");
+        }
+        byte[] headBytes = Files.readAllBytes(headPath);
+        if (headBytes.length != 45) {
+            throw failure("LOCAL_STATE_INVALID");
+        }
+        long headRevision;
+        byte[] headDigest = new byte[32];
+        try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(headBytes))) {
+            int magic = input.readInt();
+            int version = input.readUnsignedByte();
+            if (magic != 0x53444831 || version != 1) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+            headRevision = input.readLong();
+            if (headRevision <= 0) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+            input.readFully(headDigest);
+            if (input.available() != 0) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+        } catch (Exception e) {
+            throw failure("LOCAL_STATE_INVALID");
+        }
+        if (!Files.isDirectory(decisionsDir)) {
+            throw failure("LOCAL_STATE_INVALID");
+        }
+        List<Path> sdrFiles;
+        try (var stream = Files.list(decisionsDir)) {
+            sdrFiles = stream.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".sdr"))
+                    .toList();
+        }
+        if (sdrFiles.isEmpty() || sdrFiles.size() > 64) {
+            throw failure("LOCAL_STATE_INVALID");
+        }
+        Map<Long, Path> revisionMap = new HashMap<>();
+        for (Path file : sdrFiles) {
+            String name = file.getFileName().toString();
+            long revisionNum;
+            try {
+                revisionNum = Long.parseLong(name.substring(0, name.length() - ".sdr".length()));
+            } catch (Exception e) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+            if (revisionMap.put(revisionNum, file) != null) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+        }
+        List<Long> sortedRevisions = revisionMap.keySet().stream().sorted().toList();
+        if (sortedRevisions.isEmpty() || sortedRevisions.get(0) != 1) {
+            throw failure("LOCAL_STATE_INVALID");
+        }
+        DecisionRecord previous = null;
+        for (long rev : sortedRevisions) {
+            Path file = revisionMap.get(rev);
+            byte[] fileBytes = Files.readAllBytes(file);
+            DecisionRecord record;
+            try {
+                record = DecisionRecord.decode(fileBytes);
+            } catch (Exception e) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+            if (record.revision() != rev || !recordId.equals(record.recordId())
+                    || !projectId.equals(record.projectId())) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+            try {
+                if (!record.verify()) {
+                    throw failure("LOCAL_STATE_INVALID");
+                }
+            } catch (Exception e) {
+                throw failure("LOCAL_STATE_INVALID");
+            }
+            if (previous == null) {
+                if (record.revision() != 1 || record.previousDigest() != null) {
+                    throw failure("LOCAL_STATE_INVALID");
+                }
+            } else {
+                if (record.revision() != previous.revision() + 1
+                        || !Arrays.equals(record.previousDigest(), previous.digest())) {
+                    throw failure("LOCAL_STATE_INVALID");
+                }
+            }
+            previous = record;
+        }
+        if (previous == null || previous.revision() != headRevision || !Arrays.equals(previous.digest(), headDigest)) {
+            throw failure("LOCAL_STATE_INVALID");
+        }
+        return previous;
     }
 
     private static int executeSync(Parsed parsed) throws Exception {
@@ -406,6 +623,9 @@ public final class WorkspaceCli {
         System.out.println("       synesis-workspace --profile <dir> decision create --title <text>"
                 + " --rationale <text> --evidence-kind <kind> --evidence-ref <ref>"
                 + " --evidence-sha256 <64-hex>");
+        System.out.println("       synesis-workspace --profile <dir> decision search [--text <text>]"
+                + " [--record <uuid>] [--status <status>] [--owner <node-id>] [--limit <int>]");
+        System.out.println("       synesis-workspace --profile <dir> decision inspect --record <uuid>");
         System.out.println("       synesis-workspace --profile <dir> sync host");
         System.out.println("       synesis-workspace --profile <dir> sync join --project <uuid>"
                 + " --record <uuid> --expect-host <node-id> <invitation>");

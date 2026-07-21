@@ -359,7 +359,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-003
 - Priority: P0
 - Title: Workspace bootstrap and first two-person decision demo
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Provide the smallest operator-owned composition layer that creates
   isolated profiles, local signed decisions, and one-shot sync using the
   existing frozen Link and project-record APIs.
@@ -382,9 +382,10 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   federation, Obsidian, or physical-machine claim.
 - Implementation checkpoints: CP-W1 is local bootstrap and decision creation;
   CP-W2 is the separately approved authenticated host/join and sync slice.
-- Evidence: `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md` and
-  `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`; focused workspace tests and
-  full strict root verification PASS. Stop before CP-W3.
+- Evidence: `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`,
+  `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`, and
+  `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`; focused workspace tests and
+  full strict root verification PASS. Closed at CP-W3.
 - CP-W2 acceptance: `sync host` uses the sole configured peer; `sync join`
   authenticates and pins the expected host before creating B's configuration,
   performs exactly one CP-R4 sync, treats only APPLIED and DUPLICATE as
