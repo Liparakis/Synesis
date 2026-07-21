@@ -13,6 +13,10 @@ public final class ExitCodes {
      */
     public static final int USAGE = 2;
     /**
+     * Doctor found a broken local component.
+     */
+    public static final int DOCTOR_BROKEN = 3;
+    /**
      * Local identity or configuration failure.
      */
     public static final int LOCAL_CONFIGURATION = 10;

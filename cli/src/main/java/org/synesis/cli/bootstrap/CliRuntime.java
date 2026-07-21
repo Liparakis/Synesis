@@ -12,6 +12,7 @@ import org.synesis.workspace.application.ConstraintApplicationService;
 import org.synesis.workspace.application.GuardrailApplicationService;
 import org.synesis.workspace.application.HookApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.ProviderApplicationService;
 import org.synesis.workspace.application.SyncApplicationService;
 
 /**
@@ -25,12 +26,13 @@ import org.synesis.workspace.application.SyncApplicationService;
  * @param guardrailService guardrail service
  * @param hookService hook service
  * @param syncService synchronization service
+ * @param providerService provider lifecycle service
  * @since 1.0
  */
 public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInspector readinessInspector,
                          ProjectApplicationService projectService, ConstraintApplicationService constraintService,
                          GuardrailApplicationService guardrailService, HookApplicationService hookService,
-                         SyncApplicationService syncService) {
+                         SyncApplicationService syncService, ProviderApplicationService providerService) {
     /**
      * Creates an injectable runtime for command tests and process execution.
      *
@@ -41,7 +43,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
     public CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInspector readinessInspector) {
         this(onboarding, terminal, readinessInspector, new ProjectApplicationService(),
                 new ConstraintApplicationService(), new GuardrailApplicationService(),
-                new HookApplicationService(), new SyncApplicationService());
+                new HookApplicationService(), new SyncApplicationService(), new ProviderApplicationService());
     }
 
     /**
@@ -55,6 +57,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
      * @param guardrailService   guardrail service
      * @param hookService        hook service
      * @param syncService        synchronization service
+     * @param providerService    provider lifecycle service
      */
     public CliRuntime {
     }
@@ -153,6 +156,15 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
     @Override
     public SyncApplicationService syncService() {
         return syncService;
+    }
+
+    /**
+     * Returns the provider lifecycle service.
+     * @return provider service
+     */
+    @Override
+    public ProviderApplicationService providerService() {
+        return providerService;
     }
 
     /**

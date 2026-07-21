@@ -2,21 +2,21 @@
 
 ## Identity
 
-- Task ID: SYN-009A
+- Task ID: SYN-009B
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0096
-- Latest checkpoint: CP-0096
+- Started checkpoint: CP-0100
+- Latest checkpoint: CP-0101
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020
+- Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021
 
 ## Objective
 
-Unified CLI, application services, project initialization, and local state layout.
+Provider lifecycle management and installation diagnostics.
 
 ## Planning state
 
-SYN-009A is promoted after CP-0095. No production code has been changed for this task yet.
+SYN-009B is promoted after SYN-009A completion at CP-0099. Provider lifecycle must use the existing unified CLI, application-service, project-layout, and shared-guardrail boundaries.
 
 ## Architecture brief
 
@@ -29,16 +29,25 @@ SYN-009A is promoted after CP-0095. No production code has been changed for this
 
 ## Work completed
 
-SYN-009A implementation is complete pending checkpoint creation.
+SYN-009A is complete at CP-0099. SYN-009B implementation is complete pending checkpoint creation.
 
 - Added `ProjectApplicationService` with upward discovery, malformed/partial
   state rejection, atomic metadata initialization, identity bootstrap, local
   profile paths, and one-peer project configuration.
 - Added structured workspace services for constraints, guardrails, hooks, and
   synchronization; provider adapters now live in bounded integration packages.
-- Retired `WorkspaceCli` as a launcher by moving the internal compatibility
-  operation path to `WorkspaceOperations`; removed `:workspace` and
-  `:project-record` application plugins and distributions.
+- Retired `WorkspaceCli`, `WorkspaceOperations`, and `DecisionRecordCli`; the
+  unified `:cli` launcher is the only supported command entry point.
+- Removed the unreleased process-level compatibility tests and updated active
+  scripts and integration docs to target the unified launcher.
+- Centralized identical Claude and Antigravity path resolution in
+  `ProjectPathResolver`.
+- Added provider support levels, static registry, Antigravity and Claude Code
+  integrations, local metadata, atomic JSON configuration merge, provider
+  application service, lifecycle commands, synthetic checks, and provider-aware
+  doctor diagnostics.
+- Added provider boundary, management, doctor, Claude Code integration, and
+  ADR-0021 documentation.
 - Wired the requested command tree into the sole `:cli` `synesis` launcher,
   including `init`, project/constraint/sync/check-action/hook commands,
   `help`, and the version placeholder.
@@ -50,13 +59,17 @@ SYN-009A implementation is complete pending checkpoint creation.
 - Promotion prerequisite: `scripts/agent-resume.ps1` passed after SYN-009A was
   promoted as the sole ACTIVE task.
 - Focused tests: `ProjectApplicationServiceTest`, hook adapter tests,
-  `WorkspaceCliTest`, and `cli:test` PASS.
+  project/application-service tests, and `cli:test` PASS.
 - Architecture check and strict Javadocs PASS.
 - Required verification: `./gradlew.bat clean check --dependency-verification=strict` PASS
   (34 actionable tasks); `./gradlew.bat :cli:installDist --dependency-verification=strict` PASS.
 - Generated launcher verification: `synesis init` clean/repeat, constraint and
   check-action help, and both hook commands PASS; only `cli/build/install/synesis`
   exists after clean build.
+- Provider verification: registry/lifecycle tests PASS; disposable Antigravity
+  and Claude Code install/status/uninstall checks PASS; idempotent reinstall,
+  synthetic block/allow checks, doctor warnings, and malformed-config rejection
+  PASS.
 
 ## Current failures
 
@@ -64,4 +77,4 @@ None.
 
 ## Immediate next action
 
-Commit the verified SYN-009A implementation and documentation; do not promote SYN-009B or SYN-009C.
+Review CP-0101 and the working-tree diff; do not start SYN-009C.

@@ -31,7 +31,7 @@ When a coding agent receives instructions targeting a file scope governed by an 
    - Agent operates without Synesis guardrail hook.
    - Pre-tool edit reaches target file `src/protocol/RecordMessage.java` and modifies disk content.
 2. **Synesis Condition**:
-   - Agent operates with `synesis-workspace --profile <dir> hook claude-code` pre-tool hook adapter enabled.
+   - Agent operates with `synesis --profile <project> hook claude-code` pre-tool hook adapter enabled.
    - Pre-tool edit targeting `src/protocol/RecordMessage.java` is intercepted and evaluated against reconciled profile constraints via `ScopeMatcher`.
    - Operation is denied (`{"decision": "deny"}`), returning exit code `10`.
    - Target file `src/protocol/RecordMessage.java` remains byte-for-byte unchanged.

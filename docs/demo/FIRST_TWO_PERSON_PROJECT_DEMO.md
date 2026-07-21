@@ -10,8 +10,8 @@ profiles and makes no physical two-machine claim.
 Build the distribution and resolve the batch launcher path:
 
 ```powershell
-gradlew.bat :workspace:installDist --dependency-verification=strict
-$ws = Resolve-Path .\workspace\build\install\synesis-workspace\bin\synesis-workspace.bat
+gradlew.bat :cli:installDist --dependency-verification=strict
+$ws = Resolve-Path .\cli\build\install\synesis\bin\synesis.bat
 $profileA = Join-Path $env:TEMP 'synesis-demo-a'
 $profileB = Join-Path $env:TEMP 'synesis-demo-b'
 ```

@@ -32,7 +32,10 @@ public final class SyncHostCommand implements Callable<Integer> {
             Path resolved = profile == null ? location.profile() : Path.of(profile);
             String projectId = project == null || Files.isDirectory(Path.of(project)) ? null : UUID.fromString(project).toString();
             if (record != null) UUID.fromString(record);
-            return runtime.syncService().host(resolved, projectId, record).exitCode();
+            var result = runtime.syncService().host(resolved, projectId, record,
+                    invitation -> runtime.terminal().stdout("INVITATION=" + invitation));
+            if (result.values().containsKey("ERROR")) runtime.terminal().stderr("ERROR=" + result.values().get("ERROR"));
+            return result.exitCode();
         } catch (ProjectApplicationService.ProjectApplicationException | IllegalArgumentException failure) {
             runtime.terminal().stderr("ERROR=PROJECT_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;

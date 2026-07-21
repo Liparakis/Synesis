@@ -9,8 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import org.synesis.projectrecord.ScopeMatcher;
 import org.synesis.workspace.guardrail.ActionGuardrail;
+import org.synesis.workspace.guardrail.ProjectPathResolver;
 
 /**
  * Pre-action hook adapter translating Google Antigravity PreToolUse hook events
@@ -185,19 +185,7 @@ public final class AntigravityHookAdapter {
      * @throws IllegalArgumentException if path lies outside project root
      */
     public static String resolveRelativePath(Path projectRoot, String rawPath) {
-        if (rawPath == null || rawPath.isBlank()) return null;
-        Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
-        Path target = Path.of(rawPath);
-        if (!target.isAbsolute()) {
-            target = root.resolve(target);
-        }
-        target = target.normalize();
-
-        if (!target.startsWith(root)) {
-            throw new IllegalArgumentException("Target path outside project root: " + rawPath);
-        }
-        Path relative = root.relativize(target);
-        return ScopeMatcher.normalizePath(relative.toString());
+        return ProjectPathResolver.resolve(projectRoot, rawPath);
     }
 
     private static boolean isSupportedTool(String toolName) {

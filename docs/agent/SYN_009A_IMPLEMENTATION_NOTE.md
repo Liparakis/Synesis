@@ -2,18 +2,15 @@
 
 ## Current repository truth
 
-1. Public entry points are `synesis` from `:cli`, `synesis-workspace` from
-   `:workspace`, and `synesis-project-record` from `:project-record`. The
-   requested task retires the workspace launcher; the unified `synesis` CLI is
-   the only user-facing application launcher for this slice.
+1. The only supported command entry point is `synesis` from `:cli`.
 2. The module graph is `:project-record -> :link`, `:workspace -> :link,
    :project-record`, and `:cli -> :link`; the CLI does not yet depend on
    `:workspace`.
 3. The former `WorkspaceCli` contained argument parsing, process exit/error
    formatting, project/configuration and record orchestration, sync host/join
    lifecycle, constraint evaluation, and hook stdin/stdout adaptation. It is
-   now an internal `WorkspaceOperations` helper; public parsing and formatting
-   live in `:cli`.
+   now live in application services and `:cli`; the compatibility runner was
+   removed because the project has no released consumers.
 4. The justified service boundaries are `ProjectApplicationService`,
    `SyncApplicationService`, `ConstraintApplicationService`,
    `GuardrailApplicationService`, and `HookApplicationService`. They will be
@@ -38,10 +35,9 @@
    package-boundary checks, and the requested architecture/CLI/layout/state
    documentation. `:link` protocol classes and `:project-record` domain types
    are not expected to move.
-7. No public release exists, so the unreleased `synesis-workspace` launcher
-   alias and old `project.conf` layout may be removed after replacement tests
-   pass. Provider management, expanded doctor, and portable packaging remain
-   out of scope.
+7. No public release exists, so the unreleased launchers and old process-level
+   compatibility harness were removed. Provider management, expanded doctor,
+   and portable packaging remain out of scope.
 
 ## Architecture decision summary
 

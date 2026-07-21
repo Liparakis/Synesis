@@ -19,7 +19,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$Launcher = Join-Path $RootDir "workspace\build\install\synesis-workspace\bin\synesis-workspace.bat"
+$Launcher = Join-Path $RootDir "cli\build\install\synesis\bin\synesis.bat"
 if (-not (Test-Path $Launcher)) {
     Write-Error "Launcher script not found at $Launcher"
     exit 1

@@ -20,12 +20,14 @@
   - `DecisionRecord`: Canonical signed SDR2 record format (`0x53445232`, `VERSION = 2`) with explicit `RecordType` (`DECISION` vs `PROJECT_CONSTRAINT`) and binary `ConstraintPayload`.
   - `ProjectConstraint`: Domain model with `filterEffectiveActive` excluding superseded constraints; scope evaluation via `ScopeMatcher`.
 - **`:workspace` Module**:
-  - `WorkspaceOperations` is the internal legacy orchestration helper; public command ownership is now in `:cli`.
+  - Application services own orchestration; public command ownership is now in `:cli`.
   - `ClaudeCodeHookAdapter`: Conforms to official Claude Code v2.1+ `PreToolUse` contract. Emits `hookSpecificOutput` with `permissionDecision: "deny"`, handles absolute paths via `resolveRelativePath`, and emits `additionalContext` for warnings.
 - **Integration & Validation Suite**:
   - `docs/integration/claude-code-hook.json`: Project-local Claude Code hook configuration example.
   - `scripts/run-synesis-guardrail-experiment.ps1`: Automated experiment runner proving PreToolUse hook denial and target file preservation.
   - `docs/validation/baseline-vs-synesis-experiment.md`: Experiment specification and metric results.
+  - Provider lifecycle is available through `synesis provider`; Antigravity is
+    `BETA`, Claude Code is `EXPERIMENTAL`, and provider metadata is local-only.
 
 ---
 
@@ -39,7 +41,7 @@
 | **Session & Transport** | `:link` | `PeerSession`, `SessionAuthenticator`, `NettyControlStream` | QUIC session establishment, ALPN negotiation, replay guard, reciprocal CONTROL_READY, graceful close. |
 | **Domain & Constraints** | `:project-record` | `DecisionRecord` (SDR2), `ProjectConstraint`, `ScopeMatcher` | Immutable canonical signed SDR2 records, explicit typed constraint payloads, supersession filtering, deterministic scope path matcher. |
 | **Local Store & PRP1 Sync**| `:project-record` | `DecisionStore`, `ProjectReconciliationSync` | File-based record store, magic prefix `0x50525031` PRP1 project-wide reconciliation over authenticated Link application streams. |
-| **Workspace & Guardrails** | `:workspace` | application services, `WorkspaceOperations`, hook adapters | Guided onboarding (`sync host`/`sync join`), typed constraints, `check-action` guardrail, official provider hook adapters (exit 0 for JSON responses). |
+| **Workspace & Guardrails** | `:workspace` | application services, hook adapters | Guided onboarding (`sync host`/`sync join`), typed constraints, `check-action` guardrail, official provider hook adapters (exit 0 for JSON responses). |
 
 ### B. Documented Limitations & Harness Enforcement Boundaries
 

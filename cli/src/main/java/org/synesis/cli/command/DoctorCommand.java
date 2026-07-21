@@ -1,11 +1,14 @@
 package org.synesis.cli.command;
 
 import java.util.concurrent.Callable;
+import java.nio.file.Path;
 
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.diagnostics.ReadinessReport;
+import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.exit.ExitCodes;
 
 /**
@@ -13,6 +16,7 @@ import org.synesis.cli.exit.ExitCodes;
  */
 @Command(name = "doctor", description = "Inspect local readiness without repair or networking.", mixinStandardHelpOptions = true)
 public final class DoctorCommand implements Callable<Integer> {
+    @Option(names = "--project", description = "Project directory.") private String project;
     private final CliRuntime runtime;
 
     /**
@@ -29,7 +33,19 @@ public final class DoctorCommand implements Callable<Integer> {
      */
     @Override
     public Integer call() {
-        ReadinessReport report = runtime.readinessInspector().inspect();
+        ReadinessReport report;
+        org.synesis.workspace.application.ProjectApplicationService.ProjectLocation location = null;
+        try {
+            if (project != null) {
+                location = runtime.projectService().require(Path.of(project));
+                report = new ReadinessInspector(location.profile()).inspect();
+            } else {
+                report = runtime.readinessInspector().inspect();
+            }
+        } catch (Exception failure) {
+            runtime.terminal().stdout("DOCTOR_RESULT=BROKEN");
+            return ExitCodes.LOCAL_CONFIGURATION;
+        }
         runtime.terminal().stdout("JAVA_RUNTIME=" + (report.javaReady() ? "PASS" : "FAIL"));
         runtime.terminal().stdout("PROFILE=" + (report.profileReady() ? "PASS" : "FAIL"));
         runtime.terminal().stdout("IDENTITY=" + (report.identityReady() ? report.identityDetail() : "FAIL"));
@@ -37,6 +53,20 @@ public final class DoctorCommand implements Callable<Integer> {
         runtime.terminal().stdout("QUIC_NATIVE=" + (report.quicReady() ? report.quicDetail() : "FAIL"));
         runtime.terminal().stdout("WINDOWS_ACL=" + (isWindows() ? "INFO_UNVERIFIED" : "NOT_APPLICABLE"));
         runtime.terminal().stdout("DOCTOR=" + (report.ready() ? "PASS" : "FAIL"));
+        if (location != null) {
+            runtime.terminal().stdout("PROJECT_DISCOVERED=PASS");
+            runtime.terminal().stdout("PROJECT_METADATA=PASS");
+            runtime.terminal().stdout("LOCAL_PROFILE=PASS");
+            try {
+                var providerReport = runtime.providerService().diagnose(location);
+                providerReport.lines().forEach(line -> runtime.terminal().stdout(line));
+                runtime.terminal().stdout("DOCTOR_RESULT=" + (report.ready() ? providerReport.result() : "BROKEN"));
+                if ("BROKEN".equals(providerReport.result())) return ExitCodes.DOCTOR_BROKEN;
+            } catch (Exception failure) {
+                runtime.terminal().stdout("DOCTOR_RESULT=BROKEN");
+                return ExitCodes.LOCAL_CONFIGURATION;
+            }
+        }
         if (report.ready()) return ExitCodes.OK;
         return report.profileReady() && report.identityReady() ? ExitCodes.SESSION_FAILED : ExitCodes.LOCAL_CONFIGURATION;
     }

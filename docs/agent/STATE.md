@@ -4,7 +4,7 @@
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
-are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, and SYN-009A
+are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, and SYN-009B
 is the only ACTIVE task;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
@@ -84,7 +84,7 @@ allowed.
   `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.
 - SYN-PRODUCT-REVIEW: PASS; completed the product review and roadmap planning through CP-0079. The review is recorded in `docs/agent/PRODUCT_REVIEW.md`.
 - SYN-004 planning: PASS; completed the minimal guided workspace demo flow design and task promotion under CP-0081. Detailed design is in `docs/agent/SYN_004_DESIGN.md`.
-- SYN-009A planning/promotion: PASS; the existing four-module graph and CLI/workspace boundaries were reviewed, no service split or new Gradle module was justified, and SYN-009A is the sole ACTIVE task. Implementation evidence is pending.
+- SYN-009A implementation: PASS; unreleased `WorkspaceOperations`, `DecisionRecordCli`, and legacy process harnesses were removed, synchronization orchestration now belongs to `SyncApplicationService`, and the unified `synesis` launcher is the only supported command entry point. Strict clean verification passed after the removal.
 
 ## Honest limitations
 

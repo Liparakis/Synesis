@@ -1,8 +1,11 @@
 # Synesis — Google Antigravity PreToolUse Hook Integration Guide
 
 **Module**: `:workspace` / `AntigravityHookAdapter`
-**Command**: `synesis-workspace --profile <profile> hook antigravity`
+**Command**: `synesis --profile <project> hook antigravity`
 **Configuration File**: `<workspace>/.agents/hooks.json`
+
+Prefer `synesis provider install antigravity` to merge and maintain the managed
+entry. It uses a stable `id` and preserves unrelated hook groups and events.
 
 ---
 
@@ -25,7 +28,7 @@ Add the following to `<workspace>/.agents/hooks.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\path\\to\\synesis\\workspace\\build\\install\\synesis-workspace\\bin\\synesis-workspace.bat --profile C:\\path\\to\\synesis\\profile hook antigravity",
+            "command": "C:\\path\\to\\synesis\\cli\\build\\install\\synesis\\bin\\synesis.bat --profile C:\\path\\to\\synesis hook antigravity",
             "timeout": 10
           }
         ]
@@ -51,5 +54,5 @@ Add the following to `<workspace>/.agents/hooks.json`:
 You can manually verify hook execution by piping an official Antigravity `PreToolUse` payload into the launcher:
 
 ```powershell
-Get-Content payload.json | .\workspace\build\install\synesis-workspace\bin\synesis-workspace.bat --profile C:\path\to\profile hook antigravity
+Get-Content payload.json | .\cli\build\install\synesis\bin\synesis.bat --profile C:\path\to\synesis hook antigravity
 ```

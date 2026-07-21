@@ -9,8 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import org.synesis.projectrecord.ScopeMatcher;
 import org.synesis.workspace.guardrail.ActionGuardrail;
+import org.synesis.workspace.guardrail.ProjectPathResolver;
 
 /**
  * Pre-action hook adapter translating official Claude Code PreToolUse hook events
@@ -31,22 +31,34 @@ public final class ClaudeCodeHookAdapter {
      * @param profile path to workspace profile directory
      */
     public ClaudeCodeHookAdapter(Path profile) {
-        this.profile = Objects.requireNonNull(profile, "profile").toAbsolutePath().normalize();
+        this.profile = Objects.requireNonNull(profile, "profile")
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**
      * Outcome classification of the adapter check.
      */
     public enum Outcome {
-        /** Operation is permitted. */
+        /**
+         * Operation is permitted.
+         */
         ALLOWED,
-        /** Operation triggers a non-blocking warning. */
+        /**
+         * Operation triggers a non-blocking warning.
+         */
         WARNING,
-        /** Operation is blocked by an active constraint. */
+        /**
+         * Operation is blocked by an active constraint.
+         */
         BLOCKED,
-        /** Operation is an unsupported tool/action. */
+        /**
+         * Operation is an unsupported tool/action.
+         */
         UNSUPPORTED,
-        /** Event JSON or path format is invalid. */
+        /**
+         * Event JSON or path format is invalid.
+         */
         INVALID_INPUT
     }
 
@@ -58,6 +70,7 @@ public final class ClaudeCodeHookAdapter {
      * @param humanReason  human readable explanation or hint
      */
     public record Result(Outcome outcome, String responseJson, String humanReason) {
+
     }
 
     /**
@@ -72,9 +85,11 @@ public final class ClaudeCodeHookAdapter {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+                sb.append(line)
+                        .append("\n");
             }
-            return processJson(sb.toString().trim());
+            return processJson(sb.toString()
+                    .trim());
         } catch (Exception e) {
             return new Result(Outcome.INVALID_INPUT, denyJson("Invalid input: " + e.getMessage()), e.getMessage());
         }
@@ -97,8 +112,9 @@ public final class ClaudeCodeHookAdapter {
         }
 
         if (toolName == null || !isFileEditTool(toolName)) {
-            String diagnostic = "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
-                    + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
+            String diagnostic =
+                    "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
+                            + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
             return new Result(Outcome.UNSUPPORTED, emptyJson(), diagnostic);
         }
 
@@ -106,15 +122,18 @@ public final class ClaudeCodeHookAdapter {
         Path projectRoot = profile;
         if (cwdStr != null && !cwdStr.isBlank()) {
             try {
-                projectRoot = Path.of(cwdStr).toAbsolutePath().normalize();
+                projectRoot = Path.of(cwdStr)
+                        .toAbsolutePath()
+                        .normalize();
             } catch (Exception ignored) {
-                projectRoot = profile;
             }
         }
 
         List<String> rawPaths = extractTargetPaths(json);
         if (rawPaths.isEmpty()) {
-            return new Result(Outcome.INVALID_INPUT, denyJson("No target file path found in tool input"), "No target file path");
+            return new Result(Outcome.INVALID_INPUT,
+                    denyJson("No target file path found in tool input"),
+                    "No target file path");
         }
 
         List<String> normalizedRelativePaths = new ArrayList<>();
@@ -125,24 +144,33 @@ public final class ClaudeCodeHookAdapter {
                     normalizedRelativePaths.add(rel);
                 }
             } catch (IllegalArgumentException e) {
-                return new Result(Outcome.INVALID_INPUT, denyJson("Path outside project root or invalid: " + raw), e.getMessage());
+                return new Result(Outcome.INVALID_INPUT,
+                        denyJson("Path outside project root or invalid: " + raw),
+                        e.getMessage());
             }
         }
 
         if (normalizedRelativePaths.isEmpty()) {
-            return new Result(Outcome.INVALID_INPUT, denyJson("No valid repository-relative target path could be resolved"), "No relative target path");
+            return new Result(Outcome.INVALID_INPUT,
+                    denyJson("No valid repository-relative target path could be resolved"),
+                    "No relative target path");
         }
 
-        ActionGuardrail.Response finalResponse = new ActionGuardrail.Response(ActionGuardrail.Outcome.ALLOWED, null, null, "Allowed");
+        ActionGuardrail.Response finalResponse = new ActionGuardrail.Response(ActionGuardrail.Outcome.ALLOWED,
+                null,
+                null,
+                "Allowed");
         for (String relPath : normalizedRelativePaths) {
             ActionGuardrail.Request req = new ActionGuardrail.Request(projectRoot, relPath, toolName, null);
             ActionGuardrail.Response resp = ActionGuardrail.evaluate(profile, req);
             if (resp.outcome() == ActionGuardrail.Outcome.BLOCKED) {
                 finalResponse = resp;
                 break;
-            } else if (resp.outcome() == ActionGuardrail.Outcome.WARNING && finalResponse.outcome() != ActionGuardrail.Outcome.BLOCKED) {
+            } else if (resp.outcome() == ActionGuardrail.Outcome.WARNING
+                    && finalResponse.outcome() != ActionGuardrail.Outcome.BLOCKED) {
                 finalResponse = resp;
-            } else if (resp.outcome() == ActionGuardrail.Outcome.INVALID_INPUT && finalResponse.outcome() == ActionGuardrail.Outcome.ALLOWED) {
+            } else if (resp.outcome() == ActionGuardrail.Outcome.INVALID_INPUT
+                    && finalResponse.outcome() == ActionGuardrail.Outcome.ALLOWED) {
                 finalResponse = resp;
             }
         }
@@ -151,14 +179,18 @@ public final class ClaudeCodeHookAdapter {
             case BLOCKED -> new Result(Outcome.BLOCKED, denyJson(finalResponse.message()), finalResponse.message());
             case WARNING -> {
                 String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE="
-                        + (finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().title() : "Warning")
+                        + (finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()
+                                                                       .title() : "Warning")
                         + "\nREASON=" + finalResponse.message();
                 yield new Result(Outcome.WARNING, warnJson(
-                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().title() : "Warning",
-                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().rationale() : finalResponse.message()
+                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()
+                                                                    .title() : "Warning",
+                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()
+                                                                    .rationale() : finalResponse.message()
                 ), warningDiag);
             }
-            case INVALID_INPUT -> new Result(Outcome.INVALID_INPUT, denyJson(finalResponse.message()), finalResponse.message());
+            case INVALID_INPUT ->
+                    new Result(Outcome.INVALID_INPUT, denyJson(finalResponse.message()), finalResponse.message());
             case UNSUPPORTED -> new Result(Outcome.UNSUPPORTED, emptyJson(), finalResponse.message());
             case ALLOWED -> new Result(Outcome.ALLOWED, emptyJson(), "Allowed");
         };
@@ -173,19 +205,7 @@ public final class ClaudeCodeHookAdapter {
      * @throws IllegalArgumentException if path lies outside project root
      */
     public static String resolveRelativePath(Path projectRoot, String rawPath) {
-        if (rawPath == null || rawPath.isBlank()) return null;
-        Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
-        Path target = Path.of(rawPath);
-        if (!target.isAbsolute()) {
-            target = root.resolve(target);
-        }
-        target = target.normalize();
-
-        if (!target.startsWith(root)) {
-            throw new IllegalArgumentException("Target path outside project root: " + rawPath);
-        }
-        Path relative = root.relativize(target);
-        return ScopeMatcher.normalizePath(relative.toString());
+        return ProjectPathResolver.resolve(projectRoot, rawPath);
     }
 
     private static boolean isFileEditTool(String toolName) {
@@ -214,17 +234,23 @@ public final class ClaudeCodeHookAdapter {
             search = "\"" + key + "\" :";
             idx = json.indexOf(search);
         }
-        if (idx < 0) return null;
+        if (idx < 0) {
+            return null;
+        }
 
         int start = idx + search.length();
         while (start < json.length() && (json.charAt(start) == ' ' || json.charAt(start) == '\t')) {
             start++;
         }
-        if (start >= json.length() || json.charAt(start) != '"') return null;
+        if (start >= json.length() || json.charAt(start) != '"') {
+            return null;
+        }
 
         start++;
         int end = json.indexOf('"', start);
-        if (end < 0) return null;
+        if (end < 0) {
+            return null;
+        }
 
         return json.substring(start, end);
     }

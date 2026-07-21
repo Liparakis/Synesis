@@ -20,17 +20,29 @@ import org.synesis.projectrecord.ProjectConstraint;
  */
 public final class ActionGuardrail {
 
-    /** Action evaluation outcome classification. */
+    /**
+     * Action evaluation outcome classification.
+     */
     public enum Outcome {
-        /** Operation is allowed with no matching constraints. */
+        /**
+         * Operation is allowed with no matching constraints.
+         */
         ALLOWED,
-        /** Operation matches a WARN constraint. */
+        /**
+         * Operation matches a WARN constraint.
+         */
         WARNING,
-        /** Operation matches a BLOCK constraint. */
+        /**
+         * Operation matches a BLOCK constraint.
+         */
         BLOCKED,
-        /** Operation is unsupported for guardrail validation. */
+        /**
+         * Operation is unsupported for guardrail validation.
+         */
         UNSUPPORTED,
-        /** Input request or path is invalid. */
+        /**
+         * Input request or path is invalid.
+         */
         INVALID_INPUT
     }
 
@@ -43,6 +55,7 @@ public final class ActionGuardrail {
      * @param description  optional action description or context
      */
     public record Request(Path projectRoot, String relativePath, String toolName, String description) {
+
     }
 
     /**
@@ -59,6 +72,7 @@ public final class ActionGuardrail {
             ProjectConstraint warningConstraint,
             String message
     ) {
+
     }
 
     private ActionGuardrail() {
@@ -74,7 +88,8 @@ public final class ActionGuardrail {
     public static Response evaluate(Path profile, Request request) {
         Objects.requireNonNull(profile, "profile");
         Objects.requireNonNull(request, "request");
-        if (request.relativePath() == null || request.relativePath().isBlank()) {
+        if (request.relativePath() == null || request.relativePath()
+                .isBlank()) {
             return new Response(Outcome.INVALID_INPUT, null, null, "No target relative path specified");
         }
 
@@ -86,7 +101,10 @@ public final class ActionGuardrail {
             store = new DecisionStore(profile.resolve("records"), config.projectId());
             heads = store.verifiedHeads(1_000);
         } catch (Exception e) {
-            return new Response(Outcome.INVALID_INPUT, null, null, "Project is not configured for profile: " + e.getMessage());
+            return new Response(Outcome.INVALID_INPUT,
+                    null,
+                    null,
+                    "Project is not configured for profile: " + e.getMessage());
         }
 
         List<ProjectConstraint> activeConstraints = new ArrayList<>();

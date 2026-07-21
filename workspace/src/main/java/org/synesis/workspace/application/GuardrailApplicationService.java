@@ -6,20 +6,25 @@ import java.util.Objects;
 import org.synesis.projectrecord.ProjectConstraint;
 import org.synesis.workspace.guardrail.ActionGuardrail;
 
-/** Evaluates proposed actions against verified project constraints. */
+/**
+ * Evaluates proposed actions against verified project constraints.
+ */
 public final class GuardrailApplicationService {
-    /** Creates the service. */
+
+    /**
+     * Creates the service.
+     */
     public GuardrailApplicationService() {
     }
 
     /**
      * Evaluates one normalized action request.
      *
-     * @param profile local profile directory
-     * @param projectRoot project root used for request context
+     * @param profile      local profile directory
+     * @param projectRoot  project root used for request context
      * @param relativePath normalized project-relative target
-     * @param toolName action/tool name
-     * @param description action description
+     * @param toolName     action/tool name
+     * @param description  action description
      * @return structured action result
      */
     public ActionCheckResult check(Path profile, Path projectRoot, String relativePath, String toolName,
@@ -33,13 +38,17 @@ public final class GuardrailApplicationService {
 
     /**
      * Structured action evaluation result.
-     * @param outcome evaluation outcome
+     *
+     * @param outcome           evaluation outcome
      * @param matchedConstraint matched constraint, if any
-     * @param message safe result message
+     * @param message           safe result message
      */
     public record ActionCheckResult(ActionGuardrail.Outcome outcome, ProjectConstraint matchedConstraint,
-            String message) {
-        /** Validates the result. */
+                                    String message) {
+
+        /**
+         * Validates the result.
+         */
         public ActionCheckResult {
             Objects.requireNonNull(outcome, "outcome");
             Objects.requireNonNull(message, "message");

@@ -491,14 +491,28 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-009A
 - Priority: P0
 - Title: Unified CLI, application services, project initialization, and local state layout
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Make `synesis` the sole public CLI, extract workspace application services, and establish safe discovered `.synesis` project state for the SYN-009 roadmap.
 - Dependencies: SYN-008 DONE; CP-0095; existing `:link`, `:project-record`, `:workspace`, and `:cli` modules.
-- Acceptance criteria: `:cli` owns the public command tree and composition; `:workspace` is a library without an application launcher; workspace business logic is exposed through structured application services without Picocli or direct console output; project discovery and `synesis init` create and validate the bounded `.synesis` layout; ordinary commands default to `.synesis/local/profile` with an explicit advanced profile override; existing host/join, decision/constraint, guardrail, hook, and two-profile behavior remains verified; package and dependency checks pass; SYN-009B provider management and SYN-009C portable packaging remain deferred.
-- Required tests: service results, project discovery/init conflicts and secrets, unified command reachability and exit/output contracts, package-boundary checks, launcher retirement, existing workspace and process regressions.
-- Required documentation: implementation note, ADR-0020, package boundaries, project layout, command reference, current state, checkpoint CP-0096, and durable task state.
-- Scope boundary: no provider installation/status/uninstall, expanded doctor, portable ZIP, version injection, protocol changes, background synchronization, additional adapters, or remote publication.
-- Evidence: PASS — `ProjectApplicationServiceTest`, adapter/workspace/CLI tests, `:workspace:architectureCheck`, strict Javadocs, `gradlew.bat clean check --dependency-verification=strict`, `:cli:installDist`, generated `synesis` init/help/hook verification, and CP-0096.
+- Acceptance criteria: `:cli` owns the public command tree and composition; `:workspace` is a library without an application launcher; workspace business logic is exposed through structured application services without Picocli or direct console output; project discovery and `synesis init` create and validate the bounded `.synesis` layout; ordinary commands default to `.synesis/local/profile` with an explicit advanced profile override; existing host/join, decision/constraint, guardrail, and hook behavior remains covered; package and dependency checks pass.
+- Required tests: service results, project discovery/init conflicts and secrets, unified command reachability and exit/output contracts, package-boundary checks, launcher retirement, and current module tests. The unreleased legacy process harness is intentionally removed rather than retained as a compatibility requirement.
+- Required documentation: implementation note, ADR-0020, package boundaries, project layout, command reference, current state, checkpoints CP-0096 and CP-0099, and durable task state.
+- Scope boundary: provider lifecycle, expanded doctor, portable ZIP, version injection, protocol changes, background synchronization, additional adapters, and remote publication were out of scope.
+- Evidence: PASS — `ProjectApplicationServiceTest`, adapter/workspace/CLI tests, `:workspace:architectureCheck`, strict Javadocs, `gradlew.bat clean check --dependency-verification=strict` (34 actionable tasks), unified launcher smoke tests, and CP-0099. Unreleased compatibility launchers and process harnesses are deleted.
+
+## SYN-009B
+
+- ID: SYN-009B
+- Priority: P0
+- Title: Provider lifecycle management and installation diagnostics
+- Status: ACTIVE
+- Purpose: Add project-local provider install, status, uninstall, registry, synthetic health checks, and doctor diagnostics for Antigravity and Claude Code.
+- Dependencies: SYN-009A DONE; CP-0099; existing unified CLI, project layout, provider adapters, and shared `ActionGuardrail`.
+- Acceptance criteria: provider lifecycle is application-service owned; only Antigravity (`BETA`) and Claude Code (`EXPERIMENTAL`) are listed; provider metadata remains local-only; configuration merges preserve unrelated JSON; writes are atomic; malformed configuration is never overwritten; install/status/uninstall are idempotent; synthetic checks use isolated fixtures; doctor reports project, record, provider, and known-limitations results; Codex and portable packaging remain deferred.
+- Required tests: registry, provider configuration merge/atomicity, Antigravity and Claude Code lifecycle, isolated synthetic checks, status classification, uninstall preservation, doctor results, and strict full verification.
+- Required documentation: implementation note, ADR-0021, provider boundary, provider management, doctor, integration docs, current state, and durable task state.
+- Scope boundary: no Codex, MCP, dynamic plugins, shell-command analysis, portable ZIP, release packaging, background synchronization, protocol changes, cloud services, or remote publication.
+- Evidence: PASS — `ProviderApplicationServiceTest`, workspace/CLI tests, provider Javadocs, `gradlew.bat clean check --dependency-verification=strict` (34 actionable tasks), generated disposable-project Antigravity and Claude Code lifecycle checks, and CP-0101. SYN-009C remains deferred.
 
 ## Deferred capability register
 

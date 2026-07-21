@@ -93,11 +93,10 @@
 | Searchable view bounded query grammar and deterministic ordering | SYN-002 | `DecisionSearchTest` | pass | PASS | SYN-002 |
 | Searchable view returns only verified heads and fails closed on corruption | SYN-002 | `DecisionSearchTest`; `DecisionStore.verifiedHeads` | pass | PASS | SYN-002 |
 | Searchable view performs no mutation and remains restart-equivalent | SYN-002 | `DecisionSearchTest` | pass | PASS | SYN-002 |
-| Workspace profile paths are isolated and bounded | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
-| Identity show creates/reuses only the selected profile identity | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
-| Project creation persists one peer atomically and refuses overwrite/mismatch | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
-| Decision creation signs deterministic revision 1 with exactly one evidence reference | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
-| Workspace output is stable and omits secrets and absolute paths | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
+| Workspace project initialization and local state layout | SYN-009A CP-0096 | `ProjectApplicationServiceTest` | pass | PASS | CP-0096 |
+| Provider registry ordering and support levels | SYN-009B CP-0100 | `ProviderApplicationServiceTest` | pass | PASS | CP-0100 |
+| Provider lifecycle, atomic merge, and synthetic checks | SYN-009B CP-0100 | `ProviderApplicationServiceTest` plus disposable launcher checks | pass | PASS | CP-0100 |
+| Provider-aware doctor and record-store diagnostics | SYN-009B CP-0100 | disposable launcher check | pass | PASS | CP-0100 |
 | Workspace host uses the sole configured peer and emits the invitation only on host | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
 | Workspace join pins expected remote identity before creating configuration | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
 | One-shot workspace sync reports APPLIED then DUPLICATE | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |

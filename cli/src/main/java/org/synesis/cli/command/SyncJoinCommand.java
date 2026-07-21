@@ -50,7 +50,12 @@ public final class SyncJoinCommand implements Callable<Integer> {
             Path candidate = project != null && Files.isDirectory(Path.of(project)) ? Path.of(project) : Path.of(".");
             var location = runtime.projectService().require(candidate);
             Path resolved = profile == null ? location.profile() : Path.of(profile);
-            return runtime.syncService().join(resolved, projectId, record, expectedHost, invitation).exitCode();
+            var result = runtime.syncService().join(resolved, projectId, record, expectedHost, invitation);
+            result.values().forEach((key, value) -> {
+                if ("ERROR".equals(key)) runtime.terminal().stderr(key + "=" + value);
+                else runtime.terminal().stdout(key + "=" + value);
+            });
+            return result.exitCode();
         } catch (ProjectApplicationService.ProjectApplicationException | IllegalArgumentException failure) {
             runtime.terminal().stderr("ERROR=PROJECT_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;
