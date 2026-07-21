@@ -392,6 +392,18 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   success, and returns nonzero for UNKNOWN, REJECTED, REMOTE_STALE, CONFLICT,
   authentication, configuration, invitation, or transport failures.
 
+## SYN-PRODUCT-REVIEW
+
+- ID: SYN-PRODUCT-REVIEW
+- Priority: P0
+- Title: Product review and future planning through CP-0079
+- Status: ACTIVE
+- Purpose: Evaluate the product value of Synesis through CP-0079, identify friction points, outline future milestones, and recommend the next step.
+- Dependencies: SYN-003 DONE
+- Acceptance criteria: A complete product review document under `docs/agent/PRODUCT_REVIEW.md` is committed and checkpointed.
+- Required tests: resume, doctor, checkpoint, fixture validators.
+- Required documentation: `docs/agent/PRODUCT_REVIEW.md`, tasks, state, current, next session.
+
 ## Deferred capability register
 
 Deliberately postponed, unsupported, partially verified, and physically

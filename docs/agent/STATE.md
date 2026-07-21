@@ -81,6 +81,7 @@ allowed.
   inspection. Evidence is in `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`,
   `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`, and
   `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.
+- SYN-PRODUCT-REVIEW: PASS; completed the product review and roadmap planning through CP-0079. The review is recorded in `docs/agent/PRODUCT_REVIEW.md`.
 
 ## Honest limitations
 
