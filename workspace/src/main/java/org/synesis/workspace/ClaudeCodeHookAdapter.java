@@ -5,20 +5,15 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import org.synesis.projectrecord.DecisionRecord;
-import org.synesis.projectrecord.DecisionStore;
-import org.synesis.projectrecord.ProjectConfig;
-import org.synesis.projectrecord.ProjectConstraint;
 import org.synesis.projectrecord.ScopeMatcher;
 
 /**
  * Pre-action hook adapter translating official Claude Code PreToolUse hook events
- * into Synesis action-time constraint checks.
+ * into Synesis action-time constraint checks via {@link ActionGuardrail}.
  *
  * <p>Enforces supported structured file-edit operations without modifying
  * target files. Preserves Claude Code's normal permission flow and exits with code 0.
@@ -95,11 +90,6 @@ public final class ClaudeCodeHookAdapter {
             return new Result(Outcome.INVALID_INPUT, denyJson("Empty input event"), "Empty input event");
         }
 
-        String eventName = extractJsonField(json, "hook_event_name");
-        if (eventName == null || eventName.isEmpty()) {
-            eventName = "PreToolUse";
-        }
-
         String toolName = extractJsonField(json, "tool_name");
         if (toolName == null || toolName.isEmpty()) {
             toolName = extractJsonField(json, "name");
@@ -143,76 +133,45 @@ public final class ClaudeCodeHookAdapter {
             return new Result(Outcome.INVALID_INPUT, denyJson("No valid repository-relative target path could be resolved"), "No relative target path");
         }
 
-        // Load project config and decision store
-        ProjectConfig config;
-        DecisionStore store;
-        List<DecisionRecord> heads;
-        try {
-            config = ProjectConfig.load(profile.resolve("project.conf"));
-            store = new DecisionStore(profile.resolve("records"), config.projectId());
-            heads = store.verifiedHeads(1_000);
-        } catch (Exception e) {
-            return new Result(Outcome.INVALID_INPUT, denyJson("Project is not configured for profile"), "Project not configured");
-        }
-
-        List<ProjectConstraint> activeConstraints = new ArrayList<>();
-        for (DecisionRecord r : heads) {
-            ProjectConstraint c = ProjectConstraint.fromRecord(r);
-            if (c != null && c.status() == ProjectConstraint.ConstraintStatus.ACTIVE) {
-                activeConstraints.add(c);
+        ActionGuardrail.Response finalResponse = new ActionGuardrail.Response(ActionGuardrail.Outcome.ALLOWED, null, null, "Allowed");
+        for (String relPath : normalizedRelativePaths) {
+            ActionGuardrail.Request req = new ActionGuardrail.Request(projectRoot, relPath, toolName, null);
+            ActionGuardrail.Response resp = ActionGuardrail.evaluate(profile, req);
+            if (resp.outcome() == ActionGuardrail.Outcome.BLOCKED) {
+                finalResponse = resp;
+                break;
+            } else if (resp.outcome() == ActionGuardrail.Outcome.WARNING && finalResponse.outcome() != ActionGuardrail.Outcome.BLOCKED) {
+                finalResponse = resp;
+            } else if (resp.outcome() == ActionGuardrail.Outcome.INVALID_INPUT && finalResponse.outcome() == ActionGuardrail.Outcome.ALLOWED) {
+                finalResponse = resp;
             }
         }
-        activeConstraints = ProjectConstraint.filterEffectiveActive(activeConstraints);
 
-        ProjectConstraint blockingConstraint = null;
-        ProjectConstraint warningConstraint = null;
-
-        for (String path : normalizedRelativePaths) {
-            for (ProjectConstraint c : activeConstraints) {
-                try {
-                    if (c.appliesTo(path)) {
-                        if (c.effect() == ProjectConstraint.Effect.BLOCK) {
-                            blockingConstraint = c;
-                            break;
-                        } else if (c.effect() == ProjectConstraint.Effect.WARN && warningConstraint == null) {
-                            warningConstraint = c;
-                        }
-                    }
-                } catch (IllegalArgumentException e) {
-                    return new Result(Outcome.INVALID_INPUT, denyJson("Invalid path format: " + path), e.getMessage());
-                }
+        return switch (finalResponse.outcome()) {
+            case BLOCKED -> new Result(Outcome.BLOCKED, denyJson(finalResponse.message()), finalResponse.message());
+            case WARNING -> {
+                String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE="
+                        + (finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().title() : "Warning")
+                        + "\nREASON=" + finalResponse.message();
+                System.err.println(warningDiag);
+                yield new Result(Outcome.WARNING, warnJson(
+                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().title() : "Warning",
+                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().rationale() : finalResponse.message()
+                ), warningDiag);
             }
-            if (blockingConstraint != null) break;
-        }
-
-        if (blockingConstraint != null) {
-            String denialReason = "Synesis blocked this edit.\n\n"
-                    + "Constraint: " + blockingConstraint.title() + "\n"
-                    + "Effect: BLOCK\n"
-                    + "Scope: " + String.join(", ", blockingConstraint.scopes()) + "\n"
-                    + "Reason: " + blockingConstraint.rationale() + "\n\n"
-                    + "Re-plan without modifying the protected scope.";
-            return new Result(Outcome.BLOCKED, denyJson(denialReason), denialReason);
-        }
-
-        if (warningConstraint != null) {
-            String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE=" + warningConstraint.title()
-                    + "\nREASON=" + warningConstraint.rationale();
-            System.err.println(warningDiag);
-            return new Result(Outcome.WARNING, warnJson(warningConstraint.title(), warningConstraint.rationale()), warningDiag);
-        }
-
-        return new Result(Outcome.ALLOWED, emptyJson(), "Allowed");
+            case INVALID_INPUT -> new Result(Outcome.INVALID_INPUT, denyJson(finalResponse.message()), finalResponse.message());
+            case UNSUPPORTED -> new Result(Outcome.UNSUPPORTED, emptyJson(), finalResponse.message());
+            case ALLOWED -> new Result(Outcome.ALLOWED, emptyJson(), "Allowed");
+        };
     }
 
     /**
-     * Resolves a raw target path (absolute or relative) against the project root,
-     * verifying it remains inside the project boundary and converting to a canonical `/`-separated path.
+     * Resolves a raw target path (absolute or relative) against the project root.
      *
      * @param projectRoot project root directory
      * @param rawPath     raw file path string from tool input
      * @return normalized repository-relative path string
-     * @throws IllegalArgumentException if path lies outside project root or crosses drive boundaries
+     * @throws IllegalArgumentException if path lies outside project root
      */
     public static String resolveRelativePath(Path projectRoot, String rawPath) {
         if (rawPath == null || rawPath.isBlank()) return null;
@@ -264,7 +223,7 @@ public final class ClaudeCodeHookAdapter {
         }
         if (start >= json.length() || json.charAt(start) != '"') return null;
 
-        start++; // skip opening quote
+        start++;
         int end = json.indexOf('"', start);
         if (end < 0) return null;
 

@@ -473,7 +473,21 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 
 
+## SYN-008
+
+- ID: SYN-008
+- Priority: P0
+- Title: Antigravity PreToolUse Adapter and Real-Agent Validation
+- Status: DONE
+- Purpose: Add AntigravityHookAdapter reusing ActionGuardrail, expose via hook antigravity CLI subcommand, run automated experiment proving guardrail denial with official Antigravity PreToolUse payload shape.
+- Dependencies: SYN-007.1 DONE
+- Acceptance criteria: ActionGuardrail harness-neutral evaluator extracted; AntigravityHookAdapter processes toolCall.name/toolCall.args.TargetFile/workspacePaths; force_ask for WARN; deny for BLOCK; ask for ALLOWED; deny for invalid/missing TargetFile; ask+diagnostic for unsupported tools; resolveRelativePath and selectProjectRoot boundary-verified; automated experiment passes with p50/p95 latency; ADR-0019; docs/integration/antigravity-hook.md and antigravity-hooks.json; docs/validation/antigravity-real-agent-experiment.md; checkpoint CP-0095.
+- Required tests: AntigravityHookAdapterTest, ClaudeCodeHookAdapterTest, ActionGuardrailTest, run-antigravity-guardrail-experiment.ps1.
+- Required documentation: ADR-0019, antigravity-hook.md, antigravity-hooks.json, antigravity-real-agent-experiment.md, current-state.md, CP-0095.
+- Evidence: PASS — BUILD SUCCESSFUL in 2m 4s (39 tasks); run-antigravity-guardrail-experiment.ps1 SYNESIS_ACTION_RESULT=BLOCKED, GUARDRAIL_LATENCY_P50_MS=181, GUARDRAIL_LATENCY_P95_MS=196, SYNESIS_FALSE_POSITIVE_COUNT=0.
+
 ## Deferred capability register
+
 
 Deliberately postponed, unsupported, partially verified, and physically
 unverified capabilities are tracked in

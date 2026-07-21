@@ -2,37 +2,42 @@
 
 ## Identity
 
-- Task ID: SYN-007.1
+- Task ID: SYN-008
 - Status: DONE
 - Priority: P0
-- Started checkpoint: CP-0093
-- Latest checkpoint: CP-0094
+- Started checkpoint: CP-0094
+- Latest checkpoint: CP-0095
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0018
+- Related decisions: ADR-0019
 
 ## Objective
 
-Real Claude Code PreToolUse Contract Conformance (`PreToolUse` JSON framing, exit 0 denial output, absolute path boundary resolution).
+Antigravity PreToolUse Adapter and Real-Agent Validation.
 
 ## Planning state
 
-SYN-007.1 implementation, testing, verification, and documentation are complete.
+SYN-008 implementation, testing, experiment execution, and documentation are complete.
 
 ## Work completed
 
-- Aligned `ClaudeCodeHookAdapter` with official Claude Code v2.1+ `PreToolUse` command hook contract: returns `hookSpecificOutput` with `permissionDecision: "deny"` and `permissionDecisionReason`.
-- Updated `WorkspaceCli` hook command to **exit with code 0** on JSON denial responses as required by Claude Code's hook engine.
-- Implemented `ClaudeCodeHookAdapter.resolveRelativePath` converting absolute CWD/path inputs into project-relative normalized paths while rejecting targets outside project boundaries or across Windows drive letters.
-- Implemented `ProjectConstraint.filterEffectiveActive` to exclude superseded active constraints prior to action checks.
-- Created `docs/integration/claude-code-hook.json` demonstrating project-local hook configuration.
-- Updated `ClaudeCodeHookAdapterTest` and `scripts/run-synesis-guardrail-experiment.ps1`.
-- Created ADR-0018 and updated `docs/development/current-state.md`.
-- Strictly verified build and test suite (`39 actionable tasks: 30 executed, 6 from cache, 3 up-to-date`).
+- Extracted `ActionGuardrail` harness-neutral constraint evaluator shared by both Claude and Antigravity adapters.
+- Created `AntigravityHookAdapter` with official Antigravity PreToolUse payload support (`toolCall.name`, `toolCall.args.TargetFile`, `workspacePaths`).
+- Added `selectProjectRoot` for workspacePaths-aware root selection.
+- Added `resolveRelativePath` boundary verification (outside-project rejected, traversal rejected, cross-drive rejected on Windows).
+- Exposed `hook antigravity` CLI subcommand in `WorkspaceCli`.
+- Updated `ClaudeCodeHookAdapter` to delegate evaluation to `ActionGuardrail`.
+- Created `AntigravityHookAdapterTest` with blocked/warn/allow/unsupported/invalid contract tests.
+- Created `scripts/run-antigravity-guardrail-experiment.ps1` automated 20-invocation latency benchmark.
+- Created `docs/integration/antigravity-hook.md` and `docs/integration/antigravity-hooks.json`.
+- Created `docs/validation/antigravity-real-agent-experiment.md`.
+- Created ADR-0019.
+- Build: `BUILD SUCCESSFUL in 2m 4s` (39 actionable tasks).
+- Automated experiment: `SYNESIS_ACTION_RESULT=BLOCKED`, `GUARDRAIL_LATENCY_P50_MS=181`, `GUARDRAIL_LATENCY_P95_MS=196`, `FALSE_POSITIVE_COUNT=0`.
 
 ## Verification
 
-- Automated tests: `ClaudeCodeHookAdapterTest`, `ProjectConstraintTest`, `WorkspaceSyncProcessTest`.
-- Automated experiment: `scripts/run-synesis-guardrail-experiment.ps1`.
+- Automated tests: `AntigravityHookAdapterTest`, `ClaudeCodeHookAdapterTest`, `WorkspaceSyncProcessTest`.
+- Automated experiment: `scripts/run-antigravity-guardrail-experiment.ps1`.
 - Command: `.\gradlew.bat clean check --dependency-verification=strict`.
 
 ## Current failures
@@ -41,4 +46,4 @@ None.
 
 ## Immediate next action
 
-Record checkpoint CP-0094, set SYN-007.1 to DONE, and commit.
+Record checkpoint CP-0095, set SYN-008 to DONE, and commit.

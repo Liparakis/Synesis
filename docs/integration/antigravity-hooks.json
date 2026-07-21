@@ -1,0 +1,16 @@
+{
+  "synesis-guardrail": {
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\path\\to\\synesis\\workspace\\build\\install\\synesis-workspace\\bin\\synesis-workspace.bat --profile C:\\path\\to\\synesis\\profile hook antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

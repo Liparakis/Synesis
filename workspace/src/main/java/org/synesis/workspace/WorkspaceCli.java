@@ -337,16 +337,26 @@ public final class WorkspaceCli {
     }
 
     private static int executeHook(Parsed parsed) throws Exception {
-        if (!"claude-code".equals(parsed.subcommand)) throw failure("USAGE");
+        if ("claude-code".equals(parsed.subcommand)) {
+            ClaudeCodeHookAdapter adapter = new ClaudeCodeHookAdapter(parsed.profile);
+            ClaudeCodeHookAdapter.Result result = adapter.processStream(System.in);
 
-        ClaudeCodeHookAdapter adapter = new ClaudeCodeHookAdapter(parsed.profile);
-        ClaudeCodeHookAdapter.Result result = adapter.processStream(System.in);
+            System.out.println(result.responseJson());
+            if (result.humanReason() != null && !result.humanReason().isEmpty()) {
+                System.err.println("HINT=" + result.humanReason());
+            }
+            return 0;
+        } else if ("antigravity".equals(parsed.subcommand)) {
+            AntigravityHookAdapter adapter = new AntigravityHookAdapter(parsed.profile);
+            AntigravityHookAdapter.Result result = adapter.processStream(System.in);
 
-        System.out.println(result.responseJson());
-        if (result.humanReason() != null && !result.humanReason().isEmpty()) {
-            System.err.println("HINT=" + result.humanReason());
+            System.out.println(result.responseJson());
+            if (result.humanReason() != null && !result.humanReason().isEmpty()) {
+                System.err.println("HINT=" + result.humanReason());
+            }
+            return 0;
         }
-        return 0;
+        throw failure("USAGE");
     }
 
     private static int executeCheckAction(Parsed parsed) throws Exception {
