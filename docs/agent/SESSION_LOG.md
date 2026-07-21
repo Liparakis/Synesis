@@ -477,3 +477,13 @@ Append-only operational history.
   ordering, and restart equivalence are covered.
 - Evidence: `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`. Stop after
   SYN-002 review/closure; no broader CAF slice is started.
+
+## 2026-07-21 — SYN-003 planning and CP-W1 activation
+
+- User approved SYN-003 and ADR-0014 after review through CP-0075.
+- Closed SYN-002 as DONE and promoted SYN-003 as the sole ACTIVE task.
+- Selected a thin JDK-only `:workspace` composition layer for isolated profile
+  bootstrap, one-peer project creation, and revision-1 signed decision
+  creation. Link, `:cli`, and `:project-record` production code remain frozen.
+- CP-W1 is active. Host/join, sync, networking, and broader CAF behavior remain
+  deferred to CP-W2 or later.

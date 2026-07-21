@@ -331,7 +331,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-002
 - Priority: P1
 - Title: Minimal searchable project view over signed decisions
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Define and, only after review, expose a bounded read-only view of
   existing verified decision heads so a human can find and compare shared
   project truth without adding another record type or protocol.
@@ -340,8 +340,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: bounded query grammar, deterministic result order,
   corruption/failure behavior, verified-head-only reads, safe rendering, and
   no-mutation behavior are implemented and verified inside `:project-record`.
-  The task remains ACTIVE only for review/closure; no further production scope
-  is open.
+  The task is closed after CP-0075 verification review; no further production
+  scope is open.
 - Required tests: query bounds/encoding, deterministic matching and ordering,
   verified-head-only results, corruption fail-closed behavior, no-mutation
   checks, conflicts, stale revisions, temporary files, and restart-equivalent
@@ -353,6 +353,34 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   Obsidian integration.
 - Evidence: `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`; focused
   `DecisionSearchTest` and full strict verification PASS.
+
+## SYN-003
+
+- ID: SYN-003
+- Priority: P0
+- Title: Workspace bootstrap and first two-person decision demo
+- Status: ACTIVE
+- Purpose: Provide the smallest operator-owned composition layer that creates
+  isolated profiles and a local signed decision using the existing frozen Link
+  and project-record APIs.
+- Dependencies: SYN-002 DONE; frozen SL-013/CP-0054, SL-014, and
+  `:project-record` CP-R4 boundary.
+- Acceptance criteria: CP-W1 adds a JDK-only `:workspace` launcher with bounded
+  profile handling, isolated `<profile>/link`, `<profile>/project.conf`, and
+  `<profile>/records` layout, identity inspection, atomic one-peer project
+  creation with overwrite/mismatch refusal, and revision-1 signed decision
+  creation with exactly one evidence reference. Output is stable and safe and
+  includes `NODE_ID`, `PROJECT_ID`, `RECORD_ID`, and `DIGEST`.
+- Required tests: profile isolation/restart, argument bounds, identity reuse,
+  project overwrite and mismatch refusal, atomic config persistence, signed
+  decision/evidence validation, stable output, and sensitive-output redaction.
+- Required documentation: ADR-0014, first two-person demo script, CP-W1
+  evidence, phase-map update, test matrix, and durable state files.
+- Scope boundary: no host/join, networking, sync, new record type, Link or CLI
+  production changes, background behavior, workers, leases, autonomy,
+  federation, Obsidian, or physical-machine claim.
+- Implementation checkpoints: CP-W1 is local bootstrap and decision creation;
+  CP-W2 is the separately approved authenticated host/join and sync slice.
 
 ## Deferred capability register
 

@@ -9,8 +9,8 @@ over the supplied Collaborative Agent Fabric (CAF) concept PDF. Link and
 `:cli` remain unchanged.
 
 `SYN-001` is DONE at CP-R4. The verified Link seam and CP-R4 protocol remain
-frozen. `SYN-002` implements only the bounded local searchable view inside
-`:project-record`; this checkpoint stops after SYN-002.
+frozen. `SYN-002` is DONE at CP-0075. `SYN-003` is active for the smallest
+workspace/bootstrap slice; implementation stops before CP-W2 networking.
 
 ## Evidence ledger
 
@@ -289,4 +289,7 @@ profile will reconcile automatically.
 ## Decision recorded for review
 
 `SYN-001` is closed as DONE at CP-R4. CP-R5 is deferred. SYN-002 is verified
-and remains active only for review/closure; no new CAF slice is authorized.
+and closed at CP-0075. SYN-003 CP-W1 is the only active next slice: a thin
+operator composition layer for isolated profile bootstrap and local signed
+decision creation. No CP-W2 networking or broader CAF functionality is
+authorized by this checkpoint.

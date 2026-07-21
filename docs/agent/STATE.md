@@ -4,7 +4,8 @@
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
-are DONE, and SYN-002 is the only ACTIVE task for planning; SYN-001 is DONE at
+are DONE, SYN-002 is DONE at CP-0075, and SYN-003 is the only ACTIVE task;
+SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
 implemented transport/session subproject.
@@ -29,8 +30,8 @@ and quarantine. Production installation remains out of scope.
 The CAF Phase 1 map and first signed-decision-record proposal are recorded in
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, ADR-0011, and ADR-0013.
 ADR-0011 is accepted and SYN-001 is DONE at CP-R4. CP-R5 is deferred. SYN-002
-implements only a read-only searchable view and remains active for review/
-closure; no background sync,
+is DONE at CP-0075. ADR-0014 selects SYN-003 CP-W1 as a thin workspace
+bootstrap layer; no background sync,
 reconnect, discovery, membership, retries, second transport, shared-Markdown
 authority, extra record types, physical two-machine claim, or CLI change is
 allowed.
@@ -70,6 +71,10 @@ allowed.
   state; ADR-0013 defines the searchable-view boundary.
 - SYN-002 implementation: PASS; `DecisionSearch` and validated-head snapshot
   remain local, on-demand, bounded, and non-mutating.
+- SYN-002 closure review: PASS at CP-0075; evidence is
+  `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`.
+- SYN-003 planning: ADR-0014, first-demo script, task promotion, and CP-0076
+  are recorded; CP-W1 implementation is the next action.
 
 ## Honest limitations
 
