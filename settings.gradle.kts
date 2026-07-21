@@ -7,3 +7,4 @@ rootProject.name = "synesis"
 include(":link")
 include(":cli")
 include(":project-record")
+include(":workspace")

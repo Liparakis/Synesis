@@ -2,7 +2,7 @@
 
 ## Status
 
-ACCEPTED — planning and CP-W1 implementation boundary, 2026-07-21.
+ACCEPTED AND VERIFIED FOR CP-W1, 2026-07-21.
 
 ## Context
 

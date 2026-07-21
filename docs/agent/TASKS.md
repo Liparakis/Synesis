@@ -381,6 +381,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   federation, Obsidian, or physical-machine claim.
 - Implementation checkpoints: CP-W1 is local bootstrap and decision creation;
   CP-W2 is the separately approved authenticated host/join and sync slice.
+- Evidence: `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`; focused workspace
+  tests and full strict root verification PASS. Stop before CP-W2.
 
 ## Deferred capability register
 

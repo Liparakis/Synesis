@@ -487,3 +487,14 @@ Append-only operational history.
   creation. Link, `:cli`, and `:project-record` production code remain frozen.
 - CP-W1 is active. Host/join, sync, networking, and broader CAF behavior remain
   deferred to CP-W2 or later.
+
+## 2026-07-21 — SYN-003 CP-W1 verified
+
+- Added the JDK-only `:workspace` application and generated
+  `synesis-workspace` launcher.
+- Focused workspace tests and full strict root verification pass. Identity
+  reuse, isolated profiles, project overwrite/mismatch refusal, signed
+  revision-1 creation, restart readability, bounds, and safe output are
+  covered.
+- Evidence: `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`.
+- Stop before CP-W2 host/join or sync.

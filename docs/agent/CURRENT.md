@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0076
-- Latest checkpoint: CP-0076
+- Latest checkpoint: CP-0077
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014
 
@@ -32,17 +32,25 @@ has been added yet.
 
 ## Verification
 
-Planning-state validators and the CP-0076 checkpoint must pass before code
-changes. CP-W1 requires focused workspace tests followed by the full strict
-root build and all repository validators.
+Planning-state validators and the CP-0076 checkpoint passed before code
+changes. CP-W1 focused tests, the full strict root build, and all repository
+validators now pass.
 
 ## Current failures
 
 Physical generated-launcher onboarding, abrupt-loss, wrong-identity, and
-physical project-record transfer remain unclaimed. No CP-W1 implementation
-failure is known before implementation begins.
+physical project-record transfer remain unclaimed. CP-W1 has no known
+verification failure.
+
+## Work completed
+
+Added `:workspace` with a generated `synesis-workspace` launcher. The launcher
+supports bounded `--profile` handling, identity inspection, atomic one-peer
+project creation, and signed revision-1 decision creation with exactly one
+evidence reference. Link, `:cli`, and `:project-record` production code were
+not changed.
 
 ## Immediate next action
 
-Create the `:workspace` Gradle application and its bounded JDK-only launcher;
-do not implement host/join or sync.
+Create CP-0077, commit the verified CP-W1 implementation and evidence, and
+stop before CP-W2 host/join or sync.

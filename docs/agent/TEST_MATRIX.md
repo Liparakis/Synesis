@@ -93,8 +93,8 @@
 | Searchable view bounded query grammar and deterministic ordering | SYN-002 | `DecisionSearchTest` | pass | PASS | SYN-002 |
 | Searchable view returns only verified heads and fails closed on corruption | SYN-002 | `DecisionSearchTest`; `DecisionStore.verifiedHeads` | pass | PASS | SYN-002 |
 | Searchable view performs no mutation and remains restart-equivalent | SYN-002 | `DecisionSearchTest` | pass | PASS | SYN-002 |
-| Workspace profile paths are isolated and bounded | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PENDING | CP-W1 |
-| Identity show creates/reuses only the selected profile identity | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PENDING | CP-W1 |
-| Project creation persists one peer atomically and refuses overwrite/mismatch | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PENDING | CP-W1 |
-| Decision creation signs deterministic revision 1 with exactly one evidence reference | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PENDING | CP-W1 |
-| Workspace output is stable and omits secrets and absolute paths | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PENDING | CP-W1 |
+| Workspace profile paths are isolated and bounded | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
+| Identity show creates/reuses only the selected profile identity | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
+| Project creation persists one peer atomically and refuses overwrite/mismatch | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
+| Decision creation signs deterministic revision 1 with exactly one evidence reference | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
+| Workspace output is stable and omits secrets and absolute paths | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
