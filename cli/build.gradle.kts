@@ -22,6 +22,8 @@ application {
 
 dependencies {
     implementation(project(":link"))
+    implementation(project(":project-record"))
+    implementation(project(":workspace"))
     implementation(libs.picocli)
     implementation(libs.zxing.core)
     testImplementation(platform(libs.junit.bom))

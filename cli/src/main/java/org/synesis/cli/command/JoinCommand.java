@@ -39,7 +39,7 @@ public final class JoinCommand implements Callable<Integer> {
         } catch (OnboardingFailure failure) {
             return FailureMapper.map(failure, runtime.terminal());
         } catch (RuntimeException failure) {
-            return FailureMapper.internal(failure, runtime.terminal());
+            return FailureMapper.internal(runtime.terminal());
         }
     }
 }

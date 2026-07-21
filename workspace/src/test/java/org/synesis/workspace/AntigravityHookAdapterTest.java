@@ -18,6 +18,7 @@ import org.synesis.projectrecord.DecisionStore;
 import org.synesis.projectrecord.Ed25519Signer;
 import org.synesis.projectrecord.ProjectConfig;
 import org.synesis.projectrecord.ProjectConstraint;
+import org.synesis.workspace.integration.antigravity.AntigravityHookAdapter;
 
 final class AntigravityHookAdapterTest {
 

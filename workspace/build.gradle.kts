@@ -1,7 +1,7 @@
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
 
 plugins {
-    application
+    `java-library`
 }
 
 group = "org.synesis"
@@ -11,12 +11,6 @@ java {
     toolchain { languageVersion = JavaLanguageVersion.of(25) }
     withSourcesJar()
     withJavadocJar()
-}
-
-application {
-    applicationName = "synesis-workspace"
-    mainClass = "org.synesis.workspace.WorkspaceCli"
-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 dependencies {
@@ -43,7 +37,6 @@ tasks.withType<Javadoc>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
-    dependsOn(tasks.installDist)
     val forkOverride = project.findProperty("synesisTestForks")?.toString()?.toIntOrNull()
     maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
@@ -67,16 +60,21 @@ tasks.register("staticAnalysis") {
     dependsOn(tasks.compileJava, tasks.compileTestJava)
 }
 
-tasks.register("launcherSmoke") {
+tasks.register("architectureCheck") {
     group = "verification"
-    description = "Checks that the workspace launchers are generated."
-    dependsOn(tasks.installDist)
+    description = "Checks workspace package and module import boundaries."
     doLast {
-        require(layout.buildDirectory.file("install/synesis-workspace/bin/synesis-workspace.bat").get().asFile.isFile)
-        require(layout.buildDirectory.file("install/synesis-workspace/bin/synesis-workspace").get().asFile.isFile)
+        val guardrail = project.file("src/main/java/org/synesis/workspace/guardrail")
+        val providerImports = guardrail.walkTopDown().filter { it.isFile && it.extension == "java" }
+            .flatMap { file -> file.readLines().filter { it.contains("org.synesis.workspace.integration") } }
+        require(providerImports.none()) { "Guardrail imports provider adapter: $providerImports" }
+        val recordSources = project.file("../project-record/src/main/java")
+        val reverseImports = recordSources.walkTopDown().filter { it.isFile && it.extension == "java" }
+            .flatMap { file -> file.readLines().filter { it.contains("org.synesis.workspace") } }
+        require(reverseImports.none()) { "Project-record imports workspace code: $reverseImports" }
     }
 }
 
 tasks.check {
-    dependsOn(tasks.javadoc, "formatCheck", "staticAnalysis", "launcherSmoke")
+    dependsOn(tasks.javadoc, "formatCheck", "staticAnalysis", "architectureCheck")
 }

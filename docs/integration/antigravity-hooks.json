@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\path\\to\\synesis\\workspace\\build\\install\\synesis-workspace\\bin\\synesis-workspace.bat --profile C:\\path\\to\\synesis\\profile hook antigravity",
+            "command": "C:\\path\\to\\synesis\\cli\\build\\install\\synesis\\bin\\synesis.bat hook antigravity --profile C:\\path\\to\\project\\.synesis\\local\\profile",
             "timeout": 10
           }
         ]

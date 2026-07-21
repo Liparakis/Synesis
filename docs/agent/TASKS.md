@@ -486,6 +486,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: ADR-0019, antigravity-hook.md, antigravity-hooks.json, antigravity-real-agent-experiment.md, current-state.md, CP-0095.
 - Evidence: PASS — BUILD SUCCESSFUL in 2m 4s (39 tasks); run-antigravity-guardrail-experiment.ps1 SYNESIS_ACTION_RESULT=BLOCKED, GUARDRAIL_LATENCY_P50_MS=181, GUARDRAIL_LATENCY_P95_MS=196, SYNESIS_FALSE_POSITIVE_COUNT=0.
 
+## SYN-009A
+
+- ID: SYN-009A
+- Priority: P0
+- Title: Unified CLI, application services, project initialization, and local state layout
+- Status: ACTIVE
+- Purpose: Make `synesis` the sole public CLI, extract workspace application services, and establish safe discovered `.synesis` project state for the SYN-009 roadmap.
+- Dependencies: SYN-008 DONE; CP-0095; existing `:link`, `:project-record`, `:workspace`, and `:cli` modules.
+- Acceptance criteria: `:cli` owns the public command tree and composition; `:workspace` is a library without an application launcher; workspace business logic is exposed through structured application services without Picocli or direct console output; project discovery and `synesis init` create and validate the bounded `.synesis` layout; ordinary commands default to `.synesis/local/profile` with an explicit advanced profile override; existing host/join, decision/constraint, guardrail, hook, and two-profile behavior remains verified; package and dependency checks pass; SYN-009B provider management and SYN-009C portable packaging remain deferred.
+- Required tests: service results, project discovery/init conflicts and secrets, unified command reachability and exit/output contracts, package-boundary checks, launcher retirement, existing workspace and process regressions.
+- Required documentation: implementation note, ADR-0020, package boundaries, project layout, command reference, current state, checkpoint CP-0096, and durable task state.
+- Scope boundary: no provider installation/status/uninstall, expanded doctor, portable ZIP, version injection, protocol changes, background synchronization, additional adapters, or remote publication.
+- Evidence: PASS — `ProjectApplicationServiceTest`, adapter/workspace/CLI tests, `:workspace:architectureCheck`, strict Javadocs, `gradlew.bat clean check --dependency-verification=strict`, `:cli:installDist`, generated `synesis` init/help/hook verification, and CP-0096.
+
 ## Deferred capability register
 
 

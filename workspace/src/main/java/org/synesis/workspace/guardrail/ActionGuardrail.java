@@ -1,4 +1,4 @@
-package org.synesis.workspace;
+package org.synesis.workspace.guardrail;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

@@ -1,4 +1,4 @@
-package org.synesis.workspace;
+package org.synesis.workspace.integration.claude;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Objects;
 
 import org.synesis.projectrecord.ScopeMatcher;
+import org.synesis.workspace.guardrail.ActionGuardrail;
 
 /**
  * Pre-action hook adapter translating official Claude Code PreToolUse hook events
@@ -98,7 +99,6 @@ public final class ClaudeCodeHookAdapter {
         if (toolName == null || !isFileEditTool(toolName)) {
             String diagnostic = "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
                     + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
-            System.err.println(diagnostic);
             return new Result(Outcome.UNSUPPORTED, emptyJson(), diagnostic);
         }
 
@@ -153,7 +153,6 @@ public final class ClaudeCodeHookAdapter {
                 String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE="
                         + (finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().title() : "Warning")
                         + "\nREASON=" + finalResponse.message();
-                System.err.println(warningDiag);
                 yield new Result(Outcome.WARNING, warnJson(
                         finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().title() : "Warning",
                         finalResponse.warningConstraint() != null ? finalResponse.warningConstraint().rationale() : finalResponse.message()

@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Objects;
 
 import org.synesis.link.candidate.Candidate;
-import org.synesis.link.candidate.CandidateCancellation;
 import org.synesis.link.candidate.CandidateProvider;
 import org.synesis.link.candidate.LocalInterfaceCandidateProvider;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -55,7 +54,7 @@ public final class ReadinessInspector {
         List<Candidate> candidates = List.of();
         String candidateDetail;
         try {
-            candidates = candidateProvider.gather((CandidateCancellation) () -> false)
+            candidates = candidateProvider.gather(() -> false)
                     .toCompletableFuture().join();
             candidateDetail = "COUNT=" + candidates.size();
         } catch (RuntimeException failure) {

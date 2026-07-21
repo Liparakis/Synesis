@@ -1,7 +1,7 @@
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
 
 plugins {
-    application
+    `java-library`
 }
 
 group = "org.synesis"
@@ -11,11 +11,6 @@ java {
     toolchain { languageVersion = JavaLanguageVersion.of(25) }
     withSourcesJar()
     withJavadocJar()
-}
-
-application {
-    applicationName = "synesis-project-record"
-    mainClass = "org.synesis.projectrecord.DecisionRecordCli"
 }
 
 dependencies {
@@ -66,16 +61,6 @@ tasks.register("staticAnalysis") {
     dependsOn(tasks.compileJava, tasks.compileTestJava)
 }
 
-tasks.register("launcherSmoke") {
-    group = "verification"
-    description = "Checks that the project-record launcher is generated."
-    dependsOn(tasks.installDist)
-    doLast {
-        require(layout.buildDirectory.file("install/synesis-project-record/bin/synesis-project-record.bat").get().asFile.isFile)
-        require(layout.buildDirectory.file("install/synesis-project-record/bin/synesis-project-record").get().asFile.isFile)
-    }
-}
-
 tasks.check {
-    dependsOn(tasks.javadoc, "formatCheck", "staticAnalysis", "launcherSmoke")
+    dependsOn(tasks.javadoc, "formatCheck", "staticAnalysis")
 }

@@ -2,7 +2,7 @@
 
 **Date**: July 22, 2026
 **Repository Branch**: `master`
-**Latest Checkpoint**: `CP-0094`
+**Latest Checkpoint**: `CP-0096` (SYN-009A implementation verified)
 **Build Status**: `PASS` (`.\gradlew.bat clean check --dependency-verification=strict`)
 
 ---
@@ -10,11 +10,17 @@
 ## 1. Executive Summary & Task Status Audit
 
 ### Active Capability Summary
+- **Unified CLI / project state (`SYN-009A`)**:
+  - `:cli` is the sole application distribution and exposes `synesis init`,
+    project/constraint/sync/check-action/hook commands.
+  - `:workspace` is a library with application services and no launcher.
+  - Project discovery walks upward through `.synesis/project.json`; local
+    profile and runtime state live below `.synesis/local`.
 - **`:project-record` Module**:
   - `DecisionRecord`: Canonical signed SDR2 record format (`0x53445232`, `VERSION = 2`) with explicit `RecordType` (`DECISION` vs `PROJECT_CONSTRAINT`) and binary `ConstraintPayload`.
   - `ProjectConstraint`: Domain model with `filterEffectiveActive` excluding superseded constraints; scope evaluation via `ScopeMatcher`.
 - **`:workspace` Module**:
-  - `WorkspaceCli`: Subcommands `constraint create`, `check-action`, and `hook claude-code` (exits code 0 for JSON responses).
+  - `WorkspaceOperations` is the internal legacy orchestration helper; public command ownership is now in `:cli`.
   - `ClaudeCodeHookAdapter`: Conforms to official Claude Code v2.1+ `PreToolUse` contract. Emits `hookSpecificOutput` with `permissionDecision: "deny"`, handles absolute paths via `resolveRelativePath`, and emits `additionalContext` for warnings.
 - **Integration & Validation Suite**:
   - `docs/integration/claude-code-hook.json`: Project-local Claude Code hook configuration example.
@@ -33,7 +39,7 @@
 | **Session & Transport** | `:link` | `PeerSession`, `SessionAuthenticator`, `NettyControlStream` | QUIC session establishment, ALPN negotiation, replay guard, reciprocal CONTROL_READY, graceful close. |
 | **Domain & Constraints** | `:project-record` | `DecisionRecord` (SDR2), `ProjectConstraint`, `ScopeMatcher` | Immutable canonical signed SDR2 records, explicit typed constraint payloads, supersession filtering, deterministic scope path matcher. |
 | **Local Store & PRP1 Sync**| `:project-record` | `DecisionStore`, `ProjectReconciliationSync` | File-based record store, magic prefix `0x50525031` PRP1 project-wide reconciliation over authenticated Link application streams. |
-| **Workspace & Guardrails** | `:workspace` | `WorkspaceCli`, `ClaudeCodeHookAdapter` | Guided onboarding (`sync host`/`sync join`), `constraint create`, `check-action` guardrail, official `PreToolUse` hook adapter (exit 0, `permissionDecision: "deny"`). |
+| **Workspace & Guardrails** | `:workspace` | application services, `WorkspaceOperations`, hook adapters | Guided onboarding (`sync host`/`sync join`), typed constraints, `check-action` guardrail, official provider hook adapters (exit 0 for JSON responses). |
 
 ### B. Documented Limitations & Harness Enforcement Boundaries
 

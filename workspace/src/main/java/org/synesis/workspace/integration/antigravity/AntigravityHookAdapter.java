@@ -1,4 +1,4 @@
-package org.synesis.workspace;
+package org.synesis.workspace.integration.antigravity;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Objects;
 
 import org.synesis.projectrecord.ScopeMatcher;
+import org.synesis.workspace.guardrail.ActionGuardrail;
 
 /**
  * Pre-action hook adapter translating Google Antigravity PreToolUse hook events
@@ -98,7 +99,6 @@ public final class AntigravityHookAdapter {
         if (toolName == null || !isSupportedTool(toolName)) {
             String diagnostic = "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
                     + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
-            System.err.println(diagnostic);
             return new Result(Outcome.UNSUPPORTED, askJson("Synesis found no blocking project constraint."), diagnostic);
         }
 

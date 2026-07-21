@@ -528,3 +528,27 @@ Append-only operational history.
 - Corrected the roadmap in `PRODUCT_REVIEW.md` to ensure decision records are treated as declarative policies/metadata, never as executable tasks or job scripts.
 - Documented the exact operator commands, security guarantees, command contracts, failure behavior, hints, and test matrix in `docs/agent/SYN_004_DESIGN.md`.
 - Closed the planning/review task and promoted `SYN-004` as the ACTIVE task. All validators and checkpoint pass.
+## 2026-07-22 — SYN-009A promotion
+
+- User supplied the SYN-009A scope for a unified CLI, application services,
+  project initialization, and local `.synesis` state layout.
+- Repository truth showed SYN-008 DONE and zero ACTIVE tasks, so the mandatory
+  resume validator failed before implementation. SYN-009A is now the sole
+  ACTIVE task and durable state agrees on its scope.
+- Architecture mode is EVOLUTION. The four existing Gradle modules remain;
+  `:cli` becomes the only composition root, while `:workspace` becomes a
+  library exposing small structured application services.
+- Exact continuation: write the implementation note, then implement and test
+  the smallest service/CLI vertical slice. Do not begin SYN-009B or SYN-009C.
+
+## 2026-07-22 — SYN-009A verified at CP-0096
+
+- Unified `synesis` launcher, application-service boundaries, project discovery,
+  `.synesis` initialization, local profile layout, adapter package boundaries,
+  launcher retirement, and documentation are implemented.
+- `gradlew.bat clean check --dependency-verification=strict` passed with 34
+  actionable tasks. `:cli:installDist`, generated init/repeat/help/hook checks,
+  `:workspace:architectureCheck`, and focused service tests passed.
+- CP-0096 was created. SYN-009B provider management and SYN-009C portable
+  packaging remain unpromoted and unimplemented.
+- Exact continuation: commit the verified SYN-009A changes; do not expand scope.

@@ -1,4 +1,4 @@
-package org.synesis.workspace;
+package org.synesis.workspace.application;
 
 import java.io.Serial;
 import java.nio.charset.StandardCharsets;
@@ -38,36 +38,39 @@ import org.synesis.projectrecord.ProjectConstraint;
 import org.synesis.projectrecord.ProjectRecordSync;
 import org.synesis.projectrecord.ProjectReconciliationSync;
 import org.synesis.projectrecord.ScopeMatcher;
+import org.synesis.workspace.integration.antigravity.AntigravityHookAdapter;
+import org.synesis.workspace.integration.claude.ClaudeCodeHookAdapter;
 
 /**
- * JDK-only bootstrap launcher for one isolated Synesis workspace profile.
+ * Internal compatibility runner for one isolated Synesis workspace profile.
  *
  * <p>This application composes the existing Link identity and project-record
  * APIs. It owns no network protocol, record encoding, or durable format. The
- * launcher is process-confined and does not start background work.
+ * runner is process-confined and does not start background work. The public
+ * process entry point is owned by {@code :cli}; this class has no {@code main}
+ * method and is retained only while application services absorb the legacy
+ * operation paths.
  *
  * @since 1.0
  */
-public final class WorkspaceCli {
+public final class WorkspaceOperations {
     private static final int MAX_ARGUMENTS = 64;
     private static final int MAX_ARGUMENT_BYTES = 8_192;
     private static final int MAX_PROFILE_BYTES = 1_024;
     private static final Path PROJECT_CONFIG = Path.of("project.conf");
 
-    private WorkspaceCli() {
+    private WorkspaceOperations() {
     }
 
     /**
-     * Runs one bounded workspace command and exits with a stable status.
+     * Runs one bounded legacy workspace operation for application-service
+     * delegation and regression tests. This class is not a process entry point;
+     * callers own output streams and exit mapping at the public CLI boundary.
      *
-     * @param arguments launcher arguments; profile paths and values are never
-     *                  emitted in failure output
+     * @param arguments workspace operation arguments
+     * @return stable operation status
      */
-    static void main(String[] arguments) {
-        System.exit(run(arguments));
-    }
-
-    static int run(String[] arguments) {
+    public static int run(String[] arguments) {
         try {
             validateArguments(arguments);
             if (arguments.length == 1 && "--help".equals(arguments[0])) {
@@ -414,7 +417,7 @@ public final class WorkspaceCli {
                 System.err.println("HINT=Action blocked by project constraint " + primaryBlock.recordId() + ". Re-plan required.");
                 return 10;
             } else {
-                ProjectConstraint primaryWarn = matched.get(0);
+                ProjectConstraint primaryWarn = matched.getFirst();
                 System.out.println("ACTION_RESULT=WARNING");
                 System.out.println("MATCHED_CONSTRAINT_COUNT=" + matched.size());
                 System.out.println("MATCHED_CONSTRAINT_ID=" + primaryWarn.recordId());
@@ -930,14 +933,7 @@ public final class WorkspaceCli {
     }
 
     private static void printUsage() {
-        System.out.println("Usage: synesis-workspace --profile <dir> identity show");
-        System.out.println("       synesis-workspace --profile <dir> project create --peer <node-id>");
-        System.out.println("       synesis-workspace --profile <dir> decision create --title <text>" + " --rationale <text> --evidence-kind <kind> --evidence-ref <ref>" + " --evidence-sha256 <64-hex>");
-        System.out.println("       synesis-workspace --profile <dir> decision search [--text <text>]" + " [--record <uuid>] [--status <status>] [--owner <node-id>] [--limit <int>]");
-        System.out.println("       synesis-workspace --profile <dir> decision inspect --record <uuid>");
-        System.out.println("       synesis-workspace --profile <dir> sync host");
-        System.out.println("       synesis-workspace --profile <dir> sync join --project <uuid>" + " [--record <uuid>] [--expect-host <node-id>] <invitation>");
-        System.out.println("       synesis-workspace --profile <dir> check-action --scope <scope> --action <text>");
+        System.out.println("Internal workspace operation; use the public synesis command.");
     }
 
     private record Parsed(Path profile, String command, String subcommand, Map<String, String> options,

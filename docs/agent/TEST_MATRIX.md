@@ -103,3 +103,6 @@
 | One-shot workspace sync reports APPLIED then DUPLICATE | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
 | Wrong host, malformed invitation, project mismatch, and missing record fail safely without unsafe mutation | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
 | Connection close before result reports UNKNOWN with nonzero exit | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
+| `.synesis` initialization, nested discovery, repeat/idempotency, malformed/partial conflict, local identity, and metadata redaction | service tests | `ProjectApplicationServiceTest` | pass | PASS | SYN-009A |
+| Unified CLI command reachability and retired launcher absence | generated launcher/manual verification | `:cli:installDist`, `synesis init`, help, hook commands | pass | PASS | SYN-009A |
+| Workspace guardrail/provider and project-record reverse-import boundaries | build-time architecture check | `:workspace:architectureCheck` | pass | PASS | SYN-009A |

@@ -34,11 +34,10 @@ public final class FailureMapper {
     /**
      * Maps an unexpected fault without exposing its message.
      *
-     * @param failure  unexpected fault
      * @param terminal output boundary
      * @return internal exit code
      */
-    public static int internal(Throwable failure, Terminal terminal) {
+    public static int internal(Terminal terminal) {
         terminal.stdout("FAILURE=INTERNAL");
         terminal.stderr("Unexpected internal failure.");
         return ExitCodes.INTERNAL;

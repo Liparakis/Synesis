@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\path\\to\\synesis\\workspace\\build\\install\\synesis-workspace\\bin\\synesis-workspace.bat --profile C:\\path\\to\\workspace\\profile hook claude-code"
+        "command": "C:\\path\\to\\synesis\\cli\\build\\install\\synesis\\bin\\synesis.bat hook claude-code --profile C:\\path\\to\\project\\.synesis\\local\\profile"
           }
         ]
       }

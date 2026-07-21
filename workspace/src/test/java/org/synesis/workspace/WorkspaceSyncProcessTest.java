@@ -1,5 +1,7 @@
 package org.synesis.workspace;
 
+import org.synesis.workspace.application.WorkspaceOperations;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -465,9 +467,11 @@ final class WorkspaceSyncProcessTest {
 
     private static Process start(Path profile, String... arguments) throws IOException {
         List<String> command = new ArrayList<>();
-        command.add("cmd.exe");
-        command.add("/c");
-        command.add(launcher().toString());
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java.exe").toString());
+        command.add("--enable-native-access=ALL-UNNAMED");
+        command.add("-cp");
+        command.add(System.getProperty("java.class.path"));
+        command.add(WorkspaceProcessMain.class.getName());
         command.add("--profile");
         command.add(profile.toString());
         for (String arg : arguments) {
@@ -516,11 +520,6 @@ final class WorkspaceSyncProcessTest {
 
     private static String output(Process process) throws IOException {
         return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    }
-
-    private static Path launcher() {
-        Path local = Path.of("build", "install", "synesis-workspace", "bin", "synesis-workspace.bat");
-        return (Files.exists(local) ? local : Path.of("workspace").resolve(local)).toAbsolutePath();
     }
 
     private static String value(String output, String key) {

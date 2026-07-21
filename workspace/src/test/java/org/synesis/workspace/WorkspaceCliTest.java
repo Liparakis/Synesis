@@ -1,5 +1,7 @@
 package org.synesis.workspace;
 
+import org.synesis.workspace.application.WorkspaceOperations;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -198,7 +200,7 @@ final class WorkspaceCliTest {
         try {
             System.setOut(new PrintStream(stdout, true, StandardCharsets.UTF_8));
             System.setErr(new PrintStream(stderr, true, StandardCharsets.UTF_8));
-            return new Invocation(WorkspaceCli.run(arguments), stdout.toString(StandardCharsets.UTF_8),
+            return new Invocation(WorkspaceOperations.run(arguments), stdout.toString(StandardCharsets.UTF_8),
                     stderr.toString(StandardCharsets.UTF_8));
         } finally {
             System.setOut(previousOut);

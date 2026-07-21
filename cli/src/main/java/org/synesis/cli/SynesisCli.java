@@ -4,11 +4,25 @@ import picocli.CommandLine;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.DoctorCommand;
+import org.synesis.cli.command.CheckActionCommand;
+import org.synesis.cli.command.ConstraintCommand;
+import org.synesis.cli.command.ConstraintCreateCommand;
+import org.synesis.cli.command.HookAntigravityCommand;
+import org.synesis.cli.command.HookClaudeCodeCommand;
+import org.synesis.cli.command.HookCommand;
+import org.synesis.cli.command.HelpCommand;
 import org.synesis.cli.command.HostCommand;
 import org.synesis.cli.command.IdentityCommand;
 import org.synesis.cli.command.IdentityShowCommand;
+import org.synesis.cli.command.InitCommand;
 import org.synesis.cli.command.JoinCommand;
+import org.synesis.cli.command.ProjectCommand;
+import org.synesis.cli.command.ProjectCreateCommand;
 import org.synesis.cli.command.RootCommand;
+import org.synesis.cli.command.SyncCommand;
+import org.synesis.cli.command.SyncHostCommand;
+import org.synesis.cli.command.SyncJoinCommand;
+import org.synesis.cli.command.VersionPlaceholderCommand;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.cli.terminal.ConsoleTerminal;
@@ -35,6 +49,20 @@ public final class SynesisCli {
         CommandLine identity = command.getSubcommands().get("identity");
         identity.addSubcommand("show", new IdentityShowCommand(runtime));
         command.addSubcommand("doctor", new DoctorCommand(runtime));
+        command.addSubcommand("help", new HelpCommand());
+        command.addSubcommand("version-placeholder", new VersionPlaceholderCommand(runtime));
+        command.addSubcommand("init", new InitCommand(runtime));
+        command.addSubcommand("project", new ProjectCommand());
+        command.getSubcommands().get("project").addSubcommand("create", new ProjectCreateCommand(runtime));
+        command.addSubcommand("constraint", new ConstraintCommand());
+        command.getSubcommands().get("constraint").addSubcommand("create", new ConstraintCreateCommand(runtime));
+        command.addSubcommand("sync", new SyncCommand());
+        command.getSubcommands().get("sync").addSubcommand("host", new SyncHostCommand(runtime));
+        command.getSubcommands().get("sync").addSubcommand("join", new SyncJoinCommand(runtime));
+        command.addSubcommand("check-action", new CheckActionCommand(runtime));
+        command.addSubcommand("hook", new HookCommand());
+        command.getSubcommands().get("hook").addSubcommand("antigravity", new HookAntigravityCommand(runtime));
+        command.getSubcommands().get("hook").addSubcommand("claude-code", new HookClaudeCodeCommand(runtime));
         command.setOut(runtime.terminal().out());
         command.setErr(runtime.terminal().err());
         command.setParameterExceptionHandler((exception, _) -> {
@@ -44,7 +72,7 @@ public final class SynesisCli {
         try {
             return command.execute(arguments);
         } catch (RuntimeException failure) {
-            return FailureMapper.internal(failure, runtime.terminal());
+            return FailureMapper.internal(runtime.terminal());
         }
     }
 
