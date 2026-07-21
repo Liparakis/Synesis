@@ -2,7 +2,7 @@
 
 ## Status
 
-ACCEPTED AND VERIFIED FOR CP-W1, 2026-07-21.
+ACCEPTED AND VERIFIED FOR CP-W1 AND CP-W2, 2026-07-21.
 
 ## Context
 
@@ -29,11 +29,13 @@ Each profile is rooted at one operator-selected directory:
 <profile>/records/       existing DecisionStore format
 ```
 
-CP-W1 exposes only identity inspection, one-peer project creation, and signed
-revision-1 decision creation. It creates no network session and changes no
-wire format. Project creation refuses an existing configuration and never
-silently replaces a mismatched project or peer. Decision creation requires
-exactly one bounded evidence reference and SHA-256 digest.
+CP-W1 exposes identity inspection, one-peer project creation, and signed
+revision-1 decision creation. CP-W2 adds only one-shot `sync host` and
+`sync join` orchestration over the existing Link onboarding seam and CP-R4
+sync endpoint. It creates no new wire format. Project creation refuses an
+existing configuration and never silently replaces a mismatched project or
+peer. Decision creation requires exactly one bounded evidence reference and
+SHA-256 digest.
 
 ## Ownership and invariants
 
@@ -46,6 +48,10 @@ exactly one bounded evidence reference and SHA-256 digest.
 - A successful decision create emits revision `1`, a stable `RECORD_ID`, and
   the canonical `DIGEST`.
 - Existing state is never overwritten by a retry or mismatch.
+- Join pins and verifies the expected remote identity before creating a project
+  configuration and performs exactly one record request.
+- Only `APPLIED` and `DUPLICATE` are successful sync outcomes; `UNKNOWN`,
+  `REJECTED`, `REMOTE_STALE`, `CONFLICT`, and setup failures are nonzero.
 
 ## Alternatives rejected
 
@@ -58,8 +64,14 @@ exactly one bounded evidence reference and SHA-256 digest.
 
 ## Non-claims and invalidation
 
-This decision does not provide onboarding, sync, membership, multi-project
-profiles, background behavior, physical two-machine evidence, or production
-packaging. Reopen it only if existing public APIs cannot support CP-W1 without
-changing Link or project-record production code; that blocker must be recorded
-before any exception.
+This decision does not provide retries, reconnect, discovery, membership,
+multi-project profiles, background behavior, search/inspect commands, physical
+two-machine evidence, or production packaging. Reopen it only if existing
+public APIs cannot support the bounded CP-W2 composition without changing Link
+or project-record production code; that blocker must be recorded before any
+exception.
+
+## CP-W2 verification
+
+CP-W2 is verified by `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`. CP-W3 and
+all broader CAF functionality remain separately gated.

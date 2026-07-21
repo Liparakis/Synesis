@@ -498,3 +498,16 @@ Append-only operational history.
   covered.
 - Evidence: `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`.
 - Stop before CP-W2 host/join or sync.
+
+## 2026-07-21 — SYN-003 CP-W2 verified
+
+- Implemented only `:workspace` one-shot `sync host` and `sync join` over the
+  existing Link onboarding seam and CP-R4 project-record sync API.
+- Join authenticates and checks the expected host before creating B's project
+  configuration; existing mismatched configuration is never overwritten. Host
+  uses exactly one configured peer. Invitations are emitted only by host and
+  are omitted from tests and evidence.
+- Generated-launcher process tests cover APPLIED, DUPLICATE, wrong host,
+  malformed invitation, project mismatch, missing record, and UNKNOWN on close
+  before result. Full strict verification and validators pass.
+- Evidence: `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`. Stop before CP-W3.

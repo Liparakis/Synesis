@@ -98,3 +98,8 @@
 | Project creation persists one peer atomically and refuses overwrite/mismatch | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
 | Decision creation signs deterministic revision 1 with exactly one evidence reference | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
 | Workspace output is stable and omits secrets and absolute paths | SYN-003 CP-W1 | `WorkspaceCliTest` | pass | PASS | CP-W1 |
+| Workspace host uses the sole configured peer and emits the invitation only on host | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
+| Workspace join pins expected remote identity before creating configuration | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
+| One-shot workspace sync reports APPLIED then DUPLICATE | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
+| Wrong host, malformed invitation, project mismatch, and missing record fail safely without unsafe mutation | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |
+| Connection close before result reports UNKNOWN with nonzero exit | SYN-003 CP-W2 | `WorkspaceSyncProcessTest` | pass | PASS | CP-W2 |

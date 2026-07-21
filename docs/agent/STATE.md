@@ -30,8 +30,8 @@ and quarantine. Production installation remains out of scope.
 The CAF Phase 1 map and first signed-decision-record proposal are recorded in
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, ADR-0011, and ADR-0013.
 ADR-0011 is accepted and SYN-001 is DONE at CP-R4. CP-R5 is deferred. SYN-002
-is DONE at CP-0075. ADR-0014 selects SYN-003 CP-W1 as a thin workspace
-bootstrap layer; no background sync,
+is DONE at CP-0075. ADR-0014 selects SYN-003 CP-W1/CP-W2 as a thin workspace
+bootstrap and one-shot sync layer; no background sync,
 reconnect, discovery, membership, retries, second transport, shared-Markdown
 authority, extra record types, physical two-machine claim, or CLI change is
 allowed.
@@ -74,10 +74,12 @@ allowed.
 - SYN-002 closure review: PASS at CP-0075; evidence is
   `docs/evidence/PROJECT-VIEW-SYN-002-2026-07-21.md`.
 - SYN-003 planning: ADR-0014, first-demo script, task promotion, and CP-0076
-  are recorded; CP-W1 implementation is now verified.
-- SYN-003 CP-W1 implementation: PASS; `:workspace` provides bounded profile
-  bootstrap, one-peer project creation, and signed revision-1 decision
-  creation. Evidence is `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`.
+  are recorded; CP-W1 and CP-W2 implementations are verified.
+- SYN-003 CP-W1/CP-W2 implementation: PASS; `:workspace` provides bounded
+  profile bootstrap, one-peer project creation, signed revision-1 decision
+  creation, and one-shot authenticated host/join sync. Evidence is
+  `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md` and
+  `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`.
 
 ## Honest limitations
 

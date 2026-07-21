@@ -29,14 +29,15 @@ networking.
 |---|---|---|---|---|
 | 0 - specification | Record schemas, freshness rules, threat model, ownership semantics | Link has ADRs, wire formats, threat model, task memory, and a deferred register. It has no project-record schema or project trust policy. | PARTIAL | This document and proposed ADR-0011 define the first record contract only. |
 | 1 - shared project brain | Canonical event log and structured knowledge store; decisions/failures searchable | CP-R4 proves one signed decision type and local immutable storage/sync; SYN-002 adds only a local read-only view, not an event log or second record type. | PARTIAL | Keep failed-experiment type and canonical log deferred. |
-| 2 - two human nodes | Two local supervisors synchronize context and status | Two independent profiles exchange one signed decision through Link; no physical claim, supervisor, or continuous sync exists. | PAIRWISE PROOF ONLY | Keep CP-R5 deferred; do not add supervision or background behavior. |
+| 2 - two human nodes | Two local supervisors synchronize context and status | Two independent profiles use generated workspace launchers for one authenticated one-shot signed-decision sync; no physical claim, supervisor, or continuous sync exists. | PAIRWISE PROOF ONLY | Keep CP-R5 deferred; do not add supervision or background behavior. |
 | 3 - isolated workers | Worktrees and worker publication | No workers or worktrees. | DEFERRED | Do not introduce before a shared-record proof is stable. |
 | 4 - ownership and leases | Semantic ownership, leases, contention paths | Link has no project ownership. Task documents have a human-maintained active-task rule only. | DEFERRED | Record owner is immutable signer authority, not a lease system. |
 | 5 - autonomous negotiation | Policy-governed low-risk approvals | No such policy or autonomy exists. | DEFERRED | Keep all record creation and peer configuration operator-invoked. |
 | 6 - federation | Multi-organization replication and trust policies | No server, replication topology, or organization model exists. | DEFERRED | Two explicitly configured profiles only. |
 
 The repository is therefore at the useful precondition for CAF Phase 1: a
-tested authenticated transport, not a project brain. Treating the existing
+tested authenticated transport plus one usable two-profile decision exchange,
+not a project brain. Treating the existing
 Markdown files as the shared plane would repeat the PDF's rejected
 "shared prose" design.
 

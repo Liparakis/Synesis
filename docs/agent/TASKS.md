@@ -361,8 +361,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Title: Workspace bootstrap and first two-person decision demo
 - Status: ACTIVE
 - Purpose: Provide the smallest operator-owned composition layer that creates
-  isolated profiles and a local signed decision using the existing frozen Link
-  and project-record APIs.
+  isolated profiles, local signed decisions, and one-shot sync using the
+  existing frozen Link and project-record APIs.
 - Dependencies: SYN-002 DONE; frozen SL-013/CP-0054, SL-014, and
   `:project-record` CP-R4 boundary.
 - Acceptance criteria: CP-W1 adds a JDK-only `:workspace` launcher with bounded
@@ -376,13 +376,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   decision/evidence validation, stable output, and sensitive-output redaction.
 - Required documentation: ADR-0014, first two-person demo script, CP-W1
   evidence, phase-map update, test matrix, and durable state files.
-- Scope boundary: no host/join, networking, sync, new record type, Link or CLI
-  production changes, background behavior, workers, leases, autonomy,
+- Scope boundary: no retries, reconnect, discovery, membership, new record
+  type, Link or CLI production changes, background behavior, workers, leases,
+  autonomy,
   federation, Obsidian, or physical-machine claim.
 - Implementation checkpoints: CP-W1 is local bootstrap and decision creation;
   CP-W2 is the separately approved authenticated host/join and sync slice.
-- Evidence: `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`; focused workspace
-  tests and full strict root verification PASS. Stop before CP-W2.
+- Evidence: `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md` and
+  `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`; focused workspace tests and
+  full strict root verification PASS. Stop before CP-W3.
+- CP-W2 acceptance: `sync host` uses the sole configured peer; `sync join`
+  authenticates and pins the expected host before creating B's configuration,
+  performs exactly one CP-R4 sync, treats only APPLIED and DUPLICATE as
+  success, and returns nonzero for UNKNOWN, REJECTED, REMOTE_STALE, CONFLICT,
+  authentication, configuration, invitation, or transport failures.
 
 ## Deferred capability register
 

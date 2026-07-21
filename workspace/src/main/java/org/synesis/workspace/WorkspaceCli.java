@@ -10,15 +10,24 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.link.session.PeerSession;
+import org.synesis.link.session.SessionCloseReason;
+import org.synesis.link.transport.Onboarding;
+import org.synesis.link.transport.OnboardingFailure;
+import org.synesis.link.transport.OnboardingFailureCode;
+import org.synesis.link.transport.OnboardingEventType;
 import org.synesis.projectrecord.DecisionEvidence;
 import org.synesis.projectrecord.DecisionRecord;
 import org.synesis.projectrecord.DecisionStatus;
 import org.synesis.projectrecord.DecisionStore;
 import org.synesis.projectrecord.Ed25519Signer;
 import org.synesis.projectrecord.ProjectConfig;
+import org.synesis.projectrecord.ProjectRecordSync;
 
 /**
  * JDK-only bootstrap launcher for one isolated Synesis workspace profile.
@@ -70,6 +79,7 @@ public final class WorkspaceCli {
             case "identity" -> executeIdentity(parsed);
             case "project" -> executeProject(parsed);
             case "decision" -> executeDecision(parsed);
+            case "sync" -> executeSync(parsed);
             default -> throw failure("USAGE");
         };
     }
@@ -160,6 +170,144 @@ public final class WorkspaceCli {
         return 0;
     }
 
+    private static int executeSync(Parsed parsed) throws Exception {
+        if (!"host".equals(parsed.subcommand) && !"join".equals(parsed.subcommand)) {
+            throw failure("USAGE");
+        }
+        if ("host".equals(parsed.subcommand)) {
+            if (!parsed.options.isEmpty() || parsed.positional != null) throw failure("USAGE");
+            return host(parsed.profile);
+        }
+        if (parsed.options.size() != 3 || parsed.positional == null
+                || !parsed.options.containsKey("--project") || !parsed.options.containsKey("--record")
+                || !parsed.options.containsKey("--expect-host")) throw failure("USAGE");
+        UUID projectId = parseUuid(parsed.options.get("--project"), "PROJECT_INVALID");
+        UUID recordId = parseUuid(parsed.options.get("--record"), "RECORD_INVALID");
+        String expectedHost = bounded(parsed.options.get("--expect-host"), 128, "peer");
+        if (!expectedHost.matches("sl1-[0-9a-f]{64}")) throw failure("AUTH_FAILED");
+        String invitation = bounded(parsed.positional, org.synesis.link.protocol.SessionInvitation.MAX_LINK_CHARS,
+                "invitation");
+        return join(parsed.profile, projectId, recordId, expectedHost, invitation);
+    }
+
+    private static int host(Path profile) throws Exception {
+        ProjectConfig config = loadConfig(profile);
+        if (config.peerNodeIds().size() != 1) throw failure("PROJECT_INVALID");
+        String expectedPeer = config.peerNodeIds().iterator().next();
+        DecisionStore store = new DecisionStore(profile.resolve("records"), config.projectId());
+        ProjectRecordSync endpoint = new ProjectRecordSync(config, store);
+        Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> {
+            if (event.type() == OnboardingEventType.SHARE_LINK) {
+                System.out.println("INVITATION=" + event.value());
+            }
+        });
+        try {
+            onboarding.host(expectedPeer, endpoint.handler(), session -> { });
+        } catch (OnboardingFailure failure) {
+            throw failure(mapOnboarding(failure.code()));
+        }
+        return 0;
+    }
+
+    private static int join(Path profile, UUID projectId, UUID recordId, String expectedHost,
+            String invitation) throws Exception {
+        AtomicReference<WorkspaceFailure> callbackFailure = new AtomicReference<>();
+        Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> { });
+        try {
+            onboarding.join(invitation, null, session -> {
+                try {
+                    System.out.println("AUTHENTICATED_REMOTE=" + session.remoteNodeId());
+                    if (!session.isUsable() || !expectedHost.equals(session.remoteNodeId())) {
+                        WorkspaceFailure failure = failure("AUTH_FAILED");
+                        callbackFailure.set(failure);
+                        closeQuietly(session);
+                        throw new WorkspaceAbort(failure);
+                    }
+                    ProjectConfig config = existingOrCreateConfig(profile, projectId, expectedHost);
+                    DecisionStore store = new DecisionStore(profile.resolve("records"), projectId);
+                    ProjectRecordSync endpoint = new ProjectRecordSync(config, store);
+                    ProjectRecordSync.SyncOutcome outcome = endpoint.sync(session, recordId);
+                    System.out.println("PROJECT_ID=" + projectId);
+                    System.out.println("RECORD_ID=" + recordId);
+                    System.out.println("SYNC_RESULT=" + outcome.code());
+                    if (outcome.code() != ProjectRecordSync.Code.APPLIED
+                            && outcome.code() != ProjectRecordSync.Code.DUPLICATE) {
+                        WorkspaceFailure failure = failure(outcome.code().name());
+                        callbackFailure.set(failure);
+                        closeQuietly(session);
+                        throw new WorkspaceAbort(failure);
+                    }
+                } catch (WorkspaceAbort abort) {
+                    throw abort;
+                } catch (WorkspaceFailure failure) {
+                    callbackFailure.set(failure);
+                    closeQuietly(session);
+                    throw new WorkspaceAbort(failure);
+                } catch (Exception failure) {
+                    WorkspaceFailure safe = failure("SYNC_FAILED");
+                    callbackFailure.set(safe);
+                    closeQuietly(session);
+                    throw new WorkspaceAbort(safe);
+                }
+            });
+        } catch (OnboardingFailure failure) {
+            WorkspaceFailure callback = callbackFailure.get();
+            if (callback != null) throw callback;
+            throw failure(mapOnboarding(failure.code()));
+        }
+        return 0;
+    }
+
+    private static ProjectConfig existingOrCreateConfig(Path profile, UUID projectId, String expectedHost)
+            throws Exception {
+        Path path = profile.resolve(PROJECT_CONFIG);
+        if (Files.exists(path)) {
+            ProjectConfig existing;
+            try {
+                existing = ProjectConfig.load(path);
+            } catch (Exception failure) {
+                throw failure("PROJECT_INVALID");
+            }
+            if (!projectId.equals(existing.projectId()) || !existing.peerNodeIds().equals(Set.of(expectedHost))) {
+                throw failure("PROJECT_MISMATCH");
+            }
+            return existing;
+        }
+        ProjectConfig created = new ProjectConfig(projectId, Set.of(expectedHost));
+        try {
+            created.save(path);
+            return created;
+        } catch (Exception failure) {
+            throw failure("PROJECT_WRITE_FAILED");
+        }
+    }
+
+    private static ProjectConfig loadConfig(Path profile) throws Exception {
+        try {
+            return ProjectConfig.load(profile.resolve(PROJECT_CONFIG));
+        } catch (Exception failure) {
+            throw failure("PROJECT_INVALID");
+        }
+    }
+
+    private static void closeQuietly(PeerSession session) {
+        try {
+            session.closeGracefully(SessionCloseReason.LOCAL_REQUEST);
+        } catch (Exception ignored) {
+            // Link owns bounded cleanup; this is only a best-effort rejection close.
+        }
+    }
+
+    private static String mapOnboarding(OnboardingFailureCode code) {
+        return switch (code) {
+            case INVITE_INVALID -> "INVITE_INVALID";
+            case HOST_IDENTITY_MISMATCH -> "AUTH_FAILED";
+            case IDENTITY_FAILED -> "IDENTITY_FAILED";
+            case HOST_TIMEOUT -> "TRANSPORT_FAILED";
+            case NO_USABLE_CANDIDATE, CONNECTION_FAILED, INTERNAL -> "TRANSPORT_FAILED";
+        };
+    }
+
     private static NodeIdentity identity(Path profile) throws Exception {
         try {
             return new IdentityBootstrap(profile.resolve("link")).loadOrCreate().identity();
@@ -180,13 +328,24 @@ public final class WorkspaceCli {
         String command = arguments[2];
         String subcommand = arguments.length > 3 ? arguments[3] : "";
         Map<String, String> options = new HashMap<>();
+        String positional = null;
         for (int index = 4; index < arguments.length; index += 2) {
             String name = arguments[index];
-            if (!name.startsWith("--") || index + 1 >= arguments.length || options.put(name, arguments[index + 1]) != null) {
+            if (!name.startsWith("--")) {
+                if (!"sync".equals(command) || !"join".equals(subcommand) || positional != null) {
+                    throw failure("USAGE");
+                }
+                positional = name;
+                if (index != arguments.length - 1) throw failure("USAGE");
+                break;
+            }
+            if (index + 1 >= arguments.length || arguments[index + 1].startsWith("--")
+                    || options.put(name, arguments[index + 1]) != null) {
                 throw failure("USAGE");
             }
         }
-        return new Parsed(profile, command, subcommand, Map.copyOf(options));
+        if ("sync".equals(command) && "join".equals(subcommand) && positional == null) throw failure("USAGE");
+        return new Parsed(profile, command, subcommand, Map.copyOf(options), positional);
     }
 
     private static void requireOptions(Map<String, String> options, String... names) throws WorkspaceFailure {
@@ -232,20 +391,41 @@ public final class WorkspaceCli {
 
     private static WorkspaceFailure failure(String code) { return new WorkspaceFailure(code); }
 
+    private static UUID parseUuid(String value, String code) throws WorkspaceFailure {
+        bounded(value, 64, code.equals("PROJECT_INVALID") ? "project" : "record");
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException failure) {
+            throw failure(code);
+        }
+    }
+
     private static void printUsage() {
         System.out.println("Usage: synesis-workspace --profile <dir> identity show");
         System.out.println("       synesis-workspace --profile <dir> project create --peer <node-id>");
         System.out.println("       synesis-workspace --profile <dir> decision create --title <text>"
                 + " --rationale <text> --evidence-kind <kind> --evidence-ref <ref>"
                 + " --evidence-sha256 <64-hex>");
+        System.out.println("       synesis-workspace --profile <dir> sync host");
+        System.out.println("       synesis-workspace --profile <dir> sync join --project <uuid>"
+                + " --record <uuid> --expect-host <node-id> <invitation>");
     }
 
-    private record Parsed(Path profile, String command, String subcommand, Map<String, String> options) {
+    private record Parsed(Path profile, String command, String subcommand, Map<String, String> options,
+            String positional) {
         private Parsed {
             Objects.requireNonNull(profile, "profile");
             Objects.requireNonNull(command, "command");
             Objects.requireNonNull(subcommand, "subcommand");
             Objects.requireNonNull(options, "options");
+        }
+    }
+
+    private static final class WorkspaceAbort extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        private WorkspaceAbort(WorkspaceFailure failure) {
+            super(failure);
         }
     }
 

@@ -16,6 +16,7 @@ java {
 application {
     applicationName = "synesis-workspace"
     mainClass = "org.synesis.workspace.WorkspaceCli"
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 dependencies {
@@ -42,6 +43,7 @@ tasks.withType<Javadoc>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    dependsOn(tasks.installDist)
 }
 
 tasks.register("formatCheck") {
