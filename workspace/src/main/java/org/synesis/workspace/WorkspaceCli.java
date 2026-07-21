@@ -77,12 +77,12 @@ public final class WorkspaceCli {
             System.err.println("ERROR=" + failure.code);
             String hint = getHint(failure.code);
             if (hint != null) {
-                System.out.println("HINT=" + hint);
+                System.err.println("HINT=" + hint);
             }
             return 10;
         } catch (Exception failure) {
             System.err.println("ERROR=INTERNAL");
-            System.out.println("HINT=Unexpected internal failure.");
+            System.err.println("HINT=Unexpected internal failure.");
             return 70;
         }
     }

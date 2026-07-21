@@ -102,7 +102,8 @@ SYNC_RESULT=APPLIED
 ## 3. Security Implications
 
 - **Host Pinning Integrity**: The host Node ID is embedded inside the connection URI. B's client enforces that the remote node's public identity matches this pinned Node ID during the handshake. If an attacker intercepts the invitation link and attempts to masquerade as the host, the connection will fail to authenticate because the attacker does not control the private key matching the host Node ID.
-- **URI Tampering**: If an attacker tampers with the URI (e.g. replacing the host Node ID with their own), B's client will connect to the attacker. However, this is identical to manual flag tampering and is mitigated by sharing the connection link over trusted out-of-band communication channels (e.g. Signal, direct file copy).
+- **URI Tampering & Pinned Host Bootstrapping**: If an attacker tampers with the URI (e.g. replacing the host Node ID with their own), B's client would connect to the attacker. To prevent this, the client does not trust the `host=` query parameter inside the URI convenience bundle to bootstrap configuration for a new project. Instead, B must explicitly confirm the host identity fingerprint using the `--expect-host` command line option.
+- **Trusted Channel Prerequisite**: The `--expect-host` fingerprint verification is cryptographically sound and trustworthy **only** when the fingerprint is received through an independent trusted channel (out-of-band) relative to the invitation link itself. If the invitation link and the fingerprint are received over the same untrusted transport, there is no protection against an active man-in-the-middle attacker.
 - **Secret Redaction**: No private keys or absolute paths are exposed in the URI or console logs.
 
 ---

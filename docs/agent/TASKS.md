@@ -410,12 +410,13 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-004
 - Priority: P0
 - Title: Minimal guided workspace demo flow
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Reduce the two-person workspace demo to the fewest safe operator steps while preserving host Node ID pinning and cryptographic identity verification.
 - Dependencies: SYN-PRODUCT-REVIEW DONE, SYN-003 DONE
 - Acceptance criteria: Update `:workspace` CLI commands: `sync host` takes optional `--project` and `--record` arguments and outputs a parameterized invitation link; `sync join` accepts a single invitation link, parses the project/record/host parameters, verifies the local configuration, pins the connection to the host Node ID, and runs sync. Clean error exit code `10` is accompanied by stderr contextual `HINT:` messages. No change to wire protocol formats or storage.
 - Required tests: Unit tests for URI validation and query param extraction; integration process tests verifying the single-link flow, wrong host pinning rejection, and contextual next-action hints.
 - Required documentation: Design document `docs/agent/SYN_004_DESIGN.md`, updated demo flow document `docs/demo/FIRST_TWO_PERSON_PROJECT_DEMO.md`, and CP-W4 evidence.
+- Evidence: CP-0083; WorkspaceSyncProcessTest; full strict check PASS.
 
 ## Deferred capability register
 
@@ -436,7 +437,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SL-011
 - Priority: P0
 - Title: CLI and release verification
-- Status: READY
+- Status: ACTIVE
 - Purpose: Deliver the public-API-only two-peer CLI and release evidence.
 - Dependencies: SL-010
 - Acceptance criteria: clean build, CLI workflow, generated Javadocs, protocol docs, vectors, release notes/checklist, and two-machine evidence.

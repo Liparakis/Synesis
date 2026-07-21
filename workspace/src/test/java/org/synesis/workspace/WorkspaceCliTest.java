@@ -51,12 +51,12 @@ final class WorkspaceCliTest {
 
         Invocation duplicate = invoke("--profile", profile.toString(), "project", "create", "--peer", peer);
         assertEquals(10, duplicate.code);
-        assertEquals("ERROR=PROJECT_EXISTS", duplicate.stderr.trim());
+        assertEquals("ERROR=PROJECT_EXISTS", errorCode(duplicate.stderr));
 
         String otherPeer = value(invoke("--profile", root.resolve("c").toString(), "identity", "show").stdout, "NODE_ID");
         Invocation mismatch = invoke("--profile", profile.toString(), "project", "create", "--peer", otherPeer);
         assertEquals(10, mismatch.code);
-        assertEquals("ERROR=PROJECT_MISMATCH", mismatch.stderr.trim());
+        assertEquals("ERROR=PROJECT_MISMATCH", errorCode(mismatch.stderr));
         assertEquals(project, ProjectConfig.load(profile.resolve("project.conf")).projectId());
     }
 
@@ -93,11 +93,11 @@ final class WorkspaceCliTest {
         // Unconfigured search/inspect fails
         Invocation unconfSearch = invoke("--profile", profile.toString(), "decision", "search");
         assertEquals(10, unconfSearch.code);
-        assertEquals("ERROR=PROJECT_NOT_CONFIGURED", unconfSearch.stderr.trim());
+        assertEquals("ERROR=PROJECT_NOT_CONFIGURED", errorCode(unconfSearch.stderr));
 
         Invocation unconfInspect = invoke("--profile", profile.toString(), "decision", "inspect", "--record", UUID.randomUUID().toString());
         assertEquals(10, unconfInspect.code);
-        assertEquals("ERROR=PROJECT_NOT_CONFIGURED", unconfInspect.stderr.trim());
+        assertEquals("ERROR=PROJECT_NOT_CONFIGURED", errorCode(unconfInspect.stderr));
 
         // Configure project
         Invocation project = invoke("--profile", profile.toString(), "project", "create", "--peer", peer);
@@ -113,7 +113,7 @@ final class WorkspaceCliTest {
         UUID missingId = UUID.randomUUID();
         Invocation inspectMissing = invoke("--profile", profile.toString(), "decision", "inspect", "--record", missingId.toString());
         assertEquals(10, inspectMissing.code);
-        assertEquals("ERROR=RECORD_NOT_FOUND", inspectMissing.stderr.trim());
+        assertEquals("ERROR=RECORD_NOT_FOUND", errorCode(inspectMissing.stderr));
 
         // Create a decision
         String digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -150,12 +150,12 @@ final class WorkspaceCliTest {
         // Search with malformed status fails
         Invocation searchBadStatus = invoke("--profile", profile.toString(), "decision", "search", "--status", "INVALID");
         assertEquals(10, searchBadStatus.code);
-        assertEquals("ERROR=USAGE", searchBadStatus.stderr.trim());
+        assertEquals("ERROR=USAGE", errorCode(searchBadStatus.stderr));
 
         // Search with malformed limit fails
         Invocation searchBadLimit = invoke("--profile", profile.toString(), "decision", "search", "--limit", "-1");
         assertEquals(10, searchBadLimit.code);
-        assertEquals("ERROR=USAGE", searchBadLimit.stderr.trim());
+        assertEquals("ERROR=USAGE", errorCode(searchBadLimit.stderr));
 
         // Inspect returns details in stable byte order
         Invocation inspect = invoke("--profile", profile.toString(), "decision", "inspect", "--record", recordIdStr);
@@ -176,12 +176,18 @@ final class WorkspaceCliTest {
                 "--title", tooLong, "--rationale", "r", "--evidence-kind", "text",
                 "--evidence-ref", "ref", "--evidence-sha256", "0".repeat(64));
         assertEquals(10, invalid.code);
-        assertEquals("ERROR=RECORD_INVALID", invalid.stderr.trim());
+        assertEquals("ERROR=RECORD_INVALID", errorCode(invalid.stderr));
         assertFalse(invalid.stderr.contains(profile.toString()));
 
         Invocation unknown = invoke("--profile", profile.toString(), "project", "create", "--unknown", "x");
         assertEquals(10, unknown.code);
-        assertEquals("ERROR=USAGE", unknown.stderr.trim());
+        assertEquals("ERROR=USAGE", errorCode(unknown.stderr));
+    }
+
+    private static String errorCode(String stderr) {
+        return stderr.lines().filter(line -> line.startsWith("ERROR=")).findFirst()
+                .orElse("")
+                .trim();
     }
 
     private static Invocation invoke(String... arguments) {

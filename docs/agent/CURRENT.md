@@ -2,34 +2,29 @@
 
 ## Identity
 
-- Task ID: SYN-004
+- Task ID: SL-011
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0081
-- Latest checkpoint: CP-0082
+- Started checkpoint: CP-0083
+- Latest checkpoint: CP-0083
 - Responsible agent: fresh coding agent
 - Related decisions: none
 
 ## Objective
 
-Reduce the two-person workspace demo to the fewest safe operator steps. Update the CLI: `sync host` takes optional `--project` and `--record` and outputs a query-parameterized invitation link; `sync join` parses the link, pins the connection to the host Node ID, and runs sync. Clean error exit code `10` is accompanied by stderr contextual `HINT:` messages. No change to wire protocols, record schemas, or storage.
+Deliver the public-API-only two-peer CLI and release evidence.
 
 ## Planning state
 
-SYN-PRODUCT-REVIEW is DONE at CP-0080. Design is complete in `docs/agent/SYN_004_DESIGN.md`.
+SL-011 is promoted as the next active task. SYN-004 is completed.
 
 ## Work completed
 
-- Parameterized invitation URI generation in `sync host`.
-- Convenience query parameter extraction and host Node ID verification in `sync join`.
-- Trust bootstrap require fingerprint confirmation (`--expect-host`) for unconfigured projects.
-- Contextual `HINT=` outputs on stdout on error mapping all CLI failures.
-- Integration tests in `WorkspaceSyncProcessTest.java` verifying guided flows, tampering, replay, and status codes.
-- Removed trailing whitespaces and passed formatting checks.
+None.
 
 ## Verification
 
-All automated unit and integration tests compiled, run, and passed successfully with strict dependency verification.
+None.
 
 ## Current failures
 
@@ -37,4 +32,4 @@ None.
 
 ## Immediate next action
 
-Wait for the operator's next instructions.
+Review release checklist and draft release notes.
