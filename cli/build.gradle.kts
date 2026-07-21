@@ -1,4 +1,5 @@
-import org.gradle.external.javadoc.StandardJavadocDocletOptions
+import org.gradle.kotlin.dsl.application
+import org.gradle.kotlin.dsl.dependencies
 
 plugins {
     application
@@ -70,7 +71,8 @@ tasks.register("formatCheck") {
         val files = roots.flatMap { candidate ->
             if (candidate.isDirectory) candidate.walkTopDown().filter { it.isFile }.toList() else listOf(candidate)
         }.filter { it.extension in setOf("java", "kt", "kts") }
-        val offenders = files.filter { source -> source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } } }
+        val offenders =
+            files.filter { source -> source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } } }
         require(offenders.isEmpty()) { "Trailing whitespace: ${offenders.joinToString()}" }
     }
 }

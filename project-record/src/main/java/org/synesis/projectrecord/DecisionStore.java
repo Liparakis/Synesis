@@ -28,24 +28,41 @@ import java.util.UUID;
  * durable revisions. Corrupt bytes fail recovery rather than being guessed.
  */
 public final class DecisionStore {
-    /** Maximum head entries accepted by one read-only snapshot. */
+    /**
+     * Maximum head entries accepted by one read-only snapshot.
+     */
     public static final int MAX_HEAD_SNAPSHOT = 1_024;
     private static final int MAX_REVISIONS_PER_RECORD = 64;
-    /** Result of attempting to append one revision. */
+
+    /**
+     * Result of attempting to append one revision.
+     */
     public enum SaveResult {
-        /** The revision and head were durably advanced. */
+        /**
+         * The revision and head were durably advanced.
+         */
         APPLIED,
-        /** The exact revision already exists and the head is unchanged. */
+        /**
+         * The exact revision already exists and the head is unchanged.
+         */
         DUPLICATE,
-        /** The caller's expected base no longer equals the local head. */
+        /**
+         * The caller's expected base no longer equals the local head.
+         */
         STALE_BASE,
-        /** The candidate is validly framed but cannot extend the local chain. */
+        /**
+         * The candidate is validly framed but cannot extend the local chain.
+         */
         CONFLICT,
-        /** The candidate fails signature, project, or structural trust checks. */
+        /**
+         * The candidate fails signature, project, or structural trust checks.
+         */
         CORRUPT
     }
 
-    /** Immutable local head pointer. */
+    /**
+     * Immutable local head pointer.
+     */
     public static final class Head {
         private final long revision;
         private final byte[] digest;
@@ -56,18 +73,32 @@ public final class DecisionStore {
             this.digest = digest.clone();
         }
 
-        /** Returns the positive head revision.
+        /**
+         * Returns the positive head revision.
+         *
          * @return revision
          */
-        public long revision() { return revision; }
-        /** Returns a copy of the head digest.
+        public long revision() {
+            return revision;
+        }
+
+        /**
+         * Returns a copy of the head digest.
+         *
          * @return digest bytes
          */
-        public byte[] digest() { return digest.clone(); }
-        /** Returns the lowercase hexadecimal head digest.
+        public byte[] digest() {
+            return digest.clone();
+        }
+
+        /**
+         * Returns the lowercase hexadecimal head digest.
+         *
          * @return digest text
          */
-        public String digestHex() { return java.util.HexFormat.of().formatHex(digest); }
+        public String digestHex() {
+            return java.util.HexFormat.of().formatHex(digest);
+        }
 
         @Override
         public boolean equals(Object other) {
@@ -75,7 +106,9 @@ public final class DecisionStore {
         }
 
         @Override
-        public int hashCode() { return Objects.hash(revision, Arrays.hashCode(digest)); }
+        public int hashCode() {
+            return Objects.hash(revision, Arrays.hashCode(digest));
+        }
     }
 
     private static final int HEAD_MAGIC = 0x53444831;
@@ -89,7 +122,7 @@ public final class DecisionStore {
     /**
      * Opens or creates one profile-local store and performs crash recovery.
      *
-     * @param root profile directory; no private key is stored here
+     * @param root      profile directory; no private key is stored here
      * @param projectId project namespace enforced for every revision
      * @throws IOException if durable bytes are corrupt or filesystem access fails
      */
@@ -105,13 +138,19 @@ public final class DecisionStore {
         recover();
     }
 
-    /** Returns the root path of this store. */
-    public Path rootPath() { return root; }
+    /**
+     * Returns the root path of this store.
+     *
+     * @return root path directory
+     */
+    public Path rootPath() {
+        return root;
+    }
 
     /**
      * Appends one signed revision after validating the expected local base.
      *
-     * @param record candidate immutable revision
+     * @param record       candidate immutable revision
      * @param expectedBase caller's observed head, or null for a new record
      * @return deterministic append result
      * @throws IOException if the store cannot be read or atomically written
@@ -285,7 +324,8 @@ public final class DecisionStore {
                 DecisionRecord previous = null;
                 for (DecisionRecord record : revisions.values().stream().sorted(Comparator.comparingLong(DecisionRecord::revision)).toList()) {
                     if (previous == null) {
-                        if (record.revision() != 1 || record.previousDigest() != null) throw new IOException("broken revision chain");
+                        if (record.revision() != 1 || record.previousDigest() != null)
+                            throw new IOException("broken revision chain");
                     } else if (record.revision() != previous.revision() + 1
                             || !Arrays.equals(record.previousDigest(), previous.digest())) {
                         throw new IOException("broken revision chain");
@@ -357,6 +397,14 @@ public final class DecisionStore {
         }
     }
 
+    /**
+     * Reads and verifies a single decision record revision.
+     *
+     * @param recordId decision record identifier
+     * @param revision revision version number
+     * @return validated decision record
+     * @throws IOException if revision file is missing, corrupt, or has invalid signature
+     */
     public DecisionRecord readRevision(UUID recordId, long revision) throws IOException {
         Path path = revisionPath(recordId, revision);
         DecisionRecord record = readRevisionFile(path);
@@ -426,7 +474,9 @@ public final class DecisionStore {
         return decisions.resolve(recordId.toString()).resolve(revision + ".sdr");
     }
 
-    private Path headPath(UUID recordId) { return heads.resolve(recordId + ".head"); }
+    private Path headPath(UUID recordId) {
+        return heads.resolve(recordId + ".head");
+    }
 
     private static void atomicWrite(Path path, byte[] bytes) throws IOException {
         Files.createDirectories(path.getParent());

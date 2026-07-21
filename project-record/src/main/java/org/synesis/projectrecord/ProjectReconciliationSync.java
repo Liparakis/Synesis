@@ -56,6 +56,19 @@ public final class ProjectReconciliationSync {
         private final List<String> outcomes;
         private final String hint;
 
+        /**
+         * Creates a reconciliation result instance.
+         *
+         * @param success true if reconciliation fully succeeded without corrupt records
+         * @param reconciledCount total number of records reconciled
+         * @param addedLocal number of records added locally
+         * @param addedRemote number of records uploaded to remote
+         * @param duplicateCount number of duplicate records observed
+         * @param corruptLocalCount number of corrupt records observed locally
+         * @param corruptRemoteCount number of corrupt records observed on remote
+         * @param outcomes list of per-record outcome descriptions
+         * @param hint diagnostic hint string
+         */
         public ReconciliationResult(boolean success, int reconciledCount, int addedLocal, int addedRemote,
                 int duplicateCount, int corruptLocalCount, int corruptRemoteCount, List<String> outcomes, String hint) {
             this.success = success;
@@ -69,23 +82,67 @@ public final class ProjectReconciliationSync {
             this.hint = hint == null ? "" : hint;
         }
 
-        /** Returns whether the inventories converged exactly with no corruptions. */
+        /**
+         * Returns whether the inventories converged exactly with no corruptions.
+         *
+         * @return true if successful
+         */
         public boolean success() { return success; }
-        /** Returns total records reconciled. */
+
+        /**
+         * Returns total records reconciled.
+         *
+         * @return reconciled count
+         */
         public int reconciledCount() { return reconciledCount; }
-        /** Returns local additions count. */
+
+        /**
+         * Returns local additions count.
+         *
+         * @return local additions count
+         */
         public int addedLocal() { return addedLocal; }
-        /** Returns remote additions count. */
+
+        /**
+         * Returns remote additions count.
+         *
+         * @return remote additions count
+         */
         public int addedRemote() { return addedRemote; }
-        /** Returns duplicate count. */
+
+        /**
+         * Returns duplicate count.
+         *
+         * @return duplicate count
+         */
         public int duplicateCount() { return duplicateCount; }
-        /** Returns corrupt local count. */
+
+        /**
+         * Returns corrupt local count.
+         *
+         * @return corrupt local count
+         */
         public int corruptLocalCount() { return corruptLocalCount; }
-        /** Returns corrupt remote count. */
+
+        /**
+         * Returns corrupt remote count.
+         *
+         * @return corrupt remote count
+         */
         public int corruptRemoteCount() { return corruptRemoteCount; }
-        /** Returns detailed per-record outcomes. */
+
+        /**
+         * Returns detailed per-record outcomes.
+         *
+         * @return list of outcomes
+         */
         public List<String> outcomes() { return outcomes; }
-        /** Returns diagnostic hint. */
+
+        /**
+         * Returns diagnostic hint.
+         *
+         * @return diagnostic hint
+         */
         public String hint() { return hint; }
     }
 
@@ -93,14 +150,24 @@ public final class ProjectReconciliationSync {
     private final ProjectConfig config;
     private final DecisionStore store;
 
-    /** Creates a project reconciliation sync endpoint. */
+    /**
+     * Creates a project reconciliation sync endpoint.
+     *
+     * @param localNodeId local node identifier
+     * @param config active project configuration
+     * @param store local decision store
+     */
     public ProjectReconciliationSync(String localNodeId, ProjectConfig config, DecisionStore store) {
         this.localNodeId = Objects.requireNonNull(localNodeId, "localNodeId");
         this.config = Objects.requireNonNull(config, "config");
         this.store = Objects.requireNonNull(store, "store");
     }
 
-    /** Returns handler for incoming server-side application streams. */
+    /**
+     * Returns handler for incoming server-side application streams.
+     *
+     * @return stream handler callback
+     */
     public PeerSession.ApplicationStreamHandler handler() {
         return this::handle;
     }

@@ -22,8 +22,8 @@ public final class CliRuntime {
     /**
      * Creates an injectable runtime for command tests and process execution.
      *
-     * @param onboarding Link façade
-     * @param terminal terminal boundary
+     * @param onboarding         Link façade
+     * @param terminal           terminal boundary
      * @param readinessInspector local readiness inspector
      */
     public CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInspector readinessInspector) {
@@ -55,19 +55,28 @@ public final class CliRuntime {
 
     /**
      * Returns the Link-owned onboarding façade.
+     *
      * @return onboarding façade
      */
-    public Onboarding onboarding() { return onboarding; }
+    public Onboarding onboarding() {
+        return onboarding;
+    }
 
     /**
      * Returns the terminal boundary.
+     *
      * @return terminal
      */
-    public Terminal terminal() { return terminal; }
+    public Terminal terminal() {
+        return terminal;
+    }
 
     /**
      * Returns the read-only readiness inspector.
+     *
      * @return readiness inspector
      */
-    public ReadinessInspector readinessInspector() { return readinessInspector; }
+    public ReadinessInspector readinessInspector() {
+        return readinessInspector;
+    }
 }

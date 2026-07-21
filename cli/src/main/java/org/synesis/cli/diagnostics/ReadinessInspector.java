@@ -35,7 +35,7 @@ public final class ReadinessInspector {
      * <p>This constructor is intended for deterministic readiness tests; the
      * production constructor uses the platform local-interface provider.
      *
-     * @param profileDirectory profile path; it is never created
+     * @param profileDirectory  profile path; it is never created
      * @param candidateProvider bounded non-networking candidate provider
      */
     public ReadinessInspector(Path profileDirectory, CandidateProvider candidateProvider) {

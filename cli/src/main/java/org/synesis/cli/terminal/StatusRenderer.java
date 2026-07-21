@@ -5,7 +5,9 @@ import java.util.function.Consumer;
 import org.synesis.link.transport.OnboardingEvent;
 import org.synesis.link.transport.OnboardingEventType;
 
-/** Maps typed Link events to the stable terminal status contract. */
+/**
+ * Maps typed Link events to the stable terminal status contract.
+ */
 public final class StatusRenderer implements Consumer<OnboardingEvent> {
     private final Terminal terminal;
     private final QrRenderer qr;
@@ -46,8 +48,8 @@ public final class StatusRenderer implements Consumer<OnboardingEvent> {
         }
         String line = switch (type) {
             case IDENTITY_CREATED, IDENTITY_LOADED, SESSION_CREATED, LISTENER_READY,
-                    DESCRIPTOR_CREATED, INVITE_CREATED, INVITE_PARSED, INVITE_VERIFIED,
-                    LOCAL_DESCRIPTOR_CREATED, PEER_CONNECTED, SESSION_CLOSED -> type.name();
+                 DESCRIPTOR_CREATED, INVITE_CREATED, INVITE_PARSED, INVITE_VERIFIED,
+                 LOCAL_DESCRIPTOR_CREATED, PEER_CONNECTED, SESSION_CLOSED -> type.name();
             default -> type.name() + "=" + event.value();
         };
         terminal.stdout(line);

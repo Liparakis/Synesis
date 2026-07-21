@@ -5,7 +5,9 @@ import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
-/** Renders an exact share link as a compact Unicode terminal QR. */
+/**
+ * Renders an exact share link as a compact Unicode terminal QR.
+ */
 public final class CompactQrRenderer implements QrRenderer {
     private static final int BORDER_MODULES = 2;
     private final int terminalWidth;
@@ -13,7 +15,8 @@ public final class CompactQrRenderer implements QrRenderer {
 
     /**
      * Creates a renderer using the supplied terminal capabilities.
-     * @param terminalWidth available terminal columns
+     *
+     * @param terminalWidth    available terminal columns
      * @param unicodeSupported whether QR glyphs can be encoded
      */
     public CompactQrRenderer(int terminalWidth, boolean unicodeSupported) {

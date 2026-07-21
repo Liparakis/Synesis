@@ -4,14 +4,17 @@ import org.synesis.cli.terminal.Terminal;
 import org.synesis.link.transport.OnboardingFailure;
 import org.synesis.link.transport.OnboardingFailureCode;
 
-/** Maps typed Link failures to stable numeric exits and redacted diagnostics. */
+/**
+ * Maps typed Link failures to stable numeric exits and redacted diagnostics.
+ */
 public final class FailureMapper {
-    private FailureMapper() { }
+    private FailureMapper() {
+    }
 
     /**
      * Writes one stable failure label and returns its numeric process code.
      *
-     * @param failure typed Link failure
+     * @param failure  typed Link failure
      * @param terminal output boundary
      * @return stable exit code
      */
@@ -31,7 +34,7 @@ public final class FailureMapper {
     /**
      * Maps an unexpected fault without exposing its message.
      *
-     * @param failure unexpected fault
+     * @param failure  unexpected fault
      * @param terminal output boundary
      * @return internal exit code
      */

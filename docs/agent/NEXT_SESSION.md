@@ -2,7 +2,7 @@
 
 - Active task: SYN-005
 - Repository branch: master
-- Last checkpoint: CP-0087
+- Last checkpoint: CP-0088
 - Last passing command: `.\gradlew.bat clean check --dependency-verification=strict`
 - Last failing command: none
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

@@ -10,7 +10,9 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.link.transport.OnboardingFailure;
 
-/** Adapts {@code synesis join <link>} to the Link façade. */
+/**
+ * Adapts {@code synesis join <link>} to the Link façade.
+ */
 @Command(name = "join", description = "Join one signed onboarding invitation.", mixinStandardHelpOptions = true)
 public final class JoinCommand implements Callable<Integer> {
     @Parameters(index = "0", description = "Exact signed invitation link.")
@@ -19,11 +21,16 @@ public final class JoinCommand implements Callable<Integer> {
 
     /**
      * Creates a join command with one manually composed runtime.
+     *
      * @param runtime manually composed CLI runtime
      */
-    public JoinCommand(CliRuntime runtime) { this.runtime = runtime; }
+    public JoinCommand(CliRuntime runtime) {
+        this.runtime = runtime;
+    }
 
-    /** Runs the bounded join operation. @return stable exit code */
+    /**
+     * Runs the bounded join operation. @return stable exit code
+     */
     @Override
     public Integer call() {
         try {

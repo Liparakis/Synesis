@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0085
-- Latest checkpoint: CP-0087
+- Latest checkpoint: CP-0088
 - Responsible agent: fresh coding agent
 - Related decisions: none
 
@@ -23,7 +23,9 @@ SYN-005 planning is complete. The PRP1 reconciliation design is finalized under 
 - Implemented `ReconciliationMessage` binary codec under `:project-record` with magic bytes `0x50525031` (PRP1).
 - Implemented `ProjectReconciliationSync` protocol handler in `:project-record` with chunked inventory exchange, reconciliation plan computing, and download/upload sequences.
 - Added comprehensive unit and integration process tests verifying APPLIED, DUPLICATE, CONFLICT quarantining, and local corruption fail-safe behavior.
-- Strictly verified and compiled code. All tests passed.
+- Added missing SHA-256 checksum entries for `core-3.5.4-sources.jar` and `picocli-4.7.7-sources.jar` to `gradle/verification-metadata.xml`.
+- Fixed strict Javadoc tags across `:project-record` public API elements and trimmed trailing whitespace.
+- Strictly verified and compiled code. All tests passed under `--dependency-verification=strict`.
 
 ## Verification
 

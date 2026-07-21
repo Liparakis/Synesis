@@ -15,11 +15,17 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Immutable local project namespace and explicit authenticated peer allowlist. */
+/**
+ * Immutable local project namespace and explicit authenticated peer allowlist.
+ */
 public final class ProjectConfig {
-    /** Maximum UTF-8 configuration file size. */
+    /**
+     * Maximum UTF-8 configuration file size.
+     */
     public static final int MAX_BYTES = 4_096;
-    /** Maximum configured peer count. */
+    /**
+     * Maximum configured peer count.
+     */
     public static final int MAX_PEERS = 32;
     private static final String PROJECT_KEY = "projectId";
     private final UUID projectId;
@@ -28,9 +34,9 @@ public final class ProjectConfig {
     /**
      * Creates a bounded immutable configuration.
      *
-     * @param projectId project namespace
+     * @param projectId   project namespace
      * @param peerNodeIds explicit allowed authenticated node IDs
-     * @throws NullPointerException if an argument or peer is null
+     * @throws NullPointerException     if an argument or peer is null
      * @throws IllegalArgumentException if a peer ID or count is invalid
      */
     public ProjectConfig(UUID projectId, Set<String> peerNodeIds) {
@@ -39,27 +45,40 @@ public final class ProjectConfig {
         if (peerNodeIds.size() > MAX_PEERS) throw new IllegalArgumentException("too many configured peers");
         LinkedHashSet<String> checked = new LinkedHashSet<>();
         for (String peer : peerNodeIds) {
-            if (peer == null || !peer.matches("sl1-[0-9a-f]{64}")) throw new IllegalArgumentException("invalid peer ID");
+            if (peer == null || !peer.matches("sl1-[0-9a-f]{64}"))
+                throw new IllegalArgumentException("invalid peer ID");
             checked.add(peer);
         }
         this.peerNodeIds = Set.copyOf(checked);
     }
 
-    /** Returns the configured project UUID.
+    /**
+     * Returns the configured project UUID.
+     *
      * @return configured project UUID
      */
-    public UUID projectId() { return projectId; }
+    public UUID projectId() {
+        return projectId;
+    }
 
-    /** Returns the immutable explicit peer allowlist.
+    /**
+     * Returns the immutable explicit peer allowlist.
+     *
      * @return immutable allowlist
      */
-    public Set<String> peerNodeIds() { return peerNodeIds; }
+    public Set<String> peerNodeIds() {
+        return peerNodeIds;
+    }
 
-    /** Tests whether an authenticated remote node is explicitly allowed.
+    /**
+     * Tests whether an authenticated remote node is explicitly allowed.
+     *
      * @param remoteNodeId authenticated remote ID
      * @return whether it is explicitly allowed
      */
-    public boolean allows(String remoteNodeId) { return peerNodeIds.contains(remoteNodeId); }
+    public boolean allows(String remoteNodeId) {
+        return peerNodeIds.contains(remoteNodeId);
+    }
 
     /**
      * Loads strict UTF-8 {@code projectId=} and repeated {@code peer=} lines.
@@ -84,7 +103,8 @@ public final class ProjectConfig {
         for (String line : text.split("\\n", -1)) {
             if (line.isEmpty()) continue;
             int separator = line.indexOf('=');
-            if (separator <= 0 || separator != line.lastIndexOf('=')) throw new IOException("malformed project configuration");
+            if (separator <= 0 || separator != line.lastIndexOf('='))
+                throw new IOException("malformed project configuration");
             String key = line.substring(0, separator);
             String value = line.substring(separator + 1);
             try {

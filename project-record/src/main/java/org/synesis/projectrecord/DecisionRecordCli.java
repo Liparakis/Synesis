@@ -4,9 +4,12 @@ import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Minimal JDK-only launcher for safe local decision inspection. */
+/**
+ * Minimal JDK-only launcher for safe local decision inspection.
+ */
 public final class DecisionRecordCli {
-    private DecisionRecordCli() { }
+    private DecisionRecordCli() {
+    }
 
     /**
      * Runs {@code inspect <profile-dir> <project-id> <record-id>}.
@@ -44,5 +47,7 @@ public final class DecisionRecordCli {
         System.out.println("SIGNATURE_VALID=" + record.verify());
     }
 
-    private static String safe(String value) { return value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n"); }
+    private static String safe(String value) {
+        return value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n");
+    }
 }

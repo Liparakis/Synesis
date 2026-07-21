@@ -16,8 +16,12 @@ public final class ConsoleTerminal implements Terminal {
     private final int width;
     private final boolean unicodeSupported;
 
-    /** Creates a terminal connected to the current process streams. */
-    public ConsoleTerminal() { this(System.out, System.err); }
+    /**
+     * Creates a terminal connected to the current process streams.
+     */
+    public ConsoleTerminal() {
+        this(System.out, System.err);
+    }
 
     /**
      * Creates a terminal with injected streams for deterministic tests.
@@ -33,10 +37,25 @@ public final class ConsoleTerminal implements Terminal {
         this.unicodeSupported = outputCharset.newEncoder().canEncode("█▀▄");
     }
 
-    @Override public PrintWriter out() { return out; }
-    @Override public PrintWriter err() { return err; }
-    @Override public int width() { return width; }
-    @Override public boolean unicodeSupported() { return unicodeSupported; }
+    @Override
+    public PrintWriter out() {
+        return out;
+    }
+
+    @Override
+    public PrintWriter err() {
+        return err;
+    }
+
+    @Override
+    public int width() {
+        return width;
+    }
+
+    @Override
+    public boolean unicodeSupported() {
+        return unicodeSupported;
+    }
 
     private static int detectWidth() {
         String configured = System.getProperty("synesis.link.terminal.width");

@@ -10,19 +10,43 @@ import java.util.concurrent.CompletionStage;
 
 import org.synesis.link.session.PeerSession;
 
-/** One-shot authenticated exchange for the local decision record type. */
+/**
+ * One-shot authenticated exchange for the local decision record type.
+ */
 public final class ProjectRecordSync {
-    /** Deterministic result visible to a one-shot caller. */
+    /**
+     * Deterministic result visible to a one-shot caller.
+     */
     public enum Code {
-        /** Exact revision already existed. */ DUPLICATE,
-        /** Remote observed a newer local head. */ REMOTE_STALE,
-        /** Valid divergent revision was quarantined. */ CONFLICT,
-        /** Peer or record failed trust validation. */ REJECTED,
-        /** Revision was durably applied. */ APPLIED,
-        /** Connection ended before a result arrived. */ UNKNOWN
+        /**
+         * Exact revision already existed.
+         */
+        DUPLICATE,
+        /**
+         * Remote observed a newer local head.
+         */
+        REMOTE_STALE,
+        /**
+         * Valid divergent revision was quarantined.
+         */
+        CONFLICT,
+        /**
+         * Peer or record failed trust validation.
+         */
+        REJECTED,
+        /**
+         * Revision was durably applied.
+         */
+        APPLIED,
+        /**
+         * Connection ended before a result arrived.
+         */
+        UNKNOWN
     }
 
-    /** Immutable one-shot result. */
+    /**
+     * Immutable one-shot result.
+     */
     public static final class SyncOutcome {
         private final Code code;
         private final UUID recordId;
@@ -38,26 +62,50 @@ public final class ProjectRecordSync {
             this.detail = detail == null ? "" : detail;
         }
 
-        /** Returns the deterministic result code.
+        /**
+         * Returns the deterministic result code.
+         *
          * @return result code
          */
-        public Code code() { return code; }
-        /** Returns the stable record identity, when known.
+        public Code code() {
+            return code;
+        }
+
+        /**
+         * Returns the stable record identity, when known.
+         *
          * @return record identity
          */
-        public UUID recordId() { return recordId; }
-        /** Returns the observed head revision.
+        public UUID recordId() {
+            return recordId;
+        }
+
+        /**
+         * Returns the observed head revision.
+         *
          * @return revision
          */
-        public long revision() { return revision; }
-        /** Returns the observed head digest, when known.
+        public long revision() {
+            return revision;
+        }
+
+        /**
+         * Returns the observed head digest, when known.
+         *
          * @return digest
          */
-        public byte[] digest() { return digest == null ? null : digest.clone(); }
-        /** Returns bounded human-readable detail.
+        public byte[] digest() {
+            return digest == null ? null : digest.clone();
+        }
+
+        /**
+         * Returns bounded human-readable detail.
+         *
          * @return detail
          */
-        public String detail() { return detail; }
+        public String detail() {
+            return detail;
+        }
     }
 
     private final ProjectConfig config;
@@ -67,23 +115,27 @@ public final class ProjectRecordSync {
      * Creates one profile-local exchange endpoint.
      *
      * @param config project namespace and explicit peer allowlist
-     * @param store immutable local decision store
+     * @param store  immutable local decision store
      */
     public ProjectRecordSync(ProjectConfig config, DecisionStore store) {
         this.config = Objects.requireNonNull(config, "project config");
         this.store = Objects.requireNonNull(store, "decision store");
     }
 
-    /** Returns the Link application callback for this endpoint.
+    /**
+     * Returns the Link application callback for this endpoint.
+     *
      * @return application callback
      */
-    public PeerSession.ApplicationStreamHandler handler() { return this::handle; }
+    public PeerSession.ApplicationStreamHandler handler() {
+        return this::handle;
+    }
 
     /**
      * Publishes one local signed decision over one authenticated stream.
      *
      * @param session authenticated, control-ready Link session
-     * @param record local signed decision
+     * @param record  local signed decision
      * @return completion with a deterministic result or {@link Code#UNKNOWN}
      */
     public SyncOutcome publish(PeerSession session, DecisionRecord record) {
@@ -109,7 +161,7 @@ public final class ProjectRecordSync {
     /**
      * Requests one record head from a peer and applies at most one successor.
      *
-     * @param session authenticated, control-ready Link session
+     * @param session  authenticated, control-ready Link session
      * @param recordId stable record identity
      * @return completion with a deterministic result or {@link Code#UNKNOWN}
      */
@@ -203,7 +255,8 @@ public final class ProjectRecordSync {
                 return new SyncOutcome(map(saved), record.recordId(), head == null ? 0 : head.revision(),
                         head == null ? null : head.digest(), "");
             }
-            if (response.kind() != RecordMessage.Kind.RESULT) return new SyncOutcome(Code.REJECTED, recordId, 0, null, "unexpected response");
+            if (response.kind() != RecordMessage.Kind.RESULT)
+                return new SyncOutcome(Code.REJECTED, recordId, 0, null, "unexpected response");
             return new SyncOutcome(response.resultCode() == null ? Code.REJECTED : Code.valueOf(response.resultCode().name()),
                     response.recordId(), response.revision(), response.digest(), "");
         } catch (GeneralSecurityException failure) {

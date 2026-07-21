@@ -38,7 +38,7 @@ Through CP-0084, Synesis implements the following user-facing capabilities:
 ### Selected Milestone: **Direction 1: Project-wide Reconciliation**
 
 ### Justification
-While **Direction 3 (Agent-Work Foundation)** is the ultimate destination of the Synesis vision, implementing it now represents a premature leap in complexity. An agent-work system requires a reliable, synchronized shared state of the project to retrieve tasks and verify results. Currently, syncing multiple decision records is extremely painful and manual—each record requires its own invitation link and separate connection. 
+While **Direction 3 (Agent-Work Foundation)** is the ultimate destination of the Synesis vision, implementing it now represents a premature leap in complexity. An agent-work system requires a reliable, synchronized shared state of the project to retrieve tasks and verify results. Currently, syncing multiple decision records is extremely painful and manual—each record requires its own invitation link and separate connection.
 
 **Direction 1 (Project-wide Reconciliation)** is the smallest, most secure, and lowest-risk milestone that directly advances Synesis from a single-record state-sync demo toward a useful cooperative workspace. Reconciling all missing or divergent record heads under a project in one single session eliminates the manual invitation loop entirely, providing the robust multi-record synchronization foundation required before any automated task execution can be safely built.
 

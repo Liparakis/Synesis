@@ -31,13 +31,21 @@ import java.util.UUID;
  * it is not secret material.
  */
 public final class DecisionRecord {
-    /** Maximum complete encoded record size. */
+    /**
+     * Maximum complete encoded record size.
+     */
     public static final int MAX_BYTES = 16_384;
-    /** Maximum UTF-8 title size. */
+    /**
+     * Maximum UTF-8 title size.
+     */
     public static final int MAX_TITLE_BYTES = 512;
-    /** Maximum UTF-8 rationale size. */
+    /**
+     * Maximum UTF-8 rationale size.
+     */
     public static final int MAX_RATIONALE_BYTES = 4_096;
-    /** Maximum evidence references per revision. */
+    /**
+     * Maximum evidence references per revision.
+     */
     public static final int MAX_EVIDENCE = 8;
 
     private static final int MAGIC = 0x53445231;
@@ -66,9 +74,9 @@ public final class DecisionRecord {
     private final byte[] digest;
 
     private DecisionRecord(UUID projectId, UUID recordId, long revision, byte[] previousDigest,
-            String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
-            Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-            byte[] publicKey, byte[] signature) {
+                           String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
+                           Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
+                           byte[] publicKey, byte[] signature) {
         this.projectId = Objects.requireNonNull(projectId, "project ID");
         this.recordId = Objects.requireNonNull(recordId, "record ID");
         if (revision <= 0) throw new IllegalArgumentException("revision must be positive");
@@ -119,32 +127,32 @@ public final class DecisionRecord {
     /**
      * Creates and signs revision one or a supplied successor revision.
      *
-     * @param projectId stable local project namespace
-     * @param recordId stable decision identity
-     * @param revision positive revision number
+     * @param projectId      stable local project namespace
+     * @param recordId       stable decision identity
+     * @param revision       positive revision number
      * @param previousDigest predecessor digest, or null only for revision one
-     * @param ownerNodeId immutable signer node ID
-     * @param authorNodeId provenance author ID; must equal owner in v1
-     * @param status decision status
-     * @param createdAt millisecond-precision UTC provenance timestamp
-     * @param updatedAt millisecond-precision UTC provenance timestamp
-     * @param title bounded readable title
-     * @param rationale bounded readable rationale
-     * @param evidence at least one bounded evidence reference
-     * @param signer Ed25519 signer whose node ID must equal owner
+     * @param ownerNodeId    immutable signer node ID
+     * @param authorNodeId   provenance author ID; must equal owner in v1
+     * @param status         decision status
+     * @param createdAt      millisecond-precision UTC provenance timestamp
+     * @param updatedAt      millisecond-precision UTC provenance timestamp
+     * @param title          bounded readable title
+     * @param rationale      bounded readable rationale
+     * @param evidence       at least one bounded evidence reference
+     * @param signer         Ed25519 signer whose node ID must equal owner
      * @return a canonical signed record
      * @throws GeneralSecurityException if signing fails
      * @throws IllegalArgumentException if a field or bound is invalid
      */
     public static DecisionRecord create(UUID projectId, UUID recordId, long revision, byte[] previousDigest,
-            String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
-            Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-            Ed25519Signer signer) throws GeneralSecurityException {
+                                        String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
+                                        Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
+                                        Ed25519Signer signer) throws GeneralSecurityException {
         Objects.requireNonNull(signer, "signer");
         if (!signer.nodeId().equals(ownerNodeId)) throw new IllegalArgumentException("signer does not match owner");
         DecisionRecord unsigned = new DecisionRecord(projectId, recordId, revision, previousDigest,
                 ownerNodeId, authorNodeId, status, createdAt, updatedAt, title, rationale, evidence,
-                signer.publicKeyEncoded(), new byte[] {0});
+                signer.publicKeyEncoded(), new byte[]{0});
         byte[] signature = signer.sign(unsigned.unsignedBytes);
         return new DecisionRecord(projectId, recordId, revision, previousDigest, ownerNodeId, authorNodeId,
                 status, createdAt, updatedAt, title, rationale, evidence, signer.publicKeyEncoded(), signature);
@@ -198,22 +206,36 @@ public final class DecisionRecord {
         }
     }
 
-    /** Returns complete canonical SDR1 bytes, including the signature.
+    /**
+     * Returns complete canonical SDR1 bytes, including the signature.
+     *
      * @return encoded bytes
      */
-    public byte[] encoded() { return encoded.clone(); }
+    public byte[] encoded() {
+        return encoded.clone();
+    }
 
-    /** Returns the SHA-256 digest of complete canonical signed bytes.
+    /**
+     * Returns the SHA-256 digest of complete canonical signed bytes.
+     *
      * @return digest bytes
      */
-    public byte[] digest() { return digest.clone(); }
+    public byte[] digest() {
+        return digest.clone();
+    }
 
-    /** Returns the lowercase hexadecimal record digest.
+    /**
+     * Returns the lowercase hexadecimal record digest.
+     *
      * @return digest text
      */
-    public String digestHex() { return HexFormat.of().formatHex(digest); }
+    public String digestHex() {
+        return HexFormat.of().formatHex(digest);
+    }
 
-    /** Verifies the embedded key, owner binding, and signature.
+    /**
+     * Verifies the embedded key, owner binding, and signature.
+     *
      * @return true only for an authentic record
      * @throws GeneralSecurityException if key parsing or verification fails
      */
@@ -223,62 +245,131 @@ public final class DecisionRecord {
                 && Ed25519Signer.verify(publicKey, unsignedBytes, signature);
     }
 
-    /** Returns the project namespace.
+    /**
+     * Returns the project namespace.
+     *
      * @return project ID
      */
-    public UUID projectId() { return projectId; }
-    /** Returns the stable decision identity.
+    public UUID projectId() {
+        return projectId;
+    }
+
+    /**
+     * Returns the stable decision identity.
+     *
      * @return record ID
      */
-    public UUID recordId() { return recordId; }
-    /** Returns the positive immutable revision number.
+    public UUID recordId() {
+        return recordId;
+    }
+
+    /**
+     * Returns the positive immutable revision number.
+     *
      * @return revision
      */
-    public long revision() { return revision; }
-    /** Returns the predecessor digest, or null for revision one.
+    public long revision() {
+        return revision;
+    }
+
+    /**
+     * Returns the predecessor digest, or null for revision one.
+     *
      * @return predecessor digest
      */
-    public byte[] previousDigest() { return previousDigest == null ? null : previousDigest.clone(); }
-    /** Returns the immutable owner node ID.
+    public byte[] previousDigest() {
+        return previousDigest == null ? null : previousDigest.clone();
+    }
+
+    /**
+     * Returns the immutable owner node ID.
+     *
      * @return owner node ID
      */
-    public String ownerNodeId() { return ownerNodeId; }
-    /** Returns the provenance author node ID.
+    public String ownerNodeId() {
+        return ownerNodeId;
+    }
+
+    /**
+     * Returns the provenance author node ID.
+     *
      * @return author node ID
      */
-    public String authorNodeId() { return authorNodeId; }
-    /** Returns the decision status.
+    public String authorNodeId() {
+        return authorNodeId;
+    }
+
+    /**
+     * Returns the decision status.
+     *
      * @return status
      */
-    public DecisionStatus status() { return status; }
-    /** Returns the creation timestamp.
+    public DecisionStatus status() {
+        return status;
+    }
+
+    /**
+     * Returns the creation timestamp.
+     *
      * @return creation instant
      */
-    public Instant createdAt() { return createdAt; }
-    /** Returns the update timestamp.
+    public Instant createdAt() {
+        return createdAt;
+    }
+
+    /**
+     * Returns the update timestamp.
+     *
      * @return update instant
      */
-    public Instant updatedAt() { return updatedAt; }
-    /** Returns the readable title.
+    public Instant updatedAt() {
+        return updatedAt;
+    }
+
+    /**
+     * Returns the readable title.
+     *
      * @return title
      */
-    public String title() { return title; }
-    /** Returns the readable rationale.
+    public String title() {
+        return title;
+    }
+
+    /**
+     * Returns the readable rationale.
+     *
      * @return rationale
      */
-    public String rationale() { return rationale; }
-    /** Returns the immutable evidence list.
+    public String rationale() {
+        return rationale;
+    }
+
+    /**
+     * Returns the immutable evidence list.
+     *
      * @return evidence
      */
-    public List<DecisionEvidence> evidence() { return evidence; }
-    /** Returns a copy of the embedded X.509 public key.
+    public List<DecisionEvidence> evidence() {
+        return evidence;
+    }
+
+    /**
+     * Returns a copy of the embedded X.509 public key.
+     *
      * @return public-key bytes
      */
-    public byte[] publicKeyEncoded() { return publicKey.clone(); }
-    /** Returns a copy of the Ed25519 signature.
+    public byte[] publicKeyEncoded() {
+        return publicKey.clone();
+    }
+
+    /**
+     * Returns a copy of the Ed25519 signature.
+     *
      * @return signature bytes
      */
-    public byte[] signature() { return signature.clone(); }
+    public byte[] signature() {
+        return signature.clone();
+    }
 
     private byte[] encodeUnsigned() {
         try {
@@ -394,7 +485,8 @@ public final class DecisionRecord {
 
     private static Instant canonicalInstant(Instant value, String name) {
         Objects.requireNonNull(value, name);
-        if (value.getNano() % 1_000_000 != 0) throw new IllegalArgumentException(name + " must have millisecond precision");
+        if (value.getNano() % 1_000_000 != 0)
+            throw new IllegalArgumentException(name + " must have millisecond precision");
         return value;
     }
 

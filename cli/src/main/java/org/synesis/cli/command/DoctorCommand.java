@@ -8,18 +8,25 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.diagnostics.ReadinessReport;
 import org.synesis.cli.exit.ExitCodes;
 
-/** Runs the local-only {@code synesis doctor} readiness report. */
+/**
+ * Runs the local-only {@code synesis doctor} readiness report.
+ */
 @Command(name = "doctor", description = "Inspect local readiness without repair or networking.", mixinStandardHelpOptions = true)
 public final class DoctorCommand implements Callable<Integer> {
     private final CliRuntime runtime;
 
     /**
      * Creates a doctor command with one manually composed runtime.
+     *
      * @param runtime manually composed CLI runtime
      */
-    public DoctorCommand(CliRuntime runtime) { this.runtime = runtime; }
+    public DoctorCommand(CliRuntime runtime) {
+        this.runtime = runtime;
+    }
 
-    /** Runs all bounded local checks. @return 0, 10, or 13 */
+    /**
+     * Runs all bounded local checks. @return 0, 10, or 13
+     */
     @Override
     public Integer call() {
         ReadinessReport report = runtime.readinessInspector().inspect();

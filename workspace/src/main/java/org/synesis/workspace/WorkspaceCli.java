@@ -1,22 +1,20 @@
 package org.synesis.workspace;
 
+import java.io.Serial;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.io.IOException;
 import java.io.DataInputStream;
 import java.io.ByteArrayInputStream;
 
@@ -52,15 +50,16 @@ public final class WorkspaceCli {
     private static final int MAX_PROFILE_BYTES = 1_024;
     private static final Path PROJECT_CONFIG = Path.of("project.conf");
 
-    private WorkspaceCli() { }
+    private WorkspaceCli() {
+    }
 
     /**
      * Runs one bounded workspace command and exits with a stable status.
      *
      * @param arguments launcher arguments; profile paths and values are never
-     *                 emitted in failure output
+     *                  emitted in failure output
      */
-    public static void main(String[] arguments) {
+    static void main(String[] arguments) {
         System.exit(run(arguments));
     }
 
@@ -281,7 +280,7 @@ public final class WorkspaceCli {
         System.out.println("AUTHOR=" + record.authorNodeId());
         System.out.println("AUTHOR_NODE_ID=" + record.authorNodeId());
         System.out.println("STATUS=" + record.status());
-        String evidenceDigest = record.evidence().isEmpty() ? "" : record.evidence().get(0).digestHex();
+        String evidenceDigest = record.evidence().isEmpty() ? "" : record.evidence().getFirst().digestHex();
         System.out.println("EVIDENCE_DIGEST=" + evidenceDigest);
         boolean valid;
         try {
@@ -350,7 +349,7 @@ public final class WorkspaceCli {
             }
         }
         List<Long> sortedRevisions = revisionMap.keySet().stream().sorted().toList();
-        if (sortedRevisions.isEmpty() || sortedRevisions.get(0) != 1) {
+        if (sortedRevisions.isEmpty() || sortedRevisions.getFirst() != 1) {
             throw failure("LOCAL_STATE_INVALID");
         }
         DecisionRecord previous = null;
@@ -386,7 +385,7 @@ public final class WorkspaceCli {
             }
             previous = record;
         }
-        if (previous == null || previous.revision() != headRevision || !Arrays.equals(previous.digest(), headDigest)) {
+        if (previous.revision() != headRevision || !Arrays.equals(previous.digest(), headDigest)) {
             throw failure("LOCAL_STATE_INVALID");
         }
         return previous;
@@ -460,14 +459,14 @@ public final class WorkspaceCli {
 
         // 5. Determine project and record ID from CLI options or URI query parameters
         String projectStr = parsed.options.containsKey("--project")
-            ? parsed.options.get("--project")
-            : queryParams.get("project");
+                ? parsed.options.get("--project")
+                : queryParams.get("project");
         if (projectStr == null) throw failure("USAGE");
         UUID projectId = parseUuid(projectStr, "PROJECT_INVALID");
 
         String recordStr = parsed.options.containsKey("--record")
-            ? parsed.options.get("--record")
-            : queryParams.get("record");
+                ? parsed.options.get("--record")
+                : queryParams.get("record");
         if (recordStr == null) throw failure("USAGE");
         UUID recordId = parseUuid(recordStr, "RECORD_INVALID");
 
@@ -515,7 +514,7 @@ public final class WorkspaceCli {
                 throw failure("PROJECT_NOT_CONFIGURED");
             }
             // Create project config with the confirmed host
-            config = existingOrCreateConfig(parsed.profile, projectId, derivedHostNodeId);
+            existingOrCreateConfig(parsed.profile, projectId, derivedHostNodeId);
         }
 
         // 8. Run sync
@@ -550,7 +549,8 @@ public final class WorkspaceCli {
             }
         });
         try {
-            onboarding.host(expectedPeer, endpoint.handler(), session -> { });
+            onboarding.host(expectedPeer, endpoint.handler(), _ -> {
+            });
         } catch (OnboardingFailure failure) {
             throw failure(mapOnboarding(failure.code()));
         }
@@ -558,9 +558,10 @@ public final class WorkspaceCli {
     }
 
     private static int join(Path profile, UUID projectId, UUID recordId, String expectedHost,
-            String invitation) throws Exception {
+                            String invitation) throws Exception {
         AtomicReference<WorkspaceFailure> callbackFailure = new AtomicReference<>();
-        Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> { });
+        Onboarding onboarding = new Onboarding(profile.resolve("link"), _ -> {
+        });
         try {
             onboarding.join(invitation, null, session -> {
                 try {
@@ -651,8 +652,7 @@ public final class WorkspaceCli {
             case INVITE_INVALID -> "INVITE_INVALID";
             case HOST_IDENTITY_MISMATCH -> "AUTH_FAILED";
             case IDENTITY_FAILED -> "IDENTITY_FAILED";
-            case HOST_TIMEOUT -> "TRANSPORT_FAILED";
-            case NO_USABLE_CANDIDATE, CONNECTION_FAILED, INTERNAL -> "TRANSPORT_FAILED";
+            case HOST_TIMEOUT, NO_USABLE_CANDIDATE, CONNECTION_FAILED, INTERNAL -> "TRANSPORT_FAILED";
         };
     }
 
@@ -680,7 +680,7 @@ public final class WorkspaceCli {
         for (int index = 4; index < arguments.length; index += 2) {
             String name = arguments[index];
             if (!name.startsWith("--")) {
-                if (!"sync".equals(command) || !"join".equals(subcommand) || positional != null) {
+                if (!"sync".equals(command) || !"join".equals(subcommand)) {
                     throw failure("USAGE");
                 }
                 positional = name;
@@ -713,7 +713,7 @@ public final class WorkspaceCli {
     }
 
     private static String bounded(String value, int maxBytes, String name) throws WorkspaceFailure {
-        if (value == null || value.indexOf('\u0000') >= 0) throw failure("" + nameCode(name));
+        if (value == null || value.indexOf('\u0000') >= 0) throw failure(nameCode(name));
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         if (bytes.length == 0 || bytes.length > maxBytes) throw failure(nameCode(name));
         return value;
@@ -737,7 +737,9 @@ public final class WorkspaceCli {
         }
     }
 
-    private static WorkspaceFailure failure(String code) { return new WorkspaceFailure(code); }
+    private static WorkspaceFailure failure(String code) {
+        return new WorkspaceFailure(code);
+    }
 
     private static UUID parseUuid(String value, String code) throws WorkspaceFailure {
         bounded(value, 64, code.equals("PROJECT_INVALID") ? "project" : "record");
@@ -763,7 +765,7 @@ public final class WorkspaceCli {
     }
 
     private record Parsed(Path profile, String command, String subcommand, Map<String, String> options,
-            String positional) {
+                          String positional) {
         private Parsed {
             Objects.requireNonNull(profile, "profile");
             Objects.requireNonNull(command, "command");
@@ -773,6 +775,7 @@ public final class WorkspaceCli {
     }
 
     private static final class WorkspaceAbort extends RuntimeException {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private WorkspaceAbort(WorkspaceFailure failure) {
@@ -781,6 +784,7 @@ public final class WorkspaceCli {
     }
 
     private static final class WorkspaceFailure extends Exception {
+        @Serial
         private static final long serialVersionUID = 1L;
         private final String code;
 
@@ -827,13 +831,16 @@ public final class WorkspaceCli {
         return switch (code) {
             case "PROFILE_INVALID" -> "Specify a valid absolute path to a profile directory.";
             case "IDENTITY_FAILED" -> "Local identity files are missing or could not be loaded.";
-            case "PROJECT_INVALID", "PROJECT_NOT_CONFIGURED" -> "Project is not configured. Run 'project create --peer <host-node-id>' first.";
-            case "PROJECT_MISMATCH" -> "Project ID or configured peer Node ID does not match the workspace configuration.";
+            case "PROJECT_INVALID", "PROJECT_NOT_CONFIGURED" ->
+                    "Project is not configured. Run 'project create --peer <host-node-id>' first.";
+            case "PROJECT_MISMATCH" ->
+                    "Project ID or configured peer Node ID does not match the workspace configuration.";
             case "PEER_MISMATCH" -> "The host node identity does not match the configured peer for this project.";
             case "RECORD_INVALID" -> "The decision record format or inputs are invalid.";
             case "RECORD_NOT_FOUND" -> "The requested record was not found or is missing.";
             case "AUTH_FAILED" -> "The remote host public identity did not match the expected pinned host Node ID.";
-            case "TRANSPORT_FAILED" -> "The bounded session connection failed. Verify the network and that the host is running.";
+            case "TRANSPORT_FAILED" ->
+                    "The bounded session connection failed. Verify the network and that the host is running.";
             case "INVITE_INVALID" -> "The connection link is invalid, expired, or malformed.";
             case "LOCAL_STATE_INVALID" -> "The local storage contains corrupt or inconsistent record files.";
             case "SCAN_LIMIT" -> "The directory scan exceeds the maximum allowed files limit.";

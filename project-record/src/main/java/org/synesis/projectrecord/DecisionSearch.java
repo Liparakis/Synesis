@@ -8,24 +8,44 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Bounded on-demand search over one profile's validated decision heads. */
+/**
+ * Bounded on-demand search over one profile's validated decision heads.
+ */
 public final class DecisionSearch {
-    /** Maximum UTF-8 query text size. */
+    /**
+     * Maximum UTF-8 query text size.
+     */
     public static final int MAX_QUERY_BYTES = 256;
-    /** Maximum whitespace-separated text terms. */
+    /**
+     * Maximum whitespace-separated text terms.
+     */
     public static final int MAX_TERMS = 4;
-    /** Maximum returned rows. */
+    /**
+     * Maximum returned rows.
+     */
     public static final int MAX_RESULTS = 64;
-    /** Maximum decision heads scanned by one query. */
+    /**
+     * Maximum decision heads scanned by one query.
+     */
     public static final int MAX_RECORD_SCAN = 128;
 
-    /** Safe search failure classification. */
+    /**
+     * Safe search failure classification.
+     */
     public enum ErrorCode {
-        /** Local heads or revision chains are invalid. */ LOCAL_STATE_INVALID,
-        /** The bounded head scan could not complete. */ SCAN_LIMIT
+        /**
+         * Local heads or revision chains are invalid.
+         */
+        LOCAL_STATE_INVALID,
+        /**
+         * The bounded head scan could not complete.
+         */
+        SCAN_LIMIT
     }
 
-    /** Immutable bounded search query. */
+    /**
+     * Immutable bounded search query.
+     */
     public static final class Query {
         private final String text;
         private final List<String> terms;
@@ -37,11 +57,11 @@ public final class DecisionSearch {
         /**
          * Creates one bounded query.
          *
-         * @param text optional title/rationale text; terms are ANDed
-         * @param recordId optional exact record identity
-         * @param status optional exact decision status
+         * @param text        optional title/rationale text; terms are ANDed
+         * @param recordId    optional exact record identity
+         * @param status      optional exact decision status
          * @param ownerNodeId optional exact owner/author node ID
-         * @param limit maximum result rows
+         * @param limit       maximum result rows
          */
         public Query(String text, UUID recordId, DecisionStatus status, String ownerNodeId, int limit) {
             this.text = text == null ? "" : text.trim();
@@ -60,65 +80,129 @@ public final class DecisionSearch {
             this.limit = limit;
         }
 
-        /** Returns the original bounded query text.
+        /**
+         * Returns the original bounded query text.
+         *
          * @return query text
          */
-        public String text() { return text; }
-        /** Returns the exact record filter, or null.
+        public String text() {
+            return text;
+        }
+
+        /**
+         * Returns the exact record filter, or null.
+         *
          * @return record filter
          */
-        public UUID recordId() { return recordId; }
-        /** Returns the exact status filter, or null.
+        public UUID recordId() {
+            return recordId;
+        }
+
+        /**
+         * Returns the exact status filter, or null.
+         *
          * @return status filter
          */
-        public DecisionStatus status() { return status; }
-        /** Returns the exact owner filter, or null.
+        public DecisionStatus status() {
+            return status;
+        }
+
+        /**
+         * Returns the exact owner filter, or null.
+         *
          * @return owner filter
          */
-        public String ownerNodeId() { return ownerNodeId; }
-        /** Returns the maximum result count.
+        public String ownerNodeId() {
+            return ownerNodeId;
+        }
+
+        /**
+         * Returns the maximum result count.
+         *
          * @return result limit
          */
-        public int limit() { return limit; }
+        public int limit() {
+            return limit;
+        }
     }
 
-    /** Immutable safe projection of one verified decision head. */
+    /**
+     * Immutable safe projection of one verified decision head.
+     */
     public static final class Result {
         private final DecisionRecord record;
 
-        private Result(DecisionRecord record) { this.record = record; }
+        private Result(DecisionRecord record) {
+            this.record = record;
+        }
 
-        /** Returns the stable record identity.
+        /**
+         * Returns the stable record identity.
+         *
          * @return record identity
          */
-        public UUID recordId() { return record.recordId(); }
-        /** Returns the current revision.
+        public UUID recordId() {
+            return record.recordId();
+        }
+
+        /**
+         * Returns the current revision.
+         *
          * @return revision
          */
-        public long revision() { return record.revision(); }
-        /** Returns the current canonical digest.
+        public long revision() {
+            return record.revision();
+        }
+
+        /**
+         * Returns the current canonical digest.
+         *
          * @return digest text
          */
-        public String digestHex() { return record.digestHex(); }
-        /** Returns the verified owner/author node ID.
+        public String digestHex() {
+            return record.digestHex();
+        }
+
+        /**
+         * Returns the verified owner/author node ID.
+         *
          * @return node ID
          */
-        public String ownerNodeId() { return record.ownerNodeId(); }
-        /** Returns the decision status.
+        public String ownerNodeId() {
+            return record.ownerNodeId();
+        }
+
+        /**
+         * Returns the decision status.
+         *
          * @return status
          */
-        public DecisionStatus status() { return record.status(); }
-        /** Returns the bounded title.
+        public DecisionStatus status() {
+            return record.status();
+        }
+
+        /**
+         * Returns the bounded title.
+         *
          * @return title
          */
-        public String title() { return record.title(); }
-        /** Returns the bounded rationale.
+        public String title() {
+            return record.title();
+        }
+
+        /**
+         * Returns the bounded rationale.
+         *
          * @return rationale
          */
-        public String rationale() { return record.rationale(); }
+        public String rationale() {
+            return record.rationale();
+        }
     }
 
-    /** Immutable search response with either rows or a safe failure. */
+    /**
+     * Immutable search response with either rows or a safe failure.
+     */
     public static final class SearchResult {
         private final List<Result> results;
         private final ErrorCode errorCode;
@@ -128,18 +212,32 @@ public final class DecisionSearch {
             this.errorCode = errorCode;
         }
 
-        /** Returns immutable matching rows.
+        /**
+         * Returns immutable matching rows.
+         *
          * @return matching rows
          */
-        public List<Result> results() { return results; }
-        /** Returns the failure code, or null for a successful query.
+        public List<Result> results() {
+            return results;
+        }
+
+        /**
+         * Returns the failure code, or null for a successful query.
+         *
          * @return failure code
          */
-        public ErrorCode errorCode() { return errorCode; }
-        /** Returns whether the query completed without a local-state error.
+        public ErrorCode errorCode() {
+            return errorCode;
+        }
+
+        /**
+         * Returns whether the query completed without a local-state error.
+         *
          * @return true when successful
          */
-        public boolean isSuccessful() { return errorCode == null; }
+        public boolean isSuccessful() {
+            return errorCode == null;
+        }
 
         /**
          * Renders a stable safe projection without paths or secret material.
@@ -170,7 +268,9 @@ public final class DecisionSearch {
      *
      * @param store profile-local decision store
      */
-    public DecisionSearch(DecisionStore store) { this.store = Objects.requireNonNull(store, "decision store"); }
+    public DecisionSearch(DecisionStore store) {
+        this.store = Objects.requireNonNull(store, "decision store");
+    }
 
     /**
      * Searches validated current heads on demand.
