@@ -423,13 +423,13 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-005
 - Priority: P0
 - Title: Project-wide reconciliation over one authenticated session
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Design and implement the smallest bounded bidirectional reconciliation protocol over a single Link session to synchronize all missing or divergent verified record heads.
 - Dependencies: SYN-004 DONE
-- Acceptance criteria: Design and implement a new batch reconciliation protocol over the existing authenticated Link stream seam. The protocol must exchange inventories, transfer contiguous missing revisions, prevent deletion/overwriting of divergent heads, quarantine conflict heads, verify every revision independently before storage, enforce bounds on size/records, and report per-record and project-level outcomes. Clean error exit code `10` with contextual stderr `HINT=` messages must be integrated with the workspace launcher commands. Standalone CLI remains unmodified.
-- Required tests: Unit tests for inventory exchange and matrix reconciliation logic; integration process tests verifying APPLIED, DUPLICATE, tampered host rejection, missing fingerprint rejection, and multi-revision chain catch-up.
-- Required documentation: Design document `docs/agent/SYN_005_DESIGN.md` and checkpoint CP-0086.
-- Evidence: pending.
+- Acceptance criteria: Design and implement PRP1 protocol over the existing authenticated Link stream seam. Exchange inventories, transfer contiguous missing revisions, prevent deletion/overwriting of divergent heads, quarantine conflict heads, verify every revision independently before storage, enforce bounds on size/records, and report per-record and project-level outcomes. Integrated `check-action` command for action-time constraint enforcement. Clean exit codes with contextual stderr `HINT=` messages.
+- Required tests: Unit tests for PRP1 codec and reconciliation logic; integration process tests verifying project-wide convergence, conflict quarantining, corruption detection, and action-time checking (`projectReconciliationAndCheckActionWorkflow`).
+- Required documentation: Design document `docs/agent/SYN_005_DESIGN.md`, ADR-0015, `docs/development/current-state.md`, and checkpoint CP-0091.
+- Evidence: PASS — `ReconciliationMessageTest`, `ProjectReconciliationSyncProcessTest`, `WorkspaceSyncProcessTest`, and `gradlew.bat clean check --dependency-verification=strict`. Closed at CP-0091.
 
 ## Deferred capability register
 

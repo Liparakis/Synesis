@@ -34,6 +34,7 @@ import org.synesis.projectrecord.DecisionSearch;
 import org.synesis.projectrecord.Ed25519Signer;
 import org.synesis.projectrecord.ProjectConfig;
 import org.synesis.projectrecord.ProjectRecordSync;
+import org.synesis.projectrecord.ProjectReconciliationSync;
 
 /**
  * JDK-only bootstrap launcher for one isolated Synesis workspace profile.
@@ -92,6 +93,7 @@ public final class WorkspaceCli {
             case "project" -> executeProject(parsed);
             case "decision" -> executeDecision(parsed);
             case "sync" -> executeSync(parsed);
+            case "check-action" -> executeCheckAction(parsed);
             default -> throw failure("USAGE");
         };
     }
@@ -106,8 +108,7 @@ public final class WorkspaceCli {
     }
 
     private static int executeProject(Parsed parsed) throws Exception {
-        if (!"create".equals(parsed.subcommand) || parsed.options.size() != 1
-                || !parsed.options.containsKey("--peer")) {
+        if (!"create".equals(parsed.subcommand) || parsed.options.size() != 1 || !parsed.options.containsKey("--peer")) {
             throw failure("USAGE");
         }
         String peer = bounded(parsed.options.get("--peer"), 128, "peer");
@@ -116,8 +117,7 @@ public final class WorkspaceCli {
         if (Files.exists(configPath)) {
             try {
                 ProjectConfig existing = ProjectConfig.load(configPath);
-                throw failure(existing.peerNodeIds().contains(peer) && existing.peerNodeIds().size() == 1
-                        ? "PROJECT_EXISTS" : "PROJECT_MISMATCH");
+                throw failure(existing.peerNodeIds().contains(peer) && existing.peerNodeIds().size() == 1 ? "PROJECT_EXISTS" : "PROJECT_MISMATCH");
             } catch (WorkspaceFailure failure) {
                 throw failure;
             } catch (Exception malformed) {
@@ -148,8 +148,7 @@ public final class WorkspaceCli {
     }
 
     private static int executeDecisionCreate(Parsed parsed) throws Exception {
-        requireOptions(parsed.options, "--title", "--rationale", "--evidence-kind",
-                "--evidence-ref", "--evidence-sha256");
+        requireOptions(parsed.options, "--title", "--rationale", "--evidence-kind", "--evidence-ref", "--evidence-sha256");
         String title = bounded(parsed.options.get("--title"), DecisionRecord.MAX_TITLE_BYTES, "title");
         String rationale = bounded(parsed.options.get("--rationale"), DecisionRecord.MAX_RATIONALE_BYTES, "rationale");
         String kind = bounded(parsed.options.get("--evidence-kind"), 64, "evidence kind");
@@ -165,10 +164,7 @@ public final class WorkspaceCli {
         }
         NodeIdentity identity = identity(parsed.profile);
         Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
-        DecisionRecord record = DecisionRecord.create(config.projectId(), UUID.randomUUID(), 1, null,
-                identity.nodeId(), identity.nodeId(), DecisionStatus.PROPOSED, now, now, title, rationale,
-                java.util.List.of(new DecisionEvidence(kind, reference, evidenceDigest)),
-                Ed25519Signer.from(identity));
+        DecisionRecord record = DecisionRecord.create(config.projectId(), UUID.randomUUID(), 1, null, identity.nodeId(), identity.nodeId(), DecisionStatus.PROPOSED, now, now, title, rationale, java.util.List.of(new DecisionEvidence(kind, reference, evidenceDigest)), Ed25519Signer.from(identity));
         DecisionStore store;
         try {
             store = new DecisionStore(parsed.profile.resolve("records"), config.projectId());
@@ -192,8 +188,7 @@ public final class WorkspaceCli {
 
     private static int executeDecisionSearch(Parsed parsed) throws Exception {
         for (String key : parsed.options.keySet()) {
-            if (!key.equals("--text") && !key.equals("--record") && !key.equals("--status")
-                    && !key.equals("--owner") && !key.equals("--limit")) {
+            if (!key.equals("--text") && !key.equals("--record") && !key.equals("--status") && !key.equals("--owner") && !key.equals("--limit")) {
                 throw failure("USAGE");
             }
         }
@@ -292,6 +287,77 @@ public final class WorkspaceCli {
         return 0;
     }
 
+    private static int executeCheckAction(Parsed parsed) throws Exception {
+        requireOptions(parsed.options, "--scope", "--action");
+        String scope = bounded(parsed.options.get("--scope"), 512, "scope");
+        String action = bounded(parsed.options.get("--action"), 512, "action");
+
+        Path configPath = parsed.profile.resolve(PROJECT_CONFIG);
+        ProjectConfig config;
+        try {
+            config = ProjectConfig.load(configPath);
+        } catch (Exception failure) {
+            throw failure("PROJECT_NOT_CONFIGURED");
+        }
+
+        DecisionStore store = new DecisionStore(parsed.profile.resolve("records"), config.projectId());
+        List<DecisionRecord> heads;
+        try {
+            heads = store.verifiedHeads(1_000);
+        } catch (Exception failure) {
+            throw failure("RECORD_NOT_FOUND");
+        }
+
+        DecisionRecord matchedConstraint = null;
+        for (DecisionRecord record : heads) {
+            if (record.status() == DecisionStatus.PROPOSED || record.status() == DecisionStatus.ACCEPTED) {
+                String text = (record.title() + " " + record.rationale()).toLowerCase(java.util.Locale.ROOT);
+                boolean scopeMatch = false;
+                for (DecisionEvidence ev : record.evidence()) {
+                    if (ev.reference() != null) {
+                        String ref = ev.reference();
+                        int wildcardIdx = ref.indexOf('*');
+                        String prefix = wildcardIdx >= 0 ? ref.substring(0, wildcardIdx) : ref;
+                        if (!prefix.isEmpty() && (scope.startsWith(prefix) || prefix.startsWith(scope))) {
+                            scopeMatch = true;
+                            break;
+                        }
+                    }
+                }
+                if (scopeMatch || text.contains(scope.toLowerCase(java.util.Locale.ROOT)) || containsMatchingKeywords(text, action)) {
+                    matchedConstraint = record;
+                    break;
+                }
+            }
+        }
+
+        System.out.println("PROJECT_ID=" + config.projectId());
+        if (matchedConstraint != null) {
+            System.out.println("ACTION_RESULT=BLOCKED");
+            System.out.println("MATCHED_CONSTRAINT_ID=" + matchedConstraint.recordId());
+            System.out.println("CONSTRAINT_TITLE=" + matchedConstraint.title());
+            System.out.println("CONSTRAINT_RATIONALE=" + matchedConstraint.rationale());
+            System.out.println("REASON=Action affecting scope '" + scope + "' collides with authoritative constraint.");
+            System.err.println("HINT=Action blocked by project constraint " + matchedConstraint.recordId() + ". Re-plan required.");
+            return 10;
+        } else {
+            System.out.println("ACTION_RESULT=ALLOWED");
+            System.out.println("REASON=No active project constraint collides with action.");
+            return 0;
+        }
+    }
+
+    private static boolean containsMatchingKeywords(String text, String action) {
+        String[] keywords = action.toLowerCase(java.util.Locale.ROOT).split("\\s+");
+        int matches = 0;
+        for (String kw : keywords) {
+            if (kw.length() > 3 && text.contains(kw)) {
+                matches++;
+            }
+        }
+        return matches >= 2 || (keywords.length == 1 && matches == 1);
+    }
+
     private static DecisionRecord validateSingleRecord(Path profile, UUID projectId, UUID recordId) throws Exception {
         Path recordsDir = profile.resolve("records");
         Path decisionsDir = recordsDir.resolve("decisions").resolve(recordId.toString());
@@ -328,9 +394,7 @@ public final class WorkspaceCli {
         }
         List<Path> sdrFiles;
         try (var stream = Files.list(decisionsDir)) {
-            sdrFiles = stream.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().endsWith(".sdr"))
-                    .toList();
+            sdrFiles = stream.filter(Files::isRegularFile).filter(path -> path.getFileName().toString().endsWith(".sdr")).toList();
         }
         if (sdrFiles.isEmpty() || sdrFiles.size() > 64) {
             throw failure("LOCAL_STATE_INVALID");
@@ -362,8 +426,7 @@ public final class WorkspaceCli {
             } catch (Exception e) {
                 throw failure("LOCAL_STATE_INVALID");
             }
-            if (record.revision() != rev || !recordId.equals(record.recordId())
-                    || !projectId.equals(record.projectId())) {
+            if (record.revision() != rev || !recordId.equals(record.recordId()) || !projectId.equals(record.projectId())) {
                 throw failure("LOCAL_STATE_INVALID");
             }
             try {
@@ -378,8 +441,7 @@ public final class WorkspaceCli {
                     throw failure("LOCAL_STATE_INVALID");
                 }
             } else {
-                if (record.revision() != previous.revision() + 1
-                        || !Arrays.equals(record.previousDigest(), previous.digest())) {
+                if (record.revision() != previous.revision() + 1 || !Arrays.equals(record.previousDigest(), previous.digest())) {
                     throw failure("LOCAL_STATE_INVALID");
                 }
             }
@@ -458,17 +520,12 @@ public final class WorkspaceCli {
         }
 
         // 5. Determine project and record ID from CLI options or URI query parameters
-        String projectStr = parsed.options.containsKey("--project")
-                ? parsed.options.get("--project")
-                : queryParams.get("project");
+        String projectStr = parsed.options.containsKey("--project") ? parsed.options.get("--project") : queryParams.get("project");
         if (projectStr == null) throw failure("USAGE");
         UUID projectId = parseUuid(projectStr, "PROJECT_INVALID");
 
-        String recordStr = parsed.options.containsKey("--record")
-                ? parsed.options.get("--record")
-                : queryParams.get("record");
-        if (recordStr == null) throw failure("USAGE");
-        UUID recordId = parseUuid(recordStr, "RECORD_INVALID");
+        String recordStr = parsed.options.containsKey("--record") ? parsed.options.get("--record") : queryParams.get("record");
+        UUID recordId = recordStr != null ? parseUuid(recordStr, "RECORD_INVALID") : null;
 
         // Check for unknown options on join
         for (String key : parsed.options.keySet()) {
@@ -540,8 +597,22 @@ public final class WorkspaceCli {
             }
         }
 
-        ProjectRecordSync endpoint = new ProjectRecordSync(config, store);
         String hostNode = new IdentityBootstrap(profile.resolve("link")).loadOrCreate().identity().nodeId();
+        PeerSession.ApplicationStreamHandler recordHandler = new ProjectRecordSync(config, store).handler();
+        PeerSession.ApplicationStreamHandler reconHandler = new ProjectReconciliationSync(hostNode, config, store).handler();
+
+        PeerSession.ApplicationStreamHandler handler = (remoteNodeId, requestBytes) -> {
+            if (requestBytes != null && requestBytes.length >= 4) {
+                int magic = ((requestBytes[0] & 0xFF) << 24)
+                        | ((requestBytes[1] & 0xFF) << 16)
+                        | ((requestBytes[2] & 0xFF) << 8)
+                        | (requestBytes[3] & 0xFF);
+                if (magic == 0x50525031) {
+                    return reconHandler.handle(remoteNodeId, requestBytes);
+                }
+            }
+            return recordHandler.handle(remoteNodeId, requestBytes);
+        };
         Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> {
             if (event.type() == OnboardingEventType.SHARE_LINK) {
                 String composed = composeWorkspaceUri(event.value(), config.projectId(), recordId, hostNode);
@@ -549,7 +620,7 @@ public final class WorkspaceCli {
             }
         });
         try {
-            onboarding.host(expectedPeer, endpoint.handler(), _ -> {
+            onboarding.host(expectedPeer, handler, _ -> {
             });
         } catch (OnboardingFailure failure) {
             throw failure(mapOnboarding(failure.code()));
@@ -557,8 +628,7 @@ public final class WorkspaceCli {
         return 0;
     }
 
-    private static int join(Path profile, UUID projectId, UUID recordId, String expectedHost,
-                            String invitation) throws Exception {
+    private static int join(Path profile, UUID projectId, UUID recordId, String expectedHost, String invitation) throws Exception {
         AtomicReference<WorkspaceFailure> callbackFailure = new AtomicReference<>();
         Onboarding onboarding = new Onboarding(profile.resolve("link"), _ -> {
         });
@@ -574,17 +644,40 @@ public final class WorkspaceCli {
                     }
                     ProjectConfig config = existingOrCreateConfig(profile, projectId, expectedHost);
                     DecisionStore store = new DecisionStore(profile.resolve("records"), projectId);
-                    ProjectRecordSync endpoint = new ProjectRecordSync(config, store);
-                    ProjectRecordSync.SyncOutcome outcome = endpoint.sync(session, recordId);
-                    System.out.println("PROJECT_ID=" + projectId);
-                    System.out.println("RECORD_ID=" + recordId);
-                    System.out.println("SYNC_RESULT=" + outcome.code());
-                    if (outcome.code() != ProjectRecordSync.Code.APPLIED
-                            && outcome.code() != ProjectRecordSync.Code.DUPLICATE) {
-                        WorkspaceFailure failure = failure(outcome.code().name());
-                        callbackFailure.set(failure);
-                        closeQuietly(session);
-                        throw new WorkspaceAbort(failure);
+                    String localNode = new IdentityBootstrap(profile.resolve("link")).loadOrCreate().identity().nodeId();
+                    if (recordId != null) {
+                        ProjectRecordSync endpoint = new ProjectRecordSync(config, store);
+                        ProjectRecordSync.SyncOutcome outcome = endpoint.sync(session, recordId);
+                        System.out.println("PROJECT_ID=" + projectId);
+                        System.out.println("RECORD_ID=" + recordId);
+                        System.out.println("SYNC_RESULT=" + outcome.code());
+                        if (outcome.code() != ProjectRecordSync.Code.APPLIED && outcome.code() != ProjectRecordSync.Code.DUPLICATE) {
+                            WorkspaceFailure failure = failure(outcome.code().name());
+                            callbackFailure.set(failure);
+                            closeQuietly(session);
+                            throw new WorkspaceAbort(failure);
+                        }
+                    } else {
+                        ProjectReconciliationSync endpoint = new ProjectReconciliationSync(localNode, config, store);
+                        ProjectReconciliationSync.ReconciliationResult result = endpoint.syncProject(session);
+                        System.out.println("PROJECT_ID=" + projectId);
+                        System.out.println("RECONCILED_COUNT=" + result.reconciledCount());
+                        System.out.println("ADDED_LOCAL=" + result.addedLocal());
+                        System.out.println("ADDED_REMOTE=" + result.addedRemote());
+                        System.out.println("DUPLICATE_COUNT=" + result.duplicateCount());
+                        System.out.println("SYNC_RESULT=" + (result.success() ? "SUCCESS" : "PARTIAL_SUCCESS"));
+                        for (String outcome : result.outcomes()) {
+                            System.out.println("RECORD_OUTCOME=" + outcome);
+                        }
+                        if (!result.success()) {
+                            if (!result.hint().isEmpty()) {
+                                System.err.println("HINT=" + result.hint());
+                            }
+                            WorkspaceFailure failure = failure("RECONCILIATION_FAILED");
+                            callbackFailure.set(failure);
+                            closeQuietly(session);
+                            throw new WorkspaceAbort(failure);
+                        }
                     }
                 } catch (WorkspaceAbort abort) {
                     throw abort;
@@ -607,8 +700,7 @@ public final class WorkspaceCli {
         return 0;
     }
 
-    private static ProjectConfig existingOrCreateConfig(Path profile, UUID projectId, String expectedHost)
-            throws Exception {
+    private static ProjectConfig existingOrCreateConfig(Path profile, UUID projectId, String expectedHost) throws Exception {
         Path path = profile.resolve(PROJECT_CONFIG);
         if (Files.exists(path)) {
             ProjectConfig existing;
@@ -674,10 +766,11 @@ public final class WorkspaceCli {
             throw failure("PROFILE_INVALID");
         }
         String command = arguments[2];
-        String subcommand = arguments.length > 3 ? arguments[3] : "";
+        boolean hasSubcommand = arguments.length > 3 && !arguments[3].startsWith("--");
+        String subcommand = hasSubcommand ? arguments[3] : "";
         Map<String, String> options = new HashMap<>();
         String positional = null;
-        for (int index = 4; index < arguments.length; index += 2) {
+        for (int index = hasSubcommand ? 4 : 3; index < arguments.length; index += 2) {
             String name = arguments[index];
             if (!name.startsWith("--")) {
                 if (!"sync".equals(command) || !"join".equals(subcommand)) {
@@ -687,8 +780,7 @@ public final class WorkspaceCli {
                 if (index != arguments.length - 1) throw failure("USAGE");
                 break;
             }
-            if (index + 1 >= arguments.length || arguments[index + 1].startsWith("--")
-                    || options.put(name, arguments[index + 1]) != null) {
+            if (index + 1 >= arguments.length || arguments[index + 1].startsWith("--") || options.put(name, arguments[index + 1]) != null) {
                 throw failure("USAGE");
             }
         }
@@ -753,15 +845,12 @@ public final class WorkspaceCli {
     private static void printUsage() {
         System.out.println("Usage: synesis-workspace --profile <dir> identity show");
         System.out.println("       synesis-workspace --profile <dir> project create --peer <node-id>");
-        System.out.println("       synesis-workspace --profile <dir> decision create --title <text>"
-                + " --rationale <text> --evidence-kind <kind> --evidence-ref <ref>"
-                + " --evidence-sha256 <64-hex>");
-        System.out.println("       synesis-workspace --profile <dir> decision search [--text <text>]"
-                + " [--record <uuid>] [--status <status>] [--owner <node-id>] [--limit <int>]");
+        System.out.println("       synesis-workspace --profile <dir> decision create --title <text>" + " --rationale <text> --evidence-kind <kind> --evidence-ref <ref>" + " --evidence-sha256 <64-hex>");
+        System.out.println("       synesis-workspace --profile <dir> decision search [--text <text>]" + " [--record <uuid>] [--status <status>] [--owner <node-id>] [--limit <int>]");
         System.out.println("       synesis-workspace --profile <dir> decision inspect --record <uuid>");
         System.out.println("       synesis-workspace --profile <dir> sync host");
-        System.out.println("       synesis-workspace --profile <dir> sync join --project <uuid>"
-                + " --record <uuid> --expect-host <node-id> <invitation>");
+        System.out.println("       synesis-workspace --profile <dir> sync join --project <uuid>" + " [--record <uuid>] [--expect-host <node-id>] <invitation>");
+        System.out.println("       synesis-workspace --profile <dir> check-action --scope <scope> --action <text>");
     }
 
     private record Parsed(Path profile, String command, String subcommand, Map<String, String> options,
@@ -842,6 +931,7 @@ public final class WorkspaceCli {
             case "TRANSPORT_FAILED" ->
                     "The bounded session connection failed. Verify the network and that the host is running.";
             case "INVITE_INVALID" -> "The connection link is invalid, expired, or malformed.";
+            case "RECONCILIATION_FAILED" -> "Project reconciliation completed with conflicts or local corruptions.";
             case "LOCAL_STATE_INVALID" -> "The local storage contains corrupt or inconsistent record files.";
             case "SCAN_LIMIT" -> "The directory scan exceeds the maximum allowed files limit.";
             case "USAGE" -> "Check command syntax and options using --help.";

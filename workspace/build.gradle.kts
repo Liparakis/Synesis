@@ -44,6 +44,7 @@ tasks.withType<Javadoc>().configureEach {
 tasks.test {
     useJUnitPlatform()
     dependsOn(tasks.installDist)
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 4).coerceAtLeast(2)
 }
 
 tasks.register("formatCheck") {

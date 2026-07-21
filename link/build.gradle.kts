@@ -47,6 +47,7 @@ tasks.withType<Javadoc>().configureEach {
 tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 4).coerceAtLeast(2)
 }
 
 tasks.register<JavaExec>("demoCli") {
@@ -56,7 +57,6 @@ tasks.register<JavaExec>("demoCli") {
     mainClass = "org.synesis.link.transport.DemoCli"
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
-
 
 tasks.register("formatCheck") {
     group = "verification"

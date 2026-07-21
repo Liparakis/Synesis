@@ -38,6 +38,51 @@ final class WorkspaceSyncProcessTest {
     }
 
     @Test
+    void projectReconciliationAndCheckActionWorkflow() throws Exception {
+        DemoState state = prepare();
+        // Agent A creates an architectural constraint decision
+        String digest = "1".repeat(64);
+        CommandResult constraint = run(state.host, "decision", "create",
+                "--title", "CONSTRAINT: Lock protocol wire format",
+                "--rationale", "Scope: src/protocol/** - Do not modify protocol formats.",
+                "--evidence-kind", "scope",
+                "--evidence-ref", "src/protocol/**",
+                "--evidence-sha256", digest);
+        assertEquals(0, constraint.exit);
+
+        // Host runs project-wide reconciliation
+        Process host = start(state.host, "sync", "host");
+        HostCapture capture = captureInvitation(host);
+
+        // Joiner joins via project-only link (no --record option)
+        Process join = start(state.join, "sync", "join", "--project", state.projectId,
+                "--expect-host", state.hostNodeId, capture.invitation);
+        assertTrue(join.waitFor(60, TimeUnit.SECONDS));
+        assertEquals(0, join.exitValue());
+        int hostExit = finishHost(host, capture.reader);
+        assertEquals(0, hostExit);
+
+        String joinOut = output(join);
+        assertTrue(joinOut.contains("SYNC_RESULT=SUCCESS"), joinOut);
+        assertTrue(joinOut.contains("RECONCILED_COUNT="), joinOut);
+
+        // Agent B checks an action on constrained scope src/protocol/RecordMessage.java -> BLOCKED (exit 10)
+        CommandResult blockedCheck = run(state.join, "check-action",
+                "--scope", "src/protocol/RecordMessage.java",
+                "--action", "Modify wire format");
+        assertEquals(10, blockedCheck.exit);
+        assertTrue(blockedCheck.stdout.contains("ACTION_RESULT=BLOCKED"), blockedCheck.stdout);
+        assertTrue(blockedCheck.stdout.contains("CONSTRAINT_TITLE=CONSTRAINT: Lock protocol wire format"), blockedCheck.stdout);
+
+        // Agent B checks an unconstrained action -> ALLOWED (exit 0)
+        CommandResult allowedCheck = run(state.join, "check-action",
+                "--scope", "src/ui/Component.java",
+                "--action", "Update padding");
+        assertEquals(0, allowedCheck.exit);
+        assertTrue(allowedCheck.stdout.contains("ACTION_RESULT=ALLOWED"), allowedCheck.stdout);
+    }
+
+    @Test
     void wrongHostMalformedInvitationAndProjectMismatchDoNotOverwriteConfig() throws Exception {
         DemoState state = prepare();
         Path wrongJoin = state.join;
@@ -406,8 +451,9 @@ final class WorkspaceSyncProcessTest {
             throws Exception {
         Process host = start(state.host, "sync", "host");
         HostCapture capture = captureInvitation(host);
-        Process join = start(state.join, "sync", "join", "--project", projectId, "--record", recordId,
-                "--expect-host", expectedHost, capture.invitation);
+        Process join = recordId != null
+                ? start(state.join, "sync", "join", "--project", projectId, "--record", recordId, "--expect-host", expectedHost, capture.invitation)
+                : start(state.join, "sync", "join", "--project", projectId, "--expect-host", expectedHost, capture.invitation);
         assertTrue(join.waitFor(60, TimeUnit.SECONDS));
         int joinExit = join.exitValue();
         String joinOutput = output(join);
