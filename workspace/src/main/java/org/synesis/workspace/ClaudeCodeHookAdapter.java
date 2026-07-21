@@ -101,7 +101,10 @@ public final class ClaudeCodeHookAdapter {
         }
 
         if (toolName == null || !isFileEditTool(toolName)) {
-            return new Result(Outcome.UNSUPPORTED, allowJson(), "Unsupported non-file-edit tool: " + toolName);
+            String diagnostic = "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
+                    + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
+            System.err.println(diagnostic);
+            return new Result(Outcome.UNSUPPORTED, allowJson(), diagnostic);
         }
 
         List<String> paths = extractTargetPaths(json);
@@ -131,7 +134,6 @@ public final class ClaudeCodeHookAdapter {
 
         ProjectConstraint blockingConstraint = null;
         ProjectConstraint warningConstraint = null;
-        String matchedPath = null;
 
         for (String path : paths) {
             for (ProjectConstraint c : activeConstraints) {
@@ -139,11 +141,9 @@ public final class ClaudeCodeHookAdapter {
                     if (c.appliesTo(path)) {
                         if (c.effect() == ProjectConstraint.Effect.BLOCK) {
                             blockingConstraint = c;
-                            matchedPath = path;
                             break;
                         } else if (c.effect() == ProjectConstraint.Effect.WARN && warningConstraint == null) {
                             warningConstraint = c;
-                            matchedPath = path;
                         }
                     }
                 } catch (IllegalArgumentException e) {
@@ -164,7 +164,10 @@ public final class ClaudeCodeHookAdapter {
         }
 
         if (warningConstraint != null) {
-            return new Result(Outcome.WARNING, allowJson(), "Warning: " + warningConstraint.title());
+            String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE=" + warningConstraint.title()
+                    + "\nREASON=" + warningConstraint.rationale();
+            System.err.println(warningDiag);
+            return new Result(Outcome.WARNING, allowJson(), warningDiag);
         }
 
         return new Result(Outcome.ALLOWED, allowJson(), "Allowed");

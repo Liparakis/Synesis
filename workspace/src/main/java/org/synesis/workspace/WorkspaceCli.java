@@ -697,6 +697,7 @@ public final class WorkspaceCli {
             if (event.type() == OnboardingEventType.SHARE_LINK) {
                 String composed = composeWorkspaceUri(event.value(), config.projectId(), recordId, hostNode);
                 System.out.println("INVITATION=" + composed);
+                System.out.flush();
             }
         });
         try {

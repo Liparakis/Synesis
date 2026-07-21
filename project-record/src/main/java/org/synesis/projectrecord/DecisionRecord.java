@@ -12,8 +12,8 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
-import java.time.Instant;
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -23,40 +23,81 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Immutable canonical signed decision revision v1.
+ * Immutable canonical signed decision revision v2 (SDR2).
  *
- * <p>The unsigned portion is deterministic binary {@code SDR1}; the Ed25519
- * signature is appended after it. Instances are immutable and thread-safe.
- * The embedded public key makes restart inspection independently verifiable;
- * it is not secret material.
+ * <p>Supports explicit record types (DECISION vs PROJECT_CONSTRAINT) with
+ * deterministic binary serialization. Instances are immutable and thread-safe.
+ *
+ * @since 1.0
  */
 public final class DecisionRecord {
-    /**
-     * Maximum complete encoded record size.
-     */
+    /** Maximum complete encoded record size. */
     public static final int MAX_BYTES = 16_384;
-    /**
-     * Maximum UTF-8 title size.
-     */
+    /** Maximum UTF-8 title size. */
     public static final int MAX_TITLE_BYTES = 512;
-    /**
-     * Maximum UTF-8 rationale size.
-     */
+    /** Maximum UTF-8 rationale size. */
     public static final int MAX_RATIONALE_BYTES = 4_096;
-    /**
-     * Maximum evidence references per revision.
-     */
+    /** Maximum evidence references per revision. */
     public static final int MAX_EVIDENCE = 8;
 
-    private static final int MAGIC = 0x53445231;
-    private static final int VERSION = 1;
-    private static final byte[] TYPE = "decision".getBytes(StandardCharsets.UTF_8);
+    private static final int MAGIC = 0x53445232;
+    private static final int VERSION = 2;
     private static final int MAX_NODE_ID_BYTES = 128;
     private static final int MAX_KEY_BYTES = 256;
     private static final int MAX_SIGNATURE_BYTES = 128;
 
+    /** Record classification. */
+    public enum RecordType {
+        /** General architectural or project decision. */
+        DECISION,
+        /** Enforceable project constraint record. */
+        PROJECT_CONSTRAINT
+    }
+
+    /**
+     * Bounded typed constraint payload embedded in SDR2 PROJECT_CONSTRAINT records.
+     *
+     * @param effect     enforcement effect
+     * @param status     lifecycle status
+     * @param scopes     target path scopes
+     * @param supersedes list of superseded record UUIDs
+     */
+    public record ConstraintPayload(
+            ProjectConstraint.Effect effect,
+            ProjectConstraint.ConstraintStatus status,
+            List<String> scopes,
+            List<UUID> supersedes
+    ) {
+        /**
+         * Validates constraint payload fields.
+         */
+        public ConstraintPayload {
+            Objects.requireNonNull(effect, "effect");
+            Objects.requireNonNull(status, "status");
+            Objects.requireNonNull(scopes, "scopes");
+            Objects.requireNonNull(supersedes, "supersedes");
+            if (scopes.isEmpty() || scopes.size() > 16) {
+                throw new IllegalArgumentException("scopes count outside bound");
+            }
+            List<String> normScopes = new ArrayList<>();
+            for (String s : scopes) {
+                String n = ScopeMatcher.normalizePath(s);
+                if (normScopes.contains(n)) {
+                    throw new IllegalArgumentException("duplicate normalized scope: " + n);
+                }
+                normScopes.add(n);
+            }
+            scopes = List.copyOf(normScopes);
+            if (supersedes.size() > 16) {
+                throw new IllegalArgumentException("supersedes count outside bound");
+            }
+            supersedes = List.copyOf(supersedes.stream().distinct().toList());
+        }
+    }
+
     private final UUID projectId;
     private final UUID recordId;
+    private final RecordType recordType;
     private final long revision;
     private final byte[] previousDigest;
     private final String ownerNodeId;
@@ -67,18 +108,21 @@ public final class DecisionRecord {
     private final String title;
     private final String rationale;
     private final List<DecisionEvidence> evidence;
+    private final ConstraintPayload constraintPayload;
     private final byte[] publicKey;
     private final byte[] unsignedBytes;
     private final byte[] signature;
     private final byte[] encoded;
     private final byte[] digest;
 
-    private DecisionRecord(UUID projectId, UUID recordId, long revision, byte[] previousDigest,
-                           String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
-                           Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-                           byte[] publicKey, byte[] signature) {
+    private DecisionRecord(UUID projectId, UUID recordId, RecordType recordType, long revision,
+                           byte[] previousDigest, String ownerNodeId, String authorNodeId,
+                           DecisionStatus status, Instant createdAt, Instant updatedAt, String title,
+                           String rationale, List<DecisionEvidence> evidence,
+                           ConstraintPayload constraintPayload, byte[] publicKey, byte[] signature) {
         this.projectId = Objects.requireNonNull(projectId, "project ID");
         this.recordId = Objects.requireNonNull(recordId, "record ID");
+        this.recordType = Objects.requireNonNull(recordType, "record type");
         if (revision <= 0) throw new IllegalArgumentException("revision must be positive");
         this.revision = revision;
         if ((revision == 1) != (previousDigest == null)) {
@@ -91,7 +135,7 @@ public final class DecisionRecord {
         this.ownerNodeId = nodeId(ownerNodeId, "owner node ID");
         this.authorNodeId = nodeId(authorNodeId, "author node ID");
         if (!this.ownerNodeId.equals(this.authorNodeId)) {
-            throw new IllegalArgumentException("v1 author must equal owner");
+            throw new IllegalArgumentException("v2 author must equal owner");
         }
         this.status = Objects.requireNonNull(status, "status");
         this.createdAt = canonicalInstant(createdAt, "created at");
@@ -108,6 +152,16 @@ public final class DecisionRecord {
                         .thenComparing(DecisionEvidence::reference)
                         .thenComparing(DecisionEvidence::digestHex))
                 .toList();
+
+        if (recordType == RecordType.PROJECT_CONSTRAINT) {
+            this.constraintPayload = Objects.requireNonNull(constraintPayload, "constraint payload required");
+        } else {
+            if (constraintPayload != null) {
+                throw new IllegalArgumentException("non-constraint record must not carry constraint payload");
+            }
+            this.constraintPayload = null;
+        }
+
         Objects.requireNonNull(publicKey, "public key");
         if (publicKey.length == 0 || publicKey.length > MAX_KEY_BYTES) {
             throw new IllegalArgumentException("public key exceeds the supported bound");
@@ -125,43 +179,78 @@ public final class DecisionRecord {
     }
 
     /**
-     * Creates and signs revision one or a supplied successor revision.
+     * Creates and signs an ordinary decision record.
      *
      * @param projectId      stable local project namespace
      * @param recordId       stable decision identity
      * @param revision       positive revision number
      * @param previousDigest predecessor digest, or null only for revision one
      * @param ownerNodeId    immutable signer node ID
-     * @param authorNodeId   provenance author ID; must equal owner in v1
+     * @param authorNodeId   provenance author ID; must equal owner
      * @param status         decision status
      * @param createdAt      millisecond-precision UTC provenance timestamp
      * @param updatedAt      millisecond-precision UTC provenance timestamp
      * @param title          bounded readable title
      * @param rationale      bounded readable rationale
      * @param evidence       at least one bounded evidence reference
-     * @param signer         Ed25519 signer whose node ID must equal owner
+     * @param signer         Ed25519 signer
      * @return a canonical signed record
      * @throws GeneralSecurityException if signing fails
-     * @throws IllegalArgumentException if a field or bound is invalid
      */
     public static DecisionRecord create(UUID projectId, UUID recordId, long revision, byte[] previousDigest,
                                         String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
                                         Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
                                         Ed25519Signer signer) throws GeneralSecurityException {
+        return createTyped(projectId, recordId, RecordType.DECISION, revision, previousDigest, ownerNodeId,
+                authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, null, signer);
+    }
+
+    /**
+     * Creates and signs a typed project constraint record.
+     *
+     * @param projectId         stable local project namespace
+     * @param recordId          stable decision identity
+     * @param revision          positive revision number
+     * @param previousDigest    predecessor digest, or null only for revision one
+     * @param ownerNodeId       immutable signer node ID
+     * @param authorNodeId      provenance author ID; must equal owner
+     * @param status            decision status
+     * @param createdAt         millisecond-precision UTC provenance timestamp
+     * @param updatedAt         millisecond-precision UTC provenance timestamp
+     * @param title             bounded readable title
+     * @param rationale         bounded readable rationale
+     * @param evidence          at least one bounded evidence reference
+     * @param constraintPayload explicit constraint payload
+     * @param signer            Ed25519 signer
+     * @return a canonical signed project constraint record
+     * @throws GeneralSecurityException if signing fails
+     */
+    public static DecisionRecord createConstraint(UUID projectId, UUID recordId, long revision, byte[] previousDigest,
+                                                  String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
+                                                  Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
+                                                  ConstraintPayload constraintPayload, Ed25519Signer signer) throws GeneralSecurityException {
+        return createTyped(projectId, recordId, RecordType.PROJECT_CONSTRAINT, revision, previousDigest, ownerNodeId,
+                authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, constraintPayload, signer);
+    }
+
+    private static DecisionRecord createTyped(UUID projectId, UUID recordId, RecordType recordType, long revision, byte[] previousDigest,
+                                              String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
+                                              Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
+                                              ConstraintPayload constraintPayload, Ed25519Signer signer) throws GeneralSecurityException {
         Objects.requireNonNull(signer, "signer");
         if (!signer.nodeId().equals(ownerNodeId)) throw new IllegalArgumentException("signer does not match owner");
-        DecisionRecord unsigned = new DecisionRecord(projectId, recordId, revision, previousDigest,
-                ownerNodeId, authorNodeId, status, createdAt, updatedAt, title, rationale, evidence,
+        DecisionRecord unsigned = new DecisionRecord(projectId, recordId, recordType, revision, previousDigest,
+                ownerNodeId, authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, constraintPayload,
                 signer.publicKeyEncoded(), new byte[]{0});
         byte[] signature = signer.sign(unsigned.unsignedBytes);
-        return new DecisionRecord(projectId, recordId, revision, previousDigest, ownerNodeId, authorNodeId,
-                status, createdAt, updatedAt, title, rationale, evidence, signer.publicKeyEncoded(), signature);
+        return new DecisionRecord(projectId, recordId, recordType, revision, previousDigest, ownerNodeId, authorNodeId,
+                status, createdAt, updatedAt, title, rationale, evidence, constraintPayload, signer.publicKeyEncoded(), signature);
     }
 
     /**
      * Decodes a bounded record without trusting its signature.
      *
-     * @param bytes complete SDR1 bytes
+     * @param bytes complete SDR2 bytes
      * @return decoded immutable record
      * @throws IOException if framing, UTF-8, bounds, or values are invalid
      */
@@ -170,12 +259,13 @@ public final class DecisionRecord {
         if (bytes.length == 0 || bytes.length > MAX_BYTES) throw new IOException("record exceeds bound");
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
             if (input.readInt() != MAGIC || input.readUnsignedByte() != VERSION) {
-                throw new IOException("unsupported decision record version");
+                throw new IOException("unsupported decision record version: expected SDR2");
             }
             UUID projectId = readUuid(input);
             UUID recordId = readUuid(input);
-            byte[] type = input.readNBytes(TYPE.length);
-            if (!Arrays.equals(type, TYPE)) throw new IOException("unsupported record type");
+            int typeOrd = input.readUnsignedByte();
+            if (typeOrd >= RecordType.values().length) throw new IOException("unknown record type");
+            RecordType recordType = RecordType.values()[typeOrd];
             long revision = input.readLong();
             int predecessorFlag = input.readUnsignedByte();
             if (predecessorFlag > 1) throw new IOException("invalid predecessor marker");
@@ -195,49 +285,66 @@ public final class DecisionRecord {
                 evidence.add(new DecisionEvidence(readText(input, DecisionEvidence.MAX_KIND_BYTES),
                         readText(input, DecisionEvidence.MAX_REFERENCE_BYTES), readExact(input, 32, 32)));
             }
+
+            ConstraintPayload constraintPayload = null;
+            if (recordType == RecordType.PROJECT_CONSTRAINT) {
+                int effOrd = input.readUnsignedByte();
+                if (effOrd >= ProjectConstraint.Effect.values().length) throw new IOException("invalid effect");
+                int statOrd = input.readUnsignedByte();
+                if (statOrd >= ProjectConstraint.ConstraintStatus.values().length) throw new IOException("invalid status");
+                int scopeCount = input.readUnsignedByte();
+                if (scopeCount == 0 || scopeCount > 16) throw new IOException("invalid scope count");
+                List<String> scopes = new ArrayList<>(scopeCount);
+                for (int i = 0; i < scopeCount; i++) {
+                    scopes.add(readText(input, 1_024));
+                }
+                int supCount = input.readUnsignedByte();
+                if (supCount > 16) throw new IOException("invalid supersedes count");
+                List<UUID> supersedes = new ArrayList<>(supCount);
+                for (int i = 0; i < supCount; i++) {
+                    supersedes.add(readUuid(input));
+                }
+                constraintPayload = new ConstraintPayload(ProjectConstraint.Effect.values()[effOrd],
+                        ProjectConstraint.ConstraintStatus.values()[statOrd], scopes, supersedes);
+            }
+
             byte[] publicKey = readBytes(input, MAX_KEY_BYTES);
             byte[] signature = readBytes(input, MAX_SIGNATURE_BYTES);
             if (input.available() != 0) throw new IOException("trailing record bytes");
-            return new DecisionRecord(projectId, recordId, revision, previousDigest, owner, author,
+            return new DecisionRecord(projectId, recordId, recordType, revision, previousDigest, owner, author,
                     DecisionStatus.values()[status], createdAt, updatedAt, title, rationale, evidence,
-                    publicKey, signature);
+                    constraintPayload, publicKey, signature);
         } catch (EOFException | DateTimeException | IllegalArgumentException exception) {
             throw new IOException("malformed decision record", exception);
         }
     }
 
     /**
-     * Returns complete canonical SDR1 bytes, including the signature.
+     * Returns a copy of the complete encoded bytes.
      *
      * @return encoded bytes
      */
-    public byte[] encoded() {
-        return encoded.clone();
-    }
+    public byte[] encoded() { return encoded.clone(); }
 
     /**
-     * Returns the SHA-256 digest of complete canonical signed bytes.
+     * Returns a copy of the SHA-256 digest.
      *
      * @return digest bytes
      */
-    public byte[] digest() {
-        return digest.clone();
-    }
+    public byte[] digest() { return digest.clone(); }
 
     /**
-     * Returns the lowercase hexadecimal record digest.
+     * Returns the hex-encoded digest string.
      *
-     * @return digest text
+     * @return hex digest string
      */
-    public String digestHex() {
-        return HexFormat.of().formatHex(digest);
-    }
+    public String digestHex() { return HexFormat.of().formatHex(digest); }
 
     /**
-     * Verifies the embedded key, owner binding, and signature.
+     * Verifies the cryptographic signature of this record against its owner public key.
      *
-     * @return true only for an authentic record
-     * @throws GeneralSecurityException if key parsing or verification fails
+     * @return true if valid
+     * @throws GeneralSecurityException if verification fails
      */
     public boolean verify() throws GeneralSecurityException {
         return Ed25519Signer.deriveNodeId(publicKey).equals(ownerNodeId)
@@ -246,130 +353,116 @@ public final class DecisionRecord {
     }
 
     /**
-     * Returns the project namespace.
+     * Returns the project ID.
      *
      * @return project ID
      */
-    public UUID projectId() {
-        return projectId;
-    }
+    public UUID projectId() { return projectId; }
 
     /**
-     * Returns the stable decision identity.
+     * Returns the record ID.
      *
      * @return record ID
      */
-    public UUID recordId() {
-        return recordId;
-    }
+    public UUID recordId() { return recordId; }
 
     /**
-     * Returns the positive immutable revision number.
+     * Returns the record type.
      *
-     * @return revision
+     * @return record type
      */
-    public long revision() {
-        return revision;
-    }
+    public RecordType recordType() { return recordType; }
 
     /**
-     * Returns the predecessor digest, or null for revision one.
+     * Returns the revision number.
      *
-     * @return predecessor digest
+     * @return revision number
      */
-    public byte[] previousDigest() {
-        return previousDigest == null ? null : previousDigest.clone();
-    }
+    public long revision() { return revision; }
 
     /**
-     * Returns the immutable owner node ID.
+     * Returns a copy of the previous revision digest.
+     *
+     * @return previous digest bytes or null
+     */
+    public byte[] previousDigest() { return previousDigest == null ? null : previousDigest.clone(); }
+
+    /**
+     * Returns the owner node ID.
      *
      * @return owner node ID
      */
-    public String ownerNodeId() {
-        return ownerNodeId;
-    }
+    public String ownerNodeId() { return ownerNodeId; }
 
     /**
-     * Returns the provenance author node ID.
+     * Returns the author node ID.
      *
      * @return author node ID
      */
-    public String authorNodeId() {
-        return authorNodeId;
-    }
+    public String authorNodeId() { return authorNodeId; }
 
     /**
      * Returns the decision status.
      *
      * @return status
      */
-    public DecisionStatus status() {
-        return status;
-    }
+    public DecisionStatus status() { return status; }
 
     /**
-     * Returns the creation timestamp.
+     * Returns the created instant.
      *
-     * @return creation instant
+     * @return created instant
      */
-    public Instant createdAt() {
-        return createdAt;
-    }
+    public Instant createdAt() { return createdAt; }
 
     /**
-     * Returns the update timestamp.
+     * Returns the updated instant.
      *
-     * @return update instant
+     * @return updated instant
      */
-    public Instant updatedAt() {
-        return updatedAt;
-    }
+    public Instant updatedAt() { return updatedAt; }
 
     /**
-     * Returns the readable title.
+     * Returns the title.
      *
      * @return title
      */
-    public String title() {
-        return title;
-    }
+    public String title() { return title; }
 
     /**
-     * Returns the readable rationale.
+     * Returns the rationale.
      *
      * @return rationale
      */
-    public String rationale() {
-        return rationale;
-    }
+    public String rationale() { return rationale; }
 
     /**
-     * Returns the immutable evidence list.
+     * Returns the evidence list.
      *
      * @return evidence
      */
-    public List<DecisionEvidence> evidence() {
-        return evidence;
-    }
+    public List<DecisionEvidence> evidence() { return evidence; }
 
     /**
-     * Returns a copy of the embedded X.509 public key.
+     * Returns the constraint payload if record type is PROJECT_CONSTRAINT, or null.
      *
-     * @return public-key bytes
+     * @return constraint payload or null
      */
-    public byte[] publicKeyEncoded() {
-        return publicKey.clone();
-    }
+    public ConstraintPayload constraintPayload() { return constraintPayload; }
 
     /**
-     * Returns a copy of the Ed25519 signature.
+     * Returns a copy of the owner public key bytes.
+     *
+     * @return public key bytes
+     */
+    public byte[] publicKeyEncoded() { return publicKey.clone(); }
+
+    /**
+     * Returns a copy of the Ed25519 signature bytes.
      *
      * @return signature bytes
      */
-    public byte[] signature() {
-        return signature.clone();
-    }
+    public byte[] signature() { return signature.clone(); }
 
     private byte[] encodeUnsigned() {
         try {
@@ -379,7 +472,7 @@ public final class DecisionRecord {
                 output.writeByte(VERSION);
                 writeUuid(output, projectId);
                 writeUuid(output, recordId);
-                output.write(TYPE);
+                output.writeByte(recordType.ordinal());
                 output.writeLong(revision);
                 output.writeByte(previousDigest == null ? 0 : 1);
                 if (previousDigest != null) output.write(previousDigest);
@@ -395,6 +488,18 @@ public final class DecisionRecord {
                     writeText(output, item.kind());
                     writeText(output, item.reference());
                     output.write(item.digest());
+                }
+                if (recordType == RecordType.PROJECT_CONSTRAINT) {
+                    output.writeByte(constraintPayload.effect().ordinal());
+                    output.writeByte(constraintPayload.status().ordinal());
+                    output.writeByte(constraintPayload.scopes().size());
+                    for (String s : constraintPayload.scopes()) {
+                        writeText(output, s);
+                    }
+                    output.writeByte(constraintPayload.supersedes().size());
+                    for (UUID u : constraintPayload.supersedes()) {
+                        writeUuid(output, u);
+                    }
                 }
                 writeBytes(output, publicKey);
             }

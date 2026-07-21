@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,9 +27,10 @@ final class ProjectConstraintTest {
                 "Lock protocol wire format", "Protocol formats frozen.", signer);
 
         assertTrue(record.verify());
+        assertEquals(DecisionRecord.RecordType.PROJECT_CONSTRAINT, record.recordType());
+
         ProjectConstraint constraint = ProjectConstraint.fromRecord(record);
         assertNotNull(constraint);
-        assertEquals(ProjectConstraint.Source.TYPED, constraint.source());
         assertEquals(ProjectConstraint.Effect.BLOCK, constraint.effect());
         assertEquals(ProjectConstraint.ConstraintStatus.ACTIVE, constraint.status());
         assertEquals(List.of("src/protocol/**"), constraint.scopes());
@@ -37,34 +40,27 @@ final class ProjectConstraintTest {
     }
 
     @Test
-    void legacyInferredConstraintFallback() throws Exception {
+    void ordinaryDecisionWithConstraintTitleIsNotTreatedAsConstraint() throws Exception {
         Ed25519Signer signer = Ed25519Signer.generate();
-        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         byte[] digest = new byte[32];
 
-        DecisionRecord legacyRecord = DecisionRecord.create(UUID.randomUUID(), UUID.randomUUID(), 1, null,
+        // Decision record with title starting with "CONSTRAINT:" but recordType = DECISION
+        DecisionRecord decisionRecord = DecisionRecord.create(UUID.randomUUID(), UUID.randomUUID(), 1, null,
                 signer.nodeId(), signer.nodeId(), DecisionStatus.PROPOSED, now, now,
-                "CONSTRAINT: Lock legacy path", "Legacy rationale",
-                List.of(new DecisionEvidence("text", "src/legacy/**", digest)), signer);
+                "CONSTRAINT: Do not modify protocol", "Ordinary decision rationale",
+                List.of(new DecisionEvidence("text", "src/protocol/**", digest)), signer);
 
-        ProjectConstraint constraint = ProjectConstraint.fromRecord(legacyRecord);
-        assertNotNull(constraint);
-        assertEquals(ProjectConstraint.Source.LEGACY_INFERRED, constraint.source());
-        assertEquals(ProjectConstraint.Effect.BLOCK, constraint.effect());
-        assertTrue(constraint.appliesTo("src/legacy/OldFile.java"));
+        assertEquals(DecisionRecord.RecordType.DECISION, decisionRecord.recordType());
+        // Must return null — non-constraint records are never constraints
+        assertNull(ProjectConstraint.fromRecord(decisionRecord));
     }
 
     @Test
-    void nonConstraintRecordReturnsNull() throws Exception {
-        Ed25519Signer signer = Ed25519Signer.generate();
-        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
-        byte[] digest = new byte[32];
-
-        DecisionRecord record = DecisionRecord.create(UUID.randomUUID(), UUID.randomUUID(), 1, null,
-                signer.nodeId(), signer.nodeId(), DecisionStatus.ACCEPTED, now, now,
-                "Standard Decision", "No constraint info",
-                List.of(new DecisionEvidence("text", "ref", digest)), signer);
-
-        assertNull(ProjectConstraint.fromRecord(record));
+    void rejectsSelfSupersession() {
+        UUID id = UUID.randomUUID();
+        assertThrows(IllegalArgumentException.class, () ->
+                new ProjectConstraint(id, "Title", "Rat", ProjectConstraint.ConstraintStatus.ACTIVE,
+                        ProjectConstraint.Effect.BLOCK, List.of("src/**"), List.of(id)));
     }
 }

@@ -444,6 +444,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: ADR-0016, current-state.md, and checkpoint CP-0092.
 - Evidence: PASS — `ScopeMatcherTest`, `ProjectConstraintTest`, `ClaudeCodeHookAdapterTest`, `WorkspaceSyncProcessTest`, `gradlew.bat clean check --dependency-verification=strict`.
 
+## SYN-007
+
+- ID: SYN-007
+- Priority: P0
+- Title: Clean Typed Constraint Model and Baseline-vs-Synesis Validation
+- Status: DONE
+- Purpose: Remove unreleased legacy constraint inference, introduce SDR2 canonical record versioning with explicit typed constraint payloads, make adapter warnings observable, and build an automated baseline vs. Synesis experiment.
+- Dependencies: SYN-006 DONE
+- Acceptance criteria: Remove LEGACY_INFERRED and title-prefix fallback; evolve DecisionRecord to SDR2 (0x53445232); implement explicit RecordType and ConstraintPayload; enhance ClaudeCodeHookAdapter with WARNING and UNSUPPORTED diagnostics; create automated experiment script scripts/run-synesis-guardrail-experiment.ps1 and docs/validation/baseline-vs-synesis-experiment.md.
+- Required tests: DecisionRecordTest, ProjectConstraintTest, ClaudeCodeHookAdapterTest, WorkspaceSyncProcessTest, run-synesis-guardrail-experiment.ps1.
+- Required documentation: ADR-0017, baseline-vs-synesis-experiment.md, current-state.md, and checkpoint CP-0093.
+- Evidence: PASS — `DecisionRecordTest`, `ProjectConstraintTest`, `ClaudeCodeHookAdapterTest`, `WorkspaceSyncProcessTest`, `run-synesis-guardrail-experiment.ps1`, `gradlew.bat clean check --dependency-verification=strict`.
+
+
 
 ## Deferred capability register
 

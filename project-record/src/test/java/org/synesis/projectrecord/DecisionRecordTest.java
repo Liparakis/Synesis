@@ -61,7 +61,7 @@ final class DecisionRecordTest {
     void malformedUtf8AndUnknownStatusAreRejected() throws Exception {
         Ed25519Signer signer = Ed25519Signer.generate();
         byte[] bytes = create(signer).encoded();
-        int ownerOffset = 4 + 1 + 16 + 16 + 8 + 8 + 1 + 2;
+        int ownerOffset = 4 + 1 + 16 + 16 + 1 + 8 + 1 + 2;
         bytes[ownerOffset] = (byte) 0xC3;
         bytes[ownerOffset + 1] = (byte) 0x73;
         assertThrows(java.io.IOException.class, () -> DecisionRecord.decode(bytes));
