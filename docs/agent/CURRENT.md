@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0081
-- Latest checkpoint: CP-0081
+- Latest checkpoint: CP-0082
 - Responsible agent: fresh coding agent
 - Related decisions: none
 
@@ -20,11 +20,16 @@ SYN-PRODUCT-REVIEW is DONE at CP-0080. Design is complete in `docs/agent/SYN_004
 
 ## Work completed
 
-None yet (this session is planning-only).
+- Parameterized invitation URI generation in `sync host`.
+- Convenience query parameter extraction and host Node ID verification in `sync join`.
+- Trust bootstrap require fingerprint confirmation (`--expect-host`) for unconfigured projects.
+- Contextual `HINT=` outputs on stdout on error mapping all CLI failures.
+- Integration tests in `WorkspaceSyncProcessTest.java` verifying guided flows, tampering, replay, and status codes.
+- Removed trailing whitespaces and passed formatting checks.
 
 ## Verification
 
-Resume, doctor, deferred register, and fixtures validators pass.
+All automated unit and integration tests compiled, run, and passed successfully with strict dependency verification.
 
 ## Current failures
 
@@ -32,4 +37,4 @@ None.
 
 ## Immediate next action
 
-Implement connection link parsing and validation unit tests.
+Wait for the operator's next instructions.

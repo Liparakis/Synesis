@@ -75,10 +75,15 @@ public final class WorkspaceCli {
             return execute(parsed);
         } catch (WorkspaceFailure failure) {
             System.err.println("ERROR=" + failure.code);
+            String hint = getHint(failure.code);
+            if (hint != null) {
+                System.out.println("HINT=" + hint);
+            }
             return 10;
         } catch (Exception failure) {
             System.err.println("ERROR=INTERNAL");
-            return 10;
+            System.out.println("HINT=Unexpected internal failure.");
+            return 70;
         }
     }
 
@@ -392,30 +397,156 @@ public final class WorkspaceCli {
             throw failure("USAGE");
         }
         if ("host".equals(parsed.subcommand)) {
-            if (!parsed.options.isEmpty() || parsed.positional != null) throw failure("USAGE");
-            return host(parsed.profile);
+            UUID projectId = null;
+            UUID recordId = null;
+            if (parsed.options.containsKey("--project")) {
+                projectId = parseUuid(parsed.options.get("--project"), "PROJECT_INVALID");
+            }
+            if (parsed.options.containsKey("--record")) {
+                recordId = parseUuid(parsed.options.get("--record"), "RECORD_INVALID");
+            }
+            for (String key : parsed.options.keySet()) {
+                if (!"--project".equals(key) && !"--record".equals(key)) throw failure("USAGE");
+            }
+            if (parsed.positional != null) throw failure("USAGE");
+            return host(parsed.profile, projectId, recordId);
         }
-        if (parsed.options.size() != 3 || parsed.positional == null
-                || !parsed.options.containsKey("--project") || !parsed.options.containsKey("--record")
-                || !parsed.options.containsKey("--expect-host")) throw failure("USAGE");
-        UUID projectId = parseUuid(parsed.options.get("--project"), "PROJECT_INVALID");
-        UUID recordId = parseUuid(parsed.options.get("--record"), "RECORD_INVALID");
-        String expectedHost = bounded(parsed.options.get("--expect-host"), 128, "peer");
-        if (!expectedHost.matches("sl1-[0-9a-f]{64}")) throw failure("AUTH_FAILED");
-        String invitation = bounded(parsed.positional, org.synesis.link.protocol.SessionInvitation.MAX_LINK_CHARS,
-                "invitation");
-        return join(parsed.profile, projectId, recordId, expectedHost, invitation);
+
+        // join
+        if (parsed.positional == null) throw failure("USAGE");
+
+        // 1. Parse URI and query params
+        String link = parsed.positional;
+        java.net.URI uri;
+        try {
+            uri = new java.net.URI(link);
+        } catch (Exception e) {
+            throw failure("USAGE");
+        }
+
+        Map<String, String> queryParams = parseQueryParams(uri.getQuery());
+
+        // Strip query parameters to get clean link
+        String cleanInvitationLink;
+        try {
+            java.net.URI cleanUri = new java.net.URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment());
+            cleanInvitationLink = cleanUri.toString();
+        } catch (Exception e) {
+            throw failure("USAGE");
+        }
+
+        // 2. Decode the invitation from the clean link
+        org.synesis.link.protocol.SessionInvitation invitation;
+        try {
+            invitation = org.synesis.link.protocol.SessionInvitation.fromShareLink(cleanInvitationLink);
+        } catch (Exception e) {
+            throw failure("INVITE_INVALID");
+        }
+
+        // 3. Derive host identity from signed invitation
+        org.synesis.link.candidate.CandidateDescriptor hostDesc;
+        try {
+            hostDesc = org.synesis.link.candidate.CandidateDescriptor.decode(invitation.descriptorEncoded());
+        } catch (Exception e) {
+            throw failure("INVITE_INVALID");
+        }
+        String derivedHostNodeId = hostDesc.nodeId();
+
+        // 4. Validate host= in URI if present
+        String hostFromUri = queryParams.get("host");
+        if (hostFromUri != null && !hostFromUri.equals(derivedHostNodeId)) {
+            throw failure("AUTH_FAILED");
+        }
+
+        // 5. Determine project and record ID from CLI options or URI query parameters
+        String projectStr = parsed.options.containsKey("--project")
+            ? parsed.options.get("--project")
+            : queryParams.get("project");
+        if (projectStr == null) throw failure("USAGE");
+        UUID projectId = parseUuid(projectStr, "PROJECT_INVALID");
+
+        String recordStr = parsed.options.containsKey("--record")
+            ? parsed.options.get("--record")
+            : queryParams.get("record");
+        if (recordStr == null) throw failure("USAGE");
+        UUID recordId = parseUuid(recordStr, "RECORD_INVALID");
+
+        // Check for unknown options on join
+        for (String key : parsed.options.keySet()) {
+            if (!"--project".equals(key) && !"--record".equals(key) && !"--expect-host".equals(key)) {
+                throw failure("USAGE");
+            }
+        }
+
+        // 6. Check expect-host option
+        String expectHostCli = parsed.options.get("--expect-host");
+        if (expectHostCli != null) {
+            if (!expectHostCli.matches("sl1-[0-9a-f]{64}")) throw failure("AUTH_FAILED");
+            if (!expectHostCli.equals(derivedHostNodeId)) {
+                throw failure("AUTH_FAILED");
+            }
+        }
+
+        // 7. Resolve project config & trust anchor
+        ProjectConfig config = null;
+        Path configPath = parsed.profile.resolve(PROJECT_CONFIG);
+        if (Files.exists(configPath)) {
+            try {
+                config = ProjectConfig.load(configPath);
+            } catch (Exception e) {
+                throw failure("PROJECT_INVALID");
+            }
+        }
+
+        if (config != null) {
+            // Project config exists. Validate project ID!
+            if (!config.projectId().equals(projectId)) {
+                throw failure("PROJECT_MISMATCH");
+            }
+            // Validate peer Node ID!
+            String configuredPeer = config.peerNodeIds().iterator().next();
+            if (!configuredPeer.equals(derivedHostNodeId)) {
+                throw failure("PEER_MISMATCH");
+            }
+        } else {
+            // Project config does NOT exist.
+            // We require explicit fingerprint confirmation via --expect-host CLI option!
+            if (expectHostCli == null) {
+                throw failure("PROJECT_NOT_CONFIGURED");
+            }
+            // Create project config with the confirmed host
+            config = existingOrCreateConfig(parsed.profile, projectId, derivedHostNodeId);
+        }
+
+        // 8. Run sync
+        return join(parsed.profile, projectId, recordId, derivedHostNodeId, cleanInvitationLink);
     }
 
-    private static int host(Path profile) throws Exception {
+    private static int host(Path profile, UUID projectId, UUID recordId) throws Exception {
         ProjectConfig config = loadConfig(profile);
         if (config.peerNodeIds().size() != 1) throw failure("PROJECT_INVALID");
         String expectedPeer = config.peerNodeIds().iterator().next();
+
+        if (projectId != null && !projectId.equals(config.projectId())) {
+            throw failure("PROJECT_MISMATCH");
+        }
+
         DecisionStore store = new DecisionStore(profile.resolve("records"), config.projectId());
+
+        if (recordId != null) {
+            try {
+                validateSingleRecord(profile, config.projectId(), recordId);
+            } catch (Exception e) {
+                throw failure("RECORD_NOT_FOUND");
+            }
+        }
+
         ProjectRecordSync endpoint = new ProjectRecordSync(config, store);
+        String hostNode = new IdentityBootstrap(profile.resolve("link")).loadOrCreate().identity().nodeId();
         Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> {
             if (event.type() == OnboardingEventType.SHARE_LINK) {
-                System.out.println("INVITATION=" + event.value());
+                String composed = composeWorkspaceUri(event.value(), config.projectId(), recordId, hostNode);
+                System.out.println("INVITATION=" + composed);
             }
         });
         try {
@@ -657,5 +788,57 @@ public final class WorkspaceCli {
             super(code);
             this.code = code;
         }
+    }
+
+    private static String composeWorkspaceUri(String inviteLink, UUID projectId, UUID recordId, String hostNodeId) {
+        StringBuilder sb = new StringBuilder(inviteLink);
+        boolean first = true;
+        if (projectId != null) {
+            sb.append("?project=").append(projectId);
+            first = false;
+        }
+        if (recordId != null) {
+            sb.append(first ? "?" : "&").append("record=").append(recordId);
+            first = false;
+        }
+        if (hostNodeId != null) {
+            sb.append(first ? "?" : "&").append("host=").append(hostNodeId);
+        }
+        return sb.toString();
+    }
+
+    private static Map<String, String> parseQueryParams(String query) {
+        Map<String, String> params = new HashMap<>();
+        if (query == null || query.isEmpty()) {
+            return params;
+        }
+        for (String pair : query.split("&")) {
+            int idx = pair.indexOf("=");
+            if (idx > 0) {
+                String key = pair.substring(0, idx);
+                String value = pair.substring(idx + 1);
+                params.put(key, value);
+            }
+        }
+        return params;
+    }
+
+    private static String getHint(String code) {
+        return switch (code) {
+            case "PROFILE_INVALID" -> "Specify a valid absolute path to a profile directory.";
+            case "IDENTITY_FAILED" -> "Local identity files are missing or could not be loaded.";
+            case "PROJECT_INVALID", "PROJECT_NOT_CONFIGURED" -> "Project is not configured. Run 'project create --peer <host-node-id>' first.";
+            case "PROJECT_MISMATCH" -> "Project ID or configured peer Node ID does not match the workspace configuration.";
+            case "PEER_MISMATCH" -> "The host node identity does not match the configured peer for this project.";
+            case "RECORD_INVALID" -> "The decision record format or inputs are invalid.";
+            case "RECORD_NOT_FOUND" -> "The requested record was not found or is missing.";
+            case "AUTH_FAILED" -> "The remote host public identity did not match the expected pinned host Node ID.";
+            case "TRANSPORT_FAILED" -> "The bounded session connection failed. Verify the network and that the host is running.";
+            case "INVITE_INVALID" -> "The connection link is invalid, expired, or malformed.";
+            case "LOCAL_STATE_INVALID" -> "The local storage contains corrupt or inconsistent record files.";
+            case "SCAN_LIMIT" -> "The directory scan exceeds the maximum allowed files limit.";
+            case "USAGE" -> "Check command syntax and options using --help.";
+            default -> null;
+        };
     }
 }

@@ -265,6 +265,117 @@ final class WorkspaceSyncProcessTest {
         assertEquals(0, inspectXStaleStore.exit);
     }
 
+    @Test
+    void guidedSyncFlowAndURIValidation() throws Exception {
+        Path root = Files.createTempDirectory("workspace-guided-");
+        Path profileA = root.resolve("a");
+        Path profileB = root.resolve("b");
+
+        String bNodeId = value(run(profileB, "identity", "show").stdout, "NODE_ID");
+
+        // 1. Project create on A
+        CommandResult project = run(profileA, "project", "create", "--peer", bNodeId);
+        assertEquals(0, project.exit);
+        String projectId = value(project.stdout, "PROJECT_ID");
+        String aNodeId = value(project.stdout, "NODE_ID");
+
+        // 2. Decision create on A
+        String digest = "0".repeat(64);
+        CommandResult decision = run(profileA, "decision", "create", "--title", "Guided truth",
+                "--rationale", "Guided rationale", "--evidence-kind", "text", "--evidence-ref", "ref",
+                "--evidence-sha256", digest);
+        assertEquals(0, decision.exit);
+        String recordId = value(decision.stdout, "RECORD_ID");
+
+        // 3. Get a temporary invitation link for local validation checks
+        Process hostTemp = start(profileA, "sync", "host", "--project", projectId, "--record", recordId);
+        HostCapture captureTemp = captureInvitation(hostTemp);
+        String inviteLink = captureTemp.invitation;
+        hostTemp.destroyForcibly();
+
+        // Check that inviteLink contains project, record, and host parameters!
+        assertTrue(inviteLink.contains("project=" + projectId));
+        assertTrue(inviteLink.contains("record=" + recordId));
+        assertTrue(inviteLink.contains("host=" + aNodeId));
+
+        // Let's test malformed URI encoding!
+        CommandResult malformedLink = run(profileB, "sync", "join", "synesis://join/SYN1-invalidbase64bytes");
+        assertEquals(10, malformedLink.exit);
+        assertTrue(malformedLink.stdout.contains("ERROR=INVITE_INVALID"));
+        assertTrue(malformedLink.stdout.contains("HINT="));
+
+        // Let's test host mismatch query parameter mismatch!
+        // We tamper with the host parameter in the URI!
+        String tamperedHostLink = inviteLink.replace("host=" + aNodeId, "host=sl1-0000000000000000000000000000000000000000000000000000000000000000");
+        CommandResult tamperedHostResult = run(profileB, "sync", "join", tamperedHostLink);
+        assertEquals(10, tamperedHostResult.exit);
+        assertTrue(tamperedHostResult.stdout.contains("ERROR=AUTH_FAILED"));
+        assertTrue(tamperedHostResult.stdout.contains("HINT="));
+
+        // Let's test project configuration missing on B (unconfigured project bootstrap rejection)
+        // If B runs join but doesn't pass --expect-host, it must reject before connecting!
+        CommandResult unconfiguredJoin = run(profileB, "sync", "join", inviteLink);
+        assertEquals(10, unconfiguredJoin.exit);
+        assertTrue(unconfiguredJoin.stdout.contains("ERROR=PROJECT_NOT_CONFIGURED"));
+        assertTrue(unconfiguredJoin.stdout.contains("HINT="));
+
+        // Let's test project/record substitution tampering!
+        // We start a fresh host process for this connection-based test
+        Process hostProcProj = start(profileA, "sync", "host", "--project", projectId, "--record", recordId);
+        HostCapture captureProj = captureInvitation(hostProcProj);
+        String wrongProject = UUID.randomUUID().toString();
+        String tamperedProjLink = captureProj.invitation.replace("project=" + projectId, "project=" + wrongProject);
+
+        CommandResult tamperedProjResult = run(profileB, "sync", "join", "--expect-host", aNodeId, tamperedProjLink);
+        assertEquals(10, tamperedProjResult.exit);
+        assertTrue(tamperedProjResult.stdout.contains("ERROR=PROJECT_MISMATCH") || tamperedProjResult.stdout.contains("ERROR=SYNC_FAILED") || tamperedProjResult.stdout.contains("ERROR=REJECTED"));
+
+        // Clean up project.conf created on B by the tampered project sync attempt
+        Files.deleteIfExists(profileB.resolve("project.conf"));
+        finishHost(hostProcProj, captureProj.reader);
+
+        // If B passes the correct --expect-host flag, B can bootstrap the project and complete sync!
+        Process hostProcApplied = start(profileA, "sync", "host", "--project", projectId, "--record", recordId);
+        HostCapture captureApplied = captureInvitation(hostProcApplied);
+
+        Process joinProc = start(profileB, "sync", "join", "--expect-host", aNodeId, captureApplied.invitation);
+        assertTrue(joinProc.waitFor(30, TimeUnit.SECONDS));
+        int joinExit = joinProc.exitValue();
+        String joinOutput = output(joinProc);
+        if (joinExit != 0) {
+            System.out.println("JOINPROC EXIT: " + joinExit);
+            System.out.println("JOINPROC OUTPUT:\n" + joinOutput);
+        }
+        assertEquals(0, joinExit);
+        assertTrue(joinOutput.contains("SYNC_RESULT=APPLIED"));
+
+        int hostExit = finishHost(hostProcApplied, captureApplied.reader);
+        assertEquals(0, hostExit);
+
+        // Let's test replay/consumed invitation!
+        // We reuse the consumed invitation link. Host A must start again.
+        Process hostReplay = start(profileA, "sync", "host", "--project", projectId, "--record", recordId);
+        // But joiner B tries to join using the old inviteLink!
+        Process joinReplay = start(profileB, "sync", "join", captureApplied.invitation);
+        assertTrue(joinReplay.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(10, joinReplay.exitValue());
+
+        hostReplay.destroyForcibly();
+
+        // Let's test successful DUPLICATE sync!
+        // Start host again
+        Process hostDup = start(profileA, "sync", "host", "--project", projectId, "--record", recordId);
+        HostCapture captureDup = captureInvitation(hostDup);
+        // Join again - since project is now configured on B, B doesn't need --expect-host!
+        Process joinDup = start(profileB, "sync", "join", captureDup.invitation);
+        assertTrue(joinDup.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(0, joinDup.exitValue());
+        String joinDupOutput = output(joinDup);
+        assertTrue(joinDupOutput.contains("SYNC_RESULT=DUPLICATE"));
+
+        finishHost(hostDup, captureDup.reader);
+    }
+
     private static void writeHeadFile(Path path, long revision, byte[] digest) throws IOException {
         java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
         try (java.io.DataOutputStream output = new java.io.DataOutputStream(bytes)) {
@@ -300,6 +411,9 @@ final class WorkspaceSyncProcessTest {
         assertTrue(join.waitFor(60, TimeUnit.SECONDS));
         int joinExit = join.exitValue();
         String joinOutput = output(join);
+        if (joinExit != 0) {
+            System.out.println("JOIN exited with " + joinExit + "\nOutput:\n" + joinOutput);
+        }
         int hostExit = finishHost(host, capture.reader);
         return new SyncRun(joinExit, hostExit, joinOutput);
     }
@@ -311,7 +425,13 @@ final class WorkspaceSyncProcessTest {
         command.add(launcher().toString());
         command.add("--profile");
         command.add(profile.toString());
-        command.addAll(List.of(arguments));
+        for (String arg : arguments) {
+            if (arg != null && arg.contains("&") && !(arg.startsWith("\"") && arg.endsWith("\""))) {
+                command.add("\"" + arg + "\"");
+            } else {
+                command.add(arg);
+            }
+        }
         return new ProcessBuilder(command).redirectErrorStream(true).start();
     }
 
@@ -325,16 +445,20 @@ final class WorkspaceSyncProcessTest {
     private static CommandResult run(Path profile, String... arguments) throws Exception {
         Process process = start(profile, arguments);
         assertTrue(process.waitFor(30, TimeUnit.SECONDS));
-        return new CommandResult(process.exitValue(), output(process));
+        int exit = process.exitValue();
+        String out = output(process);
+        return new CommandResult(exit, out);
     }
 
     private static HostCapture captureInvitation(Process host) throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(host.getInputStream(), StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder();
         String line;
         while ((line = reader.readLine()) != null) {
+            sb.append(line).append("\n");
             if (line.startsWith("INVITATION=")) return new HostCapture(line.substring("INVITATION=".length()), reader);
         }
-        throw new AssertionError("host emitted no invitation: " + output(host));
+        throw new AssertionError("host emitted no invitation: " + sb.toString());
     }
 
     private static int finishHost(Process host, BufferedReader reader) throws Exception {

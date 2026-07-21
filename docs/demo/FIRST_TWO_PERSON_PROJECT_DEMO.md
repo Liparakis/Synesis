@@ -70,7 +70,38 @@ SIGNATURE_VALID=true
 
 ### 5. Host and Sync
 
-Operator A starts the sync host, allowing Operator B to connect and request the record:
+#### Option A: Guided Flow (SYN-004)
+
+Operator A starts the sync host with project and record parameters to generate a convenience bundle:
+
+```powershell
+& $ws --profile $profileA sync host --project <PROJECT_UUID> --record <RECORD_UUID>
+```
+
+Output:
+```text
+INVITATION=synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&record=<RECORD_UUID>&host=sl1-<A_NODE_ID_HEX>
+```
+
+Operator B can now onboard and sync the record with a single command by passing the parameterized invitation link and confirming the host fingerprint:
+
+```powershell
+& $ws --profile $profileB sync join `
+  --expect-host sl1-<A_NODE_ID_HEX> `
+  'synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&record=<RECORD_UUID>&host=sl1-<A_NODE_ID_HEX>'
+```
+
+Output:
+```text
+AUTHENTICATED_REMOTE=sl1-<A_NODE_ID_HEX>
+PROJECT_ID=<PROJECT_UUID>
+RECORD_ID=<RECORD_UUID>
+SYNC_RESULT=APPLIED
+```
+
+#### Option B: Manual Flow (SYN-003)
+
+Alternatively, Operator A starts the sync host without specifying a record, generating the default invitation link:
 
 ```powershell
 & $ws --profile $profileA sync host
@@ -78,17 +109,17 @@ Operator A starts the sync host, allowing Operator B to connect and request the 
 
 Output:
 ```text
-INVITATION=synesis://join/<signed-invitation-link>
+INVITATION=synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&host=sl1-<A_NODE_ID_HEX>
 ```
 
-Operator B joins the host and syncs the record by passing the invitation link, project ID, record ID, and host Node ID:
+Operator B joins the host and syncs the record by passing the invitation link, project ID, record ID, and expected host Node ID:
 
 ```powershell
 & $ws --profile $profileB sync join `
   --project <PROJECT_UUID> `
   --record <RECORD_UUID> `
   --expect-host sl1-<A_NODE_ID_HEX> `
-  'synesis://join/<signed-invitation-link>'
+  'synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&host=sl1-<A_NODE_ID_HEX>'
 ```
 
 Output:
