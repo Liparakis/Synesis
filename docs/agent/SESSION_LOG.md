@@ -758,3 +758,12 @@ Append-only operational history.
 - Workflow YAML parses successfully. GitHub rerun remains required for native
   Windows ARM64 confirmation.
 - Checkpoint: CP-0122.
+
+## 2026-07-22 — SYN-010A Windows Gradle version-argument repair
+
+- GitHub Windows bundle packaging parsed the unquoted
+  `-PsynesisVersion=0.1.0-dev.10` suffix as task `.1.0-dev.10`.
+- Quoting the complete version property in both Windows and Unix archive
+  commands fixes the Gradle argument boundary. The exact Windows x64 command
+  passes locally with `bundleSmokeTest` and `platformArchive`.
+- Checkpoint: CP-0123.

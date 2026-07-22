@@ -6,7 +6,7 @@ Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
   DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
-  SYN-010A is the only ACTIVE task at CP-0122;
+  SYN-010A is the only ACTIVE task at CP-0123;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first

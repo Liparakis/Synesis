@@ -104,6 +104,9 @@ tracked as `100755`. Git Bash executed `./gradlew check
   25, which supplies the missing Windows ARM64 JDK; checkout, setup-go, and
   artifact actions were moved to Node 24-compatible majors. Workflow YAML
   parsing passes. The affected GitHub run must be rerun for external evidence.
+- Windows Gradle argument repair: the full `-PsynesisVersion=...` property is
+  quoted in both archive commands. The exact `windows-x64` command now passes
+  locally; the affected GitHub matrix must be rerun for external evidence.
 
 ## Publication decision
 
