@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0110
-- Latest checkpoint: CP-0111
+- Latest checkpoint: CP-0112
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
@@ -130,12 +130,14 @@ are also deferred; no public release is claimed.
   developer preview; no open-source or production claim was added.
 - Equivalent current-tree/reachable-history secret scan, focused path scan,
   repository metadata review, workflow review, and repository validators pass.
-- Publication remains blocked: `PUBLICATION_STATUS=BLOCKED`;
-  `REASON=LICENSE_DECISION_REQUIRED`.
+- The owner selected GNU AGPL v3.0 only (`AGPL-3.0-only`); the unfinished-license
+  gate is cleared. Publication remains unperformed pending explicit push
+  authorization and review of author metadata and the remote target.
 - Secondary review remains required for personal commit metadata and the
   canonical remote target. No public push or history rewrite was performed.
 
 ## Immediate next action
 
-After an intentional license decision, replace the unfinished `LICENSE`, rerun
-the publication audit, and re-review the target repository before any push.
+With the license decision recorded, rerun the publication audit and obtain
+explicit push authorization only after reviewing author metadata and the target
+repository.

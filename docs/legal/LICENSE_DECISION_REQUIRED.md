@@ -1,17 +1,11 @@
-# License decision required
+# License decision recorded
 
-Synesis may be publicly visible on GitHub without granting reuse rights, but no
-finalized license exists. The tracked `LICENSE` file is an explicit unfinished
-placeholder.
+The owner selected the GNU Affero General Public License v3.0 only
+(SPDX: `AGPL-3.0-only`). The complete license text is in [`LICENSE`](../../LICENSE).
 
-Without a license, normal copyright restrictions remain. Viewing the source
-does not grant permission to reuse, modify, redistribute, commercially embed,
-or contribute to the project.
+Commercial licenses are available for organizations that want to embed,
+modify, or distribute Synesis without AGPL obligations.
 
-Selecting a license affects commercial embedding, contribution terms,
-redistribution, dependency compatibility, and future release strategy. This
-task does not select Apache, MIT, GPL, AGPL, BSL, or any other license.
-
-Public publication is blocked until the owner records an intentional license
-decision and replaces the placeholder `LICENSE` with complete, authorized
-license text.
+This decision clears the unfinished-license publication gate. It does not by
+itself authorize a public push, resolve existing author metadata review, or
+confirm the target repository.

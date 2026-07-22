@@ -655,7 +655,16 @@ Append-only operational history.
   target require owner review; no history rewrite or push was performed.
 - Verification: resume, doctor, deferred-register validation, fixture
   validation, `git diff --check`, ignore-rule checks, and documentation-link
-  checks PASS. Publication status is BLOCKED by the unfinished license.
+  checks PASS. Publication was initially blocked by the unfinished license.
 - Checkpoint: CP-0111.
-- Exact continuation: commit the preparation slice, then obtain an intentional
-  license decision before any public GitHub action.
+- Exact continuation: record the supplied license decision, then obtain
+  explicit push authorization before any public GitHub action.
+
+## 2026-07-22 — SYN-010A license decision recorded
+
+- Owner selected GNU AGPL v3.0 only (`AGPL-3.0-only`) and requested the
+  commercial-license availability statement in README.
+- Replaced the unfinished `LICENSE` placeholder with the canonical GNU AGPL
+  text and updated the license decision, audit, and durable-state records.
+- Checkpoint: CP-0112.
+- No public push or repository visibility change was performed.

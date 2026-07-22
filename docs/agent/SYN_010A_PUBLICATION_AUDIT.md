@@ -13,10 +13,11 @@
 
 ## License gate
 
-The tracked `LICENSE` says the project is not yet released under a finalized
-license and instructs against redistribution until one is selected. No license
-was selected autonomously. This is a hard publication blocker; see
+The owner supplied an intentional license decision: GNU Affero General Public
+License v3.0 only (`AGPL-3.0-only`). `LICENSE` now contains the canonical GNU
+license text with the SPDX identifier; see
 [`docs/legal/LICENSE_DECISION_REQUIRED.md`](../legal/LICENSE_DECISION_REQUIRED.md).
+The unfinished-license gate is cleared.
 
 ## Secret and privacy scan
 
@@ -73,12 +74,12 @@ to immutable action SHAs remains a prepublication hardening item.
 ## Publication decision
 
 ```text
-PUBLICATION_STATUS=BLOCKED
-REASON=LICENSE_DECISION_REQUIRED
+PUBLICATION_STATUS=NOT_PUBLISHED
+REASON=EXPLICIT_PUSH_AUTHORIZATION_REQUIRED
 SECONDARY_REVIEW=PERSONAL_COMMIT_METADATA_AND_REMOTE_TARGET
 ```
 
-Before any public push, the owner must intentionally decide the license,
-decide whether existing author metadata may remain public, confirm the target
-repository/default branch, rerun the scans, and review the final GitHub
-metadata. No push is authorized by this audit.
+Before any public push, the owner must decide whether existing author metadata
+may remain public, confirm the target repository/default branch, rerun the
+scans, and review the final GitHub metadata. No push is authorized by this
+audit.

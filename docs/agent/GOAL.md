@@ -6,11 +6,12 @@
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope until explicitly tasked
 - Goal revision: 4
-- Status: contract active; SYN-010A is ACTIVE from the supplied goal. Publication is blocked by the required license decision gate; Codex real-agent trust evidence, platform-native execution, and physical networking claims remain unclaimed without evidence.
+- Status: contract active; SYN-010A is ACTIVE from the supplied goal. The
+  required license decision is recorded as AGPL-3.0-only; publication remains
+  unperformed pending explicit push authorization and remaining review gates.
 - Completion target: Synesis Link v1 criteria in `docs/agent/CONTRACT.md`
 - Evidence: SYN-009C release evidence is complete at CP-0110; SYN-010A
   publication audit, current/reachable-history scan, documentation preparation,
   strict Java verification, and repository validators are recorded at CP-0111.
-- Exact continuation: obtain an intentional license decision, replace the
-  unfinished `LICENSE`, rerun the publication audit, and re-review the target
-  repository before any push.
+- Exact continuation: rerun the publication audit and obtain explicit push
+  authorization only after reviewing author metadata and the target repository.

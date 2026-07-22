@@ -15,9 +15,9 @@ provider hooks, build outputs, and documentation may change without notice.
 - Authenticated peer sessions over QUIC with bounded control and liveness behavior.
 - Verified SDR2 and PRP1 protocol paths, typed constraints, and action guardrails.
 - Provider lifecycle support with explicit support levels:
-  - Antigravity: BETA.
-  - Claude Code: EXPERIMENTAL.
-  - Codex: EXPERIMENTAL and REVIEW_REQUIRED/DEGRADED.
+    - Antigravity: BETA.
+    - Claude Code: EXPERIMENTAL.
+    - Codex: EXPERIMENTAL and REVIEW_REQUIRED/DEGRADED.
 - Cross-platform Java distributions with a Go bootstrapper. Go is used for
   distribution bootstrap, not as a replacement for the Java implementation.
 
@@ -61,12 +61,15 @@ There is no hosted installer or public release artifact in this preview.
 - [`docs/architecture/`](docs/architecture/) — architecture and protocol notes.
 - [`docs/installation/provider-management.md`](docs/installation/provider-management.md) — provider lifecycle.
 - [`docs/installation/bootstrap-install.md`](docs/installation/bootstrap-install.md) — bootstrap installation.
-- [`docs/adr/0025-cross-platform-release-and-signing.md`](docs/adr/0025-cross-platform-release-and-signing.md) — release model.
+- [`docs/adr/0025-cross-platform-release-and-signing.md`](docs/adr/0025-cross-platform-release-and-signing.md) — release
+  model.
 - [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) — threat model.
 - [`SECURITY.md`](SECURITY.md) — reporting and handling guidance.
 
 ## License
 
-No license has been finalized. Public GitHub visibility would not grant reuse,
-modification, redistribution, commercial-use, or contribution rights. See
+Synesis is licensed under the GNU Affero General Public License v3.0 only
+(SPDX: `AGPL-3.0-only`). Commercial licenses are available for organizations
+that want to embed, modify, or distribute Synesis without AGPL obligations.
+See [`LICENSE`](LICENSE) and
 [`docs/legal/LICENSE_DECISION_REQUIRED.md`](docs/legal/LICENSE_DECISION_REQUIRED.md).
