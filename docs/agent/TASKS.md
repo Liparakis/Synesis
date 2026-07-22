@@ -275,6 +275,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: threat model reconciled with implementation.
 - Evidence: pending.
 
+## SYN-010A
+
+- ID: SYN-010A
+- Priority: P0
+- Title: Public GitHub developer-preview preparation
+- Status: ACTIVE
+- Purpose: Audit and prepare the existing repository for safe public visibility without redesigning the product, publishing release assets, or selecting a license autonomously.
+- Dependencies: SYN-009C DONE at CP-0110; explicit user-supplied SYN-010A goal.
+- Acceptance criteria: complete current/history secret scan, safe ignore rules, accurate preview README, SECURITY.md and CONTRIBUTING.md, workflow security audit, repository metadata review, full verification, and a clean preparation commit; public publication only after an intentional license decision and explicit external gates.
+- Required tests: secret scanner or documented equivalent, focused history/path searches, strict Java build, Go test/vet, repository validators, workflow syntax/security review, and clean-tree confirmation.
+- Required documentation: `docs/agent/SYN_010A_PUBLICATION_AUDIT.md`, `docs/legal/LICENSE_DECISION_REQUIRED.md`, README/public-preview docs, and durable state updates.
+- Scope boundary: no new product features, protocol changes, release assets, production release, license selection, history rewrite, public push, or external announcement.
+- Evidence: `docs/agent/SYN_010A_PUBLICATION_AUDIT.md`; `docs/legal/LICENSE_DECISION_REQUIRED.md`; README, SECURITY.md, CONTRIBUTING.md, and `.gitignore` preparation; validators PASS. License gate found `LICENSE` is an explicit unfinished placeholder. Preparation may continue only through the audit and license-decision document; publication is blocked until an authorized license decision exists.
+
 ## SYN-001
 
 - ID: SYN-001

@@ -2,6 +2,17 @@
 .gradle/
 build/
 out/
+**/build/
+bootstrap/dist/
+dist/
+release/
+
+# Synesis local state and generated provider hooks
+.synesis/local/
+**/.synesis/local/
+**/.agents/hooks.json
+**/.claude/settings.json
+**/.codex/hooks.json
 
 # IDE and editor state
 .idea/

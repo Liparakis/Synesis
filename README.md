@@ -1,53 +1,72 @@
 # Synesis
 
-Synesis is a modular-monolith repository. The first implemented module is
-[`link/`](link/), the Synesis Link transport and authenticated session layer.
+Synesis is an experimental coordination and constraint-enforcement layer for
+independently running AI coding agents. The repository currently ships the
+Synesis Link transport/session layer, a terminal CLI, and a small bootstrapper.
 
-Link provides local-first direct peer-to-peer QUIC sessions, long-term node
-identity binding, bounded control/liveness behavior, candidate selection, and
-a demo-only authenticated work exchange. It does not claim that every pair of
-computers can connect directly.
+## Status
 
-The Link implementation and tests live under `link/`; the standalone terminal
-CLI and its self-contained platform distribution live under `cli/`.
+This repository is an early developer preview. It is not production-ready and
+is not a security, compliance, or policy guarantee for an AI coding agent. APIs,
+provider hooks, build outputs, and documentation may change without notice.
+
+## What is here
+
+- Authenticated peer sessions over QUIC with bounded control and liveness behavior.
+- Verified SDR2 and PRP1 protocol paths, typed constraints, and action guardrails.
+- Provider lifecycle support with explicit support levels:
+  - Antigravity: BETA.
+  - Claude Code: EXPERIMENTAL.
+  - Codex: EXPERIMENTAL and REVIEW_REQUIRED/DEGRADED.
+- Cross-platform Java distributions with a Go bootstrapper. Go is used for
+  distribution bootstrap, not as a replacement for the Java implementation.
+
+## Limitations
+
+Synesis is not an LLM, coding-agent runtime, Git replacement, or enterprise
+governance system. It does not guarantee that a model or provider obeys every
+constraint, and local or provider-side bypasses remain possible. Direct peer
+connectivity is not guaranteed. Production signing, platform notarization,
+enterprise hardening, and other deferred capabilities are not claims of this
+preview; see [`docs/agent/DEFERRED.md`](docs/agent/DEFERRED.md).
+
+Do not use this preview with secrets, sensitive data, or untrusted artifacts.
 
 ## Build
 
+Requirements: Java 25, the Gradle Wrapper, and Go 1.26.5 for bootstrapper work.
+
 ```powershell
-./gradlew.bat clean check --dependency-verification=strict
+.\gradlew.bat clean check --dependency-verification=strict
 ```
 
-Java 25 is required. Build the development distribution with:
+```powershell
+go test ./...
+go vet ./...
+```
+
+Build and inspect the local CLI distribution:
 
 ```powershell
-./gradlew.bat :cli:installDist --dependency-verification=strict
+.\gradlew.bat :cli:installDist --dependency-verification=strict
 & ".\cli\build\install\synesis\bin\synesis.bat" --help
-& ".\cli\build\install\synesis\bin\synesis.bat" --version
-& ".\cli\build\install\synesis\bin\synesis.bat" version
-& ".\cli\build\install\synesis\bin\synesis.bat" identity show
 ```
 
-For the current PowerShell session only, optionally prepend the generated
-launcher directory to PATH:
+The launcher supports local diagnostics such as `synesis init`, `synesis
+provider list`, `synesis provider install antigravity`, and `synesis doctor`.
+There is no hosted installer or public release artifact in this preview.
 
-```powershell
-$env:Path = "$(Resolve-Path .\cli\build\install\synesis\bin);$env:Path"
-synesis --help
-```
+## Documentation
 
-The physical demonstration procedure is [`docs/demo/FIRST_DEMO.md`](docs/demo/FIRST_DEMO.md).
-Unsupported networking and product capabilities are tracked in
-[`docs/agent/DEFERRED.md`](docs/agent/DEFERRED.md).
+- [`docs/architecture/`](docs/architecture/) — architecture and protocol notes.
+- [`docs/installation/provider-management.md`](docs/installation/provider-management.md) — provider lifecycle.
+- [`docs/installation/bootstrap-install.md`](docs/installation/bootstrap-install.md) — bootstrap installation.
+- [`docs/adr/0025-cross-platform-release-and-signing.md`](docs/adr/0025-cross-platform-release-and-signing.md) — release model.
+- [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) — threat model.
+- [`SECURITY.md`](SECURITY.md) — reporting and handling guidance.
 
-The generated launcher owns zero-configuration onboarding:
+## License
 
-```powershell
-synesis host
-synesis join "synesis://join/<share-link>"
-synesis doctor
-```
-
-Quote the full invitation as one argument on Windows. `DemoCli` remains a
-documented Gradle-only diagnostic fallback. Generated-launcher onboarding is
-two-process tested; physical launcher onboarding is not claimed until recorded
-in [`docs/evidence/PHYSICAL-CLI-ONBOARDING.md`](docs/evidence/PHYSICAL-CLI-ONBOARDING.md).
+No license has been finalized. Public GitHub visibility would not grant reuse,
+modification, redistribution, commercial-use, or contribution rights. See
+[`docs/legal/LICENSE_DECISION_REQUIRED.md`](docs/legal/LICENSE_DECISION_REQUIRED.md).

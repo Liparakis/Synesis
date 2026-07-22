@@ -640,3 +640,22 @@ Append-only operational history.
 - Status: `SYN-009C_STATUS=DONE`. Production signing-key replacement, OS vendor
   signing/notarization, public hosting, and real Codex trust validation remain
   outside this task.
+
+## 2026-07-22 — SYN-010A public preview preparation
+
+- Promoted SYN-010A as the sole ACTIVE task after SYN-009C closed at CP-0110.
+- Prepared README, SECURITY.md, CONTRIBUTING.md, and `.gitignore` for an early
+  developer preview without adding product behavior, release assets, or
+  open-source claims.
+- Added `docs/agent/SYN_010A_PUBLICATION_AUDIT.md` and
+  `docs/legal/LICENSE_DECISION_REQUIRED.md`.
+- Equivalent current-tree/reachable-history secret and privacy scans found no
+  credential material; the only password-pattern match is an interactive TLS
+  keystore prompt. Personal-looking commit author metadata and the old remote
+  target require owner review; no history rewrite or push was performed.
+- Verification: resume, doctor, deferred-register validation, fixture
+  validation, `git diff --check`, ignore-rule checks, and documentation-link
+  checks PASS. Publication status is BLOCKED by the unfinished license.
+- Checkpoint: CP-0111.
+- Exact continuation: commit the preparation slice, then obtain an intentional
+  license decision before any public GitHub action.

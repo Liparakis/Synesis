@@ -1,0 +1,84 @@
+# SYN-010A public GitHub publication audit
+
+## Starting state
+
+- Starting checkpoint: CP-0110.
+- Starting commit: `5a80fed898736a203310429cb98f09791c9f5b3b`.
+- Starting branch: `master`; the working tree was clean at task start.
+- `master` was 42 commits ahead of `origin/master`; the remote was not ahead.
+- The configured remote is an older `synesis-link` URL; authenticated GitHub
+  metadata identifies the canonical private repository as `Liparakis/Synesis`
+  with default branch `master`.
+- No push, visibility change, release, tag, or external announcement was made.
+
+## License gate
+
+The tracked `LICENSE` says the project is not yet released under a finalized
+license and instructs against redistribution until one is selected. No license
+was selected autonomously. This is a hard publication blocker; see
+[`docs/legal/LICENSE_DECISION_REQUIRED.md`](../legal/LICENSE_DECISION_REQUIRED.md).
+
+## Secret and privacy scan
+
+Dedicated `gitleaks`, `trufflehog`, `git-secrets`, and `detect-secrets`
+executables were unavailable. An equivalent focused scan covered the current
+tree, reachable Git history, tracked paths, and GitHub-facing configuration:
+
+- No GitHub tokens, cloud access keys, private-key blocks, OAuth tokens, API-key
+  assignments, or credential files were found.
+- The only password-pattern match is an intentional interactive TLS keystore
+  prompt in `link/src/main/java/org/synesis/link/transport/DemoCli.java`.
+- Secret-looking environment variable names in workflow/bootstrap code are
+  names only; no values are present.
+- No `.env`, private-key, credential, local-state, generated-hook, transcript,
+  or prompt files are tracked.
+- No personal absolute machine paths were found in source or documentation.
+- Commit metadata contains a personal-looking author email. It is not a source
+  credential, but public history would expose it. No history rewrite or
+  anonymization was authorized.
+
+The scan covered reachable history. Unreachable local Git objects were observed
+by `git fsck`; they are not part of the intended push and were not rewritten or
+deleted.
+
+## Preparation changes
+
+- `.gitignore` now covers nested build output, distribution/release output,
+  Synesis local state, and generated provider/agent hooks.
+- README, security reporting guidance, and contribution guidance now describe
+  the developer-preview status and avoid open-source or production claims.
+- No release artifacts or production signing assets were added.
+
+## Workflow review
+
+`.github/workflows/release.yml` was read end-to-end. It does not use
+`pull_request_target`, does not grant write permissions, does not create a
+GitHub Release automatically, and scopes the signing secret to the protected
+tag-signing step. Actions currently use mutable major-version tags, so pinning
+to immutable action SHAs remains a prepublication hardening item.
+
+## Verification
+
+- `gradlew.bat check --dependency-verification=strict`: PASS; `BUILD
+  SUCCESSFUL`.
+- Current Go execution was not available because `go.exe` is absent from this
+  machine's PATH and standard install locations. CP-0110 records the required
+  Go 1.26.5 test/vet and cross-compile evidence; no Go source changed in this
+  preparation slice.
+- `agent-resume.ps1`, `agent-doctor.ps1`, `agent-validate-fixtures.ps1`, and
+  `agent-validate-deferred.ps1`: PASS.
+- `git diff --check`, README link checks, ignore-rule checks, current-tree and
+  reachable-history secret scans, and workflow security checks: PASS.
+
+## Publication decision
+
+```text
+PUBLICATION_STATUS=BLOCKED
+REASON=LICENSE_DECISION_REQUIRED
+SECONDARY_REVIEW=PERSONAL_COMMIT_METADATA_AND_REMOTE_TARGET
+```
+
+Before any public push, the owner must intentionally decide the license,
+decide whether existing author metadata may remain public, confirm the target
+repository/default branch, rerun the scans, and review the final GitHub
+metadata. No push is authorized by this audit.

@@ -2,18 +2,18 @@
 
 ## Identity
 
-- Task ID: SYN-009C
-- Status: DONE
+- Task ID: SYN-010A
+- Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0105
-- Latest checkpoint: CP-0110
+- Started checkpoint: CP-0110
+- Latest checkpoint: CP-0111
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
 ## Objective
 
-Deliver cross-platform Java bundles with bundled runtimes, a Go bootstrapper,
-and CI artifact verification without changing Link or provider behavior.
+Prepare the existing repository for safe public GitHub developer-preview
+visibility without selecting a license or publishing before the license gate.
 
 ## Planning state
 
@@ -21,8 +21,8 @@ SYN-009B was promoted after SYN-009A completion at CP-0099 and is DONE at
 CP-0102. SYN-009B.1 is VERIFYING as an EVOLUTION of the existing provider lifecycle and
 hook boundary. It adds one Codex integration under `:workspace`, reuses the
 shared path resolver and action guardrail, and writes only project-local
-`.codex/hooks.json`. SYN-009C is complete at CP-0110; no public release was
-published.
+`.codex/hooks.json`. SYN-009C is complete at CP-0110. SYN-010A is active and
+publication is blocked by the unfinished license decision.
 
 ## Architecture brief
 
@@ -123,8 +123,19 @@ claim. The distribution gate preserves this limitation. Public production
 key replacement, Authenticode, Apple Developer ID signing, and notarization
 are also deferred; no public release is claimed.
 
+## SYN-010A verification
+
+- Publication audit and license-decision-required document added.
+- README, SECURITY.md, CONTRIBUTING.md, and `.gitignore` prepared for an early
+  developer preview; no open-source or production claim was added.
+- Equivalent current-tree/reachable-history secret scan, focused path scan,
+  repository metadata review, workflow review, and repository validators pass.
+- Publication remains blocked: `PUBLICATION_STATUS=BLOCKED`;
+  `REASON=LICENSE_DECISION_REQUIRED`.
+- Secondary review remains required for personal commit metadata and the
+  canonical remote target. No public push or history rewrite was performed.
+
 ## Immediate next action
 
-SYN-009C is DONE at CP-0110 and commit `7a40324`. The next action is an
-authorized hosted HTTPS installation trial using controlled release artifacts;
-do not begin new Synesis product features in this task.
+After an intentional license decision, replace the unfinished `LICENSE`, rerun
+the publication audit, and re-review the target repository before any push.
