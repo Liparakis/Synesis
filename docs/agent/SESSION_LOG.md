@@ -713,3 +713,11 @@ Append-only operational history.
 - `bundleSmokeTest` now asserts the source launcher mode and restores executable
   mode after extraction before running it. Native Windows bundle smoke passes.
 - Checkpoint: CP-0117.
+
+## 2026-07-22 — SYN-010A bundled Java runtime permission fix
+
+- Root cause: Gradle `tarTree` extraction also dropped the Unix mode for
+  `runtime/bin/java`, causing the next `EACCES` after the launcher fix.
+- `bundleSmokeTest` now asserts and restores the bundled Java runtime mode as
+  well. Native Windows bundle smoke passes.
+- Checkpoint: CP-0118.

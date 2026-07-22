@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0110
-- Latest checkpoint: CP-0117
+- Latest checkpoint: CP-0118
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
@@ -141,8 +141,8 @@ are also deferred; no public release is claimed.
 - Linux test repairs: Claude path fixtures are OS-native and QUIC tests reuse
   the shared platform-aware TLS helper. Targeted workspace and link tests PASS.
 - Bundle smoke repair: asserts the Unix source launcher is executable and
-  restores its mode after Gradle `tarTree` extraction. Native Windows bundle
-  smoke PASS.
+  restores its mode after Gradle `tarTree` extraction; it does the same for
+  bundled `runtime/bin/java`. Native Windows bundle smoke PASS.
 - Secondary review remains required for personal commit metadata and the
   canonical remote target. No public push or history rewrite was performed.
 

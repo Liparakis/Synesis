@@ -238,6 +238,9 @@ tasks.register("bundleSmokeTest") {
             require(platformBundleDirectory.get().asFile.resolve("bin/synesis").canExecute()) {
                 "Unix bundle launcher is not executable before archiving"
             }
+            require(runtimeImageDirectory.get().asFile.resolve("bin/java").canExecute()) {
+                "Bundled Unix Java runtime is not executable before archiving"
+            }
         }
         copy {
             from(if (archive.extension == "zip") zipTree(archive) else tarTree(resources.gzip(archive)))
@@ -248,6 +251,9 @@ tasks.register("bundleSmokeTest") {
             bundleRoot.resolve("bin").resolve(if (hostPlatform.startsWith("windows")) "synesis.cmd" else "synesis")
         if (!hostPlatform.startsWith("windows")) {
             require(launcher.setExecutable(true)) { "Unable to restore Unix launcher permissions after extraction" }
+            require(bundleRoot.resolve("runtime/bin/java").setExecutable(true)) {
+                "Unable to restore bundled Java runtime permissions after extraction"
+            }
         }
         fun run(vararg arguments: String) {
             val command = if (hostPlatform.startsWith("windows")) {

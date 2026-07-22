@@ -85,8 +85,9 @@ tracked as `100755`. Git Bash executed `./gradlew check
   on Windows; Linux execution remains for CI validation.
 - Bundle smoke repair: the Unix source launcher must be executable, while
   Gradle `tarTree` extraction does not preserve that mode. `bundleSmokeTest`
-  now asserts the source mode and restores the extracted mode before execution.
-  Native Windows bundle smoke passes; Linux remains for CI validation.
+  now asserts the source launcher and bundled `runtime/bin/java` modes and
+  restores both extracted modes before execution. Native Windows bundle smoke
+  passes; Linux remains for CI validation.
 
 ## Publication decision
 
