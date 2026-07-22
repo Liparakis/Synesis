@@ -28,6 +28,7 @@ import org.synesis.projectrecord.ProjectRecordSync;
  * Owns project synchronization orchestration for the unified CLI.
  */
 public final class SyncApplicationService {
+
     private static final Path PROJECT_CONFIG = Path.of("project.conf");
 
     /**
@@ -52,14 +53,23 @@ public final class SyncApplicationService {
             ProjectConfig config = loadConfig(profile);
             UUID projectId = parseUuid(project, "PROJECT_INVALID");
             UUID recordId = parseUuid(record, "RECORD_INVALID");
-            if (projectId != null && !projectId.equals(config.projectId())) throw failure("PROJECT_MISMATCH");
-            if (config.peerNodeIds().size() != 1) throw failure("PROJECT_INVALID");
-            if (recordId != null) validateRecord(profile, config.projectId(), recordId);
+            if (projectId != null && !projectId.equals(config.projectId())) {
+                throw failure("PROJECT_MISMATCH");
+            }
+            if (config.peerNodeIds()
+                    .size() != 1) {
+                throw failure("PROJECT_INVALID");
+            }
+            if (recordId != null) {
+                validateRecord(profile, config.projectId(), recordId);
+            }
 
             String hostNode = identity(profile).nodeId();
             DecisionStore store = new DecisionStore(profile.resolve("records"), config.projectId());
             PeerSession.ApplicationStreamHandler records = new ProjectRecordSync(config, store).handler();
-            PeerSession.ApplicationStreamHandler reconciliation = new ProjectReconciliationSync(hostNode, config, store).handler();
+            PeerSession.ApplicationStreamHandler reconciliation = new ProjectReconciliationSync(hostNode,
+                    config,
+                    store).handler();
             PeerSession.ApplicationStreamHandler handler = (remote, bytes) -> isReconciliation(bytes)
                     ? reconciliation.handle(remote, bytes) : records.handle(remote, bytes);
             Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> {
@@ -68,7 +78,9 @@ public final class SyncApplicationService {
                 }
             });
             try {
-                onboarding.host(config.peerNodeIds().iterator().next(), handler, ignored -> {
+                onboarding.host(config.peerNodeIds()
+                        .iterator()
+                        .next(), handler, ignored -> {
                 });
             } catch (OnboardingFailure failure) {
                 throw failure(mapOnboarding(failure.code()));
@@ -94,15 +106,30 @@ public final class SyncApplicationService {
     public SyncResult join(Path profile, String project, String record, String expectedHost, String invitation) {
         Objects.requireNonNull(profile, "profile");
         try {
-            URI uri = URI.create(invitation);
-            Map<String, String> query = query(uri.getQuery());
-            String clean = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment()).toString();
-            var decoded = org.synesis.link.protocol.SessionInvitation.fromShareLink(clean);
-            var host = org.synesis.link.candidate.CandidateDescriptor.decode(decoded.descriptorEncoded()).nodeId();
-            if (query.containsKey("host") && !host.equals(query.get("host"))) throw failure("AUTH_FAILED");
-            if (expectedHost != null && !expectedHost.equals(host)) throw failure("AUTH_FAILED");
+            URI uri;
+            Map<String, String> query;
+            String clean;
+            String host;
+            try {
+                uri = URI.create(invitation);
+                query = query(uri.getQuery());
+                clean = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment()).toString();
+                var decoded = org.synesis.link.protocol.SessionInvitation.fromShareLink(clean);
+                host = org.synesis.link.candidate.CandidateDescriptor.decode(decoded.descriptorEncoded())
+                        .nodeId();
+            } catch (Exception invalidInvitation) {
+                throw failure("INVITE_INVALID");
+            }
+            if (query.containsKey("host") && !host.equals(query.get("host"))) {
+                throw failure("AUTH_FAILED");
+            }
+            if (expectedHost != null && !expectedHost.equals(host)) {
+                throw failure("AUTH_FAILED");
+            }
             UUID projectId = parseUuid(project != null ? project : query.get("project"), "PROJECT_INVALID");
-            if (projectId == null) throw failure("USAGE");
+            if (projectId == null) {
+                throw failure("USAGE");
+            }
             UUID recordId = parseUuid(record != null ? record : query.get("record"), "RECORD_INVALID");
             ProjectConfig config = existingOrCreate(profile, projectId, host, expectedHost != null);
             AtomicReference<SyncFailure> callbackFailure = new AtomicReference<>();
@@ -112,18 +139,24 @@ public final class SyncApplicationService {
             try {
                 onboarding.join(clean, null, session -> {
                     try {
-                        if (!session.isUsable() || !host.equals(session.remoteNodeId())) throw failure("AUTH_FAILED");
+                        if (!session.isUsable() || !host.equals(session.remoteNodeId())) {
+                            throw failure("AUTH_FAILED");
+                        }
                         values.put("AUTHENTICATED_REMOTE", session.remoteNodeId());
                         DecisionStore store = new DecisionStore(profile.resolve("records"), projectId);
                         String local = identity(profile).nodeId();
                         if (recordId != null) {
                             var outcome = new ProjectRecordSync(config, store).sync(session, recordId);
-                            if (outcome.code() != ProjectRecordSync.Code.APPLIED && outcome.code() != ProjectRecordSync.Code.DUPLICATE) {
-                                throw failure(outcome.code().name());
+                            if (outcome.code() != ProjectRecordSync.Code.APPLIED
+                                    && outcome.code() != ProjectRecordSync.Code.DUPLICATE) {
+                                throw failure(outcome.code()
+                                        .name());
                             }
                             values.put("PROJECT_ID", projectId.toString());
                             values.put("RECORD_ID", recordId.toString());
-                            values.put("SYNC_RESULT", outcome.code().name());
+                            values.put("SYNC_RESULT",
+                                    outcome.code()
+                                            .name());
                         } else {
                             var result = new ProjectReconciliationSync(local, config, store).syncProject(session);
                             values.put("PROJECT_ID", projectId.toString());
@@ -132,7 +165,9 @@ public final class SyncApplicationService {
                             values.put("ADDED_REMOTE", Integer.toString(result.addedRemote()));
                             values.put("DUPLICATE_COUNT", Integer.toString(result.duplicateCount()));
                             values.put("SYNC_RESULT", result.success() ? "SUCCESS" : "PARTIAL_SUCCESS");
-                            if (!result.success()) throw failure("RECONCILIATION_FAILED");
+                            if (!result.success()) {
+                                throw failure("RECONCILIATION_FAILED");
+                            }
                         }
                     } catch (SyncFailure failure) {
                         callbackFailure.set(failure);
@@ -147,7 +182,9 @@ public final class SyncApplicationService {
                 });
             } catch (OnboardingFailure failure) {
                 SyncFailure callback = callbackFailure.get();
-                if (callback != null) throw callback;
+                if (callback != null) {
+                    throw callback;
+                }
                 throw failure(mapOnboarding(failure.code()));
             }
             return new SyncResult(0, values);
@@ -158,15 +195,20 @@ public final class SyncApplicationService {
         }
     }
 
-    private ProjectConfig existingOrCreate(Path profile, UUID project, String host, boolean confirmed) throws Exception {
+    private ProjectConfig existingOrCreate(Path profile, UUID project, String host, boolean confirmed)
+            throws Exception {
         Path path = profile.resolve(PROJECT_CONFIG);
         if (Files.exists(path)) {
             ProjectConfig config = ProjectConfig.load(path);
-            if (!project.equals(config.projectId()) || !config.peerNodeIds().equals(Set.of(host)))
+            if (!project.equals(config.projectId()) || !config.peerNodeIds()
+                    .equals(Set.of(host))) {
                 throw failure("PROJECT_MISMATCH");
+            }
             return config;
         }
-        if (!confirmed) throw failure("PROJECT_NOT_CONFIGURED");
+        if (!confirmed) {
+            throw failure("PROJECT_NOT_CONFIGURED");
+        }
         ProjectConfig config = new ProjectConfig(project, Set.of(host));
         config.save(path);
         return config;
@@ -182,7 +224,8 @@ public final class SyncApplicationService {
 
     private static NodeIdentity identity(Path profile) throws Exception {
         try {
-            return new IdentityBootstrap(profile.resolve("link")).loadOrCreate().identity();
+            return new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
+                    .identity();
         } catch (Exception failure) {
             throw failure("IDENTITY_FAILED");
         }
@@ -190,11 +233,15 @@ public final class SyncApplicationService {
 
     private static void validateRecord(Path profile, UUID project, UUID record) throws Exception {
         DecisionStore store = new DecisionStore(profile.resolve("records"), project);
-        if (store.head(record).isEmpty()) throw failure("RECORD_NOT_FOUND");
+        if (store.head(record)
+                .isEmpty()) {
+            throw failure("RECORD_NOT_FOUND");
+        }
     }
 
     private static boolean isReconciliation(byte[] bytes) {
-        return bytes != null && bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x52 && bytes[2] == 0x50 && bytes[3] == 0x31;
+        return bytes != null && bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x52 && bytes[2] == 0x50
+                && bytes[3] == 0x31;
     }
 
     private static String composeInvitation(String link, UUID project, UUID record, String host) {
@@ -203,16 +250,22 @@ public final class SyncApplicationService {
 
     private static Map<String, String> query(String raw) {
         Map<String, String> result = new LinkedHashMap<>();
-        if (raw == null || raw.isEmpty()) return result;
+        if (raw == null || raw.isEmpty()) {
+            return result;
+        }
         for (String part : raw.split("&", -1)) {
             String[] pair = part.split("=", 2);
-            if (pair.length == 2) result.put(pair[0], pair[1]);
+            if (pair.length == 2) {
+                result.put(pair[0], pair[1]);
+            }
         }
         return result;
     }
 
     private static UUID parseUuid(String value, String code) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         try {
             return UUID.fromString(value);
         } catch (IllegalArgumentException failure) {
@@ -249,6 +302,7 @@ public final class SyncApplicationService {
     }
 
     private static final class SyncFailure extends RuntimeException {
+
         @java.io.Serial
         private static final long serialVersionUID = 1L;
         private final String code;
@@ -262,9 +316,10 @@ public final class SyncApplicationService {
      * Structured synchronization result.
      *
      * @param exitCode process-compatible status
-     * @param values machine-readable fields
+     * @param values   machine-readable fields
      */
     public record SyncResult(int exitCode, Map<String, String> values) {
+
         /**
          * Validates the result.
          */

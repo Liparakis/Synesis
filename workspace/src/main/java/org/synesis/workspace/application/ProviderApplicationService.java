@@ -40,8 +40,7 @@ public final class ProviderApplicationService {
     public List<ProviderRow> list(ProjectApplicationService.ProjectLocation location) {
         Objects.requireNonNull(location, "location");
         return ProviderRegistry.providers().stream().map(provider -> new ProviderRow(provider.id(), provider.supportLevel(),
-                Files.exists(metadata(location, provider)) || Files.exists(provider.configurationPath(location.root()))
-                        ? "INSTALLED" : "NOT_INSTALLED")).toList();
+                Files.exists(metadata(location, provider)) ? "INSTALLED" : "NOT_INSTALLED")).toList();
     }
 
     /**
@@ -274,7 +273,21 @@ public final class ProviderApplicationService {
 
     private static String quote(Path path) { return "\"" + path.toAbsolutePath().normalize().toString().replace("\"", "\\\"") + "\""; }
     private static Path metadata(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) { return location.synesisDirectory().resolve("local/providers/" + provider.id() + ".json"); }
-    private static Path launcher() { String configured = System.getProperty("synesis.launcher", System.getenv("SYNESIS_LAUNCHER")); Path path = configured == null ? Path.of("cli/build/install/synesis/bin/synesis.bat") : Path.of(configured); return path.toAbsolutePath().normalize(); }
+    private static Path launcher() {
+        String configured = System.getProperty("synesis.launcher", System.getenv("SYNESIS_LAUNCHER"));
+        if (configured != null) return Path.of(configured).toAbsolutePath().normalize();
+        Path repositoryLauncher = Path.of("cli/build/install/synesis/bin/synesis.bat");
+        if (Files.isRegularFile(repositoryLauncher)) return repositoryLauncher.toAbsolutePath().normalize();
+        for (String entry : System.getProperty("java.class.path", "").split(java.io.File.pathSeparator)) {
+            Path classpathEntry = Path.of(entry).toAbsolutePath().normalize();
+            Path lib = classpathEntry.getParent();
+            if (lib != null && "lib".equalsIgnoreCase(lib.getFileName().toString())) {
+                Path installedLauncher = lib.getParent().resolve("bin/synesis.bat");
+                if (Files.isRegularFile(installedLauncher)) return installedLauncher;
+            }
+        }
+        return repositoryLauncher.toAbsolutePath().normalize();
+    }
 
     private static void atomicWrite(Path path, String content) throws IOException {
         Files.createDirectories(path.getParent()); Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());

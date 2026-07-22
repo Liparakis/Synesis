@@ -505,14 +505,28 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-009B
 - Priority: P0
 - Title: Provider lifecycle management and installation diagnostics
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Add project-local provider install, status, uninstall, registry, synthetic health checks, and doctor diagnostics for Antigravity and Claude Code.
 - Dependencies: SYN-009A DONE; CP-0099; existing unified CLI, project layout, provider adapters, and shared `ActionGuardrail`.
 - Acceptance criteria: provider lifecycle is application-service owned; only Antigravity (`BETA`) and Claude Code (`EXPERIMENTAL`) are listed; provider metadata remains local-only; configuration merges preserve unrelated JSON; writes are atomic; malformed configuration is never overwritten; install/status/uninstall are idempotent; synthetic checks use isolated fixtures; doctor reports project, record, provider, and known-limitations results; Codex and portable packaging remain deferred.
-- Required tests: registry, provider configuration merge/atomicity, Antigravity and Claude Code lifecycle, isolated synthetic checks, status classification, uninstall preservation, doctor results, and strict full verification.
+- Required tests: registry, provider configuration merge/atomicity, Antigravity and Claude Code lifecycle, isolated synthetic checks, status classification, uninstall preservation, doctor results, unified-launcher process coverage, and strict full verification.
 - Required documentation: implementation note, ADR-0021, provider boundary, provider management, doctor, integration docs, current state, and durable task state.
 - Scope boundary: no Codex, MCP, dynamic plugins, shell-command analysis, portable ZIP, release packaging, background synchronization, protocol changes, cloud services, or remote publication.
-- Evidence: PASS — `ProviderApplicationServiceTest`, workspace/CLI tests, provider Javadocs, `gradlew.bat clean check --dependency-verification=strict` (34 actionable tasks), generated disposable-project Antigravity and Claude Code lifecycle checks, and CP-0101. SYN-009C remains deferred.
+- Evidence: PASS — `ProviderApplicationServiceTest`, `UnifiedCliSyncProcessTest` (five generated-launcher process scenarios), provider Javadocs, `gradlew.bat clean check --dependency-verification=strict`, generated disposable-project Antigravity and Claude Code lifecycle checks with unrelated hook preservation, and CP-0102. Deleted legacy CLI compatibility tests remain deleted; valid protocol/process behavior was rewritten against the unified launcher.
+
+## SYN-009C
+
+- ID: SYN-009C
+- Priority: P0
+- Title: Portable ZIP and clean-machine smoke test
+- Status: ACTIVE
+- Purpose: Prepare the smallest reproducible portable distribution and clean-machine smoke test for the unified `synesis` launcher.
+- Dependencies: SYN-009B DONE; provider lifecycle and diagnostics closed at CP-0102.
+- Acceptance criteria: portable ZIP contents, launcher startup, dependency/runtime assumptions, and clean-machine smoke evidence are documented and verified without changing provider or Link protocol behavior.
+- Required tests: archive assembly, clean-machine launcher help/version/init, and documented smoke cleanup.
+- Required documentation: distribution note, smoke-test evidence, and durable state updates.
+- Scope state: queued for the next session; no SYN-009C implementation work has started.
+- Evidence: pending.
 
 ## Deferred capability register
 

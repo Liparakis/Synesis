@@ -40,7 +40,12 @@ public final class DoctorCommand implements Callable<Integer> {
                 location = runtime.projectService().require(Path.of(project));
                 report = new ReadinessInspector(location.profile()).inspect();
             } else {
-                report = runtime.readinessInspector().inspect();
+                try {
+                    location = runtime.projectService().locate(Path.of("."));
+                    report = new ReadinessInspector(location.profile()).inspect();
+                } catch (Exception noProject) {
+                    report = runtime.readinessInspector().inspect();
+                }
             }
         } catch (Exception failure) {
             runtime.terminal().stdout("DOCTOR_RESULT=BROKEN");

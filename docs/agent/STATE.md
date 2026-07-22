@@ -4,8 +4,8 @@
 
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
-are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, and SYN-009B
-is the only ACTIVE task;
+are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
+DONE at CP-0102, and SYN-009C is the only ACTIVE task in planning-only state;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -85,6 +85,12 @@ allowed.
 - SYN-PRODUCT-REVIEW: PASS; completed the product review and roadmap planning through CP-0079. The review is recorded in `docs/agent/PRODUCT_REVIEW.md`.
 - SYN-004 planning: PASS; completed the minimal guided workspace demo flow design and task promotion under CP-0081. Detailed design is in `docs/agent/SYN_004_DESIGN.md`.
 - SYN-009A implementation: PASS; unreleased `WorkspaceOperations`, `DecisionRecordCli`, and legacy process harnesses were removed, synchronization orchestration now belongs to `SyncApplicationService`, and the unified `synesis` launcher is the only supported command entry point. Strict clean verification passed after the removal.
+- SYN-009B closure: PASS; obsolete CLI compatibility tests remain deleted, valid
+  process/protocol scenarios were rewritten in `UnifiedCliSyncProcessTest`
+  against the generated launcher, malformed invitations map to
+  `INVITE_INVALID`, and provider lifecycle evidence includes unrelated hook
+  configuration preservation. Closed at CP-0102. SYN-009C is queued with no
+  implementation started.
 
 ## Honest limitations
 

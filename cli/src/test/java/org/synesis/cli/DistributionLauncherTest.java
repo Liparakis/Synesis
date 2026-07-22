@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -42,9 +41,12 @@ final class DistributionLauncherTest {
         command.add("cmd.exe");
         command.add("/c");
         command.add(launcher.toString());
-        command.addAll(List.of(arguments));
+        for (String argument : arguments) {
+            command.add(argument.matches(".*[&*].*") ? "\"" + argument + "\"" : argument);
+        }
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.environment().put("SYNESIS_LINK_PROFILE", profile.toString());
+        builder.redirectErrorStream(true);
         return builder.start();
     }
 

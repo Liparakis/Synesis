@@ -2,21 +2,26 @@
 
 ## Identity
 
-- Task ID: SYN-009B
-- Status: ACTIVE
+- Task ID: SYN-009C
+- Status: ACTIVE (planning only; no active implementation work)
 - Priority: P0
-- Started checkpoint: CP-0100
-- Latest checkpoint: CP-0101
+- Started checkpoint: CP-0102
+- Latest checkpoint: CP-0102
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021
 
 ## Objective
 
-Provider lifecycle management and installation diagnostics.
+SYN-009B is closed. There is no active implementation work; SYN-009C is the
+next queued task for portable ZIP and clean-machine smoke-test planning.
 
 ## Planning state
 
-SYN-009B is promoted after SYN-009A completion at CP-0099. Provider lifecycle must use the existing unified CLI, application-service, project-layout, and shared-guardrail boundaries.
+SYN-009B was promoted after SYN-009A completion at CP-0099 and is DONE at
+CP-0102. Provider lifecycle uses the existing unified CLI, application-service,
+project-layout, and shared-guardrail boundaries. SYN-009C is queued only to
+keep the repository contract's single ACTIVE task explicit; implementation has
+not started.
 
 ## Architecture brief
 
@@ -29,7 +34,7 @@ SYN-009B is promoted after SYN-009A completion at CP-0099. Provider lifecycle mu
 
 ## Work completed
 
-SYN-009A is complete at CP-0099. SYN-009B implementation is complete pending checkpoint creation.
+SYN-009A is complete at CP-0099. SYN-009B is complete at CP-0102.
 
 - Added `ProjectApplicationService` with upward discovery, malformed/partial
   state rejection, atomic metadata initialization, identity bootstrap, local
@@ -38,8 +43,13 @@ SYN-009A is complete at CP-0099. SYN-009B implementation is complete pending che
   synchronization; provider adapters now live in bounded integration packages.
 - Retired `WorkspaceCli`, `WorkspaceOperations`, and `DecisionRecordCli`; the
   unified `:cli` launcher is the only supported command entry point.
-- Removed the unreleased process-level compatibility tests and updated active
-  scripts and integration docs to target the unified launcher.
+- Deleted obsolete `DecisionRecordCliTest` and `WorkspaceCliTest` compatibility
+  tests. Rewrote valid host/join, reconciliation, invitation-validation,
+  failure-classification, and process lifecycle coverage as
+  `UnifiedCliSyncProcessTest` against the generated `synesis` launcher.
+- Removed the old `WorkspaceProcessMain` and `AbruptHostProcess` bridges; the
+  retained process checks start the generated launcher and terminate its full
+  process tree when testing abrupt host loss.
 - Centralized identical Claude and Antigravity path resolution in
   `ProjectPathResolver`.
 - Added provider support levels, static registry, Antigravity and Claude Code
@@ -53,6 +63,9 @@ SYN-009A is complete at CP-0099. SYN-009B implementation is complete pending che
   `help`, and the version placeholder.
 - Added package-boundary checks, project layout/CLI/package docs, ADR-0020,
   and project discovery/init tests.
+- Corrected malformed invitation mapping to `INVITE_INVALID` and hardened the
+  generated Windows launcher test helper for URL query separators and wildcard
+  arguments.
 
 ## Verification
 
@@ -70,6 +83,10 @@ SYN-009A is complete at CP-0099. SYN-009B implementation is complete pending che
   and Claude Code install/status/uninstall checks PASS; idempotent reinstall,
   synthetic block/allow checks, doctor warnings, and malformed-config rejection
   PASS.
+- Unified launcher process verification: five `UnifiedCliSyncProcessTest`
+  scenarios PASS, including APPLIED/DUPLICATE, reconciliation/check-action,
+  wrong-host/malformed/mismatch safety, missing-record/abrupt-host handling,
+  and guided invitation validation/replay.
 
 ## Current failures
 
@@ -77,4 +94,4 @@ None.
 
 ## Immediate next action
 
-Review CP-0101 and the working-tree diff; do not start SYN-009C.
+Review SYN-009C's portable-distribution acceptance criteria before beginning implementation.
