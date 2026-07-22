@@ -3,10 +3,10 @@
 ## Identity
 
 - Task ID: SYN-009C
-- Status: ACTIVE
+- Status: DONE
 - Priority: P0
 - Started checkpoint: CP-0105
-- Latest checkpoint: CP-0107
+- Latest checkpoint: CP-0109
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
@@ -21,7 +21,8 @@ SYN-009B was promoted after SYN-009A completion at CP-0099 and is DONE at
 CP-0102. SYN-009B.1 is VERIFYING as an EVOLUTION of the existing provider lifecycle and
 hook boundary. It adds one Codex integration under `:workspace`, reuses the
 shared path resolver and action guardrail, and writes only project-local
-`.codex/hooks.json`. The user-supplied SYN-009C goal is now ACTIVE.
+`.codex/hooks.json`. SYN-009C is complete at CP-0109; no public release was
+published.
 
 ## Architecture brief
 
@@ -35,6 +36,7 @@ shared path resolver and action guardrail, and writes only project-local
 ## Work completed
 
 SYN-009A is complete at CP-0099. SYN-009B is complete at CP-0102.
+SYN-009C is complete at CP-0109.
 
 - Promoted SYN-009B.1 as the sole ACTIVE task after reviewing the attached
   Codex contract and the installed `codex-cli 0.140.0` baseline.
@@ -103,23 +105,22 @@ SYN-009A is complete at CP-0099. SYN-009B is complete at CP-0102.
 - Real Codex validation is not complete: the untrusted run skipped the project
   hook and changed its disposable file; the bypass diagnostic did not capture
   a payload. Codex remains EXPERIMENTAL/DEGRADED/REVIEW_REQUIRED.
+- SYN-009C final gate: Java full build, Go full test, six-platform CI matrix,
+  native smoke jobs where runners exist, bootstrap native smoke, manifest
+  aggregation, test-key signature verification, release documentation, and a
+  clean working tree all PASS. Protected production signing-key use and OS
+  vendor signing/notarization remain deferred release-hardening work.
 
-## Current failures
+## Unresolved limitations
 
 Real `/hooks` trust review and a qualifying authenticated Codex payload/run
 remain pending. This is intentionally not converted into a stronger support
-claim. Distribution work must preserve this limitation.
+claim. The distribution gate preserves this limitation. Public production
+key replacement, Authenticode, Apple Developer ID signing, and notarization
+are also deferred; no public release is claimed.
 
 ## Immediate next action
 
-SYN-009C.1 verification is complete: `:cli:platformBundle`,
-`:cli:bundleSmokeTest`, `:cli:platformArchive`, bundled `version`, and clean
-strict Java `check` all PASS. Native output is Windows x64 only in this
-workspace. SYN-009C.2 verification now passes with a complete Go 1.26.5
-toolchain on D:.
-
-`gofmt -w .`, `go test -v ./...`, `go vet ./...`, native Windows bootstrap
-process install/update/doctor/uninstall, all six cross-compiles, and a clean
-room Java `clean check --dependency-verification=strict` PASS. The remaining
-action is the phase checkpoint/commit and final release-consistency audit
-before promoting SYN-009C.3.
+SYN-009C is DONE at CP-0109. The exact next action is to run
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
+promoting any future task; do not start another distribution slice implicitly.

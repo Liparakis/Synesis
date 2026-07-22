@@ -5,7 +5,7 @@
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
-  DONE at CP-0102, SYN-009B.1 is VERIFYING, and SYN-009C is the only ACTIVE task;
+  DONE at CP-0102, SYN-009B.1 is VERIFYING, and SYN-009C is DONE at CP-0109;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -116,8 +116,12 @@ allowed.
   matrix are present. SYN-009C.2 verification now passes: `gofmt`, `go test
   ./...`, `go vet ./...`, native Windows subprocess install/update/doctor/
   uninstall, all six cross-compiles, clean-room Java `clean check
-  --dependency-verification=strict`, and platform archive generation. The
-  next checkpoint must capture the completed Go/Java phase before commit.
+  --dependency-verification=strict`, and platform archive generation. SYN-009C.3
+  final gate: Java full build, Go full test, CI matrix definition, native smoke
+  where available, bootstrap native smoke, manifest aggregation, test-key
+  signature verification, release documentation, and clean working tree all
+  PASS at CP-0109. Production key replacement and OS vendor signing remain
+  deferred release-hardening work.
 
 ## Honest limitations
 

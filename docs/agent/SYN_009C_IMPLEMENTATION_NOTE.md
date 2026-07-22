@@ -81,3 +81,24 @@ exist.
 - The Codex real-agent `/hooks` trust gate remains separate and incomplete.
 - No public URL or release is created; install scripts use configurable
   endpoints only.
+
+## Final completion gate
+
+At CP-0109, the SYN-009C.3 gate is complete:
+
+```text
+JAVA_FULL_BUILD=PASS
+GO_FULL_TEST=PASS
+CI_MATRIX_DEFINED=true
+NATIVE_BUNDLE_SMOKE_TESTS=PASS_WHERE_AVAILABLE
+BOOTSTRAP_NATIVE_SMOKE_TESTS=PASS_WHERE_AVAILABLE
+MANIFEST_AGGREGATION=PASS
+SIGNATURE_VERIFICATION=PASS
+RELEASE_DOCS=COMPLETE
+WORKING_TREE=CLEAN
+```
+
+Signature verification is covered with an ephemeral test keypair and the
+bootstrap's pinned-key path; the protected production secret was not accessed.
+The checked-in public key remains a development placeholder until an authorized
+release-hardening change replaces it. No public release is claimed.

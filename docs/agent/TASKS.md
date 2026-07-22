@@ -519,18 +519,21 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-009C
 - Priority: P0
 - Title: Cross-platform distribution and bootstrap installation
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Produce platform-specific Java bundles with bundled runtimes, a Go installer/update bootstrapper, and a verified CI artifact matrix.
 - Dependencies: SYN-009B DONE; user-supplied SYN-009C activation; Codex remains EXPERIMENTAL/DEGRADED and is not promoted by this task.
 - Acceptance criteria: native Windows bundle smoke passes; Go bootstrap install/update/uninstall/doctor behavior is bounded and tested; detached Ed25519 manifest verification, SHA-256 verification, safe extraction, atomic activation, rollback, and project preservation pass; CI defines windows/linux/macos x64/arm64 artifact jobs and honest native/cross-compiled status; Java provider behavior remains covered; no Link protocol behavior changes.
 - Required tests: `:cli:platformBundle`, bundled-runtime smoke, Go unit/integration tests, artifact/manifest checks, safe-extraction tests, and strict Java verification.
 - Required documentation: implementation note, three distribution ADRs, installation/release/signing docs, smoke evidence, and durable state updates.
 - Scope state: activated from the pasted SYN-009C goal; no public release or remote publication.
-- Evidence: PARTIAL — Java bundle/archive/smoke and strict verification PASS;
-  Go formatting/tests/vet, native Windows bootstrap subprocess, safe signed
-  fixture, and six cross-compiles PASS; workflow YAML and manifest consistency
-  checks are defined. Protected production-key verification and final clean
-  commit remain release-gate work.
+- Evidence: PASS — CP-0106 through CP-0109; clean-room Java strict build,
+  jlink bundle/runtime/archive/smoke, Go 1.26.5 formatting/tests/vet, native
+  Windows bootstrap install/update/doctor/uninstall subprocess smoke, signed
+  fixture verification, safe extraction and rollback tests, six cross-builds,
+  six-platform CI YAML and manifest consistency checks, release documentation,
+  and final clean working tree. Production key replacement, Authenticode,
+  Apple Developer ID signing, notarization, and public publication remain
+  explicitly deferred.
 
 ## SYN-009B.1
 

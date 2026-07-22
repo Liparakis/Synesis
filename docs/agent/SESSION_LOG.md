@@ -602,3 +602,15 @@ Append-only operational history.
   a fresh project, disabled build cache, and D: TEMP/TMP.
 - Remaining work: create the phase-2 checkpoint, commit the verified slice,
   and continue to SYN-009C.3.
+
+## 2026-07-22 — SYN-009C.3 release-consistency gate
+
+- Checkpoint: CP-0108 phase evidence; CP-0109 final completion.
+- Completed work: made native Java bundle smoke explicit in both Windows and
+  Unix CI branches; validated the six-platform matrix, manifest aggregation,
+  checksum/signature handling, install scripts, release docs, and deferred
+  signing limitations.
+- Results: final Java/Go/CI/native-smoke/manifest/signature/documentation/clean
+  tree gate PASS. No secret was accessed and no release was published.
+- Exact continuation: run `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1` and select a separately authorized task.
