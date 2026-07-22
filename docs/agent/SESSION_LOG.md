@@ -668,3 +668,11 @@ Append-only operational history.
   text and updated the license decision, audit, and durable-state records.
 - Checkpoint: CP-0112.
 - No public push or repository visibility change was performed.
+
+## 2026-07-22 — SYN-010A Go verification completed
+
+- Go 1.26.5 was installed and verified with `bootstrap` `go test ./...` and
+  `go vet ./...`: PASS.
+- The Codex process PATH had not refreshed, so the standard install executable
+  was invoked directly. No code changes were required.
+- Checkpoint: CP-0113.

@@ -62,10 +62,9 @@ to immutable action SHAs remains a prepublication hardening item.
 
 - `gradlew.bat check --dependency-verification=strict`: PASS; `BUILD
   SUCCESSFUL`.
-- Current Go execution was not available because `go.exe` is absent from this
-  machine's PATH and standard install locations. CP-0110 records the required
-  Go 1.26.5 test/vet and cross-compile evidence; no Go source changed in this
-  preparation slice.
+- Go 1.26.5 `bootstrap` test and vet: PASS. The current Codex process PATH did
+  not include the newly installed tool, so verification invoked
+  `C:\Program Files\Go\bin\go.exe` directly; no Go source changed.
 - `agent-resume.ps1`, `agent-doctor.ps1`, `agent-validate-fixtures.ps1`, and
   `agent-validate-deferred.ps1`: PASS.
 - `git diff --check`, README link checks, ignore-rule checks, current-tree and
