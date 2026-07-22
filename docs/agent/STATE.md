@@ -5,7 +5,7 @@
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
-DONE at CP-0102, and SYN-009C is the only ACTIVE task in planning-only state;
+DONE at CP-0102, and SYN-009B.1 is the only ACTIVE task;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -89,8 +89,22 @@ allowed.
   process/protocol scenarios were rewritten in `UnifiedCliSyncProcessTest`
   against the generated launcher, malformed invitations map to
   `INVITE_INVALID`, and provider lifecycle evidence includes unrelated hook
-  configuration preservation. Closed at CP-0102. SYN-009C is queued with no
-  implementation started.
+    configuration preservation. Closed at CP-0102. SYN-009C is READY with no
+    implementation started.
+
+- SYN-009B.1 promotion: PASS as a documentation/architecture gate; the
+    installed Codex baseline is `codex-cli 0.140.0`, the official hook/config
+    boundary and trust limitation are recorded, and no SYN-009C implementation
+    has started. Parser, adapter, lifecycle, fixture, and real-agent evidence
+  remain pending.
+
+- SYN-009B.1 implementation slice: PASS for bounded parser/adapter behavior,
+  provider lifecycle, Windows launcher command shape, generated process
+  coverage, and 20-call synthetic latency. Codex remains
+  `EXPERIMENTAL`/`DEGRADED` with `TRUST_STATUS=REVIEW_REQUIRED`; the real
+  `/hooks` trust review and qualifying denial/re-plan/hash evidence are not
+  complete. See `docs/validation/codex-real-agent-experiment.md`.
+  Checkpoint CP-0103 records the verified slice and the exact continuation.
 
 ## Honest limitations
 

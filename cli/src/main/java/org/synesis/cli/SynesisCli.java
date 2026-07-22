@@ -9,6 +9,7 @@ import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
 import org.synesis.cli.command.HookAntigravityCommand;
 import org.synesis.cli.command.HookClaudeCodeCommand;
+import org.synesis.cli.command.HookCodexCommand;
 import org.synesis.cli.command.HookCommand;
 import org.synesis.cli.command.HelpCommand;
 import org.synesis.cli.command.HostCommand;
@@ -73,6 +74,7 @@ public final class SynesisCli {
         command.addSubcommand("hook", new HookCommand());
         command.getSubcommands().get("hook").addSubcommand("antigravity", new HookAntigravityCommand(runtime));
         command.getSubcommands().get("hook").addSubcommand("claude-code", new HookClaudeCodeCommand(runtime));
+        command.getSubcommands().get("hook").addSubcommand("codex", new HookCodexCommand(runtime));
         command.setOut(runtime.terminal().out());
         command.setErr(runtime.terminal().err());
         command.setParameterExceptionHandler((exception, _) -> {

@@ -33,3 +33,6 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 
 - ADR-0001: One Gradle project with package boundaries — accepted.
 - ADR-0002: Netty 4.2 native QUIC adapter — accepted for dependency and native-runtime validation.
+- ADR-0022: Codex PreToolUse adapter and trust boundary — accepted for
+  SYN-009B.1; bounded `apply_patch` parsing, shared guardrail evaluation,
+  project-local lifecycle, and no trust-database mutation.

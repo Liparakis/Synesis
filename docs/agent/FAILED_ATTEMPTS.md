@@ -59,6 +59,35 @@
 
 ## Required entry format
 
+## 2026-07-22 — Codex real-agent hook validation
+
+- Date: 2026-07-22
+- Task ID: SYN-009B.1
+- Attempted approach: Run authenticated Codex CLI 0.140.0 against a disposable
+  project with the project-local Codex hook installed; first without the trust
+  bypass, then once with the documented one-shot bypass only for diagnostics.
+- Expected result: The hook receives a real `apply_patch` payload, denies the
+  protected path, and preserves its hash.
+- Observed result: Without persisted project trust the hook was skipped and the
+  protected disposable file changed. The bypassed diagnostic run also did not
+  invoke the temporary capture wrapper in this Windows noninteractive path.
+  No actual payload fixture or denial/re-plan claim is recorded.
+- Command or evidence: `codex login status`; `codex -m gpt-5.4 -C <fixture>
+  -s workspace-write -a never exec --ephemeral --json ...`; validation report
+  `docs/validation/codex-real-agent-experiment.md`.
+- Root cause: The required `/hooks` interactive trust review was not completed;
+  the noninteractive path is not evidence of trusted project-hook execution.
+- Retry prohibition: Do not promote Codex or claim real enforcement from a
+  bypassed or untrusted run.
+- Evidence required before retry: Review/trust the exact hook in Codex `/hooks`,
+  capture and sanitize one payload, and prove denial recognition, reason,
+  replanning, and unchanged protected hash.
+- Next hypothesis: An interactive trusted run will either exercise the
+  `commandWindows` launcher and complete the gate or reveal a concrete
+  Windows hook-command contract issue.
+
+## Required entry format
+
 - Date:
 - Task ID:
 - Attempted approach:

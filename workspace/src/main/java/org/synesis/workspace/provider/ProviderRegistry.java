@@ -5,11 +5,12 @@ import java.util.Locale;
 
 import org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration;
 import org.synesis.workspace.provider.claude.ClaudeCodeProviderIntegration;
+import org.synesis.workspace.provider.codex.CodexProviderIntegration;
 
 /** Static registry for the currently implemented provider integrations. */
 public final class ProviderRegistry {
     private static final List<ProviderIntegration> PROVIDERS = List.of(
-            new AntigravityProviderIntegration(), new ClaudeCodeProviderIntegration());
+            new AntigravityProviderIntegration(), new ClaudeCodeProviderIntegration(), new CodexProviderIntegration());
 
     private ProviderRegistry() {
     }

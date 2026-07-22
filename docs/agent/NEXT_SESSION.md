@@ -1,11 +1,11 @@
 # Next Session
 
-- Active task: SYN-009C (planning only; SYN-009B is DONE and no implementation work is active)
+- Active task: SYN-009B.1 (Codex PreToolUse adapter and provider lifecycle)
 - Repository branch: master
-- Last checkpoint: CP-0102
+- Last checkpoint: CP-0105
 - Last passing command: `.\gradlew.bat clean check --dependency-verification=strict`
 - Last failing command: none
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next documentation action: Review SYN-009C's portable ZIP and clean-machine smoke-test acceptance criteria before implementation.
-- Unresolved blockers: none; SYN-009B is closed with strict clean verification, five unified-launcher process scenarios, and disposable provider lifecycle checks passed.
-- Facts that must not be forgotten: ActionGuardrail is the shared evaluator used by both ClaudeCodeHookAdapter and AntigravityHookAdapter; AntigravityHookAdapter uses toolCall.name and toolCall.args.TargetFile, NOT tool_name or tool_input; decision mapping is deny/force_ask/ask; exit code is always 0 for both adapters; Claude Code hook contract uses hookSpecificOutput.permissionDecision; Antigravity hook contract uses decision.
+- Exact next documentation action: Review/trust the exact project-local Codex hook in the interactive `/hooks` UI, then rerun the protected-file experiment in `docs/validation/codex-real-agent-experiment.md`.
+- Unresolved blockers: real Codex payload capture and authenticated `/hooks` validation are pending; do not promote Codex beyond EXPERIMENTAL without their evidence.
+- Facts that must not be forgotten: ActionGuardrail and ProjectPathResolver are shared boundaries; Codex is project-local `.codex/hooks.json`, requires trusted project configuration, and must remain `REVIEW_REQUIRED`/`DEGRADED` until real validation; Codex input is PreToolUse with `tool_name=apply_patch`, `tool_input.command`, and `cwd`; the adapter never applies patches; allowed and unsupported Codex events produce empty stdout and exit 0; blocked/invalid events produce bounded denial JSON and exit 0.

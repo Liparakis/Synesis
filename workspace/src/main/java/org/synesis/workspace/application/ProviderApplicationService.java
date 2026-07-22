@@ -33,7 +33,7 @@ public final class ProviderApplicationService {
     }
 
     /**
-     * Lists the two currently implemented providers.
+     * Lists the currently implemented providers.
      * @param location project location
      * @return provider rows
      */
@@ -68,11 +68,11 @@ public final class ProviderApplicationService {
             Map<String, Object> root = readObject(config);
             Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(), ignored -> new LinkedHashMap<>()));
             List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
-            Map<String, Object> expectedHook = managedHook(provider, launcher, profile);
-            boolean already = hooks.stream().filter(value -> managed(value, provider)).count() == 1
-                    && expectedHook.equals(hooks.stream().filter(value -> managed(value, provider)).findFirst().orElse(null))
+            Map<String, Object> expectedHook = provider.managedHook(launcher, profile);
+            boolean already = hooks.stream().filter(provider::isManagedHook).count() == 1
+                    && expectedHook.equals(hooks.stream().filter(provider::isManagedHook).findFirst().orElse(null))
                     && Files.exists(metadata(location, provider));
-            hooks.removeIf(value -> managed(value, provider));
+            hooks.removeIf(provider::isManagedHook);
             hooks.add(expectedHook);
             atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
             ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(location, provider);
@@ -88,6 +88,7 @@ public final class ProviderApplicationService {
             metadata.put("lastSyntheticCheck", synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED");
             atomicWrite(metadata(location, provider), ProviderJson.write(metadata) + System.lineSeparator());
             String result = synthetic.blocked() && synthetic.allowed() && synthetic.validJson()
+                    && !provider.requiresRealValidation()
                     ? (already ? "ALREADY_INSTALLED" : "SUCCESS") : "DEGRADED";
             return result(provider, "PROVIDER_INSTALL_RESULT", result, synthetic, config, profile, launcher, 0);
         } catch (IllegalArgumentException failure) {
@@ -129,8 +130,10 @@ public final class ProviderApplicationService {
                 return status(provider, metadataPresent ? "DEGRADED" : "DEGRADED", config, metadataPresent, count, launcherPresent, profilePresent, false, 1);
             }
             var synthetic = syntheticCheck(location, provider);
-            String state = synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "HEALTHY" : "BROKEN";
-            return status(provider, state, config, true, count, launcherPresent, profilePresent, synthetic.blocked() && synthetic.allowed(), state.equals("HEALTHY") ? 0 : 3);
+            String state = synthetic.blocked() && synthetic.allowed() && synthetic.validJson()
+                    ? (provider.requiresRealValidation() ? "DEGRADED" : "HEALTHY") : "BROKEN";
+            return status(provider, state, config, true, count, launcherPresent, profilePresent,
+                    synthetic.blocked() && synthetic.allowed(), state.equals("HEALTHY") ? 0 : 1);
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_STATUS", 3);
         } catch (Exception failure) {
@@ -157,7 +160,7 @@ public final class ProviderApplicationService {
                 Map<String, Object> group = object(root.get(provider.hookGroup()));
                 if (group != null) {
                     List<Object> hooks = list(group.get("PreToolUse"));
-                    removed = hooks.removeIf(value -> managed(value, provider));
+                    removed = hooks.removeIf(provider::isManagedHook);
                     if (hooks.isEmpty()) group.remove("PreToolUse");
                     if (group.isEmpty()) root.remove(provider.hookGroup());
                     if (root.isEmpty()) Files.deleteIfExists(config);
@@ -191,6 +194,7 @@ public final class ProviderApplicationService {
         lines.add("WARN=Antigravity run_command mutations are not inspected.");
         lines.add("WARN=Antigravity real-agent re-planning validation is not completed.");
         lines.add("WARN=Claude Code integration remains EXPERIMENTAL.");
+        lines.add("WARN=Codex project hooks require explicit trust and real-agent validation.");
         boolean recordsHealthy = recordStoreHealthy(location);
         if (!recordsHealthy) broken = true;
         lines.add("RECORD_STORE=" + (recordsHealthy ? "PASS" : "FAIL"));
@@ -226,12 +230,7 @@ public final class ProviderApplicationService {
 
     private static List<Object> managedEntries(Map<String, Object> root, ProviderIntegration provider) {
         Map<String, Object> group = object(root.get(provider.hookGroup()));
-        return group == null ? List.of() : list(group.get("PreToolUse")).stream().filter(value -> managed(value, provider)).toList();
-    }
-
-    private static boolean managed(Object value, ProviderIntegration provider) {
-        Map<String, Object> hook = object(value);
-        return hook != null && provider.managedHookId().equals(hook.get("id"));
+        return group == null ? List.of() : list(group.get("PreToolUse")).stream().filter(provider::isManagedHook).toList();
     }
 
     private static boolean managedCommandMatches(Map<String, Object> root, ProviderIntegration provider, Path launcher, Path profile) {
@@ -242,7 +241,9 @@ public final class ProviderApplicationService {
         List<Object> commands = list(hook.get("hooks"));
         if (commands.size() != 1) return false;
         Map<String, Object> command = object(commands.getFirst());
-        return command != null && (quote(launcher) + " hook " + provider.id() + " --profile " + quote(profile)).equals(command.get("command"));
+        if (command == null || !provider.hookCommand(launcher, profile).equals(command.get("command"))) return false;
+        String windowsCommand = provider.windowsHookCommand(launcher, profile);
+        return windowsCommand == null || windowsCommand.equals(command.get("commandWindows"));
     }
 
     private static boolean schemaVersion(Object value) {
@@ -261,14 +262,6 @@ public final class ProviderApplicationService {
         } catch (Exception failure) {
             return false;
         }
-    }
-
-    private static Map<String, Object> managedHook(ProviderIntegration provider, Path launcher, Path profile) {
-        Map<String, Object> hook = new LinkedHashMap<>();
-        hook.put("id", provider.managedHookId()); hook.put("matcher", provider.matcher());
-        Map<String, Object> command = new LinkedHashMap<>(); command.put("type", "command");
-        command.put("command", quote(launcher) + " hook " + provider.id() + " --profile " + quote(profile));
-        hook.put("hooks", List.of(command)); return hook;
     }
 
     private static String quote(Path path) { return "\"" + path.toAbsolutePath().normalize().toString().replace("\"", "\\\"") + "\""; }
@@ -295,9 +288,9 @@ public final class ProviderApplicationService {
     }
 
     private static ProviderResult result(ProviderIntegration provider, String key, String state, ProviderIntegration.SyntheticCheck synthetic, Path config, Path profile, Path launcher, int exit) {
-        return simple(provider, key, state, exit, "PROVIDER", provider.id(), "SUPPORT_LEVEL", provider.supportLevel().name(), "CONFIG_PATH", config.toString(), "PROFILE_PATH", profile.toString(), "MANAGED_HOOK_PRESENT", "true", "SYNTHETIC_CHECK", synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED", "REAL_AGENT_VALIDATION", "NOT_COMPLETED");
+        return simple(provider, key, state, exit, "PROVIDER", provider.id(), "SUPPORT_LEVEL", provider.supportLevel().name(), "CONFIG_PATH", config.toString(), "PROFILE_PATH", profile.toString(), "MANAGED_HOOK_PRESENT", "true", "SYNTHETIC_CHECK", synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED", "TRUST_STATUS", provider.trustStatus(), "REAL_AGENT_VALIDATION", "NOT_COMPLETED");
     }
-    private static ProviderResult status(ProviderIntegration provider, String state, Path config, boolean metadata, int count, boolean launcher, boolean profile, boolean synthetic, int exit) { return simple(provider, "PROVIDER_STATUS", state, exit, "PROVIDER", provider.id(), "SUPPORT_LEVEL", provider.supportLevel().name(), "METADATA_PRESENT", Boolean.toString(metadata), "CONFIG_PRESENT", Boolean.toString(Files.isRegularFile(config)), "MANAGED_HOOK_COUNT", Integer.toString(count), "LAUNCHER_PRESENT", Boolean.toString(launcher), "PROFILE_PRESENT", Boolean.toString(profile), "SYNTHETIC_BLOCK_CHECK", synthetic ? "PASSED" : "NOT_RUN", "REAL_AGENT_VALIDATION", "NOT_COMPLETED"); }
+    private static ProviderResult status(ProviderIntegration provider, String state, Path config, boolean metadata, int count, boolean launcher, boolean profile, boolean synthetic, int exit) { return simple(provider, "PROVIDER_STATUS", state, exit, "PROVIDER", provider.id(), "SUPPORT_LEVEL", provider.supportLevel().name(), "METADATA_PRESENT", Boolean.toString(metadata), "CONFIG_PRESENT", Boolean.toString(Files.isRegularFile(config)), "MANAGED_HOOK_COUNT", Integer.toString(count), "LAUNCHER_PRESENT", Boolean.toString(launcher), "PROFILE_PRESENT", Boolean.toString(profile), "SYNTHETIC_BLOCK_CHECK", synthetic ? "PASSED" : "NOT_RUN", "TRUST_STATUS", provider.trustStatus(), "REAL_AGENT_VALIDATION", "NOT_COMPLETED"); }
     private static ProviderResult simple(ProviderIntegration provider, String key, String state, int exit, String... fields) { Map<String, String> values = new LinkedHashMap<>(); values.put(key, state); for (int i = 0; i + 1 < fields.length; i += 2) values.put(fields[i], fields[i + 1]); return new ProviderResult(exit, values); }
     private static ProviderResult failure(String id, String error, String key, int exit) { Map<String, String> values = new LinkedHashMap<>(); values.put(key, error); values.put("ERROR", error); if (id != null) values.put("PROVIDER", id); return new ProviderResult(exit, values); }
 

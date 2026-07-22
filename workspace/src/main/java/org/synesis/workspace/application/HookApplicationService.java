@@ -6,6 +6,7 @@ import java.util.Objects;
 
 import org.synesis.workspace.integration.antigravity.AntigravityHookAdapter;
 import org.synesis.workspace.integration.claude.ClaudeCodeHookAdapter;
+import org.synesis.workspace.integration.codex.CodexHookAdapter;
 
 /**
  * Adapts provider hook streams to structured provider results.
@@ -42,6 +43,17 @@ public final class HookApplicationService {
         AntigravityHookAdapter.Result result = new AntigravityHookAdapter(profile).processStream(input);
         return new HookExecutionResult(result.outcome()
                 .name(), result.responseJson(), result.humanReason());
+    }
+
+    /**
+     * Processes one Codex PreToolUse event using payload cwd project discovery.
+     *
+     * @param input provider event stream
+     * @return structured hook result
+     */
+    public HookExecutionResult codex(InputStream input) {
+        CodexHookAdapter.Result result = new CodexHookAdapter().processStream(input);
+        return new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason());
     }
 
     /**

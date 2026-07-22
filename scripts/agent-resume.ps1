@@ -36,7 +36,7 @@ foreach ($file in $required)
     $texts[$file] = ReadText (Join-Path $RepositoryRoot $file)
 }
 $deferredValidator = Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.ps1'; $LASTEXITCODE = 0; & $deferredValidator -RepositoryRoot $RepositoryRoot; if ($LASTEXITCODE -ne 0) { Fail 'Deferred register validation failed' }
-$taskMatches = [regex]::Matches($texts['docs/agent/TASKS.md'], '(?ms)^##\s+((?:SL|SYN)-[A-Z0-9-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*(ACTIVE)\s*$')
+$taskMatches = [regex]::Matches($texts['docs/agent/TASKS.md'], '(?ms)^##\s+((?:SL|SYN)-[A-Z0-9.-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*(ACTIVE)\s*$')
 if ($taskMatches.Count -ne 1)
 {
     Fail "Expected exactly one ACTIVE task; found $( $taskMatches.Count )"

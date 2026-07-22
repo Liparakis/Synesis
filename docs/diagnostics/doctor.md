@@ -9,6 +9,9 @@ launcher/profile existence, and isolated synthetic protected/unrelated hook
 checks. Known limitations are warnings: Antigravity `run_command` mutations
 are not inspected, Antigravity real-agent re-planning is not completed, and
 Claude Code remains experimental.
+Codex trust is reported as `REVIEW_REQUIRED`/`UNKNOWN`; project-local Codex
+hooks require explicit `/hooks` review, and Codex remains `DEGRADED` until a
+real authenticated denial/re-plan/hash experiment is recorded.
 
 `DOCTOR_RESULT=HEALTHY_WITH_WARNINGS` exits successfully. Broken local
 provider or record state produces `DOCTOR_RESULT=BROKEN` and exit code `3`.

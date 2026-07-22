@@ -5,6 +5,11 @@ operations to the static `ProviderRegistry`. Provider integrations only know
 their provider configuration path, hook group, managed identifier, matcher, and
 payload contract.
 
+Codex is the first provider with a provider-specific managed-entry shape: its
+project-local `.codex/hooks.json` entry uses the documented `commandWindows`
+override and no synthetic `id` field. This remains a narrow lifecycle hook,
+not a general provider framework.
+
 Provider hook execution remains:
 
 ```text

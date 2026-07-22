@@ -519,14 +519,32 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-009C
 - Priority: P0
 - Title: Portable ZIP and clean-machine smoke test
-- Status: ACTIVE
+- Status: READY
 - Purpose: Prepare the smallest reproducible portable distribution and clean-machine smoke test for the unified `synesis` launcher.
 - Dependencies: SYN-009B DONE; provider lifecycle and diagnostics closed at CP-0102.
 - Acceptance criteria: portable ZIP contents, launcher startup, dependency/runtime assumptions, and clean-machine smoke evidence are documented and verified without changing provider or Link protocol behavior.
 - Required tests: archive assembly, clean-machine launcher help/version/init, and documented smoke cleanup.
 - Required documentation: distribution note, smoke-test evidence, and durable state updates.
-- Scope state: queued for the next session; no SYN-009C implementation work has started.
+- Scope state: queued behind SYN-009B.1; no SYN-009C implementation work has started.
 - Evidence: pending.
+
+## SYN-009B.1
+
+- ID: SYN-009B.1
+- Priority: P0
+- Title: Codex PreToolUse adapter, provider lifecycle, and real-agent validation
+- Status: ACTIVE
+- Purpose: Add the smallest project-local Codex `apply_patch` PreToolUse adapter and provider lifecycle integration on top of the closed SYN-009B foundation.
+- Dependencies: SYN-009B DONE at CP-0102; Codex CLI 0.140.0 is locally installed; official Codex hook/config contract review recorded in `docs/agent/SYN_009B1_IMPLEMENTATION_NOTE.md`.
+- Acceptance criteria: Codex is listed after Antigravity and Claude Code as `EXPERIMENTAL`; `synesis hook codex` parses bounded Add/Update/Delete/Move patch paths, resolves `cwd` through the shared project/path guardrail boundary, denies any blocked or invalid multi-path patch with exit 0, emits bounded warnings as `additionalContext`, leaves allowed/unsupported stdout empty, and never applies patches; provider install/status/uninstall owns project-local `.codex/hooks.json` atomically and idempotently while preserving unrelated configuration; install/status/doctor report trust `REVIEW_REQUIRED`/`UNKNOWN` and stay degraded until a real validated run; synthetic tests, process-level launcher coverage, Codex version/fixture capture, and the real authenticated `/hooks` experiment are recorded honestly; Codex remains `EXPERIMENTAL` unless every promotion gate passes.
+- Required tests: bounded parser tests for Add/Update/Delete/Move, duplicate normalization, malformed/traversal fail-closed cases, adapter allow/block/warning/unsupported/invalid behavior, multi-path aggregation, provider merge/atomicity/idempotence/uninstall preservation, generated-launcher hook and lifecycle process coverage, and a 20-invocation p50/p95 measurement.
+- Required documentation: implementation note, ADR-0022, `docs/integration/codex-hook.md`, `docs/validation/codex-real-agent-experiment.md`, provider/doctor/current-state updates, sanitized actual payload fixture with version, checkpoint evidence, and durable state updates.
+- Scope boundary: no Bash hooks, MCP, SDK/App Server, transcript parsing, patch application, trust-database edits, portable ZIP, release packaging, protocol changes, dynamic plugins, or remote publication.
+- Evidence: Synthetic parser/adapter/provider tests, generated launcher process
+  coverage, 20-call latency measurement (`p50=1.247 ms`, `p95=1.806 ms`),
+  strict clean check, and disposable generated-launcher lifecycle checks PASS.
+  Real `/hooks` trust review and authenticated denial/re-plan/hash evidence are
+  not complete; see `docs/validation/codex-real-agent-experiment.md`.
 
 ## Deferred capability register
 

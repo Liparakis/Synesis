@@ -2,7 +2,7 @@
 
 **Date**: July 22, 2026
 **Repository Branch**: `master`
-**Latest Checkpoint**: `CP-0096` (SYN-009A implementation verified)
+**Latest Checkpoint**: `CP-0102` (SYN-009B closure; SYN-009B.1 active)
 **Build Status**: `PASS` (`.\gradlew.bat clean check --dependency-verification=strict`)
 
 ---
@@ -27,7 +27,10 @@
   - `scripts/run-synesis-guardrail-experiment.ps1`: Automated experiment runner proving PreToolUse hook denial and target file preservation.
   - `docs/validation/baseline-vs-synesis-experiment.md`: Experiment specification and metric results.
   - Provider lifecycle is available through `synesis provider`; Antigravity is
-    `BETA`, Claude Code is `EXPERIMENTAL`, and provider metadata is local-only.
+  `BETA`, Claude Code is `EXPERIMENTAL`, and provider metadata is local-only.
+  Codex is listed as `EXPERIMENTAL`; its bounded `apply_patch` adapter and
+  project-local lifecycle are synthetic/process verified, while trust review
+  and real-agent enforcement remain unverified.
 
 ---
 
@@ -45,6 +48,8 @@
 
 ### B. Documented Limitations & Harness Enforcement Boundaries
 
-- **Real-Agent Run**: Authenticated real-agent run status is `NOT_RUN` (CLI session requires interactive login).
+- **Real-Agent Run**: Antigravity evidence is recorded; Codex CLI `0.140.0` is
+  authenticated, but project hook trust was not established in the attempted
+  noninteractive run, so Codex real-agent enforcement is `NOT_COMPLETED`.
 - **Harness Integration Scope**: Synesis enforces constraints at integration points that invoke its guardrail (`check-action` or `hook claude-code`).
 - **Claude Code Adapter Scope**: Enforces supported structured file-edit tools (`Edit`, `Write`, `str_replace_editor`, `write_file`, `file_edit`, `file_write`, `NotebookEdit`). It emits `UNSUPPORTED` diagnostics on stderr for raw un-parsed shell commands (`Bash`).
