@@ -6,7 +6,8 @@ Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
   DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
-  SYN-010A is VERIFYING and SYN-010B is the only ACTIVE task at CP-0126;
+  SYN-010A is VERIFYING, SYN-010B is VERIFYING, SYN-011 is VERIFYING, and
+  SYN-009D is the only ACTIVE task at CP-0131;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -32,7 +33,9 @@ onboarding through the typed `Onboarding` façade. `:project-record` now owns
 the CP-R2 canonical signed decision model, immutable local store, recovery, and
 JDK-only inspection launcher. CP-R4 adds only configured peer authorization,
 bounded one-shot messages, authenticated validation, deterministic outcomes,
-and quarantine. Production installation remains out of scope.
+and quarantine. SYN-009D now owns the explicit stable installation follow-up;
+broader production installation claims remain out of scope until its evidence
+passes.
 
 ## Planning boundary
 
@@ -142,3 +145,25 @@ resumption, physical IPv6/public IPv4, temporary application-silence recovery,
 all-firewall operation, production installation/signing, GUI, and production
 Synesis semantics are not claimed. Abrupt child-process loss remains classified
 only as the documented transport-failure or liveness-expiry category.
+## SYN-011 Antigravity real-integration investigation
+
+- Preserved pre-change test-project evidence before modifications under
+  `docs/evidence/antigravity-real-investigation-2026-07-22/before`.
+- The original Windows managed hook command had invalid `.cmd` quoting. The
+  minimal provider correction now emits a `cmd.exe /d /s /c` wrapper.
+- The exact observed Antigravity structured tool is `replace_file_content`; its
+  real-shaped payload is covered by `AntigravityHookAdapterTest` and the exact
+  managed command returns `decision=deny`, exit `0`, with the bounded reason.
+- Direct constraint evaluation remains `BLOCKED`, exit `10`.
+- A real Antigravity 1.0.16 protected edit still changed the protected file;
+  current transcript/database diagnostics contain no hook decision or Synesis
+  marker. This is evidence of project-hook discovery/loading failure, not an
+  adapter constraint failure.
+- Provider health is intentionally `DEGRADED`, `TRUST_STATUS=UNVALIDATED`, and
+  `REAL_AGENT_VALIDATION=NOT_COMPLETED`.
+- Real unrelated structured editing succeeded with `--add-dir`; real replan
+  content reached `proposals/tcp-fallback.md`. The protected file was restored
+  exactly and its final SHA-256 is
+  `1A73CA051A3BE63084451D3744632F227FB5236BBE3F2334DE20BCF5498D98D9`.
+- Complete sanitized evidence is in
+  `docs/evidence/antigravity-real-investigation-2026-07-22/report.md`.

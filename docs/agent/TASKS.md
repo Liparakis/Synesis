@@ -294,7 +294,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-010B
 - Priority: P0
 - Title: Simplify CI artifact output into one release candidate
-- Status: ACTIVE
+- Status: VERIFYING
 - Purpose: Expose one aggregated `synesis-release-candidate` Actions artifact for ordinary workflow runs while preserving all six platform bootstrappers, six Java bundles, native smoke validation, manifest/signature/checksum verification, and future platform-specific release assets.
 - Dependencies: SYN-009C DONE at CP-0110; explicit user-supplied SYN-010B goal; SYN-010A VERIFYING.
 - Acceptance criteria: internal matrix artifacts are clearly named and short-lived; aggregation downloads all required inputs into a clean deterministic layout; exactly one final Actions artifact is uploaded; required files, versions, platforms, checksums, signatures, archive safety, duplicates, and unexpected files are rejected; install scripts and concise README are included; no release is published.
@@ -302,6 +302,55 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: aggregation implementation note, `docs/release/cross-platform-release.md`, `docs/release/artifact-matrix.md`, `docs/installation/bootstrap-install.md`, `docs/development/current-state.md`, and durable state updates.
 - Scope boundary: no Java application, provider, synchronization, protocol, Go bootstrap behavior, installation-directory, signing-key, release-tag, GitHub Release, domain, or marketing changes.
 - Evidence: pending; start from repository CP-0123 rather than the stale pasted CP-0110 reference.
+
+## SYN-011
+
+- ID: SYN-011
+- Priority: P0
+- Title: Antigravity real hook enforcement investigation and health gate
+- Status: VERIFYING
+- Purpose: Investigate the failed real Antigravity protected-edit run and make the smallest evidence-backed correction required for honest provider health reporting and verified hook enforcement.
+- Dependencies: SYN-008 DONE; SYN-009B DONE; failed real Antigravity evidence supplied by the user; real Antigravity CLI 1.0.16 available locally.
+- Acceptance criteria: preserve pre-change evidence; capture the real tool name and sanitized payload shape; verify the generated command and exact matcher; run the manual payload through the exact configured command with stdout, stderr, and exit code; inspect available Antigravity diagnostics; restore the protected file; prevent Antigravity `HEALTHY` from synthetic checks alone; add a regression fixture for the verified real shape; rerun direct, manual, provider, real protected-edit, hash, unrelated-edit, and real-replan checks; remain DEGRADED or UNVALIDATED unless the real protected edit is denied and replanning succeeds.
+- Required tests: focused Antigravity adapter/provider tests, generated hook process test, and real Antigravity CLI protected-edit/replan evidence where the local installation supports it.
+- Required documentation: `docs/validation/antigravity-real-agent-experiment.md`, `docs/agent/STATE.md`, `docs/agent/CURRENT.md`, `docs/agent/FAILED_ATTEMPTS.md`, `docs/agent/TEST_MATRIX.md`, and a checkpoint.
+- Scope boundary: no new architecture, no unrelated provider or protocol work, no remote publication, no prompt/content/credential capture, and no compatibility claim beyond the verified Antigravity contract.
+- Evidence: `docs/evidence/antigravity-real-investigation-2026-07-22/report.md`;
+  real protected enforcement remains unresolved and the provider is
+  DEGRADED/UNVALIDATED.
+
+## SYN-009D
+
+- ID: SYN-009D
+- Priority: P0
+- Title: Replace versioned installation with a stable flat layout
+- Status: ACTIVE
+- Purpose: Make one OS-conventional `Synesis` root the only persistent
+  application installation, with sibling staging and temporary rollback during
+  signed install/update activation.
+- Dependencies: SYN-009C DONE at CP-0110; SL-D-024 activation trigger supplied
+  by the user; SYN-011 evidence preserved and moved to VERIFYING.
+- Acceptance criteria: Windows/Linux/macOS stable roots are resolved; bundles
+  install directly under the stable root; signed manifest and SHA-256 checks,
+  safe extraction, validation, atomic activation, rollback, legacy migration,
+  user PATH ownership, doctor, uninstall, and project preservation are
+  verified; no persistent `versions/`, `current`, versioned launcher, or
+  provider command path remains in normal source/docs; provider launchers use
+  PATH or the stable fallback only.
+- Required tests: fresh install/update/rollback, legacy migration/rollback,
+  stable launcher/version/doctor, uninstall/project preservation, staging and
+  rollback cleanup, Windows user PATH idempotence/removal preservation,
+  provider stable-launcher resolution, archive/signature/security regressions,
+  and native Windows smoke where available.
+- Required documentation: ADR-0026, installation/bootstrap/update,
+  provider-management, release, doctor, capability matrix, and durable state.
+- Scope boundary: no new product behavior, protocol changes, remote
+  publication, release signing-key changes, or deletion of external project
+  data.
+- Evidence: implementation and verification completed at CP-0131: Go tests/vet,
+  Windows/Linux/macOS cross-builds, strict Java verification, disposable
+  migration/rollback tests, native Windows archive smoke, and local Windows
+  migration all pass; stable-root doctor and PATH resolution were inspected.
 
 ## SYN-001
 

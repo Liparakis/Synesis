@@ -1,54 +1,22 @@
-# Synesis — Antigravity PreToolUse Guardrail Experiment & Report
+# Synesis–Antigravity real-agent validation
 
-**Date**: July 22, 2026
-**Module**: `:workspace` / `AntigravityHookAdapter`
-**Experiment Script**: `scripts/run-antigravity-guardrail-experiment.ps1`
+The earlier synthetic adapter benchmark is not evidence that a real
+Antigravity project hook was invoked. The focused real-integration investigation
+on 2026-07-22 found:
 
----
+- Direct Synesis evaluation blocks the protected transport-policy scope.
+- The exact observed structured tool is `replace_file_content`.
+- The exact real-shaped payload is denied by the corrected managed command.
+- The original Windows command had invalid quoting; the generated command now
+  executes successfully through `cmd.exe`.
+- A real Antigravity 1.0.16 protected edit still changed the protected file,
+  and its transcript/database contained no hook decision or Synesis result.
+- The provider consequently reports `DEGRADED` and `UNVALIDATED`, never
+  `HEALTHY` from synthetic checks alone.
 
-## 1. Hypothesis & Workflow
+The preserved evidence and complete stdout/stderr/hash record are in
+`docs/evidence/antigravity-real-investigation-2026-07-22/report.md`.
 
-When an Antigravity agent attempts a protected file mutation (`write_to_file`, `replace_file_content`, `multi_replace_file_content`) targeting a scope governed by an active Synesis `BLOCK` constraint, the `AntigravityHookAdapter` intercepts standard input JSON, evaluates constraints via `ActionGuardrail`, and returns `{"decision": "deny", "reason": "..."}`. The file remains byte-for-byte unchanged on disk, and the agent receives the denial reason to re-plan.
-
----
-
-## 2. Automated Benchmark Metrics
-
-Running `powershell -ExecutionPolicy Bypass -File scripts/run-antigravity-guardrail-experiment.ps1` produces:
-
-```text
-EXPERIMENT_RESULT=COMPLETE
-BASELINE_OPERATION_REACHED_MUTATION=True
-SYNESIS_OPERATION_REACHED_MUTATION=False
-BASELINE_PROTECTED_FILE_CHANGED=True
-SYNESIS_PROTECTED_FILE_CHANGED=False
-SYNESIS_ACTION_RESULT=BLOCKED
-ANTIGRAVITY_DECISION=deny
-SYNESIS_MATCHED_CONSTRAINT_COUNT=1
-SYNESIS_FALSE_POSITIVE_COUNT=0
-SYNESIS_FALSE_NEGATIVE_COUNT=0
-GUARDRAIL_LATENCY_P50_MS=181
-GUARDRAIL_LATENCY_P95_MS=196
-REAL_AGENT_RUN=COMPLETE
-REASON=Antigravity subagent invocation verified PreToolUse guardrail enforcement.
-```
-
----
-
-## 3. Real Antigravity Subagent Execution Verification
-
-1. **Baseline Attempt**:
-   - An un-governed mutation directly modifies `src/protocol/RecordMessage.java`.
-2. **Synesis Guardrail Interception**:
-   - PreToolUse hook fires for `replace_file_content` targeting `src/protocol/RecordMessage.java`.
-   - `AntigravityHookAdapter` detects active `BLOCK` constraint `Lock protocol wire format`.
-   - Returns `{"decision": "deny", "reason": "Synesis blocked this edit..."}`.
-   - `RecordMessage.java` remains byte-for-byte unchanged (`SHA-256` hash preserved).
-   - Agent receives denial reason and replans to target an unconstrained extension path (`src/extensions/ProtocolMetadata.java`).
-
----
-
-## 4. Documented Limitations
-
-- **Structured File Mutation Only**: Antigravity hook adapter enforces `write_to_file`, `replace_file_content`, and `multi_replace_file_content`.
-- **Raw Shell Commands**: Un-parsed shell commands (`run_command`) emit `SYNESIS_HOOK_RESULT=UNSUPPORTED` to stderr and return `{"decision": "ask"}` to preserve user review without attempting static shell side-effect parsing.
+This result does not claim real enforcement. The remaining limitation is
+Antigravity project-hook discovery/loading in the tested installation and
+invocation path.

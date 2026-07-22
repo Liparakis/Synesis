@@ -157,3 +157,31 @@
   native bootstrap subprocess, YAML parse, and final clean commit.
 - Result after fix: Real Windows archive trial passes; Unix branch remains
   runner-dependent and is now selected by host platform rather than `cmd.exe`.
+## 2026-07-22 — SYN-011 Antigravity real hook failure
+
+- Date: 2026-07-22
+- Task ID: SYN-011
+- Attempted approach: Run the corrected generated `.agents/hooks.json`
+  command manually, then run Antigravity 1.0.16 with the real structured file
+  editor against the protected scope.
+- Expected result: The project hook would deny the protected edit, preserve the
+  hash, pass its reason to the agent, and permit a replan.
+- Observed result: The manual exact command denied correctly, but the real
+  Antigravity operation modified the protected file. Its current transcript and
+  conversation database show `replace_file_content` but no `PreToolUse`, hook
+  decision, or Synesis marker. A later `--add-dir` run allowed an unrelated edit
+  and updated `proposals/tcp-fallback.md`.
+- Command or evidence: `docs/evidence/antigravity-real-investigation-2026-07-22/report.md`;
+  preserved before-state files; Antigravity transcript/database diagnostics.
+- Root cause: The original generated Windows command was malformed; after that
+  was corrected, the remaining failure was Antigravity project-hook
+  discovery/loading in the tested CLI/IDE invocation path.
+- Retry prohibition: Do not claim Antigravity real enforcement or restore
+  `HEALTHY` from synthetic checks. Do not broaden matcher coverage without a
+  verified structured mutation tool contract.
+- Evidence required before retry: A trusted Antigravity run with observable
+  hook invocation, denial, reason delivery, unchanged protected hash, and
+  successful replan.
+- Next hypothesis: Verify the supported Antigravity workspace/project loading
+  mode or obtain a trusted diagnostic that proves `.agents/hooks.json` is
+  loaded before changing the adapter again.

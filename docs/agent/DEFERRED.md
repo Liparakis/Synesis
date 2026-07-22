@@ -523,7 +523,8 @@ exchange; no new transport or protocol is implied.
 
 ## SL-D-024 â€” CLI packaging, installation, and distribution
 
-**Status:** READY_FOR_PLANNING
+**Status:** SUPERSEDED
+**Superseded by:** SYN-009D (CP-0131 promotion)
 **Area:** Release operations
 **Current verified capability:** Gradle Application development distribution
 with generated Windows and Unix launchers is verified; no production installer
@@ -537,11 +538,11 @@ or supported package is claimed.
 **Privacy questions:** Logs, paths, and telemetry.
 **Operational questions:** Platform matrix, support, and uninstall.
 **Public-claims impact:** No packaged production client claim.
-**Potential future task:** SYN-009C
-**Related ADRs:** ADR-0010
+**Potential future task:** None; stable-layout work is tracked by SYN-009D.
+**Related ADRs:** ADR-0010, ADR-0026
 **Related documents:** `docs/demo/FIRST_DEMO.md`
 **Code extension seams:** Gradle application packaging only if promoted.
-**Last reviewed:** CP-0030
+**Last reviewed:** CP-0131
 
 ## SL-D-025 â€” Unresolved physical firewall behavior
 

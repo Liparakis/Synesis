@@ -36,3 +36,7 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0022: Codex PreToolUse adapter and trust boundary — accepted for
   SYN-009B.1; bounded `apply_patch` parsing, shared guardrail evaluation,
   project-local lifecycle, and no trust-database mutation.
+- ADR-0026: Stable flat installation layout — accepted for SYN-009D; one
+  OS-conventional root is canonical, sibling staging and temporary rollback
+  make activation recoverable, user PATH ownership is explicit, and providers
+  never reference version directories.

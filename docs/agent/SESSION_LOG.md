@@ -782,3 +782,58 @@ Append-only operational history.
   `gradlew.bat clean check --dependency-verification=strict` PASS.
 - Hosted workflow confirmation remains pending until an authorized push/rerun.
 - Checkpoint: CP-0126.
+## 2026-07-22 — SYN-011 Antigravity real-integration investigation
+
+- Promoted SYN-011 as the sole active task after the supplied failed real
+  Antigravity protected-edit observation; preserved the test-project evidence
+  before changing configuration or code.
+- Found the original generated Windows hook command was not executable because
+  the `.cmd` launcher was not wrapped through `cmd.exe`; corrected that command
+  minimally and added an exact real-shape `replace_file_content` regression
+  fixture.
+- Manual exact-command result: `deny`, bounded reason on stdout/stderr, exit
+  `0`. Direct constraint result: `BLOCKED`, exit `10`.
+- Real Antigravity 1.0.16 still modified the protected file with no observed
+  hook invocation or decision in transcript/database diagnostics. Provider
+  status is now `DEGRADED`/`UNVALIDATED`; the protected file was restored to
+  the canonical bytes.
+- Real unrelated editing succeeded with `--add-dir`; proposal replan reached
+  `proposals/tcp-fallback.md`. Full sanitized evidence is in
+  `docs/evidence/antigravity-real-investigation-2026-07-22/report.md`.
+## 2026-07-22 — Local Synesis installation
+
+- Built the current source as `0.1.0-dev.16` with the Windows platform bundle
+  task and installed it under
+  `C:\Users\Liparakis\AppData\Local\Synesis\versions\0.1.0-dev.16`.
+- Switched the local `current` pointer from `0.1.0-dev.15` to `0.1.0-dev.16`;
+  the previous version directory was preserved.
+- Installed launcher verification passed: `synesis version` reports
+  `0.1.0-dev.16`, help exits `0`, and Antigravity status remains intentionally
+  `DEGRADED`/`UNVALIDATED`.
+- Existing `bundleSmokeTest` still fails because it expects Antigravity
+  `HEALTHY`; that expectation conflicts with the real-validation health gate
+  and was not weakened.
+
+## 2026-07-22 — SYN-009D stable flat installation promotion
+
+- The supplied stable-layout request activated the ready packaging capability
+  `SL-D-024` as SYN-009D and superseded the old deferred entry.
+- SYN-011 remains VERIFYING with its failed real Antigravity evidence intact;
+  it is no longer the sole active task.
+- ADR-0026 records one stable root, sibling staging, one temporary rollback,
+  legacy migration, user PATH ownership, and the provider launcher policy.
+
+## 2026-07-23 — SYN-009D implementation and verification
+
+- Replaced versioned bootstrap activation with a flat stable root, sibling
+  staging, one rollback root, signed/checksum validation, safe extraction,
+  rollback recovery, legacy migration, user PATH ownership, doctor, and
+  uninstall cleanup.
+- Updated provider launcher resolution to PATH-first plus OS stable fallback;
+  preserved the Antigravity degraded-health expectation and existing Link data.
+- Passed Go tests/vet, Windows/Linux/macOS cross-builds, strict Java checks,
+  disposable migration/rollback tests, and native Windows archive smoke.
+- Migrated the local install from `current`/`versions/` to
+  `%LOCALAPPDATA%\Synesis` after automated verification; stable `version`,
+  application `doctor`, bootstrap `doctor`, PATH resolution, identity
+  preservation, and cleanup checks passed.

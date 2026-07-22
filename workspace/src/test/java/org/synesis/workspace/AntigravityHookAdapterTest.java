@@ -54,7 +54,14 @@ final class AntigravityHookAdapterTest {
                         "args": {
                           "TargetFile": "%s",
                           "Instruction": "Change protocol format",
-                          "Description": "Add new field"
+                          "Description": "Add new field",
+                          "AllowMultiple": false,
+                          "TargetContent": "public class RecordMessage {}",
+                          "ReplacementContent": "public class RecordMessage { }",
+                          "StartLine": 2,
+                          "EndLine": 2,
+                          "toolAction": "modify",
+                          "toolSummary": "Update the protected file"
                         }
                       },
                       "stepIdx": 4,
