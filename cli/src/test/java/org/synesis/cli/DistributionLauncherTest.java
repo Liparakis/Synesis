@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/** Verifies the generated Windows launcher smoke path. */
+/** Verifies the generated platform launcher smoke path. */
 @Timeout(45)
 final class DistributionLauncherTest {
     @Test
@@ -45,7 +45,8 @@ final class DistributionLauncherTest {
         }
         command.add(launcher.toString());
         for (String argument : arguments) {
-            command.add(argument.matches(".*[&*].*") ? "\"" + argument + "\"" : argument);
+            command.add(isWindows() && argument.matches(".*[&*].*")
+                    ? "\"" + argument + "\"" : argument);
         }
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.environment().put("SYNESIS_LINK_PROFILE", profile.toString());

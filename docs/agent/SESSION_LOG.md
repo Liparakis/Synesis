@@ -721,3 +721,11 @@ Append-only operational history.
 - `bundleSmokeTest` now asserts and restores the bundled Java runtime mode as
   well. Native Windows bundle smoke passes.
 - Checkpoint: CP-0118.
+
+## 2026-07-22 — SYN-010A Unix launcher argument quoting fix
+
+- Root cause: the shared process-test helper added literal `"` characters to
+  arguments containing `&` or `*` even when invoking the Unix launcher directly.
+- Quoting is now limited to the Windows `cmd.exe` path. Codex and unified-sync
+  process tests pass locally; Ubuntu remains the final validation environment.
+- Checkpoint: CP-0119.

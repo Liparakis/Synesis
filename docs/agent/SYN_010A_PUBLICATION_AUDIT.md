@@ -88,6 +88,10 @@ tracked as `100755`. Git Bash executed `./gradlew check
   now asserts the source launcher and bundled `runtime/bin/java` modes and
   restores both extracted modes before execution. Native Windows bundle smoke
   passes; Linux remains for CI validation.
+- Unix process-test repair: launcher arguments are now quoted only for the
+  Windows `cmd.exe` path. Direct Unix `ProcessBuilder` invocation receives
+  arguments unchanged, preserving invitations and other values containing
+  shell metacharacters. Affected CLI process tests pass on Windows.
 
 ## Publication decision
 
