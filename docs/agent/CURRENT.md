@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0110
-- Latest checkpoint: CP-0120
+- Latest checkpoint: CP-0121
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
@@ -21,8 +21,9 @@ SYN-009B was promoted after SYN-009A completion at CP-0099 and is DONE at
 CP-0102. SYN-009B.1 is VERIFYING as an EVOLUTION of the existing provider lifecycle and
 hook boundary. It adds one Codex integration under `:workspace`, reuses the
 shared path resolver and action guardrail, and writes only project-local
-`.codex/hooks.json`. SYN-009C is complete at CP-0110. SYN-010A is active and
-publication is blocked by the unfinished license decision.
+`.codex/hooks.json`. SYN-009C is complete at CP-0110. SYN-010A is active;
+the AGPL-3.0-only license decision is recorded and publication remains
+unperformed pending external review and explicit push authorization.
 
 ## Architecture brief
 
@@ -147,6 +148,9 @@ are also deferred; no public release is claimed.
   bundled `runtime/bin/java`. Native Windows bundle smoke PASS.
 - Unix launcher process tests now avoid Windows-only literal argument quoting;
   the affected Codex and unified-sync process tests PASS on Windows.
+- Abrupt process-loss integration test now uses a short test-only liveness
+  policy, keeping its bounded terminal-classification assertion deterministic
+  under CI runner startup load; focused test passes three consecutive runs.
 - Secondary review remains required for personal commit metadata and the
   canonical remote target. No public push or history rewrite was performed.
 

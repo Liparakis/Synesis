@@ -735,3 +735,15 @@ Append-only operational history.
 - Added the Maven Central SHA-256 for the macOS x86_64 Netty QUIC native JAR.
 - Strict `:cli:startScripts` resolution with `os.name=Mac OS X` passes.
 - Checkpoint: CP-0120.
+
+## 2026-07-22 — SYN-010A CI abrupt-loss timing repair
+
+- GitHub Ubuntu full strict check failed at `NettyQuicLoopbackTest` line 312:
+  the server process did not classify the killed client within the ten-second
+  parent wait. Local reproduction passed, identifying a timing-sensitive test
+  bound rather than a production protocol failure.
+- The independent-process helper now uses a test-only 250 ms heartbeat, 1 s
+  suspicion, and 2 s expiry policy. Production `LivenessConfiguration.DEFAULT`
+  remains unchanged.
+- Focused abrupt-loss test passed three consecutive forced runs on Windows.
+- Checkpoint: CP-0121.

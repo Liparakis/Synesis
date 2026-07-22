@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -35,12 +36,17 @@ import org.synesis.link.protocol.HandshakeProof;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.session.HandshakeRole;
 import org.synesis.link.session.HandshakeTranscript;
+import org.synesis.link.session.LivenessConfiguration;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.ReplayGuard;
 import org.synesis.link.session.SessionCloseReason;
 
 /** Test-only independent JVM endpoint for authenticated-session evidence. */
 final class NettyQuicPeerProcess {
+
+    /** Short bounded policy used only to keep the abrupt-process integration test deterministic. */
+    private static final LivenessConfiguration PROCESS_LOSS_LIVENESS = new LivenessConfiguration(
+            Duration.ofMillis(250), Duration.ofSeconds(1), Duration.ofSeconds(2), true);
 
     private NettyQuicPeerProcess() { }
 
@@ -99,7 +105,7 @@ final class NettyQuicPeerProcess {
                     HandshakeRole.INITIATOR);
             connection.createStream(QuicStreamType.BIDIRECTIONAL,
                     NettySessionHandshake.clientStreamHandler(identity, remoteNodeId, List.of(ProtocolVersion.V1),
-                            transcript, proof, new ReplayGuard(), session)).sync();
+                            transcript, proof, new ReplayGuard(), session, PROCESS_LOSS_LIVENESS, null)).sync();
             PeerSession established = session.get(20, TimeUnit.SECONDS);
             awaitHeartbeat(established);
             writeResult(resultFile, established);
@@ -152,7 +158,7 @@ final class NettyQuicPeerProcess {
                                 }
                     }, NettySessionHandshake.serverStreamHandler(identity, expectedClient,
                                     List.of(ProtocolVersion.V1), new ReplayGuard(), session,
-                                    org.synesis.link.session.LivenessConfiguration.DEFAULT,
+                                    PROCESS_LOSS_LIVENESS,
                                     (remoteNodeId, payload) -> CompletableFuture.completedFuture(payload))))
                     .bind(NetUtil.LOCALHOST4, 0).sync().channel();
             Files.write(serverReady, List.of(Integer.toString(((java.net.InetSocketAddress) udp.localAddress()).getPort()),

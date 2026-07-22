@@ -95,6 +95,11 @@ tracked as `100755`. Git Bash executed `./gradlew check
   Windows `cmd.exe` path. Direct Unix `ProcessBuilder` invocation receives
   arguments unchanged, preserving invitations and other values containing
   shell metacharacters. Affected CLI process tests pass on Windows.
+- CI abrupt-loss timing repair: the independent-process helper uses a
+  test-only 250 ms heartbeat, 1 s suspicion, and 2 s expiry policy so the
+  bounded terminal-classification assertion remains reliable while production
+  liveness defaults remain unchanged. The focused test passes three
+  consecutive forced runs on Windows.
 
 ## Publication decision
 
