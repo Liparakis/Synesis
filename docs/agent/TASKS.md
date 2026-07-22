@@ -287,7 +287,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required tests: secret scanner or documented equivalent, focused history/path searches, strict Java build, Go test/vet, repository validators, workflow syntax/security review, and clean-tree confirmation.
 - Required documentation: `docs/agent/SYN_010A_PUBLICATION_AUDIT.md`, `docs/legal/LICENSE_DECISION_REQUIRED.md`, README/public-preview docs, and durable state updates.
 - Scope boundary: no new product features, protocol changes, release assets, production release, license selection, history rewrite, public push, or external announcement.
-- Evidence: `docs/agent/SYN_010A_PUBLICATION_AUDIT.md`; `docs/legal/LICENSE_DECISION_REQUIRED.md`; README, SECURITY.md, CONTRIBUTING.md, and `.gitignore` preparation; validators PASS. Owner selected AGPL-3.0-only and the complete `LICENSE` is present. Publication remains unperformed pending explicit push authorization, author-metadata review, and target confirmation.
+- Evidence: `docs/agent/SYN_010A_PUBLICATION_AUDIT.md`; `docs/legal/LICENSE_DECISION_REQUIRED.md`; README, SECURITY.md, CONTRIBUTING.md, and `.gitignore` preparation; validators PASS. Owner selected AGPL-3.0-only and the complete `LICENSE` is present. `gradlew` mode `100755` fixes the reported Linux CI permission failure; strict wrapper check passes. Publication remains unperformed pending explicit push authorization, author-metadata review, and target confirmation.
 
 ## SYN-001
 

@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0110
-- Latest checkpoint: CP-0113
+- Latest checkpoint: CP-0114
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
@@ -133,6 +133,8 @@ are also deferred; no public release is claimed.
 - The owner selected GNU AGPL v3.0 only (`AGPL-3.0-only`); the unfinished-license
   gate is cleared. Publication remains unperformed pending explicit push
   authorization and review of author metadata and the remote target.
+- CI wrapper repair: `gradlew` is now tracked executable (`100755`); Git Bash
+  wrapper smoke and full strict check PASS.
 - Secondary review remains required for personal commit metadata and the
   canonical remote target. No public push or history rewrite was performed.
 

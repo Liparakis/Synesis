@@ -676,3 +676,11 @@ Append-only operational history.
 - The Codex process PATH had not refreshed, so the standard install executable
   was invoked directly. No code changes were required.
 - Checkpoint: CP-0113.
+
+## 2026-07-22 — SYN-010A Linux Gradle wrapper permission fix
+
+- Root cause: Git tracked `gradlew` as `100644`, so Ubuntu could not execute
+  `./gradlew` and returned exit 126.
+- Changed only the tracked mode to `100755`; Git Bash wrapper smoke and full
+  `./gradlew check --dependency-verification=strict` both PASS.
+- Checkpoint: CP-0114.

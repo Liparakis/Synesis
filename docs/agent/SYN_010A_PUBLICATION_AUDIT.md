@@ -56,7 +56,10 @@ deleted.
 `pull_request_target`, does not grant write permissions, does not create a
 GitHub Release automatically, and scopes the signing secret to the protected
 tag-signing step. Actions currently use mutable major-version tags, so pinning
-to immutable action SHAs remains a prepublication hardening item.
+to immutable action SHAs remains a prepublication hardening item. The reported
+Ubuntu failure was caused by `gradlew` being tracked as mode `100644`; it is now
+tracked as `100755`. Git Bash executed `./gradlew check
+--dependency-verification=strict` successfully after the mode fix.
 
 ## Verification
 
@@ -69,6 +72,8 @@ to immutable action SHAs remains a prepublication hardening item.
   `agent-validate-deferred.ps1`: PASS.
 - `git diff --check`, README link checks, ignore-rule checks, current-tree and
   reachable-history secret scans, and workflow security checks: PASS.
+- Linux-wrapper mode correction: `gradlew` `100644` -> `100755`; wrapper
+  version smoke and full strict check under Git Bash: PASS.
 
 ## Publication decision
 
