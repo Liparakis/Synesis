@@ -84,7 +84,10 @@ $root = Join-Path $env:TEMP ('synesis-agent-fixtures-' + [guid]::NewGuid()); New
 finally
 {
     Remove-Item -LiteralPath $root -Recurse -Force
-}; $validator = Join-Path $PSScriptRoot 'agent-validate-deferred.ps1'; $LASTEXITCODE = 0; & $validator -RepositoryRoot $RepositoryRoot; if ($LASTEXITCODE -ne 0) { exit 1 }; if ($failures)
+}; $validator = Join-Path $PSScriptRoot 'agent-validate-deferred.ps1'; $LASTEXITCODE = 0; & $validator -RepositoryRoot $RepositoryRoot; if ($LASTEXITCODE -ne 0)
+{
+    exit 1
+}; if ($failures)
 {
     exit 1
 }

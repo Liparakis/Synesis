@@ -1,3 +1,7 @@
+// Command synesis-bootstrap is the self-updating installer for the Synesis
+// CLI. It downloads a signed release manifest, verifies and extracts the
+// platform-specific artifact, and manages the "current" version pointer and
+// launcher script used by end users.
 package main
 
 import (
@@ -27,9 +31,9 @@ import (
 
 const (
 	bootstrapVersion = "0.1.0-dev.local"
-	maxManifestBytes = 1 << 20
-	maxArchiveFiles  = 10000
-	maxExtractedSize = int64(512 << 20)
+	maxManifestBytes = 1 << 20          // manifests are small JSON documents
+	maxArchiveFiles  = 10000            // upper bound on entries; guards against archive bombs
+	maxExtractedSize = int64(512 << 20) // upper bound on total extracted bytes
 )
 
 // This development public key is replaced by the project's protected CI key
@@ -37,12 +41,14 @@ const (
 var manifestPublicKeyHex = "d75a9801d7b3e3c7e8c8f6f5e4d6f6e4e4b8a7a7c8d9e0f1a2b3c4d5e6f70809"
 var manifestPublicKey = ed25519.PublicKey(mustHex(manifestPublicKeyHex))
 
+// artifact describes one platform-specific download entry in a manifest.
 type artifact struct {
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
 	Size   int64  `json:"size"`
 }
 
+// manifest is the signed release descriptor fetched from SYNESIS_MANIFEST_URL.
 type manifest struct {
 	SchemaVersion           int                 `json:"schemaVersion"`
 	Channel                 string              `json:"channel"`
@@ -51,6 +57,11 @@ type manifest struct {
 	MinimumBootstrapVersion string              `json:"minimumBootstrapVersion"`
 	DevelopmentOnly         bool                `json:"developmentOnly"`
 	Artifacts               map[string]artifact `json:"artifacts"`
+}
+
+// installPaths is the resolved on-disk layout for one installation root.
+type installPaths struct {
+	root, versions, current, launcher string
 }
 
 func main() {
@@ -84,6 +95,9 @@ func main() {
 
 func usage() { fmt.Println("synesis-bootstrap install|update|uninstall|doctor|version") }
 
+// runInstall implements both "install" and "update": fetch and verify the
+// manifest, resolve the platform-appropriate artifact, verify its checksum,
+// and atomically activate it.
 func runInstall(operation string, args []string) error {
 	flags := flag.NewFlagSet(operation, flag.ContinueOnError)
 	manifestURL := flags.String("manifest", os.Getenv("SYNESIS_MANIFEST_URL"), "manifest URL")
@@ -103,8 +117,11 @@ func runInstall(operation string, args []string) error {
 		return err
 	}
 	m, err := parseManifest(data)
-	if err != nil || (len(signature) == 0 && !m.DevelopmentOnly) || (len(signature) > 0 && !ed25519.Verify(manifestPublicKey, data, signature)) {
+	if err != nil {
 		return errors.New("manifest signature or contents invalid")
+	}
+	if err := verifyManifestAuthenticity(m, data, signature); err != nil {
+		return err
 	}
 	if operation == "update" {
 		current, _ := os.ReadFile(paths.current)
@@ -131,35 +148,31 @@ func runInstall(operation string, args []string) error {
 	return nil
 }
 
-type installPaths struct {
-	root, versions, current, launcher string
+// verifyManifestAuthenticity enforces the project's trust policy for a
+// downloaded manifest: it must carry a valid Ed25519 signature, unless it
+// has no signature at all and is explicitly self-declared developmentOnly.
+// A nil signature can only reach this function via the one bypass path in
+// fetchManifest (local file:// URL with no .sig present), so this is the
+// single place that decides whether that bypass is actually honored.
+func verifyManifestAuthenticity(m manifest, data, signature []byte) error {
+	unsigned := len(signature) == 0
+	if unsigned && !m.DevelopmentOnly {
+		return errors.New("manifest signature or contents invalid")
+	}
+	if !unsigned && !ed25519.Verify(manifestPublicKey, data, signature) {
+		return errors.New("manifest signature or contents invalid")
+	}
+	return nil
 }
 
+// installationPaths resolves the on-disk layout for a Synesis installation.
+// If explicit is empty, the root follows OS convention (LOCALAPPDATA on
+// Windows, XDG_DATA_HOME or ~/.local/share on Linux, ~/Library/Application
+// Support on macOS).
 func installationPaths(explicit string) (installPaths, error) {
 	root := explicit
 	if root == "" {
-		var base string
-		var err error
-		switch runtime.GOOS {
-		case "windows":
-			base = os.Getenv("LOCALAPPDATA")
-			if base == "" {
-				base, err = os.UserConfigDir()
-			}
-		case "linux":
-			base = os.Getenv("XDG_DATA_HOME")
-			if base == "" {
-				home, homeErr := os.UserHomeDir()
-				err = homeErr
-				base = filepath.Join(home, ".local", "share")
-			}
-		case "darwin":
-			home, homeErr := os.UserHomeDir()
-			err = homeErr
-			base = filepath.Join(home, "Library", "Application Support")
-		default:
-			base, err = os.UserConfigDir()
-		}
+		base, err := defaultInstallBase()
 		if err != nil || base == "" {
 			return installPaths{}, errors.New("unable to determine installation root")
 		}
@@ -169,19 +182,61 @@ func installationPaths(explicit string) (installPaths, error) {
 	if err != nil || root == filepath.VolumeName(root)+string(filepath.Separator) {
 		return installPaths{}, errors.New("unsafe installation root")
 	}
-	launcher := filepath.Join(root, "bin", "synesis")
+
+	// The launcher lives outside `root` on Unix (typically ~/.local/bin,
+	// usually already on $PATH); the script it contains resolves `root`
+	// on its own via an absolute path, so the launcher's own location
+	// doesn't need to be relative to root. Windows has no equivalent PATH
+	// convention, so its launcher lives inside root/bin instead.
+	var launcher string
 	if runtime.GOOS == "windows" {
-		launcher += ".cmd"
+		launcher = filepath.Join(root, "bin", "synesis.cmd")
 	} else {
-		home, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			return installPaths{}, homeErr
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return installPaths{}, err
 		}
 		launcher = filepath.Join(home, ".local", "bin", "synesis")
 	}
-	return installPaths{root, filepath.Join(root, "versions"), filepath.Join(root, "current"), launcher}, nil
+	return installPaths{
+		root:     root,
+		versions: filepath.Join(root, "versions"),
+		current:  filepath.Join(root, "current"),
+		launcher: launcher,
+	}, nil
 }
 
+// defaultInstallBase returns the OS-conventional parent directory for
+// application data when --install-dir wasn't given explicitly.
+func defaultInstallBase() (string, error) {
+	switch runtime.GOOS {
+	case "windows":
+		if base := os.Getenv("LOCALAPPDATA"); base != "" {
+			return base, nil
+		}
+		return os.UserConfigDir()
+	case "linux":
+		if base := os.Getenv("XDG_DATA_HOME"); base != "" {
+			return base, nil
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, ".local", "share"), nil
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, "Library", "Application Support"), nil
+	default:
+		return os.UserConfigDir()
+	}
+}
+
+// platformID returns the manifest artifact key for the current OS/arch,
+// e.g. "linux-x64", or "<os>-unsupported" when the arch has no mapping.
 func platformID() string {
 	arch := map[string]string{"amd64": "x64", "arm64": "arm64"}[runtime.GOARCH]
 	if arch == "" {
@@ -194,6 +249,11 @@ func platformID() string {
 	return osID + "-" + arch
 }
 
+// fetchManifest downloads the manifest and its detached signature. If the
+// signature can't be fetched at all, the manifest is only usable when it
+// was loaded from a local file:// URL and self-declares developmentOnly;
+// otherwise this is a hard failure. The actual accept/reject decision is
+// made by verifyManifestAuthenticity, not here.
 func fetchManifest(raw string) ([]byte, []byte, error) {
 	data, err := fetch(raw)
 	if err != nil || len(data) > maxManifestBytes {
@@ -220,6 +280,8 @@ func fetchManifest(raw string) ([]byte, []byte, error) {
 	return data, decoded, nil
 }
 
+// fetch retrieves raw bytes from a file:// or https:// URL. Any other
+// scheme, including plain http://, is rejected.
 func fetch(raw string) ([]byte, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -246,6 +308,8 @@ func fetch(raw string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(response.Body, maxExtractedSize+1))
 }
 
+// resolveArtifactURL turns a manifest artifact URL, which may be relative,
+// into an absolute URL resolved against the manifest's own location.
 func resolveArtifactURL(manifestURL, raw string) string {
 	u, err := url.Parse(raw)
 	if err == nil && u.IsAbs() {
@@ -259,6 +323,8 @@ func resolveArtifactURL(manifestURL, raw string) string {
 	return base.String()
 }
 
+// parseManifest unmarshals and bounds-checks a manifest: pinned schema
+// version, a sane artifact count, and well-formed hex SHA-256 digests.
 func parseManifest(data []byte) (manifest, error) {
 	var value manifest
 	if err := json.Unmarshal(data, &value); err != nil {
@@ -278,6 +344,9 @@ func parseManifest(data []byte) (manifest, error) {
 	return value, nil
 }
 
+// validVersion rejects anything that isn't a plain, path-safe version
+// string, since the version is later used as a path component under
+// paths.versions.
 func validVersion(value string) bool {
 	if len(value) == 0 || len(value) > 128 || filepath.IsAbs(value) || filepath.VolumeName(value) != "" {
 		return false
@@ -290,6 +359,7 @@ func validVersion(value string) bool {
 	return value != "." && value != ".."
 }
 
+// activate extracts, validates, and atomically swaps in a new version.
 func activate(paths installPaths, version string, archive []byte) error {
 	if err := os.MkdirAll(paths.versions, 0o755); err != nil {
 		return err
@@ -309,14 +379,8 @@ func activate(paths installPaths, version string, archive []byte) error {
 	}
 	final := filepath.Join(paths.versions, version)
 	_ = os.RemoveAll(final)
-	if bundle == staging {
-		if err := os.Rename(staging, final); err != nil {
-			return err
-		}
-	} else {
-		if err := os.Rename(bundle, final); err != nil {
-			return err
-		}
+	if err := os.Rename(bundle, final); err != nil {
+		return err
 	}
 	if err := replacePointer(paths.current, version); err != nil {
 		return err
@@ -324,6 +388,8 @@ func activate(paths installPaths, version string, archive []byte) error {
 	return writeLauncher(paths)
 }
 
+// extractArchive dispatches to the ZIP or tar.gz extractor based on the
+// leading bytes, after capping the total decoded size read into memory.
 func extractArchive(data io.Reader, destination string) error {
 	bytesData, err := io.ReadAll(io.LimitReader(data, maxExtractedSize+1))
 	if err != nil || int64(len(bytesData)) > maxExtractedSize {
@@ -333,6 +399,26 @@ func extractArchive(data io.Reader, destination string) error {
 		return extractZip(bytesData, destination)
 	}
 	return extractTarGz(bytesData, destination)
+}
+
+// reserveExtractedBytes is the shared zip/tar-bomb defense: it accounts an
+// entry's declared size against the running total and rejects the archive
+// if the cumulative extracted size would exceed maxExtractedSize.
+func reserveExtractedBytes(total *int64, size int64) error {
+	if size > maxExtractedSize-*total {
+		return errors.New("archive expands beyond limit")
+	}
+	*total += size
+	return nil
+}
+
+// openExtractedFile creates (truncating) the destination file for an
+// archive entry, creating parent directories as needed.
+func openExtractedFile(target string, mode os.FileMode) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 }
 
 func extractZip(data []byte, destination string) error {
@@ -345,14 +431,15 @@ func extractZip(data []byte, destination string) error {
 	}
 	var total int64
 	for _, entry := range archive.File {
+		// Reject anything that isn't a plain regular file or directory
+		// (symlinks in particular could point outside `destination`).
 		name, err := safeArchiveName(entry.Name)
 		if err != nil || entry.Mode()&os.ModeSymlink != 0 || (!entry.FileInfo().IsDir() && !entry.FileInfo().Mode().IsRegular()) {
 			return errors.New("unsafe ZIP entry")
 		}
-		if entry.UncompressedSize64 > uint64(maxExtractedSize-total) {
-			return errors.New("archive expands beyond limit")
+		if err := reserveExtractedBytes(&total, int64(entry.UncompressedSize64)); err != nil {
+			return err
 		}
-		total += int64(entry.UncompressedSize64)
 		target := filepath.Join(destination, name)
 		if entry.FileInfo().IsDir() {
 			if err := os.MkdirAll(target, 0o755); err != nil {
@@ -360,15 +447,12 @@ func extractZip(data []byte, destination string) error {
 			}
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
 		input, err := entry.Open()
 		if err != nil {
 			return err
 		}
 		mode := safeFileMode(entry.Mode())
-		output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+		output, err := openExtractedFile(target, mode)
 		if err != nil {
 			input.Close()
 			return err
@@ -385,7 +469,7 @@ func extractZip(data []byte, destination string) error {
 }
 
 func extractTarGz(data []byte, destination string) error {
-	reader, err := gzipReader(bytes.NewReader(data))
+	reader, err := newGzipReader(bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -409,10 +493,9 @@ func extractTarGz(data []byte, destination string) error {
 		if err != nil || header.Typeflag == tar.TypeSymlink || header.Typeflag == tar.TypeLink {
 			return errors.New("unsafe TAR entry")
 		}
-		if header.Size > maxExtractedSize-total {
-			return errors.New("archive expands beyond limit")
+		if err := reserveExtractedBytes(&total, header.Size); err != nil {
+			return err
 		}
-		total += header.Size
 		target := filepath.Join(destination, name)
 		if header.Typeflag == tar.TypeDir {
 			if err := os.MkdirAll(target, 0o755); err != nil {
@@ -423,11 +506,8 @@ func extractTarGz(data []byte, destination string) error {
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
 			return errors.New("unsupported TAR entry")
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
 		mode := safeFileMode(os.FileMode(header.Mode))
-		output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+		output, err := openExtractedFile(target, mode)
 		if err != nil {
 			return err
 		}
@@ -440,6 +520,8 @@ func extractTarGz(data []byte, destination string) error {
 	}
 }
 
+// safeFileMode collapses an archive entry's mode down to one of two known
+// values, so no bit from an untrusted archive (e.g. setuid) ever reaches disk.
 func safeFileMode(mode os.FileMode) os.FileMode {
 	if mode&0o111 != 0 {
 		return 0o755
@@ -447,10 +529,8 @@ func safeFileMode(mode os.FileMode) os.FileMode {
 	return 0o644
 }
 
-func gzipReader(data io.Reader) (io.ReadCloser, error) {
-	return newGzipReader(data)
-}
-
+// safeArchiveName rejects absolute paths and "../" traversal in an archive
+// entry name, and normalizes it to the host's path separator.
 func safeArchiveName(name string) (string, error) {
 	name = filepath.FromSlash(name)
 	if name == "" || filepath.IsAbs(name) || filepath.VolumeName(name) != "" {
@@ -463,6 +543,9 @@ func safeArchiveName(name string) (string, error) {
 	return clean, nil
 }
 
+// flattenBundle unwraps a single top-level directory some archive formats
+// add (e.g. "synesis-0.2.0/..."), so the bundle root always matches what
+// validateBundle expects regardless of how the archive was packaged.
 func flattenBundle(staging string) string {
 	entries, _ := os.ReadDir(staging)
 	if len(entries) == 1 && entries[0].IsDir() {
@@ -471,6 +554,8 @@ func flattenBundle(staging string) string {
 	return staging
 }
 
+// validateBundle checks that an extracted bundle has the expected shape
+// and that its embedded launcher actually runs before it's ever activated.
 func validateBundle(bundle string) error {
 	for _, relative := range []string{"bin", "runtime", "VERSION"} {
 		if _, err := os.Stat(filepath.Join(bundle, relative)); err != nil {
@@ -494,6 +579,8 @@ func runBundleVersion(bundle string) error {
 	return nil
 }
 
+// replacePointer writes the "current version" file via write-temp-then-rename,
+// so a crash mid-write can never leave `current` truncated or corrupt.
 func replacePointer(path, version string) error {
 	temporary := path + ".staging"
 	if err := os.WriteFile(temporary, []byte(version+"\n"), 0o644); err != nil {
@@ -506,6 +593,8 @@ func replacePointer(path, version string) error {
 	return nil
 }
 
+// writeLauncher (re)writes the small script that resolves the "current"
+// pointer at run time and execs the matching version's real binary.
 func writeLauncher(paths installPaths) error {
 	if err := os.MkdirAll(filepath.Dir(paths.launcher), 0o755); err != nil {
 		return err
@@ -515,10 +604,7 @@ func writeLauncher(paths installPaths) error {
 	}
 	rootLiteral := strings.ReplaceAll(paths.root, "'", "'\\''")
 	content := "#!/bin/sh\nROOT='" + rootLiteral + "'\nVERSION=$(cat \"$ROOT/current\")\nexec \"$ROOT/versions/$VERSION/bin/synesis\" \"$@\"\n"
-	if err := os.WriteFile(paths.launcher, []byte(content), 0o755); err != nil {
-		return err
-	}
-	return nil
+	return os.WriteFile(paths.launcher, []byte(content), 0o755)
 }
 
 func runDoctor(args []string) error {
@@ -573,6 +659,8 @@ func matchesSHA256(data []byte, expected string) bool {
 	return strings.EqualFold(hex.EncodeToString(digest[:]), expected)
 }
 
+// compareVersions orders dotted numeric versions (with an optional
+// "-prerelease" suffix), returning -1/0/1 like strings.Compare.
 func compareVersions(left, right string) int {
 	leftParts, leftPre := splitVersion(left)
 	rightParts, rightPre := splitVersion(right)
@@ -594,6 +682,8 @@ func compareVersions(left, right string) int {
 	return comparePrerelease(leftPre, rightPre)
 }
 
+// comparePrerelease follows semver precedence: a version with no
+// prerelease suffix outranks one with a suffix (e.g. 1.0.0 > 1.0.0-alpha).
 func comparePrerelease(left, right string) int {
 	if left == right {
 		return 0
@@ -624,6 +714,8 @@ func comparePrerelease(left, right string) int {
 	return 1
 }
 
+// splitVersion strips a leading "v", any build metadata ("+..."), and
+// splits the remainder into numeric release parts and a prerelease string.
 func splitVersion(value string) ([]string, string) {
 	value = strings.TrimPrefix(strings.TrimSpace(value), "v")
 	value = strings.Split(value, "+")[0]
@@ -644,6 +736,6 @@ func mustHex(value string) []byte {
 	return result
 }
 
-// gzip.NewReader is kept behind a variable-sized helper so archive tests can
-// replace it without any third-party compression package.
+// newGzipReader is kept behind a package variable so tests can replace it
+// without any third-party compression package.
 var newGzipReader = func(data io.Reader) (io.ReadCloser, error) { return gzip.NewReader(data) }

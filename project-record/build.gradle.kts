@@ -30,8 +30,10 @@ tasks.withType<JavaCompile>().configureEach {
 tasks.withType<Javadoc>().configureEach {
     isFailOnError = true
     options.encoding = "UTF-8"
-    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all", true)
-    (options as StandardJavadocDocletOptions).addBooleanOption("Werror", true)
+    with(options as StandardJavadocDocletOptions) {
+        addBooleanOption("Xdoclint:all", true)
+        addBooleanOption("Werror", true)
+    }
 }
 
 tasks.test {
@@ -40,14 +42,16 @@ tasks.test {
     maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
 
+fun filesUnder(dir: File, extensions: Set<String>): List<File> =
+    if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+    else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
+
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in project-record sources."
     doLast {
-        val roots = listOf(project.file("src"), project.file("build.gradle.kts"))
-        val files = roots.flatMap { candidate ->
-            if (candidate.isDirectory) candidate.walkTopDown().filter { it.isFile }.toList() else listOf(candidate)
-        }.filter { it.extension in setOf("java", "kt", "kts") }
+        val files = filesUnder(project.file("src"), setOf("java", "kt", "kts")) +
+                filesUnder(project.file("build.gradle.kts"), setOf("kts"))
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }

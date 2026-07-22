@@ -16,13 +16,25 @@ $arguments = @(
     "-version", $Version,
     "-repo-root", $repoRoot
 )
-if ($RequireSignature) { $arguments += "-require-signature=true" }
-if ($PublicKeyHex) { $arguments += @("-public-key-hex", $PublicKeyHex) }
+if ($RequireSignature)
+{
+    $arguments += "-require-signature=true"
+}
+if ($PublicKeyHex)
+{
+    $arguments += @("-public-key-hex", $PublicKeyHex)
+}
 Push-Location (Join-Path $repoRoot "bootstrap")
-try {
+try
+{
     go @arguments
     $exitCode = $LASTEXITCODE
-} finally {
+}
+finally
+{
     Pop-Location
 }
-if ($exitCode -ne 0) { exit $exitCode }
+if ($exitCode -ne 0)
+{
+    exit $exitCode
+}

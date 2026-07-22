@@ -1,4 +1,5 @@
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
+import org.gradle.internal.os.OperatingSystem
 
 plugins {
     `java-library`
@@ -21,13 +22,13 @@ dependencies {
 }
 
 val nativeQuicClassifier = when {
-    System.getProperty("os.name").lowercase().contains("win") -> "windows-x86_64"
-    System.getProperty("os.name").lowercase().contains("mac") -> "osx-x86_64"
-    System.getProperty("os.name").lowercase().contains("linux") -> "linux-x86_64"
+    OperatingSystem.current().isWindows -> "windows-x86_64"
+    OperatingSystem.current().isMacOsX -> "osx-x86_64"
+    OperatingSystem.current().isLinux -> "linux-x86_64"
     else -> null
 }
-if (nativeQuicClassifier != null) {
-    dependencies.add("runtimeOnly", "io.netty:netty-codec-native-quic:${libs.versions.netty.get()}:$nativeQuicClassifier")
+nativeQuicClassifier?.let {
+    dependencies.add("runtimeOnly", "io.netty:netty-codec-native-quic:${libs.versions.netty.get()}:$it")
 }
 
 configurations.configureEach { resolutionStrategy.activateDependencyLocking() }
@@ -40,8 +41,10 @@ tasks.withType<JavaCompile>().configureEach {
 tasks.withType<Javadoc>().configureEach {
     isFailOnError = true
     options.encoding = "UTF-8"
-    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all", true)
-    (options as StandardJavadocDocletOptions).addBooleanOption("Werror", true)
+    with(options as StandardJavadocDocletOptions) {
+        addBooleanOption("Xdoclint:all", true)
+        addBooleanOption("Werror", true)
+    }
 }
 
 tasks.test {
@@ -59,14 +62,18 @@ tasks.register<JavaExec>("demoCli") {
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
+fun filesUnder(dir: File, extensions: Set<String>): List<File> =
+    if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+    else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
+
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in tracked source and documentation files."
     doLast {
-        val roots = listOf(
-            project.file("src"),
+        val extensions = setOf("java", "kt", "kts", "md", "xml", "toml")
+        val directoryRoots = listOf(project.file("src"), rootProject.file("docs"))
+        val singleFileRoots = listOf(
             project.file("build.gradle.kts"),
-            rootProject.file("docs"),
             rootProject.file("README.md"),
             rootProject.file("AGENTS.md"),
             rootProject.file("CONTRIBUTING.md"),
@@ -74,10 +81,10 @@ tasks.register("formatCheck") {
             rootProject.file("settings.gradle.kts"),
             rootProject.file("build.gradle.kts")
         )
-        val files = roots.flatMap { candidate ->
-            if (candidate.isDirectory) candidate.walkTopDown().filter { it.isFile }.toList() else listOf(candidate)
-        }.filter { it.extension in setOf("java", "kt", "kts", "md", "xml", "toml") }
-        val offenders = files.filter { source -> source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } } }
+        val files = (directoryRoots + singleFileRoots).flatMap { filesUnder(it, extensions) }
+        val offenders = files.filter { source ->
+            source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
+        }
         require(offenders.isEmpty()) { "Trailing whitespace: ${offenders.joinToString()}" }
     }
 }

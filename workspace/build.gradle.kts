@@ -31,8 +31,10 @@ tasks.withType<JavaCompile>().configureEach {
 tasks.withType<Javadoc>().configureEach {
     isFailOnError = true
     options.encoding = "UTF-8"
-    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all", true)
-    (options as StandardJavadocDocletOptions).addBooleanOption("Werror", true)
+    with(options as StandardJavadocDocletOptions) {
+        addBooleanOption("Xdoclint:all", true)
+        addBooleanOption("Werror", true)
+    }
 }
 
 tasks.test {
@@ -41,15 +43,24 @@ tasks.test {
     maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
 
+// Shared helper: source files under `dir` with the given extensions.
+fun filesUnder(dir: File, extensions: Set<String>): List<File> =
+    if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+    else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
+
+// Shared helper: lines across `.java` files under `dir` containing `pattern`.
+fun linesContaining(dir: File, pattern: String): List<String> =
+    filesUnder(dir, setOf("java")).flatMap { file -> file.readLines().filter { it.contains(pattern) } }
+
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in workspace sources."
     doLast {
-        val roots = listOf(project.file("src"), project.file("build.gradle.kts"))
-        val files = roots.flatMap { candidate ->
-            if (candidate.isDirectory) candidate.walkTopDown().filter { it.isFile }.toList() else listOf(candidate)
-        }.filter { it.extension in setOf("java", "kt", "kts") }
-        val offenders = files.filter { source -> source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } } }
+        val files = filesUnder(project.file("src"), setOf("java", "kt", "kts")) +
+                filesUnder(project.file("build.gradle.kts"), setOf("kts"))
+        val offenders = files.filter { source ->
+            source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
+        }
         require(offenders.isEmpty()) { "Trailing whitespace: ${offenders.joinToString()}" }
     }
 }
@@ -64,14 +75,17 @@ tasks.register("architectureCheck") {
     group = "verification"
     description = "Checks workspace package and module import boundaries."
     doLast {
-        val guardrail = project.file("src/main/java/org/synesis/workspace/guardrail")
-        val providerImports = guardrail.walkTopDown().filter { it.isFile && it.extension == "java" }
-            .flatMap { file -> file.readLines().filter { it.contains("org.synesis.workspace.integration") } }
-        require(providerImports.none()) { "Guardrail imports provider adapter: $providerImports" }
-        val recordSources = project.file("../project-record/src/main/java")
-        val reverseImports = recordSources.walkTopDown().filter { it.isFile && it.extension == "java" }
-            .flatMap { file -> file.readLines().filter { it.contains("org.synesis.workspace") } }
-        require(reverseImports.none()) { "Project-record imports workspace code: $reverseImports" }
+        val guardrailHits = linesContaining(
+            project.file("src/main/java/org/synesis/workspace/guardrail"),
+            "org.synesis.workspace.integration"
+        )
+        require(guardrailHits.none()) { "Guardrail imports provider adapter: $guardrailHits" }
+
+        val reverseHits = linesContaining(
+            project.file("../project-record/src/main/java"),
+            "org.synesis.workspace"
+        )
+        require(reverseHits.none()) { "Project-record imports workspace code: $reverseHits" }
     }
 }
 

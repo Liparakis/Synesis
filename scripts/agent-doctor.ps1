@@ -24,7 +24,14 @@ $required = @('AGENTS.md', 'docs/agent/CONTRACT.md', 'docs/agent/GOAL.md', 'docs
         Result ERROR "missing: $f"
     }
 }
-$validator = Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.ps1'; $LASTEXITCODE = 0; & $validator -RepositoryRoot $RepositoryRoot; if ($LASTEXITCODE -eq 0) { Result PASS 'deferred register validation' } else { Result ERROR 'deferred register validation' }
+$validator = Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.ps1'; $LASTEXITCODE = 0; & $validator -RepositoryRoot $RepositoryRoot; if ($LASTEXITCODE -eq 0)
+{
+    Result PASS 'deferred register validation'
+}
+else
+{
+    Result ERROR 'deferred register validation'
+}
 if (Test-Path 'docs/agent/TASKS.md')
 {
     $t = Get-Content -Raw 'docs/agent/TASKS.md'; $a = [regex]::Matches($t, '(?ms)^##\s+((?:SL|SYN)-[A-Z0-9-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*ACTIVE\s*$'); if ($a.Count -eq 1)

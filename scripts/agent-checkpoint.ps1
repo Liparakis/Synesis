@@ -11,7 +11,13 @@ function Fail([string]$Message)
     Write-Error $Message; exit 1
 }
 Set-Location $RepositoryRoot
-if (Test-Path (Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.ps1')) { $LASTEXITCODE = 0; & (Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.ps1') -RepositoryRoot $RepositoryRoot; if ($LASTEXITCODE -ne 0) { Fail 'Deferred register validation failed' } }
+if (Test-Path (Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.ps1'))
+{
+    $LASTEXITCODE = 0; & (Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.ps1') -RepositoryRoot $RepositoryRoot; if ($LASTEXITCODE -ne 0)
+    {
+        Fail 'Deferred register validation failed'
+    }
+}
 $must = @('AGENTS.md', 'docs/agent/CONTRACT.md', 'docs/agent/GOAL.md', 'docs/agent/STATE.md', 'docs/agent/TASKS.md', 'docs/agent/CURRENT.md', 'docs/agent/NEXT_SESSION.md')
 foreach ($f in $must)
 {

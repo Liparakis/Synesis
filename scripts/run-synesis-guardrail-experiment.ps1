@@ -14,13 +14,15 @@ Set-Location $RootDir
 # 1. Build workspace distribution
 Write-Host "[1/6] Building workspace distribution..."
 & .\gradlew.bat :workspace:installDist --quiet
-if ($LASTEXITCODE -ne 0) {
+if ($LASTEXITCODE -ne 0)
+{
     Write-Error "Failed to build workspace distribution"
     exit 1
 }
 
 $Launcher = Join-Path $RootDir "cli\build\install\synesis\bin\synesis.bat"
-if (-not (Test-Path $Launcher)) {
+if (-not (Test-Path $Launcher))
+{
     Write-Error "Launcher script not found at $Launcher"
     exit 1
 }
@@ -46,7 +48,8 @@ Set-Content -Path $UnconstrainedFile -Value $InitialUnconstrainedContent -NoNewl
 
 $InitialHash = (Get-FileHash -Path $ProtectedFile -Algorithm SHA256).Hash
 
-try {
+try
+{
     # 3. Create project and constraint in Profile A
     Write-Host "[2/6] Initializing project and creating typed constraint..."
     $NodeOutA = & $Launcher --profile $ProfileA identity show
@@ -75,16 +78,19 @@ try {
     $InviteUrl = $null
     for ($i = 0; $i -lt 40; $i++) {
         Start-Sleep -Milliseconds 500
-        if (Test-Path $HostOutFile) {
+        if (Test-Path $HostOutFile)
+        {
             $HostLog = Get-Content $HostOutFile -Raw -ErrorAction SilentlyContinue
-            if ($HostLog -and $HostLog -like "*INVITATION=*") {
+            if ($HostLog -and $HostLog -like "*INVITATION=*")
+            {
                 $InviteUrl = ($HostLog | Select-String "INVITATION=(.+)").Matches.Groups[1].Value
                 break
             }
         }
     }
 
-    if (-not $InviteUrl) {
+    if (-not $InviteUrl)
+    {
         $ErrLog = Get-Content $HostErrFile -Raw -ErrorAction SilentlyContinue
         Write-Error "Host process failed to produce invitation URL. Error log: $ErrLog"
         exit 1
@@ -95,7 +101,10 @@ try {
 
     # Joiner syncs
     $JoinOut = & $Launcher --profile $ProfileB sync join --project $ProjectId --record $RecordId --expect-host $NodeIdA $InviteUrl
-    if ($HostProc.HasExited -eq $false) { $HostProc | Stop-Process -Force }
+    if ($HostProc.HasExited -eq $false)
+    {
+        $HostProc | Stop-Process -Force
+    }
 
     # 5. Run BASELINE Condition (No guardrail)
     Write-Host "[4/6] Executing BASELINE condition (un-governed agent file mutation)..."
@@ -163,20 +172,51 @@ try {
     Write-Host "----------------------------------------------------------"
     Write-Host "EXPERIMENT_RESULT=COMPLETE"
     Write-Host "BASELINE_OPERATION_REACHED_MUTATION=$BaselineReachedMutation"
-    Write-Host "SYNESIS_OPERATION_REACHED_MUTATION=$(if ($SynesisBlocked) { "False" } else { "True" })"
+    Write-Host "SYNESIS_OPERATION_REACHED_MUTATION=$( if ($SynesisBlocked)
+    {
+        "False"
+    }
+    else
+    {
+        "True"
+    } )"
     Write-Host "BASELINE_PROTECTED_FILE_CHANGED=$BaselineFileChanged"
     Write-Host "SYNESIS_PROTECTED_FILE_CHANGED=$SynesisFileChanged"
-    Write-Host "SYNESIS_ACTION_RESULT=$(if ($SynesisBlocked) { "BLOCKED" } else { "ALLOWED" })"
+    Write-Host "SYNESIS_ACTION_RESULT=$( if ($SynesisBlocked)
+    {
+        "BLOCKED"
+    }
+    else
+    {
+        "ALLOWED"
+    } )"
     Write-Host "SYNESIS_MATCHED_CONSTRAINT_COUNT=1"
-    Write-Host "SYNESIS_FALSE_POSITIVE_COUNT=$(if ($FalsePositive) { 1 } else { 0 })"
-    Write-Host "SYNESIS_FALSE_NEGATIVE_COUNT=$(if (-not $SynesisBlocked) { 1 } else { 0 })"
+    Write-Host "SYNESIS_FALSE_POSITIVE_COUNT=$( if ($FalsePositive)
+    {
+        1
+    }
+    else
+    {
+        0
+    } )"
+    Write-Host "SYNESIS_FALSE_NEGATIVE_COUNT=$( if (-not $SynesisBlocked)
+    {
+        1
+    }
+    else
+    {
+        0
+    } )"
     Write-Host "SYNESIS_GUARDRAIL_LATENCY_MS=$LatencyMs"
     Write-Host "REAL_AGENT_RUN=NOT_RUN"
     Write-Host "REASON=Environment requires interactive Claude Code CLI authentication."
     Write-Host "----------------------------------------------------------"
 
-} finally {
-    if (Test-Path $TempRoot) {
+}
+finally
+{
+    if (Test-Path $TempRoot)
+    {
         Remove-Item -Path $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
