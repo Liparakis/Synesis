@@ -519,18 +519,19 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-009C
 - Priority: P0
 - Title: Cross-platform distribution and bootstrap installation
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Produce platform-specific Java bundles with bundled runtimes, a Go installer/update bootstrapper, and a verified CI artifact matrix.
 - Dependencies: SYN-009B DONE; user-supplied SYN-009C activation; Codex remains EXPERIMENTAL/DEGRADED and is not promoted by this task.
 - Acceptance criteria: native Windows bundle smoke passes; Go bootstrap install/update/uninstall/doctor behavior is bounded and tested; detached Ed25519 manifest verification, SHA-256 verification, safe extraction, atomic activation, rollback, and project preservation pass; CI defines windows/linux/macos x64/arm64 artifact jobs and honest native/cross-compiled status; Java provider behavior remains covered; no Link protocol behavior changes.
 - Required tests: `:cli:platformBundle`, bundled-runtime smoke, Go unit/integration tests, artifact/manifest checks, safe-extraction tests, and strict Java verification.
 - Required documentation: implementation note, three distribution ADRs, installation/release/signing docs, smoke evidence, and durable state updates.
 - Scope state: activated from the pasted SYN-009C goal; no public release or remote publication.
-- Evidence: REOPENED AFTER AUDIT — CP-0106 through CP-0109 established the
-  initial distribution slice. Post-CP-0109 audit found Windows-only smoke
-  execution, missing bundled launcher self-identification, and an incorrect CI
-  signature verification path. The fixes pass an isolated real Windows archive
-  trial but require final verification, checkpoint, and commit.
+- Evidence: PASS — CP-0106 through CP-0110 and commit `7a40324`; Java strict
+  build/archive extraction smoke, Go tests/vet/native subprocess, six
+  cross-builds, real Windows Java ZIP bootstrap install and bundled CLI/provider
+  lifecycle trial, CI matrix/sidecar validation, release documentation, and
+  clean working tree. Production key replacement, OS signing/notarization, and
+  public publication remain explicitly deferred.
 
 ## SYN-009B.1
 

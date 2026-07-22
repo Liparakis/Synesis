@@ -99,8 +99,7 @@ spaces.
 
 ## Final completion gate
 
-The gate remains pending until CP-0110 records the post-audit verification and
-commit.
+At CP-0110 / commit `7a40324`, the post-audit gate passes.
 
 ```text
 JAVA_FULL_BUILD=PASS

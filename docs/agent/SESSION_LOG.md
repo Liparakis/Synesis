@@ -628,3 +628,15 @@ Append-only operational history.
   doctor, project preservation, uninstall, and an install root with spaces.
 - Exact continuation: rerun final validators, create CP-0110, commit, and only
   then close SYN-009C.
+
+## 2026-07-22 — SYN-009C final closure
+
+- Checkpoint: CP-0110.
+- Commit: `7a40324 Harden cross-platform bundle release trial`.
+- Final evidence: Java strict clean build with archive extraction smoke, Go
+  native test/vet and six cross-compiles, real Windows ZIP bootstrap trial with
+  bundled version/init/provider lifecycle/doctor/uninstall, CI YAML and
+  signature-sidecar validation, durable validators, and clean working tree.
+- Status: `SYN-009C_STATUS=DONE`. Production signing-key replacement, OS vendor
+  signing/notarization, public hosting, and real Codex trust validation remain
+  outside this task.

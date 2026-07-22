@@ -5,7 +5,7 @@
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
-  DONE at CP-0102, SYN-009B.1 is VERIFYING, and SYN-009C is the only ACTIVE task;
+  DONE at CP-0102, SYN-009B.1 is VERIFYING, and SYN-009C is DONE at CP-0110;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -120,9 +120,9 @@ allowed.
   final gate: Java full build, Go full test, CI matrix definition, native smoke
   where available, bootstrap native smoke, manifest aggregation, test-key
   signature verification, release documentation, and clean working tree all
-  PASS at CP-0109, but post-checkpoint trial fixes reopened SYN-009C: archive
-  extraction smoke is now cross-platform, bundled launchers set their own
-  launcher path, and CI verifies the sidecar actually produced by signing.
+  PASS at CP-0110: archive extraction smoke is cross-platform, bundled
+  launchers set their own launcher path, CI verifies the sidecar actually
+  produced by signing, and the real Windows archive bootstrap trial passes.
   Production key replacement and OS vendor signing remain deferred
   release-hardening work.
 
