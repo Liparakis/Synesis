@@ -2,28 +2,26 @@
 
 ## Identity
 
-- Task ID: SYN-009B.1
+- Task ID: SYN-009C
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0102
-- Latest checkpoint: CP-0105
+- Started checkpoint: CP-0105
+- Latest checkpoint: CP-0107
 - Responsible agent: fresh coding agent
-- Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022
+- Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
 ## Objective
 
-Add the project-local Codex PreToolUse `apply_patch` adapter and provider
-lifecycle integration, with synthetic and process-level evidence and an
-honest real-agent validation gate. Portable ZIP work remains queued as
-SYN-009C.
+Deliver cross-platform Java bundles with bundled runtimes, a Go bootstrapper,
+and CI artifact verification without changing Link or provider behavior.
 
 ## Planning state
 
 SYN-009B was promoted after SYN-009A completion at CP-0099 and is DONE at
-CP-0102. SYN-009B.1 is an EVOLUTION of the existing provider lifecycle and
+CP-0102. SYN-009B.1 is VERIFYING as an EVOLUTION of the existing provider lifecycle and
 hook boundary. It adds one Codex integration under `:workspace`, reuses the
 shared path resolver and action guardrail, and writes only project-local
-`.codex/hooks.json`. SYN-009C is READY and has no implementation work started.
+`.codex/hooks.json`. The user-supplied SYN-009C goal is now ACTIVE.
 
 ## Architecture brief
 
@@ -110,10 +108,18 @@ SYN-009A is complete at CP-0099. SYN-009B is complete at CP-0102.
 
 Real `/hooks` trust review and a qualifying authenticated Codex payload/run
 remain pending. This is intentionally not converted into a stronger support
-claim.
+claim. Distribution work must preserve this limitation.
 
 ## Immediate next action
 
-Review and trust the exact project-local Codex hook in the interactive `/hooks`
-UI, then rerun the protected-file experiment recorded in the Codex validation
-report.
+SYN-009C.1 verification is complete: `:cli:platformBundle`,
+`:cli:bundleSmokeTest`, `:cli:platformArchive`, bundled `version`, and clean
+strict Java `check` all PASS. Native output is Windows x64 only in this
+workspace. SYN-009C.2 verification now passes with a complete Go 1.26.5
+toolchain on D:.
+
+`gofmt -w .`, `go test -v ./...`, `go vet ./...`, native Windows bootstrap
+process install/update/doctor/uninstall, all six cross-compiles, and a clean
+room Java `clean check --dependency-verification=strict` PASS. The remaining
+action is the phase checkpoint/commit and final release-consistency audit
+before promoting SYN-009C.3.

@@ -552,3 +552,53 @@ Append-only operational history.
 - CP-0096 was created. SYN-009B provider management and SYN-009C portable
   packaging remain unpromoted and unimplemented.
 - Exact continuation: commit the verified SYN-009A changes; do not expand scope.
+
+## 2026-07-22 — SYN-009C.1 native bundle
+
+- Checkpoint: CP-0107
+- Active task: SYN-009C
+- Completed work: Promoted the supplied distribution goal; added the
+  implementation note and ADR-0023 through ADR-0025; embedded build metadata,
+  `synesis version`, a native jlink runtime, relative launchers, platform
+  ZIP/tar.gz tasks, clean-room provider/init/doctor smoke, the Go bootstrapper,
+  install scripts, and the CI matrix.
+- Commands run: `:cli:platformBundle`; `:cli:bundleSmokeTest`;
+  `:cli:platformArchive`; `clean check --dependency-verification=strict`;
+  PyYAML workflow parse; attempted `gofmt -w . && go test ./...` with a
+  temporary Go 1.26.5 toolchain.
+- Results: Java bundle/archive/smoke/strict check PASS; workflow YAML PASS;
+  Go attempt failed because the temporary toolchain exhausted disk space and
+  its partial GOROOT lacked standard-library sources.
+- Decisions: Keep Java authoritative; bootstrapper uses standard-library Go,
+  detached Ed25519 plus SHA-256, bounded extraction, version pointer, and
+  manual/public-release signing gates. Codex remains degraded and separate.
+- Failed attempts: Initial smoke omitted the temp project directory and then
+  lacked a configured provider launcher; both were fixed by creating the
+  project and setting the bundle launcher fixture. A YAML parse found an
+  unquoted colon and was fixed.
+- Remaining work: Run/fix Go tests, build native bootstrap, verify fixture
+  install/update/rollback/uninstall/doctor, then complete CI manifest evidence.
+- Exact continuation: Run `gofmt -w . && go test ./...` from `bootstrap` using
+  a complete Go 1.26.5 toolchain.
+
+## 2026-07-22 — SYN-009C.2 Go bootstrap verification
+
+- Active task: SYN-009C
+- Completed work: Fixed the missing artifact download call, bounded ZIP/TAR
+  size arithmetic, version-path validation, safe executable permissions,
+  unsigned file-based development manifests, checksum-verifying installer
+  scripts, and native subprocess smoke wiring in CI.
+- Commands run: temporary Go 1.26.5 `gofmt -w .`; `go test -v ./...`; `go vet
+  ./...`; native Windows `TestNativeBootstrapProcess`; six `GOOS/GOARCH`
+  cross-compiles; PowerShell installer parse; YAML parse.
+- Results: PASS. Install/update/no-op/failed-update preservation/doctor/
+  uninstall-project-preservation, Ed25519 fixture verification, checksum and
+  size rejection, ZIP traversal/absolute-path rejection, TAR executable
+  preservation, and native process smoke all pass.
+- Java follow-up: D: clean-room `clean check --dependency-verification=strict`
+  PASS with 39 actionable tasks; `:cli:platformArchive` PASS with ZIP
+  25,825,206 bytes and tar.gz 25,591,351 bytes. Two earlier clean-room runs
+  were invalidated by copied Gradle caches/C: temp state; the final run used
+  a fresh project, disabled build cache, and D: TEMP/TMP.
+- Remaining work: create the phase-2 checkpoint, commit the verified slice,
+  and continue to SYN-009C.3.

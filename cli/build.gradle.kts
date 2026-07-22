@@ -1,5 +1,14 @@
 import org.gradle.kotlin.dsl.application
 import org.gradle.kotlin.dsl.dependencies
+import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.bundling.Compression
+import org.gradle.api.tasks.bundling.Tar
+import org.gradle.api.tasks.bundling.Zip
+import org.gradle.language.jvm.tasks.ProcessResources
+import java.time.Instant
+import java.util.Locale
+import java.nio.file.Files
 
 plugins {
     application
@@ -7,6 +16,37 @@ plugins {
 
 group = "org.synesis"
 version = "0.1.0-SNAPSHOT"
+
+val hostPlatform = when {
+    System.getProperty("os.name").lowercase(Locale.ROOT).contains("win") ->
+        if (System.getProperty("os.arch").lowercase(Locale.ROOT).contains("aarch64")) "windows-arm64" else "windows-x64"
+    System.getProperty("os.name").lowercase(Locale.ROOT).contains("mac") ->
+        if (System.getProperty("os.arch").lowercase(Locale.ROOT).contains("aarch64")) "macos-arm64" else "macos-x64"
+    else -> if (System.getProperty("os.arch").lowercase(Locale.ROOT).contains("aarch64")) "linux-arm64" else "linux-x64"
+}
+val bundlePlatform = providers.gradleProperty("bundlePlatform").orElse(hostPlatform)
+val bundleVersion = providers.gradleProperty("synesisVersion")
+    .orElse(providers.environmentVariable("SYNESIS_VERSION").orElse("0.1.0-dev.local"))
+val buildInfoDirectory = layout.buildDirectory.dir("generated-resources/build-info")
+val platformBundleDirectory = layout.buildDirectory.dir("platform-bundle/synesis-${bundleVersion.get()}-${bundlePlatform.get()}")
+val runtimeImageDirectory = layout.buildDirectory.dir("platform-runtime")
+
+val buildInfo = tasks.register("buildInfo") {
+    outputs.dir(buildInfoDirectory)
+    doLast {
+        val output = buildInfoDirectory.get().file("synesis-build.properties").asFile
+        output.parentFile.mkdirs()
+        output.writeText(
+            "version=${bundleVersion.get()}\n" +
+                "recordFormat=SDR2\n" +
+                "reconciliationProtocol=PRP1\n" +
+                "commit=${providers.environmentVariable("GITHUB_SHA").orElse("UNKNOWN").get()}\n" +
+                "time=${Instant.now()}\n" +
+                "platform=${bundlePlatform.get()}\n" +
+                "javaRuntime=${Runtime.version()}\n"
+        )
+    }
+}
 
 java {
     toolchain { languageVersion = JavaLanguageVersion.of(25) }
@@ -29,6 +69,11 @@ dependencies {
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(buildInfo)
+    from(buildInfoDirectory)
 }
 
 configurations.configureEach { resolutionStrategy.activateDependencyLocking() }
@@ -84,3 +129,126 @@ tasks.register("staticAnalysis") {
     description = "Runs strict compiler diagnostics."
     dependsOn(tasks.compileJava, tasks.compileTestJava)
 }
+
+val runtimeImage = tasks.register("runtimeImage") {
+    group = "distribution"
+    description = "Builds the minimal native jlink runtime for the current host."
+    dependsOn(tasks.installDist)
+    outputs.dir(runtimeImageDirectory)
+    doLast {
+        val javaHome = File(System.getProperty("java.home"))
+        val jlink = javaHome.resolve("bin").resolve(if (hostPlatform.startsWith("windows")) "jlink.exe" else "jlink")
+        val jmods = javaHome.resolve("jmods")
+        require(jlink.isFile) { "jlink not found: $jlink" }
+        delete(runtimeImageDirectory)
+        val process = ProcessBuilder(
+            jlink.absolutePath,
+            "--module-path", jmods.absolutePath,
+            "--add-modules", "java.base,java.logging,java.naming,jdk.jfr,jdk.unsupported",
+            "--strip-debug", "--no-header-files", "--no-man-pages", "--compress=2",
+            "--output", runtimeImageDirectory.get().asFile.absolutePath
+        ).inheritIO().start()
+        require(process.waitFor() == 0) { "jlink failed with exit code ${process.exitValue()}" }
+    }
+}
+
+val platformBundle = tasks.register("platformBundle") {
+    group = "distribution"
+    description = "Assembles a self-contained Synesis application bundle."
+    dependsOn(runtimeImage, tasks.installDist)
+    outputs.dir(platformBundleDirectory)
+    doLast {
+        val root = platformBundleDirectory.get().asFile
+        delete(root)
+        val app = root.resolve("app")
+        val libs = app.resolve("lib")
+        libs.mkdirs()
+        copy {
+            from(tasks.jar.get().archiveFile)
+            into(app)
+            rename { "synesis-cli.jar" }
+        }
+        copy {
+            from(layout.buildDirectory.dir("install/synesis/lib"))
+            into(libs)
+            exclude("cli-*.jar")
+        }
+        copy { from(runtimeImageDirectory); into(root.resolve("runtime")) }
+        val bin = root.resolve("bin")
+        bin.mkdirs()
+        bin.resolve("synesis.cmd").writeText(
+            "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
+        )
+        bin.resolve("synesis").writeText(
+            "#!/bin/sh\nAPP_HOME=\"${'$'}(CDPATH= cd -- \"${'$'}(dirname -- \"${'$'}0\")/..\" && pwd)\"\nexec \"${'$'}APP_HOME/runtime/bin/java\" --enable-native-access=ALL-UNNAMED -cp \"${'$'}APP_HOME/app/synesis-cli.jar:${'$'}APP_HOME/app/lib/*\" org.synesis.cli.SynesisCli \"${'$'}@\"\n"
+        )
+        root.resolve("VERSION").writeText(bundleVersion.get() + "\n")
+        root.resolve("README.md").writeText("Run bin/synesis (Unix) or bin/synesis.cmd (Windows).\n")
+        root.resolve("LICENSE").writeText(rootProject.file("LICENSE").readText())
+        root.resolve("manifest.json").writeText(
+            "{\"schemaVersion\":1,\"version\":\"${bundleVersion.get()}\",\"platform\":\"${bundlePlatform.get()}\"}\n"
+        )
+        if (!hostPlatform.startsWith("windows")) {
+            bin.resolve("synesis").setExecutable(true)
+        }
+    }
+}
+
+val platformZip = tasks.register<Zip>("platformZip") {
+    group = "distribution"
+    dependsOn(platformBundle)
+    archiveFileName.set("synesis-${bundleVersion.get()}-${bundlePlatform.get()}.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    from(platformBundleDirectory)
+    into(platformBundleDirectory.get().asFile.name)
+}
+
+val platformTarGz = tasks.register<Tar>("platformTarGz") {
+    group = "distribution"
+    dependsOn(platformBundle)
+    archiveFileName.set("synesis-${bundleVersion.get()}-${bundlePlatform.get()}.tar.gz")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    compression = Compression.GZIP
+    from(platformBundleDirectory)
+    into(platformBundleDirectory.get().asFile.name)
+}
+
+tasks.register("platformArchive") {
+    group = "distribution"
+    description = "Creates ZIP and gzip tar platform archives."
+    dependsOn(platformZip, platformTarGz)
+}
+
+tasks.register("bundleSmokeTest") {
+    group = "verification"
+    description = "Runs the bundled launcher outside the source tree."
+    dependsOn(platformBundle)
+    doLast {
+        val smokeRoot = Files.createTempDirectory("synesis-bundle-smoke-").toFile()
+        val launcher = platformBundleDirectory.get().file("bin/synesis.cmd").asFile
+        fun run(vararg arguments: String) {
+            val command = mutableListOf("cmd.exe", "/c", launcher.absolutePath).apply { addAll(arguments) }
+            val processBuilder = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true)
+            processBuilder.environment()["SYNESIS_LAUNCHER"] = launcher.absolutePath
+            val result = processBuilder.start()
+            val output = result.inputStream.bufferedReader().readText()
+            require(result.waitFor() == 0) { "Bundle command failed: ${arguments.joinToString(" ")}\n$output" }
+            if (arguments.firstOrNull() == "version") require("SYNESIS_VERSION=" in output)
+        }
+        try {
+            run("version")
+            val project = smokeRoot.resolve("project")
+            require(project.mkdirs()) { "Unable to create smoke project: $project" }
+            run("init", "--project", project.absolutePath)
+            run("provider", "list", "--project", project.absolutePath)
+            run("provider", "install", "antigravity", "--project", project.absolutePath)
+            run("provider", "status", "antigravity", "--project", project.absolutePath)
+            run("provider", "uninstall", "antigravity", "--project", project.absolutePath)
+            run("doctor", "--project", project.absolutePath)
+        } finally {
+            delete(smokeRoot)
+        }
+    }
+}
+
+tasks.check { dependsOn("bundleSmokeTest") }

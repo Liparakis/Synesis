@@ -9,7 +9,7 @@ a demo-only authenticated work exchange. It does not claim that every pair of
 computers can connect directly.
 
 The Link implementation and tests live under `link/`; the standalone terminal
-CLI and development distribution live under `cli/`.
+CLI and its self-contained platform distribution live under `cli/`.
 
 ## Build
 
@@ -23,6 +23,7 @@ Java 25 is required. Build the development distribution with:
 ./gradlew.bat :cli:installDist --dependency-verification=strict
 & ".\cli\build\install\synesis\bin\synesis.bat" --help
 & ".\cli\build\install\synesis\bin\synesis.bat" --version
+& ".\cli\build\install\synesis\bin\synesis.bat" version
 & ".\cli\build\install\synesis\bin\synesis.bat" identity show
 ```
 

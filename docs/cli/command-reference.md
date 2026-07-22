@@ -5,7 +5,7 @@ The only public application launcher is `synesis`.
 ```text
 synesis
   help
-  version-placeholder
+  version
   host
   join
   identity show
@@ -26,6 +26,5 @@ check-action, and hook commands for isolated process tests and cross-profile
 experiments. Hook JSON stays on stdout; diagnostics stay on stderr and hook
 exit code remains 0 for provider contract responses.
 
-Provider installation commands are intentionally absent until SYN-009B.
-Portable packaging and build-version injection are intentionally absent until
-SYN-009C.
+Provider installation commands are project-local. `synesis version` is safe to
+run without a project and reports embedded build metadata.

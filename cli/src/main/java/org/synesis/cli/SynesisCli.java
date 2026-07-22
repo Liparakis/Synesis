@@ -61,7 +61,7 @@ public final class SynesisCli {
         command.getSubcommands().get("provider").addSubcommand("status", new ProviderStatusCommand(runtime));
         command.getSubcommands().get("provider").addSubcommand("uninstall", new ProviderUninstallCommand(runtime));
         command.addSubcommand("help", new HelpCommand());
-        command.addSubcommand("version-placeholder", new VersionPlaceholderCommand(runtime));
+        command.addSubcommand("version", new VersionPlaceholderCommand(runtime));
         command.addSubcommand("init", new InitCommand(runtime));
         command.addSubcommand("project", new ProjectCommand());
         command.getSubcommands().get("project").addSubcommand("create", new ProjectCreateCommand(runtime));

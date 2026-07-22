@@ -518,22 +518,26 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-009C
 - Priority: P0
-- Title: Portable ZIP and clean-machine smoke test
-- Status: READY
-- Purpose: Prepare the smallest reproducible portable distribution and clean-machine smoke test for the unified `synesis` launcher.
-- Dependencies: SYN-009B DONE; provider lifecycle and diagnostics closed at CP-0102.
-- Acceptance criteria: portable ZIP contents, launcher startup, dependency/runtime assumptions, and clean-machine smoke evidence are documented and verified without changing provider or Link protocol behavior.
-- Required tests: archive assembly, clean-machine launcher help/version/init, and documented smoke cleanup.
-- Required documentation: distribution note, smoke-test evidence, and durable state updates.
-- Scope state: queued behind SYN-009B.1; no SYN-009C implementation work has started.
-- Evidence: pending.
+- Title: Cross-platform distribution and bootstrap installation
+- Status: ACTIVE
+- Purpose: Produce platform-specific Java bundles with bundled runtimes, a Go installer/update bootstrapper, and a verified CI artifact matrix.
+- Dependencies: SYN-009B DONE; user-supplied SYN-009C activation; Codex remains EXPERIMENTAL/DEGRADED and is not promoted by this task.
+- Acceptance criteria: native Windows bundle smoke passes; Go bootstrap install/update/uninstall/doctor behavior is bounded and tested; detached Ed25519 manifest verification, SHA-256 verification, safe extraction, atomic activation, rollback, and project preservation pass; CI defines windows/linux/macos x64/arm64 artifact jobs and honest native/cross-compiled status; Java provider behavior remains covered; no Link protocol behavior changes.
+- Required tests: `:cli:platformBundle`, bundled-runtime smoke, Go unit/integration tests, artifact/manifest checks, safe-extraction tests, and strict Java verification.
+- Required documentation: implementation note, three distribution ADRs, installation/release/signing docs, smoke evidence, and durable state updates.
+- Scope state: activated from the pasted SYN-009C goal; no public release or remote publication.
+- Evidence: PARTIAL — Java bundle/archive/smoke and strict verification PASS;
+  Go formatting/tests/vet, native Windows bootstrap subprocess, safe signed
+  fixture, and six cross-compiles PASS; workflow YAML and manifest consistency
+  checks are defined. Protected production-key verification and final clean
+  commit remain release-gate work.
 
 ## SYN-009B.1
 
 - ID: SYN-009B.1
 - Priority: P0
 - Title: Codex PreToolUse adapter, provider lifecycle, and real-agent validation
-- Status: ACTIVE
+- Status: VERIFYING
 - Purpose: Add the smallest project-local Codex `apply_patch` PreToolUse adapter and provider lifecycle integration on top of the closed SYN-009B foundation.
 - Dependencies: SYN-009B DONE at CP-0102; Codex CLI 0.140.0 is locally installed; official Codex hook/config contract review recorded in `docs/agent/SYN_009B1_IMPLEMENTATION_NOTE.md`.
 - Acceptance criteria: Codex is listed after Antigravity and Claude Code as `EXPERIMENTAL`; `synesis hook codex` parses bounded Add/Update/Delete/Move patch paths, resolves `cwd` through the shared project/path guardrail boundary, denies any blocked or invalid multi-path patch with exit 0, emits bounded warnings as `additionalContext`, leaves allowed/unsupported stdout empty, and never applies patches; provider install/status/uninstall owns project-local `.codex/hooks.json` atomically and idempotently while preserving unrelated configuration; install/status/doctor report trust `REVIEW_REQUIRED`/`UNKNOWN` and stay degraded until a real validated run; synthetic tests, process-level launcher coverage, Codex version/fixture capture, and the real authenticated `/hooks` experiment are recorded honestly; Codex remains `EXPERIMENTAL` unless every promotion gate passes.

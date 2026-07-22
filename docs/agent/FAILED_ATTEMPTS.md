@@ -88,6 +88,24 @@
 
 ## Required entry format
 
+## 2026-07-22 — Clean-room Java verification harness
+
+- Date: 2026-07-22
+- Task ID: SYN-009C.2
+- Attempted approach: Run strict Java verification in a D: copied worktree.
+- Expected result: Reproduce the prior clean Java gate independently.
+- Observed result: Early runs reused copied Gradle caches or left Java test
+  temp state on C:, causing false native-library and disk-space failures.
+- Command or evidence: D: `gradlew.bat clean check --dependency-verification=strict`;
+  final clean run with `--no-build-cache`, fresh project state, and D: TEMP/TMP.
+- Root cause: Verification harness inherited absolute build-cache paths and
+  the host C: temp directory.
+- Retry prohibition: Do not treat the early failures as source regressions;
+  rerun only with isolated project/cache/temp paths.
+- Evidence required before retry: Fresh D: project, D: Gradle home, D: temp,
+  and no build cache.
+- Next hypothesis: The isolated run will match the existing Java clean gate.
+
 - Date:
 - Task ID:
 - Attempted approach:
@@ -98,3 +116,22 @@
 - Retry prohibition:
 - Evidence required before retry:
 - Next hypothesis:
+
+## 2026-07-22 — Go bootstrap local toolchain
+
+- Date: 2026-07-22
+- Task ID: SYN-009C.2
+- Attempted approach: Downloaded the official Go 1.26.5 Windows archive to a
+  temporary directory and extracted only partial toolchain contents to run
+  `gofmt` and `go test ./...` without installing Go system-wide.
+- Expected result: Local bootstrap compile and tests pass.
+- Observed result: The host has insufficient free disk space for the complete
+  toolchain; the partial GOROOT lacked required standard-library sources and
+  `go test` could not run.
+- Command or evidence: `go test ./...`; Go 1.26.5 temporary toolchain attempt.
+- Root cause: No installed Go toolchain and only a partial temporary extraction.
+- Retry prohibition: Do not claim Go verification from the partial toolchain.
+- Evidence required before retry: Complete Go 1.26.5 toolchain or CI run with
+  `gofmt` and `go test ./...` plus native bootstrap fixture evidence.
+- Next hypothesis: CI's setup-go job will provide a complete toolchain; fix any
+  compiler or test issue there before marking SYN-009C.2 complete.

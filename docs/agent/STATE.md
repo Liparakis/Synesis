@@ -5,7 +5,7 @@
 Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
-DONE at CP-0102, and SYN-009B.1 is the only ACTIVE task;
+  DONE at CP-0102, SYN-009B.1 is VERIFYING, and SYN-009C is the only ACTIVE task;
 SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -104,7 +104,20 @@ allowed.
   `EXPERIMENTAL`/`DEGRADED` with `TRUST_STATUS=REVIEW_REQUIRED`; the real
   `/hooks` trust review and qualifying denial/re-plan/hash evidence are not
   complete. See `docs/validation/codex-real-agent-experiment.md`.
-  Checkpoint CP-0103 records the verified slice and the exact continuation.
+
+- SYN-009C promotion: PASS as a user-authorized task-state change. The
+  distribution architecture is EVOLUTION; implementation and release evidence
+  are pending. Codex remains EXPERIMENTAL/DEGRADED/REVIEW_REQUIRED.
+
+- SYN-009C.1 implementation: PASS. `synesis version`, embedded build metadata,
+  `jlink` runtime, relative launcher, ZIP/tar.gz archives, and clean-room
+  Windows provider/init/doctor smoke all pass. The bootstrapper source, signed
+  manifest helper, safe extraction, version validation, and six-platform CI
+  matrix are present. SYN-009C.2 verification now passes: `gofmt`, `go test
+  ./...`, `go vet ./...`, native Windows subprocess install/update/doctor/
+  uninstall, all six cross-compiles, clean-room Java `clean check
+  --dependency-verification=strict`, and platform archive generation. The
+  next checkpoint must capture the completed Go/Java phase before commit.
 
 ## Honest limitations
 

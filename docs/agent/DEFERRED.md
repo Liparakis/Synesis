@@ -523,7 +523,7 @@ exchange; no new transport or protocol is implied.
 
 ## SL-D-024 â€” CLI packaging, installation, and distribution
 
-**Status:** DEFERRED
+**Status:** READY_FOR_PLANNING
 **Area:** Release operations
 **Current verified capability:** Gradle Application development distribution
 with generated Windows and Unix launchers is verified; no production installer
@@ -531,13 +531,13 @@ or supported package is claimed.
 **Missing capability:** Signed, supported installation/distribution workflow.
 **Reason deferred:** First demo uses reproducible local Java/Gradle commands.
 **Dependencies:** Physical demo evidence and release ownership.
-**Activation trigger:** External operator needs installation outside the repository.
+**Activation trigger:** External operator needs installation outside the repository; satisfied by the supplied SYN-009C goal.
 **Evidence required before planning:** Clean-machine installation, upgrade, rollback, and secret handling.
 **Security questions:** Artifact signing, dependency supply chain, and secret storage.
 **Privacy questions:** Logs, paths, and telemetry.
 **Operational questions:** Platform matrix, support, and uninstall.
 **Public-claims impact:** No packaged production client claim.
-**Potential future task:** Unassigned
+**Potential future task:** SYN-009C
 **Related ADRs:** ADR-0010
 **Related documents:** `docs/demo/FIRST_DEMO.md`
 **Code extension seams:** Gradle application packaging only if promoted.
