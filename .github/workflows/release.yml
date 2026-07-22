@@ -18,6 +18,7 @@ jobs:
             -   uses: actions/setup-java@v5
                 with:
                     distribution: microsoft
+                    java-version: '25'
             -   run: ./gradlew.bat clean check --dependency-verification=strict
                 if: runner.os == 'Windows'
             -   run: ./gradlew clean check --dependency-verification=strict
