@@ -144,7 +144,8 @@ jobs:
                   raise SystemExit(f'artifact size missing/mismatch: {platform}')
               if hashlib.sha256(path.read_bytes()).hexdigest() != entry['sha256']:
                   raise SystemExit(f'artifact hash mismatch: {platform}')
-          signature = pathlib.Path('manifest.json.sig').read_text().strip()
+          signature_path = pathlib.Path('bootstrap/manifest.json.sig')
+          signature = signature_path.read_text().strip() if signature_path.exists() else ''
           if os.environ['GITHUB_REF_TYPE'] == 'tag':
               if len(base64.b64decode(signature, validate=True)) != 64:
                   raise SystemExit('tag manifest signature is not Ed25519-sized')

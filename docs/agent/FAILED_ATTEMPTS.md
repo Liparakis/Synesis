@@ -135,3 +135,25 @@
   `gofmt` and `go test ./...` plus native bootstrap fixture evidence.
 - Next hypothesis: CI's setup-go job will provide a complete toolchain; fix any
   compiler or test issue there before marking SYN-009C.2 complete.
+
+## 2026-07-22 — Post-CP-0109 distribution audit
+
+- Date: 2026-07-22
+- Task ID: SYN-009C
+- Attempted approach: Treat CP-0109 as final and run the real Windows archive
+  through the bootstrapper.
+- Expected result: The external-style installation trial and CI release path
+  should work without test-only environment injection.
+- Observed result: Unix bundle smoke selected Windows `cmd.exe`; provider
+  install failed because bundled launchers did not set `SYNESIS_LAUNCHER`; CI
+  signed `bootstrap/manifest.json.sig` but verified `manifest.json.sig` before
+  copying it.
+- Root cause: Smoke task assumed the host platform and tested a directory;
+  launcher self-identification was supplied only by the smoke harness; the CI
+  verifier used the wrong sidecar path.
+- Retry prohibition: Do not claim CP-0109 final until archive extraction,
+  launcher self-identification, and sidecar verification are rerun together.
+- Evidence required before retry: Clean D: source copy, real Java archive,
+  native bootstrap subprocess, YAML parse, and final clean commit.
+- Result after fix: Real Windows archive trial passes; Unix branch remains
+  runner-dependent and is now selected by host platform rather than `cmd.exe`.

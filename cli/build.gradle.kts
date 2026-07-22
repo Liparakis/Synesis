@@ -177,10 +177,10 @@ val platformBundle = tasks.register("platformBundle") {
         val bin = root.resolve("bin")
         bin.mkdirs()
         bin.resolve("synesis.cmd").writeText(
-            "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
+            "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
         )
         bin.resolve("synesis").writeText(
-            "#!/bin/sh\nAPP_HOME=\"${'$'}(CDPATH= cd -- \"${'$'}(dirname -- \"${'$'}0\")/..\" && pwd)\"\nexec \"${'$'}APP_HOME/runtime/bin/java\" --enable-native-access=ALL-UNNAMED -cp \"${'$'}APP_HOME/app/synesis-cli.jar:${'$'}APP_HOME/app/lib/*\" org.synesis.cli.SynesisCli \"${'$'}@\"\n"
+            "#!/bin/sh\nAPP_HOME=\"${'$'}(CDPATH= cd -- \"${'$'}(dirname -- \"${'$'}0\")/..\" && pwd)\"\nSYNESIS_LAUNCHER=\"${'$'}APP_HOME/bin/synesis\" exec \"${'$'}APP_HOME/runtime/bin/java\" --enable-native-access=ALL-UNNAMED -cp \"${'$'}APP_HOME/app/synesis-cli.jar:${'$'}APP_HOME/app/lib/*\" org.synesis.cli.SynesisCli \"${'$'}@\"\n"
         )
         root.resolve("VERSION").writeText(bundleVersion.get() + "\n")
         root.resolve("README.md").writeText("Run bin/synesis (Unix) or bin/synesis.cmd (Windows).\n")
@@ -221,15 +221,30 @@ tasks.register("platformArchive") {
 
 tasks.register("bundleSmokeTest") {
     group = "verification"
-    description = "Runs the bundled launcher outside the source tree."
-    dependsOn(platformBundle)
+    description = "Extracts and runs the platform archive outside the source tree."
+    dependsOn("platformArchive")
     doLast {
         val smokeRoot = Files.createTempDirectory("synesis-bundle-smoke-").toFile()
-        val launcher = platformBundleDirectory.get().file("bin/synesis.cmd").asFile
+        val archive = if (hostPlatform.startsWith("windows")) {
+            platformZip.get().archiveFile.get().asFile
+        } else {
+            platformTarGz.get().archiveFile.get().asFile
+        }
+        val extractedRoot = smokeRoot.resolve("bundle")
+        copy {
+            from(if (archive.extension == "zip") zipTree(archive) else tarTree(resources.gzip(archive)))
+            into(extractedRoot)
+        }
+        val bundleRoot = extractedRoot.resolve(platformBundleDirectory.get().asFile.name)
+        val launcher = bundleRoot.resolve("bin").resolve(if (hostPlatform.startsWith("windows")) "synesis.cmd" else "synesis")
         fun run(vararg arguments: String) {
-            val command = mutableListOf("cmd.exe", "/c", launcher.absolutePath).apply { addAll(arguments) }
+            val command = if (hostPlatform.startsWith("windows")) {
+                mutableListOf("cmd.exe", "/c", launcher.absolutePath)
+            } else {
+                mutableListOf(launcher.absolutePath)
+            }.apply { addAll(arguments) }
             val processBuilder = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true)
-            processBuilder.environment()["SYNESIS_LAUNCHER"] = launcher.absolutePath
+            processBuilder.environment()["JAVA_HOME"] = smokeRoot.resolve("missing-java").absolutePath
             val result = processBuilder.start()
             val output = result.inputStream.bufferedReader().readText()
             require(result.waitFor() == 0) { "Bundle command failed: ${arguments.joinToString(" ")}\n$output" }

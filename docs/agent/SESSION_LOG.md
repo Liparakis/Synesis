@@ -614,3 +614,17 @@ Append-only operational history.
   tree gate PASS. No secret was accessed and no release was published.
 - Exact continuation: run `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1` and select a separately authorized task.
+
+## 2026-07-22 — SYN-009C post-CP-0109 audit
+
+- CP-0109 was reopened after an isolated real-archive trial found three gaps:
+  Windows-only archive smoke, missing bundled launcher self-identification,
+  and CI verification of the wrong manifest signature path.
+- Fixes: bundle smoke now extracts the native ZIP/tar.gz archive and selects
+  the native launcher; platform launchers set `SYNESIS_LAUNCHER`; CI verifies
+  `bootstrap/manifest.json.sig`.
+- Evidence: D: clean source copy `:cli:bundleSmokeTest :cli:platformArchive`
+  PASS; actual Windows ZIP bootstrap trial PASS, including provider lifecycle,
+  doctor, project preservation, uninstall, and an install root with spaces.
+- Exact continuation: rerun final validators, create CP-0110, commit, and only
+  then close SYN-009C.

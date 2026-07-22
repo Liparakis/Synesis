@@ -3,7 +3,7 @@
 ## Identity
 
 - Task ID: SYN-009C
-- Status: DONE
+- Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0105
 - Latest checkpoint: CP-0109
@@ -21,8 +21,8 @@ SYN-009B was promoted after SYN-009A completion at CP-0099 and is DONE at
 CP-0102. SYN-009B.1 is VERIFYING as an EVOLUTION of the existing provider lifecycle and
 hook boundary. It adds one Codex integration under `:workspace`, reuses the
 shared path resolver and action guardrail, and writes only project-local
-`.codex/hooks.json`. SYN-009C is complete at CP-0109; no public release was
-published.
+`.codex/hooks.json`. SYN-009C is reopened for post-CP-0109 release-trial fixes;
+no public release was published.
 
 ## Architecture brief
 
@@ -36,7 +36,8 @@ published.
 ## Work completed
 
 SYN-009A is complete at CP-0099. SYN-009B is complete at CP-0102.
-SYN-009C is complete at CP-0109.
+SYN-009C reached CP-0109, then the external-style trial exposed launcher and
+CI verification defects; those fixes are now being reverified.
 
 - Promoted SYN-009B.1 as the sole ACTIVE task after reviewing the attached
   Codex contract and the installed `codex-cli 0.140.0` baseline.
@@ -105,11 +106,15 @@ SYN-009C is complete at CP-0109.
 - Real Codex validation is not complete: the untrusted run skipped the project
   hook and changed its disposable file; the bypass diagnostic did not capture
   a payload. Codex remains EXPERIMENTAL/DEGRADED/REVIEW_REQUIRED.
-- SYN-009C final gate: Java full build, Go full test, six-platform CI matrix,
-  native smoke jobs where runners exist, bootstrap native smoke, manifest
-  aggregation, test-key signature verification, release documentation, and a
-  clean working tree all PASS. Protected production signing-key use and OS
-  vendor signing/notarization remain deferred release-hardening work.
+- Post-CP-0109 trial: the real Windows archive now passes bootstrap install,
+  bundled version/init, provider lifecycle, doctor, project preservation, and
+  uninstall in an isolated D: workspace. CI manifest verification was corrected
+  to read the signed sidecar that the signing job actually creates. Unix native
+  execution remains CI-only in this Windows environment.
+- Final recheck: Java `clean check --dependency-verification=strict` passed with
+  41 actionable tasks; Go native test/vet and all six cross-compiles passed;
+  workflow YAML, matrix, sidecar path, deferred register, fixture validator,
+  doctor, and whitespace checks pass.
 
 ## Unresolved limitations
 
@@ -121,6 +126,5 @@ are also deferred; no public release is claimed.
 
 ## Immediate next action
 
-SYN-009C is DONE at CP-0109. The exact next action is to run
-`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
-promoting any future task; do not start another distribution slice implicitly.
+Run the final isolated Java/Go/CI verification, create CP-0110, commit the
+post-CP-0109 fixes, and leave the working tree clean before closing SYN-009C.

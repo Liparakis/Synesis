@@ -122,6 +122,58 @@ func TestNativeBootstrapProcess(t *testing.T) {
 	runBootstrapBinary(t, binary, "uninstall", "--install-dir", installRoot)
 }
 
+func TestNativeRealBundleInstallation(t *testing.T) {
+	binary := os.Getenv("SYNESIS_BOOTSTRAP_BIN")
+	archive := os.Getenv("SYNESIS_REAL_BUNDLE_ARCHIVE")
+	if binary == "" || archive == "" {
+		t.Skip("SYNESIS_BOOTSTRAP_BIN and SYNESIS_REAL_BUNDLE_ARCHIVE not set")
+	}
+	root := t.TempDir()
+	localArchive := filepath.Join(root, filepath.Base(archive))
+	archiveData, err := os.ReadFile(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localArchive, archiveData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := writeDevelopmentManifest(t, root, "0.1.0-real-trial", localArchive)
+	installRoot := filepath.Join(root, "install root")
+	project := filepath.Join(root, "user project")
+	if err := os.MkdirAll(filepath.Join(project, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	unrelated := filepath.Join(project, ".claude", "settings.json")
+	unrelatedData := []byte(`{"hooks":{"unrelated":"keep"}}`)
+	if err := os.WriteFile(unrelated, unrelatedData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runBootstrapBinary(t, binary, "install", "--manifest", fileURL(manifest), "--install-dir", installRoot)
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runInstalledBinary(t, paths.launcher, "version")
+	runInstalledBinary(t, paths.launcher, "init", "--project", project)
+	runInstalledBinary(t, paths.launcher, "provider", "list", "--project", project)
+	runInstalledBinary(t, paths.launcher, "provider", "install", "antigravity", "--project", project)
+	runInstalledBinary(t, paths.launcher, "provider", "status", "antigravity", "--project", project)
+	runInstalledBinary(t, paths.launcher, "provider", "uninstall", "antigravity", "--project", project)
+	runInstalledBinary(t, paths.launcher, "doctor", "--project", project)
+	if actual, err := os.ReadFile(unrelated); err != nil || string(actual) != string(unrelatedData) {
+		t.Fatalf("unrelated provider configuration changed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(project, ".synesis", "project.json")); err != nil {
+		t.Fatalf("project initialization missing: %v", err)
+	}
+	runBootstrapBinary(t, binary, "doctor", "--install-dir", installRoot)
+	runBootstrapBinary(t, binary, "uninstall", "--install-dir", installRoot)
+	if _, err := os.Stat(project); err != nil {
+		t.Fatalf("uninstall removed user project: %v", err)
+	}
+}
+
 func TestRejectsInvalidSignatureAndArtifactMismatch(t *testing.T) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -169,6 +221,22 @@ func runBootstrapBinary(t *testing.T, binary string, args ...string) {
 	t.Helper()
 	if output, err := exec.Command(binary, args...).CombinedOutput(); err != nil {
 		t.Fatalf("bootstrap %v failed: %v\n%s", args, err, output)
+	}
+}
+
+func runInstalledBinary(t *testing.T, launcher string, args ...string) {
+	t.Helper()
+	command := []string{launcher}
+	if runtime.GOOS == "windows" {
+		command = []string{"cmd.exe", "/d", "/c", "call", launcher}
+	}
+	command = append(command, args...)
+	output, err := exec.Command(command[0], command[1:]...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("installed launcher %v failed: %v\n%s", args, err, output)
+	}
+	if len(args) > 0 && args[0] == "version" && !strings.Contains(string(output), "SYNESIS_VERSION=") {
+		t.Fatalf("installed launcher version output missing metadata: %s", output)
 	}
 }
 

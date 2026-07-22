@@ -82,9 +82,25 @@ exist.
 - No public URL or release is created; install scripts use configurable
   endpoints only.
 
+## Post-CP-0109 audit
+
+The first completion claim was reopened after tracing the real release flow.
+The bundle smoke task had been Windows-only and tested the unpacked directory;
+the bundled launchers also failed to identify themselves during provider install.
+The CI verifier read the root signature path even though signing writes the
+bootstrap sidecar. These were corrected in the Gradle launcher/smoke task and
+workflow verifier.
+
+An isolated D: trial using the actual Windows ZIP and native bootstrap passed
+bootstrap install, bundled `version`, `init`, provider list/install/status/
+uninstall, doctor, unrelated `.claude/settings.json` preservation, bootstrap
+doctor, and uninstall. The trial also covers an installation root containing
+spaces.
+
 ## Final completion gate
 
-At CP-0109, the SYN-009C.3 gate is complete:
+The gate remains pending until CP-0110 records the post-audit verification and
+commit.
 
 ```text
 JAVA_FULL_BUILD=PASS
