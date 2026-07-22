@@ -99,10 +99,12 @@ final class ClaudeCodeHookAdapterTest {
 
     @Test
     void absoluteToRelativePathResolutionAndBoundaryRejection() throws Exception {
-        Path root = Path.of("C:/work/synesis-demo");
+        Path root = Path.of(System.getProperty("java.io.tmpdir"), "synesis-demo").toAbsolutePath();
+        Path inside = root.resolve("src/protocol/RecordMessage.java");
+        Path outside = root.resolveSibling("other-project").resolve("src/protocol/RecordMessage.java");
 
         // Absolute path inside project root -> normalized relative path
-        String resolvedInside = ClaudeCodeHookAdapter.resolveRelativePath(root, "C:/work/synesis-demo/src/protocol/RecordMessage.java");
+        String resolvedInside = ClaudeCodeHookAdapter.resolveRelativePath(root, inside.toString());
         assertEquals("src/protocol/RecordMessage.java", resolvedInside);
 
         // Relative path -> normalized relative path
@@ -111,7 +113,7 @@ final class ClaudeCodeHookAdapterTest {
 
         // Absolute path outside project root -> IllegalArgumentException
         assertThrows(IllegalArgumentException.class, () ->
-                ClaudeCodeHookAdapter.resolveRelativePath(root, "C:/work/other-project/src/protocol/RecordMessage.java"));
+                ClaudeCodeHookAdapter.resolveRelativePath(root, outside.toString()));
     }
 
     @Test

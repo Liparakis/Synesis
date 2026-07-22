@@ -79,6 +79,10 @@ tracked as `100755`. Git Bash executed `./gradlew check
 - Cross-platform CLI test launch: Windows continues to use `cmd.exe` and
   `synesis.bat`; Unix uses the generated `synesis` launcher directly. Native
   Windows strict clean check: PASS. Linux execution remains for CI validation.
+- Linux test portability repairs: Claude path tests now use OS-native absolute
+  fixtures, and QUIC loopback tests reuse the shared platform-aware TLS helper
+  instead of hard-coding `keytool.exe`. Targeted workspace and link tests pass
+  on Windows; Linux execution remains for CI validation.
 
 ## Publication decision
 

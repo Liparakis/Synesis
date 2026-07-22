@@ -22,13 +22,9 @@ import io.netty.handler.codec.quic.QuicSslContext;
 import io.netty.handler.codec.quic.QuicSslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.NetUtil;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyStore;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -60,7 +56,7 @@ final class NettyQuicLoopbackTest {
     @Test
     void connectsTwoLocalQuicChannelsAndClosesDeterministically() throws Exception {
         MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
-        TlsMaterial certificate = TlsMaterial.create();
+        TestTlsMaterial certificate = TestTlsMaterial.create();
         Channel serverUdp = null;
         Channel clientUdp = null;
         QuicChannel client = null;
@@ -125,7 +121,7 @@ final class NettyQuicLoopbackTest {
     @Test
     void establishesIdentityBoundSessionOnLocalQuicControlStream() throws Exception {
         MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
-        TlsMaterial certificate = TlsMaterial.create();
+        TestTlsMaterial certificate = TestTlsMaterial.create();
         NodeIdentity initiatorIdentity = NodeIdentity.generate();
         NodeIdentity responderIdentity = NodeIdentity.generate();
         HandshakeTranscript transcript = HandshakeTranscript.forIdentities(ProtocolVersion.V1,
@@ -341,7 +337,7 @@ final class NettyQuicLoopbackTest {
     private static void assertRejectedHandshake(String serverExpectedNodeId,
             java.util.List<ProtocolVersion> serverVersions, HandshakeFailureCode expected) throws Exception {
         MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
-        TlsMaterial certificate = TlsMaterial.create();
+        TestTlsMaterial certificate = TestTlsMaterial.create();
         NodeIdentity initiator = NodeIdentity.generate();
         NodeIdentity responder = NodeIdentity.generate();
         HandshakeTranscript transcript = HandshakeTranscript.forIdentities(ProtocolVersion.V1,
@@ -405,50 +401,4 @@ final class NettyQuicLoopbackTest {
         assertTrue(Files.exists(path), "timed out waiting for " + path.getFileName());
     }
 
-    private static final class TlsMaterial implements AutoCloseable {
-        private static final String PASSWORD = "changeit";
-        private final Path directory;
-        private final PrivateKey key;
-        private final X509Certificate certificate;
-
-        private TlsMaterial(Path directory, PrivateKey key, X509Certificate certificate) {
-            this.directory = directory;
-            this.key = key;
-            this.certificate = certificate;
-        }
-
-        private static TlsMaterial create() throws Exception {
-            Path directory = Files.createTempDirectory("synesis-link-tls");
-            Path store = directory.resolve("identity.p12");
-            String keytool = Path.of(System.getProperty("java.home"), "bin", "keytool.exe").toString();
-            Process process = new ProcessBuilder(keytool, "-genkeypair", "-alias", "quic", "-keyalg", "RSA",
-                    "-keystore", store.toString(), "-storetype", "PKCS12", "-storepass", PASSWORD,
-                    "-keypass", PASSWORD, "-dname", "CN=localhost", "-validity", "1", "-noprompt")
-                    .redirectErrorStream(true).start();
-            if (process.waitFor() != 0) {
-                throw new IllegalStateException("keytool failed: " + new String(process.getInputStream().readAllBytes()));
-            }
-            KeyStore keyStore = KeyStore.getInstance("PKCS12");
-            try (InputStream input = Files.newInputStream(store)) {
-                keyStore.load(input, PASSWORD.toCharArray());
-            }
-            return new TlsMaterial(directory, (PrivateKey) keyStore.getKey("quic", PASSWORD.toCharArray()),
-                    (X509Certificate) keyStore.getCertificate("quic"));
-        }
-
-        @Override
-        public void close() throws java.io.IOException {
-            try (var paths = Files.walk(directory)) {
-                paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                    try {
-                        Files.deleteIfExists(path);
-                    } catch (java.io.IOException exception) {
-                        throw new java.io.UncheckedIOException(exception);
-                    }
-                });
-            } catch (java.io.UncheckedIOException exception) {
-                throw exception.getCause();
-            }
-        }
-    }
 }

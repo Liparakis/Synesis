@@ -694,3 +694,14 @@ Append-only operational history.
 - Native Windows `gradlew.bat clean check --dependency-verification=strict`:
   PASS. Linux CI remains the required final verification environment.
 - Checkpoint: CP-0115.
+
+## 2026-07-22 — SYN-010A remaining Linux test portability fixes
+
+- Claude path test now derives absolute fixtures from the OS-native temp path
+  instead of hard-coding a Windows drive path.
+- QUIC loopback tests now reuse `TestTlsMaterial`, which selects `keytool` or
+  `keytool.exe` by platform; the duplicate hard-coded helper was removed.
+- Targeted workspace and link tests pass on Windows. Linux remains the final CI
+  validation environment.
+- Native Windows `gradlew.bat clean check --dependency-verification=strict`:
+  PASS. Checkpoint: CP-0116.
