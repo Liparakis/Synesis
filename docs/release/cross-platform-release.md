@@ -10,5 +10,13 @@ runner is unavailable, the honest status is `NOT_SUPPORTED_BY_RUNNER`; no
 workflow step may upgrade that status without native execution. The workflow
 prepares artifacts for branches and tags; it does not publish a public release.
 
+Ordinary GitHub Actions runs expose one final artifact named
+`synesis-release-candidate`. Matrix outputs are short-lived internal artifacts
+used by the final aggregation job and are deleted after successful upload.
+The final artifact keeps platform-specific bundles and bootstrappers under
+`bundles/` and `bootstrap/`; they are not combined into a universal executable.
+Future tagged GitHub Releases may expose those platform files individually for
+bootstrap downloads.
+
 Protected tags require `SYNESIS_MANIFEST_PRIVATE_KEY_B64`. Branch builds are explicitly
 `developmentOnly` and unsigned.

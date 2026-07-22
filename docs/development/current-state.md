@@ -36,6 +36,14 @@
 
 ## 2. Module & Capability Breakdown
 
+### Distribution state
+
+The release workflow builds six native Java bundles and six cross-compiled Go
+bootstrappers, then exposes one aggregated `synesis-release-candidate` Actions
+artifact for maintainers. Platform-specific files remain inside that artifact
+and may later be published individually as GitHub Release assets. No public
+release is claimed.
+
 ### A. Implemented and Tested (`:link`, `:cli`, `:project-record`, `:workspace`)
 
 | Category | Module | Implementation Classes | Verified Guarantees |

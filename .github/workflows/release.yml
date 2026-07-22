@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   java:
@@ -48,8 +49,9 @@ jobs:
         if: runner.os != 'Windows'
       - uses: actions/upload-artifact@v6
         with:
-          name: bundle-${{ matrix.platform }}
+          name: internal-bundle-${{ matrix.platform }}
           path: cli/build/distributions/synesis-0.1.0-dev.${{ github.run_number }}-${{ matrix.platform }}.${{ matrix.archive }}
+          retention-days: 3
 
   bootstrap:
     strategy:
@@ -75,8 +77,9 @@ jobs:
         working-directory: bootstrap
       - uses: actions/upload-artifact@v6
         with:
-          name: bootstrap-${{ matrix.platform }}
+          name: internal-bootstrap-${{ matrix.platform }}
           path: bootstrap/dist/*
+          retention-days: 3
 
   bootstrap-native:
     runs-on: ubuntu-24.04
@@ -112,7 +115,7 @@ jobs:
           entries = {}
           for path in files:
               if path.name.endswith(('.zip', '.tar.gz')):
-                  platform = path.parent.name.removeprefix('bundle-')
+                  platform = path.parent.name.removeprefix('internal-bundle-')
                   entries[platform] = {'url': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'size': path.stat().st_size}
           if len(entries) != 6: raise SystemExit(f'expected 6 bundles, got {len(entries)}')
           manifest = {'schemaVersion': 1, 'channel': 'dev', 'version': version, 'publishedAt': 'developmentOnly', 'minimumBootstrapVersion': '0.1.0', 'developmentOnly': os.environ.get('GITHUB_REF_TYPE') != 'tag', 'artifacts': entries}
@@ -159,8 +162,46 @@ jobs:
           cp bootstrap/manifest.json.sig .
       - uses: actions/upload-artifact@v6
         with:
-          name: release-manifest
+          name: internal-release-manifest
           path: |
             manifest.json
             manifest.json.sig
             checksums.txt
+          retention-days: 3
+
+  aggregate-release-candidate:
+    needs: manifest
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.5'
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+      - name: Aggregate and validate release candidate
+        run: >-
+          go run ./cmd/aggregate-release-candidate
+          -input ../artifacts
+          -output build/synesis-release-candidate
+          -repo-root ..
+          -version "0.1.0-dev.${GITHUB_RUN_NUMBER}"
+          -require-signature=${{ startsWith(github.ref, 'refs/tags/') }}
+        working-directory: bootstrap
+        env:
+          SYNESIS_MANIFEST_PUBLIC_KEY_HEX: ${{ vars.SYNESIS_MANIFEST_PUBLIC_KEY_HEX }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: synesis-release-candidate
+          path: bootstrap/build
+          retention-days: 30
+      - name: Remove internal workflow artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | startswith("internal-")) | .id' |
+          while read -r artifact_id; do
+            [ -z "$artifact_id" ] || gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done

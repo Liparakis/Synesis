@@ -2,18 +2,20 @@
 
 ## Identity
 
-- Task ID: SYN-010A
+- Task ID: SYN-010B
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0110
-- Latest checkpoint: CP-0123
+- Started checkpoint: CP-0123
+- Latest checkpoint: CP-0126
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
 ## Objective
 
-Prepare the existing repository for safe public GitHub developer-preview
-visibility without selecting a license or publishing before the license gate.
+Simplify normal GitHub Actions output to one aggregated
+`synesis-release-candidate` artifact while retaining all six platform bundles,
+bootstrappers, native smoke results, manifest validation, and future release
+assets. Do not publish a GitHub Release.
 
 ## Planning state
 
@@ -21,9 +23,11 @@ SYN-009B was promoted after SYN-009A completion at CP-0099 and is DONE at
 CP-0102. SYN-009B.1 is VERIFYING as an EVOLUTION of the existing provider lifecycle and
 hook boundary. It adds one Codex integration under `:workspace`, reuses the
 shared path resolver and action guardrail, and writes only project-local
-`.codex/hooks.json`. SYN-009C is complete at CP-0110. SYN-010A is active;
+`.codex/hooks.json`. SYN-009C is complete at CP-0110. SYN-010A is verifying;
 the AGPL-3.0-only license decision is recorded and publication remains
-unperformed pending external review and explicit push authorization.
+unperformed pending external review and explicit push authorization. SYN-010B
+is the sole active release-operations task activated by the supplied goal and
+is the only production-scope task currently active.
 
 ## Architecture brief
 
@@ -160,8 +164,22 @@ are also deferred; no public release is claimed.
 - Secondary review remains required for personal commit metadata and the
   canonical remote target. No public push or history rewrite was performed.
 
+## SYN-010B implementation slice
+
+- Matrix bundle and bootstrap artifacts now use short-retention `internal-*`
+  names; the manifest job recognizes the renamed bundle artifacts.
+- Added the Go aggregation command and PowerShell wrapper. It requires all six
+  platform bundles and bootstrappers, validates manifest digests/signatures,
+  rejects duplicate/unexpected/malformed/archive-unsafe inputs, emits a fixed
+  release-candidate layout, and regenerates deterministic checksums.
+- Added the aggregation job that uploads exactly one 30-day
+  `synesis-release-candidate` artifact and deletes internal artifacts on
+  writable-token runs. No GitHub Release or remote publication was performed.
+- Local verification passed: Go test/vet, workflow YAML parsing, PowerShell
+  parsing, whitespace validation, and strict Gradle clean check.
+
 ## Immediate next action
 
-With the license decision recorded, rerun the publication audit and obtain
-explicit push authorization only after reviewing author metadata and the target
-repository.
+Review the SYN-010B diff and run the local aggregation wrapper against a
+CI-shaped artifact directory; hosted confirmation requires an explicitly
+authorized push and workflow rerun.

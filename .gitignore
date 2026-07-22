@@ -6,6 +6,8 @@ out/
 bootstrap/dist/
 dist/
 release/
+!docs/release/
+!docs/release/**
 
 # Synesis local state and generated provider hooks
 .synesis/local/

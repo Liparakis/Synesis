@@ -17,3 +17,8 @@ The bootstrapper uses user-local versioned state, verifies the detached
 manifest signature, checks the artifact size and SHA-256, starts the bundled
 Java runtime, and only then activates the version. Uninstall preserves user
 projects and their `.synesis` directories.
+
+The CI release candidate contains normalized bootstrap names such as
+`synesis-bootstrap-linux-x64` and `synesis-bootstrap-windows-x64.exe` beside
+the manifest and checksums. A future tagged GitHub Release may publish the
+same platform files individually; no public release URL is claimed here.

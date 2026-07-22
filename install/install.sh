@@ -1,7 +1,6 @@
 #!/bin/sh
 set -eu
 base=${SYNESIS_BOOTSTRAP_BASE_URL:?Set SYNESIS_BOOTSTRAP_BASE_URL before running the installer.}
-version=${SYNESIS_BOOTSTRAP_VERSION:-0.1.0-dev.local}
 case "$(uname -s):$(uname -m)" in
   Linux:x86_64) platform=linux-x64 ;;
   Linux:aarch64|Linux:arm64) platform=linux-arm64 ;;
@@ -12,7 +11,7 @@ esac
 tmp=$(mktemp)
 checksums=$(mktemp)
 trap 'rm -f "$tmp" "$checksums"' EXIT
-name="synesis-bootstrap-$version-$platform"
+name="synesis-bootstrap-$platform"
 curl -fsSL "$base/$name" -o "$tmp"
 curl -fsSL "$base/checksums.txt" -o "$checksums"
 expected=$(awk -v name="$name" '$2 == name { print $1; exit }' "$checksums")

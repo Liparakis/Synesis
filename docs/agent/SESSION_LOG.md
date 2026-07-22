@@ -767,3 +767,18 @@ Append-only operational history.
   commands fixes the Gradle argument boundary. The exact Windows x64 command
   passes locally with `bundleSmokeTest` and `platformArchive`.
 - Checkpoint: CP-0123.
+
+## 2026-07-22 — SYN-010B aggregated release-candidate artifact
+
+- Promoted SYN-010B as the sole active task from the supplied continuation
+  request; no GitHub Release or remote publication was performed.
+- Added `bootstrap/cmd/aggregate-release-candidate`, its local PowerShell
+  wrapper, and validation tests for completeness, duplicates, manifest
+  digests, signatures, archive traversal, exact output layout, checksums, and
+  sensitive-text/path leakage.
+- Changed matrix artifact names to short-retention internal names, added the
+  aggregation job, and retained one 30-day `synesis-release-candidate` output.
+- Verification: `go test ./...`, `go vet ./...`, PowerShell parse, and
+  `gradlew.bat clean check --dependency-verification=strict` PASS.
+- Hosted workflow confirmation remains pending until an authorized push/rerun.
+- Checkpoint: CP-0126.

@@ -280,7 +280,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-010A
 - Priority: P0
 - Title: Public GitHub developer-preview preparation
-- Status: ACTIVE
+- Status: VERIFYING
 - Purpose: Audit and prepare the existing repository for safe public visibility without redesigning the product, publishing release assets, or selecting a license autonomously.
 - Dependencies: SYN-009C DONE at CP-0110; explicit user-supplied SYN-010A goal.
 - Acceptance criteria: complete current/history secret scan, safe ignore rules, accurate preview README, SECURITY.md and CONTRIBUTING.md, workflow security audit, repository metadata review, full verification, and a clean preparation commit; public publication only after an intentional license decision and explicit external gates.
@@ -288,6 +288,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required documentation: `docs/agent/SYN_010A_PUBLICATION_AUDIT.md`, `docs/legal/LICENSE_DECISION_REQUIRED.md`, README/public-preview docs, and durable state updates.
 - Scope boundary: no new product features, protocol changes, release assets, production release, license selection, history rewrite, public push, or external announcement.
 - Evidence: `docs/agent/SYN_010A_PUBLICATION_AUDIT.md`; `docs/legal/LICENSE_DECISION_REQUIRED.md`; README, SECURITY.md, CONTRIBUTING.md, and `.gitignore` preparation; validators PASS. Owner selected AGPL-3.0-only and the complete `LICENSE` is present. `gradlew` mode `100755` fixes the reported Linux CI permission failure; Linux/macOS Netty QUIC checksum metadata, Unix launcher test selection, OS-native Claude path fixtures, platform-aware QUIC TLS setup, bundle smoke executable-mode handling for both launcher and bundled Java, Unix process-test argument handling, the CI-stable abrupt process-loss test policy, Node 24-compatible workflow action versions with Microsoft OpenJDK 25 for Windows ARM64, and quoted Windows Gradle version arguments are repaired; native strict and targeted checks pass. Publication remains unperformed pending explicit push authorization, author-metadata review, and target confirmation.
+
+## SYN-010B
+
+- ID: SYN-010B
+- Priority: P0
+- Title: Simplify CI artifact output into one release candidate
+- Status: ACTIVE
+- Purpose: Expose one aggregated `synesis-release-candidate` Actions artifact for ordinary workflow runs while preserving all six platform bootstrappers, six Java bundles, native smoke validation, manifest/signature/checksum verification, and future platform-specific release assets.
+- Dependencies: SYN-009C DONE at CP-0110; explicit user-supplied SYN-010B goal; SYN-010A VERIFYING.
+- Acceptance criteria: internal matrix artifacts are clearly named and short-lived; aggregation downloads all required inputs into a clean deterministic layout; exactly one final Actions artifact is uploaded; required files, versions, platforms, checksums, signatures, archive safety, duplicates, and unexpected files are rejected; install scripts and concise README are included; no release is published.
+- Required tests: local aggregation success and rejection cases for missing files, duplicates, checksum/signature/version/layout/archive-safety failures; Java strict build; Go test/vet; six cross-compiles; native bundle smoke; workflow YAML validation; clean-tree confirmation.
+- Required documentation: aggregation implementation note, `docs/release/cross-platform-release.md`, `docs/release/artifact-matrix.md`, `docs/installation/bootstrap-install.md`, `docs/development/current-state.md`, and durable state updates.
+- Scope boundary: no Java application, provider, synchronization, protocol, Go bootstrap behavior, installation-directory, signing-key, release-tag, GitHub Release, domain, or marketing changes.
+- Evidence: pending; start from repository CP-0123 rather than the stale pasted CP-0110 reference.
 
 ## SYN-001
 
