@@ -18,5 +18,10 @@ The final artifact keeps platform-specific bundles and bootstrappers under
 Future tagged GitHub Releases may expose those platform files individually for
 bootstrap downloads.
 
+Each bootstrap artifact installs its matching bundle directly into the stable
+OS user-data root. Updates use sibling staging and one temporary rollback
+directory; the release process does not retain prior application versions or a
+mutable launcher pointer.
+
 Protected tags require `SYNESIS_MANIFEST_PRIVATE_KEY_B64`. Branch builds are explicitly
 `developmentOnly` and unsigned.

@@ -2,7 +2,7 @@
 
 **Date**: July 22, 2026
 **Repository Branch**: `master`
-**Latest Checkpoint**: `CP-0102` (SYN-009B closure; SYN-009B.1 active)
+**Latest Checkpoint**: `CP-0131` (SYN-009D stable flat installation promotion)
 **Build Status**: `PASS` (`.\gradlew.bat clean check --dependency-verification=strict`)
 
 ---
@@ -43,6 +43,11 @@ bootstrappers, then exposes one aggregated `synesis-release-candidate` Actions
 artifact for maintainers. Platform-specific files remain inside that artifact
 and may later be published individually as GitHub Release assets. No public
 release is claimed.
+
+The bootstrap installation model is one flat stable OS user-data root with the
+bundle launcher inside `bin/`. Install/update stage in a sibling directory and
+keep only one temporary rollback root during activation. The legacy pointer and
+version-directory layout is migration-only and is not retained after success.
 
 ### A. Implemented and Tested (`:link`, `:cli`, `:project-record`, `:workspace`)
 

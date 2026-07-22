@@ -23,6 +23,8 @@ final class ProviderApplicationServiceTest {
                 ProviderRegistry.find("codex").supportLevel());
         assertEquals("REVIEW_REQUIRED", ProviderRegistry.find("codex").trustStatus());
         assertTrue(ProviderRegistry.find("codex").requiresRealValidation());
+        assertEquals("UNVALIDATED", ProviderRegistry.find("antigravity").trustStatus());
+        assertTrue(ProviderRegistry.find("antigravity").requiresRealValidation());
     }
 
     @Test
@@ -40,10 +42,12 @@ final class ProviderApplicationServiceTest {
             ProviderApplicationService service = new ProviderApplicationService();
 
             var installed = service.install(location, "antigravity");
-            assertEquals("SUCCESS", installed.values().get("PROVIDER_INSTALL_RESULT"));
+            assertEquals("DEGRADED", installed.values().get("PROVIDER_INSTALL_RESULT"));
             Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
-            assertEquals("HEALTHY", service.status(location, "antigravity").values().get("PROVIDER_STATUS"));
+            assertTrue(!Files.readString(config).contains("versions"));
+            assertEquals("DEGRADED", service.status(location, "antigravity").values().get("PROVIDER_STATUS"));
+            assertEquals("UNVALIDATED", service.status(location, "antigravity").values().get("TRUST_STATUS"));
             assertEquals("SUCCESS", service.uninstall(location, "antigravity").values().get("PROVIDER_UNINSTALL_RESULT"));
             assertTrue(Files.exists(config));
             Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
@@ -92,6 +96,7 @@ final class ProviderApplicationServiceTest {
             assertEquals("REVIEW_REQUIRED", installed.values().get("TRUST_STATUS"));
             Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
+            assertTrue(!Files.readString(config).contains("versions"));
             Map<?, ?> hooks = (Map<?, ?>) merged.get("hooks");
             assertTrue(hooks.containsKey("Stop"));
             Map<?, ?> preToolUse = (Map<?, ?>) ((java.util.List<?>) hooks.get("PreToolUse")).getFirst();

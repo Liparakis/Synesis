@@ -49,6 +49,7 @@ func TestManifestSignatureAndBounds(t *testing.T) {
 }
 
 func TestBootstrapInstallUpdateRollbackDoctorAndUninstall(t *testing.T) {
+	withoutPathMutation(t)
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -82,26 +83,142 @@ func TestBootstrapInstallUpdateRollbackDoctorAndUninstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertCurrentVersion(t, paths, "0.1.0")
+	assertStableVersion(t, paths, "0.1.0")
+	assertNoLegacyLayout(t, paths)
+	runInstalledBinary(t, paths.launcher, "version")
 	if err := runDoctor([]string{"--install-dir", installRoot}); err != nil {
 		t.Fatal(err)
 	}
 	if err := runInstall("update", []string{"--manifest", fileURL(m2), "--install-dir", installRoot}); err != nil {
 		t.Fatal(err)
 	}
-	assertCurrentVersion(t, paths, "0.2.0")
-	if _, err := os.Stat(filepath.Join(paths.versions, "0.1.0")); err != nil {
-		t.Fatal("previous version was not retained for rollback")
-	}
+	assertStableVersion(t, paths, "0.2.0")
+	assertNoLegacyLayout(t, paths)
 	if err := runInstall("update", []string{"--manifest", fileURL(m3), "--install-dir", installRoot}); err == nil {
 		t.Fatal("invalid update activated")
 	}
-	assertCurrentVersion(t, paths, "0.2.0")
+	assertStableVersion(t, paths, "0.2.0")
+	if fileExists(paths.rollback) {
+		t.Fatal("rollback directory retained after successful update")
+	}
+	if err := os.MkdirAll(paths.rollback, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(paths.root+".staging-leftover", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := runUninstall([]string{"--install-dir", installRoot}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(projectMarker); err != nil {
 		t.Fatal("uninstall removed user project data")
+	}
+	if fileExists(paths.root) || fileExists(paths.rollback) {
+		t.Fatal("uninstall retained installation state")
+	}
+}
+
+func TestLegacyLayoutMigration(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	installRoot := filepath.Join(root, "Synesis with spaces")
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(paths.root, "versions", "0.1.0", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(paths.root, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.root, "current"), []byte("0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.root, "bin", launcherName()), []byte("legacy proxy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(paths.root, "Link"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.root, "Link", "identity.pub"), []byte("preserve"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	archive := writeBundleArchive(t, root, "0.2.0")
+	manifest := writeDevelopmentManifest(t, root, "0.2.0", archive)
+	if err := runInstall("update", []string{"--manifest", fileURL(manifest), "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	assertStableVersion(t, paths, "0.2.0")
+	assertNoLegacyLayout(t, paths)
+	if _, err := os.Stat(filepath.Join(paths.root, "Link", "identity.pub")); err != nil {
+		t.Fatalf("Link profile was not preserved: %v", err)
+	}
+}
+
+func TestLegacyMigrationFailureRestoresLegacyLayout(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	installRoot := filepath.Join(root, "legacy")
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(paths.root, "versions", "0.1.0", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(paths.root, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.root, "current"), []byte("0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.root, "bin", launcherName()), []byte("legacy proxy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	archive := writeDoctorFailureBundleArchive(t, root, "0.2.0")
+	manifest := writeDevelopmentManifest(t, root, "0.2.0", archive)
+	if err := runInstall("update", []string{"--manifest", fileURL(manifest), "--install-dir", installRoot}); err == nil {
+		t.Fatal("failed legacy migration activated")
+	}
+	if !fileExists(filepath.Join(paths.root, "current")) || !fileExists(filepath.Join(paths.root, "versions")) {
+		t.Fatal("legacy installation was not restored")
+	}
+}
+
+func TestFailedActivationRestoresPreviousStableBundle(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	installRoot := filepath.Join(root, "install")
+	oldArchive := writeBundleArchive(t, root, "0.1.0")
+	oldManifest := writeDevelopmentManifest(t, root, "0.1.0", oldArchive)
+	if err := runInstall("install", []string{"--manifest", fileURL(oldManifest), "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	badArchive := writeDoctorFailureBundleArchive(t, root, "0.2.0")
+	badManifest := writeDevelopmentManifest(t, root, "0.2.0", badArchive)
+	if err := runInstall("update", []string{"--manifest", fileURL(badManifest), "--install-dir", installRoot}); err == nil {
+		t.Fatal("doctor failure activated")
+	}
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertStableVersion(t, paths, "0.1.0")
+	if fileExists(paths.rollback) {
+		t.Fatal("rollback directory retained after failed activation")
+	}
+}
+
+func TestWindowsUserPathMergeIsCaseInsensitiveAndLossless(t *testing.T) {
+	original := `C:\Windows\System32;C:\Tools\;c:\Users\ME\AppData\Local\Synesis\bin;C:\Other`
+	merged := mergePath(original, `C:\Users\me\AppData\Local\Synesis\bin\`, true, true)
+	if merged != original {
+		t.Fatalf("duplicate Windows PATH entry changed value: %q", merged)
+	}
+	removed := mergePath(merged, `c:/users/me/appdata/local/synesis/bin`, true, false)
+	if removed != `C:\Windows\System32;C:\Tools\;C:\Other` {
+		t.Fatalf("PATH removal changed unrelated entries: %q", removed)
 	}
 }
 
@@ -137,7 +254,7 @@ func TestNativeRealBundleInstallation(t *testing.T) {
 	if err := os.WriteFile(localArchive, archiveData, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	manifest := writeDevelopmentManifest(t, root, "0.1.0-real-trial", localArchive)
+	manifest := writeDevelopmentManifest(t, root, "0.1.0-dev.local", localArchive)
 	installRoot := filepath.Join(root, "install root")
 	project := filepath.Join(root, "user project")
 	if err := os.MkdirAll(filepath.Join(project, ".claude"), 0o755); err != nil {
@@ -158,7 +275,7 @@ func TestNativeRealBundleInstallation(t *testing.T) {
 	runInstalledBinary(t, paths.launcher, "init", "--project", project)
 	runInstalledBinary(t, paths.launcher, "provider", "list", "--project", project)
 	runInstalledBinary(t, paths.launcher, "provider", "install", "antigravity", "--project", project)
-	runInstalledBinary(t, paths.launcher, "provider", "status", "antigravity", "--project", project)
+	runInstalledBinaryExit(t, paths.launcher, 1, "provider", "status", "antigravity", "--project", project)
 	runInstalledBinary(t, paths.launcher, "provider", "uninstall", "antigravity", "--project", project)
 	runInstalledBinary(t, paths.launcher, "doctor", "--project", project)
 	if actual, err := os.ReadFile(unrelated); err != nil || string(actual) != string(unrelatedData) {
@@ -225,6 +342,10 @@ func runBootstrapBinary(t *testing.T, binary string, args ...string) {
 }
 
 func runInstalledBinary(t *testing.T, launcher string, args ...string) {
+	runInstalledBinaryExit(t, launcher, 0, args...)
+}
+
+func runInstalledBinaryExit(t *testing.T, launcher string, expectedExit int, args ...string) {
 	t.Helper()
 	command := []string{launcher}
 	if runtime.GOOS == "windows" {
@@ -232,12 +353,22 @@ func runInstalledBinary(t *testing.T, launcher string, args ...string) {
 	}
 	command = append(command, args...)
 	output, err := exec.Command(command[0], command[1:]...).CombinedOutput()
-	if err != nil {
+	if exitCode := commandExitCode(err); exitCode != expectedExit {
 		t.Fatalf("installed launcher %v failed: %v\n%s", args, err, output)
 	}
 	if len(args) > 0 && args[0] == "version" && !strings.Contains(string(output), "SYNESIS_VERSION=") {
 		t.Fatalf("installed launcher version output missing metadata: %s", output)
 	}
+}
+
+func commandExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if exit, ok := err.(*exec.ExitError); ok {
+		return exit.ExitCode()
+	}
+	return -1
 }
 
 func writeBundleArchive(t *testing.T, root, version string) string {
@@ -251,9 +382,33 @@ func writeBundleArchive(t *testing.T, root, version string) string {
 	addZipFile(t, writer, "runtime/release", []byte("runtime"), 0o644)
 	addZipFile(t, writer, "VERSION", []byte(version+"\n"), 0o644)
 	if runtime.GOOS == "windows" {
-		addZipFile(t, writer, "bin/synesis.cmd", []byte("@echo off\r\necho SYNESIS_VERSION="+version+"\r\n"), 0o644)
+		addZipFile(t, writer, "bin/synesis.cmd", []byte("@echo off\r\nif \"%1\"==\"version\" echo SYNESIS_VERSION="+version+"\r\nif \"%1\"==\"doctor\" echo DOCTOR=PASS\r\r\n"), 0o644)
 	} else {
-		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\necho SYNESIS_VERSION="+version+"\n"), 0o755)
+		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\nif [ \"$1\" = version ]; then echo SYNESIS_VERSION="+version+"; fi\nif [ \"$1\" = doctor ]; then echo DOCTOR=PASS; fi\n"), 0o755)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func writeDoctorFailureBundleArchive(t *testing.T, root, version string) string {
+	t.Helper()
+	path := filepath.Join(root, "bundle-doctor-failure-"+version+".zip")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	addZipFile(t, writer, "runtime/release", []byte("runtime"), 0o644)
+	addZipFile(t, writer, "VERSION", []byte(version+"\n"), 0o644)
+	if runtime.GOOS == "windows" {
+		addZipFile(t, writer, "bin/synesis.cmd", []byte("@echo off\r\nif \"%1\"==\"version\" echo SYNESIS_VERSION="+version+"\r\nif \"%1\"==\"doctor\" exit /b 1\r\n"), 0o644)
+	} else {
+		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\nif [ \"$1\" = version ]; then echo SYNESIS_VERSION="+version+"; fi\nif [ \"$1\" = doctor ]; then exit 1; fi\n"), 0o755)
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
@@ -341,12 +496,26 @@ func fileURL(path string) string {
 	return (&url.URL{Scheme: "file", Path: slashPath}).String()
 }
 
-func assertCurrentVersion(t *testing.T, paths installPaths, expected string) {
+func assertStableVersion(t *testing.T, paths installPaths, expected string) {
 	t.Helper()
-	data, err := os.ReadFile(paths.current)
+	data, err := os.ReadFile(filepath.Join(paths.root, "VERSION"))
 	if err != nil || strings.TrimSpace(string(data)) != expected {
-		t.Fatalf("current version = %q, want %q", strings.TrimSpace(string(data)), expected)
+		t.Fatalf("stable version = %q, want %q", strings.TrimSpace(string(data)), expected)
 	}
+}
+
+func assertNoLegacyLayout(t *testing.T, paths installPaths) {
+	t.Helper()
+	if fileExists(filepath.Join(paths.root, "versions")) || fileExists(filepath.Join(paths.root, "current")) {
+		t.Fatal("legacy layout remains under stable root")
+	}
+}
+
+func withoutPathMutation(t *testing.T) {
+	t.Helper()
+	previous := pathUpdater
+	pathUpdater = func(installPaths, bool) error { return nil }
+	t.Cleanup(func() { pathUpdater = previous })
 }
 
 func TestRejectsArchiveTraversal(t *testing.T) {

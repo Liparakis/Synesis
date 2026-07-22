@@ -15,3 +15,8 @@ real authenticated denial/re-plan/hash experiment is recorded.
 
 `DOCTOR_RESULT=HEALTHY_WITH_WARNINGS` exits successfully. Broken local
 provider or record state produces `DOCTOR_RESULT=BROKEN` and exit code `3`.
+
+The bootstrapper's `doctor --install-dir <root>` validates the installation
+root directly and reports `INSTALL_ROOT`, `INSTALL_LAYOUT=FLAT_STABLE`,
+`INSTALLED_VERSION`, `LAUNCHER`, `PATH_STATUS`, and `DOCTOR_RESULT`. It does
+not inspect a version pointer or select an active version directory.

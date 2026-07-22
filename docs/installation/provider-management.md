@@ -29,6 +29,12 @@ Codex additionally requires project hook trust review in `/hooks`; installation
 does not modify Codex trust state and status remains `DEGRADED` until real
 validation.
 
+Provider commands resolve Synesis from `synesis`/`synesis.cmd` on PATH first.
+If PATH has not been refreshed in the current process, they use the stable
+fallback at `%LOCALAPPDATA%\Synesis\bin\synesis.cmd` on Windows or the
+platform stable-root `bin` launcher on Unix. Provider commands never contain a
+`versions/<version>` path.
+
 Malformed configuration is never repaired or overwritten. Review it manually,
 then rerun installation. Uninstall removes only the stable Synesis-managed
 entry and its local metadata.

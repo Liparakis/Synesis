@@ -267,19 +267,38 @@ public final class ProviderApplicationService {
     private static String quote(Path path) { return "\"" + path.toAbsolutePath().normalize().toString().replace("\"", "\\\"") + "\""; }
     private static Path metadata(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) { return location.synesisDirectory().resolve("local/providers/" + provider.id() + ".json"); }
     private static Path launcher() {
-        String configured = System.getProperty("synesis.launcher", System.getenv("SYNESIS_LAUNCHER"));
-        if (configured != null) return Path.of(configured).toAbsolutePath().normalize();
-        Path repositoryLauncher = Path.of("cli/build/install/synesis/bin/synesis.bat");
-        if (Files.isRegularFile(repositoryLauncher)) return repositoryLauncher.toAbsolutePath().normalize();
-        for (String entry : System.getProperty("java.class.path", "").split(java.io.File.pathSeparator)) {
-            Path classpathEntry = Path.of(entry).toAbsolutePath().normalize();
-            Path lib = classpathEntry.getParent();
-            if (lib != null && "lib".equalsIgnoreCase(lib.getFileName().toString())) {
-                Path installedLauncher = lib.getParent().resolve("bin/synesis.bat");
-                if (Files.isRegularFile(installedLauncher)) return installedLauncher;
+        String executable = isWindows() ? "synesis.cmd" : "synesis";
+        String path = System.getenv("PATH");
+        if (path != null) {
+            for (String entry : path.split(java.io.File.pathSeparator)) {
+                Path candidate = Path.of(entry).resolve(executable).toAbsolutePath().normalize();
+                if (Files.isRegularFile(candidate)) return candidate;
             }
         }
-        return repositoryLauncher.toAbsolutePath().normalize();
+        String configured = System.getProperty("synesis.launcher", System.getenv("SYNESIS_LAUNCHER"));
+        if (configured != null && Files.isRegularFile(Path.of(configured))) {
+            return Path.of(configured).toAbsolutePath().normalize();
+        }
+        Path fallback = stableLauncher(executable);
+        return fallback;
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+    }
+
+    private static Path stableLauncher(String executable) {
+        String base;
+        if (isWindows()) {
+            base = System.getenv("LOCALAPPDATA");
+            if (base == null || base.isBlank()) base = Path.of(System.getProperty("user.home"), "AppData", "Local").toString();
+        } else if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")) {
+            base = Path.of(System.getProperty("user.home"), "Library", "Application Support").toString();
+        } else {
+            base = System.getenv("XDG_DATA_HOME");
+            if (base == null || base.isBlank()) base = Path.of(System.getProperty("user.home"), ".local", "share").toString();
+        }
+        return Path.of(base, "Synesis", "bin", executable).toAbsolutePath().normalize();
     }
 
     private static void atomicWrite(Path path, String content) throws IOException {

@@ -1,7 +1,6 @@
 // Command synesis-bootstrap is the self-updating installer for the Synesis
 // CLI. It downloads a signed release manifest, verifies and extracts the
-// platform-specific artifact, and manages the "current" version pointer and
-// launcher script used by end users.
+// platform-specific artifact, and manages one stable installation root.
 package main
 
 import (
@@ -61,7 +60,7 @@ type manifest struct {
 
 // installPaths is the resolved on-disk layout for one installation root.
 type installPaths struct {
-	root, versions, current, launcher string
+	root, bin, launcher, rollback string
 }
 
 func main() {
@@ -123,9 +122,12 @@ func runInstall(operation string, args []string) error {
 	if err := verifyManifestAuthenticity(m, data, signature); err != nil {
 		return err
 	}
-	if operation == "update" {
-		current, _ := os.ReadFile(paths.current)
-		if strings.TrimSpace(string(current)) != "" && compareVersions(m.Version, strings.TrimSpace(string(current))) <= 0 {
+	if operation == "update" && isFlatLayout(paths) {
+		installed := installedVersion(paths)
+		if installed != "" && compareVersions(m.Version, installed) <= 0 {
+			if err := pathUpdater(paths, true); err != nil {
+				return err
+			}
 			fmt.Println("UPDATE_RESULT=NOOP")
 			return nil
 		}
@@ -183,27 +185,12 @@ func installationPaths(explicit string) (installPaths, error) {
 		return installPaths{}, errors.New("unsafe installation root")
 	}
 
-	// The launcher lives outside `root` on Unix (typically ~/.local/bin,
-	// usually already on $PATH); the script it contains resolves `root`
-	// on its own via an absolute path, so the launcher's own location
-	// doesn't need to be relative to root. Windows has no equivalent PATH
-	// convention, so its launcher lives inside root/bin instead.
-	var launcher string
+	launcherName := "synesis"
 	if runtime.GOOS == "windows" {
-		launcher = filepath.Join(root, "bin", "synesis.cmd")
-	} else {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return installPaths{}, err
-		}
-		launcher = filepath.Join(home, ".local", "bin", "synesis")
+		launcherName = "synesis.cmd"
 	}
-	return installPaths{
-		root:     root,
-		versions: filepath.Join(root, "versions"),
-		current:  filepath.Join(root, "current"),
-		launcher: launcher,
-	}, nil
+	bin := filepath.Join(root, "bin")
+	return installPaths{root: root, bin: bin, launcher: filepath.Join(bin, launcherName), rollback: root + ".rollback"}, nil
 }
 
 // defaultInstallBase returns the OS-conventional parent directory for
@@ -345,8 +332,7 @@ func parseManifest(data []byte) (manifest, error) {
 }
 
 // validVersion rejects anything that isn't a plain, path-safe version
-// string, since the version is later used as a path component under
-// paths.versions.
+// string, since it is written to the stable bundle's VERSION file.
 func validVersion(value string) bool {
 	if len(value) == 0 || len(value) > 128 || filepath.IsAbs(value) || filepath.VolumeName(value) != "" {
 		return false
@@ -359,14 +345,18 @@ func validVersion(value string) bool {
 	return value != "." && value != ".."
 }
 
-// activate extracts, validates, and atomically swaps in a new version.
+// activate extracts, validates, and atomically swaps in the stable bundle.
 func activate(paths installPaths, version string, archive []byte) error {
-	if err := os.MkdirAll(paths.versions, 0o755); err != nil {
+	if err := recoverRollback(paths); err != nil {
 		return err
 	}
-	staging := filepath.Join(paths.versions, version+".staging")
-	_ = os.RemoveAll(staging)
-	if err := os.MkdirAll(staging, 0o755); err != nil {
+	parent := filepath.Dir(paths.root)
+	staging, err := os.MkdirTemp(parent, filepath.Base(paths.root)+".staging-")
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(staging, 0o755); err != nil {
+		_ = os.RemoveAll(staging)
 		return err
 	}
 	defer os.RemoveAll(staging)
@@ -374,18 +364,169 @@ func activate(paths installPaths, version string, archive []byte) error {
 		return err
 	}
 	bundle := flattenBundle(staging)
-	if err := validateBundle(bundle); err != nil {
+	if err := validateBundleVersion(bundle, version); err != nil {
 		return err
 	}
-	final := filepath.Join(paths.versions, version)
-	_ = os.RemoveAll(final)
-	if err := os.Rename(bundle, final); err != nil {
+	if hasLegacyMarkers(bundle) {
+		return errors.New("flat bundle contains legacy layout markers")
+	}
+	oldExists := fileExists(paths.root)
+	if oldExists {
+		if err := os.RemoveAll(paths.rollback); err != nil {
+			return err
+		}
+		if err := os.Rename(paths.root, paths.rollback); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(bundle, paths.root); err != nil {
+		return restorePrevious(paths, oldExists)
+	}
+	if err := preserveLinkProfile(paths, oldExists); err != nil {
+		return restorePrevious(paths, oldExists, err)
+	}
+	if err := validateStableInstall(paths); err != nil {
+		return restorePrevious(paths, oldExists, err)
+	}
+	if err := pathUpdater(paths, true); err != nil {
+		return restorePrevious(paths, oldExists, err)
+	}
+	if oldExists {
+		if err := os.RemoveAll(paths.rollback); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+func recoverRollback(paths installPaths) error {
+	if !fileExists(paths.rollback) {
+		return nil
+	}
+	if !fileExists(paths.root) {
+		return os.Rename(paths.rollback, paths.root)
+	}
+	if validateBundle(paths.root) == nil {
+		return os.RemoveAll(paths.rollback)
+	}
+	if err := os.RemoveAll(paths.root); err != nil {
 		return err
 	}
-	if err := replacePointer(paths.current, version); err != nil {
+	return os.Rename(paths.rollback, paths.root)
+}
+
+func restorePrevious(paths installPaths, oldExists bool, failures ...error) error {
+	if fileExists(paths.root) {
+		if err := os.RemoveAll(paths.root); err != nil {
+			return fmt.Errorf("activation failed and cleanup failed: %w", err)
+		}
+	}
+	if oldExists {
+		if err := os.Rename(paths.rollback, paths.root); err != nil {
+			return fmt.Errorf("activation failed and rollback failed: %w", err)
+		}
+	}
+	if len(failures) > 0 {
+		return failures[0]
+	}
+	return errors.New("activation failed")
+}
+
+func preserveLinkProfile(paths installPaths, oldExists bool) error {
+	if !oldExists {
+		return nil
+	}
+	source := filepath.Join(paths.rollback, "Link")
+	if !fileExists(source) {
+		return nil
+	}
+	target := filepath.Join(paths.root, "Link")
+	if fileExists(target) {
+		return errors.New("stable bundle unexpectedly contains Link profile")
+	}
+	return copyTree(source, target)
+}
+
+func copyTree(source, target string) error {
+	info, err := os.Lstat(source)
+	if err != nil {
 		return err
 	}
-	return writeLauncher(paths)
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("Link profile contains symlink")
+	}
+	if info.IsDir() {
+		if err := os.MkdirAll(target, info.Mode().Perm()); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(source)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if err := copyTree(filepath.Join(source, entry.Name()), filepath.Join(target, entry.Name())); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("Link profile contains unsupported entry")
+	}
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		input.Close()
+		return err
+	}
+	_, copyErr := io.Copy(output, input)
+	input.Close()
+	if err := output.Close(); err != nil && copyErr == nil {
+		copyErr = err
+	}
+	if copyErr != nil {
+		return copyErr
+	}
+	if err := os.Chmod(target, info.Mode().Perm()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateStableInstall(paths installPaths) error {
+	if err := validateBundle(paths.root); err != nil {
+		return err
+	}
+	if err := runBundleDoctor(paths.root); err != nil {
+		return err
+	}
+	return nil
+}
+
+func hasLegacyMarkers(bundle string) bool {
+	return fileExists(filepath.Join(bundle, "versions")) || fileExists(filepath.Join(bundle, "current"))
+}
+
+func isFlatLayout(paths installPaths) bool {
+	return validateBundle(paths.root) == nil && !hasLegacyMarkers(paths.root)
+}
+
+func installedVersion(paths installPaths) string {
+	if data, err := os.ReadFile(filepath.Join(paths.root, "VERSION")); err == nil && validVersion(strings.TrimSpace(string(data))) {
+		return strings.TrimSpace(string(data))
+	}
+	if data, err := os.ReadFile(filepath.Join(paths.root, "current")); err == nil && validVersion(strings.TrimSpace(string(data))) {
+		return strings.TrimSpace(string(data))
+	}
+	return ""
 }
 
 // extractArchive dispatches to the ZIP or tar.gz extractor based on the
@@ -557,54 +698,65 @@ func flattenBundle(staging string) string {
 // validateBundle checks that an extracted bundle has the expected shape
 // and that its embedded launcher actually runs before it's ever activated.
 func validateBundle(bundle string) error {
-	for _, relative := range []string{"bin", "runtime", "VERSION"} {
-		if _, err := os.Stat(filepath.Join(bundle, relative)); err != nil {
+	for _, relative := range []string{"bin", "runtime"} {
+		info, err := os.Stat(filepath.Join(bundle, relative))
+		if err != nil || !info.IsDir() {
 			return fmt.Errorf("bundle missing %s", relative)
 		}
+	}
+	version, err := os.Stat(filepath.Join(bundle, "VERSION"))
+	if err != nil || !version.Mode().IsRegular() {
+		return errors.New("bundle missing VERSION")
+	}
+	launcher := filepath.Join(bundle, "bin", launcherName())
+	if info, err := os.Stat(launcher); err != nil || !info.Mode().IsRegular() {
+		return errors.New("bundle missing stable launcher")
 	}
 	return runBundleVersion(bundle)
 }
 
-func runBundleVersion(bundle string) error {
-	var command []string
+func launcherName() string {
 	if runtime.GOOS == "windows" {
-		command = []string{"cmd.exe", "/c", filepath.Join(bundle, "bin", "synesis.cmd"), "version"}
-	} else {
-		command = []string{filepath.Join(bundle, "bin", "synesis"), "version"}
+		return "synesis.cmd"
 	}
-	output, err := exec.Command(command[0], command[1:]...).CombinedOutput()
+	return "synesis"
+}
+
+func runBundleVersion(bundle string) error {
+	output, err := runBundleCommand(bundle, "version")
 	if err != nil || !bytes.Contains(output, []byte("SYNESIS_VERSION=")) {
 		return errors.New("bundled synesis version check failed")
 	}
 	return nil
 }
 
-// replacePointer writes the "current version" file via write-temp-then-rename,
-// so a crash mid-write can never leave `current` truncated or corrupt.
-func replacePointer(path, version string) error {
-	temporary := path + ".staging"
-	if err := os.WriteFile(temporary, []byte(version+"\n"), 0o644); err != nil {
-		return err
-	}
-	if err := os.Rename(temporary, path); err != nil {
-		_ = os.Remove(path)
-		return os.Rename(temporary, path)
+func runBundleDoctor(bundle string) error {
+	output, err := runBundleCommand(bundle, "doctor")
+	if err != nil || !bytes.Contains(output, []byte("DOCTOR")) {
+		return errors.New("bundled synesis doctor check failed")
 	}
 	return nil
 }
 
-// writeLauncher (re)writes the small script that resolves the "current"
-// pointer at run time and execs the matching version's real binary.
-func writeLauncher(paths installPaths) error {
-	if err := os.MkdirAll(filepath.Dir(paths.launcher), 0o755); err != nil {
+func validateBundleVersion(bundle, expected string) error {
+	if err := validateBundle(bundle); err != nil {
 		return err
 	}
-	if runtime.GOOS == "windows" {
-		return os.WriteFile(paths.launcher, []byte("@echo off\r\nset ROOT=%~dp0..\r\nset /p VERSION=<\"%ROOT%\\current\"\r\ncall \"%ROOT%\\versions\\%VERSION%\\bin\\synesis.cmd\" %*\r\n"), 0o644)
+	data, err := os.ReadFile(filepath.Join(bundle, "VERSION"))
+	if err != nil || strings.TrimSpace(string(data)) != expected {
+		return errors.New("bundle VERSION does not match manifest")
 	}
-	rootLiteral := strings.ReplaceAll(paths.root, "'", "'\\''")
-	content := "#!/bin/sh\nROOT='" + rootLiteral + "'\nVERSION=$(cat \"$ROOT/current\")\nexec \"$ROOT/versions/$VERSION/bin/synesis\" \"$@\"\n"
-	return os.WriteFile(paths.launcher, []byte(content), 0o755)
+	return nil
+}
+
+func runBundleCommand(bundle string, args ...string) ([]byte, error) {
+	launcher := filepath.Join(bundle, "bin", launcherName())
+	command := []string{launcher}
+	if runtime.GOOS == "windows" {
+		command = []string{"cmd.exe", "/d", "/c", "call", launcher}
+	}
+	command = append(command, args...)
+	return exec.Command(command[0], command[1:]...).CombinedOutput()
 }
 
 func runDoctor(args []string) error {
@@ -617,18 +769,18 @@ func runDoctor(args []string) error {
 	if err != nil {
 		return err
 	}
-	version, err := os.ReadFile(paths.current)
-	if err != nil {
-		return errors.New("CURRENT_POINTER=FAIL")
-	}
-	active := filepath.Join(paths.versions, strings.TrimSpace(string(version)))
-	if _, err := os.Stat(paths.launcher); err != nil {
-		return errors.New("LAUNCHER=FAIL")
-	}
-	if err := validateBundle(active); err != nil {
+	if err := validateBundle(paths.root); err != nil {
 		return err
 	}
-	fmt.Printf("INSTALL_ROOT=%s\nCURRENT_VERSION=%s\nDOCTOR_RESULT=PASS\n", paths.root, strings.TrimSpace(string(version)))
+	if err := runBundleDoctor(paths.root); err != nil {
+		return err
+	}
+	version := installedVersion(paths)
+	pathStatus := "MISSING"
+	if userPathContains(paths) {
+		pathStatus = "PASS"
+	}
+	fmt.Printf("INSTALL_ROOT=%s\nINSTALL_LAYOUT=FLAT_STABLE\nINSTALLED_VERSION=%s\nLAUNCHER=%s\nPATH_STATUS=%s\nDOCTOR_RESULT=PASS\n", paths.root, version, paths.launcher, pathStatus)
 	return nil
 }
 
@@ -645,13 +797,240 @@ func runUninstall(args []string) error {
 	if filepath.Base(paths.root) != "Synesis" && *installDir == "" {
 		return errors.New("refusing unexpected installation root")
 	}
-	if err := os.RemoveAll(paths.versions); err != nil {
+	if err := pathUpdater(paths, false); err != nil {
 		return err
 	}
-	_ = os.Remove(paths.current)
-	_ = os.Remove(paths.launcher)
+	if err := os.RemoveAll(paths.root); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(paths.rollback); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Dir(paths.root))
+	if errors.Is(err, os.ErrNotExist) {
+		fmt.Println("UNINSTALL_RESULT=SUCCESS", "USER_PROJECTS_PRESERVED=true")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	prefix := filepath.Base(paths.root) + ".staging-"
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) {
+			if err := os.RemoveAll(filepath.Join(filepath.Dir(paths.root), entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
 	fmt.Println("UNINSTALL_RESULT=SUCCESS", "USER_PROJECTS_PRESERVED=true")
 	return nil
+}
+
+var pathUpdater = updateUserPath
+
+func updateUserPath(paths installPaths, install bool) error {
+	if runtime.GOOS == "windows" {
+		return updateWindowsUserPath(paths, install)
+	}
+	return updateUnixUserPath(paths, install)
+}
+
+func userPathContains(paths installPaths) bool {
+	if runtime.GOOS == "windows" {
+		value, _, err := readWindowsUserPath()
+		return err == nil && pathContains(value, paths.bin, true)
+	}
+	if pathContains(os.Getenv("PATH"), paths.bin, false) {
+		return true
+	}
+	profile, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(profile, ".profile"))
+	return err == nil && strings.Contains(string(data), pathBegin)
+}
+
+func updateWindowsUserPath(paths installPaths, install bool) error {
+	value, valueType, err := readWindowsUserPath()
+	if err != nil {
+		return err
+	}
+	merged := mergePath(value, paths.bin, true, install)
+	if merged != value {
+		if err := writeWindowsUserPath(merged, valueType); err != nil {
+			return err
+		}
+	}
+	os.Setenv("PATH", mergePath(os.Getenv("PATH"), paths.bin, true, install))
+	if install {
+		fmt.Println("PATH_UPDATE=USER", "PATH_ENTRY="+paths.bin, "NEW_TERMINAL_REQUIRED=true")
+	}
+	return nil
+}
+
+const (
+	pathBegin = "# >>> Synesis PATH >>>"
+	pathEnd   = "# <<< Synesis PATH <<<"
+)
+
+func updateUnixUserPath(paths installPaths, install bool) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	profile := filepath.Join(home, ".profile")
+	data, err := os.ReadFile(profile)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	content := string(data)
+	updated := removeManagedPathBlock(content)
+	if install && !pathContains(os.Getenv("PATH"), paths.bin, false) {
+		if updated != "" && !strings.HasSuffix(updated, "\n") {
+			updated += "\n"
+		}
+		updated += pathBegin + "\nexport PATH=\"$PATH:" + shellDoubleQuote(paths.bin) + "\"\n" + pathEnd + "\n"
+	}
+	if updated != content {
+		if err := writeUserFile(profile, []byte(updated)); err != nil {
+			return err
+		}
+	}
+	os.Setenv("PATH", mergePath(os.Getenv("PATH"), paths.bin, false, install))
+	if install {
+		fmt.Println("PATH_UPDATE=USER_PROFILE", "PATH_ENTRY="+paths.bin, "NEW_TERMINAL_REQUIRED=true")
+	}
+	return nil
+}
+
+func removeManagedPathBlock(content string) string {
+	for {
+		start := strings.Index(content, pathBegin)
+		if start < 0 {
+			return content
+		}
+		remainder := content[start:]
+		end := strings.Index(remainder, pathEnd)
+		if end < 0 {
+			return content[:start]
+		}
+		end += len(pathEnd)
+		if end < len(remainder) && remainder[end] == '\n' {
+			end++
+		}
+		content = content[:start] + remainder[end:]
+	}
+}
+
+func shellDoubleQuote(value string) string {
+	return strings.NewReplacer("\\", "\\\\", "\"", "\\\"", "$", "\\$", "`", "\\`").Replace(value)
+}
+
+func writeUserFile(path string, data []byte) error {
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".synesis-path-")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(mode); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(data); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		_ = os.Remove(path)
+		return os.Rename(temporaryPath, path)
+	}
+	return nil
+}
+
+func readWindowsUserPath() (string, string, error) {
+	if runtime.GOOS != "windows" {
+		return os.Getenv("PATH"), "", nil
+	}
+	output, err := exec.Command("reg.exe", "query", `HKCU\Environment`, "/v", "Path").CombinedOutput()
+	if err != nil {
+		return "", "REG_EXPAND_SZ", nil
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		for _, valueType := range []string{"REG_EXPAND_SZ", "REG_SZ"} {
+			if index := strings.Index(line, valueType); index >= 0 {
+				return strings.TrimSpace(line[index+len(valueType):]), valueType, nil
+			}
+		}
+	}
+	return "", "REG_EXPAND_SZ", nil
+}
+
+func writeWindowsUserPath(value, valueType string) error {
+	if valueType != "REG_SZ" && valueType != "REG_EXPAND_SZ" {
+		valueType = "REG_EXPAND_SZ"
+	}
+	return exec.Command("reg.exe", "add", `HKCU\Environment`, "/v", "Path", "/t", valueType, "/d", value, "/f").Run()
+}
+
+func mergePath(value, entry string, windows, add bool) string {
+	separator := string(os.PathListSeparator)
+	if windows {
+		separator = ";"
+	}
+	entries := strings.Split(value, separator)
+	result := make([]string, 0, len(entries)+1)
+	found := false
+	for _, candidate := range entries {
+		if pathEntriesEqual(candidate, entry, windows) {
+			if add && !found {
+				result = append(result, candidate)
+			}
+			found = true
+			continue
+		}
+		result = append(result, candidate)
+	}
+	if add && !found {
+		result = append(result, entry)
+	}
+	if !add && len(result) == 1 && result[0] == "" && value == "" {
+		return ""
+	}
+	return strings.Join(result, separator)
+}
+
+func pathContains(value, entry string, windows bool) bool {
+	separator := string(os.PathListSeparator)
+	if windows {
+		separator = ";"
+	}
+	for _, candidate := range strings.Split(value, separator) {
+		if pathEntriesEqual(candidate, entry, windows) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathEntriesEqual(left, right string, windows bool) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if windows {
+		left = strings.TrimRight(strings.ReplaceAll(left, "/", "\\"), "\\")
+		right = strings.TrimRight(strings.ReplaceAll(right, "/", "\\"), "\\")
+		return strings.EqualFold(left, right)
+	}
+	return filepath.Clean(left) == filepath.Clean(right)
 }
 
 func matchesSHA256(data []byte, expected string) bool {

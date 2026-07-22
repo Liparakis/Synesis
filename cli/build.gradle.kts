@@ -189,7 +189,7 @@ val platformBundle = tasks.register("platformBundle") {
             "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
         )
         bin.resolve("synesis").writeText(
-            $$"#!/bin/sh\nAPP_HOME=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\nSYNESIS_LAUNCHER=\"$APP_HOME/bin/synesis\" exec \"$APP_HOME/runtime/bin/java\" --enable-native-access=ALL-UNNAMED -cp \"$APP_HOME/app/synesis-cli.jar:$APP_HOME/app/lib/*\" org.synesis.cli.SynesisCli \"$@\"\n"
+            $$"#!/bin/sh\nAPP_HOME=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\nexport SYNESIS_LAUNCHER=\"$APP_HOME/bin/synesis\"\nexec \"$APP_HOME/runtime/bin/java\" --enable-native-access=ALL-UNNAMED -cp \"$APP_HOME/app/synesis-cli.jar:$APP_HOME/app/lib/*\" org.synesis.cli.SynesisCli \"$@\"\n"
         )
         root.resolve("VERSION").writeText(bundleVersion.get() + "\n")
         root.resolve("README.md").writeText("Run bin/synesis (Unix) or bin/synesis.cmd (Windows).\n")
@@ -259,16 +259,18 @@ tasks.register("bundleSmokeTest") {
                 "Unable to restore bundled Java runtime permissions after extraction"
             }
         }
-        fun run(vararg arguments: String) {
+        fun runWithExit(expectedExitCode: Int, arguments: Array<out String>) {
             val command = (if (isWindows) mutableListOf("cmd.exe", "/c", launcher.absolutePath)
             else mutableListOf(launcher.absolutePath)).apply { addAll(arguments) }
             val processBuilder = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true)
             processBuilder.environment()["JAVA_HOME"] = smokeRoot.resolve("missing-java").absolutePath
             val result = processBuilder.start()
             val output = result.inputStream.bufferedReader().readText()
-            require(result.waitFor() == 0) { "Bundle command failed: ${arguments.joinToString(" ")}\n$output" }
+            require(result.waitFor() == expectedExitCode) { "Bundle command failed: ${arguments.joinToString(" ")}\n$output" }
             if (arguments.firstOrNull() == "version") require("SYNESIS_VERSION=" in output)
         }
+        fun run(vararg arguments: String) = runWithExit(0, arguments)
+        fun run(expectedExitCode: Int, vararg arguments: String) = runWithExit(expectedExitCode, arguments)
         try {
             run("version")
             val project = smokeRoot.resolve("project")
@@ -276,7 +278,7 @@ tasks.register("bundleSmokeTest") {
             run("init", "--project", project.absolutePath)
             run("provider", "list", "--project", project.absolutePath)
             run("provider", "install", "antigravity", "--project", project.absolutePath)
-            run("provider", "status", "antigravity", "--project", project.absolutePath)
+            run(1, "provider", "status", "antigravity", "--project", project.absolutePath)
             run("provider", "uninstall", "antigravity", "--project", project.absolutePath)
             run("doctor", "--project", project.absolutePath)
         } finally {
