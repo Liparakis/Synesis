@@ -20,15 +20,18 @@ version = "0.1.0-SNAPSHOT"
 val hostPlatform = when {
     System.getProperty("os.name").lowercase(Locale.ROOT).contains("win") ->
         if (System.getProperty("os.arch").lowercase(Locale.ROOT).contains("aarch64")) "windows-arm64" else "windows-x64"
+
     System.getProperty("os.name").lowercase(Locale.ROOT).contains("mac") ->
         if (System.getProperty("os.arch").lowercase(Locale.ROOT).contains("aarch64")) "macos-arm64" else "macos-x64"
+
     else -> if (System.getProperty("os.arch").lowercase(Locale.ROOT).contains("aarch64")) "linux-arm64" else "linux-x64"
 }
 val bundlePlatform = providers.gradleProperty("bundlePlatform").orElse(hostPlatform)
 val bundleVersion = providers.gradleProperty("synesisVersion")
     .orElse(providers.environmentVariable("SYNESIS_VERSION").orElse("0.1.0-dev.local"))
 val buildInfoDirectory = layout.buildDirectory.dir("generated-resources/build-info")
-val platformBundleDirectory = layout.buildDirectory.dir("platform-bundle/synesis-${bundleVersion.get()}-${bundlePlatform.get()}")
+val platformBundleDirectory =
+    layout.buildDirectory.dir("platform-bundle/synesis-${bundleVersion.get()}-${bundlePlatform.get()}")
 val runtimeImageDirectory = layout.buildDirectory.dir("platform-runtime")
 
 val buildInfo = tasks.register("buildInfo") {
@@ -38,12 +41,12 @@ val buildInfo = tasks.register("buildInfo") {
         output.parentFile.mkdirs()
         output.writeText(
             "version=${bundleVersion.get()}\n" +
-                "recordFormat=SDR2\n" +
-                "reconciliationProtocol=PRP1\n" +
-                "commit=${providers.environmentVariable("GITHUB_SHA").orElse("UNKNOWN").get()}\n" +
-                "time=${Instant.now()}\n" +
-                "platform=${bundlePlatform.get()}\n" +
-                "javaRuntime=${Runtime.version()}\n"
+                    "recordFormat=SDR2\n" +
+                    "reconciliationProtocol=PRP1\n" +
+                    "commit=${providers.environmentVariable("GITHUB_SHA").orElse("UNKNOWN").get()}\n" +
+                    "time=${Instant.now()}\n" +
+                    "platform=${bundlePlatform.get()}\n" +
+                    "javaRuntime=${Runtime.version()}\n"
         )
     }
 }
@@ -231,12 +234,21 @@ tasks.register("bundleSmokeTest") {
             platformTarGz.get().archiveFile.get().asFile
         }
         val extractedRoot = smokeRoot.resolve("bundle")
+        if (!hostPlatform.startsWith("windows")) {
+            require(platformBundleDirectory.get().asFile.resolve("bin/synesis").canExecute()) {
+                "Unix bundle launcher is not executable before archiving"
+            }
+        }
         copy {
             from(if (archive.extension == "zip") zipTree(archive) else tarTree(resources.gzip(archive)))
             into(extractedRoot)
         }
         val bundleRoot = extractedRoot.resolve(platformBundleDirectory.get().asFile.name)
-        val launcher = bundleRoot.resolve("bin").resolve(if (hostPlatform.startsWith("windows")) "synesis.cmd" else "synesis")
+        val launcher =
+            bundleRoot.resolve("bin").resolve(if (hostPlatform.startsWith("windows")) "synesis.cmd" else "synesis")
+        if (!hostPlatform.startsWith("windows")) {
+            require(launcher.setExecutable(true)) { "Unable to restore Unix launcher permissions after extraction" }
+        }
         fun run(vararg arguments: String) {
             val command = if (hostPlatform.startsWith("windows")) {
                 mutableListOf("cmd.exe", "/c", launcher.absolutePath)

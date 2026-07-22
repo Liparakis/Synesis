@@ -83,6 +83,10 @@ tracked as `100755`. Git Bash executed `./gradlew check
   fixtures, and QUIC loopback tests reuse the shared platform-aware TLS helper
   instead of hard-coding `keytool.exe`. Targeted workspace and link tests pass
   on Windows; Linux execution remains for CI validation.
+- Bundle smoke repair: the Unix source launcher must be executable, while
+  Gradle `tarTree` extraction does not preserve that mode. `bundleSmokeTest`
+  now asserts the source mode and restores the extracted mode before execution.
+  Native Windows bundle smoke passes; Linux remains for CI validation.
 
 ## Publication decision
 

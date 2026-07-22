@@ -705,3 +705,11 @@ Append-only operational history.
   validation environment.
 - Native Windows `gradlew.bat clean check --dependency-verification=strict`:
   PASS. Checkpoint: CP-0116.
+
+## 2026-07-22 — SYN-010A bundle smoke executable-mode fix
+
+- Root cause: Gradle `tarTree` extraction dropped the Unix launcher mode, so
+  `bundleSmokeTest` received `EACCES` on Linux.
+- `bundleSmokeTest` now asserts the source launcher mode and restores executable
+  mode after extraction before running it. Native Windows bundle smoke passes.
+- Checkpoint: CP-0117.
