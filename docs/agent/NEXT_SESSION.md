@@ -2,7 +2,7 @@
 
 - Active task: SYN-010A (public GitHub developer-preview preparation)
 - Repository branch: master
-- Last checkpoint: CP-0119
+- Last checkpoint: CP-0120
 - Last passing command: `gradlew.bat check --dependency-verification=strict`
 - Last failing command: none
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

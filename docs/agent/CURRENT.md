@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0110
-- Latest checkpoint: CP-0119
+- Latest checkpoint: CP-0120
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
@@ -138,6 +138,8 @@ are also deferred; no public release is claimed.
 - CI dependency repair: verification metadata now covers the Linux Netty QUIC
   native JAR; Unix CLI tests invoke the Unix launcher instead of `cmd.exe`.
   Native Windows strict clean check PASS; Linux remains CI validation.
+- Verification metadata now also covers the macOS x86_64 Netty QUIC native JAR;
+  strict macOS-classifier `:cli:startScripts` resolution PASS.
 - Linux test repairs: Claude path fixtures are OS-native and QUIC tests reuse
   the shared platform-aware TLS helper. Targeted workspace and link tests PASS.
 - Bundle smoke repair: asserts the Unix source launcher is executable and

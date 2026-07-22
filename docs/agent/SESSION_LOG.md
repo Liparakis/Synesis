@@ -729,3 +729,9 @@ Append-only operational history.
 - Quoting is now limited to the Windows `cmd.exe` path. Codex and unified-sync
   process tests pass locally; Ubuntu remains the final validation environment.
 - Checkpoint: CP-0119.
+
+## 2026-07-22 — SYN-010A macOS dependency verification repair
+
+- Added the Maven Central SHA-256 for the macOS x86_64 Netty QUIC native JAR.
+- Strict `:cli:startScripts` resolution with `os.name=Mac OS X` passes.
+- Checkpoint: CP-0120.
