@@ -74,6 +74,11 @@ tracked as `100755`. Git Bash executed `./gradlew check
   reachable-history secret scans, and workflow security checks: PASS.
 - Linux-wrapper mode correction: `gradlew` `100644` -> `100755`; wrapper
   version smoke and full strict check under Git Bash: PASS.
+- Linux Netty QUIC verification: added the Maven Central SHA-256 for
+  `netty-codec-native-quic-4.2.16.Final-linux-x86_64.jar`.
+- Cross-platform CLI test launch: Windows continues to use `cmd.exe` and
+  `synesis.bat`; Unix uses the generated `synesis` launcher directly. Native
+  Windows strict clean check: PASS. Linux execution remains for CI validation.
 
 ## Publication decision
 

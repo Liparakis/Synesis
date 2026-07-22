@@ -684,3 +684,13 @@ Append-only operational history.
 - Changed only the tracked mode to `100755`; Git Bash wrapper smoke and full
   `./gradlew check --dependency-verification=strict` both PASS.
 - Checkpoint: CP-0114.
+
+## 2026-07-22 — SYN-010A Linux dependency verification repair
+
+- Added the Maven Central SHA-256 for the Linux x86_64 Netty QUIC native JAR
+  missing from `gradle/verification-metadata.xml`.
+- Updated CLI test process launch to use `synesis` directly on Unix and retain
+  `cmd.exe`/`synesis.bat` on Windows.
+- Native Windows `gradlew.bat clean check --dependency-verification=strict`:
+  PASS. Linux CI remains the required final verification environment.
+- Checkpoint: CP-0115.

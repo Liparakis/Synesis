@@ -32,14 +32,17 @@ final class DistributionLauncherTest {
     }
 
     static Path launcher() {
-        Path local = Path.of("build", "install", "synesis", "bin", "synesis.bat");
+        String executable = isWindows() ? "synesis.bat" : "synesis";
+        Path local = Path.of("build", "install", "synesis", "bin", executable);
         return Files.exists(local) ? local.toAbsolutePath() : Path.of("cli").resolve(local).toAbsolutePath();
     }
 
     static Process start(Path launcher, Path profile, String... arguments) throws IOException {
         java.util.ArrayList<String> command = new java.util.ArrayList<>();
-        command.add("cmd.exe");
-        command.add("/c");
+        if (isWindows()) {
+            command.add("cmd.exe");
+            command.add("/c");
+        }
         command.add(launcher.toString());
         for (String argument : arguments) {
             command.add(argument.matches(".*[&*].*") ? "\"" + argument + "\"" : argument);
@@ -48,6 +51,10 @@ final class DistributionLauncherTest {
         builder.environment().put("SYNESIS_LINK_PROFILE", profile.toString());
         builder.redirectErrorStream(true);
         return builder.start();
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
     static String output(Process process) throws IOException {
