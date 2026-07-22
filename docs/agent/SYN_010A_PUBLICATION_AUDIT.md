@@ -100,6 +100,10 @@ tracked as `100755`. Git Bash executed `./gradlew check
   bounded terminal-classification assertion remains reliable while production
   liveness defaults remain unchanged. The focused test passes three
   consecutive forced runs on Windows.
+- Workflow runtime repair: `actions/setup-java@v5` now uses Microsoft OpenJDK
+  25, which supplies the missing Windows ARM64 JDK; checkout, setup-go, and
+  artifact actions were moved to Node 24-compatible majors. Workflow YAML
+  parsing passes. The affected GitHub run must be rerun for external evidence.
 
 ## Publication decision
 

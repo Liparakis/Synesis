@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0110
-- Latest checkpoint: CP-0121
+- Latest checkpoint: CP-0122
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025
 
@@ -151,6 +151,9 @@ are also deferred; no public release is claimed.
 - Abrupt process-loss integration test now uses a short test-only liveness
   policy, keeping its bounded terminal-classification assertion deterministic
   under CI runner startup load; focused test passes three consecutive runs.
+- GitHub Actions now uses Node 24-compatible action majors and Microsoft
+  OpenJDK 25, which provides the Windows ARM64 JDK required by the native ARM
+  bundle job. Workflow YAML parses successfully.
 - Secondary review remains required for personal commit metadata and the
   canonical remote target. No public push or history rewrite was performed.
 

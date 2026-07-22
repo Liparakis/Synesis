@@ -747,3 +747,14 @@ Append-only operational history.
   remains unchanged.
 - Focused abrupt-loss test passed three consecutive forced runs on Windows.
 - Checkpoint: CP-0121.
+
+## 2026-07-22 — SYN-010A Windows ARM64 Java/Actions runtime repair
+
+- GitHub `bundles (windows-arm64)` could not resolve Temurin Java 25; the
+  runner exposed only older cached distributions.
+- `.github/workflows/release.yml` now uses Microsoft OpenJDK 25, which has a
+  Windows ARM64 JDK 25 archive, and upgrades checkout, setup-java, setup-go,
+  upload-artifact, and download-artifact to Node 24-compatible majors.
+- Workflow YAML parses successfully. GitHub rerun remains required for native
+  Windows ARM64 confirmation.
+- Checkpoint: CP-0122.
