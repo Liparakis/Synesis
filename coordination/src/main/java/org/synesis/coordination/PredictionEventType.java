@@ -29,5 +29,15 @@ public enum PredictionEventType {
     /** Rejects the capability request. */
     REQUEST_REJECTED,
     /** Expires an unresolved prediction. */
-    PREDICTION_EXPIRED
+    PREDICTION_EXPIRED,
+    /** Creates a claimable task. */
+    TASK_CREATED,
+    /** Claims a task for one supervisor. */
+    TASK_CLAIMED,
+    /** Releases a task claim. */
+    TASK_RELEASED,
+    /** Assigns semantic ownership to a task capability. */
+    OWNERSHIP_CLAIMED,
+    /** Releases semantic ownership from a task capability. */
+    OWNERSHIP_RELEASED
 }

@@ -31,6 +31,7 @@ public final class SpeculationWorkspace implements AutoCloseable {
                 .resolve(predictionId.toString()).toAbsolutePath().normalize();
         this.worktree = metadataDirectory.resolve("worktree");
         if (!worktree.startsWith(metadataDirectory)) throw new IllegalArgumentException("invalid worktree path");
+        this.created = Files.isDirectory(worktree);
     }
 
     /** Creates the detached worktree and writes bounded metadata.

@@ -1,6 +1,8 @@
 package org.synesis.coordination;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -143,6 +145,58 @@ public record PredictionContract(
         }
     }
 
+    /** Decodes one bounded canonical contract.
+     * @param encoded canonical contract bytes
+     * @return decoded contract
+     * @throws IOException when the bytes are malformed or unsupported
+     */
+    public static PredictionContract decode(byte[] encoded) throws IOException {
+        Objects.requireNonNull(encoded, "encoded contract");
+        if (encoded.length > MAX_ENCODED_BYTES) throw new IOException("contract exceeds bound");
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != 0x53435031 || in.readUnsignedByte() != 1) {
+                throw new IOException("unsupported contract format");
+            }
+            UUID predictionId = readUuid(in);
+            UUID projectId = readUuid(in);
+            String requesterNodeId = readText(in);
+            String requesterSupervisorId = readText(in);
+            String requesterWorkerId = readText(in);
+            String owningCapability = readText(in);
+            String ownerNodeId = readText(in);
+            String ownerSupervisorId = readText(in);
+            String baseCommit = readText(in);
+            String purpose = readText(in);
+            String inputs = readText(in);
+            String outputs = readText(in);
+            String behavior = readText(in);
+            String errorSemantics = readText(in);
+            String sideEffects = readText(in);
+            String invariants = readText(in);
+            String compatibility = readText(in);
+            String performance = readText(in);
+            String concurrency = readText(in);
+            UUID requestingTaskId = readUuid(in);
+            List<String> protectedScopes = readList(in);
+            long baseProjectSequence = in.readLong();
+            List<String> baseScopeHashes = readList(in);
+            long ownerIntentVersion = in.readLong();
+            List<String> acceptanceTests = readList(in);
+            int confidence = in.readInt();
+            int speculationRisk = in.readInt();
+            long expiresAtEpochMillis = in.readLong();
+            if (in.available() != 0) throw new IOException("trailing contract bytes");
+            return new PredictionContract(predictionId, projectId, requesterNodeId, requesterSupervisorId,
+                    requesterWorkerId, requestingTaskId, owningCapability, ownerNodeId, ownerSupervisorId,
+                    protectedScopes, baseProjectSequence, baseCommit, baseScopeHashes, ownerIntentVersion,
+                    purpose, inputs, outputs, behavior, errorSemantics, sideEffects, invariants, compatibility,
+                    performance, concurrency, acceptanceTests, confidence, speculationRisk, expiresAtEpochMillis);
+        } catch (RuntimeException | java.io.EOFException failure) {
+            throw new IOException("malformed prediction contract", failure);
+        }
+    }
+
     private static List<String> boundedList(List<String> values, String label) {
         Objects.requireNonNull(values, label);
         if (values.size() > MAX_LIST_ENTRIES) throw new IllegalArgumentException(label + " exceed bound");
@@ -163,10 +217,22 @@ public record PredictionContract(
         out.writeLong(value.getLeastSignificantBits());
     }
 
+    private static UUID readUuid(DataInputStream in) throws IOException {
+        return new UUID(in.readLong(), in.readLong());
+    }
+
     private static void writeText(DataOutputStream out, String value) throws IOException {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         out.writeInt(bytes.length);
         out.write(bytes);
+    }
+
+    private static String readText(DataInputStream in) throws IOException {
+        int length = in.readInt();
+        if (length < 1 || length > MAX_TEXT_BYTES) throw new IOException("text bound");
+        byte[] bytes = in.readNBytes(length);
+        if (bytes.length != length) throw new IOException("truncated text");
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     private static void writeList(DataOutputStream out, List<String> values) throws IOException {
@@ -178,5 +244,13 @@ public record PredictionContract(
                 throw new IllegalStateException(impossible);
             }
         });
+    }
+
+    private static List<String> readList(DataInputStream in) throws IOException {
+        int count = in.readInt();
+        if (count < 0 || count > MAX_LIST_ENTRIES) throw new IOException("list bound");
+        java.util.ArrayList<String> values = new java.util.ArrayList<>(count);
+        for (int index = 0; index < count; index++) values.add(readText(in));
+        return List.copyOf(values);
     }
 }

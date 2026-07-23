@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -61,6 +62,97 @@ class PredictionCoordinationTest {
     }
 
     @Test
+    void contractRoundTripsForCoordinatorAuthorization() throws Exception {
+        PredictionContract original = contract(UUID.randomUUID(), UUID.randomUUID(), NodeIdentity.generate().nodeId());
+        assertEquals(original, PredictionContract.decode(original.encoded()));
+    }
+
+    @Test
+    void coordinatorRejectsLifecycleCommandFromForeignNode() throws Exception {
+        Path root = Files.createTempDirectory("synesis-authorization-");
+        UUID project = UUID.randomUUID();
+        UUID prediction = UUID.randomUUID();
+        NodeIdentity requester = NodeIdentity.generate();
+        NodeIdentity owner = NodeIdentity.generate();
+        NodeIdentity foreign = NodeIdentity.generate();
+        CoordinationService service = new CoordinationService(
+                new PredictionEventStore(root, project), NodeIdentity.generate());
+        PredictionContract predictionContract = new PredictionContract(prediction, project, requester.nodeId(),
+                "sup-a", "worker-a", UUID.randomUUID(), "workspace.prediction-status", owner.nodeId(), "sup-b",
+                List.of("workspace/**"), 0, "HEAD", List.of("workspace/**=absent"), 0, "purpose", "inputs",
+                "outputs", "behavior", "errors", "none", "invariants", "compatible", "normal",
+                "single-threaded", List.of("test"), 80, 20, 1_900_000_000_000L);
+        service.submit(CoordinationCommand.create(UUID.randomUUID(), project, prediction,
+                PredictionEventType.PREDICTION_CREATED, requester.nodeId(), predictionContract.encoded(), requester));
+        service.submit(CoordinationCommand.create(UUID.randomUUID(), project, prediction,
+                PredictionEventType.PREDICTION_ROUTED, requester.nodeId(), new byte[0], requester));
+        service.submit(CoordinationCommand.create(UUID.randomUUID(), project, prediction,
+                PredictionEventType.REQUEST_RECEIVED, owner.nodeId(), new byte[0], owner));
+        GeneralSecurityException failure = assertThrows(GeneralSecurityException.class, () -> service.submit(
+                CoordinationCommand.create(UUID.randomUUID(), project, prediction,
+                        PredictionEventType.ACCEPTED_EXACT, foreign.nodeId(), new byte[0], foreign)));
+        assertEquals("ACTOR_NOT_AUTHORIZED", failure.getMessage());
+    }
+
+    @Test
+    void logicalRequesterProfileCannotActAsOwnerOnSharedNode() throws Exception {
+        Path root = Files.createTempDirectory("synesis-logical-authorization-");
+        UUID project = UUID.randomUUID(); UUID prediction = UUID.randomUUID();
+        NodeIdentity shared = NodeIdentity.generate();
+        CoordinationService service = new CoordinationService(new PredictionEventStore(root, project), NodeIdentity.generate());
+        PredictionContract contract = new PredictionContract(prediction, project, shared.nodeId(), "requester-sup", "requester-worker",
+                UUID.randomUUID(), "workspace.prediction-status", shared.nodeId(), "owner-sup", List.of("workspace/**"), 0,
+                "HEAD", List.of("workspace/**=absent"), 0, "purpose", "inputs", "outputs", "behavior", "errors", "none",
+                "invariants", "compatible", "normal", "single-threaded", List.of("test"), 80, 20, 1_900_000_000_000L);
+        CoordinationCommand created = CoordinationCommand.createAs(UUID.randomUUID(), project, prediction,
+                PredictionEventType.PREDICTION_CREATED, shared.nodeId(), "requester-sup", "requester-worker",
+                contract.encoded(), shared);
+        CoordinationCommand decoded = CoordinationCommand.decode(created.encoded());
+        assertEquals("requester-sup", decoded.actorSupervisorId());
+        assertEquals("requester-worker", decoded.actorWorkerId());
+        service.submit(created);
+        service.submit(CoordinationCommand.createAs(UUID.randomUUID(), project, prediction, PredictionEventType.PREDICTION_ROUTED,
+                shared.nodeId(), "requester-sup", "requester-worker", new byte[0], shared));
+        assertThrows(GeneralSecurityException.class, () -> service.submit(CoordinationCommand.createAs(UUID.randomUUID(), project,
+                prediction, PredictionEventType.REQUEST_RECEIVED, shared.nodeId(), "requester-sup", "requester-worker",
+                new byte[0], shared)));
+        service.submit(CoordinationCommand.createAs(UUID.randomUUID(), project, prediction, PredictionEventType.REQUEST_RECEIVED,
+                shared.nodeId(), "owner-sup", "owner-worker", new byte[0], shared));
+    }
+
+    @Test
+    void taskAndOwnershipClaimsAreDurableAndConflictSafe() throws Exception {
+        Path root = Files.createTempDirectory("synesis-task-ownership-");
+        UUID project = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+        NodeIdentity requester = NodeIdentity.generate();
+        NodeIdentity owner = NodeIdentity.generate();
+        NodeIdentity foreign = NodeIdentity.generate();
+        CoordinationService service = new CoordinationService(
+                new PredictionEventStore(root, project), NodeIdentity.generate());
+        CoordinationTask task = new CoordinationTask(taskId, project, "prediction status", "workspace.prediction-status",
+                requester.nodeId(), "sup-a", "worker-a");
+        service.submit(CoordinationCommand.create(UUID.randomUUID(), project, taskId,
+                PredictionEventType.TASK_CREATED, requester.nodeId(), task.encoded(), requester));
+        TaskClaim claim = new TaskClaim(taskId, owner.nodeId(), "sup-b", "worker-b");
+        service.submit(CoordinationCommand.create(UUID.randomUUID(), project, taskId,
+                PredictionEventType.TASK_CLAIMED, owner.nodeId(), claim.encoded(), owner));
+        OwnershipClaim ownership = new OwnershipClaim(taskId, "workspace.prediction-status", owner.nodeId(),
+                "sup-b", List.of("workspace/**"), 1);
+        service.submit(CoordinationCommand.create(UUID.randomUUID(), project, taskId,
+                PredictionEventType.OWNERSHIP_CLAIMED, owner.nodeId(), ownership.encoded(), owner));
+        assertEquals(owner.nodeId(), service.coordinationProjection().task(taskId).orElseThrow().ownerNodeId());
+        assertEquals(owner.nodeId(), service.coordinationProjection().ownership("workspace.prediction-status")
+                .orElseThrow().ownerNodeId());
+        assertThrows(GeneralSecurityException.class, () -> service.submit(CoordinationCommand.create(
+                UUID.randomUUID(), project, taskId, PredictionEventType.OWNERSHIP_CLAIMED, foreign.nodeId(),
+                ownership.encoded(), foreign)));
+        CoordinationService reloaded = new CoordinationService(
+                new PredictionEventStore(root, project), NodeIdentity.generate());
+        assertEquals(owner.nodeId(), reloaded.coordinationProjection().task(taskId).orElseThrow().ownerNodeId());
+    }
+
+    @Test
     void signedCommandsAreIdempotentAndReplayToSubscribers() throws Exception {
         Path root = Files.createTempDirectory("synesis-command-");
         UUID project = UUID.randomUUID();
@@ -70,7 +162,8 @@ class PredictionCoordinationTest {
         PredictionEventStore store = new PredictionEventStore(root, project);
         CoordinationService service = new CoordinationService(store, coordinator);
         CoordinationCommand created = CoordinationCommand.create(UUID.randomUUID(), project, prediction,
-                PredictionEventType.PREDICTION_CREATED, requester.nodeId(), new byte[0], requester);
+                PredictionEventType.PREDICTION_CREATED, requester.nodeId(),
+                contract(project, prediction, requester.nodeId()).encoded(), requester);
         PredictionEvent first = service.submit(created);
         assertEquals(first.eventId(), service.submit(CoordinationCommand.decode(created.encoded())).eventId());
         try (CoordinationService.Subscription subscription = service.subscribe(0)) {
@@ -89,7 +182,8 @@ class PredictionCoordinationTest {
                 new InetSocketAddress("127.0.0.1", 0))) {
             server.start();
             CoordinationCommand command = CoordinationCommand.create(UUID.randomUUID(), project, prediction,
-                    PredictionEventType.PREDICTION_CREATED, requester.nodeId(), new byte[0], requester);
+                    PredictionEventType.PREDICTION_CREATED, requester.nodeId(),
+                    contract(project, prediction, requester.nodeId()).encoded(), requester);
             HttpClient client = HttpClient.newHttpClient();
             URI base = URI.create("http://" + server.address().getHostString() + ":" + server.address().getPort());
             HttpResponse<byte[]> response = client.send(HttpRequest.newBuilder(base.resolve("/command"))

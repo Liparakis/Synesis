@@ -356,35 +356,37 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-012
 - Priority: P0
-- Title: Speculative capability coordination MVP
+- Title: Public speculative capability coordination CLI
 - Status: ACTIVE
-- Purpose: Coordinate two independent supervisors and isolated coding agents
-  through semantic ownership, live ordered events, capability prediction,
-  owner implementation, requester validation, and auditable retirement.
+- Purpose: Expose the bounded coordination MVP through the public `synesis`
+  CLI for an external initialized project, including semantic ownership, live
+  ordered events, capability prediction, logical actor authorization, isolated
+  speculation, and auditable retirement.
 - Dependencies: SYN-009D DONE; SYN-011 remains VERIFYING; explicit user
   activation of deferred SL-D-023; existing Link identity, SDR2 records,
   ScopeMatcher, provider hooks, and unified CLI.
-- Acceptance criteria: two independent node identities, two local supervisor
-  processes, one shared deterministic coordinator, two isolated Git worktrees,
-  semantic ownership conflict detection, REQUEST_OWNER hook output, precise
-  prediction contract, live ordered delivery with replay, owner response,
-  speculative continuation, implementation publication, requester validation,
-  merge blocking while unresolved, clean retirement/invalidation, and a real
-  two-agent evidence run.
+- Acceptance criteria: required public command trees and help are present; two
+  independent CLI profiles coordinate through a deterministic loopback
+  coordinator against an external project; semantic ownership conflict
+  detection, precise prediction contracts, logical requester/owner
+  authorization, live ordered delivery with replay, implementation publication,
+  isolated speculation, requester validation, and clean retirement/invalidation
+  are proven by a real two-process evidence run.
 - Required tests: domain/state transitions, signed bounded protocol, durable
   event replay, reconnect, duplicate delivery, stale supervisors, provider
   outcomes, worktree isolation, speculative overlay and merge gate, and the
   full two-agent acceptance demonstration.
 - Required documentation: speculative architecture, supervisor protocol,
-  state machines, MVP plan, ADR-0027, CLI/provider/Git documentation, roadmap,
+  state machines, MVP plan, ADR-0027, ADR-0028, CLI/provider/Git documentation, roadmap,
   capability matrix, evidence report, and durable state/checkpoint updates.
 - Scope boundary: no global AI agent, arbitrary remote execution, shared
   working tree, federation, GUI, Obsidian authority, or production claims for
   providers and physical remote machines without evidence.
 - Implementation note: production code is authorized only within this task;
   the existing Link transport/session behavior remains unchanged.
-- Evidence: `docs/evidence/speculative-coordination-real-cli-2026-07-23/report.md`;
-  real coordinator plus Supervisor A/B OS processes passed the complete flow.
+- Evidence: `docs/evidence/speculative-coordination-real-cli-2026-07-23/report.md`
+  and `scripts/run-speculative-coordination-real.ps1`; an external project,
+  coordinator, requester, owner, and supervisor CLI process passed the flow.
 
 ## SYN-001
 

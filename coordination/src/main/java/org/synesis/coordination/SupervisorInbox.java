@@ -39,6 +39,13 @@ public final class SupervisorInbox {
         this.identity = Objects.requireNonNull(identity, "identity");
         this.service = Objects.requireNonNull(service, "service");
         Files.createDirectories(inboxDirectory);
+        try (var files = Files.list(inboxDirectory)) {
+            lastSequence = files.map(path -> path.getFileName().toString())
+                    .filter(name -> name.endsWith(".sce"))
+                    .map(name -> name.substring(0, name.length() - 4))
+                    .mapToLong(value -> { try { return Long.parseLong(value); } catch (NumberFormatException ignored) { return 0; } })
+                    .max().orElse(0);
+        }
     }
 
     /** Submits a prediction creation and routing pair.
@@ -56,6 +63,70 @@ public final class SupervisorInbox {
                 contract.encoded());
         command(contract.predictionId(), PredictionEventType.PREDICTION_ROUTED, new byte[0]);
         return created;
+    }
+
+    /** Creates a task as the current requester.
+     * @param task task declaration
+     * @return creation event
+     * @throws IOException when persistence fails
+     * @throws GeneralSecurityException when signing fails
+     */
+    public PredictionEvent createTask(CoordinationTask task) throws IOException, GeneralSecurityException {
+        if (!task.projectId().equals(projectId) || !task.creatorNodeId().equals(identity.nodeId())
+                || !task.creatorSupervisorId().equals(supervisorId) || !task.creatorWorkerId().equals(workerId)) {
+            throw new IllegalArgumentException("task creator does not match supervisor");
+        }
+        return command(task.taskId(), PredictionEventType.TASK_CREATED, task.encoded());
+    }
+
+    /** Claims one task for the current supervisor.
+     * @param claim task claim
+     * @return claim event
+     * @throws IOException when persistence fails
+     * @throws GeneralSecurityException when signing fails
+     */
+    public PredictionEvent claimTask(TaskClaim claim) throws IOException, GeneralSecurityException {
+        if (!claim.ownerNodeId().equals(identity.nodeId()) || !claim.ownerSupervisorId().equals(supervisorId)
+                || !claim.ownerWorkerId().equals(workerId)) throw new IllegalArgumentException("task claimant mismatch");
+        return command(claim.taskId(), PredictionEventType.TASK_CLAIMED, claim.encoded());
+    }
+
+    /** Releases the current task claim.
+     * @param claim current task claim
+     * @return release event
+     * @throws IOException when persistence fails
+     * @throws GeneralSecurityException when signing fails
+     */
+    public PredictionEvent releaseTask(TaskClaim claim) throws IOException, GeneralSecurityException {
+        if (!claim.ownerNodeId().equals(identity.nodeId()) || !claim.ownerSupervisorId().equals(supervisorId)
+                || !claim.ownerWorkerId().equals(workerId)) throw new IllegalArgumentException("task claimant mismatch");
+        return command(claim.taskId(), PredictionEventType.TASK_RELEASED, claim.encoded());
+    }
+
+    /** Claims semantic ownership for the current task owner.
+     * @param claim ownership claim
+     * @return ownership event
+     * @throws IOException when persistence fails
+     * @throws GeneralSecurityException when signing fails
+     */
+    public PredictionEvent claimOwnership(OwnershipClaim claim) throws IOException, GeneralSecurityException {
+        if (!claim.ownerNodeId().equals(identity.nodeId()) || !claim.ownerSupervisorId().equals(supervisorId)) {
+            throw new IllegalArgumentException("ownership claimant mismatch");
+        }
+        return command(claim.taskId(), PredictionEventType.OWNERSHIP_CLAIMED, claim.encoded());
+    }
+
+    /** Releases semantic ownership for the current owner.
+     * @param claim current ownership claim
+     * @return release event
+     * @throws IOException when persistence fails
+     * @throws GeneralSecurityException when signing fails
+     */
+    public PredictionEvent releaseOwnership(OwnershipClaim claim) throws IOException, GeneralSecurityException {
+        if (!claim.ownerNodeId().equals(identity.nodeId()) || !claim.ownerSupervisorId().equals(supervisorId)) {
+            throw new IllegalArgumentException("ownership claimant mismatch");
+        }
+        return command(claim.taskId(), PredictionEventType.OWNERSHIP_RELEASED, claim.encoded());
     }
 
     /** Accepts an exact request as the owner node.

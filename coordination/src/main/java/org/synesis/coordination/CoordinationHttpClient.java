@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /** Minimal JDK HTTP client for signed coordination commands and replay. */
 public final class CoordinationHttpClient {
@@ -71,5 +72,55 @@ public final class CoordinationHttpClient {
             result.add(PredictionEvent.decode(Base64.getDecoder().decode(encoded)));
         }
         return result;
+    }
+
+    /** Follows the live server-sent event stream from an exclusive cursor.
+     * @param after exclusive sequence cursor
+     * @param consumer ordered event consumer
+     * @throws IOException transport or malformed-event failure
+     * @throws InterruptedException interrupted stream
+     */
+    public void follow(long after, Consumer<PredictionEvent> consumer) throws IOException, InterruptedException {
+        follow(after, 0, consumer);
+    }
+
+    /** Follows the live event stream with an optional bounded duration.
+     * @param after exclusive sequence cursor
+     * @param durationSeconds maximum stream duration, or zero for a long-lived stream
+     * @param consumer ordered event consumer
+     * @throws IOException transport or malformed-event failure
+     * @throws InterruptedException interrupted stream
+     */
+    public void follow(long after, int durationSeconds, Consumer<PredictionEvent> consumer)
+            throws IOException, InterruptedException {
+        Objects.requireNonNull(consumer, "consumer");
+        URI uri = URI.create(endpoint + "events?after=" + after);
+        Duration timeout = durationSeconds > 0 ? Duration.ofSeconds(Math.max(1, durationSeconds) + 1L) : Duration.ofDays(1);
+        HttpRequest request = HttpRequest.newBuilder(uri).timeout(timeout).GET().build();
+        HttpResponse<java.util.stream.Stream<String>> response;
+        try { response = client.send(request, HttpResponse.BodyHandlers.ofLines()); }
+        catch (java.net.http.HttpTimeoutException timeoutFailure) {
+            if (durationSeconds > 0) return;
+            throw timeoutFailure;
+        }
+        if (response.statusCode() != 200) throw new IOException("event stream failed: " + response.statusCode());
+        try (var lines = response.body()) {
+            lines.filter(line -> line.startsWith("data: ")).forEach(line -> {
+                try {
+                    String encoded = line.substring(6).split(" ", 2)[0];
+                    consumer.accept(PredictionEvent.decode(Base64.getDecoder().decode(encoded)));
+                } catch (IOException failure) {
+                    throw new EventStreamFailure(failure);
+                }
+            });
+        } catch (EventStreamFailure failure) {
+            throw failure.cause;
+        }
+    }
+
+    private static final class EventStreamFailure extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        private final IOException cause;
+        private EventStreamFailure(IOException cause) { this.cause = cause; }
     }
 }

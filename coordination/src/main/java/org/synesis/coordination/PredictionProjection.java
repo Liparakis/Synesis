@@ -18,6 +18,7 @@ public final class PredictionProjection {
      */
     public synchronized void apply(PredictionEvent event) {
         Objects.requireNonNull(event, "event");
+        if (!isPredictionEvent(event.type())) return;
         PredictionState next = validate(event);
         states.put(event.predictionId(), next);
     }
@@ -29,6 +30,7 @@ public final class PredictionProjection {
      */
     public synchronized PredictionState validate(PredictionEvent event) {
         Objects.requireNonNull(event, "event");
+        if (!isPredictionEvent(event.type())) return null;
         return transition(states.get(event.predictionId()), event.type());
     }
 
@@ -68,6 +70,7 @@ public final class PredictionProjection {
             case PREDICTION_INVALIDATED -> requireNonTerminal(current, PredictionState.INVALIDATED);
             case REQUEST_REJECTED -> requireNonTerminal(current, PredictionState.REJECTED);
             case PREDICTION_EXPIRED -> requireNonTerminal(current, PredictionState.EXPIRED);
+            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> current;
         };
     }
 
@@ -87,5 +90,12 @@ public final class PredictionProjection {
 
     private static PredictionState invalid(PredictionState current, PredictionEventType type) {
         throw new IllegalStateException("duplicate creation from " + current + " via " + type);
+    }
+
+    private static boolean isPredictionEvent(PredictionEventType type) {
+        return switch (type) {
+            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> false;
+            default -> true;
+        };
     }
 }

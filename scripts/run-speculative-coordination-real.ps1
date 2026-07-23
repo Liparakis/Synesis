@@ -1,102 +1,123 @@
 [CmdletBinding()]
-param([string]$DemoRoot = (Join-Path $env:TEMP ("synesis-coordination-real-" + [Guid]::NewGuid().ToString("N"))), [int]$Port = 48123)
+param(
+    [string]$DemoRoot = (Join-Path $env:TEMP ("synesis-coordination-cli-" + [Guid]::NewGuid().ToString("N"))),
+    [int]$Port = 48123,
+    [string]$CliPath = ""
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = (Get-Location).Path
-$cli = Join-Path $repo 'cli\build\install\synesis\bin\synesis.bat'
+$cli = if ([string]::IsNullOrWhiteSpace($CliPath)) { Join-Path $repo 'cli\build\install\synesis\bin\synesis.bat' } else { $CliPath }
 if (-not (Test-Path -LiteralPath $cli)) { throw "Build the CLI first: $cli" }
+
 New-Item -ItemType Directory -Force -Path $DemoRoot | Out-Null
-$workA = Join-Path $DemoRoot 'worktree-a'; $workB = Join-Path $DemoRoot 'worktree-b'
-$profileA = Join-Path $DemoRoot 'profile-a'; $profileB = Join-Path $DemoRoot 'profile-b'
-$coordData = Join-Path $DemoRoot 'coordinator'; $stateA = Join-Path $profileA 'supervisor.state'
-$logs = Join-Path $DemoRoot 'logs'; New-Item -ItemType Directory -Force -Path $logs | Out-Null
-$branchA = 'synesis-demo-a-' + [Guid]::NewGuid().ToString('N'); $branchB = 'synesis-demo-b-' + [Guid]::NewGuid().ToString('N')
-$coord = $null; $b = $null
-function Run([string]$dir, [string[]]$commandArgs) {
-    $arguments = if ($commandArgs.Count -gt 1) { $commandArgs[1..($commandArgs.Count-1)] } else { @() }
-    $p = Start-Process -FilePath $commandArgs[0] -ArgumentList $arguments -WorkingDirectory $dir -Wait -PassThru -NoNewWindow
-    if ($p.ExitCode -ne 0) { throw "command failed ($($p.ExitCode)): $($commandArgs -join ' ')" }
+$project = Join-Path $DemoRoot 'external-project'
+$profileA = Join-Path $DemoRoot 'requester-profile'
+$profileB = Join-Path $DemoRoot 'owner-profile'
+$profileCoordinator = Join-Path $DemoRoot 'coordinator-profile'
+$coordData = Join-Path $DemoRoot 'coordinator-data'
+$logs = Join-Path $DemoRoot 'logs'
+New-Item -ItemType Directory -Force -Path $project,$profileA,$profileB,$profileCoordinator,$coordData,$logs | Out-Null
+
+function Invoke-Cli([string[]]$Arguments, [int]$ExpectedExit = 0) {
+    $previousAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $output = (& $cli @Arguments 2>&1 | Out-String)
+    $ErrorActionPreference = $previousAction
+    if ($LASTEXITCODE -ne $ExpectedExit) {
+        throw "CLI failed with $LASTEXITCODE (expected $ExpectedExit): synesis $($Arguments -join ' ')`n$output"
+    }
+    return $output
 }
-function CopySource([string]$relative) {
-    $source = Join-Path $repo $relative
-    $destA = Join-Path $workA $relative; $destB = Join-Path $workB $relative
-    $parentA = Split-Path -Parent $destA; $parentB = Split-Path -Parent $destB
-    New-Item -ItemType Directory -Force -Path $parentA,$parentB | Out-Null
-    Copy-Item -LiteralPath $source -Destination $destA -Recurse -Force
-    Copy-Item -LiteralPath $source -Destination $destB -Recurse -Force
+function Value([string]$Text, [string]$Name) {
+    $line = ($Text -split "`r?`n" | Where-Object { $_ -match "^$Name=" } | Select-Object -First 1)
+    if ($null -eq $line) { throw "Missing $Name in output:`n$Text" }
+    return ($line -split '=', 2)[1].Trim()
 }
-function StopTree($process) {
-    if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null }
+function StopTree($Process) {
+    if ($Process -and -not $Process.HasExited) { & taskkill.exe /PID $Process.Id /T /F 2>$null | Out-Null }
 }
+
+$coordinator = $null; $supervisor = $null
 try {
-    Run $repo @('git','worktree','add','-b',$branchA,$workA,'HEAD')
-    Run $repo @('git','worktree','add','-b',$branchB,$workB,'HEAD')
-    foreach ($path in @('build.gradle.kts','settings.gradle.kts','coordination','workspace\build.gradle.kts',
-            'workspace\gradle.lockfile','workspace\src\main\java\org\synesis\workspace\guardrail\ActionGuardrail.java',
-            'workspace\src\main\java\org\synesis\workspace\integration\antigravity\AntigravityHookAdapter.java',
-            'workspace\src\main\java\org\synesis\workspace\integration\claude\ClaudeCodeHookAdapter.java',
-            'cli\build.gradle.kts','cli\gradle.lockfile','cli\src\main\java\org\synesis\cli\SynesisCli.java',
-            'cli\src\main\java\org\synesis\cli\command\CoordinationDemoCommand.java')) { CopySource $path }
-    New-Item -ItemType Directory -Force -Path $profileA,$profileB,$coordData | Out-Null
-    $env:SYNESIS_LINK_PROFILE = $profileA
-    & $cli identity show --profile $profileA | Tee-Object (Join-Path $logs 'identity-a.log')
-    $env:SYNESIS_LINK_PROFILE = $profileB
-    & $cli identity show --profile $profileB | Tee-Object (Join-Path $logs 'identity-b.log')
-    Remove-Item Env:SYNESIS_LINK_PROFILE -ErrorAction SilentlyContinue
-    $nodeB = ((Get-Content (Join-Path $logs 'identity-b.log') | Select-String '^NODE_ID=').Line -replace '^NODE_ID=','').Trim()
-    $nodeA = ((Get-Content (Join-Path $logs 'identity-a.log') | Select-String '^NODE_ID=').Line -replace '^NODE_ID=','').Trim()
-    $project = [Guid]::NewGuid().ToString()
+    & git init -q $project
+    & git -C $project config user.email test@synesis.local
+    & git -C $project config user.name Synesis
+    Set-Content (Join-Path $project 'README.md') 'external project'
+    & git -C $project add README.md
+    & git -C $project commit -q -m 'external baseline'
+    $init = Invoke-Cli @('init','--project',$project)
+    $projectId = Value $init 'PROJECT_ID'
+    $baseCommit = (& git -C $project rev-parse HEAD).Trim()
+    $nodeA = Value (Invoke-Cli @('identity','show','--profile',$profileA)) 'NODE_ID'
+    $nodeB = Value (Invoke-Cli @('identity','show','--profile',$profileB)) 'NODE_ID'
+
     $coordOut = Join-Path $logs 'coordinator.log'; $coordErr = Join-Path $logs 'coordinator.err'
-    $coordArgs = @('coordination-demo','--role','coordinator','--project',$project,'--data',$coordData,
-        '--identity',(Join-Path $profileB 'link'),'--port',$Port,'--duration-seconds','180')
-    $coordStarted = (Get-Date).ToUniversalTime().ToString('o')
-    $coord = Start-Process -FilePath $cli -ArgumentList $coordArgs -WorkingDirectory $repo -RedirectStandardOutput $coordOut -RedirectStandardError $coordErr -PassThru
+    $coordinator = Start-Process -FilePath $cli -ArgumentList (@('coordination','serve','--project',$project,
+        '--data',$coordData,'--identity',$profileCoordinator,'--port',$Port,'--duration-seconds','60')) `
+        -WorkingDirectory $repo -RedirectStandardOutput $coordOut -RedirectStandardError $coordErr -PassThru -WindowStyle Hidden
     $ready = $false
-    for ($i=0; $i -lt 60; $i++) { Start-Sleep -Milliseconds 100; if ((Test-Path $coordOut) -and ((Get-Content $coordOut -Raw) -match 'COORDINATOR_READY')) { $ready = $true; break } }
+    for ($i = 0; $i -lt 100; $i++) {
+        Start-Sleep -Milliseconds 100
+        if ((Test-Path $coordOut) -and ((Get-Content $coordOut -Raw) -match 'COORDINATION_SERVE_READY')) { $ready = $true; break }
+    }
     if (-not $ready) { throw 'coordinator did not become ready' }
-    Start-Sleep -Milliseconds 500
     $endpoint = "http://127.0.0.1:$Port/"
-    $bOut = Join-Path $logs 'supervisor-b.log'; $bErr = Join-Path $logs 'supervisor-b.err'
-    $bArgs = @('coordination-demo','--role','b','--project',$project,'--data',$coordData,'--identity',(Join-Path $profileB 'link'),
-        '--endpoint',$endpoint,'--worktree',$workB,'--base-commit',(git -C $workB rev-parse HEAD))
-    $bStarted = (Get-Date).ToUniversalTime().ToString('o')
-    $b = Start-Process -FilePath $cli -ArgumentList $bArgs -WorkingDirectory $repo -RedirectStandardOutput $bOut -RedirectStandardError $bErr -PassThru
-    $aOut = Join-Path $logs 'supervisor-a-first.log'; $aErr = Join-Path $logs 'supervisor-a-first.err'
-    $aArgs = @('coordination-demo','--role','a','--project',$project,'--data',$coordData,'--identity',(Join-Path $profileA 'link'),
-        '--endpoint',$endpoint,'--profile',(Join-Path $profileA 'local'),'--worktree',$workA,
-        '--base-commit',(git -C $workA rev-parse HEAD),'--owner-node',$nodeB,'--state',$stateA)
-    $aStarted = (Get-Date).ToUniversalTime().ToString('o')
-    $a = Start-Process -FilePath $cli -ArgumentList $aArgs -WorkingDirectory $repo -RedirectStandardOutput $aOut -RedirectStandardError $aErr -PassThru -Wait
-    if ($a.ExitCode -ne 75) { throw "Supervisor A did not request the controlled restart: $($a.ExitCode)" }
-    $aResumeOut = Join-Path $logs 'supervisor-a-resume.log'; $aResumeErr = Join-Path $logs 'supervisor-a-resume.err'
-    $arArgs = @('coordination-demo','--role','a','--project',$project,'--data',$coordData,'--identity',(Join-Path $profileA 'link'),
-        '--endpoint',$endpoint,'--profile',(Join-Path $profileA 'local'),'--worktree',$workA,
-        '--base-commit',(git -C $workA rev-parse HEAD),'--owner-node',$nodeB,'--state',$stateA,'--resume')
-    $arStarted = (Get-Date).ToUniversalTime().ToString('o')
-    $ar = Start-Process -FilePath $cli -ArgumentList $arArgs -WorkingDirectory $repo -RedirectStandardOutput $aResumeOut -RedirectStandardError $aResumeErr -PassThru
-    $b.WaitForExit()
-    if ($b.ExitCode -ne 0 -and -not ((Get-Content $bOut -Raw) -match 'OWNER_IMPLEMENTATION_COMMIT=')) {
-        throw "Supervisor B failed: $($b.ExitCode)"
+
+    $supOut = Join-Path $logs 'supervisor-owner.log'; $supErr = Join-Path $logs 'supervisor-owner.err'
+    $supervisor = Start-Process -FilePath $cli -ArgumentList (@('supervisor','run','--project',$project,
+        '--endpoint',$endpoint,'--profile',$profileB,'--supervisor','sup-b','--worker','worker-b',
+        '--cursor',(Join-Path $profileB 'coordination.cursor'),'--duration-seconds','15')) `
+        -RedirectStandardOutput $supOut -RedirectStandardError $supErr -PassThru -WindowStyle Hidden
+
+    $taskOut = Invoke-Cli @('task','create','--project',$project,'--endpoint',$endpoint,'--profile',$profileA,
+        '--supervisor','sup-a','--worker','worker-a','--title','prediction status','--capability','workspace.prediction-status')
+    $task = Value $taskOut 'TASK_ID'
+    Invoke-Cli @('task','claim','--project',$project,'--endpoint',$endpoint,'--profile',$profileB,
+        '--supervisor','sup-b','--worker','worker-b','--task',$task) | Out-Null
+    Invoke-Cli @('ownership','claim','--project',$project,'--endpoint',$endpoint,'--profile',$profileB,
+        '--supervisor','sup-b','--task',$task,'--capability','workspace.prediction-status','--scope','project-scope') | Out-Null
+
+    $predictionOut = Invoke-Cli @('prediction','create','--project',$project,'--endpoint',$endpoint,'--profile',$profileA,
+        '--supervisor','sup-a','--worker','worker-a','--task',$task,'--capability','workspace.prediction-status',
+        '--owner-node',$nodeB,'--owner-supervisor','sup-b','--scope','project-scope','--base-commit',$baseCommit,
+        '--base-scope-hash','src=absent','--purpose','external acceptance','--inputs','none','--outputs','status',
+        '--behavior','returns status','--errors','missing rejected','--side-effects','none','--invariants','bounded',
+        '--compatibility','Java 25','--performance','normal','--concurrency','single-threaded','--acceptance-test','cli')
+    $prediction = Value $predictionOut 'PREDICTION_ID'
+
+    Invoke-Cli @('prediction','respond','--project',$project,'--endpoint',$endpoint,'--profile',$profileA,
+        '--supervisor','sup-a','--worker','worker-a','--prediction',$prediction,'--action','receive') 10 | Out-Null
+    $commonOwner = @('--project',$project,'--endpoint',$endpoint,'--profile',$profileB,'--supervisor','sup-b','--worker','worker-b','--prediction',$prediction)
+    Invoke-Cli (@('prediction','respond') + $commonOwner + @('--action','receive')) | Out-Null
+    Invoke-Cli (@('prediction','respond') + $commonOwner + @('--action','exact')) | Out-Null
+    foreach ($stage in @('implementation-started','patch-ready','available')) {
+        Invoke-Cli (@('prediction','publish') + $commonOwner + @('--stage',$stage,'--commit',$baseCommit)) | Out-Null
     }
-    $ar.WaitForExit()
-    if ($ar.ExitCode -ne 0 -and -not ((Get-Content $aResumeOut -Raw) -match 'PREDICTION_STATE=RETIRED')) {
-        throw "Supervisor A resume failed: $($ar.ExitCode)"
-    }
-    Get-Content $coordOut,$bOut,$aOut,$aResumeOut | Set-Content (Join-Path $DemoRoot 'process-transcript.log')
-    [pscustomobject]@{ demoRoot=$DemoRoot; project=$project; nodeA=$nodeA; nodeB=$nodeB; branchA=$branchA; branchB=$branchB; endpoint=$endpoint;
-        coordinatorPid=$coord.Id; supervisorBPid=$b.Id; supervisorAFirstPid=$a.Id; supervisorAResumePid=$ar.Id;
-        coordinatorStarted=$coordStarted; supervisorBStarted=$bStarted; supervisorAFirstStarted=$aStarted; supervisorAResumeStarted=$arStarted;
-        profileA=$profileA; profileB=$profileB; worktreeA=$workA; worktreeB=$workB; initialCursorA=0; initialCursorB=0 } |
+    Invoke-Cli @('speculation','prepare','--project',$project,'--prediction',$prediction,'--base-commit',$baseCommit) | Out-Null
+    Invoke-Cli @('integration','gate','--project',$project,'--endpoint',$endpoint,'--prediction',$prediction) | Out-Null
+    Invoke-Cli @('speculation','validate','--project',$project,'--endpoint',$endpoint,'--profile',$profileA,'--prediction',$prediction) | Out-Null
+    Invoke-Cli @('speculation','retire','--project',$project,'--endpoint',$endpoint,'--profile',$profileA,'--prediction',$prediction) | Out-Null
+    $show = Invoke-Cli @('prediction','show','--project',$project,'--endpoint',$endpoint,'--prediction',$prediction)
+    if ($show -notmatch 'STATE=RETIRED') { throw "prediction did not retire`n$show" }
+
+    $supervisor.WaitForExit()
+    $supervisorTranscript = if (Test-Path $supOut) { Get-Content $supOut -Raw } else { '' }
+    if ($supervisorTranscript -notmatch 'EVENT sequence=') { throw 'supervisor did not receive live events' }
+    $transcript = Join-Path $DemoRoot 'process-transcript.log'
+    Get-Content $coordOut,$supOut | Set-Content $transcript
+    [pscustomobject]@{ demoRoot=$DemoRoot; project=$project; projectId=$projectId; endpoint=$endpoint;
+        nodeA=$nodeA; nodeB=$nodeB; task=$task; prediction=$prediction; baseCommit=$baseCommit;
+        coordinatorPid=$coordinator.Id; supervisorPid=$supervisor.Id; transcript=$transcript } |
         ConvertTo-Json | Set-Content (Join-Path $DemoRoot 'summary.json')
     Write-Output "DEMO_ROOT=$DemoRoot"
     Write-Output "PROJECT=$project"
-    Write-Output "NODE_A=$nodeA"
-    Write-Output "NODE_B=$nodeB"
-    Write-Output "BRANCH_A=$branchA"
-    Write-Output "BRANCH_B=$branchB"
+    Write-Output "PROJECT_ID=$projectId"
+    Write-Output "TASK_ID=$task"
+    Write-Output "PREDICTION_ID=$prediction"
     Write-Output "ENDPOINT=$endpoint"
+    Write-Output "ACCEPTANCE=PASS"
 } finally {
-    StopTree $coord
-    StopTree $b
-    Remove-Item Env:SYNESIS_LINK_PROFILE -ErrorAction SilentlyContinue
+    StopTree $supervisor
+    StopTree $coordinator
 }

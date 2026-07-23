@@ -6,24 +6,23 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0135
-- Latest checkpoint: CP-0144
+- Latest checkpoint: CP-0146
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0027
 
 ## Objective
 
-Implement the smallest verified speculative-capability coordination vertical
-slice: two independent local supervisors, one deterministic coordinator,
+Expose the verified speculative-capability coordination slice as a usable
+public CLI: two independent local supervisors, one deterministic coordinator,
 semantic ownership, ordered live events with replay, capability prediction,
-provider REQUEST_OWNER enforcement, isolated worktree/speculation metadata, and
-auditable retirement.
+logical actor authorization, isolated worktree/speculation metadata, and
+auditable retirement from an external project.
 
 ## Immediate slice
 
-Create the new `:coordination` module with bounded domain records, canonical
-signed command/event envelopes, an immutable local event store, projections,
-transition validation, command idempotency, and replayable subscriptions. Do
-not change Link or provider behavior until the live HTTP slice is verified.
+Complete the public command adapters, actor-bound authorization, external
+project acceptance harness, packaging smoke, and durable evidence. Do not
+change Link or provider behavior.
 
 ## Evidence ledger
 
@@ -56,11 +55,22 @@ not change Link or provider behavior until the live HTTP slice is verified.
   identities, worktrees, live event delivery, controlled restart/replay,
   provider `REQUEST_OWNER`, both Git-gate outcomes, and retirement evidence:
   `docs/evidence/speculative-coordination-real-cli-2026-07-23/report.md`.
+- Public CLI surface now exposes coordination, task, ownership, supervisor,
+  events, prediction, speculation, and integration command trees. Task and
+  ownership claims are durable and replayable; version-two command envelopes
+  bind logical supervisor/worker actors and reject requester/owner confusion.
+- External-project public CLI acceptance passed with independent coordinator,
+  requester, and owner profiles; live supervisor SSE replay; task/ownership
+  claims; prediction acceptance and publication; speculation preparation,
+  integration gate, validation, and retirement. The reusable harness is
+  `scripts/run-speculative-coordination-real.ps1`.
+  Evidence is recorded in
+  `docs/evidence/speculative-coordination-public-cli-2026-07-23/report.md`.
 
 ## Current limitations
 
-- Remote HTTPS, production supervisor lifecycle management, and a general
-  purpose `supervisor run` command remain intentionally deferred.
+- Remote HTTPS, signed remote event-read authorization, and production
+  supervisor lifecycle management remain intentionally deferred.
 
 ## Verification target
 
@@ -69,5 +79,6 @@ validator, and checkpoint evidence for the domain/event-store slice.
 
 ## Immediate next action
 
-Review CP-0144 and the evidence report, then keep SYN-012's loopback-only
-boundary intact while any remote enrollment work is separately activated.
+Create the requested final commit `Expose speculative coordination CLI surface`
+after reviewing the strict-check, installed-bundle, and external-acceptance
+evidence.

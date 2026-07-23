@@ -31,6 +31,17 @@ final class SynesisCliParsingTest {
     }
 
     @Test
+    void publicCoordinationSurfaceIsReachableFromRootHelp() throws Exception {
+        Invocation invocation = invocation();
+        assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
+        String help = invocation.stdout();
+        for (String command : new String[] {"coordination", "task", "ownership", "prediction",
+                "speculation", "events", "supervisor", "integration"}) {
+            assertTrue(help.contains(command), "missing command: " + command);
+        }
+    }
+
+    @Test
     void malformedAndUnknownSyntaxReturnsUsageExit() throws Exception {
         assertEquals(2, SynesisCli.execute(new String[] {"unknown"}, invocation().runtime()));
         assertEquals(2, SynesisCli.execute(new String[] {"join"}, invocation().runtime()));

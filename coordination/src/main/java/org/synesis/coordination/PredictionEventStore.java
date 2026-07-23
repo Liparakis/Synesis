@@ -24,6 +24,7 @@ public final class PredictionEventStore {
     private final UUID projectId;
     private final Clock clock;
     private final PredictionProjection projection = new PredictionProjection();
+    private final CoordinationProjection coordinationProjection = new CoordinationProjection();
     private final List<PredictionEvent> events = new ArrayList<>();
 
     /**
@@ -73,6 +74,7 @@ public final class PredictionEventStore {
                 Objects.requireNonNull(payload, "payload"), previous, signer, clock.millis());
         if (!event.verify()) throw new GeneralSecurityException("event signature verification failed");
         projection.validate(event);
+        coordinationProjection.validate(event);
         Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
         Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
         try {
@@ -81,6 +83,7 @@ public final class PredictionEventStore {
             catch (java.nio.file.AtomicMoveNotSupportedException unsupported) { Files.move(temporary, target); }
         } finally { Files.deleteIfExists(temporary); }
         projection.apply(event);
+        coordinationProjection.apply(event);
         events.add(event);
         return event;
     }
@@ -106,6 +109,11 @@ public final class PredictionEventStore {
      */
     public PredictionProjection projection() { return projection; }
 
+    /** Returns the task and ownership projection reconstructed from the event log.
+     * @return coordination projection
+     */
+    public CoordinationProjection coordinationProjection() { return coordinationProjection; }
+
     private void load() throws IOException, GeneralSecurityException {
         List<Path> files;
         try (var stream = Files.list(eventsDirectory)) {
@@ -120,7 +128,8 @@ public final class PredictionEventStore {
                     || !java.util.Arrays.equals(event.previousDigest(), previous) || !event.verify()) {
                 throw new IOException("invalid coordination event log");
             }
-            projection.apply(event); events.add(event); previous = event.digest(); expected++;
+            projection.apply(event); coordinationProjection.apply(event);
+            events.add(event); previous = event.digest(); expected++;
         }
     }
 }

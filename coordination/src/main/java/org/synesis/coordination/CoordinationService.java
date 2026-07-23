@@ -49,6 +49,7 @@ public final class CoordinationService {
         }
         PredictionEvent prior = commandResults.get(command.commandId());
         if (prior != null) return prior;
+        authorize(command);
         PredictionEvent event = store.append(command.predictionId(), command.type(), coordinatorIdentity.nodeId(),
                 command.encoded(), coordinatorIdentity);
         commandResults.put(command.commandId(), event);
@@ -85,6 +86,106 @@ public final class CoordinationService {
      * @return projection
      */
     public PredictionProjection projection() { return store.projection(); }
+
+    /** Returns the durable task and ownership projection.
+     * @return coordination projection
+     */
+    public CoordinationProjection coordinationProjection() { return store.coordinationProjection(); }
+
+    private void authorize(CoordinationCommand command) throws IOException, GeneralSecurityException {
+        if (command.type() == PredictionEventType.TASK_CREATED) {
+            CoordinationTask task = CoordinationTask.decode(command.payload());
+            if (!task.taskId().equals(command.predictionId()) || !task.projectId().equals(command.projectId())
+                    || !task.creatorNodeId().equals(command.actorNodeId())
+                    || !logicalMatches(command, task.creatorSupervisorId(), task.creatorWorkerId())) {
+                throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");
+            }
+            return;
+        }
+        if (command.type() == PredictionEventType.TASK_CLAIMED) {
+            TaskClaim claim = TaskClaim.decode(command.payload());
+            if (!claim.taskId().equals(command.predictionId()) || !claim.ownerNodeId().equals(command.actorNodeId())
+                    || !logicalMatches(command, claim.ownerSupervisorId(), claim.ownerWorkerId())) {
+                throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");
+            }
+            return;
+        }
+        if (command.type() == PredictionEventType.OWNERSHIP_CLAIMED) {
+            OwnershipClaim claim = OwnershipClaim.decode(command.payload());
+            if (!claim.taskId().equals(command.predictionId()) || !claim.ownerNodeId().equals(command.actorNodeId())
+                    || !logicalMatches(command, claim.ownerSupervisorId(), null)) {
+                throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");
+            }
+            return;
+        }
+        if (command.type() == PredictionEventType.TASK_RELEASED) {
+            TaskClaim claim = TaskClaim.decode(command.payload());
+            CoordinationProjection.TaskView task = coordinationProjection().task(command.predictionId())
+                    .orElseThrow(() -> new GeneralSecurityException("TASK_NOT_FOUND"));
+            if (!claim.taskId().equals(command.predictionId()) || !command.actorNodeId().equals(task.ownerNodeId())) {
+                throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");
+            }
+            return;
+        }
+        if (command.type() == PredictionEventType.OWNERSHIP_RELEASED) {
+            OwnershipClaim claim = OwnershipClaim.decode(command.payload());
+            OwnershipClaim current = coordinationProjection().ownership(claim.capability())
+                    .orElseThrow(() -> new GeneralSecurityException("OWNERSHIP_NOT_FOUND"));
+            if (!claim.taskId().equals(command.predictionId())
+                    || !command.actorNodeId().equals(current.ownerNodeId())) {
+                throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");
+            }
+            return;
+        }
+        PredictionContract contract = contractFor(command);
+        String actor = command.actorNodeId();
+        boolean requester = actor.equals(contract.requesterNodeId())
+                && logicalMatches(command, contract.requesterSupervisorId(), contract.requesterWorkerId());
+        boolean owner = actor.equals(contract.ownerNodeId())
+                && logicalMatches(command, contract.ownerSupervisorId(), null);
+        boolean allowed = switch (command.type()) {
+            case PREDICTION_CREATED -> requester;
+            case PREDICTION_ROUTED, VALIDATION_STARTED, SPECULATION_RETIRED, PREDICTION_INVALIDATED -> requester;
+            case REQUEST_RECEIVED, ACCEPTED_EXACT, ACCEPTED_EQUIVALENT, CONTRACT_REVISED,
+                    IMPLEMENTATION_STARTED, PATCH_READY, CAPABILITY_AVAILABLE -> owner;
+            case REQUEST_REJECTED -> requester || owner;
+            case PREDICTION_EXPIRED -> false;
+            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> false;
+        };
+        if (!allowed) throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");
+    }
+
+    private static boolean logicalMatches(CoordinationCommand command, String supervisor, String worker) {
+        if (command.actorSupervisorId() == null) return true;
+        if (!command.actorSupervisorId().equals(supervisor)) return false;
+        return worker == null || command.actorWorkerId().equals(worker);
+    }
+
+    private PredictionContract contractFor(CoordinationCommand command) throws IOException {
+        if (command.type() == PredictionEventType.PREDICTION_CREATED) {
+            PredictionContract contract = decodeContract(command.payload());
+            if (!contract.predictionId().equals(command.predictionId())
+                    || !contract.projectId().equals(command.projectId())) {
+                throw new IOException("INVALID_PREDICTION_CONTRACT");
+            }
+            return contract;
+        }
+        for (PredictionEvent event : store.events()) {
+            if (event.predictionId().equals(command.predictionId())
+                    && event.type() == PredictionEventType.PREDICTION_CREATED) {
+                return decodeContract(CoordinationCommand.decode(event.payload()).payload());
+            }
+        }
+        throw new IOException("PREDICTION_NOT_FOUND");
+    }
+
+    private static PredictionContract decodeContract(byte[] payload) throws IOException {
+        try {
+            return PredictionContract.decode(payload);
+        } catch (IOException failure) {
+            throw failure;
+        }
+    }
 
     /** A closeable at-least-once event subscription. */
     public static final class Subscription implements AutoCloseable {

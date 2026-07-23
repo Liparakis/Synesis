@@ -150,7 +150,7 @@ val runtimeImage = tasks.register("runtimeImage") {
             "--module-path",
             jmods.absolutePath,
             "--add-modules",
-            "java.base,java.logging,java.naming,jdk.jfr,jdk.unsupported",
+            "java.base,java.logging,java.naming,java.net.http,jdk.httpserver,jdk.jfr,jdk.unsupported",
             "--strip-debug",
             "--no-header-files",
             "--no-man-pages",
