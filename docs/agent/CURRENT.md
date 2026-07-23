@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0131
-- Latest checkpoint: CP-0131
+- Latest checkpoint: CP-0134
 - Responsible agent: fresh coding agent
 - Related decisions: ADR-0024, ADR-0025, ADR-0026
 
@@ -66,6 +66,17 @@ PATH or the stable fallback.
 - Completed the local Windows migration from `current`/`versions/` to
   `%LOCALAPPDATA%\Synesis` and preserved `Link\identity.bin` and
   `Link\identity.pub`.
+- Repaired generated Antigravity integration: provider installation now writes
+  a project-local PowerShell wrapper that resolves `synesis.cmd` from PATH or
+  `%LOCALAPPDATA%\Synesis\bin\synesis.cmd`, sets the project root, forwards
+  stdin unchanged, emits one compact JSON decision, and exits `0`.
+- Added a Windows process regression covering a non-project working directory;
+  the protected file remained unchanged.
+- Corrected the generated `cmd.exe` argument quoting and explicitly set the
+  child process working directory after the real external-project smoke test.
+- Rebuilt and reinstalled the clean versioned bundle as `0.1.0-dev.17` under
+  the stable local installation root; the external project wrapper then
+  returned the protected-scope deny decision from outside the project root.
 
 ## Verification
 
@@ -81,17 +92,20 @@ PATH or the stable fallback.
 | Disposable migration/rollback and project preservation | PASS | `go test ./...` in `bootstrap` |
 | Native Windows archive smoke | PASS | `TestNativeRealBundleInstallation` |
 | Local Windows migration | PASS | stable root, launcher, doctor, PATH, and legacy-marker inspection |
+| Generated Antigravity wrapper from a non-project working directory | PASS | `AntigravityHookProcessTest`; compact deny JSON, exit `0`, protected file unchanged |
+| Full strict Java verification after wrapper fix | PASS | `gradlew.bat clean check --dependency-verification=strict --no-daemon` |
+| Clean versioned bundle reinstall | PASS | Stable launcher reports `0.1.0-dev.17`; `synesis version` and provider install succeeded |
+| External project wrapper smoke from outside project root | PASS | One compact deny JSON line, hook exit `0`, stderr-only bounded diagnostic, protected hash unchanged |
 
 ## Current failures
 
 - Native Linux/macOS execution is unavailable on this Windows host; their
   user-local PATH behavior is covered by implementation policy and Go tests,
   not native smoke.
-- The worktree contains unrelated pre-existing Antigravity investigation
-  changes; they must not be folded into a packaging commit.
+- Real Antigravity project-hook discovery/loading remains unverified; the
+  generated wrapper and non-project working-directory path are now covered.
 
 ## Immediate next action
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-review the generated checkpoint and mark SYN-009D complete if the durable
-state remains consistent.
+review CP-0134 and confirm the amended commit remains clean.

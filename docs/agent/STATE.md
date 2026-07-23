@@ -72,6 +72,11 @@ allowed.
   SL-013 development-distribution baseline.
 - Generated launcher two-profile onboarding: PASS; evidence is
   `docs/evidence/CLI-DISTRIBUTION-VALIDATION.md`.
+- Generated Antigravity wrapper from a non-project working directory: PASS;
+  `AntigravityHookProcessTest` proves PATH-first launcher resolution,
+  project-root setup, compact deny JSON on stdout, exit `0`, and protected-file
+  preservation. The wrapper fallback is the stable
+  `%LOCALAPPDATA%\Synesis\bin\synesis.cmd` path; no versioned path is used.
 - CP-R2 local decision record encoding, signing, storage, recovery, and
   inspection: PASS; evidence is
   `docs/evidence/DECISION-RECORD-CP-R2-2026-07-21.md`.
@@ -149,8 +154,11 @@ only as the documented transport-failure or liveness-expiry category.
 
 - Preserved pre-change test-project evidence before modifications under
   `docs/evidence/antigravity-real-investigation-2026-07-22/before`.
-- The original Windows managed hook command had invalid `.cmd` quoting. The
-  minimal provider correction now emits a `cmd.exe /d /s /c` wrapper.
+- The original Windows managed hook command had invalid `.cmd` quoting and the
+  first wrapper invocation also inherited Antigravity's working directory. The
+  generated integration now emits an unquoted, space-free PowerShell `-File`
+  command for a project-local wrapper; the wrapper sets the project root before
+  invoking Synesis.
 - The exact observed Antigravity structured tool is `replace_file_content`; its
   real-shaped payload is covered by `AntigravityHookAdapterTest` and the exact
   managed command returns `decision=deny`, exit `0`, with the bounded reason.

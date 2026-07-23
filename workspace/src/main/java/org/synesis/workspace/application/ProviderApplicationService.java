@@ -23,6 +23,7 @@ import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
+import org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration;
 
 /** Owns provider lifecycle, local metadata, configuration merging, and diagnostics. */
 public final class ProviderApplicationService {
@@ -69,6 +70,9 @@ public final class ProviderApplicationService {
             Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(), ignored -> new LinkedHashMap<>()));
             List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
             Map<String, Object> expectedHook = provider.managedHook(launcher, profile);
+            if (provider instanceof AntigravityProviderIntegration antigravity && isWindows()) {
+                antigravity.writeWrapper(profile);
+            }
             boolean already = hooks.stream().filter(provider::isManagedHook).count() == 1
                     && expectedHook.equals(hooks.stream().filter(provider::isManagedHook).findFirst().orElse(null))
                     && Files.exists(metadata(location, provider));

@@ -837,3 +837,48 @@ Append-only operational history.
   `%LOCALAPPDATA%\Synesis` after automated verification; stable `version`,
   application `doctor`, bootstrap `doctor`, PATH resolution, identity
   preservation, and cleanup checks passed.
+
+## 2026-07-23 — Antigravity generated-wrapper correction
+
+- Traced the external `SynesisTestProject` failure: quoted PowerShell `-File`
+  parsing prevented wrapper launch; removing quotes exposed the inherited
+  working-directory bug; Synesis returned `Project is not initialized.` with
+  exit `10` outside the project root and the expected protected-scope deny with
+  exit `0` from the root.
+- Changed the generated Antigravity integration to write a project-local
+  wrapper, resolve `synesis.cmd` PATH-first with the stable fallback, set the
+  project root, forward stdin unchanged, keep diagnostics on bounded stderr,
+  emit one compact JSON decision, and return exit `0`.
+- Added `cli` process regression coverage for a non-project working directory;
+  the protected file remained unchanged. No constraints, protected project
+  files, or remote repositories were modified.
+- Commands: `gradlew.bat :workspace:test --tests
+  org.synesis.workspace.ProviderApplicationServiceTest --no-daemon`;
+  `gradlew.bat :cli:test --tests org.synesis.cli.AntigravityHookProcessTest
+  --no-daemon`; `gradlew.bat clean check
+  --dependency-verification=strict --no-daemon`.
+- Results: PASS.
+- Remaining work: real Antigravity project-hook discovery/loading remains
+  unverified; provider status remains `DEGRADED`/`UNVALIDATED` until a real
+  protected edit is denied and replanning is observed.
+- Exact continuation: run the repository resume script and inspect the new
+  checkpoint for durable-state consistency.
+
+## 2026-07-23 — Antigravity reinstall and final wrapper correction
+
+- The real external-project smoke test caught a malformed `cmd.exe /c`
+  argument quote in the generated wrapper; corrected it and added an explicit
+  `ProcessStartInfo.WorkingDirectory` set to the project root.
+- Built a clean versioned Windows bundle as `0.1.0-dev.17` and reinstalled it
+  under the stable root using the local development manifest. The stable
+  launcher reports `0.1.0-dev.17`.
+- Reinstalled the Antigravity provider into
+  `C:\Users\Liparakis\Desktop\SynesisTestProject` and invoked its wrapper
+  from outside the project root. Result: one compact protected-scope deny
+  JSON line on stdout, exit `0`, bounded diagnostic on stderr, and the
+  protected-file hash unchanged.
+- Final commands: `gradlew.bat clean check
+  --dependency-verification=strict --no-daemon`; repository resume; external
+  wrapper smoke. Results: PASS.
+- Exact continuation: run the repository resume script and inspect CP-0134;
+  no feature work remains for this slice.

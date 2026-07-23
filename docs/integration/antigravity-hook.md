@@ -28,7 +28,7 @@ Add the following to `<workspace>/.agents/hooks.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\path\\to\\synesis\\cli\\build\\install\\synesis\\bin\\synesis.bat --profile C:\\path\\to\\synesis hook antigravity",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\path\\to\\project\\.synesis\\local\\run-antigravity-hook.ps1",
             "timeout": 10
           }
         ]
