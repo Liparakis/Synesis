@@ -7,6 +7,7 @@ import org.synesis.cli.command.DoctorCommand;
 import org.synesis.cli.command.CheckActionCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
+import org.synesis.cli.command.CoordinationDemoCommand;
 import org.synesis.cli.command.HookAntigravityCommand;
 import org.synesis.cli.command.HookClaudeCodeCommand;
 import org.synesis.cli.command.HookCodexCommand;
@@ -37,6 +38,7 @@ import org.synesis.cli.terminal.ConsoleTerminal;
  * Executable Picocli wiring for the standalone Synesis CLI.
  */
 public final class SynesisCli {
+
     private SynesisCli() {
     }
 
@@ -52,33 +54,60 @@ public final class SynesisCli {
         command.addSubcommand("host", new HostCommand(runtime));
         command.addSubcommand("join", new JoinCommand(runtime));
         command.addSubcommand("identity", new IdentityCommand());
-        CommandLine identity = command.getSubcommands().get("identity");
+        CommandLine identity = command.getSubcommands()
+                .get("identity");
         identity.addSubcommand("show", new IdentityShowCommand(runtime));
         command.addSubcommand("doctor", new DoctorCommand(runtime));
         command.addSubcommand("provider", new ProviderCommand());
-        command.getSubcommands().get("provider").addSubcommand("list", new ProviderListCommand(runtime));
-        command.getSubcommands().get("provider").addSubcommand("install", new ProviderInstallCommand(runtime));
-        command.getSubcommands().get("provider").addSubcommand("status", new ProviderStatusCommand(runtime));
-        command.getSubcommands().get("provider").addSubcommand("uninstall", new ProviderUninstallCommand(runtime));
+        command.getSubcommands()
+                .get("provider")
+                .addSubcommand("list", new ProviderListCommand(runtime));
+        command.getSubcommands()
+                .get("provider")
+                .addSubcommand("install", new ProviderInstallCommand(runtime));
+        command.getSubcommands()
+                .get("provider")
+                .addSubcommand("status", new ProviderStatusCommand(runtime));
+        command.getSubcommands()
+                .get("provider")
+                .addSubcommand("uninstall", new ProviderUninstallCommand(runtime));
         command.addSubcommand("help", new HelpCommand());
         command.addSubcommand("version", new VersionPlaceholderCommand(runtime));
         command.addSubcommand("init", new InitCommand(runtime));
         command.addSubcommand("project", new ProjectCommand());
-        command.getSubcommands().get("project").addSubcommand("create", new ProjectCreateCommand(runtime));
+        command.getSubcommands()
+                .get("project")
+                .addSubcommand("create", new ProjectCreateCommand(runtime));
         command.addSubcommand("constraint", new ConstraintCommand());
-        command.getSubcommands().get("constraint").addSubcommand("create", new ConstraintCreateCommand(runtime));
+        command.getSubcommands()
+                .get("constraint")
+                .addSubcommand("create", new ConstraintCreateCommand(runtime));
         command.addSubcommand("sync", new SyncCommand());
-        command.getSubcommands().get("sync").addSubcommand("host", new SyncHostCommand(runtime));
-        command.getSubcommands().get("sync").addSubcommand("join", new SyncJoinCommand(runtime));
+        command.getSubcommands()
+                .get("sync")
+                .addSubcommand("host", new SyncHostCommand(runtime));
+        command.getSubcommands()
+                .get("sync")
+                .addSubcommand("join", new SyncJoinCommand(runtime));
         command.addSubcommand("check-action", new CheckActionCommand(runtime));
+        command.addSubcommand("coordination-demo", new CoordinationDemoCommand());
         command.addSubcommand("hook", new HookCommand());
-        command.getSubcommands().get("hook").addSubcommand("antigravity", new HookAntigravityCommand(runtime));
-        command.getSubcommands().get("hook").addSubcommand("claude-code", new HookClaudeCodeCommand(runtime));
-        command.getSubcommands().get("hook").addSubcommand("codex", new HookCodexCommand(runtime));
-        command.setOut(runtime.terminal().out());
-        command.setErr(runtime.terminal().err());
+        command.getSubcommands()
+                .get("hook")
+                .addSubcommand("antigravity", new HookAntigravityCommand(runtime));
+        command.getSubcommands()
+                .get("hook")
+                .addSubcommand("claude-code", new HookClaudeCodeCommand(runtime));
+        command.getSubcommands()
+                .get("hook")
+                .addSubcommand("codex", new HookCodexCommand(runtime));
+        command.setOut(runtime.terminal()
+                .out());
+        command.setErr(runtime.terminal()
+                .err());
         command.setParameterExceptionHandler((exception, _) -> {
-            runtime.terminal().stderr("Usage error: " + exception.getMessage());
+            runtime.terminal()
+                    .stderr("Usage error: " + exception.getMessage());
             return ExitCodes.USAGE;
         });
         try {

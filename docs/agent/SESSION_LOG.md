@@ -882,3 +882,93 @@ Append-only operational history.
   wrapper smoke. Results: PASS.
 - Exact continuation: run the repository resume script and inspect CP-0134;
   no feature work remains for this slice.
+
+## 2026-07-23 — SYN-012 coordination foundation
+
+- Promoted SYN-012 as the sole active task after the explicit speculative
+  coordination request; recorded ADR-0027 and the bounded architecture/state
+  machine/protocol plan.
+- Added the `:coordination` module with bounded prediction contracts, signed
+  command envelopes, coordinator-signed hash-chained events, deterministic
+  lifecycle projection, durable command idempotency, and replayable subscriber
+  queues. Existing Link and provider behavior were not changed.
+- Verification: `.\gradlew.bat :coordination:check --no-daemon` passed,
+  including strict Javadocs, format/static checks, and two focused tests.
+- Exact continuation: implement loopback HTTP commands and SSE replay, then
+  verify reconnect semantics before touching supervisor/provider integration.
+
+## 2026-07-23 — SYN-012 coordination transport
+
+- Added loopback HTTP `/command` and replayable SSE `/events` over the
+  coordinator service, preserving signed command idempotency and durable event
+  replay.
+- Added an HTTP command/SSE replay test. `.\gradlew.bat :coordination:test
+  --no-daemon` passed; strict `:coordination:check` passed before this slice.
+- Exact continuation: implement provider `REQUEST_OWNER` enforcement and a
+  minimal foreground supervisor inbox before worktree speculation.
+
+## 2026-07-23 — SYN-012 real CLI acceptance complete
+
+- Ran the built Synesis CLI as one coordinator and two independent supervisor
+  processes across separate profiles, identities, cursors, worktrees, and
+  branches. The run passed live ownership/prediction delivery, controlled A
+  restart with ordered replay, unresolved and resolved Git gates, real owner
+  implementation, validation, and retirement.
+- Evidence: `docs/evidence/speculative-coordination-real-cli-2026-07-23/report.md`.
+- Root strict verification passed after adding the integration-gate regression
+  test: coordination check and root check both PASS.
+- Exact continuation: remote HTTPS/enrollment remains deferred; no remote
+  publication is authorized.
+
+## 2026-07-23 — SYN-012 ownership and supervisor slice
+
+- Added durable semantic ownership evaluation, policy-first `REQUEST_OWNER`
+  guardrail handling for Antigravity/Claude adapters, optional ownership-aware
+  constructors, and a foreground `SupervisorInbox` with local event copies.
+- Added two-supervisor coordination and ownership non-transfer tests. Root
+  `.\gradlew.bat check --no-daemon` passed in 90 seconds, including CLI,
+  workspace architecture, Link, project-record, and coordination checks.
+- Exact continuation: implement bounded worktree/speculation metadata and a
+  Git acceptance gate for accepted predictions.
+
+## 2026-07-23 — SYN-012 speculation isolation
+
+- Added `SpeculationWorkspace` for detached worktrees, bounded metadata, and a
+  fail-closed Git gate; whitespace and unmerged index states reject before
+  integration.
+- Added a temporary Git repository integration test. `.\gradlew.bat
+  :coordination:check :workspace:check --no-daemon` passed.
+- Exact continuation: run the exact two-node acceptance scenario and preserve
+  event sequence, digest, commit, gate, and final Git-state evidence.
+
+## 2026-07-23 — SYN-012 lifecycle evidence
+
+- Added supervisor lifecycle methods and an end-to-end test covering
+  `PROPOSED` through `RETIRED` (nine ordered events) with replay evidence.
+- Focused coordination tests pass; the remaining unverified requirement is a
+  real two-process/CLI acceptance transcript, not just an in-process harness.
+- Exact continuation: run the real two-node acceptance scenario and preserve
+  event sequence, digest, commit, gate, and final Git-state evidence.
+
+## 2026-07-23 — SYN-012 final local verification
+
+- Final root `.\gradlew.bat check --no-daemon` passed: 42 actionable tasks,
+  including strict Javadocs/static analysis, workspace architecture, CLI
+  bundle/launcher smoke, Link, project-record, and all coordination tests.
+- No real two-process CLI acceptance was claimed; the next slice must capture
+  that external transcript before SYN-012 can be marked DONE.
+
+## 2026-07-23 — SYN-012 final bound/race correction
+
+- Enforced the aggregate prediction-contract encoded-size bound and made SSE
+  subscription replay registration atomic with respect to command publication.
+- Final coordination check passed. Real two-process CLI evidence is still an
+  explicit next action, so SYN-012 remains ACTIVE.
+
+## 2026-07-23 — SYN-012 root verification
+
+- Root `.\gradlew.bat check --no-daemon` passed after adding the coordination
+  module; workspace architecture validation and existing Link/project-record/
+  workspace/CLI checks remain green.
+- Exact continuation: implement provider `REQUEST_OWNER` enforcement and a
+  minimal foreground supervisor inbox before worktree speculation.

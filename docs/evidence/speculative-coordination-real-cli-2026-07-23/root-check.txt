@@ -1,0 +1,85 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.0.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :coordination:processResources NO-SOURCE
+> Task :project-record:processResources NO-SOURCE
+> Task :workspace:processResources NO-SOURCE
+> Task :cli:buildInfo UP-TO-DATE
+> Task :cli:processResources UP-TO-DATE
+> Task :coordination:formatCheck
+> Task :project-record:formatCheck
+> Task :workspace:architectureCheck
+> Task :coordination:processTestResources NO-SOURCE
+> Task :cli:formatCheck
+> Task :project-record:processTestResources NO-SOURCE
+> Task :cli:processTestResources NO-SOURCE
+> Task :workspace:formatCheck
+> Task :workspace:processTestResources NO-SOURCE
+> Task :link:compileJava UP-TO-DATE
+> Task :link:processResources NO-SOURCE
+> Task :link:classes UP-TO-DATE
+> Task :link:jar UP-TO-DATE
+> Task :coordination:compileJava UP-TO-DATE
+> Task :coordination:classes UP-TO-DATE
+> Task :project-record:compileJava UP-TO-DATE
+> Task :project-record:classes UP-TO-DATE
+> Task :coordination:jar UP-TO-DATE
+> Task :project-record:jar UP-TO-DATE
+> Task :project-record:javadoc UP-TO-DATE
+> Task :coordination:javadoc UP-TO-DATE
+> Task :workspace:compileJava UP-TO-DATE
+> Task :workspace:classes UP-TO-DATE
+> Task :workspace:jar UP-TO-DATE
+> Task :project-record:compileTestJava UP-TO-DATE
+> Task :coordination:compileTestJava UP-TO-DATE
+> Task :cli:compileJava UP-TO-DATE
+> Task :project-record:staticAnalysis UP-TO-DATE
+> Task :coordination:staticAnalysis UP-TO-DATE
+> Task :project-record:testClasses UP-TO-DATE
+> Task :cli:classes UP-TO-DATE
+> Task :coordination:testClasses UP-TO-DATE
+> Task :cli:jar UP-TO-DATE
+> Task :cli:startScripts UP-TO-DATE
+> Task :project-record:test UP-TO-DATE
+> Task :project-record:check
+> Task :cli:installDist UP-TO-DATE
+> Task :coordination:test UP-TO-DATE
+> Task :coordination:check
+> Task :link:formatCheck
+> Task :cli:runtimeImage UP-TO-DATE
+> Task :link:javadoc UP-TO-DATE
+> Task :cli:platformBundle UP-TO-DATE
+> Task :cli:platformTarGz UP-TO-DATE
+> Task :cli:platformZip UP-TO-DATE
+> Task :cli:platformArchive UP-TO-DATE
+> Task :link:compileTestJava UP-TO-DATE
+> Task :link:staticAnalysis UP-TO-DATE
+> Task :link:processTestResources UP-TO-DATE
+> Task :link:testClasses UP-TO-DATE
+> Task :link:test UP-TO-DATE
+> Task :link:check
+> Task :workspace:javadoc
+> Task :workspace:compileTestJava
+> Task :workspace:staticAnalysis
+> Task :workspace:testClasses
+> Task :workspace:test
+> Task :workspace:check
+> Task :cli:bundleSmokeTest
+> Task :cli:javadoc
+> Task :cli:launcherSmoke
+> Task :cli:compileTestJava
+> Task :cli:staticAnalysis
+> Task :cli:testClasses
+> Task :cli:test
+> Task :cli:check
+> Task :check
+
+[Incubating] Problems report is available at: file:///C:/Users/Liparakis/Desktop/Synesis/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.0.0/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 35s
+42 actionable tasks: 14 executed, 28 up-to-date

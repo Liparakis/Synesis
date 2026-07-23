@@ -324,7 +324,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-009D
 - Priority: P0
 - Title: Replace versioned installation with a stable flat layout
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Make one OS-conventional `Synesis` root the only persistent
   application installation, with sibling staging and temporary rollback during
   signed install/update activation.
@@ -351,6 +351,40 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   Windows/Linux/macOS cross-builds, strict Java verification, disposable
   migration/rollback tests, native Windows archive smoke, and local Windows
   migration all pass; stable-root doctor and PATH resolution were inspected.
+
+## SYN-012
+
+- ID: SYN-012
+- Priority: P0
+- Title: Speculative capability coordination MVP
+- Status: ACTIVE
+- Purpose: Coordinate two independent supervisors and isolated coding agents
+  through semantic ownership, live ordered events, capability prediction,
+  owner implementation, requester validation, and auditable retirement.
+- Dependencies: SYN-009D DONE; SYN-011 remains VERIFYING; explicit user
+  activation of deferred SL-D-023; existing Link identity, SDR2 records,
+  ScopeMatcher, provider hooks, and unified CLI.
+- Acceptance criteria: two independent node identities, two local supervisor
+  processes, one shared deterministic coordinator, two isolated Git worktrees,
+  semantic ownership conflict detection, REQUEST_OWNER hook output, precise
+  prediction contract, live ordered delivery with replay, owner response,
+  speculative continuation, implementation publication, requester validation,
+  merge blocking while unresolved, clean retirement/invalidation, and a real
+  two-agent evidence run.
+- Required tests: domain/state transitions, signed bounded protocol, durable
+  event replay, reconnect, duplicate delivery, stale supervisors, provider
+  outcomes, worktree isolation, speculative overlay and merge gate, and the
+  full two-agent acceptance demonstration.
+- Required documentation: speculative architecture, supervisor protocol,
+  state machines, MVP plan, ADR-0027, CLI/provider/Git documentation, roadmap,
+  capability matrix, evidence report, and durable state/checkpoint updates.
+- Scope boundary: no global AI agent, arbitrary remote execution, shared
+  working tree, federation, GUI, Obsidian authority, or production claims for
+  providers and physical remote machines without evidence.
+- Implementation note: production code is authorized only within this task;
+  the existing Link transport/session behavior remains unchanged.
+- Evidence: `docs/evidence/speculative-coordination-real-cli-2026-07-23/report.md`;
+  real coordinator plus Supervisor A/B OS processes passed the complete flow.
 
 ## SYN-001
 

@@ -1,0 +1,7 @@
+*   13f7853 (HEAD -> synesis-demo-a-6858b06c08f44cd1a354e9a9b92f263c) Integrate prediction implementation
+|\
+| * 8c6fcab (synesis-demo-b-e9ecd34ab9a9437599d0749ff04c8fbd) Implement prediction status capability
+|/
+* 9c23120 (origin/master, master) Fix generated Antigravity hook wrapper
+* cb46013 Record durable installation and Antigravity state
+* 79ef898 Replace versioned installation with stable flat layout

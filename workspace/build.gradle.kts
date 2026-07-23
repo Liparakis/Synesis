@@ -16,6 +16,7 @@ java {
 dependencies {
     implementation(project(":link"))
     implementation(project(":project-record"))
+    implementation(project(":coordination"))
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

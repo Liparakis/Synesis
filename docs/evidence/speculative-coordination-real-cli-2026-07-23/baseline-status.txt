@@ -1,0 +1,35 @@
+ M build.gradle.kts
+ M cli/build.gradle.kts
+ M cli/src/main/java/org/synesis/cli/SynesisCli.java
+ M docs/agent/CURRENT.md
+ M docs/agent/DEFERRED.md
+ M docs/agent/GOAL.md
+ M docs/agent/NEXT_SESSION.md
+ M docs/agent/SESSION_LOG.md
+ M docs/agent/STATE.md
+ M docs/agent/TASKS.md
+ M docs/agent/TEST_MATRIX.md
+ M settings.gradle.kts
+ M workspace/build.gradle.kts
+ M workspace/src/main/java/org/synesis/workspace/guardrail/ActionGuardrail.java
+ M workspace/src/main/java/org/synesis/workspace/integration/antigravity/AntigravityHookAdapter.java
+ M workspace/src/main/java/org/synesis/workspace/integration/claude/ClaudeCodeHookAdapter.java
+?? cli/src/main/java/org/synesis/cli/command/CoordinationDemoCommand.java
+?? coordination/
+?? docs/adr/0027-speculative-capability-coordination.md
+?? docs/agent/checkpoints/CP-0135.md
+?? docs/agent/checkpoints/CP-0136.md
+?? docs/agent/checkpoints/CP-0137.md
+?? docs/agent/checkpoints/CP-0138.md
+?? docs/agent/checkpoints/CP-0139.md
+?? docs/agent/checkpoints/CP-0140.md
+?? docs/agent/checkpoints/CP-0141.md
+?? docs/agent/checkpoints/CP-0142.md
+?? docs/agent/checkpoints/CP-0143.md
+?? docs/architecture/speculation-state-machines.md
+?? docs/architecture/speculative-capability-coordination.md
+?? docs/architecture/supervisor-coordination-protocol.md
+?? docs/evidence/speculative-coordination-real-cli-2026-07-23/
+?? docs/plans/
+?? scripts/run-speculative-coordination-real.ps1
+?? workspace/gradle.lockfile

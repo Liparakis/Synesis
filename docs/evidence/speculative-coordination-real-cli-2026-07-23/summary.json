@@ -1,0 +1,23 @@
+{
+    "demoRoot":  "C:\\synesis-demo10",
+    "project":  "6c788d72-cfbd-47e6-834b-6d2badb2d869",
+    "nodeA":  "sl1-80600acd324dceedf8117b71d6e87c50f8debdf38e6a436c61b2b005fc242e6a",
+    "nodeB":  "sl1-cf329808a94088df89ff1889318fabbe8beda0bb90aed29ef5cfb9efba028aad",
+    "branchA":  "synesis-demo-a-6858b06c08f44cd1a354e9a9b92f263c",
+    "branchB":  "synesis-demo-b-e9ecd34ab9a9437599d0749ff04c8fbd",
+    "endpoint":  "http://127.0.0.1:48125/",
+    "coordinatorPid":  41620,
+    "supervisorBPid":  32060,
+    "supervisorAFirstPid":  13636,
+    "supervisorAResumePid":  41872,
+    "coordinatorStarted":  "2026-07-23T15:59:49.0960830Z",
+    "supervisorBStarted":  "2026-07-23T15:59:50.7804944Z",
+    "supervisorAFirstStarted":  "2026-07-23T15:59:50.8351920Z",
+    "supervisorAResumeStarted":  "2026-07-23T15:59:53.8862825Z",
+    "profileA":  "C:\\synesis-demo10\\profile-a",
+    "profileB":  "C:\\synesis-demo10\\profile-b",
+    "worktreeA":  "C:\\synesis-demo10\\worktree-a",
+    "worktreeB":  "C:\\synesis-demo10\\worktree-b",
+    "initialCursorA":  0,
+    "initialCursorB":  0
+}

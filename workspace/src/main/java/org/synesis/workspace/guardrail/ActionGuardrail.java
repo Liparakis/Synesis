@@ -9,6 +9,7 @@ import org.synesis.projectrecord.DecisionRecord;
 import org.synesis.projectrecord.DecisionStore;
 import org.synesis.projectrecord.ProjectConfig;
 import org.synesis.projectrecord.ProjectConstraint;
+import org.synesis.coordination.OwnershipRegistry;
 
 /**
  * Harness-neutral action guardrail evaluator.
@@ -36,6 +37,8 @@ public final class ActionGuardrail {
          * Operation matches a BLOCK constraint.
          */
         BLOCKED,
+        /** Operation is directed to another node's semantic capability owner. */
+        REQUEST_OWNER,
         /**
          * Operation is unsupported for guardrail validation.
          */
@@ -151,5 +154,30 @@ public final class ActionGuardrail {
         }
 
         return new Response(Outcome.ALLOWED, null, null, "Allowed");
+    }
+
+    /**
+     * Evaluates project policy first, then applies semantic ownership without
+     * ever mutating the ownership registry.
+     * @param profile workspace profile directory
+     * @param request evaluation request
+     * @param ownership semantic ownership view
+     * @param requesterNodeId authenticated requester node
+     * @return policy or ownership response
+     */
+    public static Response evaluate(Path profile, Request request, OwnershipRegistry ownership,
+            String requesterNodeId) {
+        Response policy = evaluate(profile, request);
+        if (policy.outcome() != Outcome.ALLOWED && policy.outcome() != Outcome.WARNING) return policy;
+        String capability = request.description() != null && request.description().startsWith("capability=")
+                ? request.description().substring("capability=".length()).trim() : request.toolName();
+        OwnershipRegistry.Decision decision = ownership.evaluate(capability, requesterNodeId);
+        if (decision.result() == OwnershipRegistry.Result.REQUEST_OWNER) {
+            String message = "REQUEST_OWNER capability=" + capability + " ownerNode="
+                    + decision.owner().nodeId() + " ownerSupervisor=" + decision.owner().supervisorId()
+                    + " intentVersion=" + decision.owner().intentVersion();
+            return new Response(Outcome.REQUEST_OWNER, null, policy.warningConstraint(), message);
+        }
+        return policy;
     }
 }

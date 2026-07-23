@@ -11,6 +11,7 @@ import java.util.Objects;
 
 import org.synesis.workspace.guardrail.ActionGuardrail;
 import org.synesis.workspace.guardrail.ProjectPathResolver;
+import org.synesis.coordination.OwnershipRegistry;
 
 /**
  * Pre-action hook adapter translating official Claude Code PreToolUse hook events
@@ -24,6 +25,8 @@ import org.synesis.workspace.guardrail.ProjectPathResolver;
 public final class ClaudeCodeHookAdapter {
 
     private final Path profile;
+    private final OwnershipRegistry ownership;
+    private final String requesterNodeId;
 
     /**
      * Constructs a Claude Code hook adapter bound to a specific workspace profile.
@@ -31,9 +34,21 @@ public final class ClaudeCodeHookAdapter {
      * @param profile path to workspace profile directory
      */
     public ClaudeCodeHookAdapter(Path profile) {
+        this(profile, null, null);
+    }
+
+    /**
+     * Constructs an adapter with optional semantic ownership enforcement.
+     * @param profile workspace profile directory
+     * @param ownership ownership view, or null to use policy-only behavior
+     * @param requesterNodeId authenticated requester node, required with ownership
+     */
+    public ClaudeCodeHookAdapter(Path profile, OwnershipRegistry ownership, String requesterNodeId) {
         this.profile = Objects.requireNonNull(profile, "profile")
                 .toAbsolutePath()
                 .normalize();
+        this.ownership = ownership;
+        this.requesterNodeId = requesterNodeId;
     }
 
     /**
@@ -52,6 +67,8 @@ public final class ClaudeCodeHookAdapter {
          * Operation is blocked by an active constraint.
          */
         BLOCKED,
+        /** Operation must stop and request the semantic owner. */
+        REQUEST_OWNER,
         /**
          * Operation is an unsupported tool/action.
          */
@@ -162,8 +179,11 @@ public final class ClaudeCodeHookAdapter {
                 "Allowed");
         for (String relPath : normalizedRelativePaths) {
             ActionGuardrail.Request req = new ActionGuardrail.Request(projectRoot, relPath, toolName, null);
-            ActionGuardrail.Response resp = ActionGuardrail.evaluate(profile, req);
+            ActionGuardrail.Response resp = ownership == null ? ActionGuardrail.evaluate(profile, req)
+                    : ActionGuardrail.evaluate(profile, req, ownership, requesterNodeId);
             if (resp.outcome() == ActionGuardrail.Outcome.BLOCKED) {
+                finalResponse = resp;
+            } else if (resp.outcome() == ActionGuardrail.Outcome.REQUEST_OWNER) {
                 finalResponse = resp;
                 break;
             } else if (resp.outcome() == ActionGuardrail.Outcome.WARNING
@@ -177,6 +197,7 @@ public final class ClaudeCodeHookAdapter {
 
         return switch (finalResponse.outcome()) {
             case BLOCKED -> new Result(Outcome.BLOCKED, denyJson(finalResponse.message()), finalResponse.message());
+            case REQUEST_OWNER -> new Result(Outcome.REQUEST_OWNER, denyJson(finalResponse.message()), finalResponse.message());
             case WARNING -> {
                 String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE="
                         + (finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()

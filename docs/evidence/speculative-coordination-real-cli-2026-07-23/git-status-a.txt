@@ -1,0 +1,11 @@
+ M build.gradle.kts
+ M cli/build.gradle.kts
+ M cli/src/main/java/org/synesis/cli/SynesisCli.java
+ M settings.gradle.kts
+ M workspace/build.gradle.kts
+ M workspace/src/main/java/org/synesis/workspace/guardrail/ActionGuardrail.java
+ M workspace/src/main/java/org/synesis/workspace/integration/antigravity/AntigravityHookAdapter.java
+ M workspace/src/main/java/org/synesis/workspace/integration/claude/ClaudeCodeHookAdapter.java
+?? cli/src/main/java/org/synesis/cli/command/CoordinationDemoCommand.java
+?? coordination/
+?? workspace/gradle.lockfile

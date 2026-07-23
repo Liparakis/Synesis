@@ -7,8 +7,8 @@ SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
   DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
   SYN-010A is VERIFYING, SYN-010B is VERIFYING, SYN-011 is VERIFYING, and
-  SYN-009D is the only ACTIVE task at CP-0131;
-SYN-001 is DONE at
+  SYN-012 is the only ACTIVE task at CP-0144;
+SYN-009D is complete. SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
 implemented transport/session subproject. Public GitHub preview preparation has
@@ -19,6 +19,17 @@ SYN-010B has a reusable Go aggregation command and a workflow aggregation job.
 Matrix outputs are short-retention internal artifacts; the final job retains
 one 30-day `synesis-release-candidate` artifact and removes internal artifacts
 on ordinary writable-token runs. No GitHub Release was created.
+
+## SYN-012 implementation state
+
+The coordination vertical slice is verified at CP-0144: bounded prediction
+contracts, signed command envelopes, coordinator-signed hash-chained event
+files, deterministic lifecycle projection, durable command idempotency,
+loopback HTTP commands, replayable SSE subscriptions, isolated speculation
+worktrees, provider REQUEST_OWNER enforcement, and a real two-process CLI
+acceptance run. Existing Link and provider behavior remain unchanged.
+Architecture and state-machine documents are under
+`docs/architecture/`; ADR-0027 records the bounded MVP decision.
 
 ## Implementation state
 

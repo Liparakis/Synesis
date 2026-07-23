@@ -457,7 +457,7 @@ permanent scope decision and record the reason.
 
 ## SL-D-023 â€” Production Synesis cooperation semantics
 
-**Status:** DEFERRED
+**Status:** SUPERSEDED
 **Area:** Application semantics
 **Current verified capability:** CP-R4 adds configured peer authorization,
 bounded one-shot decision publish/sync, deterministic outcomes, and conflict
@@ -480,14 +480,14 @@ slice requires a new explicit task, authority model, and failure evidence.
 **Privacy questions:** Project/task data and participant visibility.
 **Operational questions:** Recovery, ownership, and audit.
 **Public-claims impact:** Demo messages are not production agent cooperation.
-**Superseded by:** SYN-001 CP-R4 completion; broader CAF work remains deferred.
-**Potential future task:** A new explicitly activated CAF task after CP-R4.
+**Superseded by:** SYN-012 activation at CP-0135; broader CAF work remains deferred.
+**Potential future task:** SYN-012 speculative capability coordination MVP.
 **Related ADRs:** ADR-0006, ADR-0011
 **Related documents:** `docs/agent/CONTRACT.md`, `docs/demo/FIRST_DEMO.md`,
 `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`
 **Code extension seams:** No background or broader CAF behavior is activated;
 future slices must add explicit tasks and evidence.
-**Last reviewed:** 2026-07-21 CP-R4 completion
+**Last reviewed:** 2026-07-23 CP-0144 completion
 
 ## SL-D-028 — CP-R5 physical decision-record transfer claim
 

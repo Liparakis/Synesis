@@ -11,6 +11,7 @@ import java.util.Objects;
 
 import org.synesis.workspace.guardrail.ActionGuardrail;
 import org.synesis.workspace.guardrail.ProjectPathResolver;
+import org.synesis.coordination.OwnershipRegistry;
 
 /**
  * Pre-action hook adapter translating Google Antigravity PreToolUse hook events
@@ -24,6 +25,8 @@ import org.synesis.workspace.guardrail.ProjectPathResolver;
 public final class AntigravityHookAdapter {
 
     private final Path profile;
+    private final OwnershipRegistry ownership;
+    private final String requesterNodeId;
 
     /**
      * Outcome classification of the adapter check.
@@ -35,6 +38,8 @@ public final class AntigravityHookAdapter {
         WARNING,
         /** Operation is blocked by an active constraint (deny). */
         BLOCKED,
+        /** Operation must stop and request the semantic owner. */
+        REQUEST_OWNER,
         /** Operation is an unsupported tool/action. */
         UNSUPPORTED,
         /** Event JSON or path format is invalid. */
@@ -57,7 +62,19 @@ public final class AntigravityHookAdapter {
      * @param profile path to workspace profile directory
      */
     public AntigravityHookAdapter(Path profile) {
+        this(profile, null, null);
+    }
+
+    /**
+     * Constructs an adapter with optional semantic ownership enforcement.
+     * @param profile workspace profile directory
+     * @param ownership ownership view, or null to use policy-only behavior
+     * @param requesterNodeId authenticated requester node, required with ownership
+     */
+    public AntigravityHookAdapter(Path profile, OwnershipRegistry ownership, String requesterNodeId) {
         this.profile = Objects.requireNonNull(profile, "profile").toAbsolutePath().normalize();
+        this.ownership = ownership;
+        this.requesterNodeId = requesterNodeId;
     }
 
     /**
@@ -127,10 +144,12 @@ public final class AntigravityHookAdapter {
         if (description == null) description = extractJsonField(json, "Instruction");
 
         ActionGuardrail.Request req = new ActionGuardrail.Request(projectRoot, relativePath, toolName, description);
-        ActionGuardrail.Response resp = ActionGuardrail.evaluate(profile, req);
+        ActionGuardrail.Response resp = ownership == null ? ActionGuardrail.evaluate(profile, req)
+                : ActionGuardrail.evaluate(profile, req, ownership, requesterNodeId);
 
         return switch (resp.outcome()) {
             case BLOCKED -> new Result(Outcome.BLOCKED, denyJson(resp.message()), resp.message());
+            case REQUEST_OWNER -> new Result(Outcome.REQUEST_OWNER, denyJson(resp.message()), resp.message());
             case WARNING -> {
                 String warningReason = "Synesis warning: An active project constraint applies to this file: "
                         + (resp.warningConstraint() != null ? resp.warningConstraint().title() : "Warning")
