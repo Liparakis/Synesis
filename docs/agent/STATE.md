@@ -7,7 +7,7 @@ SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
   DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
   SYN-010A is VERIFYING, SYN-010B is VERIFYING, SYN-011 is VERIFYING, and
-SYN-012 is the only ACTIVE task at CP-0146;
+SYN-012 is DONE at CP-0144 and SYN-013 is the only ACTIVE task at CP-0149;
 SYN-009D is complete. SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -31,6 +31,14 @@ subscriptions, isolated speculation worktrees, provider REQUEST_OWNER
 enforcement, and an external-project two-process CLI acceptance run. Existing
 Link and provider behavior remain unchanged. ADR-0027 records the bounded MVP
 and ADR-0028 records the public CLI/actor decision.
+
+## SYN-013 planning state
+
+The zero-touch architecture package is documentation-only. It selects a hidden
+project-local runtime/session manager over the existing loopback coordinator,
+per-session Git worktrees, and an explicit provider capability gate. Codex and
+Antigravity remain unready until trusted real workspace-transition and
+pre-mutation evidence exists. ADR-0029 records the decision.
 
 ## Implementation state
 

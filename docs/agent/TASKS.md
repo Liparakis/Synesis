@@ -357,7 +357,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-012
 - Priority: P0
 - Title: Public speculative capability coordination CLI
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Expose the bounded coordination MVP through the public `synesis`
   CLI for an external initialized project, including semantic ownership, live
   ordered events, capability prediction, logical actor authorization, isolated
@@ -387,6 +387,29 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Evidence: `docs/evidence/speculative-coordination-real-cli-2026-07-23/report.md`
   and `scripts/run-speculative-coordination-real.ps1`; an external project,
   coordinator, requester, owner, and supervisor CLI process passed the flow.
+
+## SYN-013
+
+- ID: SYN-013
+- Priority: P0
+- Title: Zero-touch autonomous harness collaboration plan
+- Status: ACTIVE
+- Purpose: Produce the implementation-ready architecture and staged delivery
+  plan for ambient Codex/Antigravity collaboration after one `synesis init`.
+- Dependencies: SYN-012 DONE at CP-0144; SYN-009B.1 and SYN-011 remain
+  VERIFYING; existing provider evidence and failed real-hook investigations.
+- Acceptance criteria: architecture, bootstrap protocol, workspace broker,
+  lifecycle, AGENTS.md contract, MVP plan, ADR, provider maturity, migration,
+  security/failure model, file map, acceptance script, and durable state are
+  reconciled; the plan explicitly gates release on real provider workspace
+  transition and mutation-interception evidence.
+- Required tests: documentation validators, deferred-register validation,
+  strict repository check, and plan consistency review. No production code is
+  permitted in this planning task.
+- Required documentation: the seven SYN-013 architecture/plan documents and
+  ADR-0029.
+- Scope boundary: no hidden runtime, provider behavior, worktree broker, or
+  autonomous coordination implementation in this task.
 
 ## SYN-001
 

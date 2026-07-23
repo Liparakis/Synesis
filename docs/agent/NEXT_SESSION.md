@@ -1,12 +1,12 @@
 # Next Session
 
-- Active task: SYN-012 (public CLI implementation; final verification pending)
+- Active task: SYN-013 (zero-touch autonomous harness collaboration plan)
 - Repository branch: master
-- Last checkpoint: CP-0144
+- Last checkpoint: CP-0149
 - Last passing command: `powershell -ExecutionPolicy Bypass -File scripts/run-speculative-coordination-real.ps1`
 - Last failing command: root `check` before the final Javadoc and public CLI fixes; rerun after checkpoint
-- Immediate next command: `.\gradlew.bat check --no-daemon`
-- Exact next documentation action: Record strict check, bundle reinstall, and installed external-project acceptance evidence, then close SYN-012 if all pass.
+- Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Exact next documentation action: Validate the planning package and checkpoint SYN-013; do not implement production runtime behavior in this task.
 - Unresolved limitations: native Linux/macOS PATH behavior is not executable
   on this Windows host; cross-platform Go tests and the documented reversible
   user-local profile policy are the available evidence.

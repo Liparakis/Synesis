@@ -521,6 +521,38 @@ claim is made.
 exchange; no new transport or protocol is implied.
 **Last reviewed:** 2026-07-21 CP-R4 closure.
 
+## SL-D-029 — Zero-touch provider workspace transition
+
+**Status:** DEFERRED
+**Area:** Provider automation and workspace isolation
+**Current verified capability:** Provider-local mutation adapters and detached
+speculation worktrees exist; the real Antigravity hook was not observed and
+Codex real trust/enforcement evidence is incomplete.
+**Missing capability:** Trusted proof that each supported harness can bootstrap
+or resume a session in its allocated worktree and intercept every supported
+mutation before it occurs.
+**Reason deferred:** Prompt instructions and synthetic hook tests cannot prove
+workspace routing or fail-closed enforcement.
+**Dependencies:** SYN-013 plan acceptance, provider-specific capability probes,
+and real harness evidence for both requester/owner directions.
+**Activation trigger:** A provider passes workspace-transition, mutation
+interception, safe-boundary injection, and recovery tests with sanitized
+evidence.
+**Evidence required before planning implementation:** Provider version and
+trust state, authenticated session/worktree binding, protected-file hash before
+and after attempted mutation, denial/reason delivery, and restart/replay proof.
+**Security questions:** Hook bypass, shell writes, profile/worktree escape,
+provider spoofing, and stale session authority.
+**Operational questions:** Hidden runtime lifecycle, crash recovery, orphan
+cleanup, and degraded read-only behavior.
+**Public-claims impact:** No zero-touch Codex or Antigravity claim until the
+provider gate passes.
+**Potential future task:** SYN-013 implementation slices after plan approval.
+**Related ADRs:** ADR-0029, ADR-0022, ADR-0019.
+**Related documents:** `docs/architecture/zero-touch-agent-collaboration.md`,
+`docs/architecture/autonomous-workspace-broker.md`.
+**Last reviewed:** 2026-07-24 CP-0147.
+
 ## SL-D-024 â€” CLI packaging, installation, and distribution
 
 **Status:** SUPERSEDED

@@ -972,3 +972,12 @@ Append-only operational history.
   workspace/CLI checks remain green.
 - Exact continuation: implement provider `REQUEST_OWNER` enforcement and a
   minimal foreground supervisor inbox before worktree speculation.
+# 2026-07-24 — SYN-013 activation and architecture plan
+
+- Closed SYN-012 against the recorded CP-0144 real CLI evidence and activated
+  SYN-013 as the sole ACTIVE task.
+- Added the zero-touch architecture package, explicit provider/workspace
+  capability gates, phased MVP plan, ADR-0029, and durable-state reconciliation.
+- No production code or runtime behavior changed.
+- Exact continuation: run the deferred-register validator, strict repository
+  check, and checkpoint validator; then create the documentation-only commit.

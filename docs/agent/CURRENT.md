@@ -2,27 +2,23 @@
 
 ## Identity
 
-- Task ID: SYN-012
+- Task ID: SYN-013
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0135
-- Latest checkpoint: CP-0146
-- Responsible agent: primary implementation engineer
-- Related decisions: ADR-0027
+- Started checkpoint: CP-0147
+- Latest checkpoint: CP-0149
+- Responsible agent: primary architecture engineer
+- Related decisions: ADR-0027, ADR-0028, ADR-0029
 
 ## Objective
 
-Expose the verified speculative-capability coordination slice as a usable
-public CLI: two independent local supervisors, one deterministic coordinator,
-semantic ownership, ordered live events with replay, capability prediction,
-logical actor authorization, isolated worktree/speculation metadata, and
-auditable retirement from an external project.
+Produce the implementation-ready plan for zero-touch autonomous harness
+collaboration after one `synesis init`, without changing production behavior.
 
 ## Immediate slice
 
-Complete the public command adapters, actor-bound authorization, external
-project acceptance harness, packaging smoke, and durable evidence. Do not
-change Link or provider behavior.
+Create and validate the architecture package, provider capability gates,
+worktree-transition decision, phased task map, and durable-state reconciliation.
 
 ## Evidence ledger
 
@@ -79,6 +75,5 @@ validator, and checkpoint evidence for the domain/event-store slice.
 
 ## Immediate next action
 
-Create the requested final commit `Expose speculative coordination CLI surface`
-after reviewing the strict-check, installed-bundle, and external-acceptance
-evidence.
+Run the deferred-register validator, strict repository check, and checkpoint
+validator after reviewing the new planning documents.
