@@ -171,9 +171,13 @@ public final class ProviderApplicationService {
                 values.put("SESSION_NODE_ID", binding.nodeId());
                 values.put("SESSION_TRUST", binding.worktreePath() == null ? "WORKSPACE_UNVERIFIED" : binding.providerTrustState());
                 values.put("SESSION_WORKSPACE", binding.worktreePath() == null ? "UNASSIGNED" : "ASSIGNED");
-                values.put("SESSION_INTERCEPTION", "UNPROVEN");
+                boolean hasEvidence = hasProvenInterception(location, provider, binding.sessionId());
+                values.put("SESSION_INTERCEPTION", hasEvidence ? "PROVEN" : "UNPROVEN");
                 values.put("ASSIGNED_WORKTREE", binding.worktreePath() == null ? "UNASSIGNED" : binding.worktreePath());
-                values.put("ACTIVE_WORKSPACE", "UNPROVEN");
+                values.put("ACTIVE_WORKSPACE", hasEvidence && binding.worktreePath() != null ? binding.worktreePath() : "UNPROVEN");
+                values.put("HOOK_INTERCEPTED", hasEvidence ? "true" : "false");
+                values.put("DECISION", hasEvidence ? "ALLOW" : "UNKNOWN");
+                values.put("MUTATION_WITHOUT_ALLOW_POSSIBLE", hasEvidence ? "false" : "true");
                 values.put("BRANCH", binding.branch() == null ? "UNASSIGNED" : binding.branch());
                 values.put("BASE_COMMIT", binding.baseCommit());
                 values.put("WORKTREE_BINDING_STATUS", "VERIFIED".equals(binding.verificationState()) ? "BOUND" : binding.creationState());
@@ -186,6 +190,26 @@ public final class ProviderApplicationService {
             values.put("SESSION_BINDING", "BROKEN");
         }
         return new ProviderResult(result.exitCode(), values);
+    }
+
+    private static boolean hasProvenInterception(ProjectApplicationService.ProjectLocation location, String provider, String sessionId) {
+        try {
+            Path dir = location.synesisDirectory().resolve("local").resolve("evidence").resolve(provider);
+            if (!Files.isDirectory(dir)) return false;
+            try (var paths = Files.list(dir)) {
+                for (Path path : paths.filter(p -> p.getFileName().toString().endsWith(".json")).toList()) {
+                    Object parsed = ProviderJson.parse(Files.readString(path));
+                    if (parsed instanceof Map<?, ?> map) {
+                        if (sessionId.equals(map.get("sessionId")) && Boolean.TRUE.equals(map.get("hookIntercepted"))
+                                && "ALLOW".equals(map.get("decision"))) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     /**

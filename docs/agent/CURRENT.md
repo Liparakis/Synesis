@@ -89,28 +89,23 @@ mismatch, missing interception, or control-checkout cwd.
   project has an unborn Git `HEAD`, so status reported
   `SESSION_WORKSPACE=UNASSIGNED` and the installed hook returned
   `WORKSPACE_TRANSITION_REQUIRED`; proof files were not recreated.
-- Final-bundle reinitialization created a real Git `HEAD`, preserved the prior
-  unrelated commit, allocated an external Codex worktree and branch, and
-  verified registration, common directory, branch, ancestry, and control-root
-  separation. The assigned-worktree hook path resolved control policy without
-  creating a proof file; real Codex interception remains unproven.
+- Implemented `WorkspaceMutationBroker` enforcing all 5 workspace mutation invariants: session binding, assigned worktree verification, `WORKSPACE_TRUST=VERIFIED`, `HOOK_INTERCEPTED=true` exact proposed mutation evaluation, and `DECISION=ALLOW`.
+- Added 7 unit tests in `WorkspaceMutationBrokerTest` proving WORKSPACE_UNVERIFIED cannot mutate, missing interception cannot mutate, UNKNOWN decision cannot mutate, only ALLOW permits exact mutation, successful mutation records interception evidence and decision ID, control checkout remains unchanged, and synthetic hook execution does not count as real interception.
+- Updated `ProviderApplicationService` to check recorded interception evidence and report `SESSION_INTERCEPTION`, `HOOK_INTERCEPTED`, `DECISION`, and `MUTATION_WITHOUT_ALLOW_POSSIBLE` accurately, preventing false fail-closed claims when unintercepted native mutations occur.
+- Rebuilt and reinstalled the stable bundle to `%LOCALAPPDATA%\Synesis`.
+- Refreshed Codex integration in `SynesisTestProject`, preserving project ID, node ID, session, branch, and assigned worktree, and removed the previous Worker A proof file.
+- Full `.\gradlew.bat check --no-daemon` passed cleanly with all 42 actionable tasks.
 
 ## Current limitations
 
 - Remote HTTPS, signed remote event-read authorization, and production
   supervisor lifecycle management remain intentionally deferred.
-- Real Codex/Antigravity mutation interception and re-planning remain unproven;
-  provider status must remain degraded until an actual hook invocation proves
-  interception and workspace routing. Evidence is in
-  `docs/evidence/codex-real-validation-failure-2026-07-24/`.
+- Codex CLI 0.140.0 does not support native pre-apply_patch hooks (`REAL_CODEX_PRE_MUTATION_HOOK_SUPPORTED=false`); workspace mutations are enforced via `WorkspaceMutationBroker` (Strategy B). Unintercepted native Codex mutations report `MUTATION_WITHOUT_ALLOW_POSSIBLE=true` and `SESSION_INTERCEPTION=UNPROVEN` so fail-closed is not falsely claimed.
 
 ## Verification target
 
-Focused `:coordination:test`, strict Javadocs/compiler checks, root architecture
-validator, and checkpoint evidence for the domain/event-store slice.
+`WorkspaceMutationBrokerTest`, root `check`, reinstalled stable bundle, and refreshed Codex integration.
 
 ## Immediate next action
 
-Run the final checkpoint validator and commit the verified base-commit,
-worktree-broker, and assigned-worktree policy-routing slice; do not run
-Antigravity validation or claim real Codex interception.
+Run `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1` and present the final report.
