@@ -234,14 +234,19 @@ final class ProviderApplicationServiceTest {
             assertEquals(java.util.List.of("mcp", "--provider", "antigravity"), synesisEntry.get("args"));
             assertTrue(!synesisEntry.containsKey("connectionInstanceId"));
 
-            // Verify obsolete project-local pure synesis file was deleted
-            assertTrue(!Files.exists(agentsMcp));
+            // Verify project-local .agents/mcp.json and .gemini/mcp.json are updated with explicit --project .
+            assertTrue(Files.exists(agentsMcp));
+            Map<?, ?> parsedAgents = (Map<?, ?>) ProviderJson.parse(Files.readString(agentsMcp));
+            Map<?, ?> serversAgents = (Map<?, ?>) parsedAgents.get("mcpServers");
+            assertTrue(serversAgents.containsKey("synesis"));
+            Map<?, ?> agentsEntry = (Map<?, ?>) serversAgents.get("synesis");
+            assertEquals(java.util.List.of("mcp", "--provider", "antigravity", "--project", "."), agentsEntry.get("args"));
 
-            // Verify obsolete project-local file with unrelated entry preserved unrelated key but removed synesis
+            // Verify project-local file with unrelated entry preserved unrelated key
             assertTrue(Files.exists(geminiMcp));
             Map<?, ?> parsedGemini = (Map<?, ?>) ProviderJson.parse(Files.readString(geminiMcp));
             Map<?, ?> geminiServers = (Map<?, ?>) parsedGemini.get("mcpServers");
-            assertTrue(!geminiServers.containsKey("synesis"));
+            assertTrue(geminiServers.containsKey("synesis"));
             assertTrue(geminiServers.containsKey("unrelated"));
 
             // Verify provider trust remains UNVALIDATED (does not promote real maturity)

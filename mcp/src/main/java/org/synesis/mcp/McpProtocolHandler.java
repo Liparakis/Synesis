@@ -154,44 +154,75 @@ public final class McpProtocolHandler {
     }
 
     /**
-     * Extracts candidate workspace project root paths from MCP {@code initialize} request parameters.
+     * Extracts candidate workspace project root paths from MCP {@code initialize} request parameters,
+     * provider environment variables, and process working directory.
      *
      * @param params JSON-RPC initialize request params map
      * @return list of parsed candidate paths
      */
     public List<Path> extractCandidateRoots(Map<String, Object> params) {
         List<Path> candidates = new java.util.ArrayList<>();
-        if (params == null) {
-            return candidates;
-        }
 
-        if (params.get("rootUri") instanceof String rootUriStr) {
-            Path p = parseUriOrPath(rootUriStr);
-            if (p != null && !candidates.contains(p)) {
-                candidates.add(p);
+        if (params != null) {
+            if (params.get("rootUri") instanceof String rootUriStr) {
+                Path p = parseUriOrPath(rootUriStr);
+                if (p != null && !candidates.contains(p)) {
+                    candidates.add(p);
+                }
             }
-        }
 
-        if (params.get("workspaceFolders") instanceof List<?> folders) {
-            for (Object item : folders) {
-                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
-                    Path p = parseUriOrPath(uriStr);
-                    if (p != null && !candidates.contains(p)) {
-                        candidates.add(p);
+            if (params.get("workspaceFolders") instanceof List<?> folders) {
+                for (Object item : folders) {
+                    if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
+                        Path p = parseUriOrPath(uriStr);
+                        if (p != null && !candidates.contains(p)) {
+                            candidates.add(p);
+                        }
+                    }
+                }
+            }
+
+            if (params.get("roots") instanceof List<?> rootsList) {
+                for (Object item : rootsList) {
+                    if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
+                        Path p = parseUriOrPath(uriStr);
+                        if (p != null && !candidates.contains(p)) {
+                            candidates.add(p);
+                        }
                     }
                 }
             }
         }
 
-        if (params.get("roots") instanceof List<?> rootsList) {
-            for (Object item : rootsList) {
-                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
-                    Path p = parseUriOrPath(uriStr);
-                    if (p != null && !candidates.contains(p)) {
-                        candidates.add(p);
-                    }
+        // Environment variables inspection
+        String[] envKeys = {
+            "WORKSPACE_ROOT", "WORKSPACE_FOLDER", "WORKSPACE_DIR",
+            "PROJECT_ROOT", "PROJECT_DIR",
+            "GEMINI_WORKSPACE", "ANTIGRAVITY_WORKSPACE", "ANTIGRAVITY_PROJECT",
+            "VSCODE_WORKSPACE_FOLDER", "INIT_CWD", "PWD"
+        };
+        for (String envKey : envKeys) {
+            String envVal = System.getenv(envKey);
+            if (envVal != null && !envVal.isBlank()) {
+                Path p = parseUriOrPath(envVal);
+                if (p != null && !candidates.contains(p)) {
+                    candidates.add(p);
                 }
             }
+        }
+
+        // Explicit initial project root (e.g. --project argument)
+        if (initialProjectRoot != null && !candidates.contains(initialProjectRoot)) {
+            candidates.add(initialProjectRoot.toAbsolutePath().normalize());
+        }
+
+        // Current working directory
+        try {
+            Path cwd = Path.of(".").toAbsolutePath().normalize();
+            if (!candidates.contains(cwd)) {
+                candidates.add(cwd);
+            }
+        } catch (Exception ignored) {
         }
 
         return candidates;
@@ -208,6 +239,11 @@ public final class McpProtocolHandler {
             return null;
         }
         String trimmed = input.trim();
+        try {
+            trimmed = java.net.URLDecoder.decode(trimmed, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+        }
+
         if (trimmed.startsWith("file:")) {
             try {
                 return Path.of(java.net.URI.create(trimmed)).toAbsolutePath().normalize();
@@ -219,7 +255,12 @@ public final class McpProtocolHandler {
                 return Path.of(raw).toAbsolutePath().normalize();
             }
         }
-        return Path.of(trimmed).toAbsolutePath().normalize();
+
+        try {
+            return Path.of(trimmed).toAbsolutePath().normalize();
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     /**
@@ -234,12 +275,18 @@ public final class McpProtocolHandler {
         }
 
         List<Path> initializedRoots = new java.util.ArrayList<>();
+        String userHome = System.getProperty("user.home");
+        Path homePath = (userHome != null && !userHome.isBlank()) ? Path.of(userHome).toAbsolutePath().normalize() : null;
+
         for (Path candidate : candidates) {
             try {
                 Path normalized = candidate.toAbsolutePath().normalize();
                 String normStr = normalized.toString().replace('\\', '/');
                 if (normStr.contains("/.synesis/local/worktrees/")) {
                     continue; // Reject assigned worktree path as control project root
+                }
+                if (homePath != null && normalized.equals(homePath)) {
+                    continue; // Reject user home directory as control project root
                 }
                 if (java.nio.file.Files.exists(normalized.resolve(".synesis/project.json"))) {
                     if (!initializedRoots.contains(normalized)) {
