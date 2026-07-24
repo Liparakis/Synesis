@@ -357,7 +357,7 @@ final class NettySessionHandshake {
                 }
                 state.session = session;
                 NettyControlStream control = NettyControlStream.create(session, state.result,
-                        () -> state.controlClaimed.set(true), state.livenessConfiguration, state.applicationHandler);
+                        () -> state.controlClaimed.set(true), state.livenessConfiguration);
                 context.pipeline()
                         .replace(this, "synesis-control", control);
                 control.channelActive(context);

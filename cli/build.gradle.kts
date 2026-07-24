@@ -133,7 +133,10 @@ val runtimeImage = tasks.register("runtimeImage") {
     dependsOn(tasks.installDist)
     outputs.dir(runtimeImageDirectory)
     doLast {
-        val javaHome = File(System.getProperty("java.home"))
+        val javaToolchains = project.extensions.getByType<JavaToolchainService>()
+        val javaHome = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        }.get().metadata.installationPath.asFile
         val jlink = javaHome.resolve("bin").resolve(if (isWindows) "jlink.exe" else "jlink")
         val jmods = javaHome.resolve("jmods")
         require(jlink.isFile) { "jlink not found: $jlink" }

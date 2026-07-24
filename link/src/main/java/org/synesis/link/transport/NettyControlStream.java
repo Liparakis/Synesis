@@ -24,18 +24,20 @@ import org.synesis.link.demo.DemoWorkResult;
 import org.synesis.link.session.HandshakeException;
 import org.synesis.link.session.HandshakeFailureCode;
 import org.synesis.link.session.LivenessConfiguration;
+import org.synesis.link.session.LivenessEventDispatcher;
 import org.synesis.link.session.LivenessListener;
 import org.synesis.link.session.LivenessMetrics;
+import org.synesis.link.session.LivenessScheduler;
 import org.synesis.link.session.LivenessState;
+import org.synesis.link.session.LivenessTracker;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
 
 /**
  * Internal bounded control-stream owner, heartbeat loop, and close state machine.
  */
-final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
-        implements PeerSession.ControlBinding, PeerSession.DemoWorkBinding,
-        PeerSession.ApplicationStreamBinding {
+final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf> implements PeerSession.ControlBinding,
+        PeerSession.DemoWorkBinding, PeerSession.ApplicationStreamBinding {
 
     static final int MAX_CLOSE_MILLIS = 2_000;
     private static final int READY_BYTES = 20;
@@ -46,7 +48,6 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     private final Runnable claim;
     private final UUID sessionId;
     private final LivenessConfiguration livenessConfiguration;
-    private final PeerSession.ApplicationStreamHandler applicationHandler;
     private final AtomicBoolean ready = new AtomicBoolean();
     private final AtomicBoolean goodbyeSent = new AtomicBoolean();
     private final AtomicBoolean terminalOnce = new AtomicBoolean();
@@ -63,31 +64,22 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     private long highestReceivedSequence = -1;
     private long lastHeartbeatMarker;
 
-    private NettyControlStream(PeerSession session, CompletableFuture<PeerSession> established,
-            Runnable claim, LivenessConfiguration livenessConfiguration,
-            PeerSession.ApplicationStreamHandler applicationHandler) {
+    private NettyControlStream(PeerSession session,
+            CompletableFuture<PeerSession> established,
+            Runnable claim,
+            LivenessConfiguration livenessConfiguration) {
         this.session = session;
         this.established = established;
         this.claim = claim;
         this.sessionId = session.sessionId();
         this.livenessConfiguration = livenessConfiguration;
-        this.applicationHandler = applicationHandler;
     }
 
-    static NettyControlStream create(PeerSession session, CompletableFuture<PeerSession> established,
-            Runnable claim) {
-        return create(session, established, claim, LivenessConfiguration.DEFAULT);
-    }
-
-    static NettyControlStream create(PeerSession session, CompletableFuture<PeerSession> established,
-            Runnable claim, LivenessConfiguration livenessConfiguration) {
-        return create(session, established, claim, livenessConfiguration, null);
-    }
-
-    static NettyControlStream create(PeerSession session, CompletableFuture<PeerSession> established,
-            Runnable claim, LivenessConfiguration livenessConfiguration,
-            PeerSession.ApplicationStreamHandler applicationHandler) {
-        return new NettyControlStream(session, established, claim, livenessConfiguration, applicationHandler);
+    static NettyControlStream create(PeerSession session,
+            CompletableFuture<PeerSession> established,
+            Runnable claim,
+            LivenessConfiguration livenessConfiguration) {
+        return new NettyControlStream(session, established, claim, livenessConfiguration);
     }
 
     private static byte[] readBytes(ByteBuf message) {
@@ -144,22 +136,20 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     private void startLiveness() {
         LivenessScheduler scheduler = (action, delay) -> {
             java.util.concurrent.ScheduledFuture<?> future = context.executor()
-                    .schedule(action,
-                            delay.toNanos(), TimeUnit.NANOSECONDS);
+                    .schedule(action, delay.toNanos(), TimeUnit.NANOSECONDS);
             return () -> future.cancel(false);
         };
-        liveness = new LivenessTracker(livenessConfiguration, System::nanoTime, scheduler,
-                new LivenessTracker.Sink() {
-                    @Override
-                    public void heartbeatDue() {
-                        sendHeartbeat();
-                    }
+        liveness = new LivenessTracker(livenessConfiguration, System::nanoTime, scheduler, new LivenessTracker.Sink() {
+            @Override
+            public void heartbeatDue() {
+                sendHeartbeat();
+            }
 
-                    @Override
-                    public void expired() {
-                        expireFromLiveness();
-                    }
-                }, null, events);
+            @Override
+            public void expired() {
+                expireFromLiveness();
+            }
+        }, null, events);
         liveness.start();
     }
 
@@ -170,8 +160,7 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
                 protocolFailure(ControlErrorCode.INVALID_HEARTBEAT);
                 return;
             }
-            if (heartbeat.sequence() > highestReceivedSequence + 1
-                    && highestReceivedSequence != Long.MAX_VALUE) {
+            if (heartbeat.sequence() > highestReceivedSequence + 1 && highestReceivedSequence != Long.MAX_VALUE) {
                 protocolFailure(ControlErrorCode.INVALID_HEARTBEAT);
                 return;
             }
@@ -186,7 +175,9 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
                 }
             }
             write(ControlFrame.of(ControlMessageType.HEARTBEAT_ACK,
-                    HeartbeatMessage.acknowledgement(sessionId, heartbeat.sequence(), highestReceivedSequence,
+                    HeartbeatMessage.acknowledgement(sessionId,
+                                    heartbeat.sequence(),
+                                    highestReceivedSequence,
                                     heartbeat.marker())
                             .encoded()));
         } catch (IllegalArgumentException exception) {
@@ -338,8 +329,7 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     @Override
     public CompletionStage<DemoWorkResult> request(DemoWorkRequest request) {
         if (!isReady() || terminal.isDone()) {
-            return CompletableFuture.failedFuture(new IllegalStateException(
-                    "demo work requires a live control stream"));
+            return CompletableFuture.failedFuture(new IllegalStateException("demo work requires a live control stream"));
         }
         return DemoWorkTransport.open(context, request, activeDemoStreams);
     }
@@ -404,8 +394,8 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
 
     @Override
     public LivenessMetrics livenessMetrics() {
-        return liveness == null ? new LivenessMetrics(0, 0, 0, 0, 0,
-                Duration.ZERO, Duration.ZERO, 0, 0, 0, 0, 0) : liveness.metrics();
+        return liveness == null ? new LivenessMetrics(0, 0, 0, 0, 0, Duration.ZERO, Duration.ZERO, 0, 0, 0, 0, 0)
+                : liveness.metrics();
     }
 
     @Override
@@ -512,12 +502,17 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
      */
     private static final class EventDispatcher implements LivenessEventDispatcher {
 
-        private final ThreadPoolExecutor executor = new ThreadPoolExecutor(0, 1, 1, TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(32), runnable -> {
-            Thread thread = new Thread(runnable, "synesis-link-liveness");
-            thread.setDaemon(true);
-            return thread;
-        }, new ThreadPoolExecutor.AbortPolicy());
+        private final ThreadPoolExecutor executor = new ThreadPoolExecutor(0,
+                1,
+                1,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(32),
+                runnable -> {
+                    Thread thread = new Thread(runnable, "synesis-link-liveness");
+                    thread.setDaemon(true);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy());
 
         @Override
         public boolean dispatch(Runnable action) {

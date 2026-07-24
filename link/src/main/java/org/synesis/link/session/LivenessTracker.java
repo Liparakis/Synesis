@@ -6,12 +6,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import org.synesis.link.session.LivenessConfiguration;
-import org.synesis.link.session.LivenessListener;
-import org.synesis.link.session.LivenessMetrics;
-import org.synesis.link.session.LivenessState;
-import org.synesis.link.session.LivenessTransition;
-
 /**
  * Small synchronized liveness state machine with one one-shot schedule.
  *
@@ -20,7 +14,7 @@ import org.synesis.link.session.LivenessTransition;
  * Delayed callbacks derive state from elapsed monotonic time, so scheduler
  * pauses cannot leave an expired session in SUSPECT.</p>
  */
-final class LivenessTracker {
+public final class LivenessTracker {
 
     private final LivenessConfiguration configuration;
     private final MonotonicClock clock;
@@ -44,6 +38,7 @@ final class LivenessTracker {
     private long terminalTransitions;
     private long dropped;
     private long rttNanos;
+
     LivenessTracker(LivenessConfiguration configuration, MonotonicClock clock,
             LivenessScheduler scheduler, Runnable heartbeat, Runnable expiry,
             Consumer<LivenessTransition> event, Function<Runnable, Boolean> dispatch) {
@@ -57,10 +52,20 @@ final class LivenessTracker {
             public void expired() {
                 expiry.run();
             }
-        }, event, action -> dispatch.apply(action));
+        }, event, dispatch::apply);
     }
 
-    LivenessTracker(LivenessConfiguration configuration, MonotonicClock clock,
+    /**
+     * Creates a new liveness tracker.
+     *
+     * @param configuration liveness configuration parameters
+     * @param clock         monotonic time source
+     * @param scheduler     liveness scheduler
+     * @param sink          liveness sink callbacks
+     * @param event         optional transition consumer
+     * @param dispatcher    event dispatcher
+     */
+    public LivenessTracker(LivenessConfiguration configuration, MonotonicClock clock,
             LivenessScheduler scheduler, Sink sink, Consumer<LivenessTransition> event,
             LivenessEventDispatcher dispatcher) {
         this.configuration = configuration;
@@ -79,7 +84,10 @@ final class LivenessTracker {
                 || value == LivenessState.FAILED;
     }
 
-    void start() {
+    /**
+     * Starts tracking session liveness.
+     */
+    public void start() {
         LivenessTransition transition;
         synchronized (lock) {
             if (running || state != LivenessState.CONNECTING) {
@@ -93,7 +101,10 @@ final class LivenessTracker {
         emit(transition);
     }
 
-    void validPeerActivity() {
+    /**
+     * Records valid peer activity.
+     */
+    public void validPeerActivity() {
         LivenessTransition transition = null;
         synchronized (lock) {
             if (!running || isTerminal(state)) {
@@ -109,7 +120,12 @@ final class LivenessTracker {
         }
     }
 
-    void stop(LivenessState terminal) {
+    /**
+     * Stops tracking session liveness and transitions to a terminal state.
+     *
+     * @param terminal terminal liveness state
+     */
+    public void stop(LivenessState terminal) {
         LivenessTransition transition;
         synchronized (lock) {
             if (isTerminal(state)) {
@@ -128,7 +144,12 @@ final class LivenessTracker {
         emit(transition);
     }
 
-    void addListener(LivenessListener listener) {
+    /**
+     * Adds a listener for liveness state transitions.
+     *
+     * @param listener liveness transition listener
+     */
+    public void addListener(LivenessListener listener) {
         if (listener == null) {
             throw new NullPointerException("listener");
         }
@@ -139,17 +160,30 @@ final class LivenessTracker {
         }
     }
 
-    void removeListener(LivenessListener listener) {
+    /**
+     * Removes a listener for liveness state transitions.
+     *
+     * @param listener liveness transition listener
+     */
+    public void removeListener(LivenessListener listener) {
         listeners.remove(listener);
     }
 
-    void recordHeartbeatSent() {
+    /**
+     * Records a sent heartbeat message.
+     */
+    public void recordHeartbeatSent() {
         synchronized (lock) {
             heartbeatSent++;
         }
     }
 
-    void recordHeartbeatReceived(boolean newest) {
+    /**
+     * Records a received heartbeat message.
+     *
+     * @param newest whether this is the newest expected heartbeat
+     */
+    public void recordHeartbeatReceived(boolean newest) {
         synchronized (lock) {
             if (newest) {
                 heartbeatReceived++;
@@ -159,7 +193,12 @@ final class LivenessTracker {
         }
     }
 
-    void recordAcknowledged(boolean newest) {
+    /**
+     * Records an acknowledged heartbeat message.
+     *
+     * @param newest whether this is the newest expected acknowledgment
+     */
+    public void recordAcknowledged(boolean newest) {
         synchronized (lock) {
             if (newest) {
                 heartbeatAcknowledged++;
@@ -169,13 +208,21 @@ final class LivenessTracker {
         }
     }
 
-    void recordSendFailure() {
+    /**
+     * Records a send failure event.
+     */
+    public void recordSendFailure() {
         synchronized (lock) {
             sendFailures++;
         }
     }
 
-    void recordRtt(long nanos) {
+    /**
+     * Records a round-trip time sample in nanoseconds.
+     *
+     * @param nanos round-trip time in nanoseconds
+     */
+    public void recordRtt(long nanos) {
         synchronized (lock) {
             if (nanos >= 0) {
                 rttNanos = nanos;
@@ -183,19 +230,34 @@ final class LivenessTracker {
         }
     }
 
-    LivenessState state() {
+    /**
+     * Returns the current liveness state.
+     *
+     * @return current liveness state
+     */
+    public LivenessState state() {
         synchronized (lock) {
             return state;
         }
     }
 
-    boolean isRunning() {
+    /**
+     * Returns whether liveness tracking is currently active.
+     *
+     * @return true if running, false otherwise
+     */
+    public boolean isRunning() {
         synchronized (lock) {
             return running;
         }
     }
 
-    LivenessMetrics metrics() {
+    /**
+     * Returns snapshot metrics of session liveness.
+     *
+     * @return snapshot metrics
+     */
+    public LivenessMetrics metrics() {
         synchronized (lock) {
             long age = running ? Math.max(0, clock.nanoTime() - lastActivity) : 0;
             return new LivenessMetrics(heartbeatSent, heartbeatReceived, heartbeatAcknowledged,
@@ -288,10 +350,19 @@ final class LivenessTracker {
         }
     }
 
-    interface Sink {
+    /**
+     * Callback sink for liveness actions.
+     */
+    public interface Sink {
 
+        /**
+         * Invoked when a heartbeat is due.
+         */
         void heartbeatDue();
 
+        /**
+         * Invoked when the session has expired.
+         */
         void expired();
     }
 }

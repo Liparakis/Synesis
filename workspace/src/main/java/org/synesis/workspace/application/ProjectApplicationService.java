@@ -41,7 +41,7 @@ public final class ProjectApplicationService {
             2. Verify the assigned workspace (`synesis workspace verify`).
             3. Perform all file mutations through the Synesis workspace mutation operation (`synesis workspace mutate`).
             4. Never use native apply_patch, shell redirection, or direct writes while native provider interception remains unproven.
-            
+
             Work only in the assigned Synesis workspace. Synesis may stop a mutation when another task owns the capability;
             describe the required behavior when prompted and do not edit the owner scope. Do not run coordinator, supervisor,
             event, prediction, speculation, or integration diagnostic commands as part of normal work. Do not write another
@@ -76,11 +76,8 @@ public final class ProjectApplicationService {
     }
 
     private static void writeMetadata(Path metadata, UUID projectId) throws IOException {
-        String json = "{\n"
-                + "  \"schemaVersion\": 1,\n"
-                + "  \"projectId\": \"" + projectId + "\",\n"
-                + "  \"createdAt\": \"" + Instant.now() + "\"\n"
-                + "}\n";
+        String json = "{\n" + "  \"schemaVersion\": 1,\n" + "  \"projectId\": \"" + projectId + "\",\n"
+                + "  \"createdAt\": \"" + Instant.now() + "\"\n" + "}\n";
         Path temporary = metadata.resolveSibling("project.json.tmp-" + UUID.randomUUID());
         Files.writeString(temporary,
                 json,
@@ -114,17 +111,15 @@ public final class ProjectApplicationService {
         String separator = existing.contains("\r\n") ? "\r\n" : "\n";
         int begin = existing.indexOf(AGENTS_BEGIN);
         int end = existing.indexOf(AGENTS_END);
-        if ((begin < 0) != (end < 0) || count(existing, AGENTS_BEGIN) > 1 || count(existing, AGENTS_END) > 1
-                || (begin >= 0 && end < begin)) {
+        if ((begin < 0) != (end < 0) || count(existing, AGENTS_BEGIN) > 1 || count(existing, AGENTS_END) > 1 || (
+                begin >= 0 && end < begin)) {
             throw new IOException("AGENTS.md contains malformed Synesis markers");
         }
 
         String section = managedAgentsSection(separator);
         String content;
         if (begin >= 0) {
-            content = existing.substring(0, begin)
-                    + section
-                    + existing.substring(end + AGENTS_END.length());
+            content = existing.substring(0, begin) + section + existing.substring(end + AGENTS_END.length());
         } else if (existing.isEmpty()) {
             content = section + separator;
         } else {
@@ -150,7 +145,10 @@ public final class ProjectApplicationService {
 
     private static void writeTextAtomically(Path path, String content) throws IOException {
         Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());
-        Files.writeString(temporary, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
+        Files.writeString(temporary,
+                content,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE_NEW,
                 StandardOpenOption.WRITE);
         try {
             try {
@@ -185,9 +183,18 @@ public final class ProjectApplicationService {
                     throw new IOException("not an unborn branch");
                 }
                 runGit(root, "add", "--", ".synesis/project.json", "AGENTS.md");
-                runGit(root, "-c", "user.name=Synesis Initializer", "-c", "user.email=synesis@localhost",
-                        "commit", "--no-verify", "-m", "Initialize Synesis project", "--",
-                        ".synesis/project.json", "AGENTS.md");
+                runGit(root,
+                        "-c",
+                        "user.name=Synesis Initializer",
+                        "-c",
+                        "user.email=synesis@localhost",
+                        "commit",
+                        "--no-verify",
+                        "-m",
+                        "Initialize Synesis project",
+                        "--",
+                        ".synesis/project.json",
+                        "AGENTS.md");
                 String head = git(root, "rev-parse", "--verify", "HEAD");
                 if (!head.matches("[0-9a-fA-F]{40}")) {
                     throw new IOException("invalid Git HEAD after initialization");
@@ -195,11 +202,13 @@ public final class ProjectApplicationService {
                 return "GIT_INITIAL_COMMIT_CREATED";
             } catch (Exception commitFailure) {
                 throw new ProjectApplicationException("GIT_HEAD_UNAVAILABLE",
-                        "Git HEAD is unavailable; Synesis did not fabricate a base commit", commitFailure);
+                        "Git HEAD is unavailable; Synesis did not fabricate a base commit",
+                        commitFailure);
             }
         }
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static String git(Path root, String... arguments) throws Exception {
         String output = runGit(root, arguments).trim();
         if (output.isBlank()) {
@@ -208,6 +217,7 @@ public final class ProjectApplicationService {
         return output;
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static String gitAllowFailure(Path root, String... arguments) throws Exception {
         return runGit(root, arguments, false).trim();
     }
@@ -342,7 +352,8 @@ public final class ProjectApplicationService {
                     return new InitResult(InitStatus.ALREADY_INITIALIZED,
                             existing,
                             identity(existing.profile()),
-                            false, ensureGitHead(root));
+                            false,
+                            ensureGitHead(root));
                 } catch (Exception failure) {
                     throw new ProjectApplicationException("CONFLICT", "Existing project identity is invalid", failure);
                 }
@@ -440,8 +451,8 @@ public final class ProjectApplicationService {
      * @param projectId        project identifier
      * @param createdAt        creation timestamp
      */
-    public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile,
-                                  UUID projectId, Instant createdAt) {
+    public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId,
+                                  Instant createdAt) {
 
         /**
          * Validates and normalizes project paths.
