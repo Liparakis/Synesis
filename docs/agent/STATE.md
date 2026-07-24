@@ -43,14 +43,14 @@ pre-mutation evidence exists. ADR-0029 records the decision.
 
 ## SYN-013D implementation state
 
-Stage 2A Slice 1 (MCP foundation and `synesis.ensure_session` tool) is DONE at
-CP-0166: provider capability audit completed (`MCP_CONFIG_DISCOVERED`),
-`AgentSessionService` ambient resolver implemented in `:workspace`, `:mcp`
-Gradle subproject created with stdio JSON-RPC 2.0 protocol handler and
-`synesis.ensure_session` tool, bundled in platform distribution with passing
-stdio process smoke test, and full root `check` (49 tasks) passing cleanly.
-Provider configuration installation and remaining MCP tools (`read_file`,
-`apply_patch`, `run_command`, `get_next_action`) are deferred to Slice 2.
+Stage 2A Slice 1 (foundation) and Stage 2A Slice 2 (provider MCP configuration installers & installed process validation) are DONE at CP-0167:
+- Provider capability audit completed (`MCP_CONFIG_DISCOVERED`).
+- `AgentSessionService` ambient resolver implemented in `:workspace` (74 tests passing).
+- `:mcp` Gradle subproject created with stdio JSON-RPC 2.0 protocol handler (`SynesisMcpServer`).
+- Registered tool `synesis.ensure_session` returns concise status output.
+- `ProviderApplicationService` and `synesis init` automatically install `.codex/mcp.json` and `.agents/mcp.json` (and `.gemini/mcp.json`) idempotently while preserving unrelated provider MCP entries.
+- Platform bundle updated (`:cli:platformBundle`), launcher `synesis init` and installed MCP stdio process tested on `SynesisTestProject`.
+- Full root `./gradlew.bat check --no-daemon` passes cleanly (49 tasks).
 
 ## Implementation state
 

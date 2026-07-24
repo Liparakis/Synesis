@@ -345,6 +345,10 @@ public final class ProjectApplicationService {
                 ProjectLocation existing = readLocation(root, synesis, metadata);
                 try {
                     ensureAgentsFile(root);
+                    ProviderApplicationService providerService = new ProviderApplicationService();
+                    Path launcher = providerService.launcherPath();
+                    providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
+                    providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
                     return new InitResult(InitStatus.ALREADY_INITIALIZED,
                             existing,
                             identity(existing.profile()),
@@ -368,6 +372,13 @@ public final class ProjectApplicationService {
             writeMetadata(metadata, projectId);
             ensureAgentsFile(root);
             ProjectLocation location = readLocation(root, synesis, metadata);
+            try {
+                ProviderApplicationService providerService = new ProviderApplicationService();
+                Path launcher = providerService.launcherPath();
+                providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
+                providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
+            } catch (Exception ignored) {
+            }
             return new InitResult(InitStatus.SUCCESS, location, identity, true, ensureGitHead(root));
         } catch (Exception failure) {
             throw new ProjectApplicationException("CONFLICT", "Could not initialize project state", failure);

@@ -103,6 +103,11 @@ public final class AntigravityProviderIntegration implements ProviderIntegration
     }
 
     @Override
+    public Path mcpConfigurationPath(Path projectRoot) {
+        return projectRoot.resolve(".agents/mcp.json");
+    }
+
+    @Override
     public String hookGroup() {
         return "synesis-guardrail";
     }

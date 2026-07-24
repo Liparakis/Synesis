@@ -167,4 +167,72 @@ final class ProviderApplicationServiceTest {
             }
         }
     }
+
+    @Test
+    void mcpConfigurationInstalledAndPreservesUnrelatedEntries() throws Exception {
+        Path root = Files.createTempDirectory("mcp-config-test-");
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        String previous = System.getProperty("synesis.launcher");
+        System.setProperty("synesis.launcher", launcher.toString());
+        try {
+            var location = new ProjectApplicationService().init(root).location();
+
+            // Pre-populate with unrelated server entry
+            Path codexMcp = root.resolve(".codex/mcp.json");
+            Files.createDirectories(codexMcp.getParent());
+            Files.writeString(codexMcp, "{\"mcpServers\":{\"other-server\":{\"command\":\"other.cmd\"}}}\n");
+
+            ProviderApplicationService service = new ProviderApplicationService();
+            service.install(location, "codex");
+
+            assertTrue(Files.exists(codexMcp));
+            Map<?, ?> parsed = (Map<?, ?>) ProviderJson.parse(Files.readString(codexMcp));
+            Map<?, ?> servers = (Map<?, ?>) parsed.get("mcpServers");
+            assertTrue(servers.containsKey("other-server"));
+            assertTrue(servers.containsKey("synesis"));
+
+            Map<?, ?> synesisEntry = (Map<?, ?>) servers.get("synesis");
+            assertEquals(1, ((Number) synesisEntry.get("version")).intValue());
+            assertEquals(java.util.List.of("mcp", "--provider", "codex", "--project", "."), synesisEntry.get("args"));
+        } finally {
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
+        }
+    }
+
+    @Test
+    void antigravityMcpConfigurationInstalledInBothDirectories() throws Exception {
+        Path root = Files.createTempDirectory("antigravity-mcp-test-");
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        String previous = System.getProperty("synesis.launcher");
+        System.setProperty("synesis.launcher", launcher.toString());
+        try {
+            var location = new ProjectApplicationService().init(root).location();
+            ProviderApplicationService service = new ProviderApplicationService();
+            service.install(location, "antigravity");
+
+            Path agentsMcp = root.resolve(".agents/mcp.json");
+            Path geminiMcp = root.resolve(".gemini/mcp.json");
+
+            assertTrue(Files.exists(agentsMcp));
+            assertTrue(Files.exists(geminiMcp));
+
+            Map<?, ?> parsedAgents = (Map<?, ?>) ProviderJson.parse(Files.readString(agentsMcp));
+            Map<?, ?> serversAgents = (Map<?, ?>) parsedAgents.get("mcpServers");
+            assertTrue(serversAgents.containsKey("synesis"));
+
+            Map<?, ?> parsedGemini = (Map<?, ?>) ProviderJson.parse(Files.readString(geminiMcp));
+            Map<?, ?> serversGemini = (Map<?, ?>) parsedGemini.get("mcpServers");
+            assertTrue(serversGemini.containsKey("synesis"));
+        } finally {
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
+        }
+    }
 }

@@ -40,6 +40,34 @@ public interface ProviderIntegration {
     Path configurationPath(Path projectRoot);
 
     /**
+     * Resolves the provider MCP configuration path.
+     *
+     * @param projectRoot project root
+     * @return provider MCP configuration path, or {@code null} if unsupported
+     */
+    default Path mcpConfigurationPath(Path projectRoot) {
+        return null;
+    }
+
+    /**
+     * Builds the managed MCP server entry for this provider.
+     *
+     * @param launcher    generated Synesis launcher
+     * @param projectRoot project root path
+     * @return JSON-compatible MCP server object
+     */
+    default Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
+        Map<String, Object> server = new LinkedHashMap<>();
+        String cmd = launcher != null && java.nio.file.Files.isRegularFile(launcher)
+                ? launcher.toAbsolutePath().normalize().toString()
+                : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? "synesis.cmd" : "synesis");
+        server.put("command", cmd);
+        server.put("args", List.of("mcp", "--provider", id(), "--project", "."));
+        server.put("version", 1);
+        return server;
+    }
+
+    /**
      * Returns the JSON object key containing the provider hook group.
      *
      * @return hook group

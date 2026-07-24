@@ -215,6 +215,15 @@ public final class ProviderApplicationService {
                 .resolve("local/providers/" + provider.id() + ".json");
     }
 
+    /**
+     * Resolves the stable or configured launcher path.
+     *
+     * @return resolved launcher path
+     */
+    public Path launcherPath() {
+        return launcher();
+    }
+
     private static Path launcher() {
         String executable = isWindows() ? "synesis.cmd" : "synesis";
         String path = System.getenv("PATH");
@@ -296,6 +305,7 @@ public final class ProviderApplicationService {
             Path config,
             Path profile,
             Path launcher,
+            String mcpStatus,
             int exit) {
         return simple(provider,
                 key,
@@ -314,6 +324,8 @@ public final class ProviderApplicationService {
                 "true",
                 "SYNTHETIC_CHECK",
                 synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED",
+                "MCP_CONFIG_STATUS",
+                mcpStatus,
                 "TRUST_STATUS",
                 provider.trustStatus(),
                 "REAL_AGENT_VALIDATION",
@@ -442,6 +454,7 @@ public final class ProviderApplicationService {
             hooks.removeIf(provider::isManagedHook);
             hooks.add(expectedHook);
             atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
+            String mcpStatus = ensureMcpConfig(location, provider, launcher);
             ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(location, provider);
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("schemaVersion", METADATA_SCHEMA);
@@ -465,6 +478,7 @@ public final class ProviderApplicationService {
                             .normalize()
                             .toString());
             metadata.put("managedEntryId", provider.managedHookId());
+            metadata.put("mcpConfigStatus", mcpStatus);
             metadata.put("lastSyntheticCheck",
                     synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED");
             atomicWrite(metadata(location, provider), ProviderJson.write(metadata) + System.lineSeparator());
@@ -478,6 +492,7 @@ public final class ProviderApplicationService {
                     config,
                     profile,
                     launcher,
+                    mcpStatus,
                     0);
             try {
                 return decorate(location, provider.id(), installedResult,
@@ -607,6 +622,7 @@ public final class ProviderApplicationService {
                     }
                 }
             }
+            removeMcpConfig(location, provider);
             Files.deleteIfExists(metadata);
             try {
                 new ProviderSessionBindingService().revoke(location, provider.id());
@@ -619,6 +635,104 @@ public final class ProviderApplicationService {
             return failure(id, "INVALID_CONFIG", "PROVIDER_UNINSTALL_RESULT", 10);
         } catch (Exception failure) {
             return failure(id, "UNINSTALL_FAILED", "PROVIDER_UNINSTALL_RESULT", 10);
+        }
+    }
+
+    /**
+     * Ensures provider-neutral Model Context Protocol (MCP) server configuration is installed.
+     *
+     * @param location project location
+     * @param provider provider integration
+     * @param launcher stable launcher path
+     * @return installation status identifier
+     */
+    @SuppressWarnings("unchecked")
+    public String ensureMcpConfig(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider, Path launcher) {
+        Path configPath = provider.mcpConfigurationPath(location.root());
+        if (configPath == null) {
+            return "UNSUPPORTED";
+        }
+        try {
+            Map<String, Object> managedEntry = provider.managedMcpServer(launcher, location.root());
+            Map<String, Object> root = Files.exists(configPath) ? readObject(configPath) : new LinkedHashMap<>();
+
+            Map<String, Object> mcpServers = root.containsKey("mcpServers") && root.get("mcpServers") instanceof Map<?, ?>
+                    ? new LinkedHashMap<>((Map<String, Object>) root.get("mcpServers"))
+                    : new LinkedHashMap<>();
+
+            Object existing = mcpServers.get("synesis");
+            boolean unchanged = managedEntry.equals(existing);
+            if (!unchanged) {
+                mcpServers.put("synesis", managedEntry);
+                root.put("mcpServers", mcpServers);
+                atomicWrite(configPath, ProviderJson.write(root) + System.lineSeparator());
+            }
+
+            if ("antigravity".equals(provider.id())) {
+                Path geminiConfig = location.root().resolve(".gemini/mcp.json");
+                Map<String, Object> geminiRoot = Files.exists(geminiConfig) ? readObject(geminiConfig) : new LinkedHashMap<>();
+                Map<String, Object> geminiServers = geminiRoot.containsKey("mcpServers") && geminiRoot.get("mcpServers") instanceof Map<?, ?>
+                        ? new LinkedHashMap<>((Map<String, Object>) geminiRoot.get("mcpServers"))
+                        : new LinkedHashMap<>();
+                if (!managedEntry.equals(geminiServers.get("synesis"))) {
+                    geminiServers.put("synesis", managedEntry);
+                    geminiRoot.put("mcpServers", geminiServers);
+                    atomicWrite(geminiConfig, ProviderJson.write(geminiRoot) + System.lineSeparator());
+                }
+            }
+
+            return unchanged ? "UNCHANGED" : "INSTALLED";
+        } catch (Exception failure) {
+            return "MALFORMED_CONFIG";
+        }
+    }
+
+    private void removeMcpConfig(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) {
+        Path configPath = provider.mcpConfigurationPath(location.root());
+        if (configPath != null && Files.exists(configPath)) {
+            try {
+                Map<String, Object> root = readObject(configPath);
+                if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
+                    mcpServers.remove("synesis");
+                    if (mcpServers.isEmpty()) {
+                        root.remove("mcpServers");
+                    } else {
+                        root.put("mcpServers", mcpServers);
+                    }
+                    if (root.isEmpty()) {
+                        Files.deleteIfExists(configPath);
+                    } else {
+                        atomicWrite(configPath, ProviderJson.write(root) + System.lineSeparator());
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if ("antigravity".equals(provider.id())) {
+            Path geminiConfig = location.root().resolve(".gemini/mcp.json");
+            if (Files.exists(geminiConfig)) {
+                try {
+                    Map<String, Object> root = readObject(geminiConfig);
+                    if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
+                        mcpServers.remove("synesis");
+                        if (mcpServers.isEmpty()) {
+                            root.remove("mcpServers");
+                        } else {
+                            root.put("mcpServers", mcpServers);
+                        }
+                        if (root.isEmpty()) {
+                            Files.deleteIfExists(geminiConfig);
+                        } else {
+                            atomicWrite(geminiConfig, ProviderJson.write(root) + System.lineSeparator());
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 

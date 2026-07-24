@@ -70,6 +70,11 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     }
 
     @Override
+    public Path mcpConfigurationPath(Path projectRoot) {
+        return projectRoot.resolve(".codex/mcp.json");
+    }
+
+    @Override
     public String hookGroup() {
         return "hooks";
     }
