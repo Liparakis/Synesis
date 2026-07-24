@@ -685,9 +685,10 @@ public final class ProviderApplicationService {
                     }
                 }
 
-                // Ensure project-local .agents/mcp.json and .gemini/mcp.json exist with explicit --project . for workspace-level discovery
+                // Ensure project-local .agents/mcp.json and .gemini/mcp.json exist with explicit absolute project path
+                String absoluteRoot = location.root().toAbsolutePath().normalize().toString();
                 Map<String, Object> projectEntry = new LinkedHashMap<>(managedEntry);
-                projectEntry.put("args", List.of("mcp", "--provider", provider.id(), "--project", "."));
+                projectEntry.put("args", List.of("mcp", "--provider", provider.id(), "--project", absoluteRoot));
                 ensureProjectMcpFile(location.root().resolve(".agents/mcp.json"), projectEntry);
                 ensureProjectMcpFile(location.root().resolve(".gemini/mcp.json"), projectEntry);
             }

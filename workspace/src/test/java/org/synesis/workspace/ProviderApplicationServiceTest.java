@@ -234,13 +234,14 @@ final class ProviderApplicationServiceTest {
             assertEquals(java.util.List.of("mcp", "--provider", "antigravity"), synesisEntry.get("args"));
             assertTrue(!synesisEntry.containsKey("connectionInstanceId"));
 
-            // Verify project-local .agents/mcp.json and .gemini/mcp.json are updated with explicit --project .
+            // Verify project-local .agents/mcp.json and .gemini/mcp.json are updated with absolute project root path
             assertTrue(Files.exists(agentsMcp));
             Map<?, ?> parsedAgents = (Map<?, ?>) ProviderJson.parse(Files.readString(agentsMcp));
             Map<?, ?> serversAgents = (Map<?, ?>) parsedAgents.get("mcpServers");
             assertTrue(serversAgents.containsKey("synesis"));
             Map<?, ?> agentsEntry = (Map<?, ?>) serversAgents.get("synesis");
-            assertEquals(java.util.List.of("mcp", "--provider", "antigravity", "--project", "."), agentsEntry.get("args"));
+            String expectedAbsRoot = root.toAbsolutePath().normalize().toString();
+            assertEquals(java.util.List.of("mcp", "--provider", "antigravity", "--project", expectedAbsRoot), agentsEntry.get("args"));
 
             // Verify project-local file with unrelated entry preserved unrelated key
             assertTrue(Files.exists(geminiMcp));
