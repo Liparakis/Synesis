@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0165
-- Latest checkpoint: CP-0167
+- Latest checkpoint: CP-0172
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0027, ADR-0028, ADR-0029, ADR-0030
 
@@ -16,7 +16,7 @@ Implement Stage 2A: minimal stdio MCP server for safe workspace operations and p
 
 ## Immediate slice
 
-Stage 2A foundation, dual user-level and project-local Antigravity MCP config installers, environment variable and URL percent-decoding root extraction, and 5-of-5 fresh launch validation pass cleanly at CP-0171.
+Stage 2A complete at CP-0172: project-local .agents/mcp.json now embeds absolute project root path so ensure_session returns ready even when Antigravity launches MCP with cwd=user home and no rootUri in initialize.
 
 ## Evidence ledger
 
@@ -29,7 +29,8 @@ Stage 2A foundation, dual user-level and project-local Antigravity MCP config in
 - VERIFIED: Registered tool `synesis.ensure_session` returns concise status output `{"status":"ready","result":{"workspace":"isolated","pending":0}}`.
 - VERIFIED: `ProviderApplicationService` and `synesis init` automatically install user-level Antigravity MCP configuration (`~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity/mcp_config.json`) and project-local Codex config (`.codex/mcp.json`) idempotently while preserving unrelated entries and migrating obsolete project-local files.
 - VERIFIED: Platform bundle updated (`:cli:platformBundle`), installed launcher `synesis init` tested on `SynesisTestProject`.
-- VERIFIED: Installed MCP stdio process tested across 5 consecutive fresh launches with `initialize` (with `rootUri`), `tools/list`, and multiple `synesis.ensure_session` tool calls, returning concise protocol JSON-RPC with `status: ready` 100% reproducibly.
+- VERIFIED: project-local `.agents/mcp.json` now embeds absolute project root path (`--project C:\Users\Liparakis\Desktop\SynesisTestProject`) so MCP boots with correct root regardless of provider launch cwd.
+- VERIFIED: Installed MCP stdio process tested across 5/5 fresh launches with `initialize` (no rootUri, cwd=user home), `tools/list`, and two `synesis.ensure_session` calls — all returned `status: ready` 100% reproducibly.
 - VERIFIED: Full root `./gradlew.bat check --no-daemon` passes cleanly (49 tasks).
 
 ## Current limitations
