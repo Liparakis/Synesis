@@ -43,7 +43,7 @@ final class ProjectApplicationServiceTest {
         assertTrue(Files.isDirectory(root.resolve(".synesis/shared/records")));
         String agents = Files.readString(root.resolve("AGENTS.md"));
         assertTrue(agents.startsWith("<!-- SYNESIS-BEGIN -->"));
-        assertTrue(agents.contains("This project is Synesis-enabled."));
+        assertTrue(agents.contains("This repository uses Synesis."));
         String metadata = Files.readString(root.resolve(".synesis/project.json"));
         assertFalse(metadata.contains("identity.bin"));
         assertFalse(metadata.contains("private"));
@@ -73,7 +73,7 @@ final class ProjectApplicationServiceTest {
         String updated = Files.readString(root.resolve("AGENTS.md"));
         assertTrue(updated.startsWith("# Project rules\n\nKeep this text."));
         assertTrue(updated.endsWith("\n\n# End\n"));
-        assertTrue(updated.contains("This project is Synesis-enabled."));
+        assertTrue(updated.contains("This repository uses Synesis."));
         assertFalse(updated.contains("old managed text"));
     }
 

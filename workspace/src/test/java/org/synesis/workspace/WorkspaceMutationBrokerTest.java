@@ -355,9 +355,8 @@ class WorkspaceMutationBrokerTest {
         String agentsText = Files.readString(location.root()
                 .resolve("AGENTS.md"));
 
-        assertTrue(agentsText.contains("synesis workspace verify"));
-        assertTrue(agentsText.contains("synesis workspace mutate"));
-        assertTrue(agentsText.contains("Never use native apply_patch, shell redirection, or direct writes"));
+        assertTrue(agentsText.contains("Use Synesis tools for project reads, file changes, and commands."));
+        assertTrue(agentsText.contains("Do not modify the control checkout or another worker's files directly."));
     }
 
     @Test

@@ -57,6 +57,9 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
     @Option(names = {"--idempotency-key"}, description = "Idempotency key")
     private String idempotencyKey;
 
+    @Option(names = {"--output"}, description = "Output format (default, agent)", defaultValue = "default")
+    private String outputMode;
+
     /**
      * Creates the workspace mutate command.
      *
@@ -219,8 +222,17 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
             output.put("MUTATION_APPLIED", res.success());
 
             String jsonOutput = ProviderJson.write(output);
-            runtime.terminal()
-                    .stdout(jsonOutput.trim());
+            if ("agent".equalsIgnoreCase(outputMode)) {
+                org.synesis.workspace.agent.AgentOutcomeTranslator translator = new org.synesis.workspace.agent.AgentOutcomeTranslator();
+                org.synesis.workspace.agent.TranslatedOutcome translated = translator.translateMutationResult(res, target);
+                runtime.terminal()
+                        .stdout(translated.publicResponse()
+                                .toJson()
+                                .trim());
+            } else {
+                runtime.terminal()
+                        .stdout(jsonOutput.trim());
+            }
 
             // Save idempotency cache if key provided
             if (idempotencyKey != null && !idempotencyKey.isBlank() && res.success()) {
@@ -257,6 +269,16 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
             String projectId,
             String sessionId,
             String worktree) {
+        if ("agent".equalsIgnoreCase(outputMode)) {
+            org.synesis.workspace.agent.AgentOutcomeTranslator translator = new org.synesis.workspace.agent.AgentOutcomeTranslator();
+            org.synesis.workspace.agent.TranslatedOutcome translated = translator.translateException(
+                    new IllegalArgumentException(message != null ? message : reasonCode));
+            runtime.terminal()
+                    .stdout(translated.publicResponse()
+                            .toJson()
+                            .trim());
+            return;
+        }
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("RESULT", result);
         output.put("PROJECT_ID", projectId);

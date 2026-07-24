@@ -1,0 +1,114 @@
+package org.synesis.workspace.agent;
+
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import org.synesis.workspace.provider.ProviderJson;
+
+/**
+ * Shared provider-neutral agent response contract envelope.
+ *
+ * <p>All normal agent-facing outcomes serialize into this bounded envelope. Unused
+ * fields (reason, nextAction, result) are omitted rather than serializing unnecessary
+ * nulls. Internal diagnostic details (IDs, commit SHAs, evidence hashes, worktree paths)
+ * are strictly prohibited from appearing in standard agent responses.
+ *
+ * @param status     public operational status
+ * @param reason     optional public reason code
+ * @param nextAction optional public next action
+ * @param result     optional bounded result payload
+ * @since 1.0
+ */
+public record AgentResponse(
+        AgentStatus status,
+        AgentReason reason,
+        AgentNextAction nextAction,
+        Object result
+) {
+
+    /**
+     * Maximum allowed size for a serialized normal agent response (64 KB).
+     */
+    public static final int MAX_RESPONSE_BYTES = 65536;
+
+    /**
+     * Validates required response fields.
+     */
+    public AgentResponse {
+        Objects.requireNonNull(status, "status");
+    }
+
+    /**
+     * Creates a success response with a mutation result payload.
+     *
+     * @param relativePath repository-relative file path
+     * @return completed agent response
+     */
+    public static AgentResponse completed(String relativePath) {
+        return new AgentResponse(AgentStatus.COMPLETED, null, null, new AgentMutationResult(relativePath));
+    }
+
+    /**
+     * Creates a blocked response with a public reason code.
+     *
+     * @param reason public reason code
+     * @return blocked agent response
+     */
+    public static AgentResponse blocked(AgentReason reason) {
+        return new AgentResponse(AgentStatus.BLOCKED, Objects.requireNonNull(reason, "reason"), null, null);
+    }
+
+    /**
+     * Converts this response to a map omitting any null fields.
+     *
+     * @return map representation
+     */
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("status", status.value());
+        if (reason != null) {
+            map.put("reason", reason.value());
+        }
+        if (nextAction != null) {
+            map.put("nextAction", nextAction.value());
+        }
+        if (result != null) {
+            if (result instanceof AgentMutationResult mut) {
+                map.put("result", Map.of("path", mut.path()));
+            } else if (result instanceof AgentCapabilityResult cap) {
+                Map<String, Object> capMap = new LinkedHashMap<>();
+                if (cap.capability() != null) {
+                    capMap.put("capability", cap.capability());
+                }
+                if (cap.requiredFields() != null && !cap.requiredFields().isEmpty()) {
+                    capMap.put("requiredFields", cap.requiredFields());
+                }
+                map.put("result", capMap);
+            } else if (result instanceof AgentStatusResult stat) {
+                map.put("result", Map.of("workspace", stat.workspace(), "pending", stat.pending()));
+            } else if (result instanceof Map<?, ?> resMap) {
+                map.put("result", resMap);
+            } else {
+                map.put("result", result);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Serializes this response to a compact JSON string, omitting null fields.
+     *
+     * @return compact JSON representation
+     * @throws IllegalStateException if response exceeds size limits
+     */
+    public String toJson() {
+        String json = ProviderJson.write(toMap());
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_RESPONSE_BYTES) {
+            throw new IllegalStateException("Agent response exceeds maximum size of "
+                    + MAX_RESPONSE_BYTES + " bytes (actual: " + bytes.length + " bytes)");
+        }
+        return json;
+    }
+}

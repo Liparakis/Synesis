@@ -36,18 +36,14 @@ public final class ProjectApplicationService {
     private static final String AGENTS_BEGIN = "<!-- SYNESIS-BEGIN -->";
     private static final String AGENTS_END = "<!-- SYNESIS-END -->";
     private static final String AGENTS_BODY = """
-            This project is Synesis-enabled. Before any mutation:
-            1. Bootstrap or resume the Synesis session for this provider and task.
-            2. Verify the assigned workspace (`synesis workspace verify`).
-            3. Perform all file mutations through the Synesis workspace mutation operation (`synesis workspace mutate`).
-            4. Never use native apply_patch, shell redirection, or direct writes while native provider interception remains unproven.
+            ## Synesis
 
-            Work only in the assigned Synesis workspace. Synesis may stop a mutation when another task owns the capability;
-            describe the required behavior when prompted and do not edit the owner scope. Do not run coordinator, supervisor,
-            event, prediction, speculation, or integration diagnostic commands as part of normal work. Do not write another
-            session's worktree or treat a prompt-supplied path as workspace proof. If Synesis reports identity, freshness,
-            ownership, or workspace verification failure, pause mutation and continue only with safe read-only inspection until
-            the provider reports READY.
+            This repository uses Synesis.
+
+            - Use Synesis tools for project reads, file changes, and commands.
+            - Do not modify the control checkout or another worker's files directly.
+            - When Synesis reports that another worker owns a capability, provide the requested contract details.
+            - Stop when Synesis reports an unrecoverable safety failure.
             """;
 
     /**
