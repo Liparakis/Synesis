@@ -27,6 +27,7 @@ public final class McpProtocolHandler {
     private boolean isSessionBound;
     private final String provider;
     private final String connectionInstanceId;
+    private Path antigravityProjectsDir;
 
     /**
      * Creates an MCP protocol handler.
@@ -42,6 +43,20 @@ public final class McpProtocolHandler {
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        String userHome = System.getProperty("user.home");
+        this.antigravityProjectsDir = (userHome != null)
+                ? Path.of(userHome, ".gemini", "config", "projects")
+                : null;
+    }
+
+    /**
+     * Overrides the Antigravity per-project config directory used during fallback root scanning.
+     * Package-private for use in unit tests.
+     *
+     * @param dir override path, or {@code null} to disable the scan
+     */
+    void setAntigravityProjectsDir(Path dir) {
+        this.antigravityProjectsDir = dir;
     }
 
     /**
@@ -120,9 +135,17 @@ public final class McpProtocolHandler {
     }
 
     private String handleInitialize(Object id, Map<String, Object> params) {
-        if (params != null) {
-            List<Path> candidates = extractCandidateRoots(params);
-            Path resolved = resolveProjectRootFromCandidates(candidates);
+        if (!isSessionBound) {
+            // Primary: extract from MCP params (rootUri, workspaceFolders, roots)
+            List<Path> paramCandidates = extractCandidateRoots(params);
+            Path resolved = resolveProjectRootFromCandidates(paramCandidates);
+
+            // Fallback: scan Antigravity per-project configs and env vars when params yield nothing
+            if (resolved == null) {
+                List<Path> fallbackCandidates = extractFallbackCandidates();
+                resolved = resolveProjectRootFromCandidates(fallbackCandidates);
+            }
+
             if (resolved != null) {
                 this.activeProjectRoot = resolved;
             }
@@ -154,47 +177,61 @@ public final class McpProtocolHandler {
     }
 
     /**
-     * Extracts candidate workspace project root paths from MCP {@code initialize} request parameters,
-     * provider environment variables, and process working directory.
+     * Extracts candidate workspace project root paths from MCP {@code initialize} request parameters only.
+     * Does not include environment variables, file system scans, or process working directory.
      *
-     * @param params JSON-RPC initialize request params map
-     * @return list of parsed candidate paths
+     * @param params JSON-RPC initialize request params map, or {@code null}
+     * @return list of parsed candidate paths from protocol params
      */
     public List<Path> extractCandidateRoots(Map<String, Object> params) {
         List<Path> candidates = new java.util.ArrayList<>();
+        if (params == null) {
+            return candidates;
+        }
 
-        if (params != null) {
-            if (params.get("rootUri") instanceof String rootUriStr) {
-                Path p = parseUriOrPath(rootUriStr);
-                if (p != null && !candidates.contains(p)) {
-                    candidates.add(p);
-                }
+        if (params.get("rootUri") instanceof String rootUriStr) {
+            Path p = parseUriOrPath(rootUriStr);
+            if (p != null && !candidates.contains(p)) {
+                candidates.add(p);
             }
+        }
 
-            if (params.get("workspaceFolders") instanceof List<?> folders) {
-                for (Object item : folders) {
-                    if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
-                        Path p = parseUriOrPath(uriStr);
-                        if (p != null && !candidates.contains(p)) {
-                            candidates.add(p);
-                        }
-                    }
-                }
-            }
-
-            if (params.get("roots") instanceof List<?> rootsList) {
-                for (Object item : rootsList) {
-                    if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
-                        Path p = parseUriOrPath(uriStr);
-                        if (p != null && !candidates.contains(p)) {
-                            candidates.add(p);
-                        }
+        if (params.get("workspaceFolders") instanceof List<?> folders) {
+            for (Object item : folders) {
+                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
+                    Path p = parseUriOrPath(uriStr);
+                    if (p != null && !candidates.contains(p)) {
+                        candidates.add(p);
                     }
                 }
             }
         }
 
-        // Environment variables inspection
+        if (params.get("roots") instanceof List<?> rootsList) {
+            for (Object item : rootsList) {
+                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
+                    Path p = parseUriOrPath(uriStr);
+                    if (p != null && !candidates.contains(p)) {
+                        candidates.add(p);
+                    }
+                }
+            }
+        }
+
+        return candidates;
+    }
+
+    /**
+     * Collects fallback candidate project roots from environment variables, the Antigravity
+     * per-project config directory, the explicit {@code --project} argument, and the process
+     * working directory. Only called when MCP {@code initialize} params yield no initialized root.
+     *
+     * @return list of fallback candidate paths
+     */
+    List<Path> extractFallbackCandidates() {
+        List<Path> candidates = new java.util.ArrayList<>();
+
+        // Environment variables
         String[] envKeys = {
             "WORKSPACE_ROOT", "WORKSPACE_FOLDER", "WORKSPACE_DIR",
             "PROJECT_ROOT", "PROJECT_DIR",
@@ -216,7 +253,36 @@ public final class McpProtocolHandler {
             candidates.add(initialProjectRoot.toAbsolutePath().normalize());
         }
 
-        // Current working directory
+        // Scan Antigravity per-project configs (~/.gemini/config/projects/*.json)
+        try {
+            if (antigravityProjectsDir != null && java.nio.file.Files.isDirectory(antigravityProjectsDir)) {
+                try (java.util.stream.Stream<Path> files = java.nio.file.Files.list(antigravityProjectsDir)) {
+                    files.filter(f -> f.getFileName().toString().endsWith(".json")).forEach(configFile -> {
+                        try {
+                            String json = java.nio.file.Files.readString(configFile);
+                            int idx = 0;
+                            while ((idx = json.indexOf("\"folderUri\"", idx)) != -1) {
+                                int colon = json.indexOf(':', idx);
+                                int quote1 = json.indexOf('"', colon + 1);
+                                int quote2 = json.indexOf('"', quote1 + 1);
+                                if (colon != -1 && quote1 != -1 && quote2 != -1) {
+                                    String uri = json.substring(quote1 + 1, quote2);
+                                    Path p = parseUriOrPath(uri);
+                                    if (p != null && !candidates.contains(p)) {
+                                        candidates.add(p);
+                                    }
+                                }
+                                idx = quote2 + 1;
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    });
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Current working directory (last resort)
         try {
             Path cwd = Path.of(".").toAbsolutePath().normalize();
             if (!candidates.contains(cwd)) {

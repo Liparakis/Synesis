@@ -213,6 +213,7 @@ class McpServerTest {
     void testWorktreeRootPathIsNotAcceptedAsControlProject() throws Exception {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");
+        handler.setAntigravityProjectsDir(Files.createTempDirectory("synesis-test-empty-projects-"));
         String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
         handler.handleMessage(callReq);
 
@@ -221,6 +222,7 @@ class McpServerTest {
         Path worktreePath = ctx.worktreePath();
 
         McpProtocolHandler worktreeHandler = new McpProtocolHandler(sessionService, tempRoot.getParent(), "antigravity", "conn-wt-test");
+        worktreeHandler.setAntigravityProjectsDir(Files.createTempDirectory("synesis-test-empty-projects-2-"));
         String initReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + worktreePath.toUri() + "\"}}";
         worktreeHandler.handleMessage(initReq);
 
