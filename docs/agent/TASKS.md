@@ -439,7 +439,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-013B
 - Priority: P0
 - Title: Implement provider session binding and fail-closed workspace routing
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Bind Codex and Antigravity provider actions to distinct,
   project-scoped durable session, supervisor, and worker identities without
   manual ceremony, while preventing mutations in the control checkout.
@@ -462,6 +462,52 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Scope boundary: no claim of real provider readiness until an actual provider
   hook invocation proves interception and workspace routing; no remote
   coordination, and no provider credential/conversation persistence.
+- Evidence: DONE at CP-0157. WorkspaceMutationBroker enforcing all 5 workspace mutation invariants; 42-task root check passes. SYN-013C sub-slice completed at CP-0165 (commit `198f3e9`).
+
+## SYN-013C
+
+- ID: SYN-013C
+- Priority: P0
+- Title: Stage 1 — Simplify agent-facing responses and AGENTS.md contract
+- Status: DONE
+- Purpose: Establish a safe, minimal agent response envelope, a central
+  internal-to-agent outcome translator, and a concise AGENTS.md behavioral
+  contract. No MCP server.
+- Dependencies: SYN-013B DONE
+- Acceptance criteria: `AgentResponse` envelope emits only safe public fields;
+  `AgentOutcomeTranslator` maps all 10 internal Decision outcomes plus
+  exceptions without leaking IDs, hashes, or raw exception strings; CLI
+  `--output agent` emits concise JSON; AGENTS.md managed section uses the
+  canonical 4-bullet text; all `:workspace:check` tests pass; root `check`
+  (42 tasks) passes.
+- Required tests: `AgentResponseTest`, `AgentOutcomeTranslatorTest`, updated
+  `ProjectApplicationServiceTest` and `WorkspaceMutationBrokerTest`.
+- Required documentation: updated STATE.md, CURRENT.md, NEXT_SESSION.md.
+- Evidence: DONE at CP-0165. Commit `198f3e9` on master. All 65
+  `:workspace:check` tests pass. Root `check` (42 tasks) passes.
+
+## SYN-013D
+
+- ID: SYN-013D
+- Priority: P0
+- Title: Stage 2A — Minimal stdio MCP server (5 safe workspace tools)
+- Status: ACTIVE
+- Purpose: Introduce a `stdio` MCP server exposing exactly 5 safe workspace
+  tools: `synesis.ensure_session`, `synesis.read_file`, `synesis.apply_patch`,
+  `synesis.run_command`, `synesis.get_next_action`.
+- Dependencies: SYN-013C DONE
+- Acceptance criteria: `:mcp` subproject compiles and passes `check`; ambient
+  session resolver (`AgentSessionService`) wired in `:workspace`; JSON-RPC 2.0
+  `initialize`, `tools/list`, and `tools/call` work over stdio; all 5 tools
+  return `AgentResponse` JSON; path-containment and command-allowlist
+  enforcement verified by tests; distribution bundle includes `synesis mcp`
+  launcher; `:cli` does NOT depend on `:mcp`.
+- Scope boundary: no provider MCP configuration files written before real
+  harness acceptance tests. Stage 2B deferred operations (`describe_required_capability`,
+  `respond_to_owner_request`, `validate_available_implementation`,
+  `complete_task`) are explicitly excluded.
+
+
 
 ## SYN-001
 

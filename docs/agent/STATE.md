@@ -43,14 +43,14 @@ pre-mutation evidence exists. ADR-0029 records the decision.
 
 ## SYN-013B implementation state
 
-Project-local provider session binding is in progress. The binding service
-preserves project/node identity, creates atomic local records under
-`.synesis/local/sessions`, and wires Codex/Antigravity hook bootstrap. The
-current slice must resolve a real Git base commit, apply the explicit unborn
-repository policy, allocate a distinct detached worktree outside the control
-checkout, and fail closed when Codex cannot prove interception or workspace routing. Real provider validation remains
-unclaimed; fallback provider evidence is explicitly marked and does not imply
-independent chat identity.
+Project-local provider session binding and workspace mutation enforcement is
+DONE at CP-0157. Stage 1 agent simplification (SYN-013C) is DONE at
+CP-0165: the shared `AgentResponse` envelope, `AgentOutcomeTranslator`, and
+concise `AGENTS.md` managed section are committed at `198f3e9` with all
+65 `:workspace:check` tests passing, CLI `--output agent` flag integrated,
+and full root `check` (42 tasks) passing. The next task is SYN-013D
+(Stage 2A minimal MCP server). No ambient session resolver, MCP module,
+or MCP provider configuration has been created.
 
 ## Implementation state
 
