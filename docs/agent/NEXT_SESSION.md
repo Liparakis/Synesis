@@ -2,7 +2,7 @@
 
 - Active task: SYN-013B (automatic provider session binding)
 - Repository branch: master
-- Last checkpoint: CP-0156
+- Last checkpoint: CP-0157
 - Last passing command: `.\gradlew.bat check --no-daemon`
 - Last failing command: root `check` before the final Javadoc fix; rerun passed after the fix
 - Immediate next command: implement committed-HEAD resolution, the documented
