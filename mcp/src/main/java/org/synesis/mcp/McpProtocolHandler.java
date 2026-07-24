@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentSessionService;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.provider.ProviderJson;
 
 /**
@@ -21,7 +22,9 @@ import org.synesis.workspace.provider.ProviderJson;
 public final class McpProtocolHandler {
 
     private final AgentSessionService sessionService;
+    private final Path initialProjectRoot;
     private Path activeProjectRoot;
+    private boolean isSessionBound;
     private final String provider;
     private final String connectionInstanceId;
 
@@ -35,7 +38,8 @@ public final class McpProtocolHandler {
      */
     public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
-        this.activeProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
+        this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
+        this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
     }
@@ -92,6 +96,7 @@ public final class McpProtocolHandler {
             return switch (method) {
                 case "initialize" -> handleInitialize(id, (Map<String, Object>) request.get("params"));
                 case "initialized", "notifications/initialized" -> null;
+                case "notifications/roots/list_changed", "roots/list_changed" -> handleRootsListChanged(request.get("params"));
                 case "tools/list" -> handleToolsList(id);
                 case "tools/call" -> handleToolsCall(id, (Map<String, Object>) request.get("params"));
                 case "roots/list" -> handleRootsList(id);
@@ -100,6 +105,18 @@ public final class McpProtocolHandler {
         } catch (Exception failure) {
             return createErrorResponse(id, -32603, "Internal error: " + failure.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String handleRootsListChanged(Object paramsObj) {
+        if (!isSessionBound && paramsObj instanceof Map<?, ?> pMap) {
+            List<Path> candidates = extractCandidateRoots((Map<String, Object>) pMap);
+            Path resolved = resolveProjectRootFromCandidates(candidates);
+            if (resolved != null) {
+                this.activeProjectRoot = resolved;
+            }
+        }
+        return null;
     }
 
     private String handleInitialize(Object id, Map<String, Object> params) {
@@ -296,6 +313,9 @@ public final class McpProtocolHandler {
                 activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
 
         AgentResponse agentResponse = sessionService.ensureSession(resolutionRequest);
+        if (agentResponse.status() == AgentStatus.READY) {
+            isSessionBound = true;
+        }
 
         Map<String, Object> textContent = Map.of("type", "text", "text", agentResponse.toJson());
         Map<String, Object> result = Map.of("content", List.of(textContent));

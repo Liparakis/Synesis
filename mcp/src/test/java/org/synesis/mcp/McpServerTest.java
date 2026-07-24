@@ -242,6 +242,45 @@ class McpServerTest {
     }
 
     @Test
+    void testEncodedWindowsFileUriAndUriWithSpacesParsedCleanly() {
+        Path p1 = McpProtocolHandler.parseUriOrPath("file:///C:/My%20Test%20Folder/project");
+        assertNotNull(p1);
+        assertTrue(p1.toString().contains("My Test Folder"));
+
+        Path p2 = McpProtocolHandler.parseUriOrPath("file:///c%3A/Users/Liparakis/Desktop/SynesisTestProject");
+        assertNotNull(p2);
+        assertTrue(p2.toString().replace('\\', '/').toLowerCase().contains("synesistestproject"));
+    }
+
+    @Test
+    void testRootsListChangedNotificationUpdatesUnboundContext() {
+        AgentSessionService sessionService = new AgentSessionService();
+        Path dummyCwd = tempRoot.getParent();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, dummyCwd, "antigravity", "conn-changed-1");
+
+        String notif = "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{\"workspaceFolders\":[{\"uri\":\"" + tempRoot.toUri() + "\"}]}}";
+        handler.handleMessage(notif);
+
+        assertEquals(tempRoot, handler.activeProjectRoot());
+    }
+
+    @Test
+    void testConflictingRootNotificationAfterSessionBindingIsRejected() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-bound-1");
+
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String response = handler.handleMessage(callReq);
+        assertTrue(response.contains("ready"));
+
+        Path conflicting = tempRoot.getParent();
+        String notif = "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{\"workspaceFolders\":[{\"uri\":\"" + conflicting.toUri() + "\"}]}}";
+        handler.handleMessage(notif);
+
+        assertEquals(tempRoot, handler.activeProjectRoot());
+    }
+
+    @Test
     void testRootsListReturnsActiveProjectRoot() {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-roots");

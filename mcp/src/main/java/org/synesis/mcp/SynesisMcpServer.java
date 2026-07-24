@@ -39,6 +39,9 @@ public final class SynesisMcpServer {
             }
         }
 
+        long pid = ProcessHandle.current().pid();
+        System.err.println("SYNESIS_MCP_STARTUP pid=" + pid + " version=0.1.0-SNAPSHOT commit=bc334ac conn=" + connectionInstanceId + " provider=" + provider + " cwd=" + Path.of(".").toAbsolutePath().normalize());
+
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider, connectionInstanceId);
         McpStdioServer server = new McpStdioServer(handler);
