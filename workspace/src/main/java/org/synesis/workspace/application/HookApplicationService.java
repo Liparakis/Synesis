@@ -63,10 +63,10 @@ public final class HookApplicationService {
     public HookExecutionResult antigravity(Path projectRoot, Path profile, InputStream input) {
         try {
             String json = read(input);
-            var location = new ProjectApplicationService().require(projectRoot);
+            Path eventCwd = workspacePath(json, projectRoot);
+            var location = new ProjectApplicationService().require(controlRoot(eventCwd));
             ProviderSessionBindingService.BindingResult binding = bindings.ensure(location, "antigravity",
                     evidence(json));
-            Path eventCwd = workspacePath(json, projectRoot);
             ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
                     binding.binding(), eventCwd);
             if (!workspace.verified()) return deniedAntigravity(workspace.code());
@@ -88,13 +88,14 @@ public final class HookApplicationService {
             String json = read(input);
             Map<?, ?> event = object(ProviderJson.parse(json));
             String cwd = text(event, "cwd");
-            var location = new ProjectApplicationService().locate(Path.of(cwd));
+            Path eventCwd = Path.of(cwd);
+            var location = new ProjectApplicationService().require(controlRoot(eventCwd));
             ProviderSessionBindingService.BindingResult binding = bindings.ensure(location, "codex",
                     evidence(json));
             ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
-                    binding.binding(), Path.of(cwd));
+                    binding.binding(), eventCwd);
             if (!workspace.verified()) return denied(workspace.code());
-            CodexHookAdapter.Result result = new CodexHookAdapter().processJson(json);
+            CodexHookAdapter.Result result = new CodexHookAdapter().processJson(json, location);
             return withBinding(new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason()), binding);
         } catch (Exception failure) {
             return denied("Synesis could not establish a trusted project session.");
@@ -153,6 +154,17 @@ public final class HookApplicationService {
         if (paths instanceof java.util.List<?> list && !list.isEmpty() && list.getFirst() instanceof String path
                 && !path.isBlank()) return Path.of(path);
         return fallback;
+    }
+
+    private static Path controlRoot(Path cwd) throws Exception {
+        var located = new ProjectApplicationService().locate(cwd);
+        Path marker = located.synesisDirectory().resolve("local/workspace-binding.json");
+        if (!java.nio.file.Files.isRegularFile(marker)) return located.root();
+        Map<String, Object> value = object(ProviderJson.parse(java.nio.file.Files.readString(marker)));
+        if (!located.projectId().toString().equals(text(value, "projectId"))) {
+            throw new IllegalArgumentException("workspace marker project mismatch");
+        }
+        return Path.of(text(value, "controlCheckoutPath"));
     }
 
     /**

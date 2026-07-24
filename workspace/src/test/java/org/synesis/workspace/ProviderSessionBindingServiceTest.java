@@ -64,12 +64,21 @@ final class ProviderSessionBindingServiceTest {
         git(root, "add", "README.md");
         git(root, "commit", "-m", "initial");
 
-        var binding = new ProviderSessionBindingService().ensure(location, "codex", "chat-worktree").binding();
+        var service = new ProviderSessionBindingService();
+        var binding = service.ensure(location, "codex", "chat-worktree").binding();
+        var second = service.ensure(location, "codex", "chat-worktree-2").binding();
         assertNotEquals(root.toAbsolutePath().normalize().toString(), binding.worktreePath());
         assertTrue(binding.worktreePath() != null && Files.isDirectory(Path.of(binding.worktreePath())));
+        assertNotEquals(binding.worktreePath(), second.worktreePath());
+        assertNotEquals(binding.branch(), second.branch());
+        assertTrue(binding.baseCommit().matches("[0-9a-f]{40}"));
         var check = new ProviderSessionBindingService().verifyWorkspace(location, binding,
                 Path.of(binding.worktreePath()));
         assertTrue(check.verified(), check::code);
+        assertEquals("CONTROL_CHECKOUT_MUTATION_DENIED", service.verifyWorkspace(location, binding, root).code());
+        git(root, "worktree", "remove", "--force", binding.worktreePath());
+        assertEquals("WORKSPACE_TRANSITION_REQUIRED", service.verifyWorkspace(location, binding,
+                Path.of(binding.worktreePath())).code());
     }
 
     @Test
@@ -83,6 +92,26 @@ final class ProviderSessionBindingServiceTest {
         assertThrows(ProviderSessionBindingService.BindingException.class,
                 () -> new ProviderSessionBindingService().list(location, "codex"));
         assertTrue(Files.exists(location.profile().resolve("link/identity.bin")));
+    }
+
+    @Test
+    void hookResolvesControlSessionFromAssignedWorktreeMarker() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-routing-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        String peer = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
+        new ProjectConfig(location.projectId(), java.util.Set.of(peer)).save(location.profile().resolve("project.conf"));
+        var binding = new ProviderSessionBindingService().ensure(location, "codex", "routing-session").binding();
+        String event = "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"routing-session\","
+                + "\"cwd\":\"" + binding.worktreePath().replace("\\", "\\\\")
+                + "\",\"tool_name\":\"apply_patch\",\"tool_input\":{\"command\":\"*** Begin Patch\\n*** Add File: src/free.txt\\n*** End Patch\"}}";
+
+        var result = new HookApplicationService().codex(
+                new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+        assertEquals("ALLOWED", result.outcome(), result.responseJson() + " " + result.humanReason());
+        assertTrue(result.humanReason().contains("SESSION_ID=" + binding.sessionId()));
+        assertTrue(Files.notExists(root.resolve("src/free.txt")));
     }
 
     @Test
@@ -100,7 +129,7 @@ final class ProviderSessionBindingServiceTest {
                 new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
         assertEquals("INVALID_INPUT", result.outcome());
-        assertTrue(result.responseJson().contains("WORKSPACE_TRANSITION_REQUIRED"));
+        assertTrue(result.responseJson().contains("GIT_HEAD_UNAVAILABLE"));
         try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
             assertTrue(paths.findAny().isPresent());
         }
@@ -122,7 +151,7 @@ final class ProviderSessionBindingServiceTest {
                 new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
         assertEquals("INVALID_INPUT", result.outcome());
-        assertTrue(result.responseJson().contains("WORKSPACE_TRANSITION_REQUIRED"));
+        assertTrue(result.responseJson().contains("GIT_HEAD_UNAVAILABLE"));
         try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
             assertTrue(paths.findAny().isPresent());
         }

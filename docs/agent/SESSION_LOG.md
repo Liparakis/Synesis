@@ -1024,3 +1024,15 @@ Append-only operational history.
 - Focused workspace and CLI tests pass; the external project remains degraded
   by design until a real provider session can transition into its assigned
   worktree.
+
+# 2026-07-24 — SYN-013B worktree provisioning and routing
+
+- Added explicit `GIT_HEAD_UNAVAILABLE` handling and an unborn-repository init
+  policy that creates one minimal Synesis-only commit when Git has no `HEAD`.
+- Added user-local per-project worktree allocation, durable branch/common-dir/
+  control-path/verification fields, Git registration and ancestry checks, and
+  recovery for deleted or stale worktrees.
+- Added an assigned-worktree marker so hooks can load policy from the control
+  checkout while resolving patch paths in the assigned tree. The final bundle
+  produced a valid external Codex worktree and a no-output assigned-worktree
+  hook result; actual Codex interception is still not claimed.

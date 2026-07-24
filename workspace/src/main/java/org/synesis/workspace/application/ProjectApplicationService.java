@@ -116,7 +116,7 @@ public final class ProjectApplicationService {
                     return new InitResult(InitStatus.ALREADY_INITIALIZED,
                             existing,
                             identity(existing.profile()),
-                            false);
+                            false, ensureGitHead(root));
                 } catch (Exception failure) {
                     throw new ProjectApplicationException("CONFLICT", "Existing project identity is invalid", failure);
                 }
@@ -135,7 +135,7 @@ public final class ProjectApplicationService {
             writeMetadata(metadata, projectId);
             ensureAgentsFile(root);
             ProjectLocation location = readLocation(root, synesis, metadata);
-            return new InitResult(InitStatus.SUCCESS, location, identity, true);
+            return new InitResult(InitStatus.SUCCESS, location, identity, true, ensureGitHead(root));
         } catch (Exception failure) {
             throw new ProjectApplicationException("CONFLICT", "Could not initialize project state", failure);
         }
@@ -302,6 +302,54 @@ public final class ProjectApplicationService {
                 .identity();
     }
 
+    private static String ensureGitHead(Path root) throws ProjectApplicationException {
+        try {
+            if (!Files.exists(root.resolve(".git"))) return "GIT_HEAD_UNAVAILABLE";
+            String head = git(root, "rev-parse", "--verify", "HEAD");
+            if (head.matches("[0-9a-fA-F]{40}")) return "GIT_HEAD_VALID";
+            throw new IOException("invalid Git HEAD");
+        } catch (Exception unavailable) {
+            try {
+                String branch = gitAllowFailure(root, "symbolic-ref", "--short", "HEAD");
+                if (branch.isBlank()) throw new IOException("not an unborn branch");
+                runGit(root, "add", "--", ".synesis/project.json", "AGENTS.md");
+                runGit(root, "-c", "user.name=Synesis Initializer", "-c", "user.email=synesis@localhost",
+                        "commit", "--no-verify", "-m", "Initialize Synesis project", "--",
+                        ".synesis/project.json", "AGENTS.md");
+                String head = git(root, "rev-parse", "--verify", "HEAD");
+                if (!head.matches("[0-9a-fA-F]{40}")) throw new IOException("invalid Git HEAD after initialization");
+                return "GIT_INITIAL_COMMIT_CREATED";
+            } catch (Exception commitFailure) {
+                throw new ProjectApplicationException("GIT_HEAD_UNAVAILABLE",
+                        "Git HEAD is unavailable; Synesis did not fabricate a base commit", commitFailure);
+            }
+        }
+    }
+
+    private static String git(Path root, String... arguments) throws Exception {
+        String output = runGit(root, arguments).trim();
+        if (output.isBlank()) throw new IOException("empty Git output");
+        return output;
+    }
+
+    private static String gitAllowFailure(Path root, String... arguments) throws Exception {
+        return runGit(root, arguments, false).trim();
+    }
+
+    private static String runGit(Path root, String... arguments) throws Exception {
+        return runGit(root, arguments, true);
+    }
+
+    private static String runGit(Path root, String[] arguments, boolean requireSuccess) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git"; command[1] = "-C"; command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        if (requireSuccess && process.waitFor() != 0) throw new IOException("git failed: " + output);
+        return output;
+    }
+
     private static Path directory(Path path, String label) throws ProjectApplicationException {
         try {
             Path input = Objects.requireNonNull(path, label);
@@ -406,9 +454,10 @@ public final class ProjectApplicationService {
      * @param location        project location
      * @param identity        local node identity metadata
      * @param createdIdentity whether identity was created
+     * @param gitHeadStatus Git base-commit result
      */
     public record InitResult(InitStatus status, ProjectLocation location, NodeIdentity identity,
-                             boolean createdIdentity) {
+                             boolean createdIdentity, String gitHeadStatus) {
 
         /**
          * Validates the initialization result.
@@ -417,6 +466,7 @@ public final class ProjectApplicationService {
             Objects.requireNonNull(status, "status");
             Objects.requireNonNull(location, "location");
             Objects.requireNonNull(identity, "identity");
+            Objects.requireNonNull(gitHeadStatus, "Git HEAD status");
         }
     }
 

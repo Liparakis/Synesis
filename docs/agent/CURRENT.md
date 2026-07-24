@@ -6,7 +6,7 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0151
-- Latest checkpoint: CP-0155
+- Latest checkpoint: CP-0156
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0027, ADR-0028, ADR-0029
 
@@ -18,8 +18,9 @@ mutation.
 
 ## Immediate slice
 
-Persist distinct provider session, supervisor, and worker identities; allocate
-and resume a detached Git worktree; expose binding/workspace/interception
+Persist distinct provider session, supervisor, and worker identities; resolve a
+real Git base commit (or apply the documented unborn-repository init policy),
+allocate and resume a detached Git worktree outside the control checkout; expose binding/workspace/interception
 diagnostics; preserve project and node identity; and fail closed on ambiguity,
 mismatch, missing interception, or control-checkout cwd.
 
@@ -84,10 +85,15 @@ mismatch, missing interception, or control-checkout cwd.
   `scripts/run-speculative-coordination-real.ps1`.
   Evidence is recorded in
   `docs/evidence/speculative-coordination-public-cli-2026-07-23/report.md`.
-- The Codex validation retry is intentionally fail-closed: the external
-  project has no committed Git `HEAD`, so status reports
-  `SESSION_WORKSPACE=UNASSIGNED` and an installed hook invocation returns
+- The first Codex validation retry is intentionally fail-closed: the external
+  project has an unborn Git `HEAD`, so status reported
+  `SESSION_WORKSPACE=UNASSIGNED` and the installed hook returned
   `WORKSPACE_TRANSITION_REQUIRED`; proof files were not recreated.
+- Final-bundle reinitialization created a real Git `HEAD`, preserved the prior
+  unrelated commit, allocated an external Codex worktree and branch, and
+  verified registration, common directory, branch, ancestry, and control-root
+  separation. The assigned-worktree hook path resolved control policy without
+  creating a proof file; real Codex interception remains unproven.
 
 ## Current limitations
 
@@ -105,5 +111,6 @@ validator, and checkpoint evidence for the domain/event-store slice.
 
 ## Immediate next action
 
-Run the checkpoint validator, record the final diff, and create the local
-commit for the verified provider workspace-safety slice; do not push.
+Run the final checkpoint validator and commit the verified base-commit,
+worktree-broker, and assigned-worktree policy-routing slice; do not run
+Antigravity validation or claim real Codex interception.

@@ -32,11 +32,11 @@ final class CodexHookProcessTest {
             CommandResult blocked = hook(project, event(project, "*** Begin Patch\n*** Update File: src/protected/file.txt\n*** End Patch"));
             assertEquals(0, blocked.exit(), blocked.output());
             assertTrue(blocked.output().contains("\"permissionDecision\":\"deny\""), blocked.output());
-            assertTrue(blocked.output().contains("WORKSPACE_TRANSITION_REQUIRED"), blocked.output());
+            assertTrue(blocked.output().contains("GIT_HEAD_UNAVAILABLE"), blocked.output());
 
             CommandResult allowed = hook(project, event(project, "*** Begin Patch\n*** Add File: docs/readme.txt\n*** End Patch"));
             assertEquals(0, allowed.exit(), allowed.output());
-            assertTrue(allowed.output().contains("WORKSPACE_TRANSITION_REQUIRED"), allowed.output());
+            assertTrue(allowed.output().contains("GIT_HEAD_UNAVAILABLE"), allowed.output());
         } finally {
             cleanup(project);
         }

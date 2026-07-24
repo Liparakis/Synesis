@@ -29,7 +29,7 @@ import org.synesis.workspace.provider.ProviderJson;
  * @since 1.0
  */
 public final class ProviderSessionBindingService {
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 2;
     private static final String SESSIONS_DIRECTORY = "sessions";
     private static final String PROVIDERS_DIRECTORY = "providers";
 
@@ -80,8 +80,9 @@ public final class ProviderSessionBindingService {
             String workerId = "worker-" + UUID.randomUUID();
             long now = System.currentTimeMillis();
             Binding binding = new Binding(SCHEMA_VERSION, sessionId, location.projectId().toString(), identity.nodeId(),
-                    provider, fingerprint, supervisorId, workerId, null, null, null, currentCommit(location.root()),
-                    "BOUND", now, now, 0L, "WORKSPACE_UNVERIFIED", 1, null);
+                    provider, fingerprint, supervisorId, workerId, null, null, location.root().toString(), null,
+                    currentCommit(location.root()), null, "UNASSIGNED", "UNVERIFIED", "BOOTSTRAPPED", "BOUND", now,
+                    now, 0L, "WORKSPACE_UNVERIFIED", 1, null);
             binding = withWorktree(location, binding);
             write(bindingPath, binding);
             return new BindingResult(binding, instanceEvidence == null || instanceEvidence.isBlank());
@@ -170,20 +171,25 @@ public final class ProviderSessionBindingService {
     public synchronized WorkspaceCheck verifyWorkspace(ProjectApplicationService.ProjectLocation location,
             Binding binding, Path cwd) {
         if (binding == null || binding.worktreePath() == null || binding.worktreePath().isBlank()) {
-            return new WorkspaceCheck(false, "WORKSPACE_TRANSITION_REQUIRED");
+            return new WorkspaceCheck(false, binding == null ? "WORKSPACE_UNVERIFIED" : binding.lastSeenState());
         }
         try {
             Path root = location.root().toAbsolutePath().normalize();
             Path assigned = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
             Path actual = Objects.requireNonNull(cwd, "cwd").toAbsolutePath().normalize();
-            if (assigned.equals(root)) return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
+            if (actual.equals(root)) return new WorkspaceCheck(false, "CONTROL_CHECKOUT_MUTATION_DENIED");
+            if (assigned.equals(root) || assigned.startsWith(root) || !root.equals(Path.of(binding.controlCheckoutPath()))) {
+                return new WorkspaceCheck(false, "CONTROL_CHECKOUT_MUTATION_DENIED");
+            }
             if (!Files.isDirectory(assigned) || !actual.equals(assigned)) {
                 return new WorkspaceCheck(false, "WORKSPACE_TRANSITION_REQUIRED");
             }
-            String top = git(assigned, "rev-parse", "--show-toplevel");
-            if (!Files.isSameFile(assigned, Path.of(top).toAbsolutePath().normalize())) {
+            if (!registeredWorktree(root, assigned, binding)) return new WorkspaceCheck(false, "WORKTREE_NOT_REGISTERED");
+            if (!sameGitCommonDirectory(root, assigned, binding)) return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
+            if (!binding.branch().equals(git(assigned, "symbolic-ref", "--short", "HEAD"))) {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             }
+            if (!isBaseAncestor(assigned, binding.baseCommit())) return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             return new WorkspaceCheck(true, "WORKSPACE_VERIFIED");
         } catch (Exception failure) {
             return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
@@ -191,35 +197,119 @@ public final class ProviderSessionBindingService {
     }
 
     private static Binding withWorktree(ProjectApplicationService.ProjectLocation location, Binding binding) {
-        if (binding.worktreePath() != null && Files.isDirectory(Path.of(binding.worktreePath()))) return binding;
-        if ("UNKNOWN".equals(binding.baseCommit())) {
-            return binding.providerTrustState().equals("WORKSPACE_UNVERIFIED") ? binding
-                    : new Binding(binding.schemaVersion(), binding.sessionId(), binding.projectId(), binding.nodeId(),
-                    binding.provider(), binding.providerInstanceFingerprint(), binding.supervisorId(), binding.workerId(),
-                    null, null, null, binding.baseCommit(), binding.status(), binding.createdAtEpochMillis(),
-                    binding.lastSeenEpochMillis(), binding.lastVerifiedProjectSequence(), "WORKSPACE_UNVERIFIED",
-                    binding.bindingVersion(), binding.completedAt());
-        }
+        String baseCommit = validCommit(binding.baseCommit()) ? binding.baseCommit() : "GIT_HEAD_UNAVAILABLE";
         String worktreeId = "worktree-" + binding.sessionId().substring("session-".length());
-        Path path = location.synesisDirectory().resolve("local/worktrees").resolve(worktreeId).toAbsolutePath().normalize();
-        if (path.equals(location.root()) || !path.startsWith(location.synesisDirectory().toAbsolutePath().normalize())) return binding;
+        Path path = workspaceRoot().resolve(binding.projectId()).resolve("worktrees").resolve(binding.sessionId())
+                .toAbsolutePath().normalize();
+        String branch = "synesis/" + binding.provider() + "/" + binding.sessionId();
+        Path control = location.root().toAbsolutePath().normalize();
+        if (path.startsWith(control) || control.startsWith(path)) {
+            return copy(binding, null, control.toString(), null, baseCommit, null, "FAILED", "UNVERIFIED",
+                    "CONTROL_CHECKOUT_MUTATION_DENIED", "WORKSPACE_UNVERIFIED");
+        }
+        if ("GIT_HEAD_UNAVAILABLE".equals(baseCommit)) {
+            return copy(binding, null, location.root().toString(), null, baseCommit, null, "UNASSIGNED",
+                    "UNVERIFIED", "GIT_HEAD_UNAVAILABLE", "WORKSPACE_UNVERIFIED");
+        }
         try {
             Files.createDirectories(path.getParent());
             if (!Files.exists(path)) {
-                runGit(location.root(), "worktree", "add", "-b", "synesis/" + binding.sessionId(),
-                        path.toString(), binding.baseCommit());
+                try {
+                    runGit(location.root(), "worktree", "add", "-b", branch, path.toString(), baseCommit);
+                } catch (Exception branchExists) {
+                    runGit(location.root(), "worktree", "add", path.toString(), branch);
+                }
             }
-            return new Binding(binding.schemaVersion(), binding.sessionId(), binding.projectId(), binding.nodeId(),
-                    binding.provider(), binding.providerInstanceFingerprint(), binding.supervisorId(), binding.workerId(),
-                    worktreeId, path.toString(), "synesis/" + binding.sessionId(), binding.baseCommit(), binding.status(),
-                    binding.createdAtEpochMillis(), binding.lastSeenEpochMillis(), binding.lastVerifiedProjectSequence(),
-                    "WORKSPACE_UNVERIFIED", binding.bindingVersion(), binding.completedAt());
-        } catch (Exception ignored) {
-            return binding;
+            writeWorkspaceMarker(path, location, binding, branch);
+            Binding allocated = copy(binding, worktreeId, location.root().toString(), path.toString(), baseCommit,
+                    branch, "ALLOCATED", "UNVERIFIED", "WORKTREE_ALLOCATED", "WORKSPACE_UNVERIFIED");
+            return verifyBinding(location.root(), allocated);
+        } catch (Exception failure) {
+            return copy(binding, null, location.root().toString(), null, baseCommit, null, "FAILED",
+                    "UNVERIFIED", "WORKTREE_ALLOCATION_FAILED", "WORKSPACE_UNVERIFIED");
         }
     }
 
-    private static String currentCommit(Path root) { try { return git(root, "rev-parse", "HEAD"); } catch (Exception ignored) { return "UNKNOWN"; } }
+    private static Binding verifyBinding(Path controlRoot, Binding binding) {
+        try {
+            Path assigned = Path.of(binding.worktreePath());
+            String common = canonicalGitCommon(controlRoot);
+            boolean verified = registeredWorktree(controlRoot, assigned, binding)
+                    && sameGitCommonDirectory(controlRoot, assigned, binding)
+                    && binding.branch().equals(git(assigned, "symbolic-ref", "--short", "HEAD"))
+                    && isBaseAncestor(assigned, binding.baseCommit());
+            return new Binding(SCHEMA_VERSION, binding.sessionId(), binding.projectId(), binding.nodeId(), binding.provider(),
+                    binding.providerInstanceFingerprint(), binding.supervisorId(), binding.workerId(), binding.worktreeId(),
+                    binding.worktreePath(), controlRoot.toString(), binding.branch(), binding.baseCommit(), common,
+                    "ALLOCATED", verified ? "VERIFIED" : "UNVERIFIED",
+                    verified ? "WORKTREE_VERIFIED" : "WORKTREE_NOT_REGISTERED", binding.status(), binding.createdAtEpochMillis(),
+                    System.currentTimeMillis(), binding.lastVerifiedProjectSequence(), verified ? "WORKSPACE_UNVERIFIED" : "WORKSPACE_UNVERIFIED",
+                    binding.bindingVersion(), binding.completedAt());
+        } catch (Exception failure) {
+            return copy(binding, binding.worktreeId(), controlRoot.toString(), binding.worktreePath(), binding.baseCommit(),
+                    binding.branch(), "ALLOCATED", "UNVERIFIED", "WORKTREE_NOT_REGISTERED", "WORKSPACE_UNVERIFIED");
+        }
+    }
+
+    private static boolean registeredWorktree(Path root, Path assigned, Binding binding) throws Exception {
+        String list = runGit(root, "worktree", "list", "--porcelain");
+        String canonical = assigned.toRealPath().toString();
+        boolean pathFound = false;
+        for (String line : list.lines().toList()) {
+            if (line.startsWith("worktree ")) {
+                pathFound = Path.of(line.substring("worktree ".length())).toAbsolutePath().normalize()
+                        .toString().equalsIgnoreCase(canonical);
+            }
+            if (pathFound && line.equals("branch refs/heads/" + binding.branch())) return true;
+        }
+        return false;
+    }
+
+    private static boolean sameGitCommonDirectory(Path root, Path assigned, Binding binding) throws Exception {
+        Path expected = Path.of(canonicalGitCommon(root));
+        Path actual = Path.of(canonicalGitCommon(assigned));
+        return expected.equals(actual) && (binding.gitCommonDir() == null || binding.gitCommonDir().equals(actual.toString()));
+    }
+
+    private static String canonicalGitCommon(Path root) throws Exception {
+        Path common = Path.of(git(root, "rev-parse", "--git-common-dir"));
+        return (common.isAbsolute() ? common : root.resolve(common)).toRealPath().toString();
+    }
+
+    private static boolean isBaseAncestor(Path assigned, String baseCommit) throws Exception {
+        if (!validCommit(baseCommit)) return false;
+        Process process = new ProcessBuilder("git", "-C", assigned.toString(), "merge-base", "--is-ancestor", baseCommit, "HEAD")
+                .redirectErrorStream(true).start();
+        process.getInputStream().readAllBytes();
+        return process.waitFor() == 0;
+    }
+
+    private static boolean validCommit(String value) { return value != null && value.matches("[0-9a-fA-F]{40}") && !value.matches("0{40}"); }
+    private static String currentCommit(Path root) { try { String value = git(root, "rev-parse", "--verify", "HEAD"); return validCommit(value) ? value : "GIT_HEAD_UNAVAILABLE"; } catch (Exception ignored) { return "GIT_HEAD_UNAVAILABLE"; } }
+    private static Path workspaceRoot() {
+        String base = System.getenv("LOCALAPPDATA");
+        if (base == null || base.isBlank()) base = Path.of(System.getProperty("user.home"), ".synesis").toString();
+        return Path.of(base, "Synesis", "workspaces").toAbsolutePath().normalize();
+    }
+
+    private static void writeWorkspaceMarker(Path worktree, ProjectApplicationService.ProjectLocation location,
+            Binding binding, String branch) throws IOException {
+        Map<String, Object> marker = new LinkedHashMap<>();
+        marker.put("schemaVersion", 1);
+        marker.put("projectId", binding.projectId());
+        marker.put("sessionId", binding.sessionId());
+        marker.put("provider", binding.provider());
+        marker.put("controlCheckoutPath", location.root().toString());
+        marker.put("branch", branch);
+        writeText(worktree.resolve(".synesis/local/workspace-binding.json"), ProviderJson.write(marker) + System.lineSeparator());
+    }
+    private static Binding copy(Binding b, String worktreeId, String control, String path, String base, String branch,
+            String creation, String verification, String lastSeen, String trust) {
+        return new Binding(SCHEMA_VERSION, b.sessionId(), b.projectId(), b.nodeId(), b.provider(), b.providerInstanceFingerprint(),
+                b.supervisorId(), b.workerId(), worktreeId, path, control, branch, base, b.gitCommonDir(), creation,
+                verification, lastSeen, b.status(), b.createdAtEpochMillis(), System.currentTimeMillis(),
+                b.lastVerifiedProjectSequence(), trust, b.bindingVersion(), b.completedAt());
+    }
     private static String git(Path root, String... arguments) throws Exception { return runGit(root, arguments).trim(); }
     private static String runGit(Path root, String... arguments) throws Exception {
         String[] command = new String[arguments.length + 3]; command[0] = "git"; command[1] = "-C"; command[2] = root.toString();
@@ -250,11 +340,13 @@ public final class ProviderSessionBindingService {
         try {
             Map<String, Object> value = (Map<String, Object>) ProviderJson.parse(Files.readString(path));
             int schema = number(value, "schemaVersion").intValue();
-            if (schema != SCHEMA_VERSION) throw new IOException("unsupported session schema");
+            if (schema != 1 && schema != SCHEMA_VERSION) throw new IOException("unsupported session schema");
             return new Binding(schema, text(value, "sessionId"), text(value, "projectId"), text(value, "nodeId"),
                     text(value, "provider"), text(value, "providerInstanceFingerprint"), text(value, "supervisorId"),
                     text(value, "workerId"), nullable(value, "worktreeId"), nullable(value, "worktreePath"),
-                    nullable(value, "branch"), text(value, "baseCommit"), text(value, "status"), number(value, "createdAtEpochMillis").longValue(),
+                    nullable(value, "controlCheckoutPath"), nullable(value, "branch"), text(value, "baseCommit"),
+                    nullable(value, "gitCommonDir"), nullable(value, "creationState"), nullable(value, "verificationState"),
+                    nullable(value, "lastSeenState"), text(value, "status"), number(value, "createdAtEpochMillis").longValue(),
                     number(value, "lastSeenEpochMillis").longValue(), number(value, "lastVerifiedProjectSequence").longValue(),
                     text(value, "providerTrustState"), number(value, "bindingVersion").intValue(), nullable(value, "completedAt"));
         } catch (RuntimeException failure) {
@@ -274,8 +366,13 @@ public final class ProviderSessionBindingService {
         value.put("workerId", binding.workerId());
         value.put("worktreeId", binding.worktreeId());
         value.put("worktreePath", binding.worktreePath());
+        value.put("controlCheckoutPath", binding.controlCheckoutPath());
         value.put("branch", binding.branch());
         value.put("baseCommit", binding.baseCommit());
+        value.put("gitCommonDir", binding.gitCommonDir());
+        value.put("creationState", binding.creationState());
+        value.put("verificationState", binding.verificationState());
+        value.put("lastSeenState", binding.lastSeenState());
         value.put("status", binding.status());
         value.put("createdAtEpochMillis", binding.createdAtEpochMillis());
         value.put("lastSeenEpochMillis", binding.lastSeenEpochMillis());
@@ -338,8 +435,13 @@ public final class ProviderSessionBindingService {
      * @param workerId worker actor identity
      * @param worktreeId assigned worktree identity, when allocated
      * @param worktreePath assigned worktree path, when allocated
+     * @param controlCheckoutPath canonical control checkout path
      * @param branch assigned branch, when allocated
      * @param baseCommit Git base commit
+     * @param gitCommonDir Git common directory identity
+     * @param creationState worktree creation state
+     * @param verificationState worktree verification state
+     * @param lastSeenState last-seen binding state
      * @param status lifecycle status
      * @param createdAtEpochMillis creation timestamp
      * @param lastSeenEpochMillis last-seen timestamp
@@ -350,17 +452,18 @@ public final class ProviderSessionBindingService {
      */
     public record Binding(int schemaVersion, String sessionId, String projectId, String nodeId, String provider,
             String providerInstanceFingerprint, String supervisorId, String workerId, String worktreeId,
-            String worktreePath, String branch, String baseCommit, String status, long createdAtEpochMillis,
-            long lastSeenEpochMillis, long lastVerifiedProjectSequence, String providerTrustState,
+            String worktreePath, String controlCheckoutPath, String branch, String baseCommit, String gitCommonDir,
+            String creationState, String verificationState, String lastSeenState, String status,
+            long createdAtEpochMillis, long lastSeenEpochMillis, long lastVerifiedProjectSequence, String providerTrustState,
             int bindingVersion, String completedAt) {
         /** Returns a refreshed binding with an updated last-seen timestamp.
          * @return refreshed binding
          */
         public Binding touch() {
             return new Binding(schemaVersion, sessionId, projectId, nodeId, provider, providerInstanceFingerprint,
-                    supervisorId, workerId, worktreeId, worktreePath, branch, baseCommit, status, createdAtEpochMillis,
-                    System.currentTimeMillis(), lastVerifiedProjectSequence, providerTrustState, bindingVersion,
-                    completedAt);
+                    supervisorId, workerId, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir,
+                    creationState, verificationState, lastSeenState, status, createdAtEpochMillis, System.currentTimeMillis(),
+                    lastVerifiedProjectSequence, providerTrustState, bindingVersion, completedAt);
         }
 
         /** Returns a terminal revoked binding.
@@ -368,7 +471,8 @@ public final class ProviderSessionBindingService {
          */
         public Binding revoke() {
             return new Binding(schemaVersion, sessionId, projectId, nodeId, provider, providerInstanceFingerprint,
-                    supervisorId, workerId, worktreeId, worktreePath, branch, baseCommit, "REVOKED", createdAtEpochMillis,
+                    supervisorId, workerId, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir,
+                    creationState, verificationState, "REVOKED", "REVOKED", createdAtEpochMillis,
                     System.currentTimeMillis(), lastVerifiedProjectSequence, "REVOKED", bindingVersion,
                     Long.toString(System.currentTimeMillis()));
         }

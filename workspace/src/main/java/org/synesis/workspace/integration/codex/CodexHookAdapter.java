@@ -77,6 +77,18 @@ public final class CodexHookAdapter {
      * @return hook result
      */
     public Result processJson(String json) {
+        return processJson(json, null);
+    }
+
+    /**
+     * Processes an event using the assigned workspace for path resolution and
+     * an authenticated control project for policy state.
+     *
+     * @param json event JSON
+     * @param policyLocation control project whose policy is authoritative
+     * @return hook result
+     */
+    public Result processJson(String json, ProjectApplicationService.ProjectLocation policyLocation) {
         if (json == null || json.isBlank()) return invalid("Empty hook input");
         try {
             Map<String, Object> event = object(ProviderJson.parse(json));
@@ -118,7 +130,8 @@ public final class CodexHookAdapter {
 
             ActionGuardrail.Response warning = null;
             for (String relativePath : relativePaths) {
-                ActionGuardrail.Response response = ActionGuardrail.evaluate(location.profile(),
+                    ProjectApplicationService.ProjectLocation policy = policyLocation == null ? location : policyLocation;
+                    ActionGuardrail.Response response = ActionGuardrail.evaluate(policy.profile(),
                         new ActionGuardrail.Request(location.root(), relativePath, "apply_patch", null));
                 if (response.outcome() == ActionGuardrail.Outcome.BLOCKED) {
                     return new Result(Outcome.BLOCKED, deny(response.message()), bounded(response.message()));

@@ -98,4 +98,33 @@ final class ProjectApplicationServiceTest {
         assertEquals(init.location().projectId(), created.projectId());
         assertTrue(Files.readString(root.resolve(".synesis/local/profile/project.conf")).contains(init.location().projectId().toString()));
     }
+
+    @Test
+    void unbornGitRepositoryReceivesOnlyTheDocumentedSynesisInitialCommit() throws Exception {
+        Path root = Files.createTempDirectory("synesis-unborn-git-");
+        git(root, "init");
+
+        ProjectApplicationService service = new ProjectApplicationService();
+        var first = service.init(root);
+        assertEquals("GIT_INITIAL_COMMIT_CREATED", first.gitHeadStatus());
+        String head = git(root, "rev-parse", "--verify", "HEAD");
+        assertTrue(head.matches("[0-9a-f]{40}"));
+        assertTrue(git(root, "show", "--format=", "--name-only", "HEAD").contains(".synesis/project.json"));
+        assertTrue(git(root, "show", "--format=", "--name-only", "HEAD").contains("AGENTS.md"));
+
+        var second = service.init(root);
+        assertEquals(ProjectApplicationService.InitStatus.ALREADY_INITIALIZED, second.status());
+        assertEquals("GIT_HEAD_VALID", second.gitHeadStatus());
+        assertEquals(head, git(root, "rev-parse", "--verify", "HEAD"));
+    }
+
+    private static String git(Path root, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git"; command[1] = "-C"; command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes()).trim();
+        if (process.waitFor() != 0) throw new IllegalStateException(output);
+        return output;
+    }
 }

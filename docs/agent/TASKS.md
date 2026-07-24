@@ -448,12 +448,14 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: project/node identity remains stable; explicit provider
   instance evidence resumes idempotently; independent provider/session keys
   receive distinct actors; a valid Git project receives a distinct durable
-  session worktree; hooks fail closed on missing interception, missing
+  session worktree outside the control checkout; unborn repositories follow a
+  documented init policy; hooks fail closed on missing interception, missing
   workspace transition, control-checkout cwd, or binding mismatch; provider
   status reports binding/workspace/interception state; legacy projects migrate
   without reinitialization; actor/authority spoofing remains rejected.
 - Required tests: binding persistence/idempotency, provider/project/node
-  mismatch, stale/revoked/partial records, worktree allocation and resume,
+  mismatch, stale/revoked/partial records, valid and unborn Git HEAD policy,
+  worktree allocation and resume, registration/common-dir/branch invariants,
   control-checkout denial, Codex and Antigravity hook bootstrap, provider
   lifecycle/status, migration, installed bundle, and full repository
   verification.

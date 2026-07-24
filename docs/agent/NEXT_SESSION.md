@@ -2,11 +2,12 @@
 
 - Active task: SYN-013B (automatic provider session binding)
 - Repository branch: master
-- Last checkpoint: CP-0155
+- Last checkpoint: CP-0156
 - Last passing command: `.\gradlew.bat check --no-daemon`
 - Last failing command: root `check` before the final Javadoc fix; rerun passed after the fix
-- Immediate next command: inspect `SpeculationWorkspace` reuse and implement the
-  provider worktree/cwd gate for SYN-013B.
+- Immediate next command: implement committed-HEAD resolution, the documented
+  unborn-repository init policy, and an external user-local provider worktree
+  broker for SYN-013B.
 - Exact next documentation action: record the external proof cleanup hash/status
   and update the checkpoint after the focused gate tests; do not push.
 - Unresolved limitations: native Linux/macOS PATH behavior is not executable

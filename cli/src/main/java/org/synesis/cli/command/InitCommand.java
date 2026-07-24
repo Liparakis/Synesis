@@ -38,6 +38,7 @@ public final class InitCommand implements Callable<Integer> {
             runtime.terminal().stdout("PROJECT_ID=" + location.projectId());
             runtime.terminal().stdout("LOCAL_PROFILE=" + location.profile());
             runtime.terminal().stdout("NODE_ID=" + result.identity().nodeId());
+            runtime.terminal().stdout("GIT_HEAD_STATUS=" + result.gitHeadStatus());
             if (result.status() == ProjectApplicationService.InitStatus.SUCCESS) {
                 runtime.terminal().stdout("GITIGNORE_RECOMMENDATION=.synesis/local/");
                 runtime.terminal().stdout("NEXT_COMMAND=synesis constraint create --help");
