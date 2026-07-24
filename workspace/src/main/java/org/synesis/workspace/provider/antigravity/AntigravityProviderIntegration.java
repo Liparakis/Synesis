@@ -104,7 +104,23 @@ public final class AntigravityProviderIntegration implements ProviderIntegration
 
     @Override
     public Path mcpConfigurationPath(Path projectRoot) {
-        return projectRoot.resolve(".agents/mcp.json");
+        String userHome = System.getProperty("user.home");
+        if (userHome == null || userHome.isBlank()) {
+            return null;
+        }
+        return Path.of(userHome, ".gemini", "config", "mcp_config.json");
+    }
+
+    @Override
+    public java.util.Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
+        java.util.Map<String, Object> server = new java.util.LinkedHashMap<>();
+        String cmd = launcher != null && java.nio.file.Files.isRegularFile(launcher)
+                ? launcher.toAbsolutePath().normalize().toString()
+                : (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win") ? "synesis.cmd" : "synesis");
+        server.put("command", cmd);
+        server.put("args", java.util.List.of("mcp", "--provider", id()));
+        server.put("version", 1);
+        return server;
     }
 
     @Override

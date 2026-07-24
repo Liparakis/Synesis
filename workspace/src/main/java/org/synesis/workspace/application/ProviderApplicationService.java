@@ -669,21 +669,55 @@ public final class ProviderApplicationService {
             }
 
             if ("antigravity".equals(provider.id())) {
-                Path geminiConfig = location.root().resolve(".gemini/mcp.json");
-                Map<String, Object> geminiRoot = Files.exists(geminiConfig) ? readObject(geminiConfig) : new LinkedHashMap<>();
-                Map<String, Object> geminiServers = geminiRoot.containsKey("mcpServers") && geminiRoot.get("mcpServers") instanceof Map<?, ?>
-                        ? new LinkedHashMap<>((Map<String, Object>) geminiRoot.get("mcpServers"))
-                        : new LinkedHashMap<>();
-                if (!managedEntry.equals(geminiServers.get("synesis"))) {
-                    geminiServers.put("synesis", managedEntry);
-                    geminiRoot.put("mcpServers", geminiServers);
-                    atomicWrite(geminiConfig, ProviderJson.write(geminiRoot) + System.lineSeparator());
+                String userHome = System.getProperty("user.home");
+                if (userHome != null && !userHome.isBlank()) {
+                    Path secondaryConfig = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
+                    if (Files.exists(secondaryConfig) || Files.isDirectory(secondaryConfig.getParent())) {
+                        Map<String, Object> secRoot = Files.exists(secondaryConfig) ? readObject(secondaryConfig) : new LinkedHashMap<>();
+                        Map<String, Object> secServers = secRoot.containsKey("mcpServers") && secRoot.get("mcpServers") instanceof Map<?, ?>
+                                ? new LinkedHashMap<>((Map<String, Object>) secRoot.get("mcpServers"))
+                                : new LinkedHashMap<>();
+                        if (!managedEntry.equals(secServers.get("synesis"))) {
+                            secServers.put("synesis", managedEntry);
+                            secRoot.put("mcpServers", secServers);
+                            atomicWrite(secondaryConfig, ProviderJson.write(secRoot) + System.lineSeparator());
+                        }
+                    }
                 }
+
+                // Migrate obsolete project-local .agents/mcp.json and .gemini/mcp.json
+                cleanObsoleteProjectMcpFile(location.root().resolve(".agents/mcp.json"));
+                cleanObsoleteProjectMcpFile(location.root().resolve(".gemini/mcp.json"));
             }
 
             return unchanged ? "UNCHANGED" : "INSTALLED";
         } catch (Exception failure) {
             return "MALFORMED_CONFIG";
+        }
+    }
+
+    private void cleanObsoleteProjectMcpFile(Path path) {
+        if (path == null || !Files.exists(path)) {
+            return;
+        }
+        try {
+            Map<String, Object> root = readObject(path);
+            if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
+                mcpServers.remove("synesis");
+                if (mcpServers.isEmpty()) {
+                    root.remove("mcpServers");
+                } else {
+                    root.put("mcpServers", mcpServers);
+                }
+                if (root.isEmpty()) {
+                    Files.deleteIfExists(path);
+                } else {
+                    atomicWrite(path, ProviderJson.write(root) + System.lineSeparator());
+                }
+            }
+        } catch (Exception ignored) {
         }
     }
 
@@ -701,38 +735,35 @@ public final class ProviderApplicationService {
                     } else {
                         root.put("mcpServers", mcpServers);
                     }
-                    if (root.isEmpty()) {
-                        Files.deleteIfExists(configPath);
-                    } else {
-                        atomicWrite(configPath, ProviderJson.write(root) + System.lineSeparator());
-                    }
+                    atomicWrite(configPath, ProviderJson.write(root) + System.lineSeparator());
                 }
             } catch (Exception ignored) {
             }
         }
         if ("antigravity".equals(provider.id())) {
-            Path geminiConfig = location.root().resolve(".gemini/mcp.json");
-            if (Files.exists(geminiConfig)) {
-                try {
-                    Map<String, Object> root = readObject(geminiConfig);
-                    if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
-                        mcpServers.remove("synesis");
-                        if (mcpServers.isEmpty()) {
-                            root.remove("mcpServers");
-                        } else {
-                            root.put("mcpServers", mcpServers);
+            String userHome = System.getProperty("user.home");
+            if (userHome != null && !userHome.isBlank()) {
+                Path secondaryConfig = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
+                if (Files.exists(secondaryConfig)) {
+                    try {
+                        Map<String, Object> root = readObject(secondaryConfig);
+                        if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
+                            mcpServers.remove("synesis");
+                            if (mcpServers.isEmpty()) {
+                                root.remove("mcpServers");
+                            } else {
+                                root.put("mcpServers", mcpServers);
+                            }
+                            atomicWrite(secondaryConfig, ProviderJson.write(root) + System.lineSeparator());
                         }
-                        if (root.isEmpty()) {
-                            Files.deleteIfExists(geminiConfig);
-                        } else {
-                            atomicWrite(geminiConfig, ProviderJson.write(root) + System.lineSeparator());
-                        }
+                    } catch (Exception ignored) {
                     }
-                } catch (Exception ignored) {
                 }
             }
+            cleanObsoleteProjectMcpFile(location.root().resolve(".agents/mcp.json"));
+            cleanObsoleteProjectMcpFile(location.root().resolve(".gemini/mcp.json"));
         }
     }
 
