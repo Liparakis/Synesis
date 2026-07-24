@@ -16,6 +16,7 @@ import org.synesis.link.identity.IdentityBootstrap;
  * @since 1.0
  */
 public final class ReadinessInspector {
+
     private final Path profileDirectory;
     private final CandidateProvider candidateProvider;
 
@@ -49,13 +50,15 @@ public final class ReadinessInspector {
      * @return bounded readiness report
      */
     public ReadinessReport inspect() {
-        boolean javaReady = Runtime.version().feature() >= 25;
+        boolean javaReady = Runtime.version()
+                .feature() >= 25;
         IdentityBootstrap.Inspection identity = new IdentityBootstrap(profileDirectory).inspect();
         List<Candidate> candidates = List.of();
         String candidateDetail;
         try {
             candidates = candidateProvider.gather(() -> false)
-                    .toCompletableFuture().join();
+                    .toCompletableFuture()
+                    .join();
             candidateDetail = "COUNT=" + candidates.size();
         } catch (RuntimeException failure) {
             candidateDetail = "UNAVAILABLE";

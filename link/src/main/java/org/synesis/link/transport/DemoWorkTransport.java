@@ -2,7 +2,6 @@ package org.synesis.link.transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -13,25 +12,27 @@ import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.codec.quic.QuicChannel;
 import io.netty.handler.codec.quic.QuicStreamChannel;
 import io.netty.handler.codec.quic.QuicStreamType;
-
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.synesis.link.demo.DemoWorkCodec;
 import org.synesis.link.demo.DemoWorkRequest;
 import org.synesis.link.demo.DemoWorkResult;
 import org.synesis.link.demo.DemoWorkStatus;
 import org.synesis.link.session.PeerSession;
 
-/** Internal Netty adapter for one bounded demo request/result stream. */
+/**
+ * Internal Netty adapter for one bounded demo request/result stream.
+ */
 final class DemoWorkTransport {
+
     private static final int MAX_STREAMS = 4;
 
-    private DemoWorkTransport() { }
+    private DemoWorkTransport() {
+    }
 
     static CompletionStage<DemoWorkResult> open(ChannelHandlerContext controlContext,
             DemoWorkRequest request, AtomicInteger active) {
@@ -41,8 +42,13 @@ final class DemoWorkTransport {
         }
         CompletableFuture<DemoWorkResult> result = new CompletableFuture<>();
         AtomicBoolean released = new AtomicBoolean();
-        Runnable release = () -> { if (released.compareAndSet(false, true)) active.decrementAndGet(); };
-        if (!(controlContext.channel().parent() instanceof QuicChannel connection)) {
+        Runnable release = () -> {
+            if (released.compareAndSet(false, true)) {
+                active.decrementAndGet();
+            }
+        };
+        if (!(controlContext.channel()
+                .parent() instanceof QuicChannel connection)) {
             release.run();
             return CompletableFuture.failedFuture(new IllegalStateException("QUIC connection is unavailable"));
         }
@@ -65,7 +71,8 @@ final class DemoWorkTransport {
             return;
         }
         ServerHandler server = new ServerHandler(session, seen, active);
-        context.pipeline().replace(oldHandler, "demo-work", server);
+        context.pipeline()
+                .replace(oldHandler, "demo-work", server);
         server.acceptFirst(context, firstFrame);
     }
 
@@ -74,16 +81,29 @@ final class DemoWorkTransport {
         return new ChannelInitializer<QuicStreamChannel>() {
             @Override
             protected void initChannel(QuicStreamChannel channel) {
-                channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(
-                        DemoWorkCodec.MAX_FRAME_BYTES + Integer.BYTES, 0, Integer.BYTES, 0,
-                        Integer.BYTES));
-                channel.pipeline().addLast(new LengthFieldPrepender(Integer.BYTES));
-                channel.pipeline().addLast(new ClientHandler(request, result, release));
+                channel.pipeline()
+                        .addLast(new LengthFieldBasedFrameDecoder(
+                                DemoWorkCodec.MAX_FRAME_BYTES + Integer.BYTES, 0, Integer.BYTES, 0,
+                                Integer.BYTES));
+                channel.pipeline()
+                        .addLast(new LengthFieldPrepender(Integer.BYTES));
+                channel.pipeline()
+                        .addLast(new ClientHandler(request, result, release));
             }
         };
     }
 
+    private static byte[] read(ByteBuf message) {
+        if (message.readableBytes() > DemoWorkCodec.MAX_FRAME_BYTES) {
+            throw new IllegalArgumentException("demo frame is oversized");
+        }
+        byte[] bytes = new byte[message.readableBytes()];
+        message.readBytes(bytes);
+        return bytes;
+    }
+
     private static final class ClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
+
         private final DemoWorkRequest request;
         private final CompletableFuture<DemoWorkResult> result;
         private final Runnable release;
@@ -103,7 +123,8 @@ final class DemoWorkTransport {
         protected void channelRead0(ChannelHandlerContext context, ByteBuf message) {
             try {
                 DemoWorkResult value = DemoWorkCodec.decodeResult(read(message));
-                if (!request.requestId().equals(value.requestId())) {
+                if (!request.requestId()
+                        .equals(value.requestId())) {
                     throw new IllegalArgumentException("demo result correlation mismatch");
                 }
                 result.complete(value);
@@ -117,7 +138,9 @@ final class DemoWorkTransport {
         @Override
         public void channelInactive(ChannelHandlerContext context) {
             release.run();
-            if (!result.isDone()) result.completeExceptionally(new IllegalStateException("demo stream closed"));
+            if (!result.isDone()) {
+                result.completeExceptionally(new IllegalStateException("demo stream closed"));
+            }
         }
 
         @Override
@@ -128,6 +151,7 @@ final class DemoWorkTransport {
     }
 
     private static final class ServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
+
         private final PeerSession session;
         private final Set<UUID> seen;
         private final AtomicInteger active;
@@ -138,7 +162,9 @@ final class DemoWorkTransport {
             this.active = active;
         }
 
-        private void acceptFirst(ChannelHandlerContext context, byte[] frame) { respond(context, frame); }
+        private void acceptFirst(ChannelHandlerContext context, byte[] frame) {
+            respond(context, frame);
+        }
 
         @Override
         protected void channelRead0(ChannelHandlerContext context, ByteBuf message) {
@@ -147,13 +173,15 @@ final class DemoWorkTransport {
 
         private void respond(ChannelHandlerContext context, byte[] frame) {
             try {
-                if (!session.isUsable()) throw new IllegalStateException("demo stream before control readiness");
+                if (!session.isUsable()) {
+                    throw new IllegalStateException("demo stream before control readiness");
+                }
                 DemoWorkRequest request = DemoWorkCodec.decodeRequest(frame);
                 boolean fresh = seen.add(request.requestId());
                 DemoWorkStatus status = fresh ? DemoWorkStatus.OK : DemoWorkStatus.DUPLICATE_REQUEST;
                 String message = fresh ? "accepted" : "duplicate-request";
                 context.writeAndFlush(Unpooled.wrappedBuffer(DemoWorkCodec.encodeResult(
-                        new DemoWorkResult(request.requestId(), status, message))))
+                                new DemoWorkResult(request.requestId(), status, message))))
                         .addListener(ChannelFutureListener.CLOSE);
             } catch (RuntimeException exception) {
                 context.close();
@@ -161,19 +189,14 @@ final class DemoWorkTransport {
         }
 
         @Override
-        public void channelInactive(ChannelHandlerContext context) { active.decrementAndGet(); }
+        public void channelInactive(ChannelHandlerContext context) {
+            active.decrementAndGet();
+        }
 
         @Override
-        public void exceptionCaught(ChannelHandlerContext context, Throwable cause) { context.close(); }
-    }
-
-    private static byte[] read(ByteBuf message) {
-        if (message.readableBytes() > DemoWorkCodec.MAX_FRAME_BYTES) {
-            throw new IllegalArgumentException("demo frame is oversized");
+        public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
+            context.close();
         }
-        byte[] bytes = new byte[message.readableBytes()];
-        message.readBytes(bytes);
-        return bytes;
     }
 
 }

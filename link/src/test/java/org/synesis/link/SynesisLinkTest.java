@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies the first stable protocol value. */
+/**
+ * Verifies the first stable protocol value.
+ */
 final class SynesisLinkTest {
 
     @Test

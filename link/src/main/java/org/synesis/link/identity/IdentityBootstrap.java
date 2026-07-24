@@ -20,23 +20,30 @@ import java.util.Objects;
  * @since 1.0
  */
 public final class IdentityBootstrap {
+
     private static final String PRIVATE_FILE = "identity.bin";
     private static final String PUBLIC_FILE = "identity.pub";
     private final Path directory;
 
-    /** Creates a bootstrapper rooted at one profile directory.
+    /**
+     * Creates a bootstrapper rooted at one profile directory.
+     *
      * @param directory profile directory
      */
     public IdentityBootstrap(Path directory) {
         this.directory = Objects.requireNonNull(directory, "directory");
     }
 
-    /** Returns the platform-local default Synesis profile directory.
+    /**
+     * Returns the platform-local default Synesis profile directory.
+     *
      * @return default profile directory
      */
     public static Path defaultDirectory() {
         String testProfile = System.getenv("SYNESIS_LINK_PROFILE");
-        if (testProfile != null && !testProfile.isBlank()) return Path.of(testProfile);
+        if (testProfile != null && !testProfile.isBlank()) {
+            return Path.of(testProfile);
+        }
         String local = System.getenv("LOCALAPPDATA");
         return local == null || local.isBlank()
                 ? Path.of(System.getProperty("user.home"), ".synesis", "link")
@@ -47,7 +54,7 @@ public final class IdentityBootstrap {
      * Loads a valid existing identity or creates one on first use.
      *
      * @return immutable identity and whether it was newly created
-     * @throws IOException if storage is missing, corrupt, or inconsistent
+     * @throws IOException              if storage is missing, corrupt, or inconsistent
      * @throws GeneralSecurityException if key material is invalid
      */
     public Result loadOrCreate() throws IOException, GeneralSecurityException {
@@ -101,14 +108,19 @@ public final class IdentityBootstrap {
         }
     }
 
-    /** Returns the private identity file path for diagnostics without exposing key bytes.
+    /**
+     * Returns the private identity file path for diagnostics without exposing key bytes.
+     *
      * @return private identity path
      */
-    public Path privatePath() { return directory.resolve(PRIVATE_FILE); }
+    public Path privatePath() {
+        return directory.resolve(PRIVATE_FILE);
+    }
 
     private void writePublicMetadata(NodeIdentity identity) throws IOException {
         String value = "version=1\nnodeId=" + identity.nodeId() + "\npublicKey="
-                + HexFormat.of().formatHex(identity.publicKeyEncoded()) + "\n";
+                + HexFormat.of()
+                .formatHex(identity.publicKeyEncoded()) + "\n";
         Path path = directory.resolve(PUBLIC_FILE);
         Files.writeString(path, value, StandardCharsets.US_ASCII, StandardOpenOption.CREATE_NEW,
                 StandardOpenOption.WRITE);
@@ -116,33 +128,50 @@ public final class IdentityBootstrap {
             Files.setPosixFilePermissions(path, java.util.Set.of(
                     java.nio.file.attribute.PosixFilePermission.OWNER_READ,
                     java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
-        } catch (UnsupportedOperationException ignored) { }
+        } catch (UnsupportedOperationException ignored) {
+        }
     }
 
     private void validatePublicMetadata(NodeIdentity identity) throws IOException {
         Path path = directory.resolve(PUBLIC_FILE);
-        if (Files.notExists(path)) { writePublicMetadata(identity); return; }
+        if (Files.notExists(path)) {
+            writePublicMetadata(identity);
+            return;
+        }
         String value = Files.readString(path, StandardCharsets.US_ASCII);
         String expected = "version=1\nnodeId=" + identity.nodeId() + "\npublicKey="
-                + HexFormat.of().formatHex(identity.publicKeyEncoded()) + "\n";
-        if (!expected.equals(value)) throw new IOException("local identity metadata is inconsistent");
+                + HexFormat.of()
+                .formatHex(identity.publicKeyEncoded()) + "\n";
+        if (!expected.equals(value)) {
+            throw new IOException("local identity metadata is inconsistent");
+        }
     }
 
     private void validateExistingPublicMetadata(NodeIdentity identity) throws IOException {
         Path path = directory.resolve(PUBLIC_FILE);
-        if (Files.notExists(path)) throw new IOException("local identity metadata is missing");
+        if (Files.notExists(path)) {
+            throw new IOException("local identity metadata is missing");
+        }
         String value = Files.readString(path, StandardCharsets.US_ASCII);
         String expected = "version=1\nnodeId=" + identity.nodeId() + "\npublicKey="
-                + HexFormat.of().formatHex(identity.publicKeyEncoded()) + "\n";
-        if (!expected.equals(value)) throw new IOException("local identity metadata is inconsistent");
+                + HexFormat.of()
+                .formatHex(identity.publicKeyEncoded()) + "\n";
+        if (!expected.equals(value)) {
+            throw new IOException("local identity metadata is inconsistent");
+        }
     }
 
-    /** Result of one load-or-create operation.
+    /**
+     * Result of one load-or-create operation.
+     *
      * @param identity loaded or created identity
-     * @param created whether the identity was created during this operation
+     * @param created  whether the identity was created during this operation
      */
     public record Result(NodeIdentity identity, boolean created) {
-        /** Validates the non-null identity result. */
+
+        /**
+         * Validates the non-null identity result.
+         */
         public Result {
             Objects.requireNonNull(identity, "identity");
         }
@@ -152,14 +181,17 @@ public final class IdentityBootstrap {
      * Read-only profile inspection with no secret material.
      *
      * @param profileAccessible whether the profile can support local access
-     * @param identityPresent whether a private identity file exists
-     * @param identityValid whether existing identity and public metadata agree
-     * @param nodeId validated node ID, or an empty string
-     * @param detail stable diagnostic detail
+     * @param identityPresent   whether a private identity file exists
+     * @param identityValid     whether existing identity and public metadata agree
+     * @param nodeId            validated node ID, or an empty string
+     * @param detail            stable diagnostic detail
      */
     public record Inspection(boolean profileAccessible, boolean identityPresent, boolean identityValid,
-            String nodeId, String detail) {
-        /** Validates non-null safe inspection values. */
+                             String nodeId, String detail) {
+
+        /**
+         * Validates non-null safe inspection values.
+         */
         public Inspection {
             Objects.requireNonNull(nodeId, "nodeId");
             Objects.requireNonNull(detail, "detail");

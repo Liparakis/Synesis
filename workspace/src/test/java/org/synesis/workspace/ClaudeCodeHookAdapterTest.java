@@ -1,7 +1,6 @@
 package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,9 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
-
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.DecisionRecord;
@@ -23,12 +20,30 @@ import org.synesis.workspace.integration.claude.ClaudeCodeHookAdapter;
 
 final class ClaudeCodeHookAdapterTest {
 
+    private static String escape(String s) {
+        return s.replace("\\", "\\\\");
+    }
+
+    private static void cleanup(Path directory) {
+        try (var stream = Files.walk(directory)) {
+            stream.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (Exception ignored) {
+                        }
+                    });
+        } catch (Exception ignored) {
+        }
+    }
+
     @Test
     void blocksEditOnConstrainedScopeWithOfficialPreToolUseContract() throws Exception {
         Path tempDir = Files.createTempDirectory("hook-test-official-");
         try {
             // Setup profile
-            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate()
+                    .identity();
             UUID projectId = UUID.randomUUID();
             ProjectConfig config = new ProjectConfig(projectId, java.util.Set.of("sl1-" + "1".repeat(64)));
             config.save(tempDir.resolve("project.conf"));
@@ -67,9 +82,12 @@ final class ClaudeCodeHookAdapterTest {
             ClaudeCodeHookAdapter.Result result = adapter.processJson(preToolEventJson);
 
             assertEquals(ClaudeCodeHookAdapter.Outcome.BLOCKED, result.outcome());
-            assertTrue(result.responseJson().contains("\"hookEventName\": \"PreToolUse\""), result.responseJson());
-            assertTrue(result.responseJson().contains("\"permissionDecision\": \"deny\""), result.responseJson());
-            assertTrue(result.responseJson().contains("Lock protocol wire format"), result.responseJson());
+            assertTrue(result.responseJson()
+                    .contains("\"hookEventName\": \"PreToolUse\""), result.responseJson());
+            assertTrue(result.responseJson()
+                    .contains("\"permissionDecision\": \"deny\""), result.responseJson());
+            assertTrue(result.responseJson()
+                    .contains("Lock protocol wire format"), result.responseJson());
 
             // Prove target file content remains completely unchanged
             assertEquals(initialContent, Files.readString(protectedFile));
@@ -90,7 +108,9 @@ final class ClaudeCodeHookAdapterTest {
 
             ClaudeCodeHookAdapter.Result allowedResult = adapter.processJson(unconstrainedJson);
             assertEquals(ClaudeCodeHookAdapter.Outcome.ALLOWED, allowedResult.outcome());
-            assertEquals("{}", allowedResult.responseJson().trim());
+            assertEquals("{}",
+                    allowedResult.responseJson()
+                            .trim());
 
         } finally {
             cleanup(tempDir);
@@ -99,9 +119,11 @@ final class ClaudeCodeHookAdapterTest {
 
     @Test
     void absoluteToRelativePathResolutionAndBoundaryRejection() throws Exception {
-        Path root = Path.of(System.getProperty("java.io.tmpdir"), "synesis-demo").toAbsolutePath();
+        Path root = Path.of(System.getProperty("java.io.tmpdir"), "synesis-demo")
+                .toAbsolutePath();
         Path inside = root.resolve("src/protocol/RecordMessage.java");
-        Path outside = root.resolveSibling("other-project").resolve("src/protocol/RecordMessage.java");
+        Path outside = root.resolveSibling("other-project")
+                .resolve("src/protocol/RecordMessage.java");
 
         // Absolute path inside project root -> normalized relative path
         String resolvedInside = ClaudeCodeHookAdapter.resolveRelativePath(root, inside.toString());
@@ -131,19 +153,11 @@ final class ClaudeCodeHookAdapterTest {
 
         List<ProjectConstraint> effective = ProjectConstraint.filterEffectiveActive(List.of(constraintA, constraintB));
         assertEquals(1, effective.size());
-        assertEquals(idB, effective.get(0).recordId());
-        assertEquals(ProjectConstraint.Effect.WARN, effective.get(0).effect());
-    }
-
-    private static String escape(String s) {
-        return s.replace("\\", "\\\\");
-    }
-
-    private static void cleanup(Path directory) {
-        try (var stream = Files.walk(directory)) {
-            stream.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
-                try { Files.delete(p); } catch (Exception ignored) {}
-            });
-        } catch (Exception ignored) {}
+        assertEquals(idB,
+                effective.get(0)
+                        .recordId());
+        assertEquals(ProjectConstraint.Effect.WARN,
+                effective.get(0)
+                        .effect());
     }
 }

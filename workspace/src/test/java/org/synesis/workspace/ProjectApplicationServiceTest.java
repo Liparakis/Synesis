@@ -7,13 +7,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.ProjectApplicationService;
 
-/** Verifies discovered project initialization and local-state separation. */
+/**
+ * Verifies discovered project initialization and local-state separation.
+ */
 final class ProjectApplicationServiceTest {
+
+    private static String git(Path root, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream()
+                .readAllBytes()).trim();
+        if (process.waitFor() != 0) {
+            throw new IllegalStateException(output);
+        }
+        return output;
+    }
+
     @Test
     void initializesAndDiscoversFromNestedDirectory() throws Exception {
         Path root = Files.createTempDirectory("synesis-init-");
@@ -33,10 +50,14 @@ final class ProjectApplicationServiceTest {
 
         Files.createDirectories(root.resolve("nested/child"));
         ProjectApplicationService.ProjectLocation discovered = service.locate(root.resolve("nested/child"));
-        assertEquals(root.toAbsolutePath().normalize(), discovered.root());
-        assertEquals(initialized.location().projectId(), discovered.projectId());
+        assertEquals(root.toAbsolutePath()
+                .normalize(), discovered.root());
+        assertEquals(initialized.location()
+                .projectId(), discovered.projectId());
         String firstAgents = Files.readString(root.resolve("AGENTS.md"));
-        assertEquals(ProjectApplicationService.InitStatus.ALREADY_INITIALIZED, service.init(root).status());
+        assertEquals(ProjectApplicationService.InitStatus.ALREADY_INITIALIZED,
+                service.init(root)
+                        .status());
         assertEquals(firstAgents, Files.readString(root.resolve("AGENTS.md")));
     }
 
@@ -84,7 +105,8 @@ final class ProjectApplicationServiceTest {
         Files.createDirectories(malformed.resolve(".synesis"));
         Files.writeString(malformed.resolve(".synesis/project.json"), "{}\n");
         ProjectApplicationService.ProjectApplicationException malformedFailure =
-                assertThrows(ProjectApplicationService.ProjectApplicationException.class, () -> service.locate(malformed));
+                assertThrows(ProjectApplicationService.ProjectApplicationException.class,
+                        () -> service.locate(malformed));
         assertEquals("MALFORMED", malformedFailure.code());
     }
 
@@ -95,8 +117,12 @@ final class ProjectApplicationServiceTest {
         var init = service.init(root);
         String peer = "sl1-" + "a".repeat(64);
         var created = service.createProject(init.location(), peer);
-        assertEquals(init.location().projectId(), created.projectId());
-        assertTrue(Files.readString(root.resolve(".synesis/local/profile/project.conf")).contains(init.location().projectId().toString()));
+        assertEquals(init.location()
+                .projectId(), created.projectId());
+        assertTrue(Files.readString(root.resolve(".synesis/local/profile/project.conf"))
+                .contains(init.location()
+                        .projectId()
+                        .toString()));
     }
 
     @Test
@@ -116,15 +142,5 @@ final class ProjectApplicationServiceTest {
         assertEquals(ProjectApplicationService.InitStatus.ALREADY_INITIALIZED, second.status());
         assertEquals("GIT_HEAD_VALID", second.gitHeadStatus());
         assertEquals(head, git(root, "rev-parse", "--verify", "HEAD"));
-    }
-
-    private static String git(Path root, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git"; command[1] = "-C"; command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes()).trim();
-        if (process.waitFor() != 0) throw new IllegalStateException(output);
-        return output;
     }
 }

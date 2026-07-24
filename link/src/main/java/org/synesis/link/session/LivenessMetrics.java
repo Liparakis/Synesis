@@ -10,18 +10,18 @@ import java.util.Objects;
  * or authentication transcripts. The snapshot is eventually consistent with
  * a concurrently running control stream.</p>
  *
- * @param heartbeatSentCount heartbeats accepted for transport write
- * @param heartbeatReceivedCount newest valid heartbeats received
+ * @param heartbeatSentCount         heartbeats accepted for transport write
+ * @param heartbeatReceivedCount     newest valid heartbeats received
  * @param heartbeatAcknowledgedCount newest valid acknowledgements received
- * @param duplicateOrStaleCount duplicate or stale sequence observations
- * @param heartbeatSendFailureCount failed heartbeat writes
- * @param lastValidPeerActivityAge current monotonic age of valid peer activity
- * @param estimatedLocalRtt locally measured echoed-marker round-trip duration, if available
- * @param liveToSuspectCount LIVE to SUSPECT transitions
- * @param suspectToLiveCount SUSPECT to LIVE recoveries
- * @param suspectToExpiredCount SUSPECT to EXPIRED transitions
- * @param droppedEventCount liveness events dropped by a bounded dispatcher
- * @param terminalTransitionCount terminal liveness transitions selected
+ * @param duplicateOrStaleCount      duplicate or stale sequence observations
+ * @param heartbeatSendFailureCount  failed heartbeat writes
+ * @param lastValidPeerActivityAge   current monotonic age of valid peer activity
+ * @param estimatedLocalRtt          locally measured echoed-marker round-trip duration, if available
+ * @param liveToSuspectCount         LIVE to SUSPECT transitions
+ * @param suspectToLiveCount         SUSPECT to LIVE recoveries
+ * @param suspectToExpiredCount      SUSPECT to EXPIRED transitions
+ * @param droppedEventCount          liveness events dropped by a bounded dispatcher
+ * @param terminalTransitionCount    terminal liveness transitions selected
  * @since 1.0
  */
 public record LivenessMetrics(
@@ -38,7 +38,9 @@ public record LivenessMetrics(
         long droppedEventCount,
         long terminalTransitionCount) {
 
-    /** Validates immutable diagnostic values. */
+    /**
+     * Validates immutable diagnostic values.
+     */
     public LivenessMetrics {
         Objects.requireNonNull(lastValidPeerActivityAge, "last valid peer activity age");
         Objects.requireNonNull(estimatedLocalRtt, "estimated local RTT");

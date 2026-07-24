@@ -9,15 +9,17 @@ import java.util.Objects;
  * <p>The elapsed value is monotonic silence observed locally; it is not a wall
  * clock timestamp and must not be interpreted as remote time.</p>
  *
- * @param from state before the transition
- * @param to state after the transition
+ * @param from               state before the transition
+ * @param to                 state after the transition
  * @param elapsedPeerSilence monotonic peer-silence age observed at selection
  * @since 1.0
  */
 public record LivenessTransition(LivenessState from, LivenessState to,
-        Duration elapsedPeerSilence) {
+                                 Duration elapsedPeerSilence) {
 
-    /** Validates an immutable transition value. */
+    /**
+     * Validates an immutable transition value.
+     */
     public LivenessTransition {
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(to, "to");

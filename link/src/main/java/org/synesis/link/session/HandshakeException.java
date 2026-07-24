@@ -1,5 +1,7 @@
 package org.synesis.link.session;
 
+import java.io.Serial;
+
 /**
  * Bounded public failure for a handshake that never produced a session.
  *
@@ -8,8 +10,11 @@ package org.synesis.link.session;
  */
 public final class HandshakeException extends Exception {
 
+    @Serial
     private static final long serialVersionUID = 1L;
-    /** Stable category retained for callers. */
+    /**
+     * Stable category retained for callers.
+     */
     private final HandshakeFailureCode code;
 
     /**
@@ -27,5 +32,7 @@ public final class HandshakeException extends Exception {
      *
      * @return failure code
      */
-    public HandshakeFailureCode code() { return code; }
+    public HandshakeFailureCode code() {
+        return code;
+    }
 }

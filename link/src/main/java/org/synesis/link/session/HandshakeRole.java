@@ -1,10 +1,16 @@
 package org.synesis.link.session;
 
-/** The two roles used when binding a handshake transcript. */
+/**
+ * The two roles used when binding a handshake transcript.
+ */
 public enum HandshakeRole {
-    /** The endpoint that opens the connection. */
+    /**
+     * The endpoint that opens the connection.
+     */
     INITIATOR,
-    /** The endpoint that accepts the connection. */
+    /**
+     * The endpoint that accepts the connection.
+     */
     RESPONDER;
 
     /**

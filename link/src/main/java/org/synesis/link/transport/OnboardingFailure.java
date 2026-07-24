@@ -12,18 +12,22 @@ import java.util.Objects;
  * @since 1.0
  */
 public final class OnboardingFailure extends Exception {
+
     private static final long serialVersionUID = 1L;
-    /** Stable typed classification for this failure. */
+    /**
+     * Stable typed classification for this failure.
+     */
     private final OnboardingFailureCode code;
 
     /**
      * Creates a redacted typed failure.
      *
-     * @param code stable failure classification
+     * @param code  stable failure classification
      * @param cause underlying failure, or {@code null}
      */
     public OnboardingFailure(OnboardingFailureCode code, Throwable cause) {
-        super(Objects.requireNonNull(code, "code").name(), cause);
+        super(Objects.requireNonNull(code, "code")
+                .name(), cause);
         this.code = code;
     }
 

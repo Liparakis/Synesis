@@ -10,12 +10,15 @@ import java.util.Objects;
  * intentionally available to the terminal adapter but never included in
  * exception text.
  *
- * @param type event classification
+ * @param type  event classification
  * @param value bounded event value, or an empty string when no value applies
  * @since 1.0
  */
 public record OnboardingEvent(OnboardingEventType type, String value) {
-    /** Creates a validated event. */
+
+    /**
+     * Creates a validated event.
+     */
     public OnboardingEvent {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(value, "value");

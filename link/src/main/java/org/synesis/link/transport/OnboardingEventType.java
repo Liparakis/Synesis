@@ -6,44 +6,84 @@ package org.synesis.link.transport;
  * @since 1.0
  */
 public enum OnboardingEventType {
-    /** The local identity was created. */
+    /**
+     * The local identity was created.
+     */
     IDENTITY_CREATED,
-    /** The local identity was loaded. */
+    /**
+     * The local identity was loaded.
+     */
     IDENTITY_LOADED,
-    /** A session identity and capability were allocated. */
+    /**
+     * A session identity and capability were allocated.
+     */
     SESSION_CREATED,
-    /** The host listener is accepting connections. */
+    /**
+     * The host listener is accepting connections.
+     */
     LISTENER_READY,
-    /** Candidate gathering completed; the value is the bounded count. */
+    /**
+     * Candidate gathering completed; the value is the bounded count.
+     */
     CANDIDATES_GATHERED,
-    /** A signed candidate descriptor was created. */
+    /**
+     * A signed candidate descriptor was created.
+     */
     DESCRIPTOR_CREATED,
-    /** A signed invitation was created. */
+    /**
+     * A signed invitation was created.
+     */
     INVITE_CREATED,
-    /** An invitation was parsed. */
+    /**
+     * An invitation was parsed.
+     */
     INVITE_PARSED,
-    /** An invitation passed version, signature, and expiry checks. */
+    /**
+     * An invitation passed version, signature, and expiry checks.
+     */
     INVITE_VERIFIED,
-    /** The invitation's host identity was pinned. */
+    /**
+     * The invitation's host identity was pinned.
+     */
     HOST_IDENTITY_PINNED,
-    /** The local candidate descriptor is ready. */
+    /**
+     * The local candidate descriptor is ready.
+     */
     LOCAL_DESCRIPTOR_CREATED,
-    /** The selected candidate pair identifier. */
+    /**
+     * The selected candidate pair identifier.
+     */
     PATH_SELECTED,
-    /** The exact invitation share link. */
+    /**
+     * The exact invitation share link.
+     */
     SHARE_LINK,
-    /** An authenticated peer session was connected. */
+    /**
+     * An authenticated peer session was connected.
+     */
     PEER_CONNECTED,
-    /** The authenticated remote node identifier. */
+    /**
+     * The authenticated remote node identifier.
+     */
     PEER_IDENTITY_VERIFIED,
-    /** Whether the control path is ready. */
+    /**
+     * Whether the control path is ready.
+     */
     CONTROL_READY,
-    /** The current liveness state. */
+    /**
+     * The current liveness state.
+     */
     LIVENESS,
-    /** The bounded demo work result status. */
+    /**
+     * The bounded demo work result status.
+     */
     WORK_RESULT,
-    /** The local node identifier. */
+    /**
+     * The local node identifier.
+     */
     NODE_ID,
-    /** The session closed after bounded cleanup. */
+    /**
+     * The session closed after bounded cleanup.
+     */
     SESSION_CLOSED
 }

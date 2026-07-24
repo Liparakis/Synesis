@@ -9,13 +9,37 @@ import com.google.zxing.qrcode.QRCodeWriter;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies exact-link QR encoding, dimensions, and terminal skip behavior. */
+/**
+ * Verifies exact-link QR encoding, dimensions, and terminal skip behavior.
+ */
 final class CompactQrRendererTest {
+
+    private static BitMatrix encode(String link) {
+        try {
+            return new QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 1, 1);
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    private static boolean upper(char glyph) {
+        return glyph == '█' || glyph == '▀';
+    }
+
+    private static boolean lower(char glyph) {
+        return glyph == '█' || glyph == '▄';
+    }
+
+    private static boolean black(BitMatrix matrix, int x, int y) {
+        return x >= 0 && y >= 0 && x < matrix.getWidth() && y < matrix.getHeight() && matrix.get(x, y);
+    }
+
     @Test
     void rendersTheExactZxingMatrixForTheOriginalLink() throws Exception {
         String link = "synesis://join/SYN1-exact-link";
         BitMatrix expected = new QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 1, 1);
-        String[] rows = new CompactQrRenderer(200, true).render(link).split("\\R");
+        String[] rows = new CompactQrRenderer(200, true).render(link)
+                .split("\\R");
         int border = 2;
         assertEquals(expected.getWidth() + border * 2, rows[0].length());
         assertEquals((expected.getHeight() + border * 2 + 1) / 2, rows.length);
@@ -39,20 +63,5 @@ final class CompactQrRendererTest {
         IllegalArgumentException unicode = assertThrows(IllegalArgumentException.class,
                 () -> new CompactQrRenderer(200, false).render("synesis://join/SYN1-unicode"));
         assertEquals("UNICODE_UNSUPPORTED", unicode.getMessage());
-    }
-
-    private static BitMatrix encode(String link) {
-        try {
-            return new QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 1, 1);
-        } catch (Exception exception) {
-            throw new AssertionError(exception);
-        }
-    }
-
-    private static boolean upper(char glyph) { return glyph == '█' || glyph == '▀'; }
-    private static boolean lower(char glyph) { return glyph == '█' || glyph == '▄'; }
-
-    private static boolean black(BitMatrix matrix, int x, int y) {
-        return x >= 0 && y >= 0 && x < matrix.getWidth() && y < matrix.getHeight() && matrix.get(x, y);
     }
 }

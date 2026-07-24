@@ -33,7 +33,7 @@ public final class SessionAuthenticator {
      * @throws GeneralSecurityException if signing fails
      */
     public static HandshakeProof createProof(NodeIdentity identity, HandshakeTranscript transcript,
-                                             HandshakeRole role) throws GeneralSecurityException {
+            HandshakeRole role) throws GeneralSecurityException {
         Objects.requireNonNull(transcript, "transcript");
         Objects.requireNonNull(role, "role");
         return HandshakeProof.create(identity, transcript.version(), transcript.sessionId(),
@@ -56,8 +56,8 @@ public final class SessionAuthenticator {
      * @throws IllegalStateException    if the transcript was already accepted
      */
     public static PeerSession establish(NodeIdentity localIdentity, String expectedRemoteNodeId,
-                                        HandshakeTranscript transcript, HandshakeProof localProof, HandshakeProof remoteProof,
-                                        ReplayGuard replayGuard, Instant establishedAt) throws GeneralSecurityException {
+            HandshakeTranscript transcript, HandshakeProof localProof, HandshakeProof remoteProof,
+            ReplayGuard replayGuard, Instant establishedAt) throws GeneralSecurityException {
         Objects.requireNonNull(localIdentity, "local identity");
         Objects.requireNonNull(transcript, "transcript");
         Objects.requireNonNull(localProof, "local proof");
@@ -71,16 +71,19 @@ public final class SessionAuthenticator {
         if (expectedRemoteNodeId != null && !remoteNodeId.equals(expectedRemoteNodeId)) {
             throw new IllegalArgumentException("expected remote identity does not match transcript");
         }
-        if (!transcript.alpn().equals(org.synesis.link.SynesisLink.ALPN)) {
+        if (!transcript.alpn()
+                .equals(org.synesis.link.SynesisLink.ALPN)) {
             throw new IllegalArgumentException("unexpected Synesis Link ALPN");
         }
-        if (!localIdentity.nodeId().equals(transcript.nodeId(localRole))
+        if (!localIdentity.nodeId()
+                .equals(transcript.nodeId(localRole))
                 || !java.util.Arrays.equals(localIdentity.publicKeyEncoded(), transcript.publicKeyEncoded(localRole))) {
             throw new IllegalArgumentException("local identity does not match transcript");
         }
         verifyProof(localProof, transcript, localRole);
         verifyProof(remoteProof, transcript, remoteRole);
-        if (expectedRemoteNodeId != null && !remoteProof.nodeId().equals(expectedRemoteNodeId)
+        if (expectedRemoteNodeId != null && !remoteProof.nodeId()
+                .equals(expectedRemoteNodeId)
                 || !java.util.Arrays.equals(remoteProof.publicKeyEncoded(), transcript.publicKeyEncoded(remoteRole))) {
             throw new IllegalArgumentException("remote identity proof does not match expectation");
         }
@@ -105,10 +108,12 @@ public final class SessionAuthenticator {
     }
 
     private static HandshakeRole roleFor(HandshakeTranscript transcript, String nodeId) {
-        if (transcript.nodeId(HandshakeRole.INITIATOR).equals(nodeId)) {
+        if (transcript.nodeId(HandshakeRole.INITIATOR)
+                .equals(nodeId)) {
             return HandshakeRole.INITIATOR;
         }
-        if (transcript.nodeId(HandshakeRole.RESPONDER).equals(nodeId)) {
+        if (transcript.nodeId(HandshakeRole.RESPONDER)
+                .equals(nodeId)) {
             return HandshakeRole.RESPONDER;
         }
         throw new IllegalArgumentException("local identity is absent from transcript");
@@ -116,8 +121,10 @@ public final class SessionAuthenticator {
 
     private static String fingerprint(HandshakeTranscript transcript) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(transcript.encoded());
-            return HexFormat.of().formatHex(digest);
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(transcript.encoded());
+            return HexFormat.of()
+                    .formatHex(digest);
         } catch (java.security.NoSuchAlgorithmException impossible) {
             throw new AssertionError("SHA-256 is required by the Java platform", impossible);
         }

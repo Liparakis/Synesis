@@ -4,6 +4,7 @@ package org.synesis.cli.exit;
  * Stable process exit codes for the standalone Synesis CLI.
  */
 public final class ExitCodes {
+
     /**
      * Successful command completion.
      */

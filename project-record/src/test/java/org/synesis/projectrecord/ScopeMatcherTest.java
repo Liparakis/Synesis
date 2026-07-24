@@ -11,8 +11,10 @@ final class ScopeMatcherTest {
 
     @Test
     void normalizesPathSeparatorsAndDots() {
-        assertEquals("src/protocol/RecordMessage.java", ScopeMatcher.normalizePath("src\\protocol\\RecordMessage.java"));
-        assertEquals("src/protocol/RecordMessage.java", ScopeMatcher.normalizePath("./src//protocol/./RecordMessage.java"));
+        assertEquals("src/protocol/RecordMessage.java",
+                ScopeMatcher.normalizePath("src\\protocol\\RecordMessage.java"));
+        assertEquals("src/protocol/RecordMessage.java",
+                ScopeMatcher.normalizePath("./src//protocol/./RecordMessage.java"));
         assertEquals("file.java", ScopeMatcher.normalizePath("file.java"));
     }
 
@@ -21,8 +23,10 @@ final class ScopeMatcherTest {
         assertThrows(IllegalArgumentException.class, () -> ScopeMatcher.normalizePath("/src/protocol/File.java"));
         assertThrows(IllegalArgumentException.class, () -> ScopeMatcher.normalizePath("../src/protocol/File.java"));
         assertThrows(IllegalArgumentException.class, () -> ScopeMatcher.normalizePath("src/../protocol/File.java"));
-        assertThrows(IllegalArgumentException.class, () -> ScopeMatcher.normalizePath("C:\\project\\src\\protocol\\File.java"));
-        assertThrows(IllegalArgumentException.class, () -> ScopeMatcher.normalizePath("D:/project/src/protocol/File.java"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ScopeMatcher.normalizePath("C:\\project\\src\\protocol\\File.java"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ScopeMatcher.normalizePath("D:/project/src/protocol/File.java"));
     }
 
     @Test

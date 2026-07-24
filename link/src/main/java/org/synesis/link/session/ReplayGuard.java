@@ -14,13 +14,17 @@ import java.util.Set;
  */
 public final class ReplayGuard {
 
-    /** Default maximum number of accepted transcript fingerprints retained. */
+    /**
+     * Default maximum number of accepted transcript fingerprints retained.
+     */
     public static final int DEFAULT_MAX_ENTRIES = 1_024;
 
     private final int maxEntries;
     private final Set<String> fingerprints = new HashSet<>();
 
-    /** Creates a guard with the default bounded capacity. */
+    /**
+     * Creates a guard with the default bounded capacity.
+     */
     public ReplayGuard() {
         this(DEFAULT_MAX_ENTRIES);
     }

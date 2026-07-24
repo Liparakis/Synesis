@@ -11,10 +11,10 @@ import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
@@ -22,9 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import java.security.spec.X509EncodedKeySpec;
-
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -39,11 +36,17 @@ import org.synesis.link.identity.NodeIdentity;
  */
 public final class CandidateDescriptor {
 
-    /** Maximum encoded descriptor size accepted by the parser. */
+    /**
+     * Maximum encoded descriptor size accepted by the parser.
+     */
     public static final int MAX_BYTES = 8_192;
-    /** Maximum candidate count accepted in one descriptor. */
+    /**
+     * Maximum candidate count accepted in one descriptor.
+     */
     public static final int MAX_CANDIDATES = 32;
-    /** Maximum allowed clock skew for validity checks. */
+    /**
+     * Maximum allowed clock skew for validity checks.
+     */
     public static final Duration DEFAULT_CLOCK_SKEW = Duration.ofMinutes(2);
 
     private static final int MAGIC = 0x534C4431;
@@ -52,8 +55,10 @@ public final class CandidateDescriptor {
     private static final int MAX_PUBLIC_KEY_BYTES = 256;
     private static final int MAX_SIGNATURE_BYTES = 128;
     private static final Comparator<Candidate> CANDIDATE_ORDER = Comparator
-            .comparing((Candidate candidate) -> candidate.type().name())
-            .thenComparing(candidate -> HexFormat.of().formatHex(candidate.addressBytes()))
+            .comparing((Candidate candidate) -> candidate.type()
+                    .name())
+            .thenComparing(candidate -> HexFormat.of()
+                    .formatHex(candidate.addressBytes()))
             .thenComparingInt(Candidate::port)
             .thenComparingInt(Candidate::priority);
 
@@ -83,14 +88,14 @@ public final class CandidateDescriptor {
     /**
      * Creates a signed descriptor from a node identity.
      *
-     * @param identity signing identity
-     * @param issuedAt inclusive validity start
-     * @param expiresAt exclusive validity end; must be after {@code issuedAt}
+     * @param identity   signing identity
+     * @param issuedAt   inclusive validity start
+     * @param expiresAt  exclusive validity end; must be after {@code issuedAt}
      * @param candidates candidate collection; duplicates are removed
      * @return canonical signed descriptor
      * @throws GeneralSecurityException if signing fails
      * @throws IllegalArgumentException if bounds or interval are invalid
-     * @throws NullPointerException if an argument is {@code null}
+     * @throws NullPointerException     if an argument is {@code null}
      */
     public static CandidateDescriptor create(NodeIdentity identity, Instant issuedAt, Instant expiresAt,
             Collection<Candidate> candidates) throws GeneralSecurityException {
@@ -109,7 +114,7 @@ public final class CandidateDescriptor {
      *
      * @param encoded complete descriptor bytes
      * @return decoded descriptor requiring {@link #verify()} before use
-     * @throws IOException if framing, bounds, or values are malformed
+     * @throws IOException          if framing, bounds, or values are malformed
      * @throws NullPointerException if {@code encoded} is {@code null}
      */
     public static CandidateDescriptor decode(byte[] encoded) throws IOException {
@@ -167,95 +172,6 @@ public final class CandidateDescriptor {
         }
     }
 
-    /**
-     * Returns the complete canonical descriptor bytes.
-     *
-     * @return a fresh encoded byte array
-     */
-    public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream(canonicalBytes.length + signature.length + 2);
-            bytes.write(canonicalBytes);
-            try (DataOutputStream output = new DataOutputStream(bytes)) {
-                output.writeShort(signature.length);
-                output.write(signature);
-            }
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new AssertionError("byte array output cannot fail", impossible);
-        }
-    }
-
-    /**
-     * Verifies the descriptor signature and node-ID/public-key binding.
-     *
-     * @return {@code true} only when the signature and binding are valid
-     * @throws GeneralSecurityException if key parsing or signature verification fails
-     */
-    public boolean verify() throws GeneralSecurityException {
-        PublicKey signer = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(publicKey));
-        if (!NodeIdentity.deriveNodeId(publicKey).equals(nodeId)) {
-            return false;
-        }
-        Signature verifier = Signature.getInstance("Ed25519");
-        verifier.initVerify(signer);
-        verifier.update(canonicalBytes);
-        return verifier.verify(signature);
-    }
-
-    /**
-     * Checks signature, node binding, and validity interval at a bounded clock-skew policy.
-     *
-     * @param now local wall-clock instant used only for descriptor expiry
-     * @param allowedClockSkew permitted issue-time skew; non-negative
-     * @return {@code true} when the descriptor is authentic and currently valid
-     * @throws GeneralSecurityException if signature verification fails
-     * @throws IllegalArgumentException if the skew is negative
-     */
-    public boolean isValidAt(Instant now, Duration allowedClockSkew) throws GeneralSecurityException {
-        Objects.requireNonNull(now, "now");
-        Objects.requireNonNull(allowedClockSkew, "allowed clock skew");
-        if (allowedClockSkew.isNegative()) {
-            throw new IllegalArgumentException("clock skew must be non-negative");
-        }
-        return verify() && !now.isBefore(issuedAt.minus(allowedClockSkew)) && now.isBefore(expiresAt);
-    }
-
-    /**
-     * Returns the signer node ID.
-     *
-     * @return signer node ID; safe to log
-     */
-    public String nodeId() { return nodeId; }
-
-    /**
-     * Returns a copy of the signer's public key bytes.
-     *
-     * @return X.509 public-key bytes
-     */
-    public byte[] publicKeyEncoded() { return publicKey.clone(); }
-
-    /**
-     * Returns the inclusive issue instant.
-     *
-     * @return issue instant
-     */
-    public Instant issuedAt() { return issuedAt; }
-
-    /**
-     * Returns the exclusive expiry instant.
-     *
-     * @return expiry instant
-     */
-    public Instant expiresAt() { return expiresAt; }
-
-    /**
-     * Returns an immutable normalized candidate list.
-     *
-     * @return sorted, duplicate-free candidates
-     */
-    public List<Candidate> candidates() { return candidates; }
-
     private static List<Candidate> normalize(Collection<Candidate> values) {
         Objects.requireNonNull(values, "candidates");
         if (values.size() > MAX_CANDIDATES) {
@@ -272,7 +188,9 @@ public final class CandidateDescriptor {
     }
 
     private static String candidateKey(Candidate candidate) {
-        return candidate.type().name() + ':' + HexFormat.of().formatHex(candidate.addressBytes()) + ':'
+        return candidate.type()
+                .name() + ':' + HexFormat.of()
+                .formatHex(candidate.addressBytes()) + ':'
                 + candidate.port() + ':' + candidate.priority();
     }
 
@@ -295,7 +213,8 @@ public final class CandidateDescriptor {
                 output.writeShort(candidates.size());
                 for (Candidate candidate : candidates) {
                     byte[] address = candidate.addressBytes();
-                    output.writeByte(candidate.type().ordinal());
+                    output.writeByte(candidate.type()
+                            .ordinal());
                     writeBytes(output, address);
                     output.writeShort(candidate.port());
                     output.writeInt(candidate.priority());
@@ -328,5 +247,106 @@ public final class CandidateDescriptor {
 
     private static String readString(DataInputStream input, int max) throws IOException {
         return new String(readBytes(input, max), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Returns the complete canonical descriptor bytes.
+     *
+     * @return a fresh encoded byte array
+     */
+    public byte[] encoded() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream(canonicalBytes.length + signature.length + 2);
+            bytes.write(canonicalBytes);
+            try (DataOutputStream output = new DataOutputStream(bytes)) {
+                output.writeShort(signature.length);
+                output.write(signature);
+            }
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError("byte array output cannot fail", impossible);
+        }
+    }
+
+    /**
+     * Verifies the descriptor signature and node-ID/public-key binding.
+     *
+     * @return {@code true} only when the signature and binding are valid
+     * @throws GeneralSecurityException if key parsing or signature verification fails
+     */
+    public boolean verify() throws GeneralSecurityException {
+        PublicKey signer = KeyFactory.getInstance("Ed25519")
+                .generatePublic(new X509EncodedKeySpec(publicKey));
+        if (!NodeIdentity.deriveNodeId(publicKey)
+                .equals(nodeId)) {
+            return false;
+        }
+        Signature verifier = Signature.getInstance("Ed25519");
+        verifier.initVerify(signer);
+        verifier.update(canonicalBytes);
+        return verifier.verify(signature);
+    }
+
+    /**
+     * Checks signature, node binding, and validity interval at a bounded clock-skew policy.
+     *
+     * @param now              local wall-clock instant used only for descriptor expiry
+     * @param allowedClockSkew permitted issue-time skew; non-negative
+     * @return {@code true} when the descriptor is authentic and currently valid
+     * @throws GeneralSecurityException if signature verification fails
+     * @throws IllegalArgumentException if the skew is negative
+     */
+    public boolean isValidAt(Instant now, Duration allowedClockSkew) throws GeneralSecurityException {
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(allowedClockSkew, "allowed clock skew");
+        if (allowedClockSkew.isNegative()) {
+            throw new IllegalArgumentException("clock skew must be non-negative");
+        }
+        return verify() && !now.isBefore(issuedAt.minus(allowedClockSkew)) && now.isBefore(expiresAt);
+    }
+
+    /**
+     * Returns the signer node ID.
+     *
+     * @return signer node ID; safe to log
+     */
+    public String nodeId() {
+        return nodeId;
+    }
+
+    /**
+     * Returns a copy of the signer's public key bytes.
+     *
+     * @return X.509 public-key bytes
+     */
+    public byte[] publicKeyEncoded() {
+        return publicKey.clone();
+    }
+
+    /**
+     * Returns the inclusive issue instant.
+     *
+     * @return issue instant
+     */
+    public Instant issuedAt() {
+        return issuedAt;
+    }
+
+    /**
+     * Returns the exclusive expiry instant.
+     *
+     * @return expiry instant
+     */
+    public Instant expiresAt() {
+        return expiresAt;
+    }
+
+    /**
+     * Returns an immutable normalized candidate list.
+     *
+     * @return sorted, duplicate-free candidates
+     */
+    public List<Candidate> candidates() {
+        return candidates;
     }
 }

@@ -5,53 +5,24 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Deterministic in-memory projection of prediction events. */
+/**
+ * Deterministic in-memory projection of prediction events.
+ */
 public final class PredictionProjection {
+
     private final Map<UUID, PredictionState> states = new LinkedHashMap<>();
 
-    /** Creates an empty projection. */
-    public PredictionProjection() { }
-
     /**
-     * Applies one event and rejects illegal lifecycle transitions.
-     * @param event event to apply
+     * Creates an empty projection.
      */
-    public synchronized void apply(PredictionEvent event) {
-        Objects.requireNonNull(event, "event");
-        if (!isPredictionEvent(event.type())) return;
-        PredictionState next = validate(event);
-        states.put(event.predictionId(), next);
+    public PredictionProjection() {
     }
-
-    /**
-     * Validates an event against the current state without mutating the projection.
-     * @param event event to validate
-     * @return resulting state if the event were applied
-     */
-    public synchronized PredictionState validate(PredictionEvent event) {
-        Objects.requireNonNull(event, "event");
-        if (!isPredictionEvent(event.type())) return null;
-        return transition(states.get(event.predictionId()), event.type());
-    }
-
-    /**
-     * Returns the current state, or empty when no creation event has arrived.
-     * @param predictionId prediction identifier
-     * @return current state when known
-     */
-    public synchronized java.util.Optional<PredictionState> state(UUID predictionId) {
-        return java.util.Optional.ofNullable(states.get(predictionId));
-    }
-
-    /**
-     * Returns a stable snapshot of all known prediction states.
-     * @return immutable state snapshot
-     */
-    public synchronized Map<UUID, PredictionState> snapshot() { return Map.copyOf(states); }
 
     private static PredictionState transition(PredictionState current, PredictionEventType type) {
         if (current == null) {
-            if (type == PredictionEventType.PREDICTION_CREATED) return PredictionState.PROPOSED;
+            if (type == PredictionEventType.PREDICTION_CREATED) {
+                return PredictionState.PROPOSED;
+            }
             throw new IllegalStateException("prediction must be created first");
         }
         return switch (type) {
@@ -76,7 +47,10 @@ public final class PredictionProjection {
 
     private static PredictionState require(PredictionState current, PredictionState result,
             PredictionState... allowed) {
-        if (java.util.Arrays.asList(allowed).contains(current)) return result;
+        if (java.util.Arrays.asList(allowed)
+                .contains(current)) {
+            return result;
+        }
         throw new IllegalStateException("invalid transition from " + current);
     }
 
@@ -97,5 +71,52 @@ public final class PredictionProjection {
             case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> false;
             default -> true;
         };
+    }
+
+    /**
+     * Applies one event and rejects illegal lifecycle transitions.
+     *
+     * @param event event to apply
+     */
+    public synchronized void apply(PredictionEvent event) {
+        Objects.requireNonNull(event, "event");
+        if (!isPredictionEvent(event.type())) {
+            return;
+        }
+        PredictionState next = validate(event);
+        states.put(event.predictionId(), next);
+    }
+
+    /**
+     * Validates an event against the current state without mutating the projection.
+     *
+     * @param event event to validate
+     * @return resulting state if the event were applied
+     */
+    public synchronized PredictionState validate(PredictionEvent event) {
+        Objects.requireNonNull(event, "event");
+        if (!isPredictionEvent(event.type())) {
+            return null;
+        }
+        return transition(states.get(event.predictionId()), event.type());
+    }
+
+    /**
+     * Returns the current state, or empty when no creation event has arrived.
+     *
+     * @param predictionId prediction identifier
+     * @return current state when known
+     */
+    public synchronized java.util.Optional<PredictionState> state(UUID predictionId) {
+        return java.util.Optional.ofNullable(states.get(predictionId));
+    }
+
+    /**
+     * Returns a stable snapshot of all known prediction states.
+     *
+     * @return immutable state snapshot
+     */
+    public synchronized Map<UUID, PredictionState> snapshot() {
+        return Map.copyOf(states);
     }
 }

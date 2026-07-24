@@ -68,6 +68,7 @@ import org.synesis.link.session.SessionCloseReason;
  * @since 1.0
  */
 public final class Onboarding {
+
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int NONCE_BYTES = 16;
     private final Path profileDirectory;
@@ -78,7 +79,7 @@ public final class Onboarding {
      *
      * @param profileDirectory profile directory; it may be created by host or
      *                         join identity bootstrap
-     * @param events synchronous operational-event listener
+     * @param events           synchronous operational-event listener
      */
     public Onboarding(Path profileDirectory, Consumer<OnboardingEvent> events) {
         this.profileDirectory = Objects.requireNonNull(profileDirectory, "profile directory");
@@ -95,6 +96,83 @@ public final class Onboarding {
         return new Onboarding(IdentityBootstrap.defaultDirectory(), events);
     }
 
+    private static byte[] randomBytes() {
+        byte[] value = new byte[NONCE_BYTES];
+        RANDOM.nextBytes(value);
+        return value;
+    }
+
+    private static List<Candidate> gather(String id, int port) throws Exception {
+        CandidateProvider provider = new LocalInterfaceCandidateProvider(id, port, 0);
+        try (CandidateGatherer gatherer = new CandidateGatherer(CandidateGatheringPolicy.defaults())) {
+            return gatherer.gather(List.of(provider))
+                    .completion()
+                    .toCompletableFuture()
+                    .get(10, TimeUnit.SECONDS)
+                    .candidates();
+        }
+    }
+
+    private static ConnectionAttempt attempt(NodeIdentity identity, CandidateDescriptor host,
+            HandshakeTranscript transcript, Channel udp, CandidatePair pair,
+            PeerSession.ApplicationStreamHandler applicationHandler) {
+        return new ConnectionAttempt() {
+            private volatile QuicChannel connection;
+
+            @Override
+            public CompletionStage<PeerSession> connect(org.synesis.link.candidate.CandidateCancellation cancellation) {
+                CompletableFuture<PeerSession> result = new CompletableFuture<>();
+                QuicChannel.newBootstrap(udp)
+                        .handler(new ChannelInboundHandlerAdapter())
+                        .streamHandler(new ChannelInboundHandlerAdapter())
+                        .remoteAddress(new InetSocketAddress(pair.remote()
+                                .address(),
+                                pair.remote()
+                                        .port()))
+                        .connect()
+                        .addListener(future -> {
+                            if (!future.isSuccess()) {
+                                result.completeExceptionally(future.cause());
+                                return;
+                            }
+                            connection = (QuicChannel) future.getNow();
+                            CompletableFuture<PeerSession> established = new CompletableFuture<>();
+                            try {
+                                HandshakeProof proof = SessionAuthenticator.createProof(identity, transcript,
+                                        HandshakeRole.INITIATOR);
+                                connection.createStream(QuicStreamType.BIDIRECTIONAL,
+                                        NettySessionHandshake.clientStreamHandler(identity, host.nodeId(), transcript,
+                                                proof, new ReplayGuard(), established,
+                                                org.synesis.link.session.LivenessConfiguration.DEFAULT,
+                                                applicationHandler));
+                                established.whenComplete((session, failure) -> {
+                                    if (failure == null) {
+                                        result.complete(session);
+                                    } else {
+                                        result.completeExceptionally(failure);
+                                    }
+                                });
+                            } catch (Exception exception) {
+                                result.completeExceptionally(exception);
+                            }
+                        });
+                return result;
+            }
+
+            @Override
+            public void cancel() {
+                if (connection != null) {
+                    connection.close()
+                            .addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
+                }
+            }
+        };
+    }
+
+    private static OnboardingFailure failure(OnboardingFailureCode code, Throwable cause) {
+        return new OnboardingFailure(code, cause);
+    }
+
     /**
      * Loads or creates the local identity and emits its status and node ID.
      *
@@ -105,8 +183,11 @@ public final class Onboarding {
         try {
             IdentityBootstrap.Result result = bootstrap().loadOrCreate();
             emit(result.created() ? OnboardingEventType.IDENTITY_CREATED : OnboardingEventType.IDENTITY_LOADED, "");
-            emit(OnboardingEventType.NODE_ID, result.identity().nodeId());
-            return result.identity().nodeId();
+            emit(OnboardingEventType.NODE_ID,
+                    result.identity()
+                            .nodeId());
+            return result.identity()
+                    .nodeId();
         } catch (Exception failure) {
             throw failure(OnboardingFailureCode.IDENTITY_FAILED, failure);
         }
@@ -117,18 +198,19 @@ public final class Onboarding {
      *
      * @param expectedPeer optional expected peer node ID, or {@code null}
      * @throws OnboardingFailure when identity, listener, candidate, or session
-     *                            setup fails or the bounded host wait expires
+     *                           setup fails or the bounded host wait expires
      */
     public void host(String expectedPeer) throws OnboardingFailure {
-        host(expectedPeer, null, session -> { });
+        host(expectedPeer, null, session -> {
+        });
     }
 
     /**
      * Hosts one invitation and runs a bounded callback on the authenticated session.
      *
-     * @param expectedPeer optional expected peer node ID, or {@code null}
+     * @param expectedPeer       optional expected peer node ID, or {@code null}
      * @param applicationHandler optional bounded application-stream handler
-     * @param sessionAction callback invoked after control readiness
+     * @param sessionAction      callback invoked after control readiness
      * @throws OnboardingFailure if setup, callback, or cleanup fails
      */
     public void host(String expectedPeer, PeerSession.ApplicationStreamHandler applicationHandler,
@@ -148,14 +230,18 @@ public final class Onboarding {
             group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
             CompletableFuture<PeerSession> established = new CompletableFuture<>();
             QuicSslContext ssl = QuicSslContextBuilder.forServer(tls.key, null, tls.certificate)
-                    .applicationProtocols(SynesisLink.ALPN).build();
-            udp = new Bootstrap().group(group).channel(NioDatagramChannel.class)
+                    .applicationProtocols(SynesisLink.ALPN)
+                    .build();
+            udp = new Bootstrap().group(group)
+                    .channel(NioDatagramChannel.class)
                     .handler(NettyQuicTransport.serverCodec(ssl, InsecureQuicTokenHandler.INSTANCE,
                             new ChannelInboundHandlerAdapter(), NettySessionHandshake.serverInvitationStreamHandler(
                                     local.identity(), expectedPeer, List.of(ProtocolVersion.V1), new ReplayGuard(),
                                     established, org.synesis.link.session.LivenessConfiguration.DEFAULT, admission,
                                     applicationHandler)))
-                    .bind(new InetSocketAddress(0)).sync().channel();
+                    .bind(new InetSocketAddress(0))
+                    .sync()
+                    .channel();
             int port = ((InetSocketAddress) udp.localAddress()).getPort();
             emit(OnboardingEventType.SESSION_CREATED, "");
             emit(OnboardingEventType.LISTENER_READY, "");
@@ -177,7 +263,9 @@ public final class Onboarding {
             }
             emitSession(session);
             sessionAction.accept(session);
-            session.terminalCompletion().toCompletableFuture().get(30, TimeUnit.SECONDS);
+            session.terminalCompletion()
+                    .toCompletableFuture()
+                    .get(30, TimeUnit.SECONDS);
             emit(OnboardingEventType.SESSION_CLOSED, "");
         } catch (OnboardingFailure failure) {
             throw failure;
@@ -186,8 +274,14 @@ public final class Onboarding {
         } catch (Exception failure) {
             throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
         } finally {
-            if (udp != null) udp.close().syncUninterruptibly();
-            if (group != null) group.shutdownGracefully().syncUninterruptibly();
+            if (udp != null) {
+                udp.close()
+                        .syncUninterruptibly();
+            }
+            if (group != null) {
+                group.shutdownGracefully()
+                        .syncUninterruptibly();
+            }
             admission.close();
             if (tls != null) {
                 try {
@@ -204,14 +298,18 @@ public final class Onboarding {
      *
      * @param link exact signed share link supplied by the user
      * @throws OnboardingFailure for invalid invitation, unusable candidates,
-     *                            identity mismatch, or bounded connection failure
+     *                           identity mismatch, or bounded connection failure
      */
     public void join(String link) throws OnboardingFailure {
         join(link, null, session -> {
             try {
                 var work = session.requestDemoWork(new DemoWorkRequest(UUID.randomUUID(),
-                        DemoWorkRequest.DESCRIBE_SESSION)).toCompletableFuture().get(10, TimeUnit.SECONDS);
-                emit(OnboardingEventType.WORK_RESULT, work.status().toString());
+                                DemoWorkRequest.DESCRIBE_SESSION))
+                        .toCompletableFuture()
+                        .get(10, TimeUnit.SECONDS);
+                emit(OnboardingEventType.WORK_RESULT,
+                        work.status()
+                                .toString());
             } catch (Exception failure) {
                 throw new IllegalStateException("demo work failed", failure);
             }
@@ -221,9 +319,9 @@ public final class Onboarding {
     /**
      * Joins one invitation and runs a bounded callback on the authenticated session.
      *
-     * @param link exact signed share link
+     * @param link               exact signed share link
      * @param applicationHandler optional bounded application-stream handler
-     * @param sessionAction callback invoked after control readiness
+     * @param sessionAction      callback invoked after control readiness
      * @throws OnboardingFailure if setup, callback, or cleanup fails
      */
     public void join(String link, PeerSession.ApplicationStreamHandler applicationHandler,
@@ -233,7 +331,8 @@ public final class Onboarding {
         try {
             invitation = SessionInvitation.fromShareLink(link);
             emit(OnboardingEventType.INVITE_PARSED, "");
-            if (!invitation.protocolVersion().equals(ProtocolVersion.V1)
+            if (!invitation.protocolVersion()
+                    .equals(ProtocolVersion.V1)
                     || !invitation.verifyAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW)) {
                 throw new IllegalArgumentException("invalid invitation");
             }
@@ -253,35 +352,61 @@ public final class Onboarding {
         MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
         Channel udp = null;
         try {
-            QuicSslContext ssl = QuicSslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE)
-                    .applicationProtocols(SynesisLink.ALPN).build();
-            udp = new Bootstrap().group(group).channel(NioDatagramChannel.class)
-                    .handler(NettyQuicTransport.clientCodec(ssl)).bind(new InetSocketAddress(0)).sync().channel();
+            QuicSslContext ssl = QuicSslContextBuilder.forClient()
+                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                    .applicationProtocols(SynesisLink.ALPN)
+                    .build();
+            udp = new Bootstrap().group(group)
+                    .channel(NioDatagramChannel.class)
+                    .handler(NettyQuicTransport.clientCodec(ssl))
+                    .bind(new InetSocketAddress(0))
+                    .sync()
+                    .channel();
             List<Candidate> localCandidates = gather("join", ((InetSocketAddress) udp.localAddress()).getPort());
             emit(OnboardingEventType.LOCAL_DESCRIPTOR_CREATED, "");
             emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(localCandidates.size()));
             List<CandidatePair> pairs = CandidatePairs.generate(localCandidates, host.candidates(), 8);
-            if (pairs.isEmpty()) throw failure(OnboardingFailureCode.NO_USABLE_CANDIDATE, null);
+            if (pairs.isEmpty()) {
+                throw failure(OnboardingFailureCode.NO_USABLE_CANDIDATE, null);
+            }
             Channel clientUdp = udp;
             byte[] initiatorNonce = randomBytes();
             byte[] responderNonce = randomBytes();
-            HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1, SynesisLink.ALPN,
-                    invitation.sessionId(), 1, 1, initiatorNonce, responderNonce, invitation.capability(),
-                    local.identity().nodeId(), local.identity().publicKeyEncoded(), host.nodeId(),
+            HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1,
+                    SynesisLink.ALPN,
+                    invitation.sessionId(),
+                    1,
+                    1,
+                    initiatorNonce,
+                    responderNonce,
+                    invitation.capability(),
+                    local.identity()
+                            .nodeId(),
+                    local.identity()
+                            .publicKeyEncoded(),
+                    host.nodeId(),
                     host.publicKeyEncoded());
             try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(8, 8, 2, Duration.ofMillis(100),
                     Duration.ofSeconds(10), Duration.ofSeconds(20), Duration.ofSeconds(2), 16))) {
                 DirectConnectionResult result = racer.race(pairs, host.nodeId(), pair -> attempt(local.identity(), host,
-                        transcript, clientUdp, pair, applicationHandler)).completion().toCompletableFuture().get(25, TimeUnit.SECONDS);
-                if (result.session() == null) throw failure(OnboardingFailureCode.CONNECTION_FAILED, null);
+                                transcript, clientUdp, pair, applicationHandler))
+                        .completion()
+                        .toCompletableFuture()
+                        .get(25, TimeUnit.SECONDS);
+                if (result.session() == null) {
+                    throw failure(OnboardingFailureCode.CONNECTION_FAILED, null);
+                }
                 PeerSession session = result.session();
                 if (!session.hasRemotePublicKey(host.publicKeyEncoded())) {
                     throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
                 }
-                emit(OnboardingEventType.PATH_SELECTED, pairs.get(0).identifier());
+                emit(OnboardingEventType.PATH_SELECTED,
+                        pairs.get(0)
+                                .identifier());
                 emitSession(session);
                 sessionAction.accept(session);
-                session.closeGracefully(SessionCloseReason.LOCAL_REQUEST).toCompletableFuture()
+                session.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
+                        .toCompletableFuture()
                         .get(10, TimeUnit.SECONDS);
                 emit(OnboardingEventType.SESSION_CLOSED, "");
             }
@@ -292,12 +417,18 @@ public final class Onboarding {
         } catch (Exception failure) {
             throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
         } finally {
-            if (udp != null) udp.close().syncUninterruptibly();
-            group.shutdownGracefully().syncUninterruptibly();
+            if (udp != null) {
+                udp.close()
+                        .syncUninterruptibly();
+            }
+            group.shutdownGracefully()
+                    .syncUninterruptibly();
         }
     }
 
-    private IdentityBootstrap bootstrap() { return new IdentityBootstrap(profileDirectory); }
+    private IdentityBootstrap bootstrap() {
+        return new IdentityBootstrap(profileDirectory);
+    }
 
     private IdentityBootstrap.Result loadIdentity() throws OnboardingFailure {
         try {
@@ -311,71 +442,12 @@ public final class Onboarding {
         emit(OnboardingEventType.PEER_CONNECTED, "");
         emit(OnboardingEventType.PEER_IDENTITY_VERIFIED, session.remoteNodeId());
         emit(OnboardingEventType.CONTROL_READY, Boolean.toString(session.isUsable()));
-        emit(OnboardingEventType.LIVENESS, session.livenessState().toString());
+        emit(OnboardingEventType.LIVENESS,
+                session.livenessState()
+                        .toString());
     }
 
-    private void emit(OnboardingEventType type, String value) { events.accept(new OnboardingEvent(type, value)); }
-
-    private static byte[] randomBytes() {
-        byte[] value = new byte[NONCE_BYTES];
-        RANDOM.nextBytes(value);
-        return value;
-    }
-
-    private static List<Candidate> gather(String id, int port) throws Exception {
-        CandidateProvider provider = new LocalInterfaceCandidateProvider(id, port, 0);
-        try (CandidateGatherer gatherer = new CandidateGatherer(CandidateGatheringPolicy.defaults())) {
-            return gatherer.gather(List.of(provider)).completion().toCompletableFuture().get(10, TimeUnit.SECONDS)
-                    .candidates();
-        }
-    }
-
-    private static ConnectionAttempt attempt(NodeIdentity identity, CandidateDescriptor host,
-            HandshakeTranscript transcript, Channel udp, CandidatePair pair,
-            PeerSession.ApplicationStreamHandler applicationHandler) {
-        return new ConnectionAttempt() {
-            private volatile QuicChannel connection;
-
-            @Override
-            public CompletionStage<PeerSession> connect(org.synesis.link.candidate.CandidateCancellation cancellation) {
-                CompletableFuture<PeerSession> result = new CompletableFuture<>();
-                QuicChannel.newBootstrap(udp).handler(new ChannelInboundHandlerAdapter())
-                        .streamHandler(new ChannelInboundHandlerAdapter())
-                        .remoteAddress(new InetSocketAddress(pair.remote().address(), pair.remote().port())).connect()
-                        .addListener(future -> {
-                            if (!future.isSuccess()) {
-                                result.completeExceptionally(future.cause());
-                                return;
-                            }
-                            connection = (QuicChannel) future.getNow();
-                            CompletableFuture<PeerSession> established = new CompletableFuture<>();
-                            try {
-                                HandshakeProof proof = SessionAuthenticator.createProof(identity, transcript,
-                                        HandshakeRole.INITIATOR);
-                                connection.createStream(QuicStreamType.BIDIRECTIONAL,
-                                        NettySessionHandshake.clientStreamHandler(identity, host.nodeId(), transcript,
-                                                proof, new ReplayGuard(), established,
-                                                org.synesis.link.session.LivenessConfiguration.DEFAULT,
-                                                applicationHandler));
-                                established.whenComplete((session, failure) -> {
-                                    if (failure == null) result.complete(session);
-                                    else result.completeExceptionally(failure);
-                                });
-                            } catch (Exception exception) {
-                                result.completeExceptionally(exception);
-                            }
-                        });
-                return result;
-            }
-
-            @Override
-            public void cancel() {
-                if (connection != null) connection.close().addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
-            }
-        };
-    }
-
-    private static OnboardingFailure failure(OnboardingFailureCode code, Throwable cause) {
-        return new OnboardingFailure(code, cause);
+    private void emit(OnboardingEventType type, String value) {
+        events.accept(new OnboardingEvent(type, value));
     }
 }

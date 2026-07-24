@@ -1,6 +1,9 @@
-package org.synesis.link.transport;
+package org.synesis.link.session;
 
-/** Idempotent cancellation handle for one scheduled liveness callback. */
+/**
+ * Idempotent cancellation handle for one scheduled liveness callback.
+ */
 interface Cancellable {
+
     void cancel();
 }

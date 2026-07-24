@@ -5,12 +5,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
+import org.synesis.coordination.OwnershipRegistry;
 import org.synesis.projectrecord.DecisionRecord;
 import org.synesis.projectrecord.DecisionStore;
 import org.synesis.projectrecord.ProjectConfig;
 import org.synesis.projectrecord.ProjectConstraint;
-import org.synesis.coordination.OwnershipRegistry;
 
 /**
  * Harness-neutral action guardrail evaluator.
@@ -21,63 +20,6 @@ import org.synesis.coordination.OwnershipRegistry;
  * @since 1.0
  */
 public final class ActionGuardrail {
-
-    /**
-     * Action evaluation outcome classification.
-     */
-    public enum Outcome {
-        /**
-         * Operation is allowed with no matching constraints.
-         */
-        ALLOWED,
-        /**
-         * Operation matches a WARN constraint.
-         */
-        WARNING,
-        /**
-         * Operation matches a BLOCK constraint.
-         */
-        BLOCKED,
-        /** Operation is directed to another node's semantic capability owner. */
-        REQUEST_OWNER,
-        /**
-         * Operation is unsupported for guardrail validation.
-         */
-        UNSUPPORTED,
-        /**
-         * Input request or path is invalid.
-         */
-        INVALID_INPUT
-    }
-
-    /**
-     * Action check evaluation request.
-     *
-     * @param projectRoot  project workspace root directory
-     * @param relativePath normalized repository-relative file path
-     * @param toolName     tool/action identifier
-     * @param description  optional action description or context
-     */
-    public record Request(Path projectRoot, String relativePath, String toolName, String description) {
-
-    }
-
-    /**
-     * Action check evaluation response.
-     *
-     * @param outcome            evaluation outcome classification
-     * @param blockingConstraint matched BLOCK constraint, if any
-     * @param warningConstraint  matched WARN constraint, if any
-     * @param message            human readable status explanation or denial reason
-     */
-    public record Response(
-            Outcome outcome,
-            ProjectConstraint blockingConstraint,
-            ProjectConstraint warningConstraint,
-            String message
-    ) {
-
-    }
 
     private ActionGuardrail() {
     }
@@ -108,7 +50,8 @@ public final class ActionGuardrail {
                 heads = store.verifiedHeads(1_000);
             } else if (Files.isDirectory(profile.resolve("records"))) {
                 java.util.UUID projId = null;
-                Path projectJson = profile.getParent() != null ? profile.getParent().resolve("project.json") : null;
+                Path projectJson = profile.getParent() != null ? profile.getParent()
+                                                                 .resolve("project.json") : null;
                 if (projectJson != null && Files.exists(projectJson)) {
                     Object parsed = org.synesis.workspace.provider.ProviderJson.parse(Files.readString(projectJson));
                     if (parsed instanceof java.util.Map<?, ?> map && map.get("projectId") instanceof String s) {
@@ -176,25 +119,93 @@ public final class ActionGuardrail {
     /**
      * Evaluates project policy first, then applies semantic ownership without
      * ever mutating the ownership registry.
-     * @param profile workspace profile directory
-     * @param request evaluation request
-     * @param ownership semantic ownership view
+     *
+     * @param profile         workspace profile directory
+     * @param request         evaluation request
+     * @param ownership       semantic ownership view
      * @param requesterNodeId authenticated requester node
      * @return policy or ownership response
      */
     public static Response evaluate(Path profile, Request request, OwnershipRegistry ownership,
             String requesterNodeId) {
         Response policy = evaluate(profile, request);
-        if (policy.outcome() != Outcome.ALLOWED && policy.outcome() != Outcome.WARNING) return policy;
-        String capability = request.description() != null && request.description().startsWith("capability=")
-                ? request.description().substring("capability=".length()).trim() : request.toolName();
+        if (policy.outcome() != Outcome.ALLOWED && policy.outcome() != Outcome.WARNING) {
+            return policy;
+        }
+        String capability = request.description() != null && request.description()
+                .startsWith("capability=")
+                ? request.description()
+                  .substring("capability=".length())
+                  .trim() : request.toolName();
         OwnershipRegistry.Decision decision = ownership.evaluate(capability, requesterNodeId);
         if (decision.result() == OwnershipRegistry.Result.REQUEST_OWNER) {
             String message = "REQUEST_OWNER capability=" + capability + " ownerNode="
-                    + decision.owner().nodeId() + " ownerSupervisor=" + decision.owner().supervisorId()
-                    + " intentVersion=" + decision.owner().intentVersion();
+                    + decision.owner()
+                    .nodeId() + " ownerSupervisor=" + decision.owner()
+                    .supervisorId()
+                    + " intentVersion=" + decision.owner()
+                    .intentVersion();
             return new Response(Outcome.REQUEST_OWNER, null, policy.warningConstraint(), message);
         }
         return policy;
+    }
+
+    /**
+     * Action evaluation outcome classification.
+     */
+    public enum Outcome {
+        /**
+         * Operation is allowed with no matching constraints.
+         */
+        ALLOWED,
+        /**
+         * Operation matches a WARN constraint.
+         */
+        WARNING,
+        /**
+         * Operation matches a BLOCK constraint.
+         */
+        BLOCKED,
+        /**
+         * Operation is directed to another node's semantic capability owner.
+         */
+        REQUEST_OWNER,
+        /**
+         * Operation is unsupported for guardrail validation.
+         */
+        UNSUPPORTED,
+        /**
+         * Input request or path is invalid.
+         */
+        INVALID_INPUT
+    }
+
+    /**
+     * Action check evaluation request.
+     *
+     * @param projectRoot  project workspace root directory
+     * @param relativePath normalized repository-relative file path
+     * @param toolName     tool/action identifier
+     * @param description  optional action description or context
+     */
+    public record Request(Path projectRoot, String relativePath, String toolName, String description) {
+
+    }
+
+    /**
+     * Action check evaluation response.
+     *
+     * @param outcome            evaluation outcome classification
+     * @param blockingConstraint matched BLOCK constraint, if any
+     * @param warningConstraint  matched WARN constraint, if any
+     * @param message            human readable status explanation or denial reason
+     */
+    public record Response(
+            Outcome outcome,
+            ProjectConstraint blockingConstraint,
+            ProjectConstraint warningConstraint,
+            String message
+    ) {
+
     }
 }

@@ -1,14 +1,7 @@
-import org.gradle.kotlin.dsl.application
-import org.gradle.kotlin.dsl.dependencies
-import org.gradle.api.tasks.bundling.Compression
-import org.gradle.api.tasks.bundling.Tar
-import org.gradle.api.tasks.bundling.Zip
-import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.internal.os.OperatingSystem
-import org.gradle.language.jvm.tasks.ProcessResources
-import java.time.Instant
-import java.util.Locale
 import java.nio.file.Files
+import java.time.Instant
+import java.util.*
 
 plugins {
     application
@@ -270,6 +263,7 @@ tasks.register("bundleSmokeTest") {
             require(result.waitFor() == expectedExitCode) { "Bundle command failed: ${arguments.joinToString(" ")}\n$output" }
             if (arguments.firstOrNull() == "version") require("SYNESIS_VERSION=" in output)
         }
+
         fun run(vararg arguments: String) = runWithExit(0, arguments)
         fun run(expectedExitCode: Int, vararg arguments: String) = runWithExit(expectedExitCode, arguments)
         try {

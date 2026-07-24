@@ -89,7 +89,9 @@ public final class ScopeMatcher {
         }
 
         String regex = globToRegex(normPattern);
-        return Pattern.compile(regex).matcher(normPath).matches();
+        return Pattern.compile(regex)
+                .matcher(normPath)
+                .matches();
     }
 
     private static String normalizePattern(String pattern) {
@@ -134,7 +136,8 @@ public final class ScopeMatcher {
                     regex.append("[^/]*");
                 }
             } else if ("().[]{}?^$\\+|".indexOf(c) >= 0) {
-                regex.append('\\').append(c);
+                regex.append('\\')
+                        .append(c);
             } else {
                 regex.append(c);
             }

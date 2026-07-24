@@ -8,10 +8,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
+import org.synesis.coordination.OwnershipRegistry;
 import org.synesis.workspace.guardrail.ActionGuardrail;
 import org.synesis.workspace.guardrail.ProjectPathResolver;
-import org.synesis.coordination.OwnershipRegistry;
 
 /**
  * Pre-action hook adapter translating official Claude Code PreToolUse hook events
@@ -39,8 +38,9 @@ public final class ClaudeCodeHookAdapter {
 
     /**
      * Constructs an adapter with optional semantic ownership enforcement.
-     * @param profile workspace profile directory
-     * @param ownership ownership view, or null to use policy-only behavior
+     *
+     * @param profile         workspace profile directory
+     * @param ownership       ownership view, or null to use policy-only behavior
      * @param requesterNodeId authenticated requester node, required with ownership
      */
     public ClaudeCodeHookAdapter(Path profile, OwnershipRegistry ownership, String requesterNodeId) {
@@ -52,42 +52,95 @@ public final class ClaudeCodeHookAdapter {
     }
 
     /**
-     * Outcome classification of the adapter check.
+     * Resolves a raw target path (absolute or relative) against the project root.
+     *
+     * @param projectRoot project root directory
+     * @param rawPath     raw file path string from tool input
+     * @return normalized repository-relative path string
+     * @throws IllegalArgumentException if path lies outside project root
      */
-    public enum Outcome {
-        /**
-         * Operation is permitted.
-         */
-        ALLOWED,
-        /**
-         * Operation triggers a non-blocking warning.
-         */
-        WARNING,
-        /**
-         * Operation is blocked by an active constraint.
-         */
-        BLOCKED,
-        /** Operation must stop and request the semantic owner. */
-        REQUEST_OWNER,
-        /**
-         * Operation is an unsupported tool/action.
-         */
-        UNSUPPORTED,
-        /**
-         * Event JSON or path format is invalid.
-         */
-        INVALID_INPUT
+    public static String resolveRelativePath(Path projectRoot, String rawPath) {
+        return ProjectPathResolver.resolve(projectRoot, rawPath);
     }
 
-    /**
-     * Result container for adapter processing.
-     *
-     * @param outcome      check outcome
-     * @param responseJson official Claude Code hook JSON response
-     * @param humanReason  human readable explanation or hint
-     */
-    public record Result(Outcome outcome, String responseJson, String humanReason) {
+    private static boolean isFileEditTool(String toolName) {
+        String lower = toolName.toLowerCase(java.util.Locale.ROOT);
+        return lower.equals("edit") || lower.equals("write") || lower.equals("str_replace_editor")
+                || lower.equals("write_file") || lower.equals("file_edit") || lower.equals("file_write")
+                || lower.equals("notebookedit");
+    }
 
+    private static List<String> extractTargetPaths(String json) {
+        List<String> paths = new ArrayList<>();
+        String[] candidateFields = {"file_path", "path", "target_file", "filePath", "targetFile"};
+        for (String field : candidateFields) {
+            String val = extractJsonField(json, field);
+            if (val != null && !val.isEmpty()) {
+                paths.add(val);
+            }
+        }
+        return paths;
+    }
+
+    private static String extractJsonField(String json, String key) {
+        String search = "\"" + key + "\":";
+        int idx = json.indexOf(search);
+        if (idx < 0) {
+            search = "\"" + key + "\" :";
+            idx = json.indexOf(search);
+        }
+        if (idx < 0) {
+            return null;
+        }
+
+        int start = idx + search.length();
+        while (start < json.length() && (json.charAt(start) == ' ' || json.charAt(start) == '\t')) {
+            start++;
+        }
+        if (start >= json.length() || json.charAt(start) != '"') {
+            return null;
+        }
+
+        start++;
+        int end = json.indexOf('"', start);
+        if (end < 0) {
+            return null;
+        }
+
+        return json.substring(start, end);
+    }
+
+    private static String denyJson(String reason) {
+        return """
+                {
+                  "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": "%s"
+                  }
+                }""".formatted(escapeJson(reason));
+    }
+
+    private static String warnJson(String title, String rationale) {
+        return """
+                {
+                  "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": "Synesis Warning: Active constraint '%s' applies to this scope. Rationale: %s"
+                  }
+                }""".formatted(escapeJson(title), escapeJson(rationale));
+    }
+
+    private static String emptyJson() {
+        return "{}";
+    }
+
+    private static String escapeJson(String text) {
+        return text.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     /**
@@ -197,7 +250,8 @@ public final class ClaudeCodeHookAdapter {
 
         return switch (finalResponse.outcome()) {
             case BLOCKED -> new Result(Outcome.BLOCKED, denyJson(finalResponse.message()), finalResponse.message());
-            case REQUEST_OWNER -> new Result(Outcome.REQUEST_OWNER, denyJson(finalResponse.message()), finalResponse.message());
+            case REQUEST_OWNER ->
+                    new Result(Outcome.REQUEST_OWNER, denyJson(finalResponse.message()), finalResponse.message());
             case WARNING -> {
                 String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE="
                         + (finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()
@@ -218,94 +272,43 @@ public final class ClaudeCodeHookAdapter {
     }
 
     /**
-     * Resolves a raw target path (absolute or relative) against the project root.
-     *
-     * @param projectRoot project root directory
-     * @param rawPath     raw file path string from tool input
-     * @return normalized repository-relative path string
-     * @throws IllegalArgumentException if path lies outside project root
+     * Outcome classification of the adapter check.
      */
-    public static String resolveRelativePath(Path projectRoot, String rawPath) {
-        return ProjectPathResolver.resolve(projectRoot, rawPath);
+    public enum Outcome {
+        /**
+         * Operation is permitted.
+         */
+        ALLOWED,
+        /**
+         * Operation triggers a non-blocking warning.
+         */
+        WARNING,
+        /**
+         * Operation is blocked by an active constraint.
+         */
+        BLOCKED,
+        /**
+         * Operation must stop and request the semantic owner.
+         */
+        REQUEST_OWNER,
+        /**
+         * Operation is an unsupported tool/action.
+         */
+        UNSUPPORTED,
+        /**
+         * Event JSON or path format is invalid.
+         */
+        INVALID_INPUT
     }
 
-    private static boolean isFileEditTool(String toolName) {
-        String lower = toolName.toLowerCase(java.util.Locale.ROOT);
-        return lower.equals("edit") || lower.equals("write") || lower.equals("str_replace_editor")
-                || lower.equals("write_file") || lower.equals("file_edit") || lower.equals("file_write")
-                || lower.equals("notebookedit");
-    }
+    /**
+     * Result container for adapter processing.
+     *
+     * @param outcome      check outcome
+     * @param responseJson official Claude Code hook JSON response
+     * @param humanReason  human readable explanation or hint
+     */
+    public record Result(Outcome outcome, String responseJson, String humanReason) {
 
-    private static List<String> extractTargetPaths(String json) {
-        List<String> paths = new ArrayList<>();
-        String[] candidateFields = {"file_path", "path", "target_file", "filePath", "targetFile"};
-        for (String field : candidateFields) {
-            String val = extractJsonField(json, field);
-            if (val != null && !val.isEmpty()) {
-                paths.add(val);
-            }
-        }
-        return paths;
-    }
-
-    private static String extractJsonField(String json, String key) {
-        String search = "\"" + key + "\":";
-        int idx = json.indexOf(search);
-        if (idx < 0) {
-            search = "\"" + key + "\" :";
-            idx = json.indexOf(search);
-        }
-        if (idx < 0) {
-            return null;
-        }
-
-        int start = idx + search.length();
-        while (start < json.length() && (json.charAt(start) == ' ' || json.charAt(start) == '\t')) {
-            start++;
-        }
-        if (start >= json.length() || json.charAt(start) != '"') {
-            return null;
-        }
-
-        start++;
-        int end = json.indexOf('"', start);
-        if (end < 0) {
-            return null;
-        }
-
-        return json.substring(start, end);
-    }
-
-    private static String denyJson(String reason) {
-        return """
-                {
-                  "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": "%s"
-                  }
-                }""".formatted(escapeJson(reason));
-    }
-
-    private static String warnJson(String title, String rationale) {
-        return """
-                {
-                  "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "additionalContext": "Synesis Warning: Active constraint '%s' applies to this scope. Rationale: %s"
-                  }
-                }""".formatted(escapeJson(title), escapeJson(rationale));
-    }
-
-    private static String emptyJson() {
-        return "{}";
-    }
-
-    private static String escapeJson(String text) {
-        return text.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 }

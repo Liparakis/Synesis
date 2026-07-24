@@ -8,6 +8,7 @@ import org.synesis.link.transport.OnboardingFailureCode;
  * Maps typed Link failures to stable numeric exits and redacted diagnostics.
  */
 public final class FailureMapper {
+
     private FailureMapper() {
     }
 

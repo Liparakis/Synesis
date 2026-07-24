@@ -30,9 +30,13 @@ import org.synesis.link.identity.NodeIdentity;
  */
 public final class HandshakeProof {
 
-    /** Maximum encoded proof size. */
+    /**
+     * Maximum encoded proof size.
+     */
     public static final int MAX_BYTES = 2_048;
-    /** Maximum challenge size. */
+    /**
+     * Maximum challenge size.
+     */
     public static final int MAX_CHALLENGE_BYTES = 64;
 
     private static final int MAGIC = 0x534C4850;
@@ -66,14 +70,14 @@ public final class HandshakeProof {
     /**
      * Creates a signed proof for a fresh or caller-controlled transcript.
      *
-     * @param identity signing identity
-     * @param version negotiated protocol version
+     * @param identity  signing identity
+     * @param version   negotiated protocol version
      * @param sessionId new session identifier
      * @param challenge connection-specific challenge; 1 through 64 bytes
      * @return signed proof
      * @throws GeneralSecurityException if signing fails
      * @throws IllegalArgumentException if the challenge is out of bounds
-     * @throws NullPointerException if an argument is {@code null}
+     * @throws NullPointerException     if an argument is {@code null}
      */
     public static HandshakeProof create(NodeIdentity identity, ProtocolVersion version, UUID sessionId,
             byte[] challenge) throws GeneralSecurityException {
@@ -92,7 +96,7 @@ public final class HandshakeProof {
      *
      * @param encoded bounded proof bytes
      * @return decoded proof
-     * @throws IOException if framing or bounds are invalid
+     * @throws IOException          if framing or bounds are invalid
      * @throws NullPointerException if {@code encoded} is {@code null}
      */
     public static HandshakeProof decode(byte[] encoded) throws IOException {
@@ -116,89 +120,6 @@ public final class HandshakeProof {
             return new HandshakeProof(version, sessionId, challenge, nodeId, publicKey, signature);
         } catch (EOFException | IllegalArgumentException exception) {
             throw new IOException("malformed handshake proof", exception);
-        }
-    }
-
-    /**
-     * Verifies the signature and exact transcript expectations.
-     *
-     * @param expectedVersion negotiated version expected by the caller
-     * @param expectedSessionId current session identifier
-     * @param expectedChallenge current connection challenge
-     * @param expectedNodeId required remote node identifier
-     * @return {@code true} only if every binding and the signature are valid
-     * @throws GeneralSecurityException if the public key or signature is invalid
-     * @throws NullPointerException if an argument is {@code null}
-     */
-    public boolean verify(ProtocolVersion expectedVersion, UUID expectedSessionId, byte[] expectedChallenge,
-            String expectedNodeId) throws GeneralSecurityException {
-        Objects.requireNonNull(expectedVersion, "expected version");
-        Objects.requireNonNull(expectedSessionId, "expected session ID");
-        Objects.requireNonNull(expectedNodeId, "expected node ID");
-        validateChallenge(expectedChallenge);
-        if (!version.equals(expectedVersion) || !sessionId.equals(expectedSessionId)
-                || !Arrays.equals(challenge, expectedChallenge) || !nodeId.equals(expectedNodeId)
-                || !NodeIdentity.deriveNodeId(publicKey).equals(nodeId)) {
-            return false;
-        }
-        PublicKey key = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(publicKey));
-        Signature verifier = Signature.getInstance("Ed25519");
-        verifier.initVerify(key);
-        verifier.update(unsignedBytes);
-        return verifier.verify(signature);
-    }
-
-    /**
-     * Returns the negotiated version.
-     *
-     * @return negotiated version
-     */
-    public ProtocolVersion version() { return version; }
-
-    /**
-     * Returns the session identifier.
-     *
-     * @return session identifier
-     */
-    public UUID sessionId() { return sessionId; }
-
-    /**
-     * Returns a copy of the challenge bytes.
-     *
-     * @return challenge copy
-     */
-    public byte[] challenge() { return challenge.clone(); }
-
-    /**
-     * Returns the claimed node ID.
-     *
-     * @return claimed node ID
-     */
-    public String nodeId() { return nodeId; }
-
-    /**
-     * Returns a copy of the public key bytes.
-     *
-     * @return public-key encoding copy
-     */
-    public byte[] publicKeyEncoded() { return publicKey.clone(); }
-
-    /**
-     * Returns complete encoded proof bytes.
-     *
-     * @return encoded proof copy
-     */
-    public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            bytes.write(unsignedBytes);
-            try (DataOutputStream output = new DataOutputStream(bytes)) {
-                output.writeShort(signature.length);
-                output.write(signature);
-            }
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new AssertionError("byte array output cannot fail", impossible);
         }
     }
 
@@ -248,5 +169,100 @@ public final class HandshakeProof {
             throw new IOException("invalid bounded handshake field");
         }
         return input.readNBytes(length);
+    }
+
+    /**
+     * Verifies the signature and exact transcript expectations.
+     *
+     * @param expectedVersion   negotiated version expected by the caller
+     * @param expectedSessionId current session identifier
+     * @param expectedChallenge current connection challenge
+     * @param expectedNodeId    required remote node identifier
+     * @return {@code true} only if every binding and the signature are valid
+     * @throws GeneralSecurityException if the public key or signature is invalid
+     * @throws NullPointerException     if an argument is {@code null}
+     */
+    public boolean verify(ProtocolVersion expectedVersion, UUID expectedSessionId, byte[] expectedChallenge,
+            String expectedNodeId) throws GeneralSecurityException {
+        Objects.requireNonNull(expectedVersion, "expected version");
+        Objects.requireNonNull(expectedSessionId, "expected session ID");
+        Objects.requireNonNull(expectedNodeId, "expected node ID");
+        validateChallenge(expectedChallenge);
+        if (!version.equals(expectedVersion) || !sessionId.equals(expectedSessionId)
+                || !Arrays.equals(challenge, expectedChallenge) || !nodeId.equals(expectedNodeId)
+                || !NodeIdentity.deriveNodeId(publicKey)
+                .equals(nodeId)) {
+            return false;
+        }
+        PublicKey key = KeyFactory.getInstance("Ed25519")
+                .generatePublic(new X509EncodedKeySpec(publicKey));
+        Signature verifier = Signature.getInstance("Ed25519");
+        verifier.initVerify(key);
+        verifier.update(unsignedBytes);
+        return verifier.verify(signature);
+    }
+
+    /**
+     * Returns the negotiated version.
+     *
+     * @return negotiated version
+     */
+    public ProtocolVersion version() {
+        return version;
+    }
+
+    /**
+     * Returns the session identifier.
+     *
+     * @return session identifier
+     */
+    public UUID sessionId() {
+        return sessionId;
+    }
+
+    /**
+     * Returns a copy of the challenge bytes.
+     *
+     * @return challenge copy
+     */
+    public byte[] challenge() {
+        return challenge.clone();
+    }
+
+    /**
+     * Returns the claimed node ID.
+     *
+     * @return claimed node ID
+     */
+    public String nodeId() {
+        return nodeId;
+    }
+
+    /**
+     * Returns a copy of the public key bytes.
+     *
+     * @return public-key encoding copy
+     */
+    public byte[] publicKeyEncoded() {
+        return publicKey.clone();
+    }
+
+    /**
+     * Returns complete encoded proof bytes.
+     *
+     * @return encoded proof copy
+     */
+    public byte[] encoded() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            bytes.write(unsignedBytes);
+            try (DataOutputStream output = new DataOutputStream(bytes)) {
+                output.writeShort(signature.length);
+                output.write(signature);
+            }
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError("byte array output cannot fail", impossible);
+        }
     }
 }

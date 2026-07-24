@@ -25,7 +25,9 @@ enum ControlMessageType {
 
     static ControlMessageType fromCode(int code) throws java.io.IOException {
         for (ControlMessageType value : values()) {
-            if (value.code == code) return value;
+            if (value.code == code) {
+                return value;
+            }
         }
         throw new java.io.IOException("unknown required control message");
     }

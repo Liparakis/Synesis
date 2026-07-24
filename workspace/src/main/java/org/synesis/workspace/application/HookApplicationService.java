@@ -26,6 +26,90 @@ public final class HookApplicationService {
         bindings = new ProviderSessionBindingService();
     }
 
+    private static HookExecutionResult withBinding(HookExecutionResult result,
+            ProviderSessionBindingService.BindingResult binding) {
+        String hint = "SESSION_ID=" + binding.binding()
+                .sessionId() + " SUPERVISOR_ID="
+                + binding.binding()
+                .supervisorId() + " WORKER_ID=" + binding.binding()
+                .workerId();
+        return new HookExecutionResult(result.outcome(), result.responseJson(),
+                result.humanReason() == null ? hint : result.humanReason() + " " + hint);
+    }
+
+    private static HookExecutionResult denied(String reason) {
+        return new HookExecutionResult("INVALID_INPUT",
+                "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\""
+                        + reason + "\"}}",
+                reason);
+    }
+
+    private static HookExecutionResult deniedAntigravity(String reason) {
+        return new HookExecutionResult("INVALID_INPUT", "{\"decision\":\"deny\",\"reason\":\""
+                + reason + "\"}", reason);
+    }
+
+    private static String read(InputStream input) throws java.io.IOException {
+        if (input == null) {
+            throw new java.io.IOException("missing input");
+        }
+        byte[] bytes = input.readNBytes(MAX_INPUT_BYTES + 1);
+        if (bytes.length > MAX_INPUT_BYTES) {
+            throw new java.io.IOException("input exceeds bound");
+        }
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> object(Object value) {
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+    }
+
+    private static String text(Map<?, ?> value, String key) {
+        Object result = value == null ? null : value.get(key);
+        if (!(result instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return text;
+    }
+
+    private static String evidence(String json) {
+        Map<String, Object> value = object(ProviderJson.parse(json));
+        for (String key : new String[]{"session_id", "sessionId", "conversation_id", "conversationId"}) {
+            Object candidate = value == null ? null : value.get(key);
+            if (candidate instanceof String text && !text.isBlank()) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    private static Path workspacePath(String json, Path fallback) {
+        Map<String, Object> value = object(ProviderJson.parse(json));
+        Object paths = value == null ? null : value.get("workspacePaths");
+        if (paths instanceof java.util.List<?> list && !list.isEmpty() && list.getFirst() instanceof String path
+                && !path.isBlank()) {
+            return Path.of(path);
+        }
+        return fallback;
+    }
+
+    private static Path controlRoot(Path cwd) throws Exception {
+        var located = new ProjectApplicationService().locate(cwd);
+        Path marker = located.synesisDirectory()
+                .resolve("local/workspace-binding.json");
+        if (!java.nio.file.Files.isRegularFile(marker)) {
+            return located.root();
+        }
+        Map<String, Object> value = object(ProviderJson.parse(java.nio.file.Files.readString(marker)));
+        if (!located.projectId()
+                .toString()
+                .equals(text(value, "projectId"))) {
+            throw new IllegalArgumentException("workspace marker project mismatch");
+        }
+        return Path.of(text(value, "controlCheckoutPath"));
+    }
+
     /**
      * Processes one Claude Code hook event.
      *
@@ -56,8 +140,8 @@ public final class HookApplicationService {
      * Bootstraps a project-scoped Antigravity session before processing a hook.
      *
      * @param projectRoot initialized project root
-     * @param profile local profile used by the adapter
-     * @param input provider event stream
+     * @param profile     local profile used by the adapter
+     * @param input       provider event stream
      * @return structured hook result
      */
     public HookExecutionResult antigravity(Path projectRoot, Path profile, InputStream input) {
@@ -69,8 +153,11 @@ public final class HookApplicationService {
                     evidence(json));
             ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
                     binding.binding(), eventCwd);
-            if (!workspace.verified()) return deniedAntigravity(workspace.code());
-            HookExecutionResult result = antigravity(profile, new java.io.ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
+            if (!workspace.verified()) {
+                return deniedAntigravity(workspace.code());
+            }
+            HookExecutionResult result = antigravity(profile,
+                    new java.io.ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
             return withBinding(result, binding);
         } catch (Exception failure) {
             return deniedAntigravity("Synesis could not establish a trusted project session.");
@@ -94,77 +181,15 @@ public final class HookApplicationService {
                     evidence(json));
             ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
                     binding.binding(), eventCwd);
-            if (!workspace.verified()) return denied(workspace.code());
+            if (!workspace.verified()) {
+                return denied(workspace.code());
+            }
             CodexHookAdapter.Result result = new CodexHookAdapter().processJson(json, location);
-            return withBinding(new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason()), binding);
+            return withBinding(new HookExecutionResult(result.outcome()
+                    .name(), result.responseJson(), result.humanReason()), binding);
         } catch (Exception failure) {
             return denied("Synesis could not establish a trusted project session.");
         }
-    }
-
-    private static HookExecutionResult withBinding(HookExecutionResult result,
-            ProviderSessionBindingService.BindingResult binding) {
-        String hint = "SESSION_ID=" + binding.binding().sessionId() + " SUPERVISOR_ID="
-                + binding.binding().supervisorId() + " WORKER_ID=" + binding.binding().workerId();
-        return new HookExecutionResult(result.outcome(), result.responseJson(),
-                result.humanReason() == null ? hint : result.humanReason() + " " + hint);
-    }
-
-    private static HookExecutionResult denied(String reason) {
-        return new HookExecutionResult("INVALID_INPUT",
-                "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\""
-                + reason + "\"}}", reason);
-    }
-
-    private static HookExecutionResult deniedAntigravity(String reason) {
-        return new HookExecutionResult("INVALID_INPUT", "{\"decision\":\"deny\",\"reason\":\""
-                + reason + "\"}", reason);
-    }
-
-    private static String read(InputStream input) throws java.io.IOException {
-        if (input == null) throw new java.io.IOException("missing input");
-        byte[] bytes = input.readNBytes(MAX_INPUT_BYTES + 1);
-        if (bytes.length > MAX_INPUT_BYTES) throw new java.io.IOException("input exceeds bound");
-        return new String(bytes, StandardCharsets.UTF_8);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> object(Object value) {
-        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
-    }
-
-    private static String text(Map<?, ?> value, String key) {
-        Object result = value == null ? null : value.get(key);
-        if (!(result instanceof String text) || text.isBlank()) throw new IllegalArgumentException("missing " + key);
-        return text;
-    }
-
-    private static String evidence(String json) {
-        Map<String, Object> value = object(ProviderJson.parse(json));
-        for (String key : new String[] {"session_id", "sessionId", "conversation_id", "conversationId"}) {
-            Object candidate = value == null ? null : value.get(key);
-            if (candidate instanceof String text && !text.isBlank()) return text;
-        }
-        return null;
-    }
-
-    private static Path workspacePath(String json, Path fallback) {
-        Map<String, Object> value = object(ProviderJson.parse(json));
-        Object paths = value == null ? null : value.get("workspacePaths");
-        if (paths instanceof java.util.List<?> list && !list.isEmpty() && list.getFirst() instanceof String path
-                && !path.isBlank()) return Path.of(path);
-        return fallback;
-    }
-
-    private static Path controlRoot(Path cwd) throws Exception {
-        var located = new ProjectApplicationService().locate(cwd);
-        Path marker = located.synesisDirectory().resolve("local/workspace-binding.json");
-        if (!java.nio.file.Files.isRegularFile(marker)) return located.root();
-        Map<String, Object> value = object(ProviderJson.parse(java.nio.file.Files.readString(marker)));
-        if (!located.projectId().toString().equals(text(value, "projectId"))) {
-            throw new IllegalArgumentException("workspace marker project mismatch");
-        }
-        return Path.of(text(value, "controlCheckoutPath"));
     }
 
     /**

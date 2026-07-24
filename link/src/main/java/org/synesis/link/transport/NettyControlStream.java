@@ -5,10 +5,10 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.Objects;
-
+import org.synesis.link.demo.DemoWorkRequest;
+import org.synesis.link.demo.DemoWorkResult;
 import org.synesis.link.session.HandshakeException;
 import org.synesis.link.session.HandshakeFailureCode;
 import org.synesis.link.session.LivenessConfiguration;
@@ -29,10 +29,10 @@ import org.synesis.link.session.LivenessMetrics;
 import org.synesis.link.session.LivenessState;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
-import org.synesis.link.demo.DemoWorkRequest;
-import org.synesis.link.demo.DemoWorkResult;
 
-/** Internal bounded control-stream owner, heartbeat loop, and close state machine. */
+/**
+ * Internal bounded control-stream owner, heartbeat loop, and close state machine.
+ */
 final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
         implements PeerSession.ControlBinding, PeerSession.DemoWorkBinding,
         PeerSession.ApplicationStreamBinding {
@@ -90,6 +90,15 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
         return new NettyControlStream(session, established, claim, livenessConfiguration, applicationHandler);
     }
 
+    private static byte[] readBytes(ByteBuf message) {
+        if (message.readableBytes() > ControlFrame.MAX_FRAME) {
+            throw new IllegalArgumentException("frame too large");
+        }
+        byte[] value = new byte[message.readableBytes()];
+        message.readBytes(value);
+        return value;
+    }
+
     @Override
     public void channelActive(ChannelHandlerContext context) {
         this.context = context;
@@ -116,7 +125,9 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
 
     private void receiveReady(byte[] payload) throws HandshakeException {
         validateSessionPayload(payload, READY_BYTES);
-        if (ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN).getInt(16) != ControlFrame.MAX_PAYLOAD) {
+        if (ByteBuffer.wrap(payload)
+                .order(ByteOrder.BIG_ENDIAN)
+                .getInt(16) != ControlFrame.MAX_PAYLOAD) {
             protocolFailure(ControlErrorCode.ILLEGAL_STATE);
             return;
         }
@@ -132,14 +143,22 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
 
     private void startLiveness() {
         LivenessScheduler scheduler = (action, delay) -> {
-            java.util.concurrent.ScheduledFuture<?> future = context.executor().schedule(action,
-                    delay.toNanos(), TimeUnit.NANOSECONDS);
+            java.util.concurrent.ScheduledFuture<?> future = context.executor()
+                    .schedule(action,
+                            delay.toNanos(), TimeUnit.NANOSECONDS);
             return () -> future.cancel(false);
         };
         liveness = new LivenessTracker(livenessConfiguration, System::nanoTime, scheduler,
                 new LivenessTracker.Sink() {
-                    @Override public void heartbeatDue() { sendHeartbeat(); }
-                    @Override public void expired() { expireFromLiveness(); }
+                    @Override
+                    public void heartbeatDue() {
+                        sendHeartbeat();
+                    }
+
+                    @Override
+                    public void expired() {
+                        expireFromLiveness();
+                    }
                 }, null, events);
         liveness.start();
     }
@@ -157,14 +176,19 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
                 return;
             }
             boolean newest = heartbeat.sequence() > highestReceivedSequence;
-            if (newest) highestReceivedSequence = heartbeat.sequence();
+            if (newest) {
+                highestReceivedSequence = heartbeat.sequence();
+            }
             if (liveness != null) {
                 liveness.recordHeartbeatReceived(newest);
-                if (newest) liveness.validPeerActivity();
+                if (newest) {
+                    liveness.validPeerActivity();
+                }
             }
             write(ControlFrame.of(ControlMessageType.HEARTBEAT_ACK,
                     HeartbeatMessage.acknowledgement(sessionId, heartbeat.sequence(), highestReceivedSequence,
-                            heartbeat.marker()).encoded()));
+                                    heartbeat.marker())
+                            .encoded()));
         } catch (IllegalArgumentException exception) {
             protocolFailure(ControlErrorCode.INVALID_HEARTBEAT);
         }
@@ -178,7 +202,9 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
                 return;
             }
             boolean newest = acknowledgement.sequence() > highestAcknowledgedSequence;
-            if (newest) highestAcknowledgedSequence = acknowledgement.sequence();
+            if (newest) {
+                highestAcknowledgedSequence = acknowledgement.sequence();
+            }
             if (liveness != null) {
                 liveness.recordAcknowledged(newest);
                 if (newest) {
@@ -201,7 +227,9 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
             protocolFailure(ControlErrorCode.MALFORMED_FRAME);
             return;
         }
-        if (terminal.isDone()) return;
+        if (terminal.isDone()) {
+            return;
+        }
         if (!ready.get()) {
             protocolFailure(ControlErrorCode.ILLEGAL_STATE);
             return;
@@ -235,7 +263,8 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
         if (payload == null || payload.length != expectedLength) {
             throw new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE);
         }
-        ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer buffer = ByteBuffer.wrap(payload)
+                .order(ByteOrder.BIG_ENDIAN);
         if (!new UUID(buffer.getLong(), buffer.getLong()).equals(sessionId)) {
             throw new HandshakeException(HandshakeFailureCode.IDENTITY_MISMATCH);
         }
@@ -247,19 +276,26 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
     }
 
     private byte[] sessionPayload() {
-        ByteBuffer buffer = ByteBuffer.allocate(READY_BYTES).order(ByteOrder.BIG_ENDIAN);
-        buffer.putLong(sessionId.getMostSignificantBits()).putLong(sessionId.getLeastSignificantBits())
+        ByteBuffer buffer = ByteBuffer.allocate(READY_BYTES)
+                .order(ByteOrder.BIG_ENDIAN);
+        buffer.putLong(sessionId.getMostSignificantBits())
+                .putLong(sessionId.getLeastSignificantBits())
                 .putInt(ControlFrame.MAX_PAYLOAD);
         return buffer.array();
     }
 
     private byte[] sessionOnlyPayload() {
-        ByteBuffer buffer = ByteBuffer.allocate(ACK_BYTES).order(ByteOrder.BIG_ENDIAN);
-        return buffer.putLong(sessionId.getMostSignificantBits()).putLong(sessionId.getLeastSignificantBits()).array();
+        ByteBuffer buffer = ByteBuffer.allocate(ACK_BYTES)
+                .order(ByteOrder.BIG_ENDIAN);
+        return buffer.putLong(sessionId.getMostSignificantBits())
+                .putLong(sessionId.getLeastSignificantBits())
+                .array();
     }
 
     private void sendHeartbeat() {
-        if (liveness == null || !liveness.isRunning() || terminal.isDone() || !ready.get()) return;
+        if (liveness == null || !liveness.isRunning() || terminal.isDone() || !ready.get()) {
+            return;
+        }
         if (nextHeartbeatSequence < 0) {
             protocolFailure(ControlErrorCode.HEARTBEAT_SEQUENCE_EXHAUSTED);
             return;
@@ -270,22 +306,34 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
         lastHeartbeatMarker = marker;
         highestSentSequence = sequence;
         ChannelFuture write = write(ControlFrame.of(ControlMessageType.HEARTBEAT,
-                HeartbeatMessage.heartbeat(sessionId, sequence, highestReceivedSequence, marker).encoded()));
-        if (write == null) liveness.recordSendFailure();
-        else {
+                HeartbeatMessage.heartbeat(sessionId, sequence, highestReceivedSequence, marker)
+                        .encoded()));
+        if (write == null) {
+            liveness.recordSendFailure();
+        } else {
             liveness.recordHeartbeatSent();
-            write.addListener(future -> { if (!future.isSuccess() && liveness != null) liveness.recordSendFailure(); });
+            write.addListener(future -> {
+                if (!future.isSuccess() && liveness != null) {
+                    liveness.recordSendFailure();
+                }
+            });
         }
     }
 
     @Override
-    public boolean isReady() { return ready.get(); }
+    public boolean isReady() {
+        return ready.get();
+    }
 
     @Override
-    public PeerSession.DemoWorkBinding demoWorkBinding() { return this; }
+    public PeerSession.DemoWorkBinding demoWorkBinding() {
+        return this;
+    }
 
     @Override
-    public PeerSession.ApplicationStreamBinding applicationStreamBinding() { return this; }
+    public PeerSession.ApplicationStreamBinding applicationStreamBinding() {
+        return this;
+    }
 
     @Override
     public CompletionStage<DemoWorkResult> request(DemoWorkRequest request) {
@@ -307,29 +355,47 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
 
     @Override
     public CompletionStage<Void> closeGracefully(SessionCloseReason closeReason) {
-        if (!goodbyeSent.compareAndSet(false, true)) return terminal;
+        if (!goodbyeSent.compareAndSet(false, true)) {
+            return terminal;
+        }
         setReason(Objects.requireNonNull(closeReason, "close reason"));
         stopLiveness(LivenessState.CLOSED_GRACEFULLY);
         Runnable close = () -> {
-            if (!terminal.isDone() && context != null && context.channel().isOpen()) {
-                ByteBuffer payload = ByteBuffer.allocate(GOODBYE_BYTES).order(ByteOrder.BIG_ENDIAN)
-                        .putLong(sessionId.getMostSignificantBits()).putLong(sessionId.getLeastSignificantBits())
+            if (!terminal.isDone() && context != null && context.channel()
+                    .isOpen()) {
+                ByteBuffer payload = ByteBuffer.allocate(GOODBYE_BYTES)
+                        .order(ByteOrder.BIG_ENDIAN)
+                        .putLong(sessionId.getMostSignificantBits())
+                        .putLong(sessionId.getLeastSignificantBits())
                         .put((byte) closeReason.ordinal());
                 write(ControlFrame.of(ControlMessageType.GOODBYE, payload.array()));
-                context.executor().schedule(this::closeTransport, MAX_CLOSE_MILLIS, TimeUnit.MILLISECONDS);
-            } else closeTransport();
+                context.executor()
+                        .schedule(this::closeTransport, MAX_CLOSE_MILLIS, TimeUnit.MILLISECONDS);
+            } else {
+                closeTransport();
+            }
         };
-        if (context != null && context.executor().inEventLoop()) close.run();
-        else if (context != null) context.executor().execute(close);
-        else closeTransport();
+        if (context != null && context.executor()
+                .inEventLoop()) {
+            close.run();
+        } else if (context != null) {
+            context.executor()
+                    .execute(close);
+        } else {
+            closeTransport();
+        }
         return terminal;
     }
 
     @Override
-    public CompletionStage<Void> terminalCompletion() { return terminal; }
+    public CompletionStage<Void> terminalCompletion() {
+        return terminal;
+    }
 
     @Override
-    public SessionCloseReason closeReason() { return reason.get(); }
+    public SessionCloseReason closeReason() {
+        return reason.get();
+    }
 
     @Override
     public LivenessState livenessState() {
@@ -344,18 +410,26 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
 
     @Override
     public void addLivenessListener(LivenessListener listener) {
-        if (liveness != null) liveness.addListener(listener);
+        if (liveness != null) {
+            liveness.addListener(listener);
+        }
     }
 
     @Override
     public void removeLivenessListener(LivenessListener listener) {
-        if (liveness != null) liveness.removeListener(listener);
+        if (liveness != null) {
+            liveness.removeListener(listener);
+        }
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext context) {
-        if (reason.get() == null) setReason(SessionCloseReason.TRANSPORT_CLOSED);
-        if (liveness != null && !livenessState().equals(LivenessState.EXPIRED)) stopLiveness(LivenessState.FAILED);
+        if (reason.get() == null) {
+            setReason(SessionCloseReason.TRANSPORT_CLOSED);
+        }
+        if (liveness != null && !livenessState().equals(LivenessState.EXPIRED)) {
+            stopLiveness(LivenessState.FAILED);
+        }
         if (!established.isDone()) {
             established.completeExceptionally(new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE));
         }
@@ -376,35 +450,50 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
         if (!established.isDone()) {
             established.completeExceptionally(new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE));
         }
-        if (context != null && context.channel().isOpen()) {
-            byte[] payload = ByteBuffer.allocate(GOODBYE_BYTES).order(ByteOrder.BIG_ENDIAN)
-                    .putLong(sessionId.getMostSignificantBits()).putLong(sessionId.getLeastSignificantBits())
-                    .put((byte) code.code).array();
+        if (context != null && context.channel()
+                .isOpen()) {
+            byte[] payload = ByteBuffer.allocate(GOODBYE_BYTES)
+                    .order(ByteOrder.BIG_ENDIAN)
+                    .putLong(sessionId.getMostSignificantBits())
+                    .putLong(sessionId.getLeastSignificantBits())
+                    .put((byte) code.code)
+                    .array();
             write(ControlFrame.of(ControlMessageType.PROTOCOL_ERROR, payload));
             context.close();
-        } else finishTerminal();
+        } else {
+            finishTerminal();
+        }
     }
 
     private void expireFromLiveness() {
-        if (terminal.isDone() || reason.get() != null) return;
+        if (terminal.isDone() || reason.get() != null) {
+            return;
+        }
         setReason(SessionCloseReason.LIVENESS_EXPIRED);
         closeTransport();
     }
 
     private void stopLiveness(LivenessState state) {
-        if (liveness != null) liveness.stop(state);
+        if (liveness != null) {
+            liveness.stop(state);
+        }
     }
 
     private ChannelFuture write(ControlFrame frame) {
-        if (context != null && context.channel().isOpen()) {
+        if (context != null && context.channel()
+                .isOpen()) {
             return context.writeAndFlush(Unpooled.wrappedBuffer(frame.encoded()));
         }
         return null;
     }
 
     private void closeTransport() {
-        if (context != null && context.channel().isOpen()) context.close();
-        else finishTerminal();
+        if (context != null && context.channel()
+                .isOpen()) {
+            context.close();
+        } else {
+            finishTerminal();
+        }
     }
 
     private void finishTerminal() {
@@ -418,21 +507,17 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
         reason.compareAndSet(null, value);
     }
 
-    private static byte[] readBytes(ByteBuf message) {
-        if (message.readableBytes() > ControlFrame.MAX_FRAME) throw new IllegalArgumentException("frame too large");
-        byte[] value = new byte[message.readableBytes()];
-        message.readBytes(value);
-        return value;
-    }
-
-    /** Per-session bounded callback executor; it never becomes protocol backpressure. */
+    /**
+     * Per-session bounded callback executor; it never becomes protocol backpressure.
+     */
     private static final class EventDispatcher implements LivenessEventDispatcher {
+
         private final ThreadPoolExecutor executor = new ThreadPoolExecutor(0, 1, 1, TimeUnit.SECONDS,
                 new ArrayBlockingQueue<>(32), runnable -> {
-                    Thread thread = new Thread(runnable, "synesis-link-liveness");
-                    thread.setDaemon(true);
-                    return thread;
-                }, new ThreadPoolExecutor.AbortPolicy());
+            Thread thread = new Thread(runnable, "synesis-link-liveness");
+            thread.setDaemon(true);
+            return thread;
+        }, new ThreadPoolExecutor.AbortPolicy());
 
         @Override
         public boolean dispatch(Runnable action) {
@@ -444,6 +529,8 @@ final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf>
             }
         }
 
-        private void close() { executor.shutdownNow(); }
+        private void close() {
+            executor.shutdownNow();
+        }
     }
 }

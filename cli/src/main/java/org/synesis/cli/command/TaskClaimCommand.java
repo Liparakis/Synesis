@@ -14,26 +14,42 @@ import org.synesis.coordination.TaskClaim;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-/** Claims one unassigned coordination task. */
+/**
+ * Claims one unassigned coordination task.
+ */
 @Command(name = "claim", description = "Claim a coordination task.", mixinStandardHelpOptions = true)
 public final class TaskClaimCommand implements Callable<Integer> {
-    @Option(names = "--project", description = "Initialized project directory.") private Path project;
-    @Option(names = "--endpoint", required = true) private URI endpoint;
-    @Option(names = "--profile", required = true) private Path profile;
-    @Option(names = "--supervisor", required = true) private String supervisor;
-    @Option(names = "--worker", required = true) private String worker;
-    @Option(names = "--task", required = true) private UUID taskId;
-    private final CliRuntime runtime;
 
-    /** Creates a task claim command.
+    private final CliRuntime runtime;
+    @Option(names = "--project", description = "Initialized project directory.")
+    private Path project;
+    @Option(names = "--endpoint", required = true)
+    private URI endpoint;
+    @Option(names = "--profile", required = true)
+    private Path profile;
+    @Option(names = "--supervisor", required = true)
+    private String supervisor;
+    @Option(names = "--worker", required = true)
+    private String worker;
+    @Option(names = "--task", required = true)
+    private UUID taskId;
+
+    /**
+     * Creates a task claim command.
+     *
      * @param runtime composed CLI runtime
      */
-    public TaskClaimCommand(CliRuntime runtime) { this.runtime = runtime; }
+    public TaskClaimCommand(CliRuntime runtime) {
+        this.runtime = runtime;
+    }
 
-    /** Claims the task through a signed command.
+    /**
+     * Claims the task through a signed command.
+     *
      * @return stable process exit code
      */
-    @Override public Integer call() {
+    @Override
+    public Integer call() {
         try {
             var location = CoordinationCliSupport.project(runtime, project);
             var identity = CoordinationCliSupport.loadIdentity(profile);
@@ -41,12 +57,16 @@ public final class TaskClaimCommand implements Callable<Integer> {
             var command = CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), taskId,
                     PredictionEventType.TASK_CLAIMED, identity.nodeId(), supervisor, worker, claim.encoded(), identity);
             var event = CoordinationCliSupport.submit(CoordinationCliSupport.endpoint(endpoint), command);
-            runtime.terminal().stdout("TASK_CLAIMED=true");
-            runtime.terminal().stdout("TASK_ID=" + taskId);
-            runtime.terminal().stdout("PROJECT_SEQUENCE=" + event.sequence());
+            runtime.terminal()
+                    .stdout("TASK_CLAIMED=true");
+            runtime.terminal()
+                    .stdout("TASK_ID=" + taskId);
+            runtime.terminal()
+                    .stdout("PROJECT_SEQUENCE=" + event.sequence());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("TASK_ERROR=" + failure.getMessage());
+            runtime.terminal()
+                    .stderr("TASK_ERROR=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

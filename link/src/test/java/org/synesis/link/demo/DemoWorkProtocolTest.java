@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 final class DemoWorkProtocolTest {
+
     @Test
     void requestAndResultRoundTripWithCorrelation() {
         UUID id = UUID.randomUUID();

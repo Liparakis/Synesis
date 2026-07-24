@@ -14,38 +14,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.synesis.workspace.provider.ProviderJson;
 
-/** Verifies Codex hook behavior through the generated launcher process. */
+/**
+ * Verifies Codex hook behavior through the generated launcher process.
+ */
 @Timeout(60)
 final class CodexHookProcessTest {
-    @Test
-    void generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned() throws Exception {
-        Path project = Files.createTempDirectory("synesis-codex-process-");
-        try {
-            assertEquals(0, run(project, "init", "--project", project.toString()).exit());
-            assertEquals(0, run(project, "project", "create", "--project", project.toString(), "--peer",
-                    "sl1-" + "0".repeat(64)).exit());
-            CommandResult constraint = run(project, "constraint", "create", "--project", project.toString(),
-                    "--title", "Protect source", "--rationale", "Frozen source scope.", "--scope",
-                    "src/protected/**", "--effect", "block");
-            assertEquals(0, constraint.exit(), constraint.output());
-
-            CommandResult blocked = hook(project, event(project, "*** Begin Patch\n*** Update File: src/protected/file.txt\n*** End Patch"));
-            assertEquals(0, blocked.exit(), blocked.output());
-            assertTrue(blocked.output().contains("\"permissionDecision\":\"deny\""), blocked.output());
-            assertTrue(blocked.output().contains("GIT_HEAD_UNAVAILABLE"), blocked.output());
-
-            CommandResult allowed = hook(project, event(project, "*** Begin Patch\n*** Add File: docs/readme.txt\n*** End Patch"));
-            assertEquals(0, allowed.exit(), allowed.output());
-            assertTrue(allowed.output().contains("GIT_HEAD_UNAVAILABLE"), allowed.output());
-        } finally {
-            cleanup(project);
-        }
-    }
 
     private static CommandResult hook(Path project, String event) throws Exception {
         Process process = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), project, "hook", "codex");
-        process.getOutputStream().write(event.getBytes(StandardCharsets.UTF_8));
-        process.getOutputStream().close();
+        process.getOutputStream()
+                .write(event.getBytes(StandardCharsets.UTF_8));
+        process.getOutputStream()
+                .close();
         assertTrue(process.waitFor(30, TimeUnit.SECONDS));
         return new CommandResult(process.exitValue(), DistributionLauncherTest.output(process));
     }
@@ -69,11 +49,48 @@ final class CodexHookProcessTest {
 
     private static void cleanup(Path root) {
         try (var paths = Files.walk(root)) {
-            paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try { Files.deleteIfExists(path); } catch (Exception ignored) { }
-            });
-        } catch (Exception ignored) { }
+            paths.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (Exception ignored) {
+                        }
+                    });
+        } catch (Exception ignored) {
+        }
     }
 
-    private record CommandResult(int exit, String output) { }
+    @Test
+    void generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned() throws Exception {
+        Path project = Files.createTempDirectory("synesis-codex-process-");
+        try {
+            assertEquals(0, run(project, "init", "--project", project.toString()).exit());
+            assertEquals(0, run(project, "project", "create", "--project", project.toString(), "--peer",
+                    "sl1-" + "0".repeat(64)).exit());
+            CommandResult constraint = run(project, "constraint", "create", "--project", project.toString(),
+                    "--title", "Protect source", "--rationale", "Frozen source scope.", "--scope",
+                    "src/protected/**", "--effect", "block");
+            assertEquals(0, constraint.exit(), constraint.output());
+
+            CommandResult blocked = hook(project,
+                    event(project, "*** Begin Patch\n*** Update File: src/protected/file.txt\n*** End Patch"));
+            assertEquals(0, blocked.exit(), blocked.output());
+            assertTrue(blocked.output()
+                    .contains("\"permissionDecision\":\"deny\""), blocked.output());
+            assertTrue(blocked.output()
+                    .contains("GIT_HEAD_UNAVAILABLE"), blocked.output());
+
+            CommandResult allowed = hook(project,
+                    event(project, "*** Begin Patch\n*** Add File: docs/readme.txt\n*** End Patch"));
+            assertEquals(0, allowed.exit(), allowed.output());
+            assertTrue(allowed.output()
+                    .contains("GIT_HEAD_UNAVAILABLE"), allowed.output());
+        } finally {
+            cleanup(project);
+        }
+    }
+
+    private record CommandResult(int exit, String output) {
+
+    }
 }

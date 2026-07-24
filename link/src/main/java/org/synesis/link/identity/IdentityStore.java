@@ -18,7 +18,7 @@ public interface IdentityStore {
      * Loads the identity from this store.
      *
      * @return the stored identity; never {@code null}
-     * @throws IOException if storage cannot be read
+     * @throws IOException              if storage cannot be read
      * @throws GeneralSecurityException if stored key material is invalid
      */
     NodeIdentity load() throws IOException, GeneralSecurityException;
@@ -27,7 +27,7 @@ public interface IdentityStore {
      * Saves an identity without silently replacing existing key material.
      *
      * @param identity identity to persist; never {@code null}
-     * @throws IOException if storage cannot be written or already exists
+     * @throws IOException              if storage cannot be written or already exists
      * @throws GeneralSecurityException if the identity cannot be encoded
      */
     void save(NodeIdentity identity) throws IOException, GeneralSecurityException;

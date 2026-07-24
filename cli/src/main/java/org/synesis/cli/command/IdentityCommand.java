@@ -1,14 +1,15 @@
 package org.synesis.cli.command;
 
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Spec;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Spec;
 
 /**
  * Parent command for non-mutating and bootstrap identity operations.
  */
 @Command(name = "identity", description = "Inspect the local Synesis identity.")
 public final class IdentityCommand implements Runnable {
+
     @Spec
     private CommandSpec spec;
 
@@ -23,6 +24,8 @@ public final class IdentityCommand implements Runnable {
      */
     @Override
     public void run() {
-        spec.commandLine().usage(spec.commandLine().getOut());
+        spec.commandLine()
+                .usage(spec.commandLine()
+                        .getOut());
     }
 }

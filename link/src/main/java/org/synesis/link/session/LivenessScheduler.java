@@ -1,8 +1,11 @@
-package org.synesis.link.transport;
+package org.synesis.link.session;
 
 import java.time.Duration;
 
-/** Minimal scheduler seam owned by one liveness tracker. */
+/**
+ * Minimal scheduler seam owned by one liveness tracker.
+ */
 interface LivenessScheduler {
+
     Cancellable schedule(Runnable action, Duration delay);
 }

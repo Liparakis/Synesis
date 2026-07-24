@@ -8,6 +8,7 @@ import java.util.Objects;
  * Immutable bounded evidence reference included in a decision signature.
  */
 public final class DecisionEvidence {
+
     static final int MAX_KIND_BYTES = 64;
     static final int MAX_REFERENCE_BYTES = 1_024;
 
@@ -32,6 +33,15 @@ public final class DecisionEvidence {
             throw new IllegalArgumentException("evidence digest must be 32 bytes");
         }
         this.digest = digest.clone();
+    }
+
+    private static String boundedText(String value, int maxBytes, String name) {
+        Objects.requireNonNull(value, name);
+        byte[] encoded = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (encoded.length == 0 || encoded.length > maxBytes || value.indexOf('\u0000') >= 0) {
+            throw new IllegalArgumentException(name + " exceeds its supported bound");
+        }
+        return value;
     }
 
     /**
@@ -67,26 +77,20 @@ public final class DecisionEvidence {
      * @return digest text
      */
     public String digestHex() {
-        return HexFormat.of().formatHex(digest);
+        return HexFormat.of()
+                .formatHex(digest);
     }
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof DecisionEvidence value)) return false;
+        if (!(other instanceof DecisionEvidence value)) {
+            return false;
+        }
         return kind.equals(value.kind) && reference.equals(value.reference) && Arrays.equals(digest, value.digest);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(kind, reference, Arrays.hashCode(digest));
-    }
-
-    private static String boundedText(String value, int maxBytes, String name) {
-        Objects.requireNonNull(value, name);
-        byte[] encoded = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        if (encoded.length == 0 || encoded.length > maxBytes || value.indexOf('\u0000') >= 0) {
-            throw new IllegalArgumentException(name + " exceeds its supported bound");
-        }
-        return value;
     }
 }

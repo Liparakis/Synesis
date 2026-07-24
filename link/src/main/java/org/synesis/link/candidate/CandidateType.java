@@ -6,16 +6,28 @@ package org.synesis.link.candidate;
  * @since 1.0
  */
 public enum CandidateType {
-    /** Address learned from a directly connected local network. */
+    /**
+     * Address learned from a directly connected local network.
+     */
     LAN,
-    /** Globally routable IPv6 address. */
+    /**
+     * Globally routable IPv6 address.
+     */
     IPV6,
-    /** Automatically mapped IPv4 address. */
+    /**
+     * Automatically mapped IPv4 address.
+     */
     MAPPED_IPV4,
-    /** Optional server-reflexive address. */
+    /**
+     * Optional server-reflexive address.
+     */
     SERVER_REFLEXIVE,
-    /** Address supplied directly by the caller. */
+    /**
+     * Address supplied directly by the caller.
+     */
     MANUAL,
-    /** Reserved wire value; direct racing rejects relay candidates in v1. */
+    /**
+     * Reserved wire value; direct racing rejects relay candidates in v1.
+     */
     RELAY
 }

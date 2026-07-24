@@ -8,6 +8,7 @@ import java.io.PrintWriter;
  * @since 1.0
  */
 public interface Terminal {
+
     /**
      * Returns the stdout writer owned by this terminal.
      *

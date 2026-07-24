@@ -1,6 +1,9 @@
-package org.synesis.link.transport;
+package org.synesis.link.session;
 
-/** Bounded event-dispatch seam; returning false records a dropped event. */
+/**
+ * Bounded event-dispatch seam; returning false records a dropped event.
+ */
 interface LivenessEventDispatcher {
+
     boolean dispatch(Runnable action);
 }

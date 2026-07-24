@@ -22,12 +22,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.synesis.link.session.PeerSession;
 
-/** Internal Netty transport for one bounded opaque application-stream exchange. */
+/**
+ * Internal Netty transport for one bounded opaque application-stream exchange.
+ */
 final class ApplicationStreamTransport {
+
     private static final int MAX_STREAMS = 4;
     private static final int OPERATION_TIMEOUT_MILLIS = 5_000;
 
-    private ApplicationStreamTransport() { }
+    private ApplicationStreamTransport() {
+    }
 
     static CompletionStage<byte[]> open(ChannelHandlerContext controlContext, byte[] payload,
             AtomicInteger active) {
@@ -41,8 +45,13 @@ final class ApplicationStreamTransport {
         }
         CompletableFuture<byte[]> result = new CompletableFuture<>();
         AtomicBoolean released = new AtomicBoolean();
-        Runnable release = () -> { if (released.compareAndSet(false, true)) active.decrementAndGet(); };
-        if (!(controlContext.channel().parent() instanceof QuicChannel connection)) {
+        Runnable release = () -> {
+            if (released.compareAndSet(false, true)) {
+                active.decrementAndGet();
+            }
+        };
+        if (!(controlContext.channel()
+                .parent() instanceof QuicChannel connection)) {
             release.run();
             return CompletableFuture.failedFuture(new IllegalStateException("QUIC connection is unavailable"));
         }
@@ -60,12 +69,15 @@ final class ApplicationStreamTransport {
     static void accept(ChannelHandlerContext context, ChannelHandler oldHandler, PeerSession session,
             PeerSession.ApplicationStreamHandler handler, AtomicInteger active, byte[] firstFrame) {
         if (handler == null || active.incrementAndGet() > MAX_STREAMS) {
-            if (handler != null) active.decrementAndGet();
+            if (handler != null) {
+                active.decrementAndGet();
+            }
             context.close();
             return;
         }
         ServerHandler server = new ServerHandler(session, handler, active);
-        context.pipeline().replace(oldHandler, "synesis-application", server);
+        context.pipeline()
+                .replace(oldHandler, "synesis-application", server);
         server.acceptFirst(context, firstFrame);
     }
 
@@ -74,16 +86,29 @@ final class ApplicationStreamTransport {
         return new ChannelInitializer<QuicStreamChannel>() {
             @Override
             protected void initChannel(QuicStreamChannel channel) {
-                channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(
-                        ApplicationStreamCodec.MAX_FRAME_BYTES + Integer.BYTES, 0, Integer.BYTES, 0,
-                        Integer.BYTES));
-                channel.pipeline().addLast(new LengthFieldPrepender(Integer.BYTES));
-                channel.pipeline().addLast(new ClientHandler(payload, result, release));
+                channel.pipeline()
+                        .addLast(new LengthFieldBasedFrameDecoder(
+                                ApplicationStreamCodec.MAX_FRAME_BYTES + Integer.BYTES, 0, Integer.BYTES, 0,
+                                Integer.BYTES));
+                channel.pipeline()
+                        .addLast(new LengthFieldPrepender(Integer.BYTES));
+                channel.pipeline()
+                        .addLast(new ClientHandler(payload, result, release));
             }
         };
     }
 
+    private static byte[] read(ByteBuf message) {
+        if (message.readableBytes() > ApplicationStreamCodec.MAX_FRAME_BYTES) {
+            throw new IllegalArgumentException("application frame is oversized");
+        }
+        byte[] bytes = new byte[message.readableBytes()];
+        message.readBytes(bytes);
+        return bytes;
+    }
+
     private static final class ClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
+
         private final byte[] payload;
         private final CompletableFuture<byte[]> result;
         private final Runnable release;
@@ -97,11 +122,12 @@ final class ApplicationStreamTransport {
 
         @Override
         public void channelActive(ChannelHandlerContext context) {
-            timeout = context.executor().schedule(() -> {
-                if (result.completeExceptionally(new IllegalStateException("application stream timed out"))) {
-                    context.close();
-                }
-            }, OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            timeout = context.executor()
+                    .schedule(() -> {
+                        if (result.completeExceptionally(new IllegalStateException("application stream timed out"))) {
+                            context.close();
+                        }
+                    }, OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             context.writeAndFlush(Unpooled.wrappedBuffer(ApplicationStreamCodec.encode(payload)));
         }
 
@@ -109,7 +135,9 @@ final class ApplicationStreamTransport {
         protected void channelRead0(ChannelHandlerContext context, ByteBuf message) {
             try {
                 byte[] frame = read(message);
-                if (result.complete(ApplicationStreamCodec.decode(frame))) context.close();
+                if (result.complete(ApplicationStreamCodec.decode(frame))) {
+                    context.close();
+                }
             } catch (RuntimeException exception) {
                 result.completeExceptionally(exception);
                 context.close();
@@ -120,7 +148,9 @@ final class ApplicationStreamTransport {
         public void channelInactive(ChannelHandlerContext context) {
             cancelTimeout();
             release.run();
-            if (!result.isDone()) result.completeExceptionally(new IllegalStateException("application stream closed"));
+            if (!result.isDone()) {
+                result.completeExceptionally(new IllegalStateException("application stream closed"));
+            }
         }
 
         @Override
@@ -130,11 +160,14 @@ final class ApplicationStreamTransport {
         }
 
         private void cancelTimeout() {
-            if (timeout != null) timeout.cancel(false);
+            if (timeout != null) {
+                timeout.cancel(false);
+            }
         }
     }
 
     private static final class ServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
+
         private final PeerSession session;
         private final PeerSession.ApplicationStreamHandler handler;
         private final AtomicInteger active;
@@ -148,7 +181,9 @@ final class ApplicationStreamTransport {
             this.active = active;
         }
 
-        private void acceptFirst(ChannelHandlerContext context, byte[] frame) { respond(context, frame); }
+        private void acceptFirst(ChannelHandlerContext context, byte[] frame) {
+            respond(context, frame);
+        }
 
         @Override
         protected void channelRead0(ChannelHandlerContext context, ByteBuf message) {
@@ -179,35 +214,35 @@ final class ApplicationStreamTransport {
                 context.close();
                 return;
             }
-            timeout = context.executor().schedule(() -> context.close(), OPERATION_TIMEOUT_MILLIS,
-                    TimeUnit.MILLISECONDS);
-            response.whenComplete((value, failure) -> context.executor().execute(() -> {
-                if (failure != null || value == null || value.length > ApplicationStreamCodec.MAX_PAYLOAD_BYTES) {
-                    context.close();
-                    return;
-                }
-                if (timeout != null) timeout.cancel(false);
-                context.writeAndFlush(Unpooled.wrappedBuffer(ApplicationStreamCodec.encode(value)))
-                        .addListener(ChannelFutureListener.CLOSE);
-            }));
+            timeout = context.executor()
+                    .schedule(() -> context.close(), OPERATION_TIMEOUT_MILLIS,
+                            TimeUnit.MILLISECONDS);
+            response.whenComplete((value, failure) -> context.executor()
+                    .execute(() -> {
+                        if (failure != null || value == null
+                                || value.length > ApplicationStreamCodec.MAX_PAYLOAD_BYTES) {
+                            context.close();
+                            return;
+                        }
+                        if (timeout != null) {
+                            timeout.cancel(false);
+                        }
+                        context.writeAndFlush(Unpooled.wrappedBuffer(ApplicationStreamCodec.encode(value)))
+                                .addListener(ChannelFutureListener.CLOSE);
+                    }));
         }
 
         @Override
         public void channelInactive(ChannelHandlerContext context) {
-            if (timeout != null) timeout.cancel(false);
+            if (timeout != null) {
+                timeout.cancel(false);
+            }
             active.decrementAndGet();
         }
 
         @Override
-        public void exceptionCaught(ChannelHandlerContext context, Throwable cause) { context.close(); }
-    }
-
-    private static byte[] read(ByteBuf message) {
-        if (message.readableBytes() > ApplicationStreamCodec.MAX_FRAME_BYTES) {
-            throw new IllegalArgumentException("application frame is oversized");
+        public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
+            context.close();
         }
-        byte[] bytes = new byte[message.readableBytes()];
-        message.readBytes(bytes);
-        return bytes;
     }
 }

@@ -7,7 +7,9 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
-/** Test-only temporary TLS key material created through the JDK keytool. */
+/**
+ * Test-only temporary TLS key material created through the JDK keytool.
+ */
 final class TestTlsMaterial implements AutoCloseable {
 
     private static final String PASSWORD = "changeit";
@@ -24,15 +26,20 @@ final class TestTlsMaterial implements AutoCloseable {
     static TestTlsMaterial create() throws Exception {
         Path directory = Files.createTempDirectory("synesis-link-tls");
         Path store = directory.resolve("identity.p12");
-        String executable = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")
+        String executable = System.getProperty("os.name")
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains("win")
                 ? "keytool.exe" : "keytool";
-        String keytool = Path.of(System.getProperty("java.home"), "bin", executable).toString();
+        String keytool = Path.of(System.getProperty("java.home"), "bin", executable)
+                .toString();
         Process process = new ProcessBuilder(keytool, "-genkeypair", "-alias", "quic", "-keyalg", "RSA",
                 "-keystore", store.toString(), "-storetype", "PKCS12", "-storepass", PASSWORD,
                 "-keypass", PASSWORD, "-dname", "CN=localhost", "-validity", "1", "-noprompt")
-                .redirectErrorStream(true).start();
+                .redirectErrorStream(true)
+                .start();
         if (process.waitFor() != 0) {
-            throw new IllegalStateException("keytool failed: " + new String(process.getInputStream().readAllBytes()));
+            throw new IllegalStateException("keytool failed: " + new String(process.getInputStream()
+                    .readAllBytes()));
         }
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (InputStream input = Files.newInputStream(store)) {
@@ -45,13 +52,14 @@ final class TestTlsMaterial implements AutoCloseable {
     @Override
     public void close() throws java.io.IOException {
         try (var paths = Files.walk(directory)) {
-            paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (java.io.IOException exception) {
-                    throw new java.io.UncheckedIOException(exception);
-                }
-            });
+            paths.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (java.io.IOException exception) {
+                            throw new java.io.UncheckedIOException(exception);
+                        }
+                    });
         } catch (java.io.UncheckedIOException exception) {
             throw exception.getCause();
         }

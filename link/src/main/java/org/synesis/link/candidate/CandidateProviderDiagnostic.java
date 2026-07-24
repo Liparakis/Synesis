@@ -6,15 +6,18 @@ import java.util.Objects;
 /**
  * Safe bounded outcome for one provider invocation.
  *
- * @param providerId stable provider identifier
- * @param category bounded outcome category
+ * @param providerId         stable provider identifier
+ * @param category           bounded outcome category
  * @param acceptedCandidates accepted candidate count
  * @param rejectedCandidates rejected or bounded-away candidate count
- * @param duration local provider duration
+ * @param duration           local provider duration
  */
 public record CandidateProviderDiagnostic(String providerId, CandidateProviderFailureCategory category,
-        int acceptedCandidates, int rejectedCandidates, Duration duration) {
-    /** Validates the immutable diagnostic. */
+                                          int acceptedCandidates, int rejectedCandidates, Duration duration) {
+
+    /**
+     * Validates the immutable diagnostic.
+     */
     public CandidateProviderDiagnostic {
         Objects.requireNonNull(providerId, "provider ID");
         Objects.requireNonNull(category, "category");

@@ -11,6 +11,7 @@ import java.security.cert.X509Certificate;
  * Creates short-lived transport-only TLS material outside the identity store.
  */
 final class EphemeralTlsMaterial implements AutoCloseable {
+
     private static final String PASSWORD = "synesis-ephemeral";
     final Path directory;
     final PrivateKey key;
@@ -26,14 +27,20 @@ final class EphemeralTlsMaterial implements AutoCloseable {
         Path directory = Files.createTempDirectory("synesis-link-tls");
         try {
             Path store = directory.resolve("transport.p12");
-            String executable = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")
+            String executable = System.getProperty("os.name")
+                    .toLowerCase(java.util.Locale.ROOT)
+                    .contains("win")
                     ? "keytool.exe" : "keytool";
-            String keytool = Path.of(System.getProperty("java.home"), "bin", executable).toString();
+            String keytool = Path.of(System.getProperty("java.home"), "bin", executable)
+                    .toString();
             Process process = new ProcessBuilder(keytool, "-genkeypair", "-alias", "quic", "-keyalg", "RSA",
                     "-keystore", store.toString(), "-storetype", "PKCS12", "-storepass", PASSWORD,
                     "-keypass", PASSWORD, "-dname", "CN=synesis-link", "-validity", "1", "-noprompt")
-                    .redirectErrorStream(true).start();
-            if (process.waitFor() != 0) throw new IllegalStateException("ephemeral TLS generation failed");
+                    .redirectErrorStream(true)
+                    .start();
+            if (process.waitFor() != 0) {
+                throw new IllegalStateException("ephemeral TLS generation failed");
+            }
             KeyStore keyStore = KeyStore.getInstance("PKCS12");
             try (InputStream input = Files.newInputStream(store)) {
                 keyStore.load(input, PASSWORD.toCharArray());
@@ -46,22 +53,23 @@ final class EphemeralTlsMaterial implements AutoCloseable {
         }
     }
 
-    @Override
-    public void close() throws java.io.IOException {
-        delete(directory);
-    }
-
     private static void delete(Path directory) throws java.io.IOException {
         try (var paths = Files.walk(directory)) {
-            paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (java.io.IOException exception) {
-                    throw new java.io.UncheckedIOException(exception);
-                }
-            });
+            paths.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (java.io.IOException exception) {
+                            throw new java.io.UncheckedIOException(exception);
+                        }
+                    });
         } catch (java.io.UncheckedIOException exception) {
             throw exception.getCause();
         }
+    }
+
+    @Override
+    public void close() throws java.io.IOException {
+        delete(directory);
     }
 }

@@ -6,11 +6,10 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.util.Objects;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
+import java.util.Objects;
 import org.synesis.link.session.HandshakeRole;
 import org.synesis.link.session.HandshakeTranscript;
 
@@ -25,7 +24,9 @@ import org.synesis.link.session.HandshakeTranscript;
  */
 public final class HandshakeEnvelope {
 
-    /** Maximum complete envelope size. */
+    /**
+     * Maximum complete envelope size.
+     */
     public static final int MAX_BYTES = 8_192;
 
     private static final int MAGIC = 0x534C4831;
@@ -49,9 +50,9 @@ public final class HandshakeEnvelope {
     /**
      * Creates a control envelope.
      *
-     * @param role proof role
+     * @param role       proof role
      * @param transcript canonical transcript
-     * @param proof signed role proof
+     * @param proof      signed role proof
      * @return immutable envelope
      */
     public static HandshakeEnvelope create(HandshakeRole role, HandshakeTranscript transcript,
@@ -62,10 +63,10 @@ public final class HandshakeEnvelope {
     /**
      * Creates an envelope with an explicit supported-version offer.
      *
-     * @param role proof role
+     * @param role              proof role
      * @param supportedVersions versions offered by this endpoint
-     * @param transcript canonical transcript using the selected version
-     * @param proof signed role proof
+     * @param transcript        canonical transcript using the selected version
+     * @param proof             signed role proof
      * @return immutable envelope
      */
     public static HandshakeEnvelope create(HandshakeRole role, List<ProtocolVersion> supportedVersions,
@@ -130,6 +131,31 @@ public final class HandshakeEnvelope {
                 && (encoded[2] & 255) == 0x48 && (encoded[3] & 255) == 0x31;
     }
 
+    private static List<ProtocolVersion> normalizeVersions(List<ProtocolVersion> versions) {
+        Objects.requireNonNull(versions, "supported versions");
+        List<ProtocolVersion> normalized = versions.stream()
+                .distinct()
+                .sorted(Collections.reverseOrder())
+                .toList();
+        if (normalized.isEmpty() || normalized.size() > 8) {
+            throw new IllegalArgumentException("supported-version list exceeds bounds");
+        }
+        return normalized;
+    }
+
+    private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
+        output.writeShort(value.length);
+        output.write(value);
+    }
+
+    private static byte[] readBytes(DataInputStream input, int max) throws IOException {
+        int length = input.readUnsignedShort();
+        if (length == 0 || length > max || length > input.available()) {
+            throw new IOException("invalid bounded envelope field");
+        }
+        return input.readNBytes(length);
+    }
+
     /**
      * Returns canonical envelope bytes.
      *
@@ -161,52 +187,38 @@ public final class HandshakeEnvelope {
      *
      * @return role
      */
-    public HandshakeRole role() { return role; }
+    public HandshakeRole role() {
+        return role;
+    }
 
     /**
      * Returns the offered protocol versions in canonical order.
      *
      * @return immutable supported-version list
      */
-    public List<ProtocolVersion> supportedVersions() { return supportedVersions; }
+    public List<ProtocolVersion> supportedVersions() {
+        return supportedVersions;
+    }
 
     /**
      * Returns the decoded transcript.
      *
      * @return transcript
      */
-    public HandshakeTranscript transcript() { return transcript; }
+    public HandshakeTranscript transcript() {
+        return transcript;
+    }
 
     /**
      * Returns the decoded proof.
      *
      * @return proof
      */
-    public HandshakeProof proof() { return proof; }
+    public HandshakeProof proof() {
+        return proof;
+    }
 
     private int encodedLength() {
         return 7 + 2 * supportedVersions.size() + transcript.encoded().length + 2 + proof.encoded().length;
-    }
-
-    private static List<ProtocolVersion> normalizeVersions(List<ProtocolVersion> versions) {
-        Objects.requireNonNull(versions, "supported versions");
-        List<ProtocolVersion> normalized = versions.stream().distinct().sorted(Collections.reverseOrder()).toList();
-        if (normalized.isEmpty() || normalized.size() > 8) {
-            throw new IllegalArgumentException("supported-version list exceeds bounds");
-        }
-        return normalized;
-    }
-
-    private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
-        output.writeShort(value.length);
-        output.write(value);
-    }
-
-    private static byte[] readBytes(DataInputStream input, int max) throws IOException {
-        int length = input.readUnsignedShort();
-        if (length == 0 || length > max || length > input.available()) {
-            throw new IOException("invalid bounded envelope field");
-        }
-        return input.readNBytes(length);
     }
 }

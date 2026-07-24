@@ -16,8 +16,11 @@ import org.synesis.link.candidate.CandidateDescriptor;
 import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.identity.NodeIdentity;
 
-/** Verifies bounded signed invitation encoding and bearer-link behavior. */
+/**
+ * Verifies bounded signed invitation encoding and bearer-link behavior.
+ */
 final class SessionInvitationTest {
+
     @Test
     void roundTripsAndVerifiesTheExactShareLink() throws Exception {
         NodeIdentity host = NodeIdentity.generate();
@@ -33,7 +36,8 @@ final class SessionInvitationTest {
         SessionInvitation decoded = SessionInvitation.fromShareLink(invitation.shareLink());
         assertTrue(decoded.verifyAt(issued.plusSeconds(1), SessionInvitation.DEFAULT_LIFETIME));
         assertArrayEquals(invitation.encoded(), decoded.encoded());
-        assertTrue(invitation.shareLink().startsWith("synesis://join/SYN1-"));
+        assertTrue(invitation.shareLink()
+                .startsWith("synesis://join/SYN1-"));
     }
 
     @Test
@@ -47,7 +51,8 @@ final class SessionInvitationTest {
                 issued, expires, new byte[SessionInvitation.CAPABILITY_BYTES], descriptor);
         byte[] bytes = invitation.encoded();
         bytes[bytes.length - 1] ^= 1;
-        assertFalse(SessionInvitation.decode(bytes).verifyAt(issued.plusSeconds(1), SessionInvitation.DEFAULT_LIFETIME));
+        assertFalse(SessionInvitation.decode(bytes)
+                .verifyAt(issued.plusSeconds(1), SessionInvitation.DEFAULT_LIFETIME));
         assertFalse(invitation.verifyAt(expires, SessionInvitation.DEFAULT_LIFETIME));
         assertThrows(java.io.IOException.class, () -> SessionInvitation.fromShareLink("synesis://join/nope"));
     }

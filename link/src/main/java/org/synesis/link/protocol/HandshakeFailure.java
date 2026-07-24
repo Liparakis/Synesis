@@ -6,7 +6,9 @@ import java.util.Objects;
 import org.synesis.link.session.HandshakeException;
 import org.synesis.link.session.HandshakeFailureCode;
 
-/** Bounded wire message used to close a rejected pre-session handshake. */
+/**
+ * Bounded wire message used to close a rejected pre-session handshake.
+ */
 public final class HandshakeFailure {
 
     private static final int MAGIC = 0x534C4631;
@@ -66,8 +68,8 @@ public final class HandshakeFailure {
      * @return encoded failure
      */
     public byte[] encoded() {
-        return new byte[] {(byte) (MAGIC >>> 24), (byte) (MAGIC >>> 16), (byte) (MAGIC >>> 8),
-            (byte) MAGIC, VERSION, (byte) code.ordinal()};
+        return new byte[]{(byte) (MAGIC >>> 24), (byte) (MAGIC >>> 16), (byte) (MAGIC >>> 8),
+                (byte) MAGIC, VERSION, (byte) code.ordinal()};
     }
 
     /**
@@ -75,12 +77,16 @@ public final class HandshakeFailure {
      *
      * @return failure code
      */
-    public HandshakeFailureCode code() { return code; }
+    public HandshakeFailureCode code() {
+        return code;
+    }
 
     /**
      * Converts this wire value to the public exception type.
      *
      * @return categorized exception
      */
-    public HandshakeException exception() { return new HandshakeException(code); }
+    public HandshakeException exception() {
+        return new HandshakeException(code);
+    }
 }

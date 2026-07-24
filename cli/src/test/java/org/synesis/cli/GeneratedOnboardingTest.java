@@ -15,45 +15,21 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/** Runs host and join through the installed launcher with isolated profiles. */
+/**
+ * Runs host and join through the installed launcher with isolated profiles.
+ */
 @Timeout(120)
 final class GeneratedOnboardingTest {
-    @Test
-    void installedLaunchersCompleteTwoProfileOnboarding() throws Exception {
-        Path hostProfile = Files.createTempDirectory("synesis-generated-host");
-        Path joinProfile = Files.createTempDirectory("synesis-generated-join");
-        Process host = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), hostProfile, "host");
-        Process join = null;
-        try {
-            CompletableFuture<String> linkFuture = new CompletableFuture<>();
-            CompletableFuture<CapturedHost> hostFuture = CompletableFuture.supplyAsync(() -> captureHost(host, linkFuture));
-            String link = linkFuture.get(45, TimeUnit.SECONDS);
-            join = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), joinProfile, "join", link);
-            boolean joinExited = join.waitFor(60, TimeUnit.SECONDS);
-            CapturedHost capturedHost = hostFuture.get(60, TimeUnit.SECONDS);
-            assertTrue(joinExited);
-            assertEquals(0, join.exitValue());
-            assertEquals(0, host.exitValue());
-            String joinOutput = new String(join.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            assertTrue(capturedHost.output().contains("SHARE_LINK="));
-            assertTrue(capturedHost.output().contains("CONTROL_READY=true"));
-            assertTrue(capturedHost.output().contains("SESSION_CLOSED"));
-            assertTrue(joinOutput.contains("INVITE_VERIFIED"));
-            assertTrue(joinOutput.contains("WORK_RESULT=OK"));
-            assertTrue(joinOutput.contains("SESSION_CLOSED"));
-        } finally {
-            if (join != null && join.isAlive()) join.destroyForcibly();
-            if (host.isAlive()) host.destroyForcibly();
-        }
-    }
 
     private static CapturedHost captureHost(Process host, CompletableFuture<String> linkFuture) {
         StringBuilder output = new StringBuilder();
         String link = null;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(host.getInputStream(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(host.getInputStream(),
+                StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                output.append(line).append(System.lineSeparator());
+                output.append(line)
+                        .append(System.lineSeparator());
                 if (line.startsWith("SHARE_LINK=")) {
                     link = line.substring("SHARE_LINK=".length());
                     linkFuture.complete(link);
@@ -69,10 +45,51 @@ final class GeneratedOnboardingTest {
             }
             return new CapturedHost(link, output.toString());
         } catch (IOException | InterruptedException failure) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
             throw new IllegalStateException("launcher host capture failed", failure);
         }
     }
 
-    private record CapturedHost(String link, String output) { }
+    @Test
+    void installedLaunchersCompleteTwoProfileOnboarding() throws Exception {
+        Path hostProfile = Files.createTempDirectory("synesis-generated-host");
+        Path joinProfile = Files.createTempDirectory("synesis-generated-join");
+        Process host = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), hostProfile, "host");
+        Process join = null;
+        try {
+            CompletableFuture<String> linkFuture = new CompletableFuture<>();
+            CompletableFuture<CapturedHost> hostFuture = CompletableFuture.supplyAsync(() -> captureHost(host,
+                    linkFuture));
+            String link = linkFuture.get(45, TimeUnit.SECONDS);
+            join = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), joinProfile, "join", link);
+            boolean joinExited = join.waitFor(60, TimeUnit.SECONDS);
+            CapturedHost capturedHost = hostFuture.get(60, TimeUnit.SECONDS);
+            assertTrue(joinExited);
+            assertEquals(0, join.exitValue());
+            assertEquals(0, host.exitValue());
+            String joinOutput = new String(join.getInputStream()
+                    .readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(capturedHost.output()
+                    .contains("SHARE_LINK="));
+            assertTrue(capturedHost.output()
+                    .contains("CONTROL_READY=true"));
+            assertTrue(capturedHost.output()
+                    .contains("SESSION_CLOSED"));
+            assertTrue(joinOutput.contains("INVITE_VERIFIED"));
+            assertTrue(joinOutput.contains("WORK_RESULT=OK"));
+            assertTrue(joinOutput.contains("SESSION_CLOSED"));
+        } finally {
+            if (join != null && join.isAlive()) {
+                join.destroyForcibly();
+            }
+            if (host.isAlive()) {
+                host.destroyForcibly();
+            }
+        }
+    }
+
+    private record CapturedHost(String link, String output) {
+
+    }
 }

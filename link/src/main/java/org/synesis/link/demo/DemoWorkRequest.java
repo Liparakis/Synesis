@@ -11,12 +11,19 @@ import java.util.UUID;
  * @param operation fixed operation name
  */
 public record DemoWorkRequest(UUID requestId, String operation) {
-    /** The only operation implemented by the demonstration. */
+
+    /**
+     * The only operation implemented by the demonstration.
+     */
     public static final String DESCRIBE_SESSION = "describe-session";
-    /** Maximum encoded operation length. */
+    /**
+     * Maximum encoded operation length.
+     */
     public static final int MAX_OPERATION_BYTES = 64;
 
-    /** Validates the fixed operation and bounded UTF-8 representation. */
+    /**
+     * Validates the fixed operation and bounded UTF-8 representation.
+     */
     public DemoWorkRequest {
         Objects.requireNonNull(requestId, "request ID");
         Objects.requireNonNull(operation, "operation");

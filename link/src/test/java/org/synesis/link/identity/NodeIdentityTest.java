@@ -10,7 +10,9 @@ import java.security.GeneralSecurityException;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies identity generation, signatures, node IDs, and local persistence. */
+/**
+ * Verifies identity generation, signatures, node IDs, and local persistence.
+ */
 final class NodeIdentityTest {
 
     @Test
@@ -21,10 +23,15 @@ final class NodeIdentityTest {
 
         assertTrue(identity.verify(message, signature));
         assertFalse(identity.verify("other".getBytes(java.nio.charset.StandardCharsets.UTF_8), signature));
-        assertTrue(identity.nodeId().startsWith("sl1-"));
-        assertTrue(identity.nodeId().equals(NodeIdentity.deriveNodeId(identity.publicKeyEncoded())));
-        assertFalse(identity.toString().contains("PRIVATE"));
-        assertNotEquals(identity.nodeId(), NodeIdentity.generate().nodeId());
+        assertTrue(identity.nodeId()
+                .startsWith("sl1-"));
+        assertTrue(identity.nodeId()
+                .equals(NodeIdentity.deriveNodeId(identity.publicKeyEncoded())));
+        assertFalse(identity.toString()
+                .contains("PRIVATE"));
+        assertNotEquals(identity.nodeId(),
+                NodeIdentity.generate()
+                        .nodeId());
     }
 
     @Test
@@ -36,8 +43,10 @@ final class NodeIdentityTest {
         store.save(original);
 
         NodeIdentity loaded = store.load();
-        assertTrue(loaded.nodeId().equals(original.nodeId()));
-        org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> store.save(NodeIdentity.generate()));
+        assertTrue(loaded.nodeId()
+                .equals(original.nodeId()));
+        org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
+                () -> store.save(NodeIdentity.generate()));
         Files.deleteIfExists(path);
     }
 }

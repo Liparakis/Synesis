@@ -5,12 +5,11 @@ import java.io.Serial;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.ProjectConfig;
@@ -42,7 +41,7 @@ public final class ProjectApplicationService {
             2. Verify the assigned workspace (`synesis workspace verify`).
             3. Perform all file mutations through the Synesis workspace mutation operation (`synesis workspace mutate`).
             4. Never use native apply_patch, shell redirection, or direct writes while native provider interception remains unproven.
-
+            
             Work only in the assigned Synesis workspace. Synesis may stop a mutation when another task owns the capability;
             describe the required behavior when prompted and do not edit the owner scope. Do not run coordinator, supervisor,
             event, prediction, speculation, or integration diagnostic commands as part of normal work. Do not write another
@@ -55,6 +54,231 @@ public final class ProjectApplicationService {
      * Creates a project application service.
      */
     public ProjectApplicationService() {
+    }
+
+    private static ProjectLocation readLocation(Path root, Path synesis, Path metadata)
+            throws ProjectApplicationException {
+        try {
+            String json = Files.readString(metadata, StandardCharsets.UTF_8);
+            int schema = integer(json, "schemaVersion");
+            UUID projectId = UUID.fromString(string(json, "projectId"));
+            Instant createdAt = Instant.parse(string(json, "createdAt"));
+            String lower = json.toLowerCase(java.util.Locale.ROOT);
+            if (schema != PROJECT_SCHEMA_VERSION || lower.contains("identity") || lower.contains("provider")
+                    || lower.contains("private") || lower.contains("absolute") || lower.contains("runtime")
+                    || lower.contains("profile") || lower.contains("secret") || lower.contains("path")) {
+                throw new IOException("unsupported or unsafe project metadata");
+            }
+            return new ProjectLocation(root, synesis, metadata, synesis.resolve("local/profile"), projectId, createdAt);
+        } catch (Exception failure) {
+            throw new ProjectApplicationException("MALFORMED", "Project metadata is malformed", failure);
+        }
+    }
+
+    private static void writeMetadata(Path metadata, UUID projectId) throws IOException {
+        String json = "{\n"
+                + "  \"schemaVersion\": 1,\n"
+                + "  \"projectId\": \"" + projectId + "\",\n"
+                + "  \"createdAt\": \"" + Instant.now() + "\"\n"
+                + "}\n";
+        Path temporary = metadata.resolveSibling("project.json.tmp-" + UUID.randomUUID());
+        Files.writeString(temporary,
+                json,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE);
+        try {
+            try {
+                Files.move(temporary, metadata, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, metadata);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    /**
+     * Creates or replaces only the Synesis-managed section in the project root
+     * {@code AGENTS.md}, preserving all unrelated text.
+     *
+     * @param root project root
+     * @throws IOException if the file cannot be read or written, or its markers are malformed
+     */
+    private static void ensureAgentsFile(Path root) throws IOException {
+        Path agents = root.resolve(AGENTS_FILE);
+        if (Files.isSymbolicLink(agents)) {
+            throw new IOException("AGENTS.md must not be a symbolic link");
+        }
+        String existing = Files.exists(agents) ? Files.readString(agents, StandardCharsets.UTF_8) : "";
+        String separator = existing.contains("\r\n") ? "\r\n" : "\n";
+        int begin = existing.indexOf(AGENTS_BEGIN);
+        int end = existing.indexOf(AGENTS_END);
+        if ((begin < 0) != (end < 0) || count(existing, AGENTS_BEGIN) > 1 || count(existing, AGENTS_END) > 1
+                || (begin >= 0 && end < begin)) {
+            throw new IOException("AGENTS.md contains malformed Synesis markers");
+        }
+
+        String section = managedAgentsSection(separator);
+        String content;
+        if (begin >= 0) {
+            content = existing.substring(0, begin)
+                    + section
+                    + existing.substring(end + AGENTS_END.length());
+        } else if (existing.isEmpty()) {
+            content = section + separator;
+        } else {
+            String prefix = existing.endsWith("\n") ? separator : separator + separator;
+            content = existing + prefix + section + separator;
+        }
+        if (!content.equals(existing)) {
+            writeTextAtomically(agents, content);
+        }
+    }
+
+    private static String managedAgentsSection(String separator) {
+        return AGENTS_BEGIN + separator + AGENTS_BODY.replace("\n", separator) + AGENTS_END;
+    }
+
+    private static int count(String value, String token) {
+        int count = 0;
+        for (int index = value.indexOf(token); index >= 0; index = value.indexOf(token, index + token.length())) {
+            count++;
+        }
+        return count;
+    }
+
+    private static void writeTextAtomically(Path path, String content) throws IOException {
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());
+        Files.writeString(temporary, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE);
+        try {
+            try {
+                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static NodeIdentity identity(Path profile) throws Exception {
+        return new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
+                .identity();
+    }
+
+    private static String ensureGitHead(Path root) throws ProjectApplicationException {
+        try {
+            if (!Files.exists(root.resolve(".git"))) {
+                return "GIT_HEAD_UNAVAILABLE";
+            }
+            String head = git(root, "rev-parse", "--verify", "HEAD");
+            if (head.matches("[0-9a-fA-F]{40}")) {
+                return "GIT_HEAD_VALID";
+            }
+            throw new IOException("invalid Git HEAD");
+        } catch (Exception unavailable) {
+            try {
+                String branch = gitAllowFailure(root, "symbolic-ref", "--short", "HEAD");
+                if (branch.isBlank()) {
+                    throw new IOException("not an unborn branch");
+                }
+                runGit(root, "add", "--", ".synesis/project.json", "AGENTS.md");
+                runGit(root, "-c", "user.name=Synesis Initializer", "-c", "user.email=synesis@localhost",
+                        "commit", "--no-verify", "-m", "Initialize Synesis project", "--",
+                        ".synesis/project.json", "AGENTS.md");
+                String head = git(root, "rev-parse", "--verify", "HEAD");
+                if (!head.matches("[0-9a-fA-F]{40}")) {
+                    throw new IOException("invalid Git HEAD after initialization");
+                }
+                return "GIT_INITIAL_COMMIT_CREATED";
+            } catch (Exception commitFailure) {
+                throw new ProjectApplicationException("GIT_HEAD_UNAVAILABLE",
+                        "Git HEAD is unavailable; Synesis did not fabricate a base commit", commitFailure);
+            }
+        }
+    }
+
+    private static String git(Path root, String... arguments) throws Exception {
+        String output = runGit(root, arguments).trim();
+        if (output.isBlank()) {
+            throw new IOException("empty Git output");
+        }
+        return output;
+    }
+
+    private static String gitAllowFailure(Path root, String... arguments) throws Exception {
+        return runGit(root, arguments, false).trim();
+    }
+
+    private static String runGit(Path root, String... arguments) throws Exception {
+        return runGit(root, arguments, true);
+    }
+
+    private static String runGit(Path root, String[] arguments, boolean requireSuccess) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream()
+                .readAllBytes(), StandardCharsets.UTF_8);
+        if (requireSuccess && process.waitFor() != 0) {
+            throw new IOException("git failed: " + output);
+        }
+        return output;
+    }
+
+    private static Path directory(Path path, String label) throws ProjectApplicationException {
+        try {
+            Path input = Objects.requireNonNull(path, label);
+            if (input.toString()
+                    .isBlank()) {
+                throw new ProjectApplicationException("PROJECT_INVALID", "Invalid " + label);
+            }
+            Path normalized = input.toAbsolutePath()
+                    .normalize();
+            if (!Files.isDirectory(normalized) || normalized.getParent() == null) {
+                throw new ProjectApplicationException("PROJECT_INVALID", "Invalid " + label);
+            }
+            return normalized;
+        } catch (ProjectApplicationException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new ProjectApplicationException("PROJECT_INVALID", "Invalid " + label, failure);
+        }
+    }
+
+    private static String string(String json, String key) throws IOException {
+        String marker = "\"" + key + "\": \"";
+        int start = json.indexOf(marker);
+        if (start < 0) {
+            throw new IOException("missing " + key);
+        }
+        start += marker.length();
+        int end = json.indexOf('"', start);
+        if (end < 0) {
+            throw new IOException("invalid " + key);
+        }
+        return json.substring(start, end);
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private static int integer(String json, String key) throws IOException {
+        String marker = "\"" + key + "\": ";
+        int start = json.indexOf(marker);
+        if (start < 0) {
+            throw new IOException("missing " + key);
+        }
+        start += marker.length();
+        int end = start;
+        while (end < json.length() && Character.isDigit(json.charAt(end))) {
+            end++;
+        }
+        return Integer.parseInt(json.substring(start, end));
     }
 
     /**
@@ -192,215 +416,6 @@ public final class ProjectApplicationService {
         }
     }
 
-    private static ProjectLocation readLocation(Path root, Path synesis, Path metadata)
-            throws ProjectApplicationException {
-        try {
-            String json = Files.readString(metadata, StandardCharsets.UTF_8);
-            int schema = integer(json, "schemaVersion");
-            UUID projectId = UUID.fromString(string(json, "projectId"));
-            Instant createdAt = Instant.parse(string(json, "createdAt"));
-            String lower = json.toLowerCase(java.util.Locale.ROOT);
-            if (schema != PROJECT_SCHEMA_VERSION || lower.contains("identity") || lower.contains("provider")
-                    || lower.contains("private") || lower.contains("absolute") || lower.contains("runtime")
-                    || lower.contains("profile") || lower.contains("secret") || lower.contains("path")) {
-                throw new IOException("unsupported or unsafe project metadata");
-            }
-            return new ProjectLocation(root, synesis, metadata, synesis.resolve("local/profile"), projectId, createdAt);
-        } catch (Exception failure) {
-            throw new ProjectApplicationException("MALFORMED", "Project metadata is malformed", failure);
-        }
-    }
-
-    private static void writeMetadata(Path metadata, UUID projectId) throws IOException {
-        String json = "{\n"
-                + "  \"schemaVersion\": 1,\n"
-                + "  \"projectId\": \"" + projectId + "\",\n"
-                + "  \"createdAt\": \"" + Instant.now() + "\"\n"
-                + "}\n";
-        Path temporary = metadata.resolveSibling("project.json.tmp-" + UUID.randomUUID());
-        Files.writeString(temporary,
-                json,
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE);
-        try {
-            try {
-                Files.move(temporary, metadata, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, metadata);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
-    /**
-     * Creates or replaces only the Synesis-managed section in the project root
-     * {@code AGENTS.md}, preserving all unrelated text.
-     *
-     * @param root project root
-     * @throws IOException if the file cannot be read or written, or its markers are malformed
-     */
-    private static void ensureAgentsFile(Path root) throws IOException {
-        Path agents = root.resolve(AGENTS_FILE);
-        if (Files.isSymbolicLink(agents)) {
-            throw new IOException("AGENTS.md must not be a symbolic link");
-        }
-        String existing = Files.exists(agents) ? Files.readString(agents, StandardCharsets.UTF_8) : "";
-        String separator = existing.contains("\r\n") ? "\r\n" : "\n";
-        int begin = existing.indexOf(AGENTS_BEGIN);
-        int end = existing.indexOf(AGENTS_END);
-        if ((begin < 0) != (end < 0) || count(existing, AGENTS_BEGIN) > 1 || count(existing, AGENTS_END) > 1
-                || (begin >= 0 && end < begin)) {
-            throw new IOException("AGENTS.md contains malformed Synesis markers");
-        }
-
-        String section = managedAgentsSection(separator);
-        String content;
-        if (begin >= 0) {
-            content = existing.substring(0, begin)
-                    + section
-                    + existing.substring(end + AGENTS_END.length());
-        } else if (existing.isEmpty()) {
-            content = section + separator;
-        } else {
-            String prefix = existing.endsWith("\n") ? separator : separator + separator;
-            content = existing + prefix + section + separator;
-        }
-        if (!content.equals(existing)) {
-            writeTextAtomically(agents, content);
-        }
-    }
-
-    private static String managedAgentsSection(String separator) {
-        return AGENTS_BEGIN + separator + AGENTS_BODY.replace("\n", separator) + AGENTS_END;
-    }
-
-    private static int count(String value, String token) {
-        int count = 0;
-        for (int index = value.indexOf(token); index >= 0; index = value.indexOf(token, index + token.length())) {
-            count++;
-        }
-        return count;
-    }
-
-    private static void writeTextAtomically(Path path, String content) throws IOException {
-        Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());
-        Files.writeString(temporary, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE);
-        try {
-            try {
-                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
-    private static NodeIdentity identity(Path profile) throws Exception {
-        return new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
-                .identity();
-    }
-
-    private static String ensureGitHead(Path root) throws ProjectApplicationException {
-        try {
-            if (!Files.exists(root.resolve(".git"))) return "GIT_HEAD_UNAVAILABLE";
-            String head = git(root, "rev-parse", "--verify", "HEAD");
-            if (head.matches("[0-9a-fA-F]{40}")) return "GIT_HEAD_VALID";
-            throw new IOException("invalid Git HEAD");
-        } catch (Exception unavailable) {
-            try {
-                String branch = gitAllowFailure(root, "symbolic-ref", "--short", "HEAD");
-                if (branch.isBlank()) throw new IOException("not an unborn branch");
-                runGit(root, "add", "--", ".synesis/project.json", "AGENTS.md");
-                runGit(root, "-c", "user.name=Synesis Initializer", "-c", "user.email=synesis@localhost",
-                        "commit", "--no-verify", "-m", "Initialize Synesis project", "--",
-                        ".synesis/project.json", "AGENTS.md");
-                String head = git(root, "rev-parse", "--verify", "HEAD");
-                if (!head.matches("[0-9a-fA-F]{40}")) throw new IOException("invalid Git HEAD after initialization");
-                return "GIT_INITIAL_COMMIT_CREATED";
-            } catch (Exception commitFailure) {
-                throw new ProjectApplicationException("GIT_HEAD_UNAVAILABLE",
-                        "Git HEAD is unavailable; Synesis did not fabricate a base commit", commitFailure);
-            }
-        }
-    }
-
-    private static String git(Path root, String... arguments) throws Exception {
-        String output = runGit(root, arguments).trim();
-        if (output.isBlank()) throw new IOException("empty Git output");
-        return output;
-    }
-
-    private static String gitAllowFailure(Path root, String... arguments) throws Exception {
-        return runGit(root, arguments, false).trim();
-    }
-
-    private static String runGit(Path root, String... arguments) throws Exception {
-        return runGit(root, arguments, true);
-    }
-
-    private static String runGit(Path root, String[] arguments, boolean requireSuccess) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git"; command[1] = "-C"; command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        if (requireSuccess && process.waitFor() != 0) throw new IOException("git failed: " + output);
-        return output;
-    }
-
-    private static Path directory(Path path, String label) throws ProjectApplicationException {
-        try {
-            Path input = Objects.requireNonNull(path, label);
-            if (input.toString()
-                    .isBlank()) {
-                throw new ProjectApplicationException("PROJECT_INVALID", "Invalid " + label);
-            }
-            Path normalized = input.toAbsolutePath()
-                    .normalize();
-            if (!Files.isDirectory(normalized) || normalized.getParent() == null) {
-                throw new ProjectApplicationException("PROJECT_INVALID", "Invalid " + label);
-            }
-            return normalized;
-        } catch (ProjectApplicationException failure) {
-            throw failure;
-        } catch (Exception failure) {
-            throw new ProjectApplicationException("PROJECT_INVALID", "Invalid " + label, failure);
-        }
-    }
-
-    private static String string(String json, String key) throws IOException {
-        String marker = "\"" + key + "\": \"";
-        int start = json.indexOf(marker);
-        if (start < 0) {
-            throw new IOException("missing " + key);
-        }
-        start += marker.length();
-        int end = json.indexOf('"', start);
-        if (end < 0) {
-            throw new IOException("invalid " + key);
-        }
-        return json.substring(start, end);
-    }
-
-    @SuppressWarnings("SameParameterValue")
-    private static int integer(String json, String key) throws IOException {
-        String marker = "\"" + key + "\": ";
-        int start = json.indexOf(marker);
-        if (start < 0) {
-            throw new IOException("missing " + key);
-        }
-        start += marker.length();
-        int end = start;
-        while (end < json.length() && Character.isDigit(json.charAt(end))) {
-            end++;
-        }
-        return Integer.parseInt(json.substring(start, end));
-    }
-
     /**
      * Project initialization status.
      */
@@ -456,7 +471,7 @@ public final class ProjectApplicationService {
      * @param location        project location
      * @param identity        local node identity metadata
      * @param createdIdentity whether identity was created
-     * @param gitHeadStatus Git base-commit result
+     * @param gitHeadStatus   Git base-commit result
      */
     public record InitResult(InitStatus status, ProjectLocation location, NodeIdentity identity,
                              boolean createdIdentity, String gitHeadStatus) {

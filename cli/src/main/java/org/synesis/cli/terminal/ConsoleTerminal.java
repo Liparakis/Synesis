@@ -10,6 +10,7 @@ import java.nio.charset.Charset;
  * @since 1.0
  */
 public final class ConsoleTerminal implements Terminal {
+
     private static final int DEFAULT_WIDTH = 120;
     private final PrintWriter out;
     private final PrintWriter err;
@@ -34,7 +35,21 @@ public final class ConsoleTerminal implements Terminal {
         this.out = new PrintWriter(out, true);
         this.err = new PrintWriter(err, true);
         this.width = detectWidth();
-        this.unicodeSupported = outputCharset.newEncoder().canEncode("█▀▄");
+        this.unicodeSupported = outputCharset.newEncoder()
+                .canEncode("█▀▄");
+    }
+
+    private static int detectWidth() {
+        String configured = System.getProperty("synesis.link.terminal.width");
+        if (configured == null || configured.isBlank()) {
+            configured = System.getenv("COLUMNS");
+        }
+        try {
+            int value = configured == null ? DEFAULT_WIDTH : Integer.parseInt(configured);
+            return value > 0 ? value : DEFAULT_WIDTH;
+        } catch (NumberFormatException ignored) {
+            return DEFAULT_WIDTH;
+        }
     }
 
     @Override
@@ -55,16 +70,5 @@ public final class ConsoleTerminal implements Terminal {
     @Override
     public boolean unicodeSupported() {
         return unicodeSupported;
-    }
-
-    private static int detectWidth() {
-        String configured = System.getProperty("synesis.link.terminal.width");
-        if (configured == null || configured.isBlank()) configured = System.getenv("COLUMNS");
-        try {
-            int value = configured == null ? DEFAULT_WIDTH : Integer.parseInt(configured);
-            return value > 0 ? value : DEFAULT_WIDTH;
-        } catch (NumberFormatException ignored) {
-            return DEFAULT_WIDTH;
-        }
     }
 }

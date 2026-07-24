@@ -9,7 +9,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-/** Tests candidate policy filtering, mapped-address normalization, and pair ranking. */
+/**
+ * Tests candidate policy filtering, mapped-address normalization, and pair ranking.
+ */
 final class CandidateNormalizationTest {
 
     @Test
@@ -23,18 +25,25 @@ final class CandidateNormalizationTest {
                 CandidateGatheringPolicy.defaults());
 
         assertEquals(1, normalized.size());
-        assertEquals(5, normalized.get(0).priority());
-        assertEquals(4, normalized.get(0).address().getAddress().length);
+        assertEquals(5,
+                normalized.get(0)
+                        .priority());
+        assertEquals(4,
+                normalized.get(0)
+                        .address()
+                        .getAddress().length);
     }
 
     @Test
     void unsafeAddressesAndRelayPairsAreRejected() throws Exception {
         assertThrows(IllegalArgumentException.class, () -> CandidateNormalizer.normalize(List.of(
-                new Candidate(CandidateType.MANUAL, InetAddress.getByName("0.0.0.0"), 4433, 1),
-                new Candidate(CandidateType.MANUAL, InetAddress.getByName("224.0.0.1"), 4433, 1)),
+                        new Candidate(CandidateType.MANUAL, InetAddress.getByName("0.0.0.0"), 4433, 1),
+                        new Candidate(CandidateType.MANUAL, InetAddress.getByName("224.0.0.1"), 4433, 1)),
                 CandidateGatheringPolicy.defaults()));
         Candidate relay = new Candidate(CandidateType.RELAY, InetAddress.getByName("192.0.2.1"), 4433, 1);
-        assertEquals(0, CandidateNormalizer.normalize(List.of(relay), CandidateGatheringPolicy.defaults()).size());
+        assertEquals(0,
+                CandidateNormalizer.normalize(List.of(relay), CandidateGatheringPolicy.defaults())
+                        .size());
     }
 
     @Test
@@ -45,8 +54,12 @@ final class CandidateNormalizationTest {
         List<CandidatePair> pairs = CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8);
 
         assertEquals(1, pairs.size());
-        assertTrue(pairs.get(0).identifier().startsWith("LAN/MANUAL/h"));
-        assertTrue(!pairs.get(0).identifier().contains("192.0.2.1"));
+        assertTrue(pairs.get(0)
+                .identifier()
+                .startsWith("LAN/MANUAL/h"));
+        assertTrue(!pairs.get(0)
+                .identifier()
+                .contains("192.0.2.1"));
         assertEquals(pairs, CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8));
     }
 }

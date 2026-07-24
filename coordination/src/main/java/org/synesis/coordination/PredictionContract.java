@@ -14,34 +14,35 @@ import java.util.UUID;
  * Immutable, bounded description of the capability a requester predicts.
  * Text is canonicalized as strict UTF-8 and the encoded contract is safe to
  * sign and persist.
- * @param predictionId prediction identifier
- * @param projectId project identifier
- * @param requesterNodeId requester node identifier
+ *
+ * @param predictionId          prediction identifier
+ * @param projectId             project identifier
+ * @param requesterNodeId       requester node identifier
  * @param requesterSupervisorId requester supervisor identifier
- * @param requesterWorkerId requester worker identifier
- * @param requestingTaskId requesting task identifier
- * @param owningCapability semantic capability name
- * @param ownerNodeId owner node identifier
- * @param ownerSupervisorId owner supervisor identifier
- * @param protectedScopes protected scope names
- * @param baseProjectSequence project sequence used as the base
- * @param baseCommit base commit identifier
- * @param baseScopeHashes scope hashes used as the base
- * @param ownerIntentVersion owner intent version
- * @param purpose capability purpose
- * @param inputs input contract
- * @param outputs output contract
- * @param behavior behavior contract
- * @param errorSemantics error contract
- * @param sideEffects side-effect contract
- * @param invariants invariants
- * @param compatibility compatibility requirements
- * @param performance performance requirements
- * @param concurrency concurrency requirements
- * @param acceptanceTests acceptance tests
- * @param confidence confidence score
- * @param speculationRisk speculation risk score
- * @param expiresAtEpochMillis expiry timestamp
+ * @param requesterWorkerId     requester worker identifier
+ * @param requestingTaskId      requesting task identifier
+ * @param owningCapability      semantic capability name
+ * @param ownerNodeId           owner node identifier
+ * @param ownerSupervisorId     owner supervisor identifier
+ * @param protectedScopes       protected scope names
+ * @param baseProjectSequence   project sequence used as the base
+ * @param baseCommit            base commit identifier
+ * @param baseScopeHashes       scope hashes used as the base
+ * @param ownerIntentVersion    owner intent version
+ * @param purpose               capability purpose
+ * @param inputs                input contract
+ * @param outputs               output contract
+ * @param behavior              behavior contract
+ * @param errorSemantics        error contract
+ * @param sideEffects           side-effect contract
+ * @param invariants            invariants
+ * @param compatibility         compatibility requirements
+ * @param performance           performance requirements
+ * @param concurrency           concurrency requirements
+ * @param acceptanceTests       acceptance tests
+ * @param confidence            confidence score
+ * @param speculationRisk       speculation risk score
+ * @param expiresAtEpochMillis  expiry timestamp
  */
 public record PredictionContract(
         UUID predictionId,
@@ -73,12 +74,17 @@ public record PredictionContract(
         int speculationRisk,
         long expiresAtEpochMillis
 ) {
-    /** Maximum encoded contract size. */
+
+    /**
+     * Maximum encoded contract size.
+     */
     public static final int MAX_ENCODED_BYTES = 64 * 1024;
     private static final int MAX_TEXT_BYTES = 8 * 1024;
     private static final int MAX_LIST_ENTRIES = 128;
 
-    /** Validates identities, bounds, and deterministic collection ordering. */
+    /**
+     * Validates identities, bounds, and deterministic collection ordering.
+     */
     public PredictionContract {
         Objects.requireNonNull(predictionId, "prediction ID");
         Objects.requireNonNull(projectId, "project ID");
@@ -112,47 +118,17 @@ public record PredictionContract(
     }
 
     /**
-     * Returns deterministic UTF-8 bytes suitable for signing.
-     * @return canonical encoded contract
-     */
-    public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(0x53435031);
-            out.writeByte(1);
-            writeUuid(out, predictionId);
-            writeUuid(out, projectId);
-            String[] values = { requesterNodeId, requesterSupervisorId, requesterWorkerId, owningCapability,
-                    ownerNodeId, ownerSupervisorId, baseCommit, purpose, inputs, outputs, behavior, errorSemantics,
-                    sideEffects, invariants, compatibility, performance, concurrency };
-            for (String value : values) writeText(out, value);
-            writeUuid(out, requestingTaskId);
-            writeList(out, protectedScopes);
-            out.writeLong(baseProjectSequence);
-            writeList(out, baseScopeHashes);
-            out.writeLong(ownerIntentVersion);
-            writeList(out, acceptanceTests);
-            out.writeInt(confidence);
-            out.writeInt(speculationRisk);
-            out.writeLong(expiresAtEpochMillis);
-            out.flush();
-            byte[] encoded = bytes.toByteArray();
-            if (encoded.length > MAX_ENCODED_BYTES) throw new IllegalArgumentException("contract exceeds bound");
-            return encoded;
-        } catch (IOException impossible) {
-            throw new AssertionError(impossible);
-        }
-    }
-
-    /** Decodes one bounded canonical contract.
+     * Decodes one bounded canonical contract.
+     *
      * @param encoded canonical contract bytes
      * @return decoded contract
      * @throws IOException when the bytes are malformed or unsupported
      */
     public static PredictionContract decode(byte[] encoded) throws IOException {
         Objects.requireNonNull(encoded, "encoded contract");
-        if (encoded.length > MAX_ENCODED_BYTES) throw new IOException("contract exceeds bound");
+        if (encoded.length > MAX_ENCODED_BYTES) {
+            throw new IOException("contract exceeds bound");
+        }
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != 0x53435031 || in.readUnsignedByte() != 1) {
@@ -186,7 +162,9 @@ public record PredictionContract(
             int confidence = in.readInt();
             int speculationRisk = in.readInt();
             long expiresAtEpochMillis = in.readLong();
-            if (in.available() != 0) throw new IOException("trailing contract bytes");
+            if (in.available() != 0) {
+                throw new IOException("trailing contract bytes");
+            }
             return new PredictionContract(predictionId, projectId, requesterNodeId, requesterSupervisorId,
                     requesterWorkerId, requestingTaskId, owningCapability, ownerNodeId, ownerSupervisorId,
                     protectedScopes, baseProjectSequence, baseCommit, baseScopeHashes, ownerIntentVersion,
@@ -199,7 +177,9 @@ public record PredictionContract(
 
     private static List<String> boundedList(List<String> values, String label) {
         Objects.requireNonNull(values, label);
-        if (values.size() > MAX_LIST_ENTRIES) throw new IllegalArgumentException(label + " exceed bound");
+        if (values.size() > MAX_LIST_ENTRIES) {
+            throw new IllegalArgumentException(label + " exceed bound");
+        }
         List<String> copy = List.copyOf(values);
         copy.forEach(value -> requireText(value, label + " entry"));
         return copy;
@@ -229,9 +209,13 @@ public record PredictionContract(
 
     private static String readText(DataInputStream in) throws IOException {
         int length = in.readInt();
-        if (length < 1 || length > MAX_TEXT_BYTES) throw new IOException("text bound");
+        if (length < 1 || length > MAX_TEXT_BYTES) {
+            throw new IOException("text bound");
+        }
         byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) throw new IOException("truncated text");
+        if (bytes.length != length) {
+            throw new IOException("truncated text");
+        }
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
@@ -248,9 +232,52 @@ public record PredictionContract(
 
     private static List<String> readList(DataInputStream in) throws IOException {
         int count = in.readInt();
-        if (count < 0 || count > MAX_LIST_ENTRIES) throw new IOException("list bound");
+        if (count < 0 || count > MAX_LIST_ENTRIES) {
+            throw new IOException("list bound");
+        }
         java.util.ArrayList<String> values = new java.util.ArrayList<>(count);
-        for (int index = 0; index < count; index++) values.add(readText(in));
+        for (int index = 0; index < count; index++) {
+            values.add(readText(in));
+        }
         return List.copyOf(values);
+    }
+
+    /**
+     * Returns deterministic UTF-8 bytes suitable for signing.
+     *
+     * @return canonical encoded contract
+     */
+    public byte[] encoded() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(0x53435031);
+            out.writeByte(1);
+            writeUuid(out, predictionId);
+            writeUuid(out, projectId);
+            String[] values = {requesterNodeId, requesterSupervisorId, requesterWorkerId, owningCapability,
+                    ownerNodeId, ownerSupervisorId, baseCommit, purpose, inputs, outputs, behavior, errorSemantics,
+                    sideEffects, invariants, compatibility, performance, concurrency};
+            for (String value : values) {
+                writeText(out, value);
+            }
+            writeUuid(out, requestingTaskId);
+            writeList(out, protectedScopes);
+            out.writeLong(baseProjectSequence);
+            writeList(out, baseScopeHashes);
+            out.writeLong(ownerIntentVersion);
+            writeList(out, acceptanceTests);
+            out.writeInt(confidence);
+            out.writeInt(speculationRisk);
+            out.writeLong(expiresAtEpochMillis);
+            out.flush();
+            byte[] encoded = bytes.toByteArray();
+            if (encoded.length > MAX_ENCODED_BYTES) {
+                throw new IllegalArgumentException("contract exceeds bound");
+            }
+            return encoded;
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
     }
 }

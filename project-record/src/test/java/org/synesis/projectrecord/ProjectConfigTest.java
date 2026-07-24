@@ -11,13 +11,17 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies strict local project configuration persistence and allowlisting. */
+/**
+ * Verifies strict local project configuration persistence and allowlisting.
+ */
 final class ProjectConfigTest {
+
     @Test
     void persistsSortedAllowlistAndRejectsUnknownKeys() throws Exception {
         String peer = "sl1-" + "a".repeat(64);
         ProjectConfig config = new ProjectConfig(UUID.randomUUID(), Set.of(peer));
-        Path path = Files.createTempDirectory("project-config-").resolve("project.conf");
+        Path path = Files.createTempDirectory("project-config-")
+                .resolve("project.conf");
         config.save(path);
         ProjectConfig loaded = ProjectConfig.load(path);
         assertEquals(config.projectId(), loaded.projectId());

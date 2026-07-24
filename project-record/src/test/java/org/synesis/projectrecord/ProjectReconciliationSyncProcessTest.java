@@ -2,17 +2,38 @@ package org.synesis.projectrecord;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Test;
 
-/** Tests project-wide reconciliation protocol PRP1 across two JVMs. */
+/**
+ * Tests project-wide reconciliation protocol PRP1 across two JVMs.
+ */
 final class ProjectReconciliationSyncProcessTest {
+
+    private static void waitFor(Path path) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (!Files.exists(path) && System.nanoTime() < deadline) {
+            Thread.sleep(25);
+        }
+        assertTrue(Files.exists(path), "timed out waiting for " + path);
+    }
+
+    private static void cleanup(Path directory) {
+        try (var paths = Files.walk(directory)) {
+            paths.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (java.io.IOException ignored) {
+                        }
+                    });
+        } catch (java.io.IOException ignored) {
+        }
+    }
 
     @Test
     void normalSyncConvergesSuccessfully() throws Exception {
@@ -27,22 +48,49 @@ final class ProjectReconciliationSyncProcessTest {
             Path outcomes = directory.resolve("outcomes.txt");
 
             String javaExecutable = Path.of(System.getProperty("java.home"), "bin",
-                    System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") ? "java.exe" : "java").toString();
+                            System.getProperty("os.name")
+                                    .toLowerCase(java.util.Locale.ROOT)
+                                    .contains("win") ? "java.exe" : "java")
+                    .toString();
             String classpath = System.getProperty("java.class.path");
             String project = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
-            Process join = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,
-                    ProjectReconciliationPeerProcess.class.getName(), "join", joinProfile.toString(), project,
-                    joinId.toString(), hostId.toString(), invitation.toString(), marker.toString(), outcomes.toString(), "normal")
-                    .redirectErrorStream(true).start();
+            Process join = new ProcessBuilder(javaExecutable,
+                    "--enable-native-access=ALL-UNNAMED",
+                    "-cp",
+                    classpath,
+                    ProjectReconciliationPeerProcess.class.getName(),
+                    "join",
+                    joinProfile.toString(),
+                    project,
+                    joinId.toString(),
+                    hostId.toString(),
+                    invitation.toString(),
+                    marker.toString(),
+                    outcomes.toString(),
+                    "normal")
+                    .redirectErrorStream(true)
+                    .start();
 
             Process host = null;
             try {
                 waitFor(joinId);
-                host = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,
-                        ProjectReconciliationPeerProcess.class.getName(), "host", hostProfile.toString(), project,
-                        joinId.toString(), hostId.toString(), invitation.toString(), marker.toString(), outcomes.toString(), "normal")
-                        .redirectErrorStream(true).start();
+                host = new ProcessBuilder(javaExecutable,
+                        "--enable-native-access=ALL-UNNAMED",
+                        "-cp",
+                        classpath,
+                        ProjectReconciliationPeerProcess.class.getName(),
+                        "host",
+                        hostProfile.toString(),
+                        project,
+                        joinId.toString(),
+                        hostId.toString(),
+                        invitation.toString(),
+                        marker.toString(),
+                        outcomes.toString(),
+                        "normal")
+                        .redirectErrorStream(true)
+                        .start();
 
                 assertTrue(join.waitFor(45, TimeUnit.SECONDS), "join process did not exit");
                 assertTrue(host.waitFor(45, TimeUnit.SECONDS), "host process did not exit");
@@ -58,19 +106,41 @@ final class ProjectReconciliationSyncProcessTest {
                 DecisionStore hostStore = new DecisionStore(hostProfile.resolve("records"), UUID.fromString(project));
                 DecisionStore joinStore = new DecisionStore(joinProfile.resolve("records"), UUID.fromString(project));
 
-                assertEquals(2, hostStore.head(UUID.fromString("11111111-1111-1111-1111-111111111111")).orElseThrow().revision());
-                assertEquals(2, joinStore.head(UUID.fromString("11111111-1111-1111-1111-111111111111")).orElseThrow().revision());
+                assertEquals(2,
+                        hostStore.head(UUID.fromString("11111111-1111-1111-1111-111111111111"))
+                                .orElseThrow()
+                                .revision());
+                assertEquals(2,
+                        joinStore.head(UUID.fromString("11111111-1111-1111-1111-111111111111"))
+                                .orElseThrow()
+                                .revision());
 
-                assertEquals(2, hostStore.head(UUID.fromString("22222222-2222-2222-2222-222222222222")).orElseThrow().revision());
-                assertEquals(2, joinStore.head(UUID.fromString("22222222-2222-2222-2222-222222222222")).orElseThrow().revision());
+                assertEquals(2,
+                        hostStore.head(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+                                .orElseThrow()
+                                .revision());
+                assertEquals(2,
+                        joinStore.head(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+                                .orElseThrow()
+                                .revision());
 
                 // Local-only Record C was preserved and synchronized to remote without deletion
-                assertEquals(1, hostStore.head(UUID.fromString("33333333-3333-3333-3333-333333333333")).orElseThrow().revision());
-                assertEquals(1, joinStore.head(UUID.fromString("33333333-3333-3333-3333-333333333333")).orElseThrow().revision());
+                assertEquals(1,
+                        hostStore.head(UUID.fromString("33333333-3333-3333-3333-333333333333"))
+                                .orElseThrow()
+                                .revision());
+                assertEquals(1,
+                        joinStore.head(UUID.fromString("33333333-3333-3333-3333-333333333333"))
+                                .orElseThrow()
+                                .revision());
 
             } finally {
-                if (join.isAlive()) join.destroyForcibly();
-                if (host != null && host.isAlive()) host.destroyForcibly();
+                if (join.isAlive()) {
+                    join.destroyForcibly();
+                }
+                if (host != null && host.isAlive()) {
+                    host.destroyForcibly();
+                }
             }
         } finally {
             cleanup(directory);
@@ -90,22 +160,49 @@ final class ProjectReconciliationSyncProcessTest {
             Path outcomes = directory.resolve("outcomes.txt");
 
             String javaExecutable = Path.of(System.getProperty("java.home"), "bin",
-                    System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") ? "java.exe" : "java").toString();
+                            System.getProperty("os.name")
+                                    .toLowerCase(java.util.Locale.ROOT)
+                                    .contains("win") ? "java.exe" : "java")
+                    .toString();
             String classpath = System.getProperty("java.class.path");
             String project = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
-            Process join = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,
-                    ProjectReconciliationPeerProcess.class.getName(), "join", joinProfile.toString(), project,
-                    joinId.toString(), hostId.toString(), invitation.toString(), marker.toString(), outcomes.toString(), "conflict")
-                    .redirectErrorStream(true).start();
+            Process join = new ProcessBuilder(javaExecutable,
+                    "--enable-native-access=ALL-UNNAMED",
+                    "-cp",
+                    classpath,
+                    ProjectReconciliationPeerProcess.class.getName(),
+                    "join",
+                    joinProfile.toString(),
+                    project,
+                    joinId.toString(),
+                    hostId.toString(),
+                    invitation.toString(),
+                    marker.toString(),
+                    outcomes.toString(),
+                    "conflict")
+                    .redirectErrorStream(true)
+                    .start();
 
             Process host = null;
             try {
                 waitFor(joinId);
-                host = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,
-                        ProjectReconciliationPeerProcess.class.getName(), "host", hostProfile.toString(), project,
-                        joinId.toString(), hostId.toString(), invitation.toString(), marker.toString(), outcomes.toString(), "conflict")
-                        .redirectErrorStream(true).start();
+                host = new ProcessBuilder(javaExecutable,
+                        "--enable-native-access=ALL-UNNAMED",
+                        "-cp",
+                        classpath,
+                        ProjectReconciliationPeerProcess.class.getName(),
+                        "host",
+                        hostProfile.toString(),
+                        project,
+                        joinId.toString(),
+                        hostId.toString(),
+                        invitation.toString(),
+                        marker.toString(),
+                        outcomes.toString(),
+                        "conflict")
+                        .redirectErrorStream(true)
+                        .start();
 
                 assertTrue(join.waitFor(45, TimeUnit.SECONDS), "join process did not exit");
                 assertTrue(host.waitFor(45, TimeUnit.SECONDS), "host process did not exit");
@@ -121,8 +218,12 @@ final class ProjectReconciliationSyncProcessTest {
                 assertTrue(Files.exists(joinProfile.resolve("records/conflicts/11111111-1111-1111-1111-111111111111")));
 
             } finally {
-                if (join.isAlive()) join.destroyForcibly();
-                if (host != null && host.isAlive()) host.destroyForcibly();
+                if (join.isAlive()) {
+                    join.destroyForcibly();
+                }
+                if (host != null && host.isAlive()) {
+                    host.destroyForcibly();
+                }
             }
         } finally {
             cleanup(directory);
@@ -142,22 +243,49 @@ final class ProjectReconciliationSyncProcessTest {
             Path outcomes = directory.resolve("outcomes.txt");
 
             String javaExecutable = Path.of(System.getProperty("java.home"), "bin",
-                    System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") ? "java.exe" : "java").toString();
+                            System.getProperty("os.name")
+                                    .toLowerCase(java.util.Locale.ROOT)
+                                    .contains("win") ? "java.exe" : "java")
+                    .toString();
             String classpath = System.getProperty("java.class.path");
             String project = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
-            Process join = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,
-                    ProjectReconciliationPeerProcess.class.getName(), "join", joinProfile.toString(), project,
-                    joinId.toString(), hostId.toString(), invitation.toString(), marker.toString(), outcomes.toString(), "corrupt")
-                    .redirectErrorStream(true).start();
+            Process join = new ProcessBuilder(javaExecutable,
+                    "--enable-native-access=ALL-UNNAMED",
+                    "-cp",
+                    classpath,
+                    ProjectReconciliationPeerProcess.class.getName(),
+                    "join",
+                    joinProfile.toString(),
+                    project,
+                    joinId.toString(),
+                    hostId.toString(),
+                    invitation.toString(),
+                    marker.toString(),
+                    outcomes.toString(),
+                    "corrupt")
+                    .redirectErrorStream(true)
+                    .start();
 
             Process host = null;
             try {
                 waitFor(joinId);
-                host = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,
-                        ProjectReconciliationPeerProcess.class.getName(), "host", hostProfile.toString(), project,
-                        joinId.toString(), hostId.toString(), invitation.toString(), marker.toString(), outcomes.toString(), "corrupt")
-                        .redirectErrorStream(true).start();
+                host = new ProcessBuilder(javaExecutable,
+                        "--enable-native-access=ALL-UNNAMED",
+                        "-cp",
+                        classpath,
+                        ProjectReconciliationPeerProcess.class.getName(),
+                        "host",
+                        hostProfile.toString(),
+                        project,
+                        joinId.toString(),
+                        hostId.toString(),
+                        invitation.toString(),
+                        marker.toString(),
+                        outcomes.toString(),
+                        "corrupt")
+                        .redirectErrorStream(true)
+                        .start();
 
                 assertTrue(join.waitFor(45, TimeUnit.SECONDS), "join process did not exit");
                 assertTrue(host.waitFor(45, TimeUnit.SECONDS), "host process did not exit");
@@ -170,25 +298,15 @@ final class ProjectReconciliationSyncProcessTest {
                 assertTrue(output.endsWith(",1"), "Expected corrupt count = 1. Got: " + output);
 
             } finally {
-                if (join.isAlive()) join.destroyForcibly();
-                if (host != null && host.isAlive()) host.destroyForcibly();
+                if (join.isAlive()) {
+                    join.destroyForcibly();
+                }
+                if (host != null && host.isAlive()) {
+                    host.destroyForcibly();
+                }
             }
         } finally {
             cleanup(directory);
         }
-    }
-
-    private static void waitFor(Path path) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
-        while (!Files.exists(path) && System.nanoTime() < deadline) Thread.sleep(25);
-        assertTrue(Files.exists(path), "timed out waiting for " + path);
-    }
-
-    private static void cleanup(Path directory) {
-        try (var paths = Files.walk(directory)) {
-            paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try { Files.deleteIfExists(path); } catch (java.io.IOException ignored) { }
-            });
-        } catch (java.io.IOException ignored) { }
     }
 }

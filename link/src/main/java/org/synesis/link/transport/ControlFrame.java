@@ -5,7 +5,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
-/** Package-private bounded SLH1 control frame; never part of the public API. */
+/**
+ * Package-private bounded SLH1 control frame; never part of the public API.
+ */
 final class ControlFrame {
 
     static final int MAX_PAYLOAD = 4_096;
@@ -28,18 +30,12 @@ final class ControlFrame {
         return new ControlFrame(type, payload);
     }
 
-    byte[] encoded() {
-        ByteBuffer buffer = ByteBuffer.allocate(12 + payload.length).order(ByteOrder.BIG_ENDIAN);
-        buffer.putInt(MAGIC).put((byte) VERSION).put((byte) type.code).put((byte) 1).put((byte) 0)
-                .putInt(payload.length).put(payload);
-        return buffer.array();
-    }
-
     static ControlFrame decode(byte[] encoded) throws IOException {
         if (encoded == null || encoded.length < 12 || encoded.length > MAX_FRAME) {
             throw new IOException("control frame size is invalid");
         }
-        ByteBuffer buffer = ByteBuffer.wrap(encoded).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer buffer = ByteBuffer.wrap(encoded)
+                .order(ByteOrder.BIG_ENDIAN);
         if (buffer.getInt() != MAGIC || buffer.get() != VERSION) {
             throw new IOException("control frame magic or version is invalid");
         }
@@ -52,5 +48,18 @@ final class ControlFrame {
             throw new IOException("control frame payload length is invalid");
         }
         return of(type, Arrays.copyOfRange(encoded, 12, encoded.length));
+    }
+
+    byte[] encoded() {
+        ByteBuffer buffer = ByteBuffer.allocate(12 + payload.length)
+                .order(ByteOrder.BIG_ENDIAN);
+        buffer.putInt(MAGIC)
+                .put((byte) VERSION)
+                .put((byte) type.code)
+                .put((byte) 1)
+                .put((byte) 0)
+                .putInt(payload.length)
+                .put(payload);
+        return buffer.array();
     }
 }

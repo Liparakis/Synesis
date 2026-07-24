@@ -1,5 +1,3 @@
-import org.gradle.external.javadoc.StandardJavadocDocletOptions
-
 plugins {
     `java-library`
 }

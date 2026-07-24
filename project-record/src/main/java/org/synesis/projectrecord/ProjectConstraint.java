@@ -17,24 +17,6 @@ import java.util.UUID;
  */
 public final class ProjectConstraint {
 
-    /** Constraint enforcement effect. */
-    public enum Effect {
-        /** Hard block: prevents protected operation and forces re-planning. */
-        BLOCK,
-        /** Soft warning: allows operation but emits a diagnostic warning. */
-        WARN
-    }
-
-    /** Constraint lifecycle status. */
-    public enum ConstraintStatus {
-        /** Active constraint enforced against actions. */
-        ACTIVE,
-        /** Inactive constraint ignored during action checks. */
-        INACTIVE,
-        /** Superseded constraint replaced by a newer record. */
-        SUPERSEDED
-    }
-
     private final UUID recordId;
     private final String title;
     private final String rationale;
@@ -42,7 +24,6 @@ public final class ProjectConstraint {
     private final Effect effect;
     private final List<String> scopes;
     private final List<UUID> supersedes;
-
     /**
      * Constructs a typed project constraint domain model.
      *
@@ -55,7 +36,7 @@ public final class ProjectConstraint {
      * @param supersedes superseded constraint IDs
      */
     public ProjectConstraint(UUID recordId, String title, String rationale, ConstraintStatus status,
-                             Effect effect, List<String> scopes, List<UUID> supersedes) {
+            Effect effect, List<String> scopes, List<UUID> supersedes) {
         this.recordId = Objects.requireNonNull(recordId, "record ID");
         this.title = Objects.requireNonNull(title, "title");
         this.rationale = Objects.requireNonNull(rationale, "rationale");
@@ -90,20 +71,20 @@ public final class ProjectConstraint {
     /**
      * Creates a new signed {@link DecisionRecord} representing a typed project constraint.
      *
-     * @param projectId  namespace project ID
-     * @param recordId   record identity
-     * @param ownerNode  owner node identity
-     * @param effect     constraint effect (BLOCK vs WARN)
-     * @param scope      primary scope pattern
-     * @param title      constraint title
-     * @param rationale  constraint rationale
-     * @param signer     Ed25519 signer
+     * @param projectId namespace project ID
+     * @param recordId  record identity
+     * @param ownerNode owner node identity
+     * @param effect    constraint effect (BLOCK vs WARN)
+     * @param scope     primary scope pattern
+     * @param title     constraint title
+     * @param rationale constraint rationale
+     * @param signer    Ed25519 signer
      * @return signed DecisionRecord containing typed constraint payload
      * @throws GeneralSecurityException if signing fails
      */
     public static DecisionRecord createTypedRecord(UUID projectId, UUID recordId, String ownerNode,
-                                                   Effect effect, String scope, String title,
-                                                   String rationale, Ed25519Signer signer) throws GeneralSecurityException {
+            Effect effect, String scope, String title,
+            String rationale, Ed25519Signer signer) throws GeneralSecurityException {
         return createTypedRecord(projectId, recordId, ownerNode, effect, scope, title, rationale, List.of(), signer);
     }
 
@@ -123,9 +104,9 @@ public final class ProjectConstraint {
      * @throws GeneralSecurityException if signing fails
      */
     public static DecisionRecord createTypedRecord(UUID projectId, UUID recordId, String ownerNode,
-                                                   Effect effect, String scope, String title,
-                                                   String rationale, List<UUID> supersedes,
-                                                   Ed25519Signer signer) throws GeneralSecurityException {
+            Effect effect, String scope, String title,
+            String rationale, List<UUID> supersedes,
+            Ed25519Signer signer) throws GeneralSecurityException {
         Objects.requireNonNull(scope, "scope");
         String normScope = ScopeMatcher.normalizePath(scope);
         DecisionRecord.ConstraintPayload payload = new DecisionRecord.ConstraintPayload(
@@ -134,7 +115,8 @@ public final class ProjectConstraint {
         byte[] digest = sha256("scope=" + normScope);
         DecisionEvidence evidence = new DecisionEvidence("constraint", "scope=" + normScope, digest);
 
-        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        Instant now = Instant.now()
+                .truncatedTo(ChronoUnit.MILLIS);
         return DecisionRecord.createConstraint(projectId, recordId, 1, null, ownerNode, ownerNode,
                 DecisionStatus.ACCEPTED, now, now, title, rationale, List.of(evidence), payload, signer);
     }
@@ -149,55 +131,6 @@ public final class ProjectConstraint {
     }
 
     /**
-     * Returns the constraint record ID.
-     *
-     * @return record ID
-     */
-    public UUID recordId() { return recordId; }
-
-    /**
-     * Returns the constraint title.
-     *
-     * @return title
-     */
-    public String title() { return title; }
-
-    /**
-     * Returns the constraint rationale.
-     *
-     * @return rationale
-     */
-    public String rationale() { return rationale; }
-
-    /**
-     * Returns the constraint lifecycle status.
-     *
-     * @return status
-     */
-    public ConstraintStatus status() { return status; }
-
-    /**
-     * Returns the constraint enforcement effect.
-     *
-     * @return effect
-     */
-    public Effect effect() { return effect; }
-
-    /**
-     * Returns the list of target scopes.
-     *
-     * @return scopes
-     */
-    public List<String> scopes() { return scopes; }
-
-    /**
-     * Returns the list of superseded constraint record IDs.
-     *
-     * @return supersedes
-     */
-    public List<UUID> supersedes() { return supersedes; }
-
-    /**
      * Filters a list of active constraints to exclude any constraint that is explicitly
      * superseded by another active constraint in the list via its {@link #supersedes()} record IDs.
      *
@@ -205,7 +138,9 @@ public final class ProjectConstraint {
      * @return effective active constraints excluding superseded ones
      */
     public static List<ProjectConstraint> filterEffectiveActive(List<ProjectConstraint> constraints) {
-        if (constraints == null || constraints.size() <= 1) return constraints == null ? List.of() : List.copyOf(constraints);
+        if (constraints == null || constraints.size() <= 1) {
+            return constraints == null ? List.of() : List.copyOf(constraints);
+        }
         java.util.Set<UUID> supersededIds = new java.util.HashSet<>();
         for (ProjectConstraint c : constraints) {
             supersededIds.addAll(c.supersedes());
@@ -213,6 +148,69 @@ public final class ProjectConstraint {
         return constraints.stream()
                 .filter(c -> !supersededIds.contains(c.recordId()))
                 .toList();
+    }
+
+    /**
+     * Returns the constraint record ID.
+     *
+     * @return record ID
+     */
+    public UUID recordId() {
+        return recordId;
+    }
+
+    /**
+     * Returns the constraint title.
+     *
+     * @return title
+     */
+    public String title() {
+        return title;
+    }
+
+    /**
+     * Returns the constraint rationale.
+     *
+     * @return rationale
+     */
+    public String rationale() {
+        return rationale;
+    }
+
+    /**
+     * Returns the constraint lifecycle status.
+     *
+     * @return status
+     */
+    public ConstraintStatus status() {
+        return status;
+    }
+
+    /**
+     * Returns the constraint enforcement effect.
+     *
+     * @return effect
+     */
+    public Effect effect() {
+        return effect;
+    }
+
+    /**
+     * Returns the list of target scopes.
+     *
+     * @return scopes
+     */
+    public List<String> scopes() {
+        return scopes;
+    }
+
+    /**
+     * Returns the list of superseded constraint record IDs.
+     *
+     * @return supersedes
+     */
+    public List<UUID> supersedes() {
+        return supersedes;
     }
 
     /**
@@ -231,5 +229,37 @@ public final class ProjectConstraint {
             }
         }
         return false;
+    }
+
+    /**
+     * Constraint enforcement effect.
+     */
+    public enum Effect {
+        /**
+         * Hard block: prevents protected operation and forces re-planning.
+         */
+        BLOCK,
+        /**
+         * Soft warning: allows operation but emits a diagnostic warning.
+         */
+        WARN
+    }
+
+    /**
+     * Constraint lifecycle status.
+     */
+    public enum ConstraintStatus {
+        /**
+         * Active constraint enforced against actions.
+         */
+        ACTIVE,
+        /**
+         * Inactive constraint ignored during action checks.
+         */
+        INACTIVE,
+        /**
+         * Superseded constraint replaced by a newer record.
+         */
+        SUPERSEDED
     }
 }

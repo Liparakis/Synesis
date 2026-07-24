@@ -15,7 +15,6 @@ import java.security.MessageDigest;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
@@ -31,13 +30,22 @@ import java.util.UUID;
  * @since 1.0
  */
 public final class DecisionRecord {
-    /** Maximum complete encoded record size. */
+
+    /**
+     * Maximum complete encoded record size.
+     */
     public static final int MAX_BYTES = 16_384;
-    /** Maximum UTF-8 title size. */
+    /**
+     * Maximum UTF-8 title size.
+     */
     public static final int MAX_TITLE_BYTES = 512;
-    /** Maximum UTF-8 rationale size. */
+    /**
+     * Maximum UTF-8 rationale size.
+     */
     public static final int MAX_RATIONALE_BYTES = 4_096;
-    /** Maximum evidence references per revision. */
+    /**
+     * Maximum evidence references per revision.
+     */
     public static final int MAX_EVIDENCE = 8;
 
     private static final int MAGIC = 0x53445232;
@@ -45,56 +53,6 @@ public final class DecisionRecord {
     private static final int MAX_NODE_ID_BYTES = 128;
     private static final int MAX_KEY_BYTES = 256;
     private static final int MAX_SIGNATURE_BYTES = 128;
-
-    /** Record classification. */
-    public enum RecordType {
-        /** General architectural or project decision. */
-        DECISION,
-        /** Enforceable project constraint record. */
-        PROJECT_CONSTRAINT
-    }
-
-    /**
-     * Bounded typed constraint payload embedded in SDR2 PROJECT_CONSTRAINT records.
-     *
-     * @param effect     enforcement effect
-     * @param status     lifecycle status
-     * @param scopes     target path scopes
-     * @param supersedes list of superseded record UUIDs
-     */
-    public record ConstraintPayload(
-            ProjectConstraint.Effect effect,
-            ProjectConstraint.ConstraintStatus status,
-            List<String> scopes,
-            List<UUID> supersedes
-    ) {
-        /**
-         * Validates constraint payload fields.
-         */
-        public ConstraintPayload {
-            Objects.requireNonNull(effect, "effect");
-            Objects.requireNonNull(status, "status");
-            Objects.requireNonNull(scopes, "scopes");
-            Objects.requireNonNull(supersedes, "supersedes");
-            if (scopes.isEmpty() || scopes.size() > 16) {
-                throw new IllegalArgumentException("scopes count outside bound");
-            }
-            List<String> normScopes = new ArrayList<>();
-            for (String s : scopes) {
-                String n = ScopeMatcher.normalizePath(s);
-                if (normScopes.contains(n)) {
-                    throw new IllegalArgumentException("duplicate normalized scope: " + n);
-                }
-                normScopes.add(n);
-            }
-            scopes = List.copyOf(normScopes);
-            if (supersedes.size() > 16) {
-                throw new IllegalArgumentException("supersedes count outside bound");
-            }
-            supersedes = List.copyOf(supersedes.stream().distinct().toList());
-        }
-    }
-
     private final UUID projectId;
     private final UUID recordId;
     private final RecordType recordType;
@@ -114,16 +72,17 @@ public final class DecisionRecord {
     private final byte[] signature;
     private final byte[] encoded;
     private final byte[] digest;
-
     private DecisionRecord(UUID projectId, UUID recordId, RecordType recordType, long revision,
-                           byte[] previousDigest, String ownerNodeId, String authorNodeId,
-                           DecisionStatus status, Instant createdAt, Instant updatedAt, String title,
-                           String rationale, List<DecisionEvidence> evidence,
-                           ConstraintPayload constraintPayload, byte[] publicKey, byte[] signature) {
+            byte[] previousDigest, String ownerNodeId, String authorNodeId,
+            DecisionStatus status, Instant createdAt, Instant updatedAt, String title,
+            String rationale, List<DecisionEvidence> evidence,
+            ConstraintPayload constraintPayload, byte[] publicKey, byte[] signature) {
         this.projectId = Objects.requireNonNull(projectId, "project ID");
         this.recordId = Objects.requireNonNull(recordId, "record ID");
         this.recordType = Objects.requireNonNull(recordType, "record type");
-        if (revision <= 0) throw new IllegalArgumentException("revision must be positive");
+        if (revision <= 0) {
+            throw new IllegalArgumentException("revision must be positive");
+        }
         this.revision = revision;
         if ((revision == 1) != (previousDigest == null)) {
             throw new IllegalArgumentException("revision one must have no predecessor");
@@ -140,14 +99,17 @@ public final class DecisionRecord {
         this.status = Objects.requireNonNull(status, "status");
         this.createdAt = canonicalInstant(createdAt, "created at");
         this.updatedAt = canonicalInstant(updatedAt, "updated at");
-        if (updatedAt.isBefore(createdAt)) throw new IllegalArgumentException("updated at precedes created at");
+        if (updatedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("updated at precedes created at");
+        }
         this.title = text(title, MAX_TITLE_BYTES, "title");
         this.rationale = text(rationale, MAX_RATIONALE_BYTES, "rationale");
         Objects.requireNonNull(evidence, "evidence");
         if (evidence.isEmpty() || evidence.size() > MAX_EVIDENCE) {
             throw new IllegalArgumentException("evidence count is outside the supported bound");
         }
-        this.evidence = evidence.stream().map(Objects::requireNonNull)
+        this.evidence = evidence.stream()
+                .map(Objects::requireNonNull)
                 .sorted(Comparator.comparing(DecisionEvidence::kind)
                         .thenComparing(DecisionEvidence::reference)
                         .thenComparing(DecisionEvidence::digestHex))
@@ -174,7 +136,9 @@ public final class DecisionRecord {
         this.signature = signature.clone();
         this.unsignedBytes = encodeUnsigned();
         this.encoded = encodeComplete();
-        if (encoded.length > MAX_BYTES) throw new IllegalArgumentException("record exceeds the supported bound");
+        if (encoded.length > MAX_BYTES) {
+            throw new IllegalArgumentException("record exceeds the supported bound");
+        }
         this.digest = sha256(encoded);
     }
 
@@ -198,9 +162,9 @@ public final class DecisionRecord {
      * @throws GeneralSecurityException if signing fails
      */
     public static DecisionRecord create(UUID projectId, UUID recordId, long revision, byte[] previousDigest,
-                                        String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
-                                        Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-                                        Ed25519Signer signer) throws GeneralSecurityException {
+            String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
+            Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
+            Ed25519Signer signer) throws GeneralSecurityException {
         return createTyped(projectId, recordId, RecordType.DECISION, revision, previousDigest, ownerNodeId,
                 authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, null, signer);
     }
@@ -226,25 +190,53 @@ public final class DecisionRecord {
      * @throws GeneralSecurityException if signing fails
      */
     public static DecisionRecord createConstraint(UUID projectId, UUID recordId, long revision, byte[] previousDigest,
-                                                  String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
-                                                  Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-                                                  ConstraintPayload constraintPayload, Ed25519Signer signer) throws GeneralSecurityException {
+            String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
+            Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
+            ConstraintPayload constraintPayload, Ed25519Signer signer) throws GeneralSecurityException {
         return createTyped(projectId, recordId, RecordType.PROJECT_CONSTRAINT, revision, previousDigest, ownerNodeId,
                 authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, constraintPayload, signer);
     }
 
-    private static DecisionRecord createTyped(UUID projectId, UUID recordId, RecordType recordType, long revision, byte[] previousDigest,
-                                              String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
-                                              Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-                                              ConstraintPayload constraintPayload, Ed25519Signer signer) throws GeneralSecurityException {
+    private static DecisionRecord createTyped(UUID projectId,
+            UUID recordId,
+            RecordType recordType,
+            long revision,
+            byte[] previousDigest,
+            String ownerNodeId,
+            String authorNodeId,
+            DecisionStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            String title,
+            String rationale,
+            List<DecisionEvidence> evidence,
+            ConstraintPayload constraintPayload,
+            Ed25519Signer signer) throws GeneralSecurityException {
         Objects.requireNonNull(signer, "signer");
-        if (!signer.nodeId().equals(ownerNodeId)) throw new IllegalArgumentException("signer does not match owner");
+        if (!signer.nodeId()
+                .equals(ownerNodeId)) {
+            throw new IllegalArgumentException("signer does not match owner");
+        }
         DecisionRecord unsigned = new DecisionRecord(projectId, recordId, recordType, revision, previousDigest,
                 ownerNodeId, authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, constraintPayload,
                 signer.publicKeyEncoded(), new byte[]{0});
         byte[] signature = signer.sign(unsigned.unsignedBytes);
-        return new DecisionRecord(projectId, recordId, recordType, revision, previousDigest, ownerNodeId, authorNodeId,
-                status, createdAt, updatedAt, title, rationale, evidence, constraintPayload, signer.publicKeyEncoded(), signature);
+        return new DecisionRecord(projectId,
+                recordId,
+                recordType,
+                revision,
+                previousDigest,
+                ownerNodeId,
+                authorNodeId,
+                status,
+                createdAt,
+                updatedAt,
+                title,
+                rationale,
+                evidence,
+                constraintPayload,
+                signer.publicKeyEncoded(),
+                signature);
     }
 
     /**
@@ -256,7 +248,9 @@ public final class DecisionRecord {
      */
     public static DecisionRecord decode(byte[] bytes) throws IOException {
         Objects.requireNonNull(bytes, "bytes");
-        if (bytes.length == 0 || bytes.length > MAX_BYTES) throw new IOException("record exceeds bound");
+        if (bytes.length == 0 || bytes.length > MAX_BYTES) {
+            throw new IOException("record exceeds bound");
+        }
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
             if (input.readInt() != MAGIC || input.readUnsignedByte() != VERSION) {
                 throw new IOException("unsupported decision record version: expected SDR2");
@@ -264,22 +258,30 @@ public final class DecisionRecord {
             UUID projectId = readUuid(input);
             UUID recordId = readUuid(input);
             int typeOrd = input.readUnsignedByte();
-            if (typeOrd >= RecordType.values().length) throw new IOException("unknown record type");
+            if (typeOrd >= RecordType.values().length) {
+                throw new IOException("unknown record type");
+            }
             RecordType recordType = RecordType.values()[typeOrd];
             long revision = input.readLong();
             int predecessorFlag = input.readUnsignedByte();
-            if (predecessorFlag > 1) throw new IOException("invalid predecessor marker");
+            if (predecessorFlag > 1) {
+                throw new IOException("invalid predecessor marker");
+            }
             byte[] previousDigest = predecessorFlag == 0 ? null : readExact(input, 32, 32);
             String owner = readText(input, MAX_NODE_ID_BYTES);
             String author = readText(input, MAX_NODE_ID_BYTES);
             int status = input.readUnsignedByte();
-            if (status >= DecisionStatus.values().length) throw new IOException("unknown decision status");
+            if (status >= DecisionStatus.values().length) {
+                throw new IOException("unknown decision status");
+            }
             Instant createdAt = readInstant(input);
             Instant updatedAt = readInstant(input);
             String title = readText(input, MAX_TITLE_BYTES);
             String rationale = readText(input, MAX_RATIONALE_BYTES);
             int count = input.readUnsignedByte();
-            if (count == 0 || count > MAX_EVIDENCE) throw new IOException("invalid evidence count");
+            if (count == 0 || count > MAX_EVIDENCE) {
+                throw new IOException("invalid evidence count");
+            }
             List<DecisionEvidence> evidence = new ArrayList<>(count);
             for (int index = 0; index < count; index++) {
                 evidence.add(new DecisionEvidence(readText(input, DecisionEvidence.MAX_KIND_BYTES),
@@ -289,17 +291,25 @@ public final class DecisionRecord {
             ConstraintPayload constraintPayload = null;
             if (recordType == RecordType.PROJECT_CONSTRAINT) {
                 int effOrd = input.readUnsignedByte();
-                if (effOrd >= ProjectConstraint.Effect.values().length) throw new IOException("invalid effect");
+                if (effOrd >= ProjectConstraint.Effect.values().length) {
+                    throw new IOException("invalid effect");
+                }
                 int statOrd = input.readUnsignedByte();
-                if (statOrd >= ProjectConstraint.ConstraintStatus.values().length) throw new IOException("invalid status");
+                if (statOrd >= ProjectConstraint.ConstraintStatus.values().length) {
+                    throw new IOException("invalid status");
+                }
                 int scopeCount = input.readUnsignedByte();
-                if (scopeCount == 0 || scopeCount > 16) throw new IOException("invalid scope count");
+                if (scopeCount == 0 || scopeCount > 16) {
+                    throw new IOException("invalid scope count");
+                }
                 List<String> scopes = new ArrayList<>(scopeCount);
                 for (int i = 0; i < scopeCount; i++) {
                     scopes.add(readText(input, 1_024));
                 }
                 int supCount = input.readUnsignedByte();
-                if (supCount > 16) throw new IOException("invalid supersedes count");
+                if (supCount > 16) {
+                    throw new IOException("invalid supersedes count");
+                }
                 List<UUID> supersedes = new ArrayList<>(supCount);
                 for (int i = 0; i < supCount; i++) {
                     supersedes.add(readUuid(input));
@@ -310,7 +320,9 @@ public final class DecisionRecord {
 
             byte[] publicKey = readBytes(input, MAX_KEY_BYTES);
             byte[] signature = readBytes(input, MAX_SIGNATURE_BYTES);
-            if (input.available() != 0) throw new IOException("trailing record bytes");
+            if (input.available() != 0) {
+                throw new IOException("trailing record bytes");
+            }
             return new DecisionRecord(projectId, recordId, recordType, revision, previousDigest, owner, author,
                     DecisionStatus.values()[status], createdAt, updatedAt, title, rationale, evidence,
                     constraintPayload, publicKey, signature);
@@ -319,26 +331,129 @@ public final class DecisionRecord {
         }
     }
 
+    private static UUID readUuid(DataInputStream input) throws IOException {
+        return new UUID(input.readLong(), input.readLong());
+    }
+
+    private static void writeUuid(DataOutputStream output, UUID value) throws IOException {
+        output.writeLong(value.getMostSignificantBits());
+        output.writeLong(value.getLeastSignificantBits());
+    }
+
+    private static Instant readInstant(DataInputStream input) throws IOException {
+        try {
+            return Instant.ofEpochMilli(input.readLong());
+        } catch (DateTimeException exception) {
+            throw new IOException("invalid timestamp", exception);
+        }
+    }
+
+    private static byte[] readExact(DataInputStream input, int length, int max) throws IOException {
+        if (length <= 0 || length > max || input.available() < length) {
+            throw new IOException("invalid fixed field");
+        }
+        return input.readNBytes(length);
+    }
+
+    private static byte[] readBytes(DataInputStream input, int max) throws IOException {
+        int length = input.readUnsignedShort();
+        if (length == 0 || length > max || input.available() < length) {
+            throw new IOException("invalid bounded field");
+        }
+        return input.readNBytes(length);
+    }
+
+    private static String readText(DataInputStream input, int max) throws IOException {
+        byte[] bytes = readBytes(input, max);
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes))
+                    .toString();
+        } catch (CharacterCodingException exception) {
+            throw new IOException("invalid UTF-8", exception);
+        }
+    }
+
+    private static void writeText(DataOutputStream output, String value) throws IOException {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > 65_535) {
+            throw new IllegalArgumentException("text field exceeds encoding bound");
+        }
+        output.writeShort(bytes.length);
+        output.write(bytes);
+    }
+
+    private static void writeBytes(DataOutputStream output, byte[] bytes) throws IOException {
+        if (bytes.length == 0 || bytes.length > 65_535) {
+            throw new IllegalArgumentException("byte field exceeds bound");
+        }
+        output.writeShort(bytes.length);
+        output.write(bytes);
+    }
+
+    private static String text(String value, int maxBytes, String name) {
+        Objects.requireNonNull(value, name);
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length == 0 || bytes.length > maxBytes || value.indexOf('\u0000') >= 0) {
+            throw new IllegalArgumentException(name + " exceeds its supported bound");
+        }
+        return value;
+    }
+
+    private static String nodeId(String value, String name) {
+        String result = text(value, MAX_NODE_ID_BYTES, name);
+        if (!result.matches("sl1-[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("invalid " + name);
+        }
+        return result;
+    }
+
+    private static Instant canonicalInstant(Instant value, String name) {
+        Objects.requireNonNull(value, name);
+        if (value.getNano() % 1_000_000 != 0) {
+            throw new IllegalArgumentException(name + " must have millisecond precision");
+        }
+        return value;
+    }
+
+    private static byte[] sha256(byte[] bytes) {
+        try {
+            return MessageDigest.getInstance("SHA-256")
+                    .digest(bytes);
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError("SHA-256 is required by the JDK", impossible);
+        }
+    }
+
     /**
      * Returns a copy of the complete encoded bytes.
      *
      * @return encoded bytes
      */
-    public byte[] encoded() { return encoded.clone(); }
+    public byte[] encoded() {
+        return encoded.clone();
+    }
 
     /**
      * Returns a copy of the SHA-256 digest.
      *
      * @return digest bytes
      */
-    public byte[] digest() { return digest.clone(); }
+    public byte[] digest() {
+        return digest.clone();
+    }
 
     /**
      * Returns the hex-encoded digest string.
      *
      * @return hex digest string
      */
-    public String digestHex() { return HexFormat.of().formatHex(digest); }
+    public String digestHex() {
+        return HexFormat.of()
+                .formatHex(digest);
+    }
 
     /**
      * Verifies the cryptographic signature of this record against its owner public key.
@@ -347,7 +462,8 @@ public final class DecisionRecord {
      * @throws GeneralSecurityException if verification fails
      */
     public boolean verify() throws GeneralSecurityException {
-        return Ed25519Signer.deriveNodeId(publicKey).equals(ownerNodeId)
+        return Ed25519Signer.deriveNodeId(publicKey)
+                .equals(ownerNodeId)
                 && ownerNodeId.equals(authorNodeId)
                 && Ed25519Signer.verify(publicKey, unsignedBytes, signature);
     }
@@ -357,112 +473,144 @@ public final class DecisionRecord {
      *
      * @return project ID
      */
-    public UUID projectId() { return projectId; }
+    public UUID projectId() {
+        return projectId;
+    }
 
     /**
      * Returns the record ID.
      *
      * @return record ID
      */
-    public UUID recordId() { return recordId; }
+    public UUID recordId() {
+        return recordId;
+    }
 
     /**
      * Returns the record type.
      *
      * @return record type
      */
-    public RecordType recordType() { return recordType; }
+    public RecordType recordType() {
+        return recordType;
+    }
 
     /**
      * Returns the revision number.
      *
      * @return revision number
      */
-    public long revision() { return revision; }
+    public long revision() {
+        return revision;
+    }
 
     /**
      * Returns a copy of the previous revision digest.
      *
      * @return previous digest bytes or null
      */
-    public byte[] previousDigest() { return previousDigest == null ? null : previousDigest.clone(); }
+    public byte[] previousDigest() {
+        return previousDigest == null ? null : previousDigest.clone();
+    }
 
     /**
      * Returns the owner node ID.
      *
      * @return owner node ID
      */
-    public String ownerNodeId() { return ownerNodeId; }
+    public String ownerNodeId() {
+        return ownerNodeId;
+    }
 
     /**
      * Returns the author node ID.
      *
      * @return author node ID
      */
-    public String authorNodeId() { return authorNodeId; }
+    public String authorNodeId() {
+        return authorNodeId;
+    }
 
     /**
      * Returns the decision status.
      *
      * @return status
      */
-    public DecisionStatus status() { return status; }
+    public DecisionStatus status() {
+        return status;
+    }
 
     /**
      * Returns the created instant.
      *
      * @return created instant
      */
-    public Instant createdAt() { return createdAt; }
+    public Instant createdAt() {
+        return createdAt;
+    }
 
     /**
      * Returns the updated instant.
      *
      * @return updated instant
      */
-    public Instant updatedAt() { return updatedAt; }
+    public Instant updatedAt() {
+        return updatedAt;
+    }
 
     /**
      * Returns the title.
      *
      * @return title
      */
-    public String title() { return title; }
+    public String title() {
+        return title;
+    }
 
     /**
      * Returns the rationale.
      *
      * @return rationale
      */
-    public String rationale() { return rationale; }
+    public String rationale() {
+        return rationale;
+    }
 
     /**
      * Returns the evidence list.
      *
      * @return evidence
      */
-    public List<DecisionEvidence> evidence() { return evidence; }
+    public List<DecisionEvidence> evidence() {
+        return evidence;
+    }
 
     /**
      * Returns the constraint payload if record type is PROJECT_CONSTRAINT, or null.
      *
      * @return constraint payload or null
      */
-    public ConstraintPayload constraintPayload() { return constraintPayload; }
+    public ConstraintPayload constraintPayload() {
+        return constraintPayload;
+    }
 
     /**
      * Returns a copy of the owner public key bytes.
      *
      * @return public key bytes
      */
-    public byte[] publicKeyEncoded() { return publicKey.clone(); }
+    public byte[] publicKeyEncoded() {
+        return publicKey.clone();
+    }
 
     /**
      * Returns a copy of the Ed25519 signature bytes.
      *
      * @return signature bytes
      */
-    public byte[] signature() { return signature.clone(); }
+    public byte[] signature() {
+        return signature.clone();
+    }
 
     private byte[] encodeUnsigned() {
         try {
@@ -475,7 +623,9 @@ public final class DecisionRecord {
                 output.writeByte(recordType.ordinal());
                 output.writeLong(revision);
                 output.writeByte(previousDigest == null ? 0 : 1);
-                if (previousDigest != null) output.write(previousDigest);
+                if (previousDigest != null) {
+                    output.write(previousDigest);
+                }
                 writeText(output, ownerNodeId);
                 writeText(output, authorNodeId);
                 output.writeByte(status.ordinal());
@@ -490,13 +640,17 @@ public final class DecisionRecord {
                     output.write(item.digest());
                 }
                 if (recordType == RecordType.PROJECT_CONSTRAINT) {
-                    output.writeByte(constraintPayload.effect().ordinal());
-                    output.writeByte(constraintPayload.status().ordinal());
-                    output.writeByte(constraintPayload.scopes().size());
+                    output.writeByte(constraintPayload.effect()
+                            .ordinal());
+                    output.writeByte(constraintPayload.status()
+                            .ordinal());
+                    output.writeByte(constraintPayload.scopes()
+                            .size());
                     for (String s : constraintPayload.scopes()) {
                         writeText(output, s);
                     }
-                    output.writeByte(constraintPayload.supersedes().size());
+                    output.writeByte(constraintPayload.supersedes()
+                            .size());
                     for (UUID u : constraintPayload.supersedes()) {
                         writeUuid(output, u);
                     }
@@ -522,84 +676,61 @@ public final class DecisionRecord {
         }
     }
 
-    private static UUID readUuid(DataInputStream input) throws IOException {
-        return new UUID(input.readLong(), input.readLong());
+    /**
+     * Record classification.
+     */
+    public enum RecordType {
+        /**
+         * General architectural or project decision.
+         */
+        DECISION,
+        /**
+         * Enforceable project constraint record.
+         */
+        PROJECT_CONSTRAINT
     }
 
-    private static void writeUuid(DataOutputStream output, UUID value) throws IOException {
-        output.writeLong(value.getMostSignificantBits());
-        output.writeLong(value.getLeastSignificantBits());
-    }
+    /**
+     * Bounded typed constraint payload embedded in SDR2 PROJECT_CONSTRAINT records.
+     *
+     * @param effect     enforcement effect
+     * @param status     lifecycle status
+     * @param scopes     target path scopes
+     * @param supersedes list of superseded record UUIDs
+     */
+    public record ConstraintPayload(
+            ProjectConstraint.Effect effect,
+            ProjectConstraint.ConstraintStatus status,
+            List<String> scopes,
+            List<UUID> supersedes
+    ) {
 
-    private static Instant readInstant(DataInputStream input) throws IOException {
-        try {
-            return Instant.ofEpochMilli(input.readLong());
-        } catch (DateTimeException exception) {
-            throw new IOException("invalid timestamp", exception);
-        }
-    }
-
-    private static byte[] readExact(DataInputStream input, int length, int max) throws IOException {
-        if (length <= 0 || length > max || input.available() < length) throw new IOException("invalid fixed field");
-        return input.readNBytes(length);
-    }
-
-    private static byte[] readBytes(DataInputStream input, int max) throws IOException {
-        int length = input.readUnsignedShort();
-        if (length == 0 || length > max || input.available() < length) throw new IOException("invalid bounded field");
-        return input.readNBytes(length);
-    }
-
-    private static String readText(DataInputStream input, int max) throws IOException {
-        byte[] bytes = readBytes(input, max);
-        try {
-            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
-        } catch (CharacterCodingException exception) {
-            throw new IOException("invalid UTF-8", exception);
-        }
-    }
-
-    private static void writeText(DataOutputStream output, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > 65_535) throw new IllegalArgumentException("text field exceeds encoding bound");
-        output.writeShort(bytes.length);
-        output.write(bytes);
-    }
-
-    private static void writeBytes(DataOutputStream output, byte[] bytes) throws IOException {
-        if (bytes.length == 0 || bytes.length > 65_535) throw new IllegalArgumentException("byte field exceeds bound");
-        output.writeShort(bytes.length);
-        output.write(bytes);
-    }
-
-    private static String text(String value, int maxBytes, String name) {
-        Objects.requireNonNull(value, name);
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length == 0 || bytes.length > maxBytes || value.indexOf('\u0000') >= 0) {
-            throw new IllegalArgumentException(name + " exceeds its supported bound");
-        }
-        return value;
-    }
-
-    private static String nodeId(String value, String name) {
-        String result = text(value, MAX_NODE_ID_BYTES, name);
-        if (!result.matches("sl1-[0-9a-f]{64}")) throw new IllegalArgumentException("invalid " + name);
-        return result;
-    }
-
-    private static Instant canonicalInstant(Instant value, String name) {
-        Objects.requireNonNull(value, name);
-        if (value.getNano() % 1_000_000 != 0)
-            throw new IllegalArgumentException(name + " must have millisecond precision");
-        return value;
-    }
-
-    private static byte[] sha256(byte[] bytes) {
-        try {
-            return MessageDigest.getInstance("SHA-256").digest(bytes);
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required by the JDK", impossible);
+        /**
+         * Validates constraint payload fields.
+         */
+        public ConstraintPayload {
+            Objects.requireNonNull(effect, "effect");
+            Objects.requireNonNull(status, "status");
+            Objects.requireNonNull(scopes, "scopes");
+            Objects.requireNonNull(supersedes, "supersedes");
+            if (scopes.isEmpty() || scopes.size() > 16) {
+                throw new IllegalArgumentException("scopes count outside bound");
+            }
+            List<String> normScopes = new ArrayList<>();
+            for (String s : scopes) {
+                String n = ScopeMatcher.normalizePath(s);
+                if (normScopes.contains(n)) {
+                    throw new IllegalArgumentException("duplicate normalized scope: " + n);
+                }
+                normScopes.add(n);
+            }
+            scopes = List.copyOf(normScopes);
+            if (supersedes.size() > 16) {
+                throw new IllegalArgumentException("supersedes count outside bound");
+            }
+            supersedes = List.copyOf(supersedes.stream()
+                    .distinct()
+                    .toList());
         }
     }
 }

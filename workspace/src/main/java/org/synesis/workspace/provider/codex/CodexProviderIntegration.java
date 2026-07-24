@@ -10,10 +10,48 @@ import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderJson;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 
-/** Codex project-local PreToolUse provider integration. */
+/**
+ * Codex project-local PreToolUse provider integration.
+ */
 public final class CodexProviderIntegration implements ProviderIntegration {
-    /** Creates the Codex integration. */
+
+    /**
+     * Creates the Codex integration.
+     */
     public CodexProviderIntegration() {
+    }
+
+    private static String event(Path root, String path) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("command", "*** Begin Patch\n*** Update File: " + path + "\n*** End Patch");
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("hook_event_name", "PreToolUse");
+        event.put("cwd",
+                root.toAbsolutePath()
+                        .normalize()
+                        .toString());
+        event.put("tool_name", "apply_patch");
+        event.put("tool_input", input);
+        return ProviderJson.write(event);
+    }
+
+    private static boolean valid(String json) {
+        try {
+            return ProviderJson.parse(json) instanceof Map<?, ?>;
+        } catch (RuntimeException failure) {
+            return false;
+        }
+    }
+
+    private static String quote(Path path) {
+        return "\"" + path.toAbsolutePath()
+                .normalize()
+                .toString()
+                .replace("\"", "\\\"") + "\"";
+    }
+
+    private static String windowsHookCommand(Path launcher) {
+        return "cmd.exe /d /s /c \"" + quote(launcher) + " hook codex\"";
     }
 
     @Override
@@ -80,9 +118,13 @@ public final class CodexProviderIntegration implements ProviderIntegration {
 
     @Override
     public boolean isManagedHook(Object value) {
-        if (!(value instanceof Map<?, ?> hook) || !matcher().equals(hook.get("matcher"))) return false;
+        if (!(value instanceof Map<?, ?> hook) || !matcher().equals(hook.get("matcher"))) {
+            return false;
+        }
         if (!(hook.get("hooks") instanceof List<?> handlers) || handlers.size() != 1
-                || !(handlers.getFirst() instanceof Map<?, ?> handler)) return false;
+                || !(handlers.getFirst() instanceof Map<?, ?> handler)) {
+            return false;
+        }
         Object command = handler.get("command");
         return "command".equals(handler.get("type")) && command instanceof String text
                 && text.endsWith(" hook codex");
@@ -97,34 +139,8 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         CodexHookAdapter.Result allowed = adapter.processJson(allowedEvent);
         return new SyntheticCheck(blocked.outcome() == CodexHookAdapter.Outcome.BLOCKED,
                 allowed.outcome() == CodexHookAdapter.Outcome.ALLOWED,
-                valid(blocked.responseJson()) && allowed.responseJson().isEmpty(),
+                valid(blocked.responseJson()) && allowed.responseJson()
+                        .isEmpty(),
                 blocked.responseJson(), allowed.responseJson());
-    }
-
-    private static String event(Path root, String path) {
-        Map<String, Object> input = new LinkedHashMap<>();
-        input.put("command", "*** Begin Patch\n*** Update File: " + path + "\n*** End Patch");
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("hook_event_name", "PreToolUse");
-        event.put("cwd", root.toAbsolutePath().normalize().toString());
-        event.put("tool_name", "apply_patch");
-        event.put("tool_input", input);
-        return ProviderJson.write(event);
-    }
-
-    private static boolean valid(String json) {
-        try {
-            return ProviderJson.parse(json) instanceof Map<?, ?>;
-        } catch (RuntimeException failure) {
-            return false;
-        }
-    }
-
-    private static String quote(Path path) {
-        return "\"" + path.toAbsolutePath().normalize().toString().replace("\"", "\\\"") + "\"";
-    }
-
-    private static String windowsHookCommand(Path launcher) {
-        return "cmd.exe /d /s /c \"" + quote(launcher) + " hook codex\"";
     }
 }

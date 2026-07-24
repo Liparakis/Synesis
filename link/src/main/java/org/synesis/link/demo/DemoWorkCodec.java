@@ -12,19 +12,26 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
-/** Bounded codec for the demo application stream; it does not authenticate peers. */
+/**
+ * Bounded codec for the demo application stream; it does not authenticate peers.
+ */
 public final class DemoWorkCodec {
-    /** Maximum unprefixed application frame size. */
+
+    /**
+     * Maximum unprefixed application frame size.
+     */
     public static final int MAX_FRAME_BYTES = 4_096;
     private static final int MAGIC = 0x53445731;
     private static final int VERSION = 1;
     private static final int REQUEST = 1;
     private static final int RESULT = 2;
 
-    private DemoWorkCodec() { }
+    private DemoWorkCodec() {
+    }
 
     /**
      * Encodes one bounded request deterministically.
+     *
      * @param request request to encode
      * @return complete unprefixed frame
      */
@@ -34,6 +41,7 @@ public final class DemoWorkCodec {
 
     /**
      * Encodes one bounded result deterministically.
+     *
      * @param result result to encode
      * @return complete unprefixed frame
      */
@@ -43,6 +51,7 @@ public final class DemoWorkCodec {
 
     /**
      * Decodes and validates one request frame.
+     *
      * @param encoded complete unprefixed frame
      * @return decoded request
      */
@@ -53,6 +62,7 @@ public final class DemoWorkCodec {
 
     /**
      * Decodes and validates one result frame.
+     *
      * @param encoded complete unprefixed frame
      * @return decoded result
      */
@@ -71,11 +81,15 @@ public final class DemoWorkCodec {
                 data.writeByte(kind);
                 data.writeLong(id.getMostSignificantBits());
                 data.writeLong(id.getLeastSignificantBits());
-                if (status != null) data.writeByte(status.ordinal());
+                if (status != null) {
+                    data.writeByte(status.ordinal());
+                }
                 data.writeShort(bytes.length);
                 data.write(bytes);
             }
-            if (output.size() > MAX_FRAME_BYTES) throw new IllegalArgumentException("demo frame is oversized");
+            if (output.size() > MAX_FRAME_BYTES) {
+                throw new IllegalArgumentException("demo frame is oversized");
+            }
             return output.toByteArray();
         } catch (IOException impossible) {
             throw new AssertionError("byte array output cannot fail", impossible);
@@ -94,12 +108,18 @@ public final class DemoWorkCodec {
             UUID id = new UUID(input.readLong(), input.readLong());
             DemoWorkStatus status = expectedKind == RESULT ? readStatus(input) : null;
             int length = input.readUnsignedShort();
-            if (length > input.available()) throw new IllegalArgumentException("truncated demo frame");
+            if (length > input.available()) {
+                throw new IllegalArgumentException("truncated demo frame");
+            }
             byte[] text = input.readNBytes(length);
-            if (input.available() != 0) throw new IllegalArgumentException("trailing demo frame bytes");
+            if (input.available() != 0) {
+                throw new IllegalArgumentException("trailing demo frame bytes");
+            }
             return new Parsed(id, decodeUtf8(text), status);
         } catch (IOException | RuntimeException exception) {
-            if (exception instanceof IllegalArgumentException value) throw value;
+            if (exception instanceof IllegalArgumentException value) {
+                throw value;
+            }
             throw new IllegalArgumentException("malformed demo frame", exception);
         }
     }
@@ -107,7 +127,9 @@ public final class DemoWorkCodec {
     private static DemoWorkStatus readStatus(DataInputStream input) throws IOException {
         int ordinal = input.readUnsignedByte();
         DemoWorkStatus[] statuses = DemoWorkStatus.values();
-        if (ordinal >= statuses.length) throw new IllegalArgumentException("unknown demo status");
+        if (ordinal >= statuses.length) {
+            throw new IllegalArgumentException("unknown demo status");
+        }
         return statuses[ordinal];
     }
 
@@ -115,12 +137,15 @@ public final class DemoWorkCodec {
         try {
             CharBuffer decoded = StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes));
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes));
             return decoded.toString();
         } catch (CharacterCodingException exception) {
             throw new IllegalArgumentException("invalid UTF-8", exception);
         }
     }
 
-    private record Parsed(UUID id, String text, DemoWorkStatus status) { }
+    private record Parsed(UUID id, String text, DemoWorkStatus status) {
+
+    }
 }

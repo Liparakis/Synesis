@@ -9,6 +9,7 @@ import org.synesis.link.transport.OnboardingEventType;
  * Maps typed Link events to the stable terminal status contract.
  */
 public final class StatusRenderer implements Consumer<OnboardingEvent> {
+
     private final Terminal terminal;
     private final QrRenderer qr;
 

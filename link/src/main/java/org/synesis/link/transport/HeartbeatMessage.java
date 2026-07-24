@@ -4,8 +4,11 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.UUID;
 
-/** Internal fixed-size codec for authenticated heartbeat payloads. */
+/**
+ * Internal fixed-size codec for authenticated heartbeat payloads.
+ */
 record HeartbeatMessage(UUID sessionId, long sequence, long relatedSequence, long marker, boolean ack) {
+
     static final byte VERSION = 1;
     static final int BYTES = 41;
 
@@ -17,21 +20,19 @@ record HeartbeatMessage(UUID sessionId, long sequence, long relatedSequence, lon
         return create(sessionId, sequence, receiverSequence, marker, true);
     }
 
-    byte[] encoded() {
-        ByteBuffer buffer = ByteBuffer.allocate(BYTES).order(ByteOrder.BIG_ENDIAN);
-        buffer.put(VERSION).putLong(sessionId.getMostSignificantBits()).putLong(sessionId.getLeastSignificantBits())
-                .putLong(sequence).putLong(relatedSequence).putLong(marker);
-        return buffer.array();
-    }
-
     static HeartbeatMessage decode(byte[] encoded, boolean ack) {
         return decode(encoded, null, ack);
     }
 
     static HeartbeatMessage decode(byte[] encoded, UUID expectedSession, boolean ack) {
-        if (encoded == null || encoded.length != BYTES) throw new IllegalArgumentException("invalid heartbeat length");
-        ByteBuffer buffer = ByteBuffer.wrap(encoded).order(ByteOrder.BIG_ENDIAN);
-        if (buffer.get() != VERSION) throw new IllegalArgumentException("unsupported heartbeat version");
+        if (encoded == null || encoded.length != BYTES) {
+            throw new IllegalArgumentException("invalid heartbeat length");
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(encoded)
+                .order(ByteOrder.BIG_ENDIAN);
+        if (buffer.get() != VERSION) {
+            throw new IllegalArgumentException("unsupported heartbeat version");
+        }
         UUID sessionId = new UUID(buffer.getLong(), buffer.getLong());
         if (expectedSession != null && !expectedSession.equals(sessionId)) {
             throw new IllegalArgumentException("heartbeat session mismatch");
@@ -51,5 +52,17 @@ record HeartbeatMessage(UUID sessionId, long sequence, long relatedSequence, lon
             throw new IllegalArgumentException("invalid heartbeat fields");
         }
         return new HeartbeatMessage(sessionId, sequence, related, marker, ack);
+    }
+
+    byte[] encoded() {
+        ByteBuffer buffer = ByteBuffer.allocate(BYTES)
+                .order(ByteOrder.BIG_ENDIAN);
+        buffer.put(VERSION)
+                .putLong(sessionId.getMostSignificantBits())
+                .putLong(sessionId.getLeastSignificantBits())
+                .putLong(sequence)
+                .putLong(relatedSequence)
+                .putLong(marker);
+        return buffer.array();
     }
 }

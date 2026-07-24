@@ -13,30 +13,51 @@ import org.synesis.coordination.PredictionEventType;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-/** Invalidates a prediction and removes any local speculation workspace. */
+/**
+ * Invalidates a prediction and removes any local speculation workspace.
+ */
 @Command(name = "invalidate", description = "Invalidate a prediction.", mixinStandardHelpOptions = true)
 public final class SpeculationInvalidateCommand implements Callable<Integer> {
-    @Option(names = "--project") private Path project;
-    @Option(names = "--endpoint", required = true) private URI endpoint;
-    @Option(names = "--profile", required = true) private Path profile;
-    @Option(names = "--prediction", required = true) private UUID prediction;
+
     private final CliRuntime runtime;
-    /** Creates an invalidation command.
+    @Option(names = "--project")
+    private Path project;
+    @Option(names = "--endpoint", required = true)
+    private URI endpoint;
+    @Option(names = "--profile", required = true)
+    private Path profile;
+    @Option(names = "--prediction", required = true)
+    private UUID prediction;
+
+    /**
+     * Creates an invalidation command.
+     *
      * @param runtime composed CLI runtime
      */
-    public SpeculationInvalidateCommand(CliRuntime runtime) { this.runtime = runtime; }
-    /** Appends invalidation and best-effort closes local speculation. @return stable exit code */
-    @Override public Integer call() {
+    public SpeculationInvalidateCommand(CliRuntime runtime) {
+        this.runtime = runtime;
+    }
+
+    /**
+     * Appends invalidation and best-effort closes local speculation. @return stable exit code
+     */
+    @Override
+    public Integer call() {
         try {
             var location = CoordinationCliSupport.project(runtime, project);
             var identity = CoordinationCliSupport.loadIdentity(profile);
             CoordinationCliSupport.submit(endpoint, CoordinationCommand.create(UUID.randomUUID(), location.projectId(),
                     prediction, PredictionEventType.PREDICTION_INVALIDATED, identity.nodeId(), new byte[0], identity));
-            try { SpeculationRetireCommand.close(location, prediction); } catch (java.io.IOException ignored) { }
-            runtime.terminal().stdout("PREDICTION_INVALIDATED=true");
+            try {
+                SpeculationRetireCommand.close(location, prediction);
+            } catch (java.io.IOException ignored) {
+            }
+            runtime.terminal()
+                    .stdout("PREDICTION_INVALIDATED=true");
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("SPECULATION_ERROR=" + failure.getMessage());
+            runtime.terminal()
+                    .stderr("SPECULATION_ERROR=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

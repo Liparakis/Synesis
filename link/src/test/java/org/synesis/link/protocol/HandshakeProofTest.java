@@ -9,20 +9,23 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.NodeIdentity;
 
-/** Verifies version and transcript-bound handshake proof behavior. */
+/**
+ * Verifies version and transcript-bound handshake proof behavior.
+ */
 final class HandshakeProofTest {
 
     @Test
     void bindsProofToVersionSessionChallengeAndIdentity() throws Exception {
         NodeIdentity identity = NodeIdentity.generate();
         UUID session = UUID.randomUUID();
-        byte[] challenge = new byte[] {1, 2, 3, 4};
+        byte[] challenge = new byte[]{1, 2, 3, 4};
         HandshakeProof proof = HandshakeProof.create(identity, ProtocolVersion.V1, session, challenge);
 
-        assertTrue(HandshakeProof.decode(proof.encoded()).verify(ProtocolVersion.V1, session, challenge,
-                identity.nodeId()));
+        assertTrue(HandshakeProof.decode(proof.encoded())
+                .verify(ProtocolVersion.V1, session, challenge,
+                        identity.nodeId()));
         assertFalse(proof.verify(ProtocolVersion.V1, UUID.randomUUID(), challenge, identity.nodeId()));
-        assertFalse(proof.verify(ProtocolVersion.V1, session, new byte[] {9}, identity.nodeId()));
+        assertFalse(proof.verify(ProtocolVersion.V1, session, new byte[]{9}, identity.nodeId()));
         assertFalse(proof.verify(new ProtocolVersion(1, 1), session, challenge, identity.nodeId()));
     }
 

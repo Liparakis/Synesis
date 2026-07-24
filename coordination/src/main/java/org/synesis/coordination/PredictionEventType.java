@@ -1,43 +1,83 @@
 package org.synesis.coordination;
 
-/** Append-only events that advance a speculative prediction. */
+/**
+ * Append-only events that advance a speculative prediction.
+ */
 public enum PredictionEventType {
-    /** Creates a prediction and its immutable contract. */
+    /**
+     * Creates a prediction and its immutable contract.
+     */
     PREDICTION_CREATED,
-    /** Routes a prediction to its owner supervisor. */
+    /**
+     * Routes a prediction to its owner supervisor.
+     */
     PREDICTION_ROUTED,
-    /** Confirms owner receipt. */
+    /**
+     * Confirms owner receipt.
+     */
     REQUEST_RECEIVED,
-    /** Accepts the requested contract exactly. */
+    /**
+     * Accepts the requested contract exactly.
+     */
     ACCEPTED_EXACT,
-    /** Accepts an equivalent contract. */
+    /**
+     * Accepts an equivalent contract.
+     */
     ACCEPTED_EQUIVALENT,
-    /** Revises the requested contract. */
+    /**
+     * Revises the requested contract.
+     */
     CONTRACT_REVISED,
-    /** Starts owner implementation. */
+    /**
+     * Starts owner implementation.
+     */
     IMPLEMENTATION_STARTED,
-    /** Publishes an implementation reference. */
+    /**
+     * Publishes an implementation reference.
+     */
     PATCH_READY,
-    /** Announces capability availability. */
+    /**
+     * Announces capability availability.
+     */
     CAPABILITY_AVAILABLE,
-    /** Starts requester validation. */
+    /**
+     * Starts requester validation.
+     */
     VALIDATION_STARTED,
-    /** Retires resolved speculation. */
+    /**
+     * Retires resolved speculation.
+     */
     SPECULATION_RETIRED,
-    /** Invalidates speculation and dependent work. */
+    /**
+     * Invalidates speculation and dependent work.
+     */
     PREDICTION_INVALIDATED,
-    /** Rejects the capability request. */
+    /**
+     * Rejects the capability request.
+     */
     REQUEST_REJECTED,
-    /** Expires an unresolved prediction. */
+    /**
+     * Expires an unresolved prediction.
+     */
     PREDICTION_EXPIRED,
-    /** Creates a claimable task. */
+    /**
+     * Creates a claimable task.
+     */
     TASK_CREATED,
-    /** Claims a task for one supervisor. */
+    /**
+     * Claims a task for one supervisor.
+     */
     TASK_CLAIMED,
-    /** Releases a task claim. */
+    /**
+     * Releases a task claim.
+     */
     TASK_RELEASED,
-    /** Assigns semantic ownership to a task capability. */
+    /**
+     * Assigns semantic ownership to a task capability.
+     */
     OWNERSHIP_CLAIMED,
-    /** Releases semantic ownership from a task capability. */
+    /**
+     * Releases semantic ownership from a task capability.
+     */
     OWNERSHIP_RELEASED
 }

@@ -8,14 +8,19 @@ import java.util.UUID;
  * One bounded correlated result in the demo-only work exchange.
  *
  * @param requestId request correlation ID
- * @param status fixed safe result status
- * @param message bounded safe result message
+ * @param status    fixed safe result status
+ * @param message   bounded safe result message
  */
 public record DemoWorkResult(UUID requestId, DemoWorkStatus status, String message) {
-    /** Maximum encoded result-message length. */
+
+    /**
+     * Maximum encoded result-message length.
+     */
     public static final int MAX_MESSAGE_BYTES = 1_024;
 
-    /** Validates status and bounded UTF-8 message data. */
+    /**
+     * Validates status and bounded UTF-8 message data.
+     */
     public DemoWorkResult {
         Objects.requireNonNull(requestId, "request ID");
         Objects.requireNonNull(status, "status");

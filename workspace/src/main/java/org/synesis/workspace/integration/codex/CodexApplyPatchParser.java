@@ -6,68 +6,73 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Parses only the bounded file-directive grammar used by Codex {@code apply_patch}. */
+/**
+ * Parses only the bounded file-directive grammar used by Codex {@code apply_patch}.
+ */
 public final class CodexApplyPatchParser {
+
     private static final int MAX_PATCH_LENGTH = 64 * 1024;
     private static final int MAX_LINES = 4_096;
     private static final int MAX_FILES = 64;
     private static final int MAX_PATH_LENGTH = 512;
 
-    /** Creates the bounded parser. */
+    /**
+     * Creates the bounded parser.
+     */
     public CodexApplyPatchParser() {
     }
 
-    /** Supported file-level patch operations. */
-    public enum Operation {
-        /** Adds a file. */
-        ADD,
-        /** Updates a file. */
-        UPDATE,
-        /** Deletes a file. */
-        DELETE,
-        /** Moves a file from source to destination. */
-        MOVE
+    private static ParseResult invalid(String message) {
+        return new ParseResult(List.of(), message);
     }
 
-    /**
-     * One normalized file-level patch operation.
-     * @param operation operation kind
-     * @param sourcePath normalized source path
-     * @param destinationPath normalized destination path for moves
-     */
-    public record FileChange(Operation operation, String sourcePath, String destinationPath) {
-        /** Validates the operation shape. */
-        public FileChange {
-            if (operation == null || sourcePath == null || sourcePath.isBlank()) {
-                throw new IllegalArgumentException("Patch change requires an operation and source path");
-            }
-            if (operation == Operation.MOVE && (destinationPath == null || destinationPath.isBlank())) {
-                throw new IllegalArgumentException("Move change requires a destination path");
-            }
-            if (operation != Operation.MOVE && destinationPath != null) {
-                throw new IllegalArgumentException("Only move changes have a destination path");
-            }
-        }
+    private static FileChange change(Operation operation, String source, String destination) {
+        String safeSource = safePath(source);
+        String safeDestination = destination == null ? null : safePath(destination);
+        return safeSource == null || (destination != null && safeDestination == null)
+                ? null : new FileChange(operation, safeSource, safeDestination);
     }
 
-    /**
-     * Bounded parser result.
-     * @param changes normalized file changes
-     * @param errorMessage bounded parse error, or {@code null} on success
-     */
-    public record ParseResult(List<FileChange> changes, String errorMessage) {
-        /** Copies changes and validates the result state. */
-        public ParseResult {
-            changes = List.copyOf(changes == null ? List.of() : changes);
-        }
+    private static String pathAfter(String line, String directive) {
+        return line.substring(directive.length())
+                .trim();
+    }
 
-        /**
-         * Returns whether the patch was parsed successfully.
-         * @return success state
-         */
-        public boolean valid() {
-            return errorMessage == null && !changes.isEmpty();
+    private static String safePath(String raw) {
+        if (raw == null || raw.isBlank() || raw.length() > MAX_PATH_LENGTH
+                || raw.indexOf('\0') >= 0 || raw.indexOf('\r') >= 0 || raw.indexOf('\n') >= 0) {
+            return null;
         }
+        String path = raw.replace('\\', '/');
+        if (path.startsWith("/") || path.matches("^[A-Za-z]:.*")) {
+            return null;
+        }
+        for (String segment : path.split("/", -1)) {
+            if (segment.isEmpty() || ".".equals(segment) || "..".equals(segment)) {
+                return null;
+            }
+        }
+        try {
+            Path normalized = Path.of(path)
+                    .normalize();
+            if (normalized.isAbsolute() || normalized.startsWith("..")) {
+                return null;
+            }
+        } catch (RuntimeException failure) {
+            return null;
+        }
+        return path;
+    }
+
+    private static String key(FileChange change) {
+        return change.operation() + "\u0000" + change.sourcePath() + "\u0000" + change.destinationPath();
+    }
+
+    private static FileChange last(Map<String, FileChange> changes) {
+        return changes.values()
+                .stream()
+                .reduce((_, second) -> second)
+                .orElseThrow();
     }
 
     /**
@@ -84,7 +89,8 @@ public final class CodexApplyPatchParser {
             return invalid("Patch exceeds the maximum accepted size");
         }
 
-        String[] lines = patch.strip().split("\\R", -1);
+        String[] lines = patch.strip()
+                .split("\\R", -1);
         if (lines.length > MAX_LINES || lines.length < 3
                 || !"*** Begin Patch".equals(lines[0])
                 || !"*** End Patch".equals(lines[lines.length - 1])) {
@@ -96,15 +102,21 @@ public final class CodexApplyPatchParser {
             String line = lines[index];
             if (line.startsWith("*** Add File:")) {
                 FileChange change = change(Operation.ADD, pathAfter(line, "*** Add File:"), null);
-                if (change == null) return invalid("Malformed Add File directive");
+                if (change == null) {
+                    return invalid("Malformed Add File directive");
+                }
                 unique.putIfAbsent(key(change), change);
             } else if (line.startsWith("*** Update File:")) {
                 FileChange change = change(Operation.UPDATE, pathAfter(line, "*** Update File:"), null);
-                if (change == null) return invalid("Malformed Update File directive");
+                if (change == null) {
+                    return invalid("Malformed Update File directive");
+                }
                 unique.putIfAbsent(key(change), change);
             } else if (line.startsWith("*** Delete File:")) {
                 FileChange change = change(Operation.DELETE, pathAfter(line, "*** Delete File:"), null);
-                if (change == null) return invalid("Malformed Delete File directive");
+                if (change == null) {
+                    return invalid("Malformed Delete File directive");
+                }
                 unique.putIfAbsent(key(change), change);
             } else if (line.startsWith("*** Move to:")) {
                 String destination = safePath(pathAfter(line, "*** Move to:"));
@@ -117,7 +129,9 @@ public final class CodexApplyPatchParser {
                 }
                 unique.remove(key(previous));
                 FileChange move = change(Operation.MOVE, previous.sourcePath(), destination);
-                if (move == null) return invalid("Malformed Move directive");
+                if (move == null) {
+                    return invalid("Malformed Move directive");
+                }
                 unique.putIfAbsent(key(move), move);
             } else if (line.startsWith("*** ")) {
                 return invalid("Unsupported patch directive");
@@ -126,49 +140,81 @@ public final class CodexApplyPatchParser {
                 return invalid("Patch contains too many file changes");
             }
         }
-        if (unique.isEmpty()) return invalid("Patch contains no file directives");
+        if (unique.isEmpty()) {
+            return invalid("Patch contains no file directives");
+        }
         return new ParseResult(new ArrayList<>(unique.values()), null);
     }
 
-    private static ParseResult invalid(String message) {
-        return new ParseResult(List.of(), message);
+    /**
+     * Supported file-level patch operations.
+     */
+    public enum Operation {
+        /**
+         * Adds a file.
+         */
+        ADD,
+        /**
+         * Updates a file.
+         */
+        UPDATE,
+        /**
+         * Deletes a file.
+         */
+        DELETE,
+        /**
+         * Moves a file from source to destination.
+         */
+        MOVE
     }
 
-    private static FileChange change(Operation operation, String source, String destination) {
-        String safeSource = safePath(source);
-        String safeDestination = destination == null ? null : safePath(destination);
-        return safeSource == null || (destination != null && safeDestination == null)
-                ? null : new FileChange(operation, safeSource, safeDestination);
-    }
+    /**
+     * One normalized file-level patch operation.
+     *
+     * @param operation       operation kind
+     * @param sourcePath      normalized source path
+     * @param destinationPath normalized destination path for moves
+     */
+    public record FileChange(Operation operation, String sourcePath, String destinationPath) {
 
-    private static String pathAfter(String line, String directive) {
-        return line.substring(directive.length()).trim();
-    }
-
-    private static String safePath(String raw) {
-        if (raw == null || raw.isBlank() || raw.length() > MAX_PATH_LENGTH
-                || raw.indexOf('\0') >= 0 || raw.indexOf('\r') >= 0 || raw.indexOf('\n') >= 0) {
-            return null;
+        /**
+         * Validates the operation shape.
+         */
+        public FileChange {
+            if (operation == null || sourcePath == null || sourcePath.isBlank()) {
+                throw new IllegalArgumentException("Patch change requires an operation and source path");
+            }
+            if (operation == Operation.MOVE && (destinationPath == null || destinationPath.isBlank())) {
+                throw new IllegalArgumentException("Move change requires a destination path");
+            }
+            if (operation != Operation.MOVE && destinationPath != null) {
+                throw new IllegalArgumentException("Only move changes have a destination path");
+            }
         }
-        String path = raw.replace('\\', '/');
-        if (path.startsWith("/") || path.matches("^[A-Za-z]:.*")) return null;
-        for (String segment : path.split("/", -1)) {
-            if (segment.isEmpty() || ".".equals(segment) || "..".equals(segment)) return null;
-        }
-        try {
-            Path normalized = Path.of(path).normalize();
-            if (normalized.isAbsolute() || normalized.startsWith("..")) return null;
-        } catch (RuntimeException failure) {
-            return null;
-        }
-        return path;
     }
 
-    private static String key(FileChange change) {
-        return change.operation() + "\u0000" + change.sourcePath() + "\u0000" + change.destinationPath();
-    }
+    /**
+     * Bounded parser result.
+     *
+     * @param changes      normalized file changes
+     * @param errorMessage bounded parse error, or {@code null} on success
+     */
+    public record ParseResult(List<FileChange> changes, String errorMessage) {
 
-    private static FileChange last(Map<String, FileChange> changes) {
-        return changes.values().stream().reduce((_, second) -> second).orElseThrow();
+        /**
+         * Copies changes and validates the result state.
+         */
+        public ParseResult {
+            changes = List.copyOf(changes == null ? List.of() : changes);
+        }
+
+        /**
+         * Returns whether the patch was parsed successfully.
+         *
+         * @return success state
+         */
+        public boolean valid() {
+            return errorMessage == null && !changes.isEmpty();
+        }
     }
 }

@@ -1,16 +1,12 @@
 package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
-
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.DecisionRecord;
@@ -22,12 +18,30 @@ import org.synesis.workspace.integration.antigravity.AntigravityHookAdapter;
 
 final class AntigravityHookAdapterTest {
 
+    private static String escape(String s) {
+        return s.replace("\\", "\\\\");
+    }
+
+    private static void cleanup(Path directory) {
+        try (var stream = Files.walk(directory)) {
+            stream.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (Exception ignored) {
+                        }
+                    });
+        } catch (Exception ignored) {
+        }
+    }
+
     @Test
     void blocksReplaceFileContentOnConstrainedScope() throws Exception {
         Path tempDir = Files.createTempDirectory("antigravity-test-replace-");
         try {
             // Setup profile
-            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate()
+                    .identity();
             UUID projectId = UUID.randomUUID();
             ProjectConfig config = new ProjectConfig(projectId, java.util.Set.of("sl1-" + "1".repeat(64)));
             config.save(tempDir.resolve("project.conf"));
@@ -73,8 +87,10 @@ final class AntigravityHookAdapterTest {
             AntigravityHookAdapter.Result result = adapter.processJson(payload);
 
             assertEquals(AntigravityHookAdapter.Outcome.BLOCKED, result.outcome());
-            assertTrue(result.responseJson().contains("\"decision\": \"deny\""), result.responseJson());
-            assertTrue(result.responseJson().contains("Lock protocol wire format"), result.responseJson());
+            assertTrue(result.responseJson()
+                    .contains("\"decision\": \"deny\""), result.responseJson());
+            assertTrue(result.responseJson()
+                    .contains("Lock protocol wire format"), result.responseJson());
 
             // Target file remains unchanged
             assertEquals(initialContent, Files.readString(protectedFile));
@@ -88,9 +104,11 @@ final class AntigravityHookAdapterTest {
     void blocksWriteToFileAndMultiReplaceFileContent() throws Exception {
         Path tempDir = Files.createTempDirectory("antigravity-test-tools-");
         try {
-            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate()
+                    .identity();
             UUID projectId = UUID.randomUUID();
-            new ProjectConfig(projectId, java.util.Set.of("sl1-" + "1".repeat(64))).save(tempDir.resolve("project.conf"));
+            new ProjectConfig(projectId,
+                    java.util.Set.of("sl1-" + "1".repeat(64))).save(tempDir.resolve("project.conf"));
 
             Path protectedFile = tempDir.resolve("src/protocol/NewFile.java");
 
@@ -114,7 +132,8 @@ final class AntigravityHookAdapterTest {
                     """.formatted(escape(protectedFile.toString()), escape(tempDir.toString()));
             AntigravityHookAdapter.Result writeRes = adapter.processJson(writePayload);
             assertEquals(AntigravityHookAdapter.Outcome.BLOCKED, writeRes.outcome());
-            assertTrue(writeRes.responseJson().contains("\"decision\": \"deny\""));
+            assertTrue(writeRes.responseJson()
+                    .contains("\"decision\": \"deny\""));
 
             // Test multi_replace_file_content
             String multiPayload = """
@@ -128,7 +147,8 @@ final class AntigravityHookAdapterTest {
                     """.formatted(escape(protectedFile.toString()), escape(tempDir.toString()));
             AntigravityHookAdapter.Result multiRes = adapter.processJson(multiPayload);
             assertEquals(AntigravityHookAdapter.Outcome.BLOCKED, multiRes.outcome());
-            assertTrue(multiRes.responseJson().contains("\"decision\": \"deny\""));
+            assertTrue(multiRes.responseJson()
+                    .contains("\"decision\": \"deny\""));
 
         } finally {
             cleanup(tempDir);
@@ -139,9 +159,11 @@ final class AntigravityHookAdapterTest {
     void evaluatesWarningsAndUnconstrainedActions() throws Exception {
         Path tempDir = Files.createTempDirectory("antigravity-test-warn-");
         try {
-            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = new IdentityBootstrap(tempDir.resolve("link")).loadOrCreate()
+                    .identity();
             UUID projectId = UUID.randomUUID();
-            new ProjectConfig(projectId, java.util.Set.of("sl1-" + "1".repeat(64))).save(tempDir.resolve("project.conf"));
+            new ProjectConfig(projectId,
+                    java.util.Set.of("sl1-" + "1".repeat(64))).save(tempDir.resolve("project.conf"));
 
             Path warnFile = tempDir.resolve("src/ui/Panel.java");
             Path allowFile = tempDir.resolve("docs/readme.txt");
@@ -166,7 +188,8 @@ final class AntigravityHookAdapterTest {
                     """.formatted(escape(warnFile.toString()), escape(tempDir.toString()));
             AntigravityHookAdapter.Result warnRes = adapter.processJson(warnPayload);
             assertEquals(AntigravityHookAdapter.Outcome.WARNING, warnRes.outcome());
-            assertTrue(warnRes.responseJson().contains("\"decision\": \"force_ask\""));
+            assertTrue(warnRes.responseJson()
+                    .contains("\"decision\": \"force_ask\""));
 
             // Test Unconstrained scope -> ask decision
             String allowPayload = """
@@ -180,7 +203,8 @@ final class AntigravityHookAdapterTest {
                     """.formatted(escape(allowFile.toString()), escape(tempDir.toString()));
             AntigravityHookAdapter.Result allowRes = adapter.processJson(allowPayload);
             assertEquals(AntigravityHookAdapter.Outcome.ALLOWED, allowRes.outcome());
-            assertTrue(allowRes.responseJson().contains("\"decision\": \"ask\""));
+            assertTrue(allowRes.responseJson()
+                    .contains("\"decision\": \"ask\""));
 
         } finally {
             cleanup(tempDir);
@@ -204,7 +228,8 @@ final class AntigravityHookAdapterTest {
                     """;
             AntigravityHookAdapter.Result unsuppRes = adapter.processJson(runCmdPayload);
             assertEquals(AntigravityHookAdapter.Outcome.UNSUPPORTED, unsuppRes.outcome());
-            assertTrue(unsuppRes.responseJson().contains("\"decision\": \"ask\""));
+            assertTrue(unsuppRes.responseJson()
+                    .contains("\"decision\": \"ask\""));
 
             // Missing TargetFile -> deny decision + INVALID_INPUT outcome
             String missingTargetPayload = """
@@ -217,22 +242,11 @@ final class AntigravityHookAdapterTest {
                     """;
             AntigravityHookAdapter.Result missingRes = adapter.processJson(missingTargetPayload);
             assertEquals(AntigravityHookAdapter.Outcome.INVALID_INPUT, missingRes.outcome());
-            assertTrue(missingRes.responseJson().contains("\"decision\": \"deny\""));
+            assertTrue(missingRes.responseJson()
+                    .contains("\"decision\": \"deny\""));
 
         } finally {
             cleanup(tempDir);
         }
-    }
-
-    private static String escape(String s) {
-        return s.replace("\\", "\\\\");
-    }
-
-    private static void cleanup(Path directory) {
-        try (var stream = Files.walk(directory)) {
-            stream.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
-                try { Files.delete(p); } catch (Exception ignored) {}
-            });
-        } catch (Exception ignored) {}
     }
 }

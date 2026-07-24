@@ -13,6 +13,7 @@ import java.util.concurrent.CompletionStage;
  * idempotent. Implementations are expected to be thread-safe.</p>
  */
 public interface CandidateProvider extends AutoCloseable {
+
     /**
      * Returns the stable non-sensitive provider identifier.
      *
@@ -35,7 +36,10 @@ public interface CandidateProvider extends AutoCloseable {
      */
     CompletionStage<List<Candidate>> gather(CandidateCancellation cancellation);
 
-    /** Closes provider-owned resources; repeated calls must be safe. */
+    /**
+     * Closes provider-owned resources; repeated calls must be safe.
+     */
     @Override
-    default void close() { }
+    default void close() {
+    }
 }

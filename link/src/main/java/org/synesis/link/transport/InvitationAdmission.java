@@ -12,10 +12,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.session.HandshakeTranscript;
 
-/** Single-use host admission state shared by per-connection handshake state. */
+/**
+ * Single-use host admission state shared by per-connection handshake state.
+ */
 final class InvitationAdmission implements AutoCloseable {
+
     static final Duration RESERVATION_TIMEOUT = Duration.ofSeconds(15);
-    private enum State { AVAILABLE, RESERVED, CONSUMED }
     private final UUID sessionId;
     private final byte[] capability;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -25,7 +27,6 @@ final class InvitationAdmission implements AutoCloseable {
     });
     private final AtomicReference<State> state = new AtomicReference<>(State.AVAILABLE);
     private volatile ScheduledFuture<?> expiry;
-
     InvitationAdmission(UUID sessionId, byte[] capability) {
         this.sessionId = sessionId;
         this.capability = capability.clone();
@@ -35,10 +36,13 @@ final class InvitationAdmission implements AutoCloseable {
     }
 
     boolean reserve(HandshakeTranscript transcript) {
-        if (!sessionId.equals(transcript.sessionId()) || !Arrays.equals(capability, transcript.invitationCapability())) {
+        if (!sessionId.equals(transcript.sessionId()) || !Arrays.equals(capability,
+                transcript.invitationCapability())) {
             return false;
         }
-        if (!state.compareAndSet(State.AVAILABLE, State.RESERVED)) return false;
+        if (!state.compareAndSet(State.AVAILABLE, State.RESERVED)) {
+            return false;
+        }
         expiry = scheduler.schedule(() -> state.compareAndSet(State.RESERVED, State.AVAILABLE),
                 RESERVATION_TIMEOUT.toNanos(), TimeUnit.NANOSECONDS);
         return true;
@@ -52,7 +56,9 @@ final class InvitationAdmission implements AutoCloseable {
     }
 
     void releaseBeforeAuthentication() {
-        if (state.compareAndSet(State.RESERVED, State.AVAILABLE)) cancelExpiry();
+        if (state.compareAndSet(State.RESERVED, State.AVAILABLE)) {
+            cancelExpiry();
+        }
     }
 
     @Override
@@ -63,6 +69,10 @@ final class InvitationAdmission implements AutoCloseable {
 
     private void cancelExpiry() {
         ScheduledFuture<?> value = expiry;
-        if (value != null) value.cancel(false);
+        if (value != null) {
+            value.cancel(false);
+        }
     }
+
+    private enum State {AVAILABLE, RESERVED, CONSUMED}
 }

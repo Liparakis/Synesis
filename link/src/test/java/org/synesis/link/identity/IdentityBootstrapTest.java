@@ -9,8 +9,11 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies automatic profile creation, reuse, and fail-closed metadata checks. */
+/**
+ * Verifies automatic profile creation, reuse, and fail-closed metadata checks.
+ */
 final class IdentityBootstrapTest {
+
     @Test
     void createsOnceAndReusesTheSameIdentity() throws Exception {
         Path directory = Files.createTempDirectory("synesis-identity-bootstrap");
@@ -20,13 +23,20 @@ final class IdentityBootstrapTest {
             IdentityBootstrap.Result second = bootstrap.loadOrCreate();
             assertTrue(first.created());
             assertTrue(!second.created());
-            assertEquals(first.identity().nodeId(), second.identity().nodeId());
+            assertEquals(first.identity()
+                            .nodeId(),
+                    second.identity()
+                            .nodeId());
             assertTrue(Files.exists(directory.resolve("identity.pub")));
         } finally {
             try (var paths = Files.walk(directory)) {
-                paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                    try { Files.deleteIfExists(path); } catch (java.io.IOException ignored) { }
-                });
+                paths.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (java.io.IOException ignored) {
+                            }
+                        });
             }
         }
     }
@@ -41,9 +51,13 @@ final class IdentityBootstrapTest {
             assertThrows(java.io.IOException.class, bootstrap::loadOrCreate);
         } finally {
             try (var paths = Files.walk(directory)) {
-                paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                    try { Files.deleteIfExists(path); } catch (java.io.IOException ignored) { }
-                });
+                paths.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (java.io.IOException ignored) {
+                            }
+                        });
             }
         }
     }

@@ -17,9 +17,59 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.synesis.workspace.provider.ProviderJson;
 
-/** Verifies the generated Antigravity wrapper from a non-project directory. */
+/**
+ * Verifies the generated Antigravity wrapper from a non-project directory.
+ */
 @Timeout(60)
 final class AntigravityHookProcessTest {
+
+    private static CommandResult run(Path launcher, Path directory, Map<String, String> settings, String... arguments)
+            throws Exception {
+        ArrayList<String> command = new ArrayList<>();
+        command.add("cmd.exe");
+        command.add("/d");
+        command.add("/c");
+        command.add(launcher.toString());
+        for (String argument : arguments) {
+            command.add(argument);
+        }
+        ProcessBuilder builder = new ProcessBuilder(command).directory(directory.toFile())
+                .redirectErrorStream(true);
+        String path = builder.environment()
+                .get("PATH");
+        builder.environment()
+                .put("PATH", settings.get("PATH_PREFIX") + ";" + path);
+        Process process = builder.start();
+        return new CommandResult(process.waitFor(),
+                new String(process.getInputStream()
+                        .readAllBytes(), StandardCharsets.UTF_8));
+    }
+
+    private static String jsonPath(Path path) {
+        return path.toAbsolutePath()
+                .normalize()
+                .toString()
+                .replace("\\", "\\\\");
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains("win");
+    }
+
+    private static void cleanup(Path root) throws IOException {
+        try (var paths = Files.walk(root)) {
+            paths.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException ignored) {
+                        }
+                    });
+        }
+    }
+
     @Test
     void wrapperSetsProjectRootBeforeInvokingSynesis() throws Exception {
         Assumptions.assumeTrue(isWindows());
@@ -28,7 +78,8 @@ final class AntigravityHookProcessTest {
             Path project = Files.createDirectories(root.resolve("project"));
             Path outside = Files.createDirectories(root.resolve("outside"));
             Path pathBin = Files.createDirectories(root.resolve("path-bin"));
-            Path launcher = DistributionLauncherTest.launcher().toAbsolutePath();
+            Path launcher = DistributionLauncherTest.launcher()
+                    .toAbsolutePath();
             Files.writeString(pathBin.resolve("synesis.cmd"),
                     "@echo off\r\ncall \"" + launcher + "\" %*\r\nexit /b %ERRORLEVEL%\r\n");
             Map<String, String> environment = Map.of("PATH_PREFIX", pathBin.toString());
@@ -53,7 +104,8 @@ final class AntigravityHookProcessTest {
             Map<?, ?> group = (Map<?, ?>) config.get("synesis-guardrail");
             Map<?, ?> managedHook = (Map<?, ?>) ((java.util.List<?>) group.get("PreToolUse")).getFirst();
             assertEquals("write_to_file|replace_file_content|multi_replace_file_content", managedHook.get("matcher"));
-            String command = String.valueOf(((Map<?, ?>) ((java.util.List<?>) managedHook.get("hooks")).getFirst()).get("command"));
+            String command = String.valueOf(((Map<?, ?>) ((java.util.List<?>) managedHook.get("hooks")).getFirst()).get(
+                    "command"));
             assertTrue(command.contains("-File " + wrapper));
             assertFalse(command.contains("-File \"" + wrapper));
 
@@ -62,15 +114,23 @@ final class AntigravityHookProcessTest {
                     + jsonPath(protectedFile) + "\"}}}";
             ProcessBuilder builder = new ProcessBuilder("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
                     "-File", wrapper.toString()).directory(outside.toFile());
-            builder.environment().put("PATH", pathBin + ";" + System.getenv("PATH"));
+            builder.environment()
+                    .put("PATH", pathBin + ";" + System.getenv("PATH"));
             Process hook = builder.start();
-            hook.getOutputStream().write(payload.getBytes(StandardCharsets.UTF_8));
-            hook.getOutputStream().close();
-            String stdout = new String(hook.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            String stderr = new String(hook.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            hook.getOutputStream()
+                    .write(payload.getBytes(StandardCharsets.UTF_8));
+            hook.getOutputStream()
+                    .close();
+            String stdout = new String(hook.getInputStream()
+                    .readAllBytes(), StandardCharsets.UTF_8).trim();
+            String stderr = new String(hook.getErrorStream()
+                    .readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(hook.waitFor(30, TimeUnit.SECONDS));
             assertEquals(0, hook.exitValue(), stderr);
-            assertEquals(1, stdout.lines().count(), stdout);
+            assertEquals(1,
+                    stdout.lines()
+                            .count(),
+                    stdout);
             Map<?, ?> decision = (Map<?, ?>) ProviderJson.parse(stdout);
             assertEquals("deny", decision.get("decision"));
             assertFalse(stdout.contains("Project is not initialized"), stdout);
@@ -81,36 +141,7 @@ final class AntigravityHookProcessTest {
         }
     }
 
-    private static CommandResult run(Path launcher, Path directory, Map<String, String> settings, String... arguments)
-            throws Exception {
-        ArrayList<String> command = new ArrayList<>();
-        command.add("cmd.exe");
-        command.add("/d");
-        command.add("/c");
-        command.add(launcher.toString());
-        for (String argument : arguments) command.add(argument);
-        ProcessBuilder builder = new ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true);
-        String path = builder.environment().get("PATH");
-        builder.environment().put("PATH", settings.get("PATH_PREFIX") + ";" + path);
-        Process process = builder.start();
-        return new CommandResult(process.waitFor(), new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
-    }
+    private record CommandResult(int exit, String output) {
 
-    private static String jsonPath(Path path) {
-        return path.toAbsolutePath().normalize().toString().replace("\\", "\\\\");
     }
-
-    private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
-    }
-
-    private static void cleanup(Path root) throws IOException {
-        try (var paths = Files.walk(root)) {
-            paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try { Files.deleteIfExists(path); } catch (IOException ignored) { }
-            });
-        }
-    }
-
-    private record CommandResult(int exit, String output) { }
 }

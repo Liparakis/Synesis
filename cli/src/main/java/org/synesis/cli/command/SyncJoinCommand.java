@@ -1,23 +1,23 @@
 package org.synesis.cli.command;
 
-import java.nio.file.Path;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
-
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
 
 /**
  * Joins one bounded project synchronization invitation.
  */
 @Command(name = "join", description = "Join project synchronization.", mixinStandardHelpOptions = true)
 public final class SyncJoinCommand implements Callable<Integer> {
+
+    private final CliRuntime runtime;
     @Option(names = "--project")
     private String project;
     @Option(names = "--record")
@@ -28,7 +28,6 @@ public final class SyncJoinCommand implements Callable<Integer> {
     private String profile;
     @Parameters(index = "0", description = "Signed project invitation link.")
     private String invitation;
-    private final CliRuntime runtime;
 
     /**
      * Creates the command.
@@ -45,19 +44,31 @@ public final class SyncJoinCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            String projectId = project != null && !Files.isDirectory(Path.of(project)) ? UUID.fromString(project).toString() : null;
-            if (record != null) UUID.fromString(record);
+            String projectId = project != null && !Files.isDirectory(Path.of(project)) ? UUID.fromString(project)
+                                                                                         .toString() : null;
+            if (record != null) {
+                UUID.fromString(record);
+            }
             Path candidate = project != null && Files.isDirectory(Path.of(project)) ? Path.of(project) : Path.of(".");
-            var location = runtime.projectService().require(candidate);
+            var location = runtime.projectService()
+                    .require(candidate);
             Path resolved = profile == null ? location.profile() : Path.of(profile);
-            var result = runtime.syncService().join(resolved, projectId, record, expectedHost, invitation);
-            result.values().forEach((key, value) -> {
-                if ("ERROR".equals(key)) runtime.terminal().stderr(key + "=" + value);
-                else runtime.terminal().stdout(key + "=" + value);
-            });
+            var result = runtime.syncService()
+                    .join(resolved, projectId, record, expectedHost, invitation);
+            result.values()
+                    .forEach((key, value) -> {
+                        if ("ERROR".equals(key)) {
+                            runtime.terminal()
+                                    .stderr(key + "=" + value);
+                        } else {
+                            runtime.terminal()
+                                    .stdout(key + "=" + value);
+                        }
+                    });
             return result.exitCode();
         } catch (ProjectApplicationService.ProjectApplicationException | IllegalArgumentException failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_INVALID");
+            runtime.terminal()
+                    .stderr("ERROR=PROJECT_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

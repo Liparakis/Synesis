@@ -1,14 +1,15 @@
 package org.synesis.cli.command;
 
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Spec;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Spec;
 
 /**
  * Root Picocli command; no arguments prints help.
  */
 @Command(name = "synesis", mixinStandardHelpOptions = true, version = "synesis 0.1.0-SNAPSHOT")
 public final class RootCommand implements Runnable {
+
     @Spec
     private CommandSpec spec;
 
@@ -23,6 +24,8 @@ public final class RootCommand implements Runnable {
      */
     @Override
     public void run() {
-        spec.commandLine().usage(spec.commandLine().getOut());
+        spec.commandLine()
+                .usage(spec.commandLine()
+                        .getOut());
     }
 }

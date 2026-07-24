@@ -11,7 +11,9 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
-/** Tests bounded provider isolation, partial success, and cancellation. */
+/**
+ * Tests bounded provider isolation, partial success, and cancellation.
+ */
 final class CandidateGathererTest {
 
     @Test
@@ -23,11 +25,18 @@ final class CandidateGathererTest {
                 new IllegalStateException("not safe to log")));
 
         try (CandidateGatherer gatherer = new CandidateGatherer(CandidateGatheringPolicy.defaults())) {
-            CandidateGatheringResult result = gatherer.gather(List.of(good, bad)).completion()
-                    .toCompletableFuture().get(2, TimeUnit.SECONDS);
+            CandidateGatheringResult result = gatherer.gather(List.of(good, bad))
+                    .completion()
+                    .toCompletableFuture()
+                    .get(2, TimeUnit.SECONDS);
             assertEquals(List.of(candidate), result.candidates());
-            assertEquals(1, result.diagnostics().stream().filter(diagnostic ->
-                    diagnostic.providerId().equals("bad")).count());
+            assertEquals(1,
+                    result.diagnostics()
+                            .stream()
+                            .filter(diagnostic ->
+                                    diagnostic.providerId()
+                                            .equals("bad"))
+                            .count());
         }
     }
 
@@ -39,16 +48,23 @@ final class CandidateGathererTest {
                     new StubProvider("pending", pending)));
             assertTrue(operation.cancel());
             assertTrue(!operation.cancel());
-            CandidateGatheringResult result = operation.completion().toCompletableFuture().get(2, TimeUnit.SECONDS);
+            CandidateGatheringResult result = operation.completion()
+                    .toCompletableFuture()
+                    .get(2, TimeUnit.SECONDS);
             assertEquals(CandidateProviderFailureCategory.CANCELLED,
-                    result.diagnostics().get(0).category());
+                    result.diagnostics()
+                            .get(0)
+                            .category());
         }
     }
 
     private record StubProvider(String id, CompletableFuture<List<Candidate>> result)
             implements CandidateProvider {
+
         @Override
-        public Set<CandidateType> supportedTypes() { return Set.of(CandidateType.MANUAL); }
+        public Set<CandidateType> supportedTypes() {
+            return Set.of(CandidateType.MANUAL);
+        }
 
         @Override
         public CompletableFuture<List<Candidate>> gather(CandidateCancellation cancellation) {

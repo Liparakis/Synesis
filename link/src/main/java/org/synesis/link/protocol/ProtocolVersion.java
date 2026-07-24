@@ -17,10 +17,14 @@ import java.util.Objects;
  */
 public record ProtocolVersion(int major, int minor) implements Comparable<ProtocolVersion> {
 
-    /** The only currently supported protocol version. */
+    /**
+     * The only currently supported protocol version.
+     */
     public static final ProtocolVersion V1 = new ProtocolVersion(1, 0);
 
-    /** Validates version components. */
+    /**
+     * Validates version components.
+     */
     public ProtocolVersion {
         if (major < 0 || minor < 0 || major > 255 || minor > 255) {
             throw new IllegalArgumentException("version components must be between 0 and 255");
@@ -30,17 +34,19 @@ public record ProtocolVersion(int major, int minor) implements Comparable<Protoc
     /**
      * Selects the highest exact common version.
      *
-     * @param local versions supported locally
+     * @param local  versions supported locally
      * @param remote versions advertised by the peer
      * @return highest common version
      * @throws IllegalArgumentException if no exact common version exists
-     * @throws NullPointerException if an argument or element is {@code null}
+     * @throws NullPointerException     if an argument or element is {@code null}
      */
     public static ProtocolVersion negotiate(Collection<ProtocolVersion> local,
             Collection<ProtocolVersion> remote) {
         Objects.requireNonNull(local, "local versions");
         Objects.requireNonNull(remote, "remote versions");
-        return local.stream().filter(Objects::nonNull).filter(remote::contains)
+        return local.stream()
+                .filter(Objects::nonNull)
+                .filter(remote::contains)
                 .max(Comparator.naturalOrder())
                 .orElseThrow(() -> new IllegalArgumentException("no compatible protocol version"));
     }

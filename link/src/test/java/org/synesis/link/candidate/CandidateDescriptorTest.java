@@ -12,7 +12,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.NodeIdentity;
 
-/** Verifies canonical, bounded, signed candidate descriptors. */
+/**
+ * Verifies canonical, bounded, signed candidate descriptors.
+ */
 final class CandidateDescriptorTest {
 
     private static final Instant ISSUED = Instant.parse("2026-01-01T00:00:00Z");
@@ -27,7 +29,8 @@ final class CandidateDescriptorTest {
         CandidateDescriptor second = CandidateDescriptor.create(identity, ISSUED, EXPIRES, List.of(ipv6, lan));
 
         assertArrayEquals(first.encoded(), second.encoded());
-        assertTrue(CandidateDescriptor.decode(first.encoded()).verify());
+        assertTrue(CandidateDescriptor.decode(first.encoded())
+                .verify());
     }
 
     @Test
@@ -37,7 +40,8 @@ final class CandidateDescriptorTest {
         CandidateDescriptor descriptor = CandidateDescriptor.create(identity, ISSUED, EXPIRES, List.of(candidate));
         byte[] tampered = descriptor.encoded();
         tampered[10] ^= 1;
-        assertFalse(CandidateDescriptor.decode(tampered).verify());
+        assertFalse(CandidateDescriptor.decode(tampered)
+                .verify());
         assertTrue(descriptor.isValidAt(ISSUED.plusSeconds(30), CandidateDescriptor.DEFAULT_CLOCK_SKEW));
         assertFalse(descriptor.isValidAt(EXPIRES, CandidateDescriptor.DEFAULT_CLOCK_SKEW));
     }
@@ -48,7 +52,8 @@ final class CandidateDescriptorTest {
         Candidate candidate = new Candidate(CandidateType.LAN, InetAddress.getLoopbackAddress(), 4433, 1);
         CandidateDescriptor descriptor = CandidateDescriptor.create(identity, ISSUED, EXPIRES,
                 List.of(candidate, candidate));
-        assertTrue(descriptor.candidates().size() == 1);
+        assertTrue(descriptor.candidates()
+                .size() == 1);
         assertThrows(IllegalArgumentException.class, () -> new Candidate(CandidateType.LAN,
                 InetAddress.getLoopbackAddress(), 0, 1));
     }

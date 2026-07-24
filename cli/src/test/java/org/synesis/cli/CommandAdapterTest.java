@@ -18,8 +18,15 @@ import org.synesis.link.transport.OnboardingEventType;
 import org.synesis.link.transport.OnboardingFailure;
 import org.synesis.link.transport.OnboardingFailureCode;
 
-/** Verifies adapter output and typed failure mapping with injected streams. */
+/**
+ * Verifies adapter output and typed failure mapping with injected streams.
+ */
 final class CommandAdapterTest {
+
+    private static PrintStream stream(ByteArrayOutputStream target) {
+        return new PrintStream(target, true, StandardCharsets.UTF_8);
+    }
+
     @Test
     void statusRendererPreservesTheExactShareLink() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -27,9 +34,12 @@ final class CommandAdapterTest {
         ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
         String link = "synesis://join/SYN1-exact-link";
         new StatusRenderer(terminal).accept(new OnboardingEvent(OnboardingEventType.SHARE_LINK, link));
-        assertTrue(out.toString(StandardCharsets.UTF_8).contains("SHARE_LINK=" + link));
-        assertTrue(out.toString(StandardCharsets.UTF_8).contains("QR_RENDERED=COMPACT"));
-        assertTrue(err.toString(StandardCharsets.UTF_8).isEmpty());
+        assertTrue(out.toString(StandardCharsets.UTF_8)
+                .contains("SHARE_LINK=" + link));
+        assertTrue(out.toString(StandardCharsets.UTF_8)
+                .contains("QR_RENDERED=COMPACT"));
+        assertTrue(err.toString(StandardCharsets.UTF_8)
+                .isEmpty());
     }
 
     @Test
@@ -40,12 +50,11 @@ final class CommandAdapterTest {
         int exit = FailureMapper.map(new OnboardingFailure(OnboardingFailureCode.INVITE_INVALID,
                 new IllegalStateException("secret link must not escape")), terminal);
         assertEquals(ExitCodes.INVITE_INVALID, exit);
-        assertTrue(out.toString(StandardCharsets.UTF_8).contains("FAILURE=INVITE_INVALID"));
-        assertTrue(err.toString(StandardCharsets.UTF_8).contains("invalid or expired"));
-        assertTrue(!err.toString(StandardCharsets.UTF_8).contains("secret link"));
-    }
-
-    private static PrintStream stream(ByteArrayOutputStream target) {
-        return new PrintStream(target, true, StandardCharsets.UTF_8);
+        assertTrue(out.toString(StandardCharsets.UTF_8)
+                .contains("FAILURE=INVITE_INVALID"));
+        assertTrue(err.toString(StandardCharsets.UTF_8)
+                .contains("invalid or expired"));
+        assertTrue(!err.toString(StandardCharsets.UTF_8)
+                .contains("secret link"));
     }
 }

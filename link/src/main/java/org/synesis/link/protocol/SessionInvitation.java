@@ -34,15 +34,26 @@ import org.synesis.link.identity.NodeIdentity;
  * @since 1.0
  */
 public final class SessionInvitation {
-    /** Invitation format version. */
+
+    /**
+     * Invitation format version.
+     */
     public static final int FORMAT_VERSION = 1;
-    /** Maximum raw invitation bytes accepted before parsing. */
+    /**
+     * Maximum raw invitation bytes accepted before parsing.
+     */
     public static final int MAX_BYTES = 12_288;
-    /** Maximum share-link characters accepted by the parser. */
+    /**
+     * Maximum share-link characters accepted by the parser.
+     */
     public static final int MAX_LINK_CHARS = 16_384;
-    /** Default invitation validity. */
+    /**
+     * Default invitation validity.
+     */
     public static final Duration DEFAULT_LIFETIME = Duration.ofMinutes(10);
-    /** Capability size in bytes. */
+    /**
+     * Capability size in bytes.
+     */
     public static final int CAPABILITY_BYTES = 32;
 
     private static final int MAGIC = 0x53494E31;
@@ -62,8 +73,12 @@ public final class SessionInvitation {
         this.sessionId = Objects.requireNonNull(sessionId, "session ID");
         this.issuedAt = Objects.requireNonNull(issuedAt, "issued at");
         this.expiresAt = Objects.requireNonNull(expiresAt, "expires at");
-        if (!expiresAt.isAfter(issuedAt)) throw new IllegalArgumentException("invitation interval is empty");
-        if (capability.length != CAPABILITY_BYTES) throw new IllegalArgumentException("invalid capability size");
+        if (!expiresAt.isAfter(issuedAt)) {
+            throw new IllegalArgumentException("invitation interval is empty");
+        }
+        if (capability.length != CAPABILITY_BYTES) {
+            throw new IllegalArgumentException("invalid capability size");
+        }
         this.capability = capability.clone();
         if (descriptor.length == 0 || descriptor.length > CandidateDescriptor.MAX_BYTES) {
             throw new IllegalArgumentException("descriptor exceeds invitation bound");
@@ -77,12 +92,14 @@ public final class SessionInvitation {
         this.signature = signature.clone();
     }
 
-    /** Creates and signs an invitation for one host session.
-     * @param host signing host identity
-     * @param sessionId fresh session ID
-     * @param version supported protocol version
-     * @param issuedAt issue time
-     * @param expiresAt exclusive expiry time
+    /**
+     * Creates and signs an invitation for one host session.
+     *
+     * @param host       signing host identity
+     * @param sessionId  fresh session ID
+     * @param version    supported protocol version
+     * @param issuedAt   issue time
+     * @param expiresAt  exclusive expiry time
      * @param capability random bearer capability
      * @param descriptor signed host candidate descriptor
      * @return signed invitation
@@ -93,25 +110,31 @@ public final class SessionInvitation {
             throws GeneralSecurityException {
         Objects.requireNonNull(host, "host identity");
         Objects.requireNonNull(descriptor, "descriptor");
-        if (!host.nodeId().equals(descriptor.nodeId())
+        if (!host.nodeId()
+                .equals(descriptor.nodeId())
                 || !Arrays.equals(host.publicKeyEncoded(), descriptor.publicKeyEncoded())) {
             throw new IllegalArgumentException("descriptor is not bound to host identity");
         }
-        byte[] cap = Objects.requireNonNull(capability, "capability").clone();
+        byte[] cap = Objects.requireNonNull(capability, "capability")
+                .clone();
         SessionInvitation unsigned = new SessionInvitation(version, sessionId, issuedAt, expiresAt, cap,
-                descriptor.encoded(), new byte[] {1});
+                descriptor.encoded(), new byte[]{1});
         return new SessionInvitation(version, sessionId, issuedAt, expiresAt, cap, descriptor.encoded(),
                 host.sign(unsigned.unsigned));
     }
 
-    /** Decodes a share link and validates its bounded URI shape.
+    /**
+     * Decodes a share link and validates its bounded URI shape.
+     *
      * @param link terminal share link
      * @return decoded invitation
      * @throws IOException if the link is malformed or oversized
      */
     public static SessionInvitation fromShareLink(String link) throws IOException {
         Objects.requireNonNull(link, "share link");
-        if (link.length() > MAX_LINK_CHARS) throw new IOException("invitation link is oversized");
+        if (link.length() > MAX_LINK_CHARS) {
+            throw new IOException("invitation link is oversized");
+        }
         try {
             URI uri = new URI(link);
             if (!"synesis".equals(uri.getScheme()) || !"join".equals(uri.getHost())
@@ -122,21 +145,26 @@ public final class SessionInvitation {
             if (path == null || !path.startsWith("/SYN1-") || path.length() <= 6) {
                 throw new IOException("invalid invitation link format");
             }
-            byte[] encoded = Base64.getUrlDecoder().decode(path.substring(6));
+            byte[] encoded = Base64.getUrlDecoder()
+                    .decode(path.substring(6));
             return decode(encoded);
         } catch (IllegalArgumentException | URISyntaxException exception) {
             throw new IOException("invalid invitation link", exception);
         }
     }
 
-    /** Decodes a bounded canonical invitation without trusting its signature.
+    /**
+     * Decodes a bounded canonical invitation without trusting its signature.
+     *
      * @param encoded invitation bytes
      * @return decoded invitation
      * @throws IOException if framing or bounds are invalid
      */
     public static SessionInvitation decode(byte[] encoded) throws IOException {
         Objects.requireNonNull(encoded, "invitation");
-        if (encoded.length == 0 || encoded.length > MAX_BYTES) throw new IOException("invitation is oversized");
+        if (encoded.length == 0 || encoded.length > MAX_BYTES) {
+            throw new IOException("invitation is oversized");
+        }
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
             if (input.readInt() != MAGIC || input.readUnsignedByte() != FORMAT_VERSION) {
                 throw new IOException("unsupported invitation format");
@@ -148,41 +176,75 @@ public final class SessionInvitation {
             byte[] capability = readBytes(input, CAPABILITY_BYTES);
             byte[] descriptor = readBytes(input, CandidateDescriptor.MAX_BYTES);
             byte[] signature = readBytes(input, MAX_SIGNATURE_BYTES);
-            if (input.available() != 0) throw new IOException("trailing invitation bytes");
+            if (input.available() != 0) {
+                throw new IOException("trailing invitation bytes");
+            }
             SessionInvitation value = new SessionInvitation(version, session, issued, expires, capability,
                     descriptor, signature);
-            if (!Arrays.equals(encoded, value.encoded())) throw new IOException("non-canonical invitation");
+            if (!Arrays.equals(encoded, value.encoded())) {
+                throw new IOException("non-canonical invitation");
+            }
             return value;
         } catch (EOFException | IllegalArgumentException exception) {
             throw new IOException("malformed invitation", exception);
         }
     }
 
-    /** Verifies the host descriptor, invitation signature, and validity interval.
-     * @param now verification time
+    private static byte[] readBytes(DataInputStream input, int max) throws IOException {
+        int length = input.readUnsignedShort();
+        if (length == 0 || length > max || length > input.available()) {
+            throw new IOException("invalid invitation field");
+        }
+        return input.readNBytes(length);
+    }
+
+    private static void writeBytes(DataOutputStream output, byte[] bytes) throws IOException {
+        if (bytes.length > 65_535) {
+            throw new IllegalArgumentException("invitation field is oversized");
+        }
+        output.writeShort(bytes.length);
+        output.write(bytes);
+    }
+
+    /**
+     * Verifies the host descriptor, invitation signature, and validity interval.
+     *
+     * @param now              verification time
      * @param allowedClockSkew tolerated issue-time skew
      * @return whether the invitation is authentic and current
      * @throws GeneralSecurityException if key verification fails
-     * @throws IOException if the embedded descriptor is malformed
+     * @throws IOException              if the embedded descriptor is malformed
      */
     public boolean verifyAt(Instant now, Duration allowedClockSkew) throws GeneralSecurityException, IOException {
         Objects.requireNonNull(now, "now");
         Objects.requireNonNull(allowedClockSkew, "allowed clock skew");
-        if (allowedClockSkew.isNegative()) throw new IllegalArgumentException("clock skew must be non-negative");
+        if (allowedClockSkew.isNegative()) {
+            throw new IllegalArgumentException("clock skew must be non-negative");
+        }
         CandidateDescriptor host = CandidateDescriptor.decode(descriptor);
-        if (!host.isValidAt(now, allowedClockSkew) || !host.expiresAt().equals(expiresAt)
-                || !host.issuedAt().equals(issuedAt) || !verifySignature(host.publicKeyEncoded())) return false;
+        if (!host.isValidAt(now, allowedClockSkew) || !host.expiresAt()
+                .equals(expiresAt)
+                || !host.issuedAt()
+                .equals(issuedAt) || !verifySignature(host.publicKeyEncoded())) {
+            return false;
+        }
         return !now.isBefore(issuedAt.minus(allowedClockSkew)) && now.isBefore(expiresAt);
     }
 
-    /** Returns the terminal share link.
+    /**
+     * Returns the terminal share link.
+     *
      * @return versioned copyable share link
      */
     public String shareLink() {
-        return "synesis://join/SYN1-" + Base64.getUrlEncoder().withoutPadding().encodeToString(encoded());
+        return "synesis://join/SYN1-" + Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(encoded());
     }
 
-    /** Returns the signed invitation bytes.
+    /**
+     * Returns the signed invitation bytes.
+     *
      * @return canonical signed bytes
      */
     public byte[] encoded() {
@@ -194,36 +256,68 @@ public final class SessionInvitation {
                 data.write(signature);
             }
             return output.toByteArray();
-        } catch (IOException impossible) { throw new AssertionError(impossible); }
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
     }
 
-    /** Returns the protocol version carried by the invitation.
+    /**
+     * Returns the protocol version carried by the invitation.
+     *
      * @return protocol version
      */
-    public ProtocolVersion protocolVersion() { return protocolVersion; }
-    /** Returns the session ID carried by the invitation.
+    public ProtocolVersion protocolVersion() {
+        return protocolVersion;
+    }
+
+    /**
+     * Returns the session ID carried by the invitation.
+     *
      * @return session ID
      */
-    public UUID sessionId() { return sessionId; }
-    /** Returns the inclusive issue instant.
+    public UUID sessionId() {
+        return sessionId;
+    }
+
+    /**
+     * Returns the inclusive issue instant.
+     *
      * @return issue instant
      */
-    public Instant issuedAt() { return issuedAt; }
-    /** Returns the exclusive expiry instant.
+    public Instant issuedAt() {
+        return issuedAt;
+    }
+
+    /**
+     * Returns the exclusive expiry instant.
+     *
      * @return expiry instant
      */
-    public Instant expiresAt() { return expiresAt; }
-    /** Returns a copy of the bearer capability.
+    public Instant expiresAt() {
+        return expiresAt;
+    }
+
+    /**
+     * Returns a copy of the bearer capability.
+     *
      * @return capability bytes
      */
-    public byte[] capability() { return capability.clone(); }
-    /** Returns a copy of the signed host descriptor bytes.
+    public byte[] capability() {
+        return capability.clone();
+    }
+
+    /**
+     * Returns a copy of the signed host descriptor bytes.
+     *
      * @return descriptor bytes
      */
-    public byte[] descriptorEncoded() { return descriptor.clone(); }
+    public byte[] descriptorEncoded() {
+        return descriptor.clone();
+    }
 
     private boolean verifySignature(byte[] publicKeyBytes) throws GeneralSecurityException {
-        PublicKey key = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(publicKeyBytes));
+        PublicKey key = KeyFactory.getInstance("Ed25519")
+                .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
         Signature verifier = Signature.getInstance("Ed25519");
         verifier.initVerify(key);
         verifier.update(unsigned);
@@ -245,20 +339,12 @@ public final class SessionInvitation {
                 writeBytes(output, capability);
                 writeBytes(output, descriptor);
             }
-            if (bytes.size() > MAX_BYTES) throw new IllegalArgumentException("invitation exceeds supported bound");
+            if (bytes.size() > MAX_BYTES) {
+                throw new IllegalArgumentException("invitation exceeds supported bound");
+            }
             return bytes.toByteArray();
-        } catch (IOException impossible) { throw new AssertionError(impossible); }
-    }
-
-    private static byte[] readBytes(DataInputStream input, int max) throws IOException {
-        int length = input.readUnsignedShort();
-        if (length == 0 || length > max || length > input.available()) throw new IOException("invalid invitation field");
-        return input.readNBytes(length);
-    }
-
-    private static void writeBytes(DataOutputStream output, byte[] bytes) throws IOException {
-        if (bytes.length > 65_535) throw new IllegalArgumentException("invitation field is oversized");
-        output.writeShort(bytes.length);
-        output.write(bytes);
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
     }
 }

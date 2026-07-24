@@ -1,5 +1,8 @@
 package org.synesis.cli;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -8,14 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.terminal.ConsoleTerminal;
@@ -31,6 +29,34 @@ class WorkspaceCliTest {
     private ProjectApplicationService.ProjectLocation location;
     private ProviderSessionBindingService bindingService;
 
+    private static Invocation createInvocation(Path profile) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
+        StatusRenderer renderer = new StatusRenderer(terminal);
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, renderer),
+                terminal,
+                new ReadinessInspector(profile));
+        return new Invocation(runtime, out, err);
+    }
+
+    private static PrintStream stream(ByteArrayOutputStream target) {
+        return new PrintStream(target, true, StandardCharsets.UTF_8);
+    }
+
+    private static void runGit(Path root, String... args) throws Exception {
+        String[] cmd = new String[args.length + 3];
+        cmd[0] = "git";
+        cmd[1] = "-C";
+        cmd[2] = root.toString();
+        System.arraycopy(args, 0, cmd, 3, args.length);
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true)
+                .start();
+        p.getInputStream()
+                .readAllBytes();
+        p.waitFor();
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         tempDir = Files.createTempDirectory("synesis-cli-broker-test-");
@@ -42,10 +68,12 @@ class WorkspaceCliTest {
         runGit(tempDir, "commit", "-m", "initial commit");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        location = projectService.init(tempDir).location();
+        location = projectService.init(tempDir)
+                .location();
         UUID projectId = location.projectId();
         new ProjectConfig(projectId, java.util.Set.of("sl1-" + "0".repeat(64)))
-                .save(location.profile().resolve("project.conf"));
+                .save(location.profile()
+                        .resolve("project.conf"));
 
         bindingService = new ProviderSessionBindingService();
         bindingService.ensure(location, "codex", null);
@@ -55,12 +83,13 @@ class WorkspaceCliTest {
     void tearDown() throws Exception {
         if (tempDir != null && Files.exists(tempDir)) {
             try (var paths = Files.walk(tempDir)) {
-                paths.sorted(Comparator.reverseOrder()).forEach(p -> {
-                    try {
-                        Files.deleteIfExists(p);
-                    } catch (IOException ignored) {
-                    }
-                });
+                paths.sorted(Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try {
+                                Files.deleteIfExists(p);
+                            } catch (IOException ignored) {
+                            }
+                        });
             }
         }
     }
@@ -72,13 +101,16 @@ class WorkspaceCliTest {
         int exit = SynesisCli.execute(new String[]{"workspace", "mutate", "--help"}, invocation.runtime());
 
         assertEquals(0, exit);
-        assertTrue(invocation.output().contains("mutate"));
-        assertTrue(invocation.output().contains("--target"));
+        assertTrue(invocation.output()
+                .contains("mutate"));
+        assertTrue(invocation.output()
+                .contains("--target"));
     }
 
     @Test
     void test14RepeatedBrokerRequestWithSameIdempotencyKeyDoesNotDuplicateMutation() throws Exception {
-        var binding = bindingService.list(location, "codex").getLast();
+        var binding = bindingService.list(location, "codex")
+                .getLast();
         Path worktreePath = Path.of(binding.worktreePath());
         bindingService.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktreePath);
 
@@ -113,31 +145,10 @@ class WorkspaceCliTest {
         assertEquals(output1, output2);
     }
 
-    private static Invocation createInvocation(Path profile) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteArrayOutputStream err = new ByteArrayOutputStream();
-        ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
-        StatusRenderer renderer = new StatusRenderer(terminal);
-        CliRuntime runtime = new CliRuntime(new Onboarding(profile, renderer), terminal, new ReadinessInspector(profile));
-        return new Invocation(runtime, out, err);
-    }
-
-    private static PrintStream stream(ByteArrayOutputStream target) {
-        return new PrintStream(target, true, StandardCharsets.UTF_8);
-    }
-
     private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
-        private String output() { return out.toString(StandardCharsets.UTF_8); }
-    }
 
-    private static void runGit(Path root, String... args) throws Exception {
-        String[] cmd = new String[args.length + 3];
-        cmd[0] = "git";
-        cmd[1] = "-C";
-        cmd[2] = root.toString();
-        System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        p.getInputStream().readAllBytes();
-        p.waitFor();
+        private String output() {
+            return out.toString(StandardCharsets.UTF_8);
+        }
     }
 }

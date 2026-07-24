@@ -7,15 +7,33 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Deterministic task and ownership projection over the shared event sequence. */
+/**
+ * Deterministic task and ownership projection over the shared event sequence.
+ */
 public final class CoordinationProjection {
+
     private final Map<UUID, TaskView> tasks = new LinkedHashMap<>();
     private final Map<String, OwnershipClaim> ownership = new LinkedHashMap<>();
 
-    /** Creates an empty coordination projection. */
-    public CoordinationProjection() { }
+    /**
+     * Creates an empty coordination projection.
+     */
+    public CoordinationProjection() {
+    }
 
-    /** Applies one task or ownership event.
+    private CoordinationProjection(CoordinationProjection source) {
+        tasks.putAll(source.tasks);
+        ownership.putAll(source.ownership);
+    }
+
+    private static byte[] commandPayload(PredictionEvent event) throws IOException {
+        return CoordinationCommand.decode(event.payload())
+                .payload();
+    }
+
+    /**
+     * Applies one task or ownership event.
+     *
      * @param event event to apply
      * @throws IOException when an event payload is malformed
      */
@@ -27,11 +45,14 @@ public final class CoordinationProjection {
             case TASK_RELEASED -> releaseTask(event);
             case OWNERSHIP_CLAIMED -> claimOwnership(event);
             case OWNERSHIP_RELEASED -> releaseOwnership(event);
-            default -> { }
+            default -> {
+            }
         }
     }
 
-    /** Validates one task or ownership event without mutating this projection.
+    /**
+     * Validates one task or ownership event without mutating this projection.
+     *
      * @param event event to validate
      * @throws IOException when the event payload or state transition is invalid
      */
@@ -40,7 +61,9 @@ public final class CoordinationProjection {
         candidate.apply(event);
     }
 
-    /** Returns the projected task state.
+    /**
+     * Returns the projected task state.
+     *
      * @param taskId task identifier
      * @return task when known
      */
@@ -48,7 +71,9 @@ public final class CoordinationProjection {
         return Optional.ofNullable(tasks.get(taskId));
     }
 
-    /** Returns the projected owner for a capability.
+    /**
+     * Returns the projected owner for a capability.
+     *
      * @param capability capability name
      * @return ownership claim when known
      */
@@ -56,19 +81,28 @@ public final class CoordinationProjection {
         return Optional.ofNullable(ownership.get(capability));
     }
 
-    /** Returns a stable task snapshot.
+    /**
+     * Returns a stable task snapshot.
+     *
      * @return immutable task view
      */
-    public synchronized Map<UUID, TaskView> tasks() { return Map.copyOf(tasks); }
+    public synchronized Map<UUID, TaskView> tasks() {
+        return Map.copyOf(tasks);
+    }
 
-    /** Returns a stable ownership snapshot.
+    /**
+     * Returns a stable ownership snapshot.
+     *
      * @return immutable ownership view
      */
-    public synchronized Map<String, OwnershipClaim> ownerships() { return Map.copyOf(ownership); }
+    public synchronized Map<String, OwnershipClaim> ownerships() {
+        return Map.copyOf(ownership);
+    }
 
     private void createTask(PredictionEvent event) throws IOException {
         CoordinationTask task = CoordinationTask.decode(commandPayload(event));
-        if (!task.taskId().equals(event.predictionId()) || tasks.containsKey(task.taskId())) {
+        if (!task.taskId()
+                .equals(event.predictionId()) || tasks.containsKey(task.taskId())) {
             throw new IOException("INVALID_TASK_STATE");
         }
         tasks.put(task.taskId(), new TaskView(task, null));
@@ -77,7 +111,8 @@ public final class CoordinationProjection {
     private void claimTask(PredictionEvent event) throws IOException {
         TaskClaim claim = TaskClaim.decode(commandPayload(event));
         TaskView current = task(claim.taskId()).orElseThrow(() -> new IOException("TASK_NOT_FOUND"));
-        if (current.ownerNodeId() != null || !claim.taskId().equals(event.predictionId())) {
+        if (current.ownerNodeId() != null || !claim.taskId()
+                .equals(event.predictionId())) {
             throw new IOException("TASK_ALREADY_CLAIMED");
         }
         tasks.put(claim.taskId(), new TaskView(current.task(), claim));
@@ -91,11 +126,14 @@ public final class CoordinationProjection {
     private void claimOwnership(PredictionEvent event) throws IOException {
         OwnershipClaim claim = OwnershipClaim.decode(commandPayload(event));
         TaskView task = task(claim.taskId()).orElseThrow(() -> new IOException("TASK_NOT_FOUND"));
-        if (!claim.taskId().equals(event.predictionId()) || !claim.ownerNodeId().equals(task.ownerNodeId())) {
+        if (!claim.taskId()
+                .equals(event.predictionId()) || !claim.ownerNodeId()
+                .equals(task.ownerNodeId())) {
             throw new IOException("OWNERSHIP_REQUIRES_TASK_CLAIM");
         }
         OwnershipClaim current = ownership.get(claim.capability());
-        if (current != null && !current.ownerNodeId().equals(claim.ownerNodeId())) {
+        if (current != null && !current.ownerNodeId()
+                .equals(claim.ownerNodeId())) {
             throw new IOException("OWNERSHIP_CONFLICT");
         }
         ownership.put(claim.capability(), claim);
@@ -104,28 +142,28 @@ public final class CoordinationProjection {
     private void releaseOwnership(PredictionEvent event) throws IOException {
         OwnershipClaim claim = OwnershipClaim.decode(commandPayload(event));
         OwnershipClaim current = ownership.get(claim.capability());
-        if (current == null || !current.taskId().equals(event.predictionId())) {
+        if (current == null || !current.taskId()
+                .equals(event.predictionId())) {
             throw new IOException("OWNERSHIP_NOT_FOUND");
         }
         ownership.remove(claim.capability());
     }
 
-    private static byte[] commandPayload(PredictionEvent event) throws IOException {
-        return CoordinationCommand.decode(event.payload()).payload();
-    }
-
-    /** Projected task and optional claim.
-     * @param task immutable task declaration
+    /**
+     * Projected task and optional claim.
+     *
+     * @param task  immutable task declaration
      * @param claim current claim, when assigned
      */
     public record TaskView(CoordinationTask task, TaskClaim claim) {
-        /** Returns the current owner node, or null when unclaimed.
+
+        /**
+         * Returns the current owner node, or null when unclaimed.
+         *
          * @return owner node ID
          */
-        public String ownerNodeId() { return claim == null ? null : claim.ownerNodeId(); }
-    }
-
-    private CoordinationProjection(CoordinationProjection source) {
-        tasks.putAll(source.tasks); ownership.putAll(source.ownership);
+        public String ownerNodeId() {
+            return claim == null ? null : claim.ownerNodeId();
+        }
     }
 }

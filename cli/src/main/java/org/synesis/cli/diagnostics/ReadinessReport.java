@@ -18,6 +18,7 @@ import java.util.Objects;
 public record ReadinessReport(boolean javaReady, boolean profileReady, boolean identityReady,
                               boolean candidatesReady, boolean quicReady, String identityDetail, String candidateDetail,
                               String quicDetail) {
+
     /**
      * Validates safe report strings.
      */

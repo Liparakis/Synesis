@@ -10,15 +10,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
 import org.synesis.link.transport.Onboarding;
+import org.synesis.link.transport.OnboardingEventType;
 import org.synesis.link.transport.OnboardingFailure;
 import org.synesis.link.transport.OnboardingFailureCode;
-import org.synesis.link.transport.OnboardingEventType;
 import org.synesis.projectrecord.DecisionStore;
 import org.synesis.projectrecord.ProjectConfig;
 import org.synesis.projectrecord.ProjectReconciliationSync;
@@ -35,6 +34,93 @@ public final class SyncApplicationService {
      * Creates the service.
      */
     public SyncApplicationService() {
+    }
+
+    private static ProjectConfig loadConfig(Path profile) throws Exception {
+        try {
+            return ProjectConfig.load(profile.resolve(PROJECT_CONFIG));
+        } catch (Exception failure) {
+            throw failure("PROJECT_INVALID");
+        }
+    }
+
+    private static NodeIdentity identity(Path profile) throws Exception {
+        try {
+            return new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
+                    .identity();
+        } catch (Exception failure) {
+            throw failure("IDENTITY_FAILED");
+        }
+    }
+
+    private static void validateRecord(Path profile, UUID project, UUID record) throws Exception {
+        DecisionStore store = new DecisionStore(profile.resolve("records"), project);
+        if (store.head(record)
+                .isEmpty()) {
+            throw failure("RECORD_NOT_FOUND");
+        }
+    }
+
+    private static boolean isReconciliation(byte[] bytes) {
+        return bytes != null && bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x52 && bytes[2] == 0x50
+                && bytes[3] == 0x31;
+    }
+
+    private static String composeInvitation(String link, UUID project, UUID record, String host) {
+        return link + "?project=" + project + (record == null ? "" : "&record=" + record) + "&host=" + host;
+    }
+
+    private static Map<String, String> query(String raw) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (raw == null || raw.isEmpty()) {
+            return result;
+        }
+        for (String part : raw.split("&", -1)) {
+            String[] pair = part.split("=", 2);
+            if (pair.length == 2) {
+                result.put(pair[0], pair[1]);
+            }
+        }
+        return result;
+    }
+
+    private static UUID parseUuid(String value, String code) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException failure) {
+            throw failure(code);
+        }
+    }
+
+    private static void close(PeerSession session) {
+        try {
+            session.closeGracefully(SessionCloseReason.LOCAL_REQUEST);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static String mapOnboarding(OnboardingFailureCode code) {
+        return switch (code) {
+            case INVITE_INVALID -> "INVITE_INVALID";
+            case HOST_IDENTITY_MISMATCH -> "AUTH_FAILED";
+            case IDENTITY_FAILED -> "IDENTITY_FAILED";
+            case HOST_TIMEOUT, NO_USABLE_CANDIDATE, CONNECTION_FAILED, INTERNAL -> "TRANSPORT_FAILED";
+        };
+    }
+
+    private static SyncFailure failure(String code) {
+        return new SyncFailure(code);
+    }
+
+    private static SyncResult success() {
+        return new SyncResult(0, Map.of());
+    }
+
+    private static SyncResult failed(String code) {
+        return new SyncResult(10, Map.of("ERROR", code));
     }
 
     /**
@@ -212,93 +298,6 @@ public final class SyncApplicationService {
         ProjectConfig config = new ProjectConfig(project, Set.of(host));
         config.save(path);
         return config;
-    }
-
-    private static ProjectConfig loadConfig(Path profile) throws Exception {
-        try {
-            return ProjectConfig.load(profile.resolve(PROJECT_CONFIG));
-        } catch (Exception failure) {
-            throw failure("PROJECT_INVALID");
-        }
-    }
-
-    private static NodeIdentity identity(Path profile) throws Exception {
-        try {
-            return new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
-                    .identity();
-        } catch (Exception failure) {
-            throw failure("IDENTITY_FAILED");
-        }
-    }
-
-    private static void validateRecord(Path profile, UUID project, UUID record) throws Exception {
-        DecisionStore store = new DecisionStore(profile.resolve("records"), project);
-        if (store.head(record)
-                .isEmpty()) {
-            throw failure("RECORD_NOT_FOUND");
-        }
-    }
-
-    private static boolean isReconciliation(byte[] bytes) {
-        return bytes != null && bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x52 && bytes[2] == 0x50
-                && bytes[3] == 0x31;
-    }
-
-    private static String composeInvitation(String link, UUID project, UUID record, String host) {
-        return link + "?project=" + project + (record == null ? "" : "&record=" + record) + "&host=" + host;
-    }
-
-    private static Map<String, String> query(String raw) {
-        Map<String, String> result = new LinkedHashMap<>();
-        if (raw == null || raw.isEmpty()) {
-            return result;
-        }
-        for (String part : raw.split("&", -1)) {
-            String[] pair = part.split("=", 2);
-            if (pair.length == 2) {
-                result.put(pair[0], pair[1]);
-            }
-        }
-        return result;
-    }
-
-    private static UUID parseUuid(String value, String code) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException failure) {
-            throw failure(code);
-        }
-    }
-
-    private static void close(PeerSession session) {
-        try {
-            session.closeGracefully(SessionCloseReason.LOCAL_REQUEST);
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static String mapOnboarding(OnboardingFailureCode code) {
-        return switch (code) {
-            case INVITE_INVALID -> "INVITE_INVALID";
-            case HOST_IDENTITY_MISMATCH -> "AUTH_FAILED";
-            case IDENTITY_FAILED -> "IDENTITY_FAILED";
-            case HOST_TIMEOUT, NO_USABLE_CANDIDATE, CONNECTION_FAILED, INTERNAL -> "TRANSPORT_FAILED";
-        };
-    }
-
-    private static SyncFailure failure(String code) {
-        return new SyncFailure(code);
-    }
-
-    private static SyncResult success() {
-        return new SyncResult(0, Map.of());
-    }
-
-    private static SyncResult failed(String code) {
-        return new SyncResult(10, Map.of("ERROR", code));
     }
 
     private static final class SyncFailure extends RuntimeException {

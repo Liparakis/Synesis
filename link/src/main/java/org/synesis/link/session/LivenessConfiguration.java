@@ -11,9 +11,9 @@ import java.util.Objects;
  * later than suspicion. The defaults are implementation defaults, not wire
  * constants. This value is immutable and thread-safe.</p>
  *
- * @param heartbeatInterval interval between at most one scheduled heartbeat
- * @param suspicionTimeout elapsed peer silence at which state becomes {@code SUSPECT}
- * @param expiryTimeout elapsed peer silence at which state becomes {@code EXPIRED}
+ * @param heartbeatInterval        interval between at most one scheduled heartbeat
+ * @param suspicionTimeout         elapsed peer silence at which state becomes {@code SUSPECT}
+ * @param expiryTimeout            elapsed peer silence at which state becomes {@code EXPIRED}
  * @param refreshOnControlActivity whether other valid non-terminal control messages may refresh liveness
  * @since 1.0
  */
@@ -23,14 +23,16 @@ public record LivenessConfiguration(
         Duration expiryTimeout,
         boolean refreshOnControlActivity) {
 
-    /** The conservative local default: one-second heartbeats and five-second expiry. */
+    /**
+     * The conservative local default: one-second heartbeats and five-second expiry.
+     */
     public static final LivenessConfiguration DEFAULT = new LivenessConfiguration(
             Duration.ofSeconds(1), Duration.ofSeconds(3), Duration.ofSeconds(5), true);
 
     /**
      * Creates a validated timing policy.
      *
-     * @throws NullPointerException if a duration is null
+     * @throws NullPointerException     if a duration is null
      * @throws IllegalArgumentException if durations are non-positive or out of order
      */
     public LivenessConfiguration {

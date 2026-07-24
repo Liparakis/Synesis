@@ -13,18 +13,31 @@ import org.synesis.workspace.application.ProviderApplicationService;
 import org.synesis.workspace.provider.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
 
-/** Verifies provider registry and isolated lifecycle behavior. */
+/**
+ * Verifies provider registry and isolated lifecycle behavior.
+ */
 final class ProviderApplicationServiceTest {
+
     @Test
     void registryIsDeterministicAndListsCodexAsExperimental() {
         assertEquals(java.util.List.of("antigravity", "claude-code", "codex"),
-                ProviderRegistry.providers().stream().map(provider -> provider.id()).toList());
+                ProviderRegistry.providers()
+                        .stream()
+                        .map(provider -> provider.id())
+                        .toList());
         assertEquals(org.synesis.workspace.provider.ProviderSupportLevel.EXPERIMENTAL,
-                ProviderRegistry.find("codex").supportLevel());
-        assertEquals("REVIEW_REQUIRED", ProviderRegistry.find("codex").trustStatus());
-        assertTrue(ProviderRegistry.find("codex").requiresRealValidation());
-        assertEquals("UNVALIDATED", ProviderRegistry.find("antigravity").trustStatus());
-        assertTrue(ProviderRegistry.find("antigravity").requiresRealValidation());
+                ProviderRegistry.find("codex")
+                        .supportLevel());
+        assertEquals("REVIEW_REQUIRED",
+                ProviderRegistry.find("codex")
+                        .trustStatus());
+        assertTrue(ProviderRegistry.find("codex")
+                .requiresRealValidation());
+        assertEquals("UNVALIDATED",
+                ProviderRegistry.find("antigravity")
+                        .trustStatus());
+        assertTrue(ProviderRegistry.find("antigravity")
+                .requiresRealValidation());
     }
 
     @Test
@@ -35,26 +48,42 @@ final class ProviderApplicationServiceTest {
         System.setProperty("synesis.launcher", launcher.toString());
         try {
             ProjectApplicationService projectService = new ProjectApplicationService();
-            var location = projectService.init(root).location();
+            var location = projectService.init(root)
+                    .location();
             Path config = root.resolve(".agents/hooks.json");
             Files.createDirectories(config.getParent());
             Files.writeString(config, "{\"unrelated\":{\"value\":true},\"synesis-guardrail\":{\"PreToolUse\":[]}}\n");
             ProviderApplicationService service = new ProviderApplicationService();
 
             var installed = service.install(location, "antigravity");
-            assertEquals("DEGRADED", installed.values().get("PROVIDER_INSTALL_RESULT"));
+            assertEquals("DEGRADED",
+                    installed.values()
+                            .get("PROVIDER_INSTALL_RESULT"));
             Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
-            assertTrue(!Files.readString(config).contains("versions"));
-            assertEquals("DEGRADED", service.status(location, "antigravity").values().get("PROVIDER_STATUS"));
-            assertEquals("UNVALIDATED", service.status(location, "antigravity").values().get("TRUST_STATUS"));
-            assertEquals("SUCCESS", service.uninstall(location, "antigravity").values().get("PROVIDER_UNINSTALL_RESULT"));
+            assertTrue(!Files.readString(config)
+                    .contains("versions"));
+            assertEquals("DEGRADED",
+                    service.status(location, "antigravity")
+                            .values()
+                            .get("PROVIDER_STATUS"));
+            assertEquals("UNVALIDATED",
+                    service.status(location, "antigravity")
+                            .values()
+                            .get("TRUST_STATUS"));
+            assertEquals("SUCCESS",
+                    service.uninstall(location, "antigravity")
+                            .values()
+                            .get("PROVIDER_UNINSTALL_RESULT"));
             assertTrue(Files.exists(config));
             Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) after.get("unrelated")).get("value"));
         } finally {
-            if (previous == null) System.clearProperty("synesis.launcher");
-            else System.setProperty("synesis.launcher", previous);
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
         }
     }
 
@@ -65,16 +94,22 @@ final class ProviderApplicationServiceTest {
         String previous = System.getProperty("synesis.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
         try {
-            var location = new ProjectApplicationService().init(root).location();
+            var location = new ProjectApplicationService().init(root)
+                    .location();
             Path config = root.resolve(".agents/hooks.json");
             Files.createDirectories(config.getParent());
             Files.writeString(config, "{broken");
             var result = new ProviderApplicationService().install(location, "antigravity");
-            assertEquals("INVALID_CONFIG", result.values().get("PROVIDER_INSTALL_RESULT"));
+            assertEquals("INVALID_CONFIG",
+                    result.values()
+                            .get("PROVIDER_INSTALL_RESULT"));
             assertEquals("{broken", Files.readString(config));
         } finally {
-            if (previous == null) System.clearProperty("synesis.launcher");
-            else System.setProperty("synesis.launcher", previous);
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
         }
     }
 
@@ -85,32 +120,51 @@ final class ProviderApplicationServiceTest {
         String previous = System.getProperty("synesis.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
         try {
-            var location = new ProjectApplicationService().init(root).location();
+            var location = new ProjectApplicationService().init(root)
+                    .location();
             Path config = root.resolve(".codex/hooks.json");
             Files.createDirectories(config.getParent());
             Files.writeString(config, "{\"unrelated\":{\"value\":true},\"hooks\":{\"Stop\":[]}}\n");
             ProviderApplicationService service = new ProviderApplicationService();
 
             var installed = service.install(location, "codex");
-            assertEquals("DEGRADED", installed.values().get("PROVIDER_INSTALL_RESULT"));
-            assertEquals("REVIEW_REQUIRED", installed.values().get("TRUST_STATUS"));
+            assertEquals("DEGRADED",
+                    installed.values()
+                            .get("PROVIDER_INSTALL_RESULT"));
+            assertEquals("REVIEW_REQUIRED",
+                    installed.values()
+                            .get("TRUST_STATUS"));
             Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
-            assertTrue(!Files.readString(config).contains("versions"));
+            assertTrue(!Files.readString(config)
+                    .contains("versions"));
             Map<?, ?> hooks = (Map<?, ?>) merged.get("hooks");
             assertTrue(hooks.containsKey("Stop"));
             Map<?, ?> preToolUse = (Map<?, ?>) ((java.util.List<?>) hooks.get("PreToolUse")).getFirst();
             Map<?, ?> handler = (Map<?, ?>) ((java.util.List<?>) preToolUse.get("hooks")).getFirst();
-            assertTrue(String.valueOf(handler.get("commandWindows")).startsWith("cmd.exe /d /s /c"));
-            assertEquals("DEGRADED", service.status(location, "codex").values().get("PROVIDER_STATUS"));
-            assertEquals("REVIEW_REQUIRED", service.status(location, "codex").values().get("TRUST_STATUS"));
-            assertEquals("SUCCESS", service.uninstall(location, "codex").values().get("PROVIDER_UNINSTALL_RESULT"));
+            assertTrue(String.valueOf(handler.get("commandWindows"))
+                    .startsWith("cmd.exe /d /s /c"));
+            assertEquals("DEGRADED",
+                    service.status(location, "codex")
+                            .values()
+                            .get("PROVIDER_STATUS"));
+            assertEquals("REVIEW_REQUIRED",
+                    service.status(location, "codex")
+                            .values()
+                            .get("TRUST_STATUS"));
+            assertEquals("SUCCESS",
+                    service.uninstall(location, "codex")
+                            .values()
+                            .get("PROVIDER_UNINSTALL_RESULT"));
             Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) after.get("unrelated")).get("value"));
             assertTrue(((Map<?, ?>) after.get("hooks")).containsKey("Stop"));
         } finally {
-            if (previous == null) System.clearProperty("synesis.launcher");
-            else System.setProperty("synesis.launcher", previous);
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
         }
     }
 }

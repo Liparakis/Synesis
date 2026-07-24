@@ -5,20 +5,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
-
 import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.diagnostics.ReadinessReport;
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.candidate.CandidateProvider;
 import org.synesis.link.candidate.CandidateType;
+import org.synesis.link.identity.IdentityBootstrap;
 
-/** Verifies read-only identity inspection outcomes. */
+/**
+ * Verifies read-only identity inspection outcomes.
+ */
 final class ReadinessInspectorTest {
+
     @Test
     void absentIdentityPassesWithInformationAndDoesNotCreateProfile() throws Exception {
-        Path profile = Files.createTempDirectory("synesis-doctor").resolve("profile");
+        Path profile = Files.createTempDirectory("synesis-doctor")
+                .resolve("profile");
         ReadinessReport report = new ReadinessInspector(profile).inspect();
         assertTrue(report.identityReady());
         assertFalse(Files.exists(profile));
@@ -31,14 +33,15 @@ final class ReadinessInspectorTest {
         String before = Files.readString(profile.resolve("identity.pub"));
         ReadinessReport report = new ReadinessInspector(profile).inspect();
         assertTrue(report.identityReady());
-        assertTrue(report.identityDetail().equals("IDENTITY_VALID"));
+        assertTrue(report.identityDetail()
+                .equals("IDENTITY_VALID"));
         assertTrue(before.equals(Files.readString(profile.resolve("identity.pub"))));
     }
 
     @Test
     void corruptIdentityFailsWithoutRepair() throws Exception {
         Path profile = Files.createTempDirectory("synesis-doctor");
-        Files.write(profile.resolve("identity.bin"), new byte[] {1, 2, 3});
+        Files.write(profile.resolve("identity.bin"), new byte[]{1, 2, 3});
         ReadinessReport report = new ReadinessInspector(profile).inspect();
         assertFalse(report.identityReady());
         assertFalse(Files.exists(profile.resolve("identity.pub")));
@@ -55,9 +58,18 @@ final class ReadinessInspectorTest {
     void noCandidateProviderIsReportedAsAReadinessFailure() throws Exception {
         Path profile = Files.createTempDirectory("synesis-doctor");
         CandidateProvider empty = new CandidateProvider() {
-            @Override public String id() { return "test-empty"; }
-            @Override public java.util.Set<CandidateType> supportedTypes() { return java.util.Set.of(); }
-            @Override public java.util.concurrent.CompletableFuture<java.util.List<org.synesis.link.candidate.Candidate>> gather(
+            @Override
+            public String id() {
+                return "test-empty";
+            }
+
+            @Override
+            public java.util.Set<CandidateType> supportedTypes() {
+                return java.util.Set.of();
+            }
+
+            @Override
+            public java.util.concurrent.CompletableFuture<java.util.List<org.synesis.link.candidate.Candidate>> gather(
                     org.synesis.link.candidate.CandidateCancellation cancellation) {
                 return java.util.concurrent.CompletableFuture.completedFuture(java.util.List.of());
             }

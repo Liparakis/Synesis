@@ -6,15 +6,15 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
 import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.GeneralSecurityException;
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -45,11 +45,34 @@ public final class FileIdentityStore implements IdentityStore {
         this.path = Objects.requireNonNull(path, "path");
     }
 
+    private static byte[] encode(NodeIdentity identity) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(bytes)) {
+            output.writeInt(MAGIC);
+            output.writeInt(FORMAT_VERSION);
+            byte[] publicKey = identity.publicKeyEncoded();
+            byte[] privateKey = identity.privateKeyEncodedForStore();
+            output.writeInt(publicKey.length);
+            output.write(publicKey);
+            output.writeInt(privateKey.length);
+            output.write(privateKey);
+        }
+        return bytes.toByteArray();
+    }
+
+    private static byte[] readBounded(DataInputStream input) throws IOException {
+        int length = input.readInt();
+        if (length <= 0 || length > MAX_FILE_BYTES || length > input.available()) {
+            throw new IOException("invalid identity key length");
+        }
+        return input.readNBytes(length);
+    }
+
     /**
      * Loads and validates the bounded identity record.
      *
      * @return stored identity
-     * @throws IOException if the file is absent, unreadable, oversized, or malformed
+     * @throws IOException              if the file is absent, unreadable, oversized, or malformed
      * @throws GeneralSecurityException if encoded keys are invalid
      */
     @Override
@@ -75,7 +98,7 @@ public final class FileIdentityStore implements IdentityStore {
      * Atomically writes an identity and refuses unsafe replacement.
      *
      * @param identity identity to save
-     * @throws IOException if the target exists or writing/moving fails
+     * @throws IOException              if the target exists or writing/moving fails
      * @throws GeneralSecurityException if key material cannot be encoded
      */
     @Override
@@ -84,7 +107,8 @@ public final class FileIdentityStore implements IdentityStore {
         if (Files.exists(path)) {
             throw new FileAlreadyExistsException(path.toString());
         }
-        Path parent = path.toAbsolutePath().getParent();
+        Path parent = path.toAbsolutePath()
+                .getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
@@ -98,35 +122,13 @@ public final class FileIdentityStore implements IdentityStore {
                 Files.move(temporary, path);
             }
             try {
-                Files.setPosixFilePermissions(path, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+                Files.setPosixFilePermissions(path,
+                        Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
             } catch (UnsupportedOperationException ignored) {
                 // Windows and other non-POSIX stores enforce permissions differently.
             }
         } finally {
             Files.deleteIfExists(temporary);
         }
-    }
-
-    private static byte[] encode(NodeIdentity identity) throws IOException {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(MAGIC);
-            output.writeInt(FORMAT_VERSION);
-            byte[] publicKey = identity.publicKeyEncoded();
-            byte[] privateKey = identity.privateKeyEncodedForStore();
-            output.writeInt(publicKey.length);
-            output.write(publicKey);
-            output.writeInt(privateKey.length);
-            output.write(privateKey);
-        }
-        return bytes.toByteArray();
-    }
-
-    private static byte[] readBounded(DataInputStream input) throws IOException {
-        int length = input.readInt();
-        if (length <= 0 || length > MAX_FILE_BYTES || length > input.available()) {
-            throw new IOException("invalid identity key length");
-        }
-        return input.readNBytes(length);
     }
 }

@@ -3,14 +3,18 @@ package org.synesis.link.transport;
 import java.util.Arrays;
 import java.util.Objects;
 
-/** Internal bounded codec for one opaque Link application-stream payload. */
+/**
+ * Internal bounded codec for one opaque Link application-stream payload.
+ */
 final class ApplicationStreamCodec {
+
     static final int MAX_PAYLOAD_BYTES = ControlFrame.MAX_PAYLOAD;
     static final int MAX_FRAME_BYTES = 5 + MAX_PAYLOAD_BYTES;
-    private static final byte[] MAGIC = new byte[] {'S', 'L', 'A', '1'};
+    private static final byte[] MAGIC = new byte[]{'S', 'L', 'A', '1'};
     private static final int VERSION = 1;
 
-    private ApplicationStreamCodec() { }
+    private ApplicationStreamCodec() {
+    }
 
     static byte[] encode(byte[] payload) {
         Objects.requireNonNull(payload, "payload");

@@ -18,21 +18,22 @@ import org.synesis.workspace.application.SyncApplicationService;
 /**
  * Manual composition point for one CLI invocation.
  *
- * @param onboarding Link onboarding façade
- * @param terminal terminal boundary
+ * @param onboarding         Link onboarding façade
+ * @param terminal           terminal boundary
  * @param readinessInspector local readiness inspector
- * @param projectService project discovery and initialization service
- * @param constraintService constraint service
- * @param guardrailService guardrail service
- * @param hookService hook service
- * @param syncService synchronization service
- * @param providerService provider lifecycle service
+ * @param projectService     project discovery and initialization service
+ * @param constraintService  constraint service
+ * @param guardrailService   guardrail service
+ * @param hookService        hook service
+ * @param syncService        synchronization service
+ * @param providerService    provider lifecycle service
  * @since 1.0
  */
 public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInspector readinessInspector,
                          ProjectApplicationService projectService, ConstraintApplicationService constraintService,
                          GuardrailApplicationService guardrailService, HookApplicationService hookService,
                          SyncApplicationService syncService, ProviderApplicationService providerService) {
+
     /**
      * Creates an injectable runtime for command tests and process execution.
      *
@@ -115,6 +116,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
 
     /**
      * Returns the project application service.
+     *
      * @return project application service
      */
     @Override
@@ -124,6 +126,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
 
     /**
      * Returns the constraint application service.
+     *
      * @return constraint application service
      */
     @Override
@@ -133,6 +136,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
 
     /**
      * Returns the guardrail application service.
+     *
      * @return guardrail application service
      */
     @Override
@@ -142,6 +146,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
 
     /**
      * Returns the hook application service.
+     *
      * @return hook application service
      */
     @Override
@@ -151,6 +156,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
 
     /**
      * Returns the synchronization application service.
+     *
      * @return synchronization application service
      */
     @Override
@@ -160,6 +166,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
 
     /**
      * Returns the provider lifecycle service.
+     *
      * @return provider service
      */
     @Override
@@ -177,7 +184,10 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
      */
     public Path resolveProfile(Path project, Path profile)
             throws ProjectApplicationService.ProjectApplicationException {
-        if (profile != null) return profile.toAbsolutePath().normalize();
+        if (profile != null) {
+            return profile.toAbsolutePath()
+                    .normalize();
+        }
         ProjectApplicationService.ProjectLocation location = project == null
                 ? projectService.locate(Path.of(".")) : projectService.require(project);
         return projectService.profile(location);

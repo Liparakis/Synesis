@@ -26,11 +26,17 @@ import org.synesis.link.protocol.ProtocolVersion;
  */
 public final class HandshakeTranscript {
 
-    /** Maximum nonce size. */
+    /**
+     * Maximum nonce size.
+     */
     public static final int MAX_NONCE_BYTES = 64;
-    /** Maximum invitation-capability size carried by a transcript. */
+    /**
+     * Maximum invitation-capability size carried by a transcript.
+     */
     public static final int MAX_INVITATION_CAPABILITY_BYTES = 64;
-    /** Maximum encoded transcript size. */
+    /**
+     * Maximum encoded transcript size.
+     */
     public static final int MAX_BYTES = 4_096;
 
     private static final int MAGIC = 0x534C5431;
@@ -72,8 +78,10 @@ public final class HandshakeTranscript {
         this.initiatorPublicKey = copyBounded(initiatorPublicKey, MAX_KEY_BYTES, "initiator public key");
         this.responderNodeId = requireText(responderNodeId, MAX_NODE_ID_BYTES, "responder node ID");
         this.responderPublicKey = copyBounded(responderPublicKey, MAX_KEY_BYTES, "responder public key");
-        if (!NodeIdentity.deriveNodeId(this.initiatorPublicKey).equals(this.initiatorNodeId)
-                || !NodeIdentity.deriveNodeId(this.responderPublicKey).equals(this.responderNodeId)) {
+        if (!NodeIdentity.deriveNodeId(this.initiatorPublicKey)
+                .equals(this.initiatorNodeId)
+                || !NodeIdentity.deriveNodeId(this.responderPublicKey)
+                .equals(this.responderNodeId)) {
             throw new IllegalArgumentException("node ID does not match public key");
         }
         this.encoded = encode();
@@ -82,16 +90,16 @@ public final class HandshakeTranscript {
     /**
      * Creates a transcript from both canonical public identities.
      *
-     * @param version protocol version
-     * @param alpn negotiated application protocol
-     * @param sessionId fresh session ID
-     * @param initiatorEpoch initiator session epoch
-     * @param responderEpoch responder session epoch
-     * @param initiatorNonce fresh initiator nonce
-     * @param responderNonce fresh responder nonce
-     * @param initiatorNodeId initiator node ID
+     * @param version            protocol version
+     * @param alpn               negotiated application protocol
+     * @param sessionId          fresh session ID
+     * @param initiatorEpoch     initiator session epoch
+     * @param responderEpoch     responder session epoch
+     * @param initiatorNonce     fresh initiator nonce
+     * @param responderNonce     fresh responder nonce
+     * @param initiatorNodeId    initiator node ID
      * @param initiatorPublicKey initiator X.509 public key
-     * @param responderNodeId responder node ID
+     * @param responderNodeId    responder node ID
      * @param responderPublicKey responder X.509 public key
      * @return immutable canonical transcript
      */
@@ -107,18 +115,18 @@ public final class HandshakeTranscript {
      * Creates a transcript with an optional invitation capability bound into
      * the signed proof challenge.
      *
-     * @param version protocol version
-     * @param alpn negotiated application protocol
-     * @param sessionId fresh session ID
-     * @param initiatorEpoch initiator session epoch
-     * @param responderEpoch responder session epoch
-     * @param initiatorNonce fresh initiator nonce
-     * @param responderNonce fresh responder nonce
+     * @param version              protocol version
+     * @param alpn                 negotiated application protocol
+     * @param sessionId            fresh session ID
+     * @param initiatorEpoch       initiator session epoch
+     * @param responderEpoch       responder session epoch
+     * @param initiatorNonce       fresh initiator nonce
+     * @param responderNonce       fresh responder nonce
      * @param invitationCapability bearer capability, or empty for ordinary sessions
-     * @param initiatorNodeId initiator node ID
-     * @param initiatorPublicKey initiator X.509 public key
-     * @param responderNodeId responder node ID
-     * @param responderPublicKey responder X.509 public key
+     * @param initiatorNodeId      initiator node ID
+     * @param initiatorPublicKey   initiator X.509 public key
+     * @param responderNodeId      responder node ID
+     * @param responderPublicKey   responder X.509 public key
      * @return immutable canonical transcript
      */
     public static HandshakeTranscript create(ProtocolVersion version, String alpn, UUID sessionId,
@@ -133,14 +141,14 @@ public final class HandshakeTranscript {
     /**
      * Creates a transcript using two identities and the Synesis Link ALPN.
      *
-     * @param version protocol version
-     * @param sessionId fresh session ID
+     * @param version        protocol version
+     * @param sessionId      fresh session ID
      * @param initiatorEpoch initiator session epoch
      * @param responderEpoch responder session epoch
      * @param initiatorNonce fresh initiator nonce
      * @param responderNonce fresh responder nonce
-     * @param initiator initiator identity
-     * @param responder responder identity
+     * @param initiator      initiator identity
+     * @param responder      responder identity
      * @return immutable canonical transcript
      */
     public static HandshakeTranscript forIdentities(ProtocolVersion version, UUID sessionId,
@@ -193,118 +201,6 @@ public final class HandshakeTranscript {
             return transcript;
         } catch (EOFException | IllegalArgumentException exception) {
             throw new IOException("malformed handshake transcript", exception);
-        }
-    }
-
-    /**
-     * Returns the canonical transcript bytes.
-     *
-     * @return fresh encoded bytes
-     */
-    public byte[] encoded() { return encoded.clone(); }
-
-    /**
-     * Returns the invitation capability bound into this transcript.
-     *
-     * @return a copy, empty for ordinary non-invitation sessions
-     */
-    public byte[] invitationCapability() { return invitationCapability.clone(); }
-
-    /**
-     * Returns the role-specific bytes to be challenged by a proof.
-     *
-     * @param role proof role
-     * @return SHA-256 challenge bytes
-     */
-    public byte[] proofChallenge(HandshakeRole role) {
-        Objects.requireNonNull(role, "role");
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            digest.update(encoded);
-            digest.update((byte) role.ordinal());
-            return digest.digest();
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required by the Java platform", impossible);
-        }
-    }
-
-    /**
-     * Returns the node ID for a role.
-     *
-     * @param role role to inspect
-     * @return role's node ID
-     */
-    public String nodeId(HandshakeRole role) {
-        return role == HandshakeRole.INITIATOR ? initiatorNodeId : responderNodeId;
-    }
-
-    /**
-     * Returns the public key for a role.
-     *
-     * @param role role to inspect
-     * @return fresh X.509 public-key bytes
-     */
-    public byte[] publicKeyEncoded(HandshakeRole role) {
-        return (role == HandshakeRole.INITIATOR ? initiatorPublicKey : responderPublicKey).clone();
-    }
-
-    /**
-     * Returns the session ID.
-     *
-     * @return session ID
-     */
-    public UUID sessionId() { return sessionId; }
-
-    /**
-     * Returns the negotiated protocol version.
-     *
-     * @return protocol version
-     */
-    public ProtocolVersion version() { return version; }
-
-    /**
-     * Returns the ALPN value included in the transcript.
-     *
-     * @return ALPN
-     */
-    public String alpn() { return alpn; }
-
-    /**
-     * Returns the epoch for a role.
-     *
-     * @param role role to inspect
-     * @return non-negative session epoch
-     */
-    public long epoch(HandshakeRole role) {
-        return role == HandshakeRole.INITIATOR ? initiatorEpoch : responderEpoch;
-    }
-
-    private byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            try (DataOutputStream output = new DataOutputStream(bytes)) {
-                output.writeInt(MAGIC);
-                output.writeByte(version.major());
-                output.writeByte(version.minor());
-                writeString(output, alpn);
-                output.writeLong(sessionId.getMostSignificantBits());
-                output.writeLong(sessionId.getLeastSignificantBits());
-                output.writeLong(initiatorEpoch);
-                output.writeLong(responderEpoch);
-                writeBytes(output, initiatorNonce);
-                writeBytes(output, responderNonce);
-                writeBytes(output, invitationCapability);
-                writeString(output, initiatorNodeId);
-                writeBytes(output, initiatorPublicKey);
-                writeString(output, responderNodeId);
-                writeBytes(output, responderPublicKey);
-            }
-            if (bytes.size() > MAX_BYTES) {
-                throw new IllegalArgumentException("handshake transcript exceeds supported bound");
-            }
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new AssertionError("byte array output cannot fail", impossible);
         }
     }
 
@@ -366,5 +262,127 @@ public final class HandshakeTranscript {
             throw new IOException("invalid optional transcript field");
         }
         return input.readNBytes(length);
+    }
+
+    /**
+     * Returns the canonical transcript bytes.
+     *
+     * @return fresh encoded bytes
+     */
+    public byte[] encoded() {
+        return encoded.clone();
+    }
+
+    /**
+     * Returns the invitation capability bound into this transcript.
+     *
+     * @return a copy, empty for ordinary non-invitation sessions
+     */
+    public byte[] invitationCapability() {
+        return invitationCapability.clone();
+    }
+
+    /**
+     * Returns the role-specific bytes to be challenged by a proof.
+     *
+     * @param role proof role
+     * @return SHA-256 challenge bytes
+     */
+    public byte[] proofChallenge(HandshakeRole role) {
+        Objects.requireNonNull(role, "role");
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(encoded);
+            digest.update((byte) role.ordinal());
+            return digest.digest();
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError("SHA-256 is required by the Java platform", impossible);
+        }
+    }
+
+    /**
+     * Returns the node ID for a role.
+     *
+     * @param role role to inspect
+     * @return role's node ID
+     */
+    public String nodeId(HandshakeRole role) {
+        return role == HandshakeRole.INITIATOR ? initiatorNodeId : responderNodeId;
+    }
+
+    /**
+     * Returns the public key for a role.
+     *
+     * @param role role to inspect
+     * @return fresh X.509 public-key bytes
+     */
+    public byte[] publicKeyEncoded(HandshakeRole role) {
+        return (role == HandshakeRole.INITIATOR ? initiatorPublicKey : responderPublicKey).clone();
+    }
+
+    /**
+     * Returns the session ID.
+     *
+     * @return session ID
+     */
+    public UUID sessionId() {
+        return sessionId;
+    }
+
+    /**
+     * Returns the negotiated protocol version.
+     *
+     * @return protocol version
+     */
+    public ProtocolVersion version() {
+        return version;
+    }
+
+    /**
+     * Returns the ALPN value included in the transcript.
+     *
+     * @return ALPN
+     */
+    public String alpn() {
+        return alpn;
+    }
+
+    /**
+     * Returns the epoch for a role.
+     *
+     * @param role role to inspect
+     * @return non-negative session epoch
+     */
+    public long epoch(HandshakeRole role) {
+        return role == HandshakeRole.INITIATOR ? initiatorEpoch : responderEpoch;
+    }
+
+    private byte[] encode() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (DataOutputStream output = new DataOutputStream(bytes)) {
+                output.writeInt(MAGIC);
+                output.writeByte(version.major());
+                output.writeByte(version.minor());
+                writeString(output, alpn);
+                output.writeLong(sessionId.getMostSignificantBits());
+                output.writeLong(sessionId.getLeastSignificantBits());
+                output.writeLong(initiatorEpoch);
+                output.writeLong(responderEpoch);
+                writeBytes(output, initiatorNonce);
+                writeBytes(output, responderNonce);
+                writeBytes(output, invitationCapability);
+                writeString(output, initiatorNodeId);
+                writeBytes(output, initiatorPublicKey);
+                writeString(output, responderNodeId);
+                writeBytes(output, responderPublicKey);
+            }
+            if (bytes.size() > MAX_BYTES) {
+                throw new IllegalArgumentException("handshake transcript exceeds supported bound");
+            }
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError("byte array output cannot fail", impossible);
+        }
     }
 }

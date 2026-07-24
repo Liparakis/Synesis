@@ -2,8 +2,11 @@ package org.synesis.link.candidate;
 
 import java.util.concurrent.CompletionStage;
 
-/** Handle for one cancellable candidate gathering operation. */
+/**
+ * Handle for one cancellable candidate gathering operation.
+ */
 public final class CandidateGatheringOperation {
+
     private final CompletionStage<CandidateGatheringResult> completion;
     private final Runnable cancelAction;
     private final java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
@@ -18,7 +21,9 @@ public final class CandidateGatheringOperation {
      *
      * @return gathering completion stage
      */
-    public CompletionStage<CandidateGatheringResult> completion() { return completion; }
+    public CompletionStage<CandidateGatheringResult> completion() {
+        return completion;
+    }
 
     /**
      * Cancels provider work and completes with bounded cancellation diagnostics.
@@ -26,7 +31,9 @@ public final class CandidateGatheringOperation {
      * @return true only for the call that selected cancellation
      */
     public boolean cancel() {
-        if (!cancelled.compareAndSet(false, true)) return false;
+        if (!cancelled.compareAndSet(false, true)) {
+            return false;
+        }
         cancelAction.run();
         return true;
     }

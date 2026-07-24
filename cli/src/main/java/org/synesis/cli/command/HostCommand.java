@@ -1,23 +1,22 @@
 package org.synesis.cli.command;
 
 import java.util.concurrent.Callable;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.link.transport.OnboardingFailure;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 
 /**
  * Adapts {@code synesis host} to the Link onboarding façade.
  */
 @Command(name = "host", description = "Host one signed onboarding invitation.", mixinStandardHelpOptions = true)
 public final class HostCommand implements Callable<Integer> {
+
+    private final CliRuntime runtime;
     @Option(names = "--expect-peer", description = "Require this authenticated peer node ID.")
     private String expectedPeer;
-    private final CliRuntime runtime;
 
     /**
      * Creates a host command with one manually composed runtime.
@@ -34,7 +33,8 @@ public final class HostCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            runtime.onboarding().host(expectedPeer);
+            runtime.onboarding()
+                    .host(expectedPeer);
             return ExitCodes.OK;
         } catch (OnboardingFailure failure) {
             return FailureMapper.map(failure, runtime.terminal());

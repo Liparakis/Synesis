@@ -11,15 +11,17 @@ import java.util.Objects;
  * is an unsigned 32-bit ordering value represented by a non-negative Java
  * integer. The diagnostic string intentionally omits the address.
  *
- * @param type source category
- * @param address route address, never {@code null}
- * @param port destination port from 1 through 65535
+ * @param type     source category
+ * @param address  route address, never {@code null}
+ * @param port     destination port from 1 through 65535
  * @param priority lower values are preferred; must be non-negative
  * @since 1.0
  */
 public record Candidate(CandidateType type, InetAddress address, int port, int priority) {
 
-    /** Creates and validates a candidate. */
+    /**
+     * Creates and validates a candidate.
+     */
     public Candidate {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(address, "address");
@@ -42,6 +44,7 @@ public record Candidate(CandidateType type, InetAddress address, int port, int p
     }
 
     byte[] addressBytes() {
-        return address.getAddress().clone();
+        return address.getAddress()
+                .clone();
     }
 }

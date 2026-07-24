@@ -42,7 +42,8 @@ public final class NodeIdentity {
         if (!isEd25519(publicKey.getAlgorithm()) || !isEd25519(privateKey.getAlgorithm())) {
             throw new IllegalArgumentException("Only Ed25519 key pairs are supported");
         }
-        this.publicKeyEncoded = publicKey.getEncoded().clone();
+        this.publicKeyEncoded = publicKey.getEncoded()
+                .clone();
         if (publicKeyEncoded.length == 0 || publicKeyEncoded.length > MAX_PUBLIC_KEY_BYTES
                 || privateKey.getEncoded().length == 0 || privateKey.getEncoded().length > MAX_PRIVATE_KEY_BYTES) {
             throw new IllegalArgumentException("Unsupported key encoding size");
@@ -65,7 +66,7 @@ public final class NodeIdentity {
      *
      * @param keyPair key pair; neither key may be {@code null}
      * @return an immutable identity wrapper
-     * @throws NullPointerException if {@code keyPair} or a key is {@code null}
+     * @throws NullPointerException     if {@code keyPair} or a key is {@code null}
      * @throws IllegalArgumentException if the pair is not Ed25519
      */
     public static NodeIdentity from(KeyPair keyPair) {
@@ -75,11 +76,11 @@ public final class NodeIdentity {
     /**
      * Reconstructs an identity from standard encoded key material.
      *
-     * @param publicKeyEncoded X.509 public-key bytes
+     * @param publicKeyEncoded  X.509 public-key bytes
      * @param privateKeyEncoded PKCS#8 private-key bytes
      * @return the reconstructed identity
      * @throws GeneralSecurityException if either encoding is invalid
-     * @throws NullPointerException if either argument is {@code null}
+     * @throws NullPointerException     if either argument is {@code null}
      * @throws IllegalArgumentException if an encoding exceeds the bounded size
      */
     public static NodeIdentity fromEncoded(byte[] publicKeyEncoded, byte[] privateKeyEncoded)
@@ -94,6 +95,34 @@ public final class NodeIdentity {
         PublicKey publicKey = factory.generatePublic(new X509EncodedKeySpec(publicKeyEncoded));
         PrivateKey privateKey = factory.generatePrivate(new PKCS8EncodedKeySpec(privateKeyEncoded));
         return from(new KeyPair(publicKey, privateKey));
+    }
+
+    /**
+     * Derives a node ID from canonical encoded public-key material.
+     *
+     * @param publicKeyEncoded X.509 public-key bytes
+     * @return the deterministic lowercase hexadecimal node ID
+     */
+    public static String deriveNodeId(byte[] publicKeyEncoded) {
+        Objects.requireNonNull(publicKeyEncoded, "public key");
+        byte[] digest = sha256(publicKeyEncoded);
+        return NODE_ID_PREFIX + HexFormat.of()
+                .withUpperCase()
+                .formatHex(digest)
+                .toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static byte[] sha256(byte[] value) {
+        try {
+            return MessageDigest.getInstance("SHA-256")
+                    .digest(value);
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError("SHA-256 is required by the Java platform", impossible);
+        }
+    }
+
+    private static boolean isEd25519(String algorithm) {
+        return ALGORITHM.equals(algorithm) || "EdDSA".equals(algorithm);
     }
 
     /**
@@ -120,7 +149,7 @@ public final class NodeIdentity {
      * @param message exact bytes to sign; never {@code null}
      * @return a fresh Ed25519 signature
      * @throws GeneralSecurityException if signing fails
-     * @throws NullPointerException if {@code message} is {@code null}
+     * @throws NullPointerException     if {@code message} is {@code null}
      */
     public byte[] sign(byte[] message) throws GeneralSecurityException {
         Objects.requireNonNull(message, "message");
@@ -133,11 +162,11 @@ public final class NodeIdentity {
     /**
      * Verifies a signature made by this identity.
      *
-     * @param message exact signed bytes; never {@code null}
+     * @param message        exact signed bytes; never {@code null}
      * @param signatureBytes signature bytes; never {@code null}
      * @return {@code true} only when the signature is valid
      * @throws GeneralSecurityException if verification cannot be performed
-     * @throws NullPointerException if an argument is {@code null}
+     * @throws NullPointerException     if an argument is {@code null}
      */
     public boolean verify(byte[] message, byte[] signatureBytes) throws GeneralSecurityException {
         Objects.requireNonNull(message, "message");
@@ -146,18 +175,6 @@ public final class NodeIdentity {
         signature.initVerify(publicKey);
         signature.update(message);
         return signature.verify(signatureBytes);
-    }
-
-    /**
-     * Derives a node ID from canonical encoded public-key material.
-     *
-     * @param publicKeyEncoded X.509 public-key bytes
-     * @return the deterministic lowercase hexadecimal node ID
-     */
-    public static String deriveNodeId(byte[] publicKeyEncoded) {
-        Objects.requireNonNull(publicKeyEncoded, "public key");
-        byte[] digest = sha256(publicKeyEncoded);
-        return NODE_ID_PREFIX + HexFormat.of().withUpperCase().formatHex(digest).toLowerCase(java.util.Locale.ROOT);
     }
 
     /**
@@ -171,24 +188,15 @@ public final class NodeIdentity {
     }
 
     byte[] privateKeyEncodedForStore() {
-        return privateKey.getEncoded().clone();
-    }
-
-    private static byte[] sha256(byte[] value) {
-        try {
-            return MessageDigest.getInstance("SHA-256").digest(value);
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required by the Java platform", impossible);
-        }
-    }
-
-    private static boolean isEd25519(String algorithm) {
-        return ALGORITHM.equals(algorithm) || "EdDSA".equals(algorithm);
+        return privateKey.getEncoded()
+                .clone();
     }
 
     private static final class KeyPairGeneratorFactory {
+
         private KeyPair generate() throws GeneralSecurityException {
-            return KeyPairGenerator.getInstance(ALGORITHM).generateKeyPair();
+            return KeyPairGenerator.getInstance(ALGORITHM)
+                    .generateKeyPair();
         }
     }
 }

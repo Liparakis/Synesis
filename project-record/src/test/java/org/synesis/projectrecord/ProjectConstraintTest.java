@@ -42,7 +42,8 @@ final class ProjectConstraintTest {
     @Test
     void ordinaryDecisionWithConstraintTitleIsNotTreatedAsConstraint() throws Exception {
         Ed25519Signer signer = Ed25519Signer.generate();
-        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        Instant now = Instant.now()
+                .truncatedTo(ChronoUnit.MILLIS);
         byte[] digest = new byte[32];
 
         // Decision record with title starting with "CONSTRAINT:" but recordType = DECISION

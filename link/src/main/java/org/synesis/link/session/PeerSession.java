@@ -1,15 +1,14 @@
 package org.synesis.link.session;
 
 import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
-
-import org.synesis.link.protocol.ProtocolVersion;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.synesis.link.demo.DemoWorkRequest;
 import org.synesis.link.demo.DemoWorkResult;
+import org.synesis.link.protocol.ProtocolVersion;
 
 /**
  * Immutable authenticated session snapshot safe to expose above transport.
@@ -23,118 +22,6 @@ import org.synesis.link.demo.DemoWorkResult;
  */
 public final class PeerSession {
 
-    /** Transport-neutral callback for one bounded application payload. */
-    @FunctionalInterface
-    public interface ApplicationStreamHandler {
-        /**
-         * Handles one payload after authentication and control readiness.
-         *
-         * @param remoteNodeId authenticated remote node ID
-         * @param payload bounded opaque payload
-         * @return bounded response payload
-         */
-        CompletionStage<byte[]> handle(String remoteNodeId, byte[] payload);
-    }
-
-    /** Transport-neutral binding for one bounded application-stream exchange. */
-    public interface ApplicationStreamBinding {
-        /**
-         * Sends one bounded payload on an authenticated application stream.
-         *
-         * @param payload opaque payload
-         * @return bounded response or failure
-         */
-        CompletionStage<byte[]> exchange(byte[] payload);
-    }
-
-    /** Transport-neutral owner for the bounded demo-only work exchange. */
-    public interface DemoWorkBinding {
-        /**
-         * Sends one request on an authenticated, control-ready application stream.
-         *
-         * @param request fixed bounded demo request
-         * @return correlated result or failure
-         */
-        CompletionStage<DemoWorkResult> request(DemoWorkRequest request);
-    }
-
-    /**
-     * Transport-neutral lifecycle bridge owned by the authenticated control stream.
-     * Implementations must serialize writes on their transport event loop.
-     */
-    public interface ControlBinding {
-        /**
-         * Reports whether CONTROL_READY has been exchanged.
-         *
-         * @return whether the control stream is ready
-         */
-        boolean isReady();
-
-        /**
-         * Returns the optional demo-only application binding owned by this control stream.
-         *
-         * @return application binding, or {@code null} when no demo stream is installed
-         */
-        default DemoWorkBinding demoWorkBinding() { return null; }
-
-        /**
-         * Returns the optional bounded application-stream binding.
-         *
-         * @return application binding, or {@code null} when unavailable
-         */
-        default ApplicationStreamBinding applicationStreamBinding() { return null; }
-
-        /**
-         * Requests one shared graceful close operation.
-         *
-         * @param reason requested close reason
-         * @return shared terminal completion
-         */
-        CompletionStage<Void> closeGracefully(SessionCloseReason reason);
-
-        /**
-         * Returns terminal transport completion.
-         *
-         * @return completion that finishes exactly once
-         */
-        CompletionStage<Void> terminalCompletion();
-
-        /**
-         * Returns the final close reason.
-         *
-         * @return final close reason, or {@code null} before terminal closure
-         */
-        SessionCloseReason closeReason();
-
-        /**
-         * Returns the current liveness state.
-         *
-         * @return immutable liveness state
-         */
-        LivenessState livenessState();
-
-        /**
-         * Returns safe liveness counters and diagnostics.
-         *
-         * @return immutable metrics snapshot
-         */
-        LivenessMetrics livenessMetrics();
-
-        /**
-         * Registers a bounded asynchronous transition listener.
-         *
-         * @param listener listener to retain until removal or terminal cleanup
-         */
-        void addLivenessListener(LivenessListener listener);
-
-        /**
-         * Removes a previously registered listener.
-         *
-         * @param listener listener to remove
-         */
-        void removeLivenessListener(LivenessListener listener);
-    }
-
     private final String localNodeId;
     private final String remoteNodeId;
     private final byte[] remotePublicKey;
@@ -146,7 +33,6 @@ public final class PeerSession {
     private volatile ControlBinding control;
     private volatile DemoWorkBinding demoWork;
     private volatile ApplicationStreamBinding applicationStream;
-
     PeerSession(String localNodeId, String remoteNodeId, byte[] remotePublicKey, UUID sessionId,
             long localEpoch, long remoteEpoch, ProtocolVersion version, Instant establishedAt) {
         this.localNodeId = Objects.requireNonNull(localNodeId, "local node ID");
@@ -164,56 +50,72 @@ public final class PeerSession {
      *
      * @return local node ID
      */
-    public String localNodeId() { return localNodeId; }
+    public String localNodeId() {
+        return localNodeId;
+    }
 
     /**
      * Returns the authenticated remote node ID.
      *
      * @return remote node ID
      */
-    public String remoteNodeId() { return remoteNodeId; }
+    public String remoteNodeId() {
+        return remoteNodeId;
+    }
 
     /**
      * Returns a copy of the authenticated remote X.509 public key.
      *
      * @return remote public-key bytes
      */
-    public byte[] remotePublicKeyEncoded() { return remotePublicKey.clone(); }
+    public byte[] remotePublicKeyEncoded() {
+        return remotePublicKey.clone();
+    }
 
     /**
      * Returns the unique session ID.
      *
      * @return session ID
      */
-    public UUID sessionId() { return sessionId; }
+    public UUID sessionId() {
+        return sessionId;
+    }
 
     /**
      * Returns the local session epoch.
      *
      * @return local epoch
      */
-    public long localEpoch() { return localEpoch; }
+    public long localEpoch() {
+        return localEpoch;
+    }
 
     /**
      * Returns the remote session epoch.
      *
      * @return remote epoch
      */
-    public long remoteEpoch() { return remoteEpoch; }
+    public long remoteEpoch() {
+        return remoteEpoch;
+    }
 
     /**
      * Returns the negotiated protocol version.
      *
      * @return protocol version
      */
-    public ProtocolVersion negotiatedVersion() { return version; }
+    public ProtocolVersion negotiatedVersion() {
+        return version;
+    }
 
     /**
      * Returns the local establishment timestamp.
      *
      * @return establishment time
      */
-    public Instant establishedAt() { return establishedAt; }
+    public Instant establishedAt() {
+        return establishedAt;
+    }
 
     /**
      * Compares the authenticated remote key with supplied bytes.
@@ -359,7 +261,9 @@ public final class PeerSession {
      */
     public void addLivenessListener(LivenessListener listener) {
         ControlBinding binding = control;
-        if (binding == null) throw new IllegalStateException("control stream is not established");
+        if (binding == null) {
+            throw new IllegalStateException("control stream is not established");
+        }
         binding.addLivenessListener(Objects.requireNonNull(listener, "listener"));
     }
 
@@ -371,7 +275,9 @@ public final class PeerSession {
      */
     public void removeLivenessListener(LivenessListener listener) {
         ControlBinding binding = control;
-        if (binding == null) throw new IllegalStateException("control stream is not established");
+        if (binding == null) {
+            throw new IllegalStateException("control stream is not established");
+        }
         binding.removeLivenessListener(Objects.requireNonNull(listener, "listener"));
     }
 
@@ -382,5 +288,131 @@ public final class PeerSession {
      */
     public CompletionStage<Void> cancellation() {
         return terminalCompletion();
+    }
+
+    /**
+     * Transport-neutral callback for one bounded application payload.
+     */
+    @FunctionalInterface
+    public interface ApplicationStreamHandler {
+
+        /**
+         * Handles one payload after authentication and control readiness.
+         *
+         * @param remoteNodeId authenticated remote node ID
+         * @param payload      bounded opaque payload
+         * @return bounded response payload
+         */
+        CompletionStage<byte[]> handle(String remoteNodeId, byte[] payload);
+    }
+
+    /**
+     * Transport-neutral binding for one bounded application-stream exchange.
+     */
+    public interface ApplicationStreamBinding {
+
+        /**
+         * Sends one bounded payload on an authenticated application stream.
+         *
+         * @param payload opaque payload
+         * @return bounded response or failure
+         */
+        CompletionStage<byte[]> exchange(byte[] payload);
+    }
+
+    /**
+     * Transport-neutral owner for the bounded demo-only work exchange.
+     */
+    public interface DemoWorkBinding {
+
+        /**
+         * Sends one request on an authenticated, control-ready application stream.
+         *
+         * @param request fixed bounded demo request
+         * @return correlated result or failure
+         */
+        CompletionStage<DemoWorkResult> request(DemoWorkRequest request);
+    }
+
+    /**
+     * Transport-neutral lifecycle bridge owned by the authenticated control stream.
+     * Implementations must serialize writes on their transport event loop.
+     */
+    public interface ControlBinding {
+
+        /**
+         * Reports whether CONTROL_READY has been exchanged.
+         *
+         * @return whether the control stream is ready
+         */
+        boolean isReady();
+
+        /**
+         * Returns the optional demo-only application binding owned by this control stream.
+         *
+         * @return application binding, or {@code null} when no demo stream is installed
+         */
+        default DemoWorkBinding demoWorkBinding() {
+            return null;
+        }
+
+        /**
+         * Returns the optional bounded application-stream binding.
+         *
+         * @return application binding, or {@code null} when unavailable
+         */
+        default ApplicationStreamBinding applicationStreamBinding() {
+            return null;
+        }
+
+        /**
+         * Requests one shared graceful close operation.
+         *
+         * @param reason requested close reason
+         * @return shared terminal completion
+         */
+        CompletionStage<Void> closeGracefully(SessionCloseReason reason);
+
+        /**
+         * Returns terminal transport completion.
+         *
+         * @return completion that finishes exactly once
+         */
+        CompletionStage<Void> terminalCompletion();
+
+        /**
+         * Returns the final close reason.
+         *
+         * @return final close reason, or {@code null} before terminal closure
+         */
+        SessionCloseReason closeReason();
+
+        /**
+         * Returns the current liveness state.
+         *
+         * @return immutable liveness state
+         */
+        LivenessState livenessState();
+
+        /**
+         * Returns safe liveness counters and diagnostics.
+         *
+         * @return immutable metrics snapshot
+         */
+        LivenessMetrics livenessMetrics();
+
+        /**
+         * Registers a bounded asynchronous transition listener.
+         *
+         * @param listener listener to retain until removal or terminal cleanup
+         */
+        void addLivenessListener(LivenessListener listener);
+
+        /**
+         * Removes a previously registered listener.
+         *
+         * @param listener listener to remove
+         */
+        void removeLivenessListener(LivenessListener listener);
     }
 }

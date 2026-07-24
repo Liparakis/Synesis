@@ -12,6 +12,7 @@ import java.util.UUID;
  * Bounded on-demand search over one profile's validated decision heads.
  */
 public final class DecisionSearch {
+
     /**
      * Maximum UTF-8 query text size.
      */
@@ -28,6 +29,67 @@ public final class DecisionSearch {
      * Maximum decision heads scanned by one query.
      */
     public static final int MAX_RECORD_SCAN = 128;
+    private final DecisionStore store;
+
+    /**
+     * Creates a read-only view over one local decision store.
+     *
+     * @param store profile-local decision store
+     */
+    public DecisionSearch(DecisionStore store) {
+        this.store = Objects.requireNonNull(store, "decision store");
+    }
+
+    private static boolean matches(Query query, DecisionRecord record) {
+        if (query.recordId != null && !query.recordId.equals(record.recordId())) {
+            return false;
+        }
+        if (query.status != null && query.status != record.status()) {
+            return false;
+        }
+        if (query.ownerNodeId != null && !query.ownerNodeId.equals(record.ownerNodeId())) {
+            return false;
+        }
+        String searchable = (record.title() + "\n" + record.rationale()).toLowerCase(Locale.ROOT);
+        return query.terms.stream()
+                .allMatch(searchable::contains);
+    }
+
+    private static String escape(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
+    }
+
+    /**
+     * Searches validated current heads on demand.
+     *
+     * @param query bounded query and result limit
+     * @return matching rows or a safe local-state failure
+     */
+    public SearchResult search(Query query) {
+        Objects.requireNonNull(query, "query");
+        try {
+            List<DecisionRecord> heads = store.verifiedHeads(MAX_RECORD_SCAN);
+            List<Result> matches = new ArrayList<>();
+            for (DecisionRecord record : heads) {
+                if (!matches(query, record)) {
+                    continue;
+                }
+                matches.add(new Result(record));
+            }
+            matches.sort(Comparator.<Result, String>comparing(result -> result.recordId()
+                            .toString())
+                    .thenComparingLong(Result::revision)
+                    .thenComparing(Result::digestHex));
+            return new SearchResult(matches.subList(0, Math.min(query.limit(), matches.size())), null);
+        } catch (java.io.IOException | IllegalArgumentException failure) {
+            ErrorCode code = failure.getMessage() != null && failure.getMessage()
+                    .contains("bound")
+                    ? ErrorCode.SCAN_LIMIT : ErrorCode.LOCAL_STATE_INVALID;
+            return new SearchResult(List.of(), code);
+        }
+    }
 
     /**
      * Safe search failure classification.
@@ -47,6 +109,7 @@ public final class DecisionSearch {
      * Immutable bounded search query.
      */
     public static final class Query {
+
         private final String text;
         private final List<String> terms;
         private final UUID recordId;
@@ -66,17 +129,26 @@ public final class DecisionSearch {
         public Query(String text, UUID recordId, DecisionStatus status, String ownerNodeId, int limit) {
             this.text = text == null ? "" : text.trim();
             if (this.text.getBytes(StandardCharsets.UTF_8).length > MAX_QUERY_BYTES
-                    || this.text.indexOf('\u0000') >= 0) throw new IllegalArgumentException("query text exceeds bound");
+                    || this.text.indexOf('\u0000') >= 0) {
+                throw new IllegalArgumentException("query text exceeds bound");
+            }
             String[] split = this.text.isEmpty() ? new String[0] : this.text.split("\\s+");
-            if (split.length > MAX_TERMS) throw new IllegalArgumentException("too many query terms");
-            this.terms = List.of(split).stream().map(value -> value.toLowerCase(Locale.ROOT)).toList();
+            if (split.length > MAX_TERMS) {
+                throw new IllegalArgumentException("too many query terms");
+            }
+            this.terms = List.of(split)
+                    .stream()
+                    .map(value -> value.toLowerCase(Locale.ROOT))
+                    .toList();
             this.recordId = recordId;
             this.status = status;
             if (ownerNodeId != null && !ownerNodeId.matches("sl1-[0-9a-f]{64}")) {
                 throw new IllegalArgumentException("invalid owner filter");
             }
             this.ownerNodeId = ownerNodeId;
-            if (limit <= 0 || limit > MAX_RESULTS) throw new IllegalArgumentException("result limit exceeds bound");
+            if (limit <= 0 || limit > MAX_RESULTS) {
+                throw new IllegalArgumentException("result limit exceeds bound");
+            }
             this.limit = limit;
         }
 
@@ -130,6 +202,7 @@ public final class DecisionSearch {
      * Immutable safe projection of one verified decision head.
      */
     public static final class Result {
+
         private final DecisionRecord record;
 
         private Result(DecisionRecord record) {
@@ -204,6 +277,7 @@ public final class DecisionSearch {
      * Immutable search response with either rows or a safe failure.
      */
     public static final class SearchResult {
+
         private final List<Result> results;
         private final ErrorCode errorCode;
 
@@ -246,66 +320,38 @@ public final class DecisionSearch {
          */
         public String render() {
             StringBuilder output = new StringBuilder();
-            if (errorCode != null) output.append("ERROR=").append(errorCode).append('\n');
-            output.append("RESULTS=").append(results.size()).append('\n');
+            if (errorCode != null) {
+                output.append("ERROR=")
+                        .append(errorCode)
+                        .append('\n');
+            }
+            output.append("RESULTS=")
+                    .append(results.size())
+                    .append('\n');
             for (Result result : results) {
-                output.append("RECORD_ID=").append(result.recordId()).append('\n');
-                output.append("REVISION=").append(result.revision()).append('\n');
-                output.append("DIGEST=").append(result.digestHex()).append('\n');
-                output.append("OWNER_NODE_ID=").append(result.ownerNodeId()).append('\n');
-                output.append("STATUS=").append(result.status()).append('\n');
-                output.append("TITLE=").append(escape(result.title())).append('\n');
-                output.append("RATIONALE=").append(escape(result.rationale())).append('\n');
+                output.append("RECORD_ID=")
+                        .append(result.recordId())
+                        .append('\n');
+                output.append("REVISION=")
+                        .append(result.revision())
+                        .append('\n');
+                output.append("DIGEST=")
+                        .append(result.digestHex())
+                        .append('\n');
+                output.append("OWNER_NODE_ID=")
+                        .append(result.ownerNodeId())
+                        .append('\n');
+                output.append("STATUS=")
+                        .append(result.status())
+                        .append('\n');
+                output.append("TITLE=")
+                        .append(escape(result.title()))
+                        .append('\n');
+                output.append("RATIONALE=")
+                        .append(escape(result.rationale()))
+                        .append('\n');
             }
             return output.toString();
         }
-    }
-
-    private final DecisionStore store;
-
-    /**
-     * Creates a read-only view over one local decision store.
-     *
-     * @param store profile-local decision store
-     */
-    public DecisionSearch(DecisionStore store) {
-        this.store = Objects.requireNonNull(store, "decision store");
-    }
-
-    /**
-     * Searches validated current heads on demand.
-     *
-     * @param query bounded query and result limit
-     * @return matching rows or a safe local-state failure
-     */
-    public SearchResult search(Query query) {
-        Objects.requireNonNull(query, "query");
-        try {
-            List<DecisionRecord> heads = store.verifiedHeads(MAX_RECORD_SCAN);
-            List<Result> matches = new ArrayList<>();
-            for (DecisionRecord record : heads) {
-                if (!matches(query, record)) continue;
-                matches.add(new Result(record));
-            }
-            matches.sort(Comparator.<Result, String>comparing(result -> result.recordId().toString())
-                    .thenComparingLong(Result::revision).thenComparing(Result::digestHex));
-            return new SearchResult(matches.subList(0, Math.min(query.limit(), matches.size())), null);
-        } catch (java.io.IOException | IllegalArgumentException failure) {
-            ErrorCode code = failure.getMessage() != null && failure.getMessage().contains("bound")
-                    ? ErrorCode.SCAN_LIMIT : ErrorCode.LOCAL_STATE_INVALID;
-            return new SearchResult(List.of(), code);
-        }
-    }
-
-    private static boolean matches(Query query, DecisionRecord record) {
-        if (query.recordId != null && !query.recordId.equals(record.recordId())) return false;
-        if (query.status != null && query.status != record.status()) return false;
-        if (query.ownerNodeId != null && !query.ownerNodeId.equals(record.ownerNodeId())) return false;
-        String searchable = (record.title() + "\n" + record.rationale()).toLowerCase(Locale.ROOT);
-        return query.terms.stream().allMatch(searchable::contains);
-    }
-
-    private static String escape(String value) {
-        return value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n");
     }
 }

@@ -8,10 +8,20 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** Tests the bounded heartbeat payload codec before transport integration. */
+/**
+ * Tests the bounded heartbeat payload codec before transport integration.
+ */
 final class HeartbeatMessageTest {
 
     private static final UUID SESSION = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff");
+
+    private static String hex(byte[] value) {
+        StringBuilder result = new StringBuilder(value.length * 2);
+        for (byte current : value) {
+            result.append(String.format("%02x", current & 255));
+        }
+        return result.toString();
+    }
 
     @Test
     void heartbeatRoundTripUsesStableGoldenBytes() {
@@ -46,12 +56,8 @@ final class HeartbeatMessageTest {
         wrongSession[1] = 9;
         assertThrows(IllegalArgumentException.class,
                 () -> HeartbeatMessage.decode(wrongSession, SESSION, false));
-        assertArrayEquals(encoded, HeartbeatMessage.decode(encoded, false).encoded());
-    }
-
-    private static String hex(byte[] value) {
-        StringBuilder result = new StringBuilder(value.length * 2);
-        for (byte current : value) result.append(String.format("%02x", current & 255));
-        return result.toString();
+        assertArrayEquals(encoded,
+                HeartbeatMessage.decode(encoded, false)
+                        .encoded());
     }
 }
