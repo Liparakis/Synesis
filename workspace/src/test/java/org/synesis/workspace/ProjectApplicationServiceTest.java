@@ -24,6 +24,9 @@ final class ProjectApplicationServiceTest {
         assertTrue(Files.exists(root.resolve(".synesis/project.json")));
         assertTrue(Files.exists(root.resolve(".synesis/local/profile/link/identity.bin")));
         assertTrue(Files.isDirectory(root.resolve(".synesis/shared/records")));
+        String agents = Files.readString(root.resolve("AGENTS.md"));
+        assertTrue(agents.startsWith("<!-- SYNESIS-BEGIN -->"));
+        assertTrue(agents.contains("This project is Synesis-enabled."));
         String metadata = Files.readString(root.resolve(".synesis/project.json"));
         assertFalse(metadata.contains("identity.bin"));
         assertFalse(metadata.contains("private"));
@@ -32,7 +35,40 @@ final class ProjectApplicationServiceTest {
         ProjectApplicationService.ProjectLocation discovered = service.locate(root.resolve("nested/child"));
         assertEquals(root.toAbsolutePath().normalize(), discovered.root());
         assertEquals(initialized.location().projectId(), discovered.projectId());
+        String firstAgents = Files.readString(root.resolve("AGENTS.md"));
         assertEquals(ProjectApplicationService.InitStatus.ALREADY_INITIALIZED, service.init(root).status());
+        assertEquals(firstAgents, Files.readString(root.resolve("AGENTS.md")));
+    }
+
+    @Test
+    void preservesUserTextAndReplacesOnlyManagedSection() throws Exception {
+        Path root = Files.createTempDirectory("synesis-agents-");
+        String existing = "# Project rules\n\nKeep this text.\n\n"
+                + "<!-- SYNESIS-BEGIN -->\nold managed text\n<!-- SYNESIS-END -->\n\n# End\n";
+        Files.writeString(root.resolve("AGENTS.md"), existing);
+
+        new ProjectApplicationService().init(root);
+
+        String updated = Files.readString(root.resolve("AGENTS.md"));
+        assertTrue(updated.startsWith("# Project rules\n\nKeep this text."));
+        assertTrue(updated.endsWith("\n\n# End\n"));
+        assertTrue(updated.contains("This project is Synesis-enabled."));
+        assertFalse(updated.contains("old managed text"));
+    }
+
+    @Test
+    void rejectsMalformedManagedMarkersWithoutOverwritingUserFile() throws Exception {
+        Path root = Files.createTempDirectory("synesis-agents-malformed-");
+        Path agents = root.resolve("AGENTS.md");
+        String existing = "User instructions\n<!-- SYNESIS-BEGIN -->\n";
+        Files.writeString(agents, existing);
+
+        ProjectApplicationService.ProjectApplicationException failure = assertThrows(
+                ProjectApplicationService.ProjectApplicationException.class,
+                () -> new ProjectApplicationService().init(root));
+
+        assertEquals("CONFLICT", failure.code());
+        assertEquals(existing, Files.readString(agents));
     }
 
     @Test

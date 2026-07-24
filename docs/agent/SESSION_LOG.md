@@ -883,6 +883,23 @@ Append-only operational history.
 - Exact continuation: run the repository resume script and inspect CP-0134;
   no feature work remains for this slice.
 
+## 2026-07-24 — SYN-013B project-session binding
+
+- Added automatic project-scoped provider session binding for Codex and
+  Antigravity. Bindings are atomic, versioned, local-only, credential-free,
+  and preserve project/node identity; explicit provider evidence is hashed and
+  missing evidence is reported as fallback.
+- Wired both project hook paths and provider install/status. Added ADR-0030,
+  migration/installation guidance, protocol and maturity updates, and the
+  deferred real-validation gate.
+- Verification: `:workspace:test` focused binding tests PASS;
+  `:coordination:check` PASS; root `check` PASS; Windows x64 bundle rebuilt and
+  installed at `%LOCALAPPDATA%\\Synesis`; external project provider reinstall
+  yielded distinct Codex/Antigravity session, supervisor, and worker records
+  with unchanged project/node IDs.
+- Remaining: real provider mutation interception, workspace transition, and
+  re-plan evidence remain deferred; no provider is marked real-validated.
+
 ## 2026-07-23 — SYN-012 coordination foundation
 
 - Promoted SYN-012 as the sole active task after the explicit speculative
@@ -981,3 +998,17 @@ Append-only operational history.
 - No production code or runtime behavior changed.
 - Exact continuation: run the deferred-register validator, strict repository
   check, and checkpoint validator; then create the documentation-only commit.
+
+## 2026-07-24 — SYN-013A activation
+
+- User authorized implementation of the approved AGENTS.md bootstrap contract.
+- Promoted SYN-013A as the sole ACTIVE task; scope is limited to init-managed
+  AGENTS.md content and focused tests.
+# 2026-07-24 — SYN-013B provider-session binding activation
+
+- Closed SYN-013A after AGENTS.md bootstrap tests and bundled smoke passed.
+- Activated SYN-013B as the sole ACTIVE task for automatic project-scoped
+  provider session binding.
+- The implementation preserves project/node identity and keeps fallback
+  provider evidence explicitly degraded; real Codex/Antigravity validation is
+  not claimed.

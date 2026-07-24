@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -32,6 +33,21 @@ public final class ProjectApplicationService {
     public static final int PROJECT_SCHEMA_VERSION = 1;
     private static final String SYNESIS_DIRECTORY = ".synesis";
     private static final String PROJECT_FILE = "project.json";
+    private static final String AGENTS_FILE = "AGENTS.md";
+    private static final String AGENTS_BEGIN = "<!-- SYNESIS-BEGIN -->";
+    private static final String AGENTS_END = "<!-- SYNESIS-END -->";
+    private static final String AGENTS_BODY = """
+            This project is Synesis-enabled. Before any mutation, establish or resume the
+            Synesis session for this provider and task. Work only in the assigned Synesis
+            workspace. Synesis may stop a mutation when another task owns the capability;
+            describe the required behavior when prompted and do not edit the owner scope.
+            Do not run coordinator, supervisor, event, prediction, speculation, or
+            integration diagnostic commands as part of normal work. Do not bypass provider
+            hooks, write another session's worktree, or treat a prompt-supplied path as
+            workspace proof. If Synesis reports identity, freshness, ownership, or workspace
+            verification failure, pause mutation and continue only with safe read-only
+            inspection until the provider reports READY.
+            """;
 
     /**
      * Creates a project application service.
@@ -96,6 +112,7 @@ public final class ProjectApplicationService {
             if (Files.exists(metadata)) {
                 ProjectLocation existing = readLocation(root, synesis, metadata);
                 try {
+                    ensureAgentsFile(root);
                     return new InitResult(InitStatus.ALREADY_INITIALIZED,
                             existing,
                             identity(existing.profile()),
@@ -116,6 +133,7 @@ public final class ProjectApplicationService {
             Files.createDirectories(profile.resolve("records"));
             NodeIdentity identity = identity(profile);
             writeMetadata(metadata, projectId);
+            ensureAgentsFile(root);
             ProjectLocation location = readLocation(root, synesis, metadata);
             return new InitResult(InitStatus.SUCCESS, location, identity, true);
         } catch (Exception failure) {
@@ -208,6 +226,71 @@ public final class ProjectApplicationService {
                 Files.move(temporary, metadata, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
                 Files.move(temporary, metadata);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    /**
+     * Creates or replaces only the Synesis-managed section in the project root
+     * {@code AGENTS.md}, preserving all unrelated text.
+     *
+     * @param root project root
+     * @throws IOException if the file cannot be read or written, or its markers are malformed
+     */
+    private static void ensureAgentsFile(Path root) throws IOException {
+        Path agents = root.resolve(AGENTS_FILE);
+        if (Files.isSymbolicLink(agents)) {
+            throw new IOException("AGENTS.md must not be a symbolic link");
+        }
+        String existing = Files.exists(agents) ? Files.readString(agents, StandardCharsets.UTF_8) : "";
+        String separator = existing.contains("\r\n") ? "\r\n" : "\n";
+        int begin = existing.indexOf(AGENTS_BEGIN);
+        int end = existing.indexOf(AGENTS_END);
+        if ((begin < 0) != (end < 0) || count(existing, AGENTS_BEGIN) > 1 || count(existing, AGENTS_END) > 1
+                || (begin >= 0 && end < begin)) {
+            throw new IOException("AGENTS.md contains malformed Synesis markers");
+        }
+
+        String section = managedAgentsSection(separator);
+        String content;
+        if (begin >= 0) {
+            content = existing.substring(0, begin)
+                    + section
+                    + existing.substring(end + AGENTS_END.length());
+        } else if (existing.isEmpty()) {
+            content = section + separator;
+        } else {
+            String prefix = existing.endsWith("\n") ? separator : separator + separator;
+            content = existing + prefix + section + separator;
+        }
+        if (!content.equals(existing)) {
+            writeTextAtomically(agents, content);
+        }
+    }
+
+    private static String managedAgentsSection(String separator) {
+        return AGENTS_BEGIN + separator + AGENTS_BODY.replace("\n", separator) + AGENTS_END;
+    }
+
+    private static int count(String value, String token) {
+        int count = 0;
+        for (int index = value.indexOf(token); index >= 0; index = value.indexOf(token, index + token.length())) {
+            count++;
+        }
+        return count;
+    }
+
+    private static void writeTextAtomically(Path path, String content) throws IOException {
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());
+        Files.writeString(temporary, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE);
+        try {
+            try {
+                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
             }
         } finally {
             Files.deleteIfExists(temporary);

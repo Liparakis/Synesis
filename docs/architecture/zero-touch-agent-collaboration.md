@@ -30,6 +30,13 @@ read-only and the provider is not zero-touch-ready.
 | Antigravity mutation hook | UNSAFE_TO_REUSE | real protected edit changed the file; no hook invocation observed |
 | Autonomous bootstrap, workspace transition, inbox delivery | MISSING | no provider capability evidence |
 
+The missing identity link is now explicit and local: a provider hook loads the
+project node identity, verifies project membership, and automatically binds a
+provider-instance fingerprint to a durable session, supervisor, and worker
+record. The machine/global Link identity remains separate diagnostic state;
+the project profile is authoritative for project actions. This removes the
+identity mismatch blocker without claiming real provider enforcement.
+
 ## Topology and ownership
 
 ```mermaid
@@ -73,4 +80,3 @@ Reconsider the topology only after measured local event-log limits, a real
 multi-machine requirement, or a provider requiring a separate security/runtime
 boundary. Do not promote either provider until the real workspace-transition and
 pre-mutation gates pass.
-

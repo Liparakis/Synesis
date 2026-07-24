@@ -2,23 +2,24 @@
 
 ## Identity
 
-- Task ID: SYN-013
+- Task ID: SYN-013B
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0147
-- Latest checkpoint: CP-0149
-- Responsible agent: primary architecture engineer
+- Started checkpoint: CP-0151
+- Latest checkpoint: CP-0151
+- Responsible agent: primary implementation engineer
 - Related decisions: ADR-0027, ADR-0028, ADR-0029
 
 ## Objective
 
-Produce the implementation-ready plan for zero-touch autonomous harness
-collaboration after one `synesis init`, without changing production behavior.
+Implement automatic project-scoped provider session binding for Codex and
+Antigravity before their first meaningful hook action.
 
 ## Immediate slice
 
-Create and validate the architecture package, provider capability gates,
-worktree-transition decision, phased task map, and durable-state reconciliation.
+Persist distinct provider session, supervisor, and worker identities; wire
+automatic hook bootstrap; expose binding/trust diagnostics; preserve project
+and node identity; and fail closed on ambiguity or mismatch.
 
 ## Evidence ledger
 
@@ -33,6 +34,25 @@ worktree-transition decision, phased task map, and durable-state reconciliation.
   two-process demonstration; remote HTTPS is a later validation task.
 
 ## Work completed
+
+- Implemented root `AGENTS.md` bootstrap and managed-section replacement in
+  `ProjectApplicationService`; malformed markers fail closed and unrelated
+  text is preserved.
+- Added focused fresh, repeated, existing-file, and malformed-marker tests.
+- Bundled CLI smoke passed: first init created `AGENTS.md`, repeated init kept
+  its SHA-256 unchanged, and exactly one marker pair remained.
+- Full `./gradlew.bat check --no-daemon` passed.
+
+- SYN-013A AGENTS.md bootstrap is complete and its focused tests pass.
+- Added the first project-local provider session binding implementation and
+  focused persistence/hook tests; full integration and migration verification
+  remain for this task.
+- Added ADR-0030 and provider-boundary, bootstrap-protocol, maturity,
+  installation, migration, and zero-touch architecture updates. The global
+  Link identity is documented as separate machine-level diagnostic state.
+- `:coordination:check` and root `check` pass. The Windows bundle was rebuilt
+  and installed locally; the external project preserved its project/node IDs
+  while provider reinstall created distinct Codex and Antigravity bindings.
 
 - Added signed command envelopes, coordinator service idempotency, loopback
   HTTP command handling, and SSE replay with an exclusive sequence cursor.
@@ -67,6 +87,8 @@ worktree-transition decision, phased task map, and durable-state reconciliation.
 
 - Remote HTTPS, signed remote event-read authorization, and production
   supervisor lifecycle management remain intentionally deferred.
+- Real Codex/Antigravity mutation interception and re-planning remain deferred;
+  both providers are only `READY_FOR_REAL_VALIDATION`.
 
 ## Verification target
 
@@ -75,5 +97,5 @@ validator, and checkpoint evidence for the domain/event-store slice.
 
 ## Immediate next action
 
-Run the deferred-register validator, strict repository check, and checkpoint
-validator after reviewing the new planning documents.
+Perform the final diff review, stage the verified implementation slice, and
+create the requested commit `Implement automatic provider session binding`.

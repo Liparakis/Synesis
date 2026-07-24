@@ -26,7 +26,7 @@ public final class HookAntigravityCommand implements Callable<Integer> {
         try {
             var location = runtime.projectService().require(Path.of(project == null ? "." : project));
             Path resolved = profile == null ? location.profile() : Path.of(profile);
-            var result = runtime.hookService().antigravity(resolved, System.in);
+            var result = runtime.hookService().antigravity(location.root(), resolved, System.in);
             runtime.terminal().stdout(result.responseJson());
             if (result.humanReason() != null && !result.humanReason().isBlank()) runtime.terminal().stderr("HINT=" + result.humanReason());
             return ExitCodes.OK;

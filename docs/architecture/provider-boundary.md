@@ -20,3 +20,11 @@ Provider code does not discover projects, verify records, or implement scope
 matching. Provider metadata is machine-local at
 `.synesis/local/providers/<provider>.json`; it contains paths and health state,
 never keys, records, credentials, or tokens.
+
+The first provider install and every supported project hook also ensure a
+project-scoped provider session. Session records live under
+`.synesis/local/sessions/` and expose only bounded diagnostics (binding,
+session, supervisor, worker, project/node, trust, and evidence state). The
+legacy global Link identity is separate from this project-local identity; it is
+preserved for machine diagnostics and is never used as provider-session
+authority.

@@ -393,7 +393,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-013
 - Priority: P0
 - Title: Zero-touch autonomous harness collaboration plan
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Produce the implementation-ready architecture and staged delivery
   plan for ambient Codex/Antigravity collaboration after one `synesis init`.
 - Dependencies: SYN-012 DONE at CP-0144; SYN-009B.1 and SYN-011 remain
@@ -410,6 +410,52 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   ADR-0029.
 - Scope boundary: no hidden runtime, provider behavior, worktree broker, or
   autonomous coordination implementation in this task.
+- Evidence: CP-0150 planning validation; `docs/architecture/agents-md-contract.md` and
+  `docs/plans/zero-touch-collaboration-mvp.md`.
+
+## SYN-013A
+
+- ID: SYN-013A
+- Priority: P0
+- Title: Bootstrap the project AGENTS.md contract during init
+- Status: DONE
+- Purpose: Implement the already-approved AGENTS.md bootstrap contract without
+  adding provider automation or changing coordinator behavior.
+- Dependencies: SYN-013 plan package and ADR-0029.
+- Acceptance criteria: fresh init creates root AGENTS.md with the marked
+  Synesis section; repeated init is idempotent; an existing file preserves all
+  unrelated text; an existing managed section is replaced deterministically;
+  malformed marker usage fails closed without overwriting user content.
+- Required tests: focused ProjectApplicationService tests plus the affected
+  workspace/CLI verification.
+- Scope boundary: only AGENTS.md bootstrap/update behavior and its tests;
+  no provider hooks, hidden runtime, worktree broker, or autonomous
+  coordination behavior.
+- Evidence: PASS — `ProjectApplicationServiceTest`, `:workspace:test`, and the
+  bundled CLI smoke recorded in `CURRENT.md`; malformed markers fail closed.
+
+## SYN-013B
+
+- ID: SYN-013B
+- Priority: P0
+- Title: Implement automatic provider session binding
+- Status: ACTIVE
+- Purpose: Bind Codex and Antigravity provider actions to distinct,
+  project-scoped durable session, supervisor, and worker identities without
+  manual ceremony.
+- Dependencies: SYN-013A DONE; SYN-013 plan/ADR-0029; project-local identity,
+  provider adapters, and loopback coordination protocol.
+- Acceptance criteria: project/node identity remains stable; explicit provider
+  instance evidence resumes idempotently; independent provider/session keys
+  receive distinct actors; hooks fail closed when binding cannot be established;
+  provider status reports binding/trust state; legacy projects migrate without
+  reinitialization; actor/authority spoofing remains rejected.
+- Required tests: binding persistence/idempotency, provider/project/node
+  mismatch, stale/revoked/partial records, Codex and Antigravity hook bootstrap,
+  provider lifecycle/status, migration, installed bundle, and full repository
+  verification.
+- Scope boundary: no real provider validation claim, no worktree transition,
+  no remote coordination, and no provider credential/conversation persistence.
 
 ## SYN-001
 

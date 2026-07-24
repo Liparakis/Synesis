@@ -1,12 +1,12 @@
 # Next Session
 
-- Active task: SYN-013 (zero-touch autonomous harness collaboration plan)
+- Active task: SYN-013B (automatic provider session binding)
 - Repository branch: master
-- Last checkpoint: CP-0149
-- Last passing command: `powershell -ExecutionPolicy Bypass -File scripts/run-speculative-coordination-real.ps1`
-- Last failing command: root `check` before the final Javadoc and public CLI fixes; rerun after checkpoint
-- Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
-- Exact next documentation action: Validate the planning package and checkpoint SYN-013; do not implement production runtime behavior in this task.
+- Last checkpoint: CP-0151
+- Last passing command: `.\gradlew.bat check --no-daemon`
+- Last failing command: root `check` before the final Javadoc fix; rerun passed after the fix
+- Immediate next command: `git diff --check`
+- Exact next documentation action: Review the staged file set and create the requested commit; do not push.
 - Unresolved limitations: native Linux/macOS PATH behavior is not executable
   on this Windows host; cross-platform Go tests and the documented reversible
   user-local profile policy are the available evidence.

@@ -94,7 +94,13 @@ public final class ProviderApplicationService {
             String result = synthetic.blocked() && synthetic.allowed() && synthetic.validJson()
                     && !provider.requiresRealValidation()
                     ? (already ? "ALREADY_INSTALLED" : "SUCCESS") : "DEGRADED";
-            return result(provider, "PROVIDER_INSTALL_RESULT", result, synthetic, config, profile, launcher, 0);
+            ProviderResult installedResult = result(provider, "PROVIDER_INSTALL_RESULT", result, synthetic, config, profile, launcher, 0);
+            try {
+                return decorate(location, provider.id(), installedResult,
+                        new ProviderSessionBindingService().ensure(location, provider.id(), null));
+            } catch (ProviderSessionBindingService.BindingException bindingFailure) {
+                return decorate(location, provider.id(), installedResult, null);
+            }
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_INSTALL_RESULT", 10);
         } catch (Exception failure) {
@@ -109,6 +115,10 @@ public final class ProviderApplicationService {
      * @return structured result
      */
     public ProviderResult status(ProjectApplicationService.ProjectLocation location, String id) {
+        return decorate(location, id, statusInternal(location, id), null);
+    }
+
+    private ProviderResult statusInternal(ProjectApplicationService.ProjectLocation location, String id) {
         ProviderIntegration provider = provider(id);
         if (provider == null) return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_STATUS", 2);
         Path config = provider.configurationPath(location.root());
@@ -145,6 +155,31 @@ public final class ProviderApplicationService {
         }
     }
 
+    private static ProviderResult decorate(ProjectApplicationService.ProjectLocation location, String provider,
+            ProviderResult result, ProviderSessionBindingService.BindingResult ensured) {
+        Map<String, String> values = new LinkedHashMap<>(result.values());
+        try {
+            var bindings = new ProviderSessionBindingService().list(location, provider);
+            values.put("SESSION_BINDING", bindings.isEmpty() ? "UNBOUND"
+                    : bindings.stream().allMatch(binding -> binding.status().equals("REVOKED")) ? "REVOKED" : "BOUND");
+            if (!bindings.isEmpty()) {
+                var binding = ensured == null ? bindings.getLast() : ensured.binding();
+                values.put("SESSION_ID", binding.sessionId());
+                values.put("SUPERVISOR_ID", binding.supervisorId());
+                values.put("WORKER_ID", binding.workerId());
+                values.put("SESSION_PROJECT_ID", binding.projectId());
+                values.put("SESSION_NODE_ID", binding.nodeId());
+                values.put("SESSION_TRUST", binding.providerTrustState());
+                boolean fallback = ensured != null ? ensured.fallbackEvidence()
+                        : new ProviderSessionBindingService().isFallbackEvidence(location, provider, binding);
+                values.put("SESSION_EVIDENCE", fallback ? "FALLBACK" : "EXPLICIT");
+            }
+        } catch (Exception failure) {
+            values.put("SESSION_BINDING", "BROKEN");
+        }
+        return new ProviderResult(result.exitCode(), values);
+    }
+
     /**
      * Uninstalls only the managed hook and local provider metadata.
      * @param location project location
@@ -172,6 +207,11 @@ public final class ProviderApplicationService {
                 }
             }
             Files.deleteIfExists(metadata);
+            try {
+                new ProviderSessionBindingService().revoke(location, provider.id());
+            } catch (ProviderSessionBindingService.BindingException ignored) {
+                // Status exposes a broken binding; managed hook removal remains complete.
+            }
             return simple(provider, "PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0,
                     "MANAGED_HOOK_REMOVED", Boolean.toString(removed), "UNRELATED_CONFIGURATION_PRESERVED", "true");
         } catch (IllegalArgumentException failure) {

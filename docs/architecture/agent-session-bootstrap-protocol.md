@@ -37,6 +37,14 @@ message telling an agent to `cd` is not proof. If the provider cannot switch or
 cannot intercept its mutation tools, Synesis returns `WORKSPACE_UNVERIFIED` and
 the agent remains read-only.
 
+Before task intent, the local hook performs the durable project-session
+bootstrap. The chain is `NodeIdentity -> project membership -> provider binding
+-> supervisor actor -> worker actor -> task -> worktree`. The binding is written
+to `.synesis/local/sessions/<provider>-<fingerprint>.json`, resumed only when
+project/node/provider/fingerprint match, and refreshed atomically. Missing
+provider evidence uses a per-project/provider nonce and is reported as fallback
+evidence rather than a chat identity claim.
+
 ## Task intent and ownership
 
 Intent includes purpose, semantic capabilities, expected scopes, base commit,
@@ -52,4 +60,3 @@ owner capability, node, supervisor, and intent version. The session manager
 derives target, task, base evidence, scope hashes, and proposed behavior. The
 agent confirms only fields that cannot be derived; the manager validates and
 submits the existing bounded `PredictionContract`.
-

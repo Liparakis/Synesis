@@ -35,6 +35,27 @@ permanent scope decision and record the reason.
 **Code extension seams:** Candidate provider/racer APIs only; no traversal implementation.
 **Last reviewed:** CP-0030
 
+## SL-D-030 — Real Codex and Antigravity provider validation
+
+**Status:** DEFERRED
+**Area:** Provider trust and zero-touch mutation
+**Current verified capability:** Project-scoped provider-session bindings are
+created automatically and remain `READY_FOR_REAL_VALIDATION`; synthetic hook
+checks pass.
+**Missing capability:** Independent real-harness evidence for workspace
+transition, pre-mutation interception, denial, and safe re-plan.
+**Reason deferred:** The current task removes the identity blocker but does not
+authorize real provider mutation validation.
+**Activation trigger:** A controlled validation run with disposable targets,
+captured provider hook evidence, and rollback/cleanup checks.
+**Evidence required before planning:** One real Codex `apply_patch` and one
+real Antigravity structured edit, with project/node/session/actor/worktree
+binding and denial evidence.
+**Public-claims impact:** Do not claim zero-touch provider completion or
+`REAL_VALIDATED`/`ZERO_TOUCH_VALIDATED`.
+**Related ADRs:** ADR-0030
+**Last reviewed:** CP-0151
+
 ## SL-D-002 â€” PCP external port mapping
 
 **Status:** RESEARCH_REQUIRED
