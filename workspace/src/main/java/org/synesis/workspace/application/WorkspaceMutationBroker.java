@@ -39,19 +39,23 @@ public final class WorkspaceMutationBroker {
         /** Mutation is allowed and applied to the assigned worktree. */
         ALLOW,
         /** Mutation is blocked by active project policy. */
-        BLOCKED,
-        /** Mutation decision is unknown or unmapped. */
-        UNKNOWN,
-        /** Mutation matches a warning constraint and is not explicitly allowed. */
-        WARNING,
-        /** Mutation is unsupported. */
-        UNSUPPORTED,
+        DENY_POLICY,
+        /** Mutation is directed to another node's semantic capability owner. */
+        REQUEST_OWNER,
+        /** Stale workspace context. */
+        STALE_CONTEXT,
         /** Workspace trust state is unverified. */
         WORKSPACE_UNVERIFIED,
+        /** Actor is not authorized. */
+        ACTOR_NOT_AUTHORIZED,
+        /** Target path or input is invalid. */
+        INVALID_TARGET,
         /** Hook interception is missing or synthetic. */
         INTERCEPTION_MISSING,
         /** Provider session is unbound. */
-        SESSION_UNBOUND
+        SESSION_UNBOUND,
+        /** Decision is unknown. */
+        UNKNOWN
     }
 
     /**
@@ -90,18 +94,20 @@ public final class WorkspaceMutationBroker {
      *
      * @param success whether the mutation was successfully applied
      * @param decision broker decision outcome
-     * @param decisionId unique decision record identifier, or {@code null}
-     * @param interceptionEvidence SHA-256 interception evidence hash, or {@code null}
-     * @param message human readable status or denial reason
+     * @param reasonCode structured decision reason code
+     * @param message human readable status explanation or denial reason
+     * @param decisionId unique decision record identifier
+     * @param interceptionEvidence SHA-256 interception evidence hash
      * @param mutatedPath path of the mutated file in the assigned worktree, or {@code null}
      * @param controlCheckoutUnchanged whether the control checkout remained unchanged
      */
     public record MutationResult(
             boolean success,
             Decision decision,
+            String reasonCode,
+            String message,
             String decisionId,
             String interceptionEvidence,
-            String message,
             Path mutatedPath,
             boolean controlCheckoutUnchanged
     ) {
@@ -110,6 +116,8 @@ public final class WorkspaceMutationBroker {
          */
         public MutationResult {
             Objects.requireNonNull(decision, "decision");
+            Objects.requireNonNull(reasonCode, "reasonCode");
+            Objects.requireNonNull(message, "message");
         }
     }
 
@@ -126,84 +134,86 @@ public final class WorkspaceMutationBroker {
     public synchronized MutationResult applyMutation(MutationRequest request) {
         Objects.requireNonNull(request, "request");
 
+        String decisionId = "dec-" + UUID.randomUUID();
+        String interceptionEvidence = computeEvidence(request);
+
         // 1. Session binding check
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        ProviderSessionBindingService.Binding binding;
+        ProviderSessionBindingService.Binding binding = null;
         try {
             var bindings = bindingService.list(request.location(), request.provider());
             if (bindings.isEmpty()) {
-                return failure(Decision.SESSION_UNBOUND, null, null, "No bound session for provider: " + request.provider());
+                return evaluateAndRecord(false, Decision.SESSION_UNBOUND, "NO_BOUND_SESSION", "No bound session for provider: " + request.provider(), decisionId, interceptionEvidence, request, null, null);
             }
             binding = bindings.getLast();
             if (!"BOUND".equals(binding.status())) {
-                return failure(Decision.SESSION_UNBOUND, null, null, "Provider session status is " + binding.status() + ", expected BOUND");
+                return evaluateAndRecord(false, Decision.SESSION_UNBOUND, "SESSION_NOT_BOUND", "Provider session status is " + binding.status() + ", expected BOUND", decisionId, interceptionEvidence, request, binding, null);
             }
         } catch (Exception failure) {
-            return failure(Decision.SESSION_UNBOUND, null, null, "Could not load provider session binding: " + failure.getMessage());
+            return evaluateAndRecord(false, Decision.SESSION_UNBOUND, "SESSION_LOAD_FAILED", "Could not load provider session binding: " + failure.getMessage(), decisionId, interceptionEvidence, request, null, null);
         }
 
         // 2. Assigned worktree verification
         if (binding.worktreePath() == null || binding.worktreePath().isBlank()) {
-            return failure(Decision.WORKSPACE_UNVERIFIED, null, null, "Assigned worktree path is missing");
+            return evaluateAndRecord(false, Decision.WORKSPACE_UNVERIFIED, "WORKTREE_PATH_MISSING", "Assigned worktree path is missing", decisionId, interceptionEvidence, request, binding, null);
         }
         Path assignedWorktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
         ProviderSessionBindingService.WorkspaceCheck workspaceCheck = bindingService.verifyWorkspace(request.location(), binding, assignedWorktree);
         if (!workspaceCheck.verified()) {
-            return failure(Decision.WORKSPACE_UNVERIFIED, null, null, "Assigned worktree verification failed: " + workspaceCheck.code());
+            return evaluateAndRecord(false, Decision.WORKSPACE_UNVERIFIED, workspaceCheck.code(), "Assigned worktree verification failed: " + workspaceCheck.code(), decisionId, interceptionEvidence, request, binding, null);
         }
 
         // 3. Workspace trust check
         if (!"VERIFIED".equals(binding.providerTrustState())) {
-            return failure(Decision.WORKSPACE_UNVERIFIED, null, null, "Workspace trust state is " + binding.providerTrustState() + ", expected VERIFIED");
+            return evaluateAndRecord(false, Decision.WORKSPACE_UNVERIFIED, "WORKSPACE_NOT_VERIFIED", "Workspace trust state is " + binding.providerTrustState() + ", expected VERIFIED", decisionId, interceptionEvidence, request, binding, null);
         }
 
         // 4. Missing interception check
         if (!request.hookIntercepted()) {
-            return failure(Decision.INTERCEPTION_MISSING, null, null, "Missing interception: HOOK_INTERCEPTED is false");
+            return evaluateAndRecord(false, Decision.INTERCEPTION_MISSING, "HOOK_NOT_INTERCEPTED", "Missing interception: HOOK_INTERCEPTED is false", decisionId, interceptionEvidence, request, binding, null);
         }
 
         // 7. Synthetic check does not count as real interception
         if (request.isSyntheticCheck()) {
-            return failure(Decision.INTERCEPTION_MISSING, null, null, "Synthetic hook execution does not count as real interception");
+            return evaluateAndRecord(false, Decision.INTERCEPTION_MISSING, "SYNTHETIC_CHECK_REJECTED", "Synthetic hook execution does not count as real interception", decisionId, interceptionEvidence, request, binding, null);
         }
 
         // 5. Action evaluation
         if (Path.of(request.relativePath()).isAbsolute()) {
-            return failure(Decision.BLOCKED, null, null, "Absolute target paths are rejected: " + request.relativePath());
+            return evaluateAndRecord(false, Decision.INVALID_TARGET, "ABSOLUTE_PATH_REJECTED", "Absolute target paths are rejected: " + request.relativePath(), decisionId, interceptionEvidence, request, binding, null);
         }
         if (request.relativePath().contains("..")) {
-            return failure(Decision.BLOCKED, null, null, "Path traversal rejected: " + request.relativePath());
+            return evaluateAndRecord(false, Decision.INVALID_TARGET, "PATH_TRAVERSAL_REJECTED", "Path traversal rejected: " + request.relativePath(), decisionId, interceptionEvidence, request, binding, null);
         }
 
         String resolvedRelative;
         try {
             resolvedRelative = ProjectPathResolver.resolve(assignedWorktree, request.relativePath());
         } catch (Exception failure) {
-            return failure(Decision.BLOCKED, null, null, "Invalid target relative path: " + failure.getMessage());
+            return evaluateAndRecord(false, Decision.INVALID_TARGET, "INVALID_PATH_FORMAT", "Invalid target relative path: " + failure.getMessage(), decisionId, interceptionEvidence, request, binding, null);
+        }
+
+        // Protected system/provider configuration files check
+        String normalizedTarget = resolvedRelative.replace('\\', '/').toLowerCase();
+        if (normalizedTarget.startsWith(".synesis/") || normalizedTarget.startsWith(".codex/") || normalizedTarget.startsWith(".agents/") || normalizedTarget.startsWith(".git/") || normalizedTarget.equals(".synesis") || normalizedTarget.equals(".codex") || normalizedTarget.equals(".agents") || normalizedTarget.equals(".git")) {
+            return evaluateAndRecord(false, Decision.DENY_POLICY, "PROTECTED_CONFIGURATION_TARGET", "Target path is a protected configuration target: " + resolvedRelative, decisionId, interceptionEvidence, request, binding, null);
         }
 
         ActionGuardrail.Request guardrailReq = new ActionGuardrail.Request(assignedWorktree, resolvedRelative, request.toolName(), "Workspace mutation");
         ActionGuardrail.Response guardrailResp = ActionGuardrail.evaluate(request.location().profile(), guardrailReq);
 
-        Decision decision;
-        if (guardrailResp.outcome() == ActionGuardrail.Outcome.ALLOWED) {
-            decision = Decision.ALLOW;
-        } else if (guardrailResp.outcome() == ActionGuardrail.Outcome.BLOCKED) {
-            decision = Decision.BLOCKED;
-        } else if (guardrailResp.outcome() == ActionGuardrail.Outcome.WARNING) {
-            decision = Decision.WARNING;
-        } else {
-            decision = Decision.UNKNOWN;
-        }
-
-        if (decision != Decision.ALLOW) {
-            return failure(decision, null, null, "Action evaluation denied mutation: " + guardrailResp.message());
+        if (guardrailResp.outcome() == ActionGuardrail.Outcome.BLOCKED) {
+            return evaluateAndRecord(false, Decision.DENY_POLICY, "POLICY_BLOCKED", guardrailResp.message(), decisionId, interceptionEvidence, request, binding, null);
+        } else if (guardrailResp.outcome() == ActionGuardrail.Outcome.REQUEST_OWNER) {
+            return evaluateAndRecord(false, Decision.REQUEST_OWNER, "REQUEST_OWNER", guardrailResp.message(), decisionId, interceptionEvidence, request, binding, null);
+        } else if (guardrailResp.outcome() == ActionGuardrail.Outcome.INVALID_INPUT || guardrailResp.outcome() == ActionGuardrail.Outcome.UNSUPPORTED) {
+            return evaluateAndRecord(false, Decision.INVALID_TARGET, "INVALID_GUARDRAIL_INPUT", guardrailResp.message(), decisionId, interceptionEvidence, request, binding, null);
         }
 
         // 6. Execute mutation in assigned worktree ONLY
         Path targetFile = assignedWorktree.resolve(resolvedRelative).toAbsolutePath().normalize();
         if (!targetFile.startsWith(assignedWorktree)) {
-            return failure(Decision.BLOCKED, null, null, "Path escape detected outside assigned worktree");
+            return evaluateAndRecord(false, Decision.INVALID_TARGET, "PATH_ESCAPE_DETECTED", "Path escape detected outside assigned worktree", decisionId, interceptionEvidence, request, binding, null);
         }
 
         // Check symlink escape
@@ -214,10 +224,10 @@ public final class WorkspaceMutationBroker {
                 existingParent = existingParent.getParent();
             }
             if (!existingParent.toRealPath().startsWith(canonicalAssigned)) {
-                return failure(Decision.BLOCKED, null, null, "Symlink escape rejected");
+                return evaluateAndRecord(false, Decision.INVALID_TARGET, "SYMLINK_ESCAPE_REJECTED", "Symlink escape rejected", decisionId, interceptionEvidence, request, binding, null);
             }
         } catch (IOException failure) {
-            return failure(Decision.BLOCKED, null, null, "Symlink resolution failed: " + failure.getMessage());
+            return evaluateAndRecord(false, Decision.INVALID_TARGET, "SYMLINK_RESOLUTION_FAILED", "Symlink resolution failed: " + failure.getMessage(), decisionId, interceptionEvidence, request, binding, null);
         }
 
         Path controlRoot = request.location().root().toAbsolutePath().normalize();
@@ -230,17 +240,12 @@ public final class WorkspaceMutationBroker {
             }
         }
 
-        String evidenceHash;
-        String decisionId = "dec-" + UUID.randomUUID();
         try {
             Files.createDirectories(targetFile.getParent());
             byte[] contentBytes = request.newContent() == null ? new byte[0] : request.newContent().getBytes(StandardCharsets.UTF_8);
             atomicWrite(targetFile, contentBytes);
-            evidenceHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(contentBytes));
-
-            recordEvidence(request.location(), binding, decisionId, evidenceHash, resolvedRelative);
         } catch (Exception failure) {
-            return failure(Decision.BLOCKED, null, null, "Failed to apply mutation: " + failure.getMessage());
+            return evaluateAndRecord(false, Decision.DENY_POLICY, "MUTATION_WRITE_FAILED", "Failed to apply mutation: " + failure.getMessage(), decisionId, interceptionEvidence, request, binding, null);
         }
 
         // Verify control checkout remains unchanged
@@ -261,24 +266,62 @@ public final class WorkspaceMutationBroker {
         }
 
         if (!controlUnchanged) {
-            return failure(Decision.BLOCKED, decisionId, evidenceHash, "Control checkout was modified during mutation");
+            return evaluateAndRecord(false, Decision.DENY_POLICY, "CONTROL_CHECKOUT_MODIFIED", "Control checkout was modified during mutation", decisionId, interceptionEvidence, request, binding, targetFile);
         }
 
-        return new MutationResult(true, Decision.ALLOW, decisionId, evidenceHash, "Mutation successful", targetFile, true);
+        return evaluateAndRecord(true, Decision.ALLOW, "ALLOWED", "Mutation successful", decisionId, interceptionEvidence, request, binding, targetFile);
     }
 
-    private static void recordEvidence(ProjectApplicationService.ProjectLocation location,
-            ProviderSessionBindingService.Binding binding, String decisionId, String evidenceHash, String relativePath) throws IOException {
-        Path evidenceDir = location.synesisDirectory().resolve("local").resolve("evidence").resolve(binding.provider());
+    private static String computeEvidence(MutationRequest request) {
+        try {
+            String payload = request.relativePath() + "\n" + request.toolName() + "\n" + (request.newContent() == null ? "" : request.newContent());
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            return HexFormat.of().formatHex(new byte[32]);
+        }
+    }
+
+    private static MutationResult evaluateAndRecord(
+            boolean success,
+            Decision decision,
+            String reasonCode,
+            String message,
+            String decisionId,
+            String interceptionEvidence,
+            MutationRequest request,
+            ProviderSessionBindingService.Binding binding,
+            Path mutatedPath
+    ) {
+        try {
+            recordEvidence(request.location(), request.provider(), binding, decisionId, interceptionEvidence, request.relativePath(), decision, reasonCode, message);
+        } catch (Exception ignored) {
+        }
+        return new MutationResult(success, decision, reasonCode, message, decisionId, interceptionEvidence, mutatedPath, true);
+    }
+
+    private static void recordEvidence(
+            ProjectApplicationService.ProjectLocation location,
+            String provider,
+            ProviderSessionBindingService.Binding binding,
+            String decisionId,
+            String evidenceHash,
+            String relativePath,
+            Decision decision,
+            String reasonCode,
+            String message
+    ) throws IOException {
+        Path evidenceDir = location.synesisDirectory().resolve("local").resolve("evidence").resolve(provider);
         Files.createDirectories(evidenceDir);
         Map<String, Object> record = new LinkedHashMap<>();
         record.put("decisionId", decisionId);
-        record.put("sessionId", binding.sessionId());
-        record.put("provider", binding.provider());
+        record.put("sessionId", binding != null ? binding.sessionId() : "UNBOUND");
+        record.put("provider", provider);
         record.put("interceptionEvidence", evidenceHash);
         record.put("relativePath", relativePath);
         record.put("hookIntercepted", true);
-        record.put("decision", "ALLOW");
+        record.put("decision", decision.name());
+        record.put("reasonCode", reasonCode);
+        record.put("message", message);
         record.put("timestamp", System.currentTimeMillis());
         Path file = evidenceDir.resolve(decisionId + ".json");
         atomicWrite(file, (ProviderJson.write(record) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
@@ -297,9 +340,5 @@ public final class WorkspaceMutationBroker {
         } finally {
             Files.deleteIfExists(temporary);
         }
-    }
-
-    private static MutationResult failure(Decision decision, String decisionId, String evidence, String message) {
-        return new MutationResult(false, decision, decisionId, evidence, message, null, true);
     }
 }

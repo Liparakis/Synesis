@@ -1,5 +1,6 @@
 package org.synesis.workspace.guardrail;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -96,18 +97,34 @@ public final class ActionGuardrail {
             return new Response(Outcome.INVALID_INPUT, null, null, "No target relative path specified");
         }
 
-        ProjectConfig config;
-        DecisionStore store;
-        List<DecisionRecord> heads;
+        ProjectConfig config = null;
+        DecisionStore store = null;
+        List<DecisionRecord> heads = List.of();
+        Path configPath = profile.resolve("project.conf");
         try {
-            config = ProjectConfig.load(profile.resolve("project.conf"));
-            store = new DecisionStore(profile.resolve("records"), config.projectId());
-            heads = store.verifiedHeads(1_000);
+            if (Files.exists(configPath)) {
+                config = ProjectConfig.load(configPath);
+                store = new DecisionStore(profile.resolve("records"), config.projectId());
+                heads = store.verifiedHeads(1_000);
+            } else if (Files.isDirectory(profile.resolve("records"))) {
+                java.util.UUID projId = null;
+                Path projectJson = profile.getParent() != null ? profile.getParent().resolve("project.json") : null;
+                if (projectJson != null && Files.exists(projectJson)) {
+                    Object parsed = org.synesis.workspace.provider.ProviderJson.parse(Files.readString(projectJson));
+                    if (parsed instanceof java.util.Map<?, ?> map && map.get("projectId") instanceof String s) {
+                        projId = java.util.UUID.fromString(s);
+                    }
+                }
+                if (projId != null) {
+                    store = new DecisionStore(profile.resolve("records"), projId);
+                    heads = store.verifiedHeads(1_000);
+                }
+            }
         } catch (Exception e) {
             return new Response(Outcome.INVALID_INPUT,
                     null,
                     null,
-                    "Project is not configured for profile: " + e.getMessage());
+                    "Project configuration error: " + e.getMessage());
         }
 
         List<ProjectConstraint> activeConstraints = new ArrayList<>();

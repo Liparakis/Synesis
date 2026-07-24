@@ -7,11 +7,14 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 import org.synesis.workspace.application.WorkspaceMutationBroker;
+import org.synesis.workspace.application.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.WorkspaceMutationBroker.MutationRequest;
 import org.synesis.workspace.application.WorkspaceMutationBroker.MutationResult;
 import org.synesis.workspace.provider.ProviderJson;
@@ -21,7 +24,7 @@ import picocli.CommandLine.Option;
 
 /** High-level agent-facing workspace mutation command. */
 @Command(name = "mutate", description = "Applies an evaluated workspace mutation through Synesis broker.", mixinStandardHelpOptions = true)
-public final class WorkspaceMutateCommand implements Runnable {
+public final class WorkspaceMutateCommand implements Callable<Integer> {
     private final CliRuntime runtime;
 
     @Option(names = {"--project"}, description = "Project root directory")
@@ -60,11 +63,11 @@ public final class WorkspaceMutateCommand implements Runnable {
     }
 
     @Override
-    public void run() {
+    public Integer call() {
         try {
             if (target == null || target.isBlank() || Path.of(target).isAbsolute() || target.startsWith("/") || target.startsWith("\\")) {
-                emitError("FAILED", "Arbitrary absolute write paths are rejected", null, null, null);
-                return;
+                emitError("FAILED", "INVALID_TARGET", "Arbitrary absolute write paths are rejected", null, null, null);
+                return ExitCodes.USAGE;
             }
 
             Path root = project == null ? Path.of(".") : project;
@@ -73,8 +76,8 @@ public final class WorkspaceMutateCommand implements Runnable {
             ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
             var bindings = bindingService.list(location, provider);
             if (bindings.isEmpty()) {
-                emitError("FAILED", "No bound session for provider: " + provider, location.projectId().toString(), null, null);
-                return;
+                emitError("FAILED", "SESSION_UNBOUND", "No bound session for provider: " + provider, location.projectId().toString(), null, null);
+                return ExitCodes.USAGE;
             }
 
             ProviderSessionBindingService.Binding binding = (session != null && !session.isBlank())
@@ -82,13 +85,13 @@ public final class WorkspaceMutateCommand implements Runnable {
                     : bindings.getLast();
 
             if (binding == null || !"BOUND".equals(binding.status())) {
-                emitError("FAILED", "Provider session is not BOUND", location.projectId().toString(), session, null);
-                return;
+                emitError("FAILED", "SESSION_UNBOUND", "Provider session is not BOUND", location.projectId().toString(), session, null);
+                return ExitCodes.USAGE;
             }
 
             if (binding.worktreePath() == null || binding.worktreePath().isBlank()) {
-                emitError("FAILED", "Assigned worktree is UNASSIGNED", location.projectId().toString(), binding.sessionId(), null);
-                return;
+                emitError("FAILED", "WORKSPACE_UNVERIFIED", "Assigned worktree is UNASSIGNED", location.projectId().toString(), binding.sessionId(), null);
+                return ExitCodes.USAGE;
             }
 
             Path assignedWorktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
@@ -100,7 +103,7 @@ public final class WorkspaceMutateCommand implements Runnable {
                 if (Files.isRegularFile(idempotencyFile)) {
                     String cachedJson = Files.readString(idempotencyFile, StandardCharsets.UTF_8);
                     runtime.terminal().stdout(cachedJson.trim());
-                    return;
+                    return ExitCodes.OK;
                 }
             }
 
@@ -108,20 +111,20 @@ public final class WorkspaceMutateCommand implements Runnable {
             Path targetFile = assignedWorktree.resolve(target).toAbsolutePath().normalize();
             if (previousHash != null && !previousHash.isBlank()) {
                 if (!Files.exists(targetFile)) {
-                    emitError("DENIED", "Previous content hash mismatch: target file does not exist", location.projectId().toString(), binding.sessionId(), binding.worktreePath());
-                    return;
+                    emitError("DENIED", "HASH_MISMATCH", "Previous content hash mismatch: target file does not exist", location.projectId().toString(), binding.sessionId(), binding.worktreePath());
+                    return 1;
                 }
                 String actualHash = sha256(Files.readAllBytes(targetFile));
                 if (!previousHash.equalsIgnoreCase(actualHash)) {
-                    emitError("DENIED", "Previous content hash mismatch", location.projectId().toString(), binding.sessionId(), binding.worktreePath());
-                    return;
+                    emitError("DENIED", "HASH_MISMATCH", "Previous content hash mismatch", location.projectId().toString(), binding.sessionId(), binding.worktreePath());
+                    return 1;
                 }
             }
 
             // Verify create-only condition
             if (createOnly && Files.exists(targetFile)) {
-                emitError("DENIED", "Create-only condition failed: file already exists", location.projectId().toString(), binding.sessionId(), binding.worktreePath());
-                return;
+                emitError("DENIED", "FILE_ALREADY_EXISTS", "Create-only condition failed: file already exists", location.projectId().toString(), binding.sessionId(), binding.worktreePath());
+                return 1;
             }
 
             String fileContent = content == null ? "" : content;
@@ -145,6 +148,8 @@ public final class WorkspaceMutateCommand implements Runnable {
             output.put("TARGET", target);
             output.put("HOOK_INTERCEPTED", true);
             output.put("DECISION", res.decision().name());
+            output.put("DECISION_REASON_CODE", res.reasonCode());
+            output.put("DECISION_MESSAGE", res.message());
             output.put("DECISION_RECORD_ID", res.decisionId());
             output.put("INTERCEPTION_EVIDENCE_SHA256", res.interceptionEvidence());
             output.put("RESULTING_FILE_SHA256", resultingHash);
@@ -160,12 +165,26 @@ public final class WorkspaceMutateCommand implements Runnable {
                 Files.createDirectories(idempotencyFile.getParent());
                 Files.writeString(idempotencyFile, jsonOutput + System.lineSeparator(), StandardCharsets.UTF_8);
             }
+
+            if (res.success()) {
+                return ExitCodes.OK;
+            } else if (res.decision() == Decision.DENY_POLICY || res.decision() == Decision.REQUEST_OWNER
+                    || res.decision() == Decision.STALE_CONTEXT || res.decision() == Decision.WORKSPACE_UNVERIFIED
+                    || res.decision() == Decision.ACTOR_NOT_AUTHORIZED) {
+                return 1;
+            } else if (res.decision() == Decision.INVALID_TARGET || res.decision() == Decision.INTERCEPTION_MISSING
+                    || res.decision() == Decision.SESSION_UNBOUND) {
+                return ExitCodes.USAGE;
+            } else {
+                return ExitCodes.INTERNAL;
+            }
         } catch (Exception failure) {
-            emitError("FAILED", failure.getMessage(), null, null, null);
+            emitError("FAILED", "INTERNAL_ERROR", failure.getMessage(), null, null, null);
+            return ExitCodes.INTERNAL;
         }
     }
 
-    private void emitError(String result, String message, String projectId, String sessionId, String worktree) {
+    private void emitError(String result, String reasonCode, String message, String projectId, String sessionId, String worktree) {
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("RESULT", result);
         output.put("PROJECT_ID", projectId);
@@ -175,13 +194,13 @@ public final class WorkspaceMutateCommand implements Runnable {
         output.put("TARGET", target);
         output.put("HOOK_INTERCEPTED", false);
         output.put("DECISION", "UNKNOWN");
+        output.put("DECISION_REASON_CODE", reasonCode);
+        output.put("DECISION_MESSAGE", message);
         output.put("DECISION_RECORD_ID", null);
         output.put("INTERCEPTION_EVIDENCE_SHA256", null);
         output.put("RESULTING_FILE_SHA256", null);
         output.put("MUTATION_APPLIED", false);
-        output.put("MESSAGE", message);
         runtime.terminal().stdout(ProviderJson.write(output));
-        runtime.terminal().stderr("Mutation failed: " + message);
     }
 
     private static String sha256(byte[] bytes) throws Exception {

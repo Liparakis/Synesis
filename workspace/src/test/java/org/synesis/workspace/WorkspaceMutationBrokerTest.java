@@ -89,7 +89,6 @@ class WorkspaceMutationBrokerTest {
         Files.createDirectories(fakeWorktree);
 
         try {
-            // Fake session pointing to unregistered folder
             Path sessionDir = location.synesisDirectory().resolve("local/sessions");
             Map<String, Object> map = Map.ofEntries(
                     Map.entry("schemaVersion", 2), Map.entry("sessionId", "session-fake"), Map.entry("projectId", location.projectId().toString()),
@@ -128,13 +127,11 @@ class WorkspaceMutationBrokerTest {
     void test04AnotherSessionsWorktreeCannotBecomeVerified() throws Exception {
         var b1 = bindingService.list(location, "codex").getLast();
 
-        // Create second binding using fake fingerprint file
         Path fakeKey = location.synesisDirectory().resolve("local/providers/codex.bootstrap-key");
         Files.deleteIfExists(fakeKey);
         var b2Res = bindingService.ensure(location, "codex", "evidence-two");
         var b2 = b2Res.binding();
 
-        // Point b2's worktreePath and branch to b1's worktree and branch
         Path sessionDir = location.synesisDirectory().resolve("local/sessions");
         Path b2Path = sessionDir.resolve("codex-" + b2.providerInstanceFingerprint() + ".json");
         Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(Files.readString(b2Path));
@@ -156,7 +153,9 @@ class WorkspaceMutationBrokerTest {
         MutationResult result = broker.applyMutation(request);
 
         assertFalse(result.success());
-        assertEquals(Decision.BLOCKED, result.decision());
+        assertEquals(Decision.INVALID_TARGET, result.decision());
+        assertNotNull(result.decisionId());
+        assertNotNull(result.interceptionEvidence());
         assertFalse(Files.exists(tempDir.getParent().resolve("escaped.txt")));
     }
 
@@ -169,7 +168,9 @@ class WorkspaceMutationBrokerTest {
         MutationResult result = broker.applyMutation(request);
 
         assertFalse(result.success());
-        assertEquals(Decision.BLOCKED, result.decision());
+        assertEquals(Decision.INVALID_TARGET, result.decision());
+        assertNotNull(result.decisionId());
+        assertNotNull(result.interceptionEvidence());
     }
 
     @Test
@@ -185,7 +186,6 @@ class WorkspaceMutationBrokerTest {
         try {
             Files.createSymbolicLink(symlink, outsideDir);
         } catch (Exception e) {
-            // Symlinks may require elevated privileges on Windows; skip if restricted
             return;
         }
 
@@ -193,7 +193,7 @@ class WorkspaceMutationBrokerTest {
         MutationResult result = broker.applyMutation(request);
 
         assertFalse(result.success());
-        assertEquals(Decision.BLOCKED, result.decision());
+        assertEquals(Decision.INVALID_TARGET, result.decision());
     }
 
     @Test
@@ -203,6 +203,8 @@ class WorkspaceMutationBrokerTest {
 
         assertFalse(result.success());
         assertEquals(Decision.WORKSPACE_UNVERIFIED, result.decision());
+        assertNotNull(result.decisionId());
+        assertNotNull(result.interceptionEvidence());
     }
 
     @Test
@@ -216,7 +218,9 @@ class WorkspaceMutationBrokerTest {
         MutationResult result = broker.applyMutation(request);
 
         assertFalse(result.success());
-        assertEquals(Decision.BLOCKED, result.decision());
+        assertEquals(Decision.DENY_POLICY, result.decision());
+        assertNotNull(result.decisionId());
+        assertNotNull(result.interceptionEvidence());
     }
 
     @Test
