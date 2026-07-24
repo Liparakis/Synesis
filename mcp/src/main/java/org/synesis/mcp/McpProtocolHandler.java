@@ -21,7 +21,7 @@ import org.synesis.workspace.provider.ProviderJson;
 public final class McpProtocolHandler {
 
     private final AgentSessionService sessionService;
-    private final Path projectRoot;
+    private Path activeProjectRoot;
     private final String provider;
     private final String connectionInstanceId;
 
@@ -35,9 +35,18 @@ public final class McpProtocolHandler {
      */
     public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
-        this.projectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
+        this.activeProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+    }
+
+    /**
+     * Returns the currently resolved active control project root path.
+     *
+     * @return active control project root path
+     */
+    public Path activeProjectRoot() {
+        return activeProjectRoot;
     }
 
     /**
@@ -81,10 +90,11 @@ public final class McpProtocolHandler {
 
         try {
             return switch (method) {
-                case "initialize" -> handleInitialize(id);
+                case "initialize" -> handleInitialize(id, (Map<String, Object>) request.get("params"));
                 case "initialized", "notifications/initialized" -> null;
                 case "tools/list" -> handleToolsList(id);
                 case "tools/call" -> handleToolsCall(id, (Map<String, Object>) request.get("params"));
+                case "roots/list" -> handleRootsList(id);
                 default -> createErrorResponse(id, -32601, "Method not found: " + method);
             };
         } catch (Exception failure) {
@@ -92,13 +102,22 @@ public final class McpProtocolHandler {
         }
     }
 
-    private String handleInitialize(Object id) {
+    private String handleInitialize(Object id, Map<String, Object> params) {
+        if (params != null) {
+            List<Path> candidates = extractCandidateRoots(params);
+            Path resolved = resolveProjectRootFromCandidates(candidates);
+            if (resolved != null) {
+                this.activeProjectRoot = resolved;
+            }
+        }
+
         Map<String, Object> serverInfo = new LinkedHashMap<>();
         serverInfo.put("name", "synesis-mcp");
         serverInfo.put("version", "0.1.0-SNAPSHOT");
 
         Map<String, Object> capabilities = new LinkedHashMap<>();
         capabilities.put("tools", new LinkedHashMap<>());
+        capabilities.put("roots", Map.of("listChanged", true));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("protocolVersion", "2024-11-05");
@@ -106,6 +125,124 @@ public final class McpProtocolHandler {
         result.put("serverInfo", serverInfo);
 
         return createResultResponse(id, result);
+    }
+
+    private String handleRootsList(Object id) {
+        Map<String, Object> rootItem = new LinkedHashMap<>();
+        rootItem.put("uri", activeProjectRoot.toUri().toString());
+        rootItem.put("name", activeProjectRoot.getFileName() != null ? activeProjectRoot.getFileName().toString() : "root");
+
+        Map<String, Object> result = Map.of("roots", List.of(rootItem));
+        return createResultResponse(id, result);
+    }
+
+    /**
+     * Extracts candidate workspace project root paths from MCP {@code initialize} request parameters.
+     *
+     * @param params JSON-RPC initialize request params map
+     * @return list of parsed candidate paths
+     */
+    public List<Path> extractCandidateRoots(Map<String, Object> params) {
+        List<Path> candidates = new java.util.ArrayList<>();
+        if (params == null) {
+            return candidates;
+        }
+
+        if (params.get("rootUri") instanceof String rootUriStr) {
+            Path p = parseUriOrPath(rootUriStr);
+            if (p != null && !candidates.contains(p)) {
+                candidates.add(p);
+            }
+        }
+
+        if (params.get("workspaceFolders") instanceof List<?> folders) {
+            for (Object item : folders) {
+                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
+                    Path p = parseUriOrPath(uriStr);
+                    if (p != null && !candidates.contains(p)) {
+                        candidates.add(p);
+                    }
+                }
+            }
+        }
+
+        if (params.get("roots") instanceof List<?> rootsList) {
+            for (Object item : rootsList) {
+                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
+                    Path p = parseUriOrPath(uriStr);
+                    if (p != null && !candidates.contains(p)) {
+                        candidates.add(p);
+                    }
+                }
+            }
+        }
+
+        return candidates;
+    }
+
+    /**
+     * Safely converts a URI string or local path string into a normalized absolute {@link Path}.
+     *
+     * @param input URI or local path string
+     * @return normalized absolute Path, or {@code null} if empty/invalid
+     */
+    public static Path parseUriOrPath(String input) {
+        if (input == null || input.isBlank()) {
+            return null;
+        }
+        String trimmed = input.trim();
+        if (trimmed.startsWith("file:")) {
+            try {
+                return Path.of(java.net.URI.create(trimmed)).toAbsolutePath().normalize();
+            } catch (Exception ex) {
+                String raw = trimmed.substring(5);
+                while (raw.startsWith("/")) {
+                    raw = raw.substring(1);
+                }
+                return Path.of(raw).toAbsolutePath().normalize();
+            }
+        }
+        return Path.of(trimmed).toAbsolutePath().normalize();
+    }
+
+    /**
+     * Resolves the single initialized Synesis control project root from candidate paths.
+     *
+     * @param candidates candidate workspace paths
+     * @return resolved control project root, or {@code null} if none or ambiguous
+     */
+    public Path resolveProjectRootFromCandidates(List<Path> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+
+        List<Path> initializedRoots = new java.util.ArrayList<>();
+        for (Path candidate : candidates) {
+            try {
+                Path normalized = candidate.toAbsolutePath().normalize();
+                String normStr = normalized.toString().replace('\\', '/');
+                if (normStr.contains("/.synesis/local/worktrees/")) {
+                    continue; // Reject assigned worktree path as control project root
+                }
+                if (java.nio.file.Files.exists(normalized.resolve(".synesis/project.json"))) {
+                    if (!initializedRoots.contains(normalized)) {
+                        initializedRoots.add(normalized);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (initializedRoots.size() == 1) {
+            return initializedRoots.getFirst();
+        }
+
+        if (initializedRoots.size() > 1) {
+            System.err.println("SYNESIS_DIAGNOSTIC=PROJECT_ROOT_AMBIGUOUS count=" + initializedRoots.size());
+            return Path.of(System.getProperty("java.io.tmpdir"));
+        }
+
+        return null;
     }
 
     private String handleToolsList(Object id) {
@@ -156,7 +293,7 @@ public final class McpProtocolHandler {
         boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
 
         AgentSessionService.SessionResolutionRequest resolutionRequest = new AgentSessionService.SessionResolutionRequest(
-                projectRoot, provider, connectionInstanceId, taskIntent, refresh);
+                activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
 
         AgentResponse agentResponse = sessionService.ensureSession(resolutionRequest);
 

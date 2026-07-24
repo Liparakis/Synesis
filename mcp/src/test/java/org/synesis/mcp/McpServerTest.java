@@ -144,6 +144,117 @@ class McpServerTest {
     }
 
     @Test
+    void testInitializeWithRootUriBindsProjectRoot() {
+        AgentSessionService sessionService = new AgentSessionService();
+        Path dummyCwd = tempRoot.getParent(); // Incorrect cwd (not project root)
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, dummyCwd, "antigravity", "conn-antigravity-1");
+
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + tempRoot.toUri() + "\"}}";
+        String responseJson = handler.handleMessage(initReq);
+
+        assertNotNull(responseJson);
+        assertEquals(tempRoot, handler.activeProjectRoot());
+
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callResponse = handler.handleMessage(callReq);
+        assertTrue(callResponse.contains("ready"));
+    }
+
+    @Test
+    void testInitializeWithWorkspaceFoldersBindsProjectRoot() {
+        AgentSessionService sessionService = new AgentSessionService();
+        Path dummyCwd = tempRoot.getParent();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, dummyCwd, "antigravity", "conn-antigravity-2");
+
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"workspaceFolders\":[{\"uri\":\"" + tempRoot.toUri() + "\",\"name\":\"test\"}]}}";
+        handler.handleMessage(initReq);
+
+        assertEquals(tempRoot, handler.activeProjectRoot());
+    }
+
+    @Test
+    void testInitializeWithRootsBindsProjectRoot() {
+        AgentSessionService sessionService = new AgentSessionService();
+        Path dummyCwd = tempRoot.getParent();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, dummyCwd, "antigravity", "conn-antigravity-3");
+
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"roots\":[{\"uri\":\"" + tempRoot.toUri() + "\",\"name\":\"test\"}]}}";
+        handler.handleMessage(initReq);
+
+        assertEquals(tempRoot, handler.activeProjectRoot());
+    }
+
+    @Test
+    void testAmbiguousMultipleInitializedRootsFailClosed() throws Exception {
+        Path secondProject = Files.createTempDirectory("synesis-second-proj-");
+        git(secondProject, "init");
+        git(secondProject, "config", "user.name", "Test User");
+        git(secondProject, "config", "user.email", "test@example.com");
+        Files.writeString(secondProject.resolve("README.md"), "# Second Repo\n");
+        git(secondProject, "add", ".");
+        git(secondProject, "commit", "-m", "Initial commit");
+        new org.synesis.workspace.application.ProjectApplicationService().init(secondProject);
+
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot.getParent(), "antigravity", "conn-ambiguous");
+
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"workspaceFolders\":[{\"uri\":\""
+                + tempRoot.toUri() + "\"},{\"uri\":\"" + secondProject.toUri() + "\"}]}}";
+        handler.handleMessage(initReq);
+
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callResponse = handler.handleMessage(callReq);
+
+        assertTrue(callResponse.contains("retry_required"));
+        assertTrue(callResponse.contains("workspace_not_ready"));
+    }
+
+    @Test
+    void testWorktreeRootPathIsNotAcceptedAsControlProject() throws Exception {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        handler.handleMessage(callReq);
+
+        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(tempRoot, "codex", "conn-1", null, false);
+        var ctx = sessionService.resolveSessionContext(req);
+        Path worktreePath = ctx.worktreePath();
+
+        McpProtocolHandler worktreeHandler = new McpProtocolHandler(sessionService, tempRoot.getParent(), "antigravity", "conn-wt-test");
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + worktreePath.toUri() + "\"}}";
+        worktreeHandler.handleMessage(initReq);
+
+        String wtCallResponse = worktreeHandler.handleMessage(callReq);
+        assertTrue(wtCallResponse.contains("retry_required"));
+    }
+
+    @Test
+    void testMissingProjectJsonReturnsWorkspaceNotReady() throws Exception {
+        Path uninit = Files.createTempDirectory("synesis-uninit-root-");
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, uninit, "antigravity", "conn-uninit");
+
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callResponse = handler.handleMessage(callReq);
+
+        assertTrue(callResponse.contains("retry_required"));
+        assertTrue(callResponse.contains("workspace_not_ready"));
+    }
+
+    @Test
+    void testRootsListReturnsActiveProjectRoot() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-roots");
+
+        String rootsReq = "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"roots/list\"}";
+        String responseJson = handler.handleMessage(rootsReq);
+
+        assertNotNull(responseJson);
+        assertTrue(responseJson.contains("\"roots\":"));
+        assertTrue(responseJson.contains(tempRoot.getFileName().toString()));
+    }
+
+    @Test
     void testStdioServerEventLoopAndCleanEofShutdown() {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");
