@@ -23,6 +23,7 @@ import org.synesis.cli.command.InitCommand;
 import org.synesis.cli.command.IntegrationCommand;
 import org.synesis.cli.command.IntegrationGateCommand;
 import org.synesis.cli.command.JoinCommand;
+import org.synesis.cli.command.McpCommand;
 import org.synesis.cli.command.OwnershipClaimCommand;
 import org.synesis.cli.command.OwnershipCommand;
 import org.synesis.cli.command.OwnershipReleaseCommand;
@@ -106,6 +107,7 @@ public final class SynesisCli {
                 .addSubcommand("verify", new WorkspaceVerifyCommand(runtime))
                 .addSubcommand("mutate", new WorkspaceMutateCommand(runtime));
         command.addSubcommand("workspace", workspace);
+        command.addSubcommand("mcp", new McpCommand(runtime));
         command.addSubcommand("help", new HelpCommand());
         command.addSubcommand("version", new VersionPlaceholderCommand(runtime));
         command.addSubcommand("init", new InitCommand(runtime));

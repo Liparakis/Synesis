@@ -41,16 +41,16 @@ per-session Git worktrees, and an explicit provider capability gate. Codex and
 Antigravity remain unready until trusted real workspace-transition and
 pre-mutation evidence exists. ADR-0029 records the decision.
 
-## SYN-013B implementation state
+## SYN-013D implementation state
 
-Project-local provider session binding and workspace mutation enforcement is
-DONE at CP-0157. Stage 1 agent simplification (SYN-013C) is DONE at
-CP-0165: the shared `AgentResponse` envelope, `AgentOutcomeTranslator`, and
-concise `AGENTS.md` managed section are committed at `198f3e9` with all
-65 `:workspace:check` tests passing, CLI `--output agent` flag integrated,
-and full root `check` (42 tasks) passing. The next task is SYN-013D
-(Stage 2A minimal MCP server). No ambient session resolver, MCP module,
-or MCP provider configuration has been created.
+Stage 2A Slice 1 (MCP foundation and `synesis.ensure_session` tool) is DONE at
+CP-0166: provider capability audit completed (`MCP_CONFIG_DISCOVERED`),
+`AgentSessionService` ambient resolver implemented in `:workspace`, `:mcp`
+Gradle subproject created with stdio JSON-RPC 2.0 protocol handler and
+`synesis.ensure_session` tool, bundled in platform distribution with passing
+stdio process smoke test, and full root `check` (49 tasks) passing cleanly.
+Provider configuration installation and remaining MCP tools (`read_file`,
+`apply_patch`, `run_command`, `get_next_action`) are deferred to Slice 2.
 
 ## Implementation state
 

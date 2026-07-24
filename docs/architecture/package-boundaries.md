@@ -5,27 +5,18 @@
   ↑
 :project-record
   ↑
-:workspace
+:coordination
   ↑
-:cli
+:workspace
+  ↑         ↑
+:cli       :mcp
 ```
 
-The CLI is the composition root. It owns Picocli parsing, terminal formatting,
-exit codes, and the one `synesis` Application distribution.
+The CLI and MCP modules are peer transport adapters.
+- `:cli` owns Picocli command parsing and terminal formatting.
+- `:mcp` owns stdio JSON-RPC 2.0 frames and MCP tool handlers (`org.synesis.mcp`).
+- `:cli` does NOT depend on `:mcp`.
+- `:mcp` does NOT depend on `:cli`.
+- Both depend on shared application services in `:workspace` (`org.synesis.workspace.application`, `org.synesis.workspace.agent`).
 
-`:workspace` owns application orchestration under
-`org.synesis.workspace.application`. It may call Link and project-record
-components, but it does not parse Picocli, print command output, or exit the
-process. Provider-specific JSON remains in:
-
-- `org.synesis.workspace.integration.antigravity`
-- `org.synesis.workspace.integration.claude`
-
-Provider-independent evaluation is in `org.synesis.workspace.guardrail`.
-
-`:project-record` contains record models, validation, storage, and sync logic;
-it imports neither workspace nor provider packages. `:link` remains transport,
-identity, and session infrastructure and does not know project semantics.
-
-The boundary is checked by `:workspace:architectureCheck` and by the direct
-Gradle dependencies. No new module or interface is introduced for SYN-009A.
+The boundary is enforced by `:mcp:architectureCheck` and Gradle dependency locks.

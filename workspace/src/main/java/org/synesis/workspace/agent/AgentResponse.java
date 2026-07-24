@@ -50,6 +50,17 @@ public record AgentResponse(
     }
 
     /**
+     * Creates a ready response with workspace readiness status.
+     *
+     * @param workspace workspace state identifier (e.g. "isolated")
+     * @param pending   pending item count
+     * @return ready agent response
+     */
+    public static AgentResponse ready(String workspace, int pending) {
+        return new AgentResponse(AgentStatus.READY, null, null, new AgentStatusResult(workspace, pending));
+    }
+
+    /**
      * Creates a blocked response with a public reason code.
      *
      * @param reason public reason code

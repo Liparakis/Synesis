@@ -1,0 +1,74 @@
+package org.synesis.mcp;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+
+/**
+ * Runs the stdio message loop for the Synesis Model Context Protocol (MCP) server.
+ *
+ * <p>Reads JSON-RPC request frames from stdin and writes JSON-RPC response frames exclusively
+ * to stdout. Diagnostic logging is isolated to stderr so stdout remains strictly unpolluted.
+ *
+ * @since 1.0
+ */
+public final class McpStdioServer {
+
+    private final McpProtocolHandler handler;
+    private final InputStream in;
+    private final PrintStream out;
+    private final PrintStream err;
+
+    /**
+     * Creates an MCP stdio server with standard system streams.
+     *
+     * @param handler protocol message handler
+     */
+    public McpStdioServer(McpProtocolHandler handler) {
+        this(handler, System.in, System.out, System.err);
+    }
+
+    /**
+     * Creates an MCP stdio server with custom streams for testing or isolation.
+     *
+     * @param handler protocol message handler
+     * @param in      input stream for requests
+     * @param out     output stream for protocol frames ONLY
+     * @param err     error stream for diagnostic logging
+     */
+    public McpStdioServer(McpProtocolHandler handler, InputStream in, PrintStream out, PrintStream err) {
+        this.handler = Objects.requireNonNull(handler, "handler");
+        this.in = Objects.requireNonNull(in, "in");
+        this.out = Objects.requireNonNull(out, "out");
+        this.err = Objects.requireNonNull(err, "err");
+    }
+
+    /**
+     * Starts the stdio event loop, processing requests until EOF or stream closure.
+     *
+     * @return process exit code (0 for clean EOF shutdown)
+     */
+    public int run() {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                String responseJson = handler.handleMessage(line);
+                if (responseJson != null) {
+                    out.println(responseJson);
+                    out.flush();
+                }
+            }
+            return 0;
+        } catch (Exception failure) {
+            err.println("[synesis-mcp] Stdio loop terminated with error: " + failure.getMessage());
+            return 1;
+        }
+    }
+}

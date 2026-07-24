@@ -161,7 +161,7 @@ val runtimeImage = tasks.register("runtimeImage") {
 val platformBundle = tasks.register("platformBundle") {
     group = "distribution"
     description = "Assembles a self-contained Synesis application bundle."
-    dependsOn(runtimeImage, tasks.installDist)
+    dependsOn(runtimeImage, tasks.installDist, ":mcp:jar")
     outputs.dir(platformBundleDirectory)
     doLast {
         val root = platformBundleDirectory.get().asFile
@@ -178,6 +178,10 @@ val platformBundle = tasks.register("platformBundle") {
             from(layout.buildDirectory.dir("install/synesis/lib"))
             into(libDir)
             exclude("cli-*.jar")
+        }
+        copy {
+            from(project(":mcp").tasks.named<Jar>("jar").get().archiveFile)
+            into(libDir)
         }
         copy { from(runtimeImageDirectory); into(root.resolve("runtime")) }
         val bin = root.resolve("bin")
@@ -279,6 +283,28 @@ tasks.register("bundleSmokeTest") {
             run(1, "provider", "status", "antigravity", "--project", project.absolutePath)
             run("provider", "uninstall", "antigravity", "--project", project.absolutePath)
             run("doctor", "--project", project.absolutePath)
+
+            // Installed stdio MCP smoke test
+            val mcpCommand = (if (isWindows) mutableListOf("cmd.exe", "/c", launcher.absolutePath)
+            else mutableListOf(launcher.absolutePath)).apply {
+                addAll(listOf("mcp", "--provider", "codex", "--project", project.absolutePath, "--connection-instance-id", "smoke-conn-1"))
+            }
+            val mcpProcess = ProcessBuilder(mcpCommand).directory(smokeRoot).start()
+            val mcpWriter = mcpProcess.outputStream.bufferedWriter(Charsets.UTF_8)
+            val mcpReader = mcpProcess.inputStream.bufferedReader(Charsets.UTF_8)
+            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n")
+            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n")
+            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\"}}\n")
+            mcpWriter.flush()
+            mcpWriter.close()
+
+            val line1 = mcpReader.readLine()
+            val line2 = mcpReader.readLine()
+            val line3 = mcpReader.readLine()
+            require(mcpProcess.waitFor() == 0) { "MCP process failed to exit 0" }
+            require(line1 != null && line1.contains("protocolVersion")) { "MCP initialize failed: $line1" }
+            require(line2 != null && line2.contains("synesis.ensure_session")) { "MCP tools/list failed: $line2" }
+            require(line3 != null && line3.contains("ready")) { "MCP ensure_session failed: $line3" }
         } finally {
             delete(smokeRoot)
         }

@@ -8,6 +8,7 @@ tasks.named("clean") {
     dependsOn(":project-record:clean")
     dependsOn(":workspace:clean")
     dependsOn(":coordination:clean")
+    dependsOn(":mcp:clean")
 }
 
 tasks.named("check") {
@@ -16,4 +17,5 @@ tasks.named("check") {
     dependsOn(":project-record:check")
     dependsOn(":workspace:check")
     dependsOn(":coordination:check")
+    dependsOn(":mcp:check")
 }
