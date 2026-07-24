@@ -16,18 +16,20 @@ Implement Stage 2A: minimal stdio MCP server for safe workspace operations and p
 
 ## Immediate slice
 
-Stage 2A Slice 1 (foundation) and Stage 2A Slice 2 (provider configuration installer & installed bundle validation) are DONE.
+Stage 2A foundation, provider configuration installers, user-level Antigravity discovery fix, and real Antigravity MCP initialize root binding are DONE at CP-0169.
 
 ## Evidence ledger
 
 - VERIFIED: Provider MCP capability discovery audit completed for Codex and Antigravity (`MCP_CONFIG_DISCOVERED`).
 - VERIFIED: `AgentSessionService` created in `org.synesis.workspace.agent` with `ensureSession` method. All `:workspace:check` tests pass (74 tests).
-- VERIFIED: `:mcp` Gradle module created, `:mcp:check` passes (8 tests), `:mcp:architectureCheck` passes.
+- VERIFIED: `:mcp` Gradle module created, `:mcp:check` passes (15 tests), `:mcp:architectureCheck` passes.
 - VERIFIED: JSON-RPC 2.0 stdio protocol handler (`McpProtocolHandler`), stdio server (`McpStdioServer`), and entrypoint (`SynesisMcpServer`) created in `org.synesis.mcp`.
-- VERIFIED: Registered tool `synesis.ensure_session`.
-- VERIFIED: `ProviderApplicationService` and `synesis init` automatically install `.codex/mcp.json` and `.agents/mcp.json` (and `.gemini/mcp.json`) idempotently while preserving unrelated provider MCP entries.
+- VERIFIED: MCP `initialize` request params (`rootUri`, `workspaceFolders`, `roots`) extracted and bound to active control project root dynamically.
+- VERIFIED: Standard MCP `roots/list` and `roots.listChanged` capability supported.
+- VERIFIED: Registered tool `synesis.ensure_session` returns concise status output `{"status":"ready","result":{"workspace":"isolated","pending":0}}`.
+- VERIFIED: `ProviderApplicationService` and `synesis init` automatically install user-level Antigravity MCP configuration (`~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity/mcp_config.json`) and project-local Codex config (`.codex/mcp.json`) idempotently while preserving unrelated entries and migrating obsolete project-local files.
 - VERIFIED: Platform bundle updated (`:cli:platformBundle`), installed launcher `synesis init` tested on `SynesisTestProject`.
-- VERIFIED: Installed MCP stdio process tested with `initialize`, `tools/list`, and `synesis.ensure_session` tool call, returning concise protocol JSON-RPC.
+- VERIFIED: Installed MCP stdio process tested with `initialize` (with `rootUri`), `tools/list`, and multiple `synesis.ensure_session` tool calls, returning concise protocol JSON-RPC with `status: ready`.
 - VERIFIED: Full root `./gradlew.bat check --no-daemon` passes cleanly (49 tasks).
 
 ## Current limitations
