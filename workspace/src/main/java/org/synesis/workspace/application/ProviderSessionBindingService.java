@@ -196,6 +196,159 @@ public final class ProviderSessionBindingService {
         }
     }
 
+    /**
+     * Performs strict, idempotent workspace verification inspecting the real filesystem
+     * and Git repository state. On success, transitions providerTrustState to VERIFIED and records evidence.
+     *
+     * @param location initialized project location
+     * @param provider provider identifier
+     * @param sessionId session identifier, or {@code null} to resolve latest bound session
+     * @param cwd provider's declared active working directory
+     * @return structured workspace verification result
+     */
+    public synchronized WorkspaceVerificationResult verifyWorkspaceTrust(ProjectApplicationService.ProjectLocation location,
+            String provider, String sessionId, Path cwd) {
+        Objects.requireNonNull(location, "location");
+        requireText(provider, "provider");
+        if (cwd == null) {
+            return new WorkspaceVerificationResult(false, "WORKSPACE_UNVERIFIED", null, null);
+        }
+        try {
+            var bindings = list(location, provider);
+            if (bindings.isEmpty()) {
+                return new WorkspaceVerificationResult(false, "SESSION_UNBOUND", null, null);
+            }
+            Binding binding = null;
+            if (sessionId != null && !sessionId.isBlank()) {
+                binding = bindings.stream().filter(b -> sessionId.equals(b.sessionId())).findFirst().orElse(null);
+            } else {
+                binding = bindings.getLast();
+            }
+            if (binding == null || !"BOUND".equals(binding.status())) {
+                return new WorkspaceVerificationResult(false, "SESSION_UNBOUND", null, null);
+            }
+
+            if (binding.worktreePath() == null || binding.worktreePath().isBlank()) {
+                return new WorkspaceVerificationResult(false, "WORKSPACE_UNASSIGNED", null, binding);
+            }
+
+            Path root = location.root().toAbsolutePath().normalize();
+            Path assigned = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
+            Path actual = cwd.toAbsolutePath().normalize();
+
+            // 1. Check assigned worktree differs from control checkout
+            if (assigned.equals(root) || assigned.startsWith(root) || actual.equals(root)) {
+                return new WorkspaceVerificationResult(false, "CONTROL_CHECKOUT_MUTATION_DENIED", null, binding);
+            }
+
+            // 2. Check worktree path exists on filesystem
+            if (!Files.isDirectory(assigned)) {
+                return new WorkspaceVerificationResult(false, "WORKTREE_DIRECTORY_MISSING", null, binding);
+            }
+
+            // 3. Check canonical path equality
+            Path canonicalAssigned = assigned.toRealPath();
+            Path canonicalActual = actual.toRealPath();
+            if (!canonicalAssigned.equals(canonicalActual)) {
+                return new WorkspaceVerificationResult(false, "WORKSPACE_TRANSITION_REQUIRED", null, binding);
+            }
+
+            // 4. No other active session owns it
+            for (Binding other : bindings) {
+                if (!other.sessionId().equals(binding.sessionId()) && !"REVOKED".equals(other.status())
+                        && !"COMPLETED".equals(other.status()) && other.worktreePath() != null) {
+                    if (Path.of(other.worktreePath()).toAbsolutePath().normalize().equals(assigned)) {
+                        return new WorkspaceVerificationResult(false, "DUPLICATE_ACTIVE_WORKTREE", null, binding);
+                    }
+                }
+            }
+
+            // 5. Git recognizes it as a registered worktree
+            if (!registeredWorktree(root, assigned, binding)) {
+                return new WorkspaceVerificationResult(false, "WORKTREE_NOT_REGISTERED", null, binding);
+            }
+
+            // 6. Git common directory belongs to control repository
+            if (!sameGitCommonDirectory(root, assigned, binding)) {
+                return new WorkspaceVerificationResult(false, "WORKSPACE_BINDING_MISMATCH", null, binding);
+            }
+
+            // 7. Branch matches recorded session branch
+            String currentBranch = git(assigned, "symbolic-ref", "--short", "HEAD");
+            if (!binding.branch().equals(currentBranch)) {
+                return new WorkspaceVerificationResult(false, "WORKSPACE_BINDING_MISMATCH", null, binding);
+            }
+
+            // 8. HEAD is valid commit derived from base commit
+            String headCommit = git(assigned, "rev-parse", "HEAD");
+            if (!validCommit(headCommit) || !isBaseAncestor(assigned, binding.baseCommit())) {
+                return new WorkspaceVerificationResult(false, "WORKSPACE_BINDING_MISMATCH", null, binding);
+            }
+
+            // All checks passed! Transition to VERIFIED and persist evidence
+            long now = System.currentTimeMillis();
+            String evidenceRaw = location.projectId().toString() + "|" + canonicalAssigned.toString() + "|"
+                    + binding.branch() + "|" + headCommit + "|" + now;
+            String evidenceDigest = fingerprint(evidenceRaw);
+
+            Binding verifiedBinding = new Binding(
+                    binding.schemaVersion(), binding.sessionId(), binding.projectId(), binding.nodeId(),
+                    binding.provider(), binding.providerInstanceFingerprint(), binding.supervisorId(), binding.workerId(),
+                    binding.worktreeId(), binding.worktreePath(), binding.controlCheckoutPath(), binding.branch(),
+                    binding.baseCommit(), binding.gitCommonDir(), binding.creationState(), "VERIFIED",
+                    "WORKSPACE_VERIFIED", binding.status(), binding.createdAtEpochMillis(), now,
+                    binding.lastVerifiedProjectSequence(), "VERIFIED", binding.bindingVersion(), binding.completedAt()
+            );
+
+            // Persist updated binding
+            Path sessionDir = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY);
+            Path bindingPath = sessionDir.resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
+            write(bindingPath, verifiedBinding);
+
+            // Persist verification record
+            Map<String, Object> verRecord = new LinkedHashMap<>();
+            verRecord.put("schemaVersion", 1);
+            verRecord.put("verificationVersion", 1);
+            verRecord.put("sessionId", binding.sessionId());
+            verRecord.put("projectId", location.projectId().toString());
+            verRecord.put("provider", provider);
+            verRecord.put("verificationTimestamp", now);
+            verRecord.put("repositoryIdentity", location.projectId().toString());
+            verRecord.put("canonicalWorktreePath", canonicalAssigned.toString());
+            verRecord.put("branch", binding.branch());
+            verRecord.put("headCommit", headCommit);
+            verRecord.put("evidenceDigest", evidenceDigest);
+            verRecord.put("workspaceTrust", "VERIFIED");
+
+            Path evidenceFile = sessionDir.resolve("verification-" + binding.sessionId() + ".json");
+            writeText(evidenceFile, ProviderJson.write(verRecord) + System.lineSeparator());
+
+            return new WorkspaceVerificationResult(true, "WORKSPACE_VERIFIED", evidenceDigest, verifiedBinding);
+        } catch (Exception failure) {
+            return new WorkspaceVerificationResult(false, "WORKSPACE_BINDING_MISMATCH", null, null);
+        }
+    }
+
+    /**
+     * Result of workspace trust verification.
+     *
+     * @param verified whether workspace verification succeeded
+     * @param code stable status code
+     * @param evidenceDigest evidence SHA-256 digest on success, or {@code null}
+     * @param binding updated session binding, or {@code null}
+     */
+    public record WorkspaceVerificationResult(
+            boolean verified,
+            String code,
+            String evidenceDigest,
+            Binding binding
+    ) {
+        /** Validates result shape. */
+        public WorkspaceVerificationResult {
+            Objects.requireNonNull(code, "code");
+        }
+    }
+
     private static Binding withWorktree(ProjectApplicationService.ProjectLocation location, Binding binding) {
         String baseCommit = validCommit(binding.baseCommit()) ? binding.baseCommit() : "GIT_HEAD_UNAVAILABLE";
         String worktreeId = "worktree-" + binding.sessionId().substring("session-".length());
@@ -257,8 +410,9 @@ public final class ProviderSessionBindingService {
         boolean pathFound = false;
         for (String line : list.lines().toList()) {
             if (line.startsWith("worktree ")) {
-                pathFound = Path.of(line.substring("worktree ".length())).toAbsolutePath().normalize()
-                        .toString().equalsIgnoreCase(canonical);
+                Path wt = Path.of(line.substring("worktree ".length())).toAbsolutePath().normalize();
+                String wtCanonical = Files.exists(wt) ? wt.toRealPath().toString() : wt.toString();
+                pathFound = wtCanonical.equalsIgnoreCase(canonical);
             }
             if (pathFound && line.equals("branch refs/heads/" + binding.branch())) return true;
         }
@@ -348,7 +502,8 @@ public final class ProviderSessionBindingService {
                     nullable(value, "gitCommonDir"), nullable(value, "creationState"), nullable(value, "verificationState"),
                     nullable(value, "lastSeenState"), text(value, "status"), number(value, "createdAtEpochMillis").longValue(),
                     number(value, "lastSeenEpochMillis").longValue(), number(value, "lastVerifiedProjectSequence").longValue(),
-                    text(value, "providerTrustState"), number(value, "bindingVersion").intValue(), nullable(value, "completedAt"));
+                    nullable(value, "providerTrustState") == null ? "WORKSPACE_UNVERIFIED" : nullable(value, "providerTrustState"),
+                    number(value, "bindingVersion").intValue(), nullable(value, "completedAt"));
         } catch (RuntimeException failure) {
             throw new IOException("malformed provider session binding", failure);
         }

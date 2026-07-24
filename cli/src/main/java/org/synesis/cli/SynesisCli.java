@@ -59,6 +59,9 @@ import org.synesis.cli.command.SpeculationInvalidateCommand;
 import org.synesis.cli.command.IntegrationCommand;
 import org.synesis.cli.command.IntegrationGateCommand;
 import org.synesis.cli.command.VersionPlaceholderCommand;
+import org.synesis.cli.command.WorkspaceCommand;
+import org.synesis.cli.command.WorkspaceMutateCommand;
+import org.synesis.cli.command.WorkspaceVerifyCommand;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.cli.terminal.ConsoleTerminal;
@@ -100,6 +103,10 @@ public final class SynesisCli {
         command.getSubcommands()
                 .get("provider")
                 .addSubcommand("uninstall", new ProviderUninstallCommand(runtime));
+        CommandLine workspace = new CommandLine(new WorkspaceCommand())
+                .addSubcommand("verify", new WorkspaceVerifyCommand(runtime))
+                .addSubcommand("mutate", new WorkspaceMutateCommand(runtime));
+        command.addSubcommand("workspace", workspace);
         command.addSubcommand("help", new HelpCommand());
         command.addSubcommand("version", new VersionPlaceholderCommand(runtime));
         command.addSubcommand("init", new InitCommand(runtime));
@@ -180,7 +187,7 @@ public final class SynesisCli {
      *
      * @param arguments process arguments
      */
-    static void main(String[] arguments) {
+    public static void main(String[] arguments) {
         System.exit(execute(arguments, CliRuntime.defaults(new ConsoleTerminal())));
     }
 }

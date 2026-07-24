@@ -168,6 +168,13 @@ public final class WorkspaceMutationBroker {
         }
 
         // 5. Action evaluation
+        if (Path.of(request.relativePath()).isAbsolute()) {
+            return failure(Decision.BLOCKED, null, null, "Absolute target paths are rejected: " + request.relativePath());
+        }
+        if (request.relativePath().contains("..")) {
+            return failure(Decision.BLOCKED, null, null, "Path traversal rejected: " + request.relativePath());
+        }
+
         String resolvedRelative;
         try {
             resolvedRelative = ProjectPathResolver.resolve(assignedWorktree, request.relativePath());
@@ -197,6 +204,20 @@ public final class WorkspaceMutationBroker {
         Path targetFile = assignedWorktree.resolve(resolvedRelative).toAbsolutePath().normalize();
         if (!targetFile.startsWith(assignedWorktree)) {
             return failure(Decision.BLOCKED, null, null, "Path escape detected outside assigned worktree");
+        }
+
+        // Check symlink escape
+        try {
+            Path canonicalAssigned = assignedWorktree.toRealPath();
+            Path existingParent = targetFile;
+            while (!Files.exists(existingParent) && existingParent.getParent() != null) {
+                existingParent = existingParent.getParent();
+            }
+            if (!existingParent.toRealPath().startsWith(canonicalAssigned)) {
+                return failure(Decision.BLOCKED, null, null, "Symlink escape rejected");
+            }
+        } catch (IOException failure) {
+            return failure(Decision.BLOCKED, null, null, "Symlink resolution failed: " + failure.getMessage());
         }
 
         Path controlRoot = request.location().root().toAbsolutePath().normalize();

@@ -170,14 +170,21 @@ public final class ProviderApplicationService {
                 values.put("SESSION_PROJECT_ID", binding.projectId());
                 values.put("SESSION_NODE_ID", binding.nodeId());
                 values.put("SESSION_TRUST", binding.worktreePath() == null ? "WORKSPACE_UNVERIFIED" : binding.providerTrustState());
+                values.put("WORKSPACE_TRUST", binding.worktreePath() == null ? "WORKSPACE_UNVERIFIED" : binding.providerTrustState());
                 values.put("SESSION_WORKSPACE", binding.worktreePath() == null ? "UNASSIGNED" : "ASSIGNED");
                 boolean hasEvidence = hasProvenInterception(location, provider, binding.sessionId());
                 values.put("SESSION_INTERCEPTION", hasEvidence ? "PROVEN" : "UNPROVEN");
+                values.put("NATIVE_MUTATION_INTERCEPTION", "UNPROVEN");
+                values.put("BROKERED_MUTATION_AVAILABLE", "true");
+                values.put("BROKERED_MUTATION_VALIDATED", Boolean.toString(hasEvidence));
                 values.put("ASSIGNED_WORKTREE", binding.worktreePath() == null ? "UNASSIGNED" : binding.worktreePath());
                 values.put("ACTIVE_WORKSPACE", hasEvidence && binding.worktreePath() != null ? binding.worktreePath() : "UNPROVEN");
                 values.put("HOOK_INTERCEPTED", hasEvidence ? "true" : "false");
                 values.put("DECISION", hasEvidence ? "ALLOW" : "UNKNOWN");
                 values.put("MUTATION_WITHOUT_ALLOW_POSSIBLE", hasEvidence ? "false" : "true");
+                if ("codex".equals(provider) && "VERIFIED".equals(binding.providerTrustState())) {
+                    values.put("CODEX_PROVIDER_STATUS", "BROKERED_MUTATION_READY");
+                }
                 values.put("BRANCH", binding.branch() == null ? "UNASSIGNED" : binding.branch());
                 values.put("BASE_COMMIT", binding.baseCommit());
                 values.put("WORKTREE_BINDING_STATUS", "VERIFIED".equals(binding.verificationState()) ? "BOUND" : binding.creationState());
