@@ -16,7 +16,7 @@ Implement Stage 2A: minimal stdio MCP server for safe workspace operations and p
 
 ## Immediate slice
 
-Stage 2A foundation, provider configuration installers, user-level Antigravity discovery fix, real initialize root binding, and session-bootstrap stability fix are DONE at CP-0170.
+Stage 2A foundation, dual user-level and project-local Antigravity MCP config installers, environment variable and URL percent-decoding root extraction, and 5-of-5 fresh launch validation pass cleanly at CP-0171.
 
 ## Evidence ledger
 
