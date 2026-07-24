@@ -16,20 +16,20 @@ Implement Stage 2A: minimal stdio MCP server for safe workspace operations and p
 
 ## Immediate slice
 
-Stage 2A foundation, provider configuration installers, user-level Antigravity discovery fix, and real Antigravity MCP initialize root binding are DONE at CP-0169.
+Stage 2A foundation, provider configuration installers, user-level Antigravity discovery fix, real initialize root binding, and session-bootstrap stability fix are DONE at CP-0170.
 
 ## Evidence ledger
 
 - VERIFIED: Provider MCP capability discovery audit completed for Codex and Antigravity (`MCP_CONFIG_DISCOVERED`).
 - VERIFIED: `AgentSessionService` created in `org.synesis.workspace.agent` with `ensureSession` method. All `:workspace:check` tests pass (74 tests).
-- VERIFIED: `:mcp` Gradle module created, `:mcp:check` passes (15 tests), `:mcp:architectureCheck` passes.
+- VERIFIED: `:mcp` Gradle module created, `:mcp:check` passes (18 tests), `:mcp:architectureCheck` passes.
 - VERIFIED: JSON-RPC 2.0 stdio protocol handler (`McpProtocolHandler`), stdio server (`McpStdioServer`), and entrypoint (`SynesisMcpServer`) created in `org.synesis.mcp`.
-- VERIFIED: MCP `initialize` request params (`rootUri`, `workspaceFolders`, `roots`) extracted and bound to active control project root dynamically.
-- VERIFIED: Standard MCP `roots/list` and `roots.listChanged` capability supported.
+- VERIFIED: Stale background MCP process PID 22360 terminated; stderr diagnostic startup log added to `SynesisMcpServer` logging PID, version, build commit, connection ID, provider, and cwd.
+- VERIFIED: Root-source state machine implemented in `McpProtocolHandler` with URI percent-decoding, `rootUri`, `workspaceFolders`, `roots`, `roots/list`, and `notifications/roots/list_changed` handling.
 - VERIFIED: Registered tool `synesis.ensure_session` returns concise status output `{"status":"ready","result":{"workspace":"isolated","pending":0}}`.
 - VERIFIED: `ProviderApplicationService` and `synesis init` automatically install user-level Antigravity MCP configuration (`~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity/mcp_config.json`) and project-local Codex config (`.codex/mcp.json`) idempotently while preserving unrelated entries and migrating obsolete project-local files.
 - VERIFIED: Platform bundle updated (`:cli:platformBundle`), installed launcher `synesis init` tested on `SynesisTestProject`.
-- VERIFIED: Installed MCP stdio process tested with `initialize` (with `rootUri`), `tools/list`, and multiple `synesis.ensure_session` tool calls, returning concise protocol JSON-RPC with `status: ready`.
+- VERIFIED: Installed MCP stdio process tested across 5 consecutive fresh launches with `initialize` (with `rootUri`), `tools/list`, and multiple `synesis.ensure_session` tool calls, returning concise protocol JSON-RPC with `status: ready` 100% reproducibly.
 - VERIFIED: Full root `./gradlew.bat check --no-daemon` passes cleanly (49 tasks).
 
 ## Current limitations
