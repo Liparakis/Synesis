@@ -6,20 +6,22 @@
 - Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0151
-- Latest checkpoint: CP-0151
+- Latest checkpoint: CP-0154
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0027, ADR-0028, ADR-0029
 
 ## Objective
 
 Implement automatic project-scoped provider session binding for Codex and
-Antigravity before their first meaningful hook action.
+Antigravity, with a fail-closed workspace boundary before any meaningful hook
+mutation.
 
 ## Immediate slice
 
-Persist distinct provider session, supervisor, and worker identities; wire
-automatic hook bootstrap; expose binding/trust diagnostics; preserve project
-and node identity; and fail closed on ambiguity or mismatch.
+Persist distinct provider session, supervisor, and worker identities; allocate
+and resume a detached Git worktree; expose binding/workspace/interception
+diagnostics; preserve project and node identity; and fail closed on ambiguity,
+mismatch, missing interception, or control-checkout cwd.
 
 ## Evidence ledger
 
@@ -82,13 +84,19 @@ and node identity; and fail closed on ambiguity or mismatch.
   `scripts/run-speculative-coordination-real.ps1`.
   Evidence is recorded in
   `docs/evidence/speculative-coordination-public-cli-2026-07-23/report.md`.
+- The Codex validation retry is intentionally fail-closed: the external
+  project has no committed Git `HEAD`, so status reports
+  `SESSION_WORKSPACE=UNASSIGNED` and an installed hook invocation returns
+  `WORKSPACE_TRANSITION_REQUIRED`; proof files were not recreated.
 
 ## Current limitations
 
 - Remote HTTPS, signed remote event-read authorization, and production
   supervisor lifecycle management remain intentionally deferred.
-- Real Codex/Antigravity mutation interception and re-planning remain deferred;
-  both providers are only `READY_FOR_REAL_VALIDATION`.
+- Real Codex/Antigravity mutation interception and re-planning remain unproven;
+  provider status must remain degraded until an actual hook invocation proves
+  interception and workspace routing. Evidence is in
+  `docs/evidence/codex-real-validation-failure-2026-07-24/`.
 
 ## Verification target
 
@@ -97,5 +105,5 @@ validator, and checkpoint evidence for the domain/event-store slice.
 
 ## Immediate next action
 
-Perform the final diff review, stage the verified implementation slice, and
-create the requested commit `Implement automatic provider session binding`.
+Run the checkpoint validator, record the final diff, and create the local
+commit for the verified provider workspace-safety slice; do not push.

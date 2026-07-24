@@ -45,9 +45,11 @@ pre-mutation evidence exists. ADR-0029 records the decision.
 
 Project-local provider session binding is in progress. The binding service
 preserves project/node identity, creates atomic local records under
-`.synesis/local/sessions`, and wires Codex/Antigravity hook bootstrap. Real
-provider validation remains unclaimed; fallback provider evidence is explicitly
-marked and does not imply independent chat identity.
+`.synesis/local/sessions`, and wires Codex/Antigravity hook bootstrap. The
+current slice must add a distinct detached worktree and fail closed when Codex
+cannot prove interception or workspace routing. Real provider validation remains
+unclaimed; fallback provider evidence is explicitly marked and does not imply
+independent chat identity.
 
 ## Implementation state
 

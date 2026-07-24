@@ -66,6 +66,10 @@ public final class HookApplicationService {
             var location = new ProjectApplicationService().require(projectRoot);
             ProviderSessionBindingService.BindingResult binding = bindings.ensure(location, "antigravity",
                     evidence(json));
+            Path eventCwd = workspacePath(json, projectRoot);
+            ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
+                    binding.binding(), eventCwd);
+            if (!workspace.verified()) return deniedAntigravity(workspace.code());
             HookExecutionResult result = antigravity(profile, new java.io.ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
             return withBinding(result, binding);
         } catch (Exception failure) {
@@ -87,6 +91,9 @@ public final class HookApplicationService {
             var location = new ProjectApplicationService().locate(Path.of(cwd));
             ProviderSessionBindingService.BindingResult binding = bindings.ensure(location, "codex",
                     evidence(json));
+            ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
+                    binding.binding(), Path.of(cwd));
+            if (!workspace.verified()) return denied(workspace.code());
             CodexHookAdapter.Result result = new CodexHookAdapter().processJson(json);
             return withBinding(new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason()), binding);
         } catch (Exception failure) {
@@ -138,6 +145,14 @@ public final class HookApplicationService {
             if (candidate instanceof String text && !text.isBlank()) return text;
         }
         return null;
+    }
+
+    private static Path workspacePath(String json, Path fallback) {
+        Map<String, Object> value = object(ProviderJson.parse(json));
+        Object paths = value == null ? null : value.get("workspacePaths");
+        if (paths instanceof java.util.List<?> list && !list.isEmpty() && list.getFirst() instanceof String path
+                && !path.isBlank()) return Path.of(path);
+        return fallback;
     }
 
     /**

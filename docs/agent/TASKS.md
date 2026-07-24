@@ -438,24 +438,28 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-013B
 - Priority: P0
-- Title: Implement automatic provider session binding
+- Title: Implement provider session binding and fail-closed workspace routing
 - Status: ACTIVE
 - Purpose: Bind Codex and Antigravity provider actions to distinct,
   project-scoped durable session, supervisor, and worker identities without
-  manual ceremony.
+  manual ceremony, while preventing mutations in the control checkout.
 - Dependencies: SYN-013A DONE; SYN-013 plan/ADR-0029; project-local identity,
   provider adapters, and loopback coordination protocol.
 - Acceptance criteria: project/node identity remains stable; explicit provider
   instance evidence resumes idempotently; independent provider/session keys
-  receive distinct actors; hooks fail closed when binding cannot be established;
-  provider status reports binding/trust state; legacy projects migrate without
-  reinitialization; actor/authority spoofing remains rejected.
+  receive distinct actors; a valid Git project receives a distinct durable
+  session worktree; hooks fail closed on missing interception, missing
+  workspace transition, control-checkout cwd, or binding mismatch; provider
+  status reports binding/workspace/interception state; legacy projects migrate
+  without reinitialization; actor/authority spoofing remains rejected.
 - Required tests: binding persistence/idempotency, provider/project/node
-  mismatch, stale/revoked/partial records, Codex and Antigravity hook bootstrap,
-  provider lifecycle/status, migration, installed bundle, and full repository
+  mismatch, stale/revoked/partial records, worktree allocation and resume,
+  control-checkout denial, Codex and Antigravity hook bootstrap, provider
+  lifecycle/status, migration, installed bundle, and full repository
   verification.
-- Scope boundary: no real provider validation claim, no worktree transition,
-  no remote coordination, and no provider credential/conversation persistence.
+- Scope boundary: no claim of real provider readiness until an actual provider
+  hook invocation proves interception and workspace routing; no remote
+  coordination, and no provider credential/conversation persistence.
 
 ## SYN-001
 

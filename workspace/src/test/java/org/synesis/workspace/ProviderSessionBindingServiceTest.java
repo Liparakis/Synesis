@@ -36,7 +36,7 @@ final class ProviderSessionBindingServiceTest {
         assertEquals(first.binding().supervisorId(), resumed.binding().supervisorId());
         assertNotEquals(first.binding().sessionId(), second.binding().sessionId());
         assertNotEquals(first.binding().sessionId(), otherProvider.binding().sessionId());
-        assertEquals("READY_FOR_REAL_VALIDATION", first.binding().providerTrustState());
+        assertEquals("WORKSPACE_UNVERIFIED", first.binding().providerTrustState());
         try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
             assertEquals(3, paths.count());
         }
@@ -51,6 +51,25 @@ final class ProviderSessionBindingServiceTest {
         assertTrue(result.fallbackEvidence());
         assertTrue(Files.exists(root.resolve(".synesis/local/providers/codex.bootstrap-key")));
         assertEquals("FALLBACK", result.fallbackEvidence() ? "FALLBACK" : "EXPLICIT");
+    }
+
+    @Test
+    void allocatesDistinctWorktreeOnlyForACommittedGitProject() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-worktree-");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "proof\n");
+        git(root, "init");
+        git(root, "config", "user.email", "synesis-test@example.invalid");
+        git(root, "config", "user.name", "Synesis Test");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "initial");
+
+        var binding = new ProviderSessionBindingService().ensure(location, "codex", "chat-worktree").binding();
+        assertNotEquals(root.toAbsolutePath().normalize().toString(), binding.worktreePath());
+        assertTrue(binding.worktreePath() != null && Files.isDirectory(Path.of(binding.worktreePath())));
+        var check = new ProviderSessionBindingService().verifyWorkspace(location, binding,
+                Path.of(binding.worktreePath()));
+        assertTrue(check.verified(), check::code);
     }
 
     @Test
@@ -80,7 +99,8 @@ final class ProviderSessionBindingServiceTest {
         HookApplicationService.HookExecutionResult result = new HookApplicationService().codex(
                 new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
-        assertEquals("ALLOWED", result.outcome());
+        assertEquals("INVALID_INPUT", result.outcome());
+        assertTrue(result.responseJson().contains("WORKSPACE_TRANSITION_REQUIRED"));
         try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
             assertTrue(paths.findAny().isPresent());
         }
@@ -101,9 +121,19 @@ final class ProviderSessionBindingServiceTest {
                 root.resolve(".synesis/local/profile"),
                 new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
-        assertEquals("ALLOWED", result.outcome());
+        assertEquals("INVALID_INPUT", result.outcome());
+        assertTrue(result.responseJson().contains("WORKSPACE_TRANSITION_REQUIRED"));
         try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
             assertTrue(paths.findAny().isPresent());
         }
+    }
+
+    private static void git(Path root, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git"; command[1] = "-C"; command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        if (process.waitFor() != 0) throw new IllegalStateException(output);
     }
 }

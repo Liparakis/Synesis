@@ -1012,3 +1012,15 @@ Append-only operational history.
 - The implementation preserves project/node identity and keeps fallback
   provider evidence explicitly degraded; real Codex/Antigravity validation is
   not claimed.
+
+# 2026-07-24 — SYN-013B Codex workspace safety correction
+
+- Removed only the stale Codex proof file from the external validation project;
+  the Antigravity proof file was absent. The external project has no committed
+  `HEAD`, so it cannot receive a detached session worktree.
+- Added durable session worktree allocation for committed Git projects and a
+  fail-closed hook cwd/worktree gate. Provider status now reports workspace
+  assignment and interception as unproven rather than readiness.
+- Focused workspace and CLI tests pass; the external project remains degraded
+  by design until a real provider session can transition into its assigned
+  worktree.

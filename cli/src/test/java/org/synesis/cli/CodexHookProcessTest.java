@@ -18,7 +18,7 @@ import org.synesis.workspace.provider.ProviderJson;
 @Timeout(60)
 final class CodexHookProcessTest {
     @Test
-    void generatedLauncherEmitsDenyForBlockedPatchAndNothingForAllowedPatch() throws Exception {
+    void generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned() throws Exception {
         Path project = Files.createTempDirectory("synesis-codex-process-");
         try {
             assertEquals(0, run(project, "init", "--project", project.toString()).exit());
@@ -32,11 +32,11 @@ final class CodexHookProcessTest {
             CommandResult blocked = hook(project, event(project, "*** Begin Patch\n*** Update File: src/protected/file.txt\n*** End Patch"));
             assertEquals(0, blocked.exit(), blocked.output());
             assertTrue(blocked.output().contains("\"permissionDecision\":\"deny\""), blocked.output());
-            assertTrue(blocked.output().contains("Protect source"), blocked.output());
+            assertTrue(blocked.output().contains("WORKSPACE_TRANSITION_REQUIRED"), blocked.output());
 
             CommandResult allowed = hook(project, event(project, "*** Begin Patch\n*** Add File: docs/readme.txt\n*** End Patch"));
             assertEquals(0, allowed.exit(), allowed.output());
-            assertEquals("", allowed.output());
+            assertTrue(allowed.output().contains("WORKSPACE_TRANSITION_REQUIRED"), allowed.output());
         } finally {
             cleanup(project);
         }

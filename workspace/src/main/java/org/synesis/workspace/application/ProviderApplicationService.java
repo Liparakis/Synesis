@@ -169,7 +169,9 @@ public final class ProviderApplicationService {
                 values.put("WORKER_ID", binding.workerId());
                 values.put("SESSION_PROJECT_ID", binding.projectId());
                 values.put("SESSION_NODE_ID", binding.nodeId());
-                values.put("SESSION_TRUST", binding.providerTrustState());
+                values.put("SESSION_TRUST", binding.worktreePath() == null ? "WORKSPACE_UNVERIFIED" : binding.providerTrustState());
+                values.put("SESSION_WORKSPACE", binding.worktreePath() == null ? "UNASSIGNED" : "ASSIGNED");
+                values.put("SESSION_INTERCEPTION", "UNPROVEN");
                 boolean fallback = ensured != null ? ensured.fallbackEvidence()
                         : new ProviderSessionBindingService().isFallbackEvidence(location, provider, binding);
                 values.put("SESSION_EVIDENCE", fallback ? "FALLBACK" : "EXPLICIT");

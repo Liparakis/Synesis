@@ -70,7 +70,7 @@ public final class ProviderSessionBindingService {
                 }
                 if (!binding.status().equals("REVOKED") && !binding.status().equals("COMPLETED")
                         && !binding.status().equals("ABANDONED")) {
-                    Binding refreshed = binding.touch();
+                    Binding refreshed = withWorktree(location, binding).touch();
                     write(bindingPath, refreshed);
                     return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
                 }
@@ -81,7 +81,8 @@ public final class ProviderSessionBindingService {
             long now = System.currentTimeMillis();
             Binding binding = new Binding(SCHEMA_VERSION, sessionId, location.projectId().toString(), identity.nodeId(),
                     provider, fingerprint, supervisorId, workerId, null, null, null, currentCommit(location.root()),
-                    "BOUND", now, now, 0L, "READY_FOR_REAL_VALIDATION", 1, null);
+                    "BOUND", now, now, 0L, "WORKSPACE_UNVERIFIED", 1, null);
+            binding = withWorktree(location, binding);
             write(bindingPath, binding);
             return new BindingResult(binding, instanceEvidence == null || instanceEvidence.isBlank());
         } catch (BindingException failure) {
@@ -160,6 +161,75 @@ public final class ProviderSessionBindingService {
         }
     }
 
+    /** Verifies that a provider event is executing in its assigned worktree.
+     * @param location project location
+     * @param binding session binding
+     * @param cwd provider event working directory
+     * @return workspace verification result
+     */
+    public synchronized WorkspaceCheck verifyWorkspace(ProjectApplicationService.ProjectLocation location,
+            Binding binding, Path cwd) {
+        if (binding == null || binding.worktreePath() == null || binding.worktreePath().isBlank()) {
+            return new WorkspaceCheck(false, "WORKSPACE_TRANSITION_REQUIRED");
+        }
+        try {
+            Path root = location.root().toAbsolutePath().normalize();
+            Path assigned = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
+            Path actual = Objects.requireNonNull(cwd, "cwd").toAbsolutePath().normalize();
+            if (assigned.equals(root)) return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
+            if (!Files.isDirectory(assigned) || !actual.equals(assigned)) {
+                return new WorkspaceCheck(false, "WORKSPACE_TRANSITION_REQUIRED");
+            }
+            String top = git(assigned, "rev-parse", "--show-toplevel");
+            if (!Files.isSameFile(assigned, Path.of(top).toAbsolutePath().normalize())) {
+                return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
+            }
+            return new WorkspaceCheck(true, "WORKSPACE_VERIFIED");
+        } catch (Exception failure) {
+            return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
+        }
+    }
+
+    private static Binding withWorktree(ProjectApplicationService.ProjectLocation location, Binding binding) {
+        if (binding.worktreePath() != null && Files.isDirectory(Path.of(binding.worktreePath()))) return binding;
+        if ("UNKNOWN".equals(binding.baseCommit())) {
+            return binding.providerTrustState().equals("WORKSPACE_UNVERIFIED") ? binding
+                    : new Binding(binding.schemaVersion(), binding.sessionId(), binding.projectId(), binding.nodeId(),
+                    binding.provider(), binding.providerInstanceFingerprint(), binding.supervisorId(), binding.workerId(),
+                    null, null, null, binding.baseCommit(), binding.status(), binding.createdAtEpochMillis(),
+                    binding.lastSeenEpochMillis(), binding.lastVerifiedProjectSequence(), "WORKSPACE_UNVERIFIED",
+                    binding.bindingVersion(), binding.completedAt());
+        }
+        String worktreeId = "worktree-" + binding.sessionId().substring("session-".length());
+        Path path = location.synesisDirectory().resolve("local/worktrees").resolve(worktreeId).toAbsolutePath().normalize();
+        if (path.equals(location.root()) || !path.startsWith(location.synesisDirectory().toAbsolutePath().normalize())) return binding;
+        try {
+            Files.createDirectories(path.getParent());
+            if (!Files.exists(path)) {
+                runGit(location.root(), "worktree", "add", "-b", "synesis/" + binding.sessionId(),
+                        path.toString(), binding.baseCommit());
+            }
+            return new Binding(binding.schemaVersion(), binding.sessionId(), binding.projectId(), binding.nodeId(),
+                    binding.provider(), binding.providerInstanceFingerprint(), binding.supervisorId(), binding.workerId(),
+                    worktreeId, path.toString(), "synesis/" + binding.sessionId(), binding.baseCommit(), binding.status(),
+                    binding.createdAtEpochMillis(), binding.lastSeenEpochMillis(), binding.lastVerifiedProjectSequence(),
+                    "WORKSPACE_UNVERIFIED", binding.bindingVersion(), binding.completedAt());
+        } catch (Exception ignored) {
+            return binding;
+        }
+    }
+
+    private static String currentCommit(Path root) { try { return git(root, "rev-parse", "HEAD"); } catch (Exception ignored) { return "UNKNOWN"; } }
+    private static String git(Path root, String... arguments) throws Exception { return runGit(root, arguments).trim(); }
+    private static String runGit(Path root, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3]; command[0] = "git"; command[1] = "-C"; command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        if (process.waitFor() != 0) throw new IOException("git failed: " + output);
+        return output;
+    }
+
     private static String fallbackEvidence(ProjectApplicationService.ProjectLocation location, String provider) throws IOException {
         Path path = location.synesisDirectory().resolve("local").resolve(PROVIDERS_DIRECTORY)
                 .resolve(provider + ".bootstrap-key");
@@ -173,17 +243,6 @@ public final class ProviderSessionBindingService {
     private static String fingerprint(String value) throws Exception {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(value.getBytes(StandardCharsets.UTF_8)));
-    }
-
-    private static String currentCommit(Path root) {
-        try {
-            Process process = new ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD")
-                    .redirectErrorStream(true).start();
-            String value = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            return process.waitFor() == 0 && !value.isBlank() ? value : "UNKNOWN";
-        } catch (Exception ignored) {
-            return "UNKNOWN";
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -325,6 +384,12 @@ public final class ProviderSessionBindingService {
             Objects.requireNonNull(binding, "binding");
         }
     }
+
+    /** Workspace verification result.
+     * @param verified whether cwd is the assigned worktree
+     * @param code stable result code
+     */
+    public record WorkspaceCheck(boolean verified, String code) { }
 
     /** Stable automatic binding failure. */
     public static final class BindingException extends Exception {
