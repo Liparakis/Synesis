@@ -33,7 +33,7 @@ type preparedMigrations struct {
 func collectPreparedMigrations(paths installPaths) (preparedMigrations, error) {
 	refs := preparedMigrations{}
 	for _, provider := range []struct{ id, path string }{
-		{"codex", filepath.Join(userHome(), ".codex", "mcp.json")},
+		{"codex", filepath.Join(userHome(), ".codex", "config.toml")},
 		{"antigravity", filepath.Join(userHome(), ".gemini", "config", "mcp_config.json")},
 	} {
 		ref, err := inspectProviderMigration(paths, provider.id, provider.path)
@@ -64,6 +64,9 @@ func collectPreparedMigrations(paths installPaths) (preparedMigrations, error) {
 }
 
 func inspectProviderMigration(paths installPaths, provider, sourcePath string) (migrationReference, error) {
+	if provider == "codex" {
+		return inspectCodexTomlMigration(paths, sourcePath)
+	}
 	ref := migrationReference{Kind: "provider", Provider: provider, SourcePath: sourcePath}
 	data, err := os.ReadFile(sourcePath)
 	if os.IsNotExist(err) {
@@ -95,6 +98,57 @@ func inspectProviderMigration(paths installPaths, provider, sourcePath string) (
 		}
 	} else {
 		ref.State = "UP_TO_DATE"
+	}
+	if ref.State == "MIGRATION_REQUIRED" {
+		planID, ok := findPreparedPlan("pmig-", sourcePath, ref.SourceHash)
+		if !ok {
+			return ref, errors.New("update migrations not prepared")
+		}
+		ref.PlanID = planID
+	}
+	return ref, nil
+}
+
+func inspectCodexTomlMigration(paths installPaths, sourcePath string) (migrationReference, error) {
+	ref := migrationReference{Kind: "provider", Provider: "codex", SourcePath: sourcePath}
+	data, err := os.ReadFile(sourcePath)
+	if os.IsNotExist(err) {
+		ref.State = "MISSING"
+		return ref, nil
+	}
+	if err != nil {
+		return ref, err
+	}
+	ref.SourceHash = sha256Hex(data)
+	text := string(data)
+	if strings.Count(text, "[mcp_servers.synesis]") > 1 || strings.Contains(text, "mcp_servers.synesis.") {
+		ref.State = "AMBIGUOUS"
+		return ref, errors.New("provider config duplicate Synesis entry")
+	}
+	start := strings.Index(text, "[mcp_servers.synesis]")
+	if start < 0 {
+		ref.State = "MIGRATION_REQUIRED"
+	} else {
+		block := text[start:]
+		if next := strings.Index(block[len("[mcp_servers.synesis]"):], "\n["); next >= 0 {
+			block = block[:len("[mcp_servers.synesis]")+next+1]
+		}
+		stableCommand := false
+		stableArgs := strings.Contains(block, "args = [\"mcp\", \"--provider\", \"codex\"]")
+		for _, line := range strings.Split(block, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "command") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					command := strings.Trim(strings.TrimSpace(parts[1]), "\"'")
+					stableCommand = stableLauncherCommand(command) && (filepath.Clean(command) == filepath.Clean(paths.launcher) || launcherExists(command) || command == "synesis" || command == "synesis.cmd")
+				}
+			}
+		}
+		ref.State = "UP_TO_DATE"
+		if !stableCommand || !stableArgs {
+			ref.State = "MIGRATION_REQUIRED"
+		}
 	}
 	if ref.State == "MIGRATION_REQUIRED" {
 		planID, ok := findPreparedPlan("pmig-", sourcePath, ref.SourceHash)

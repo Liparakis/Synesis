@@ -26,7 +26,7 @@ func TestMigrationPlanningRejectsMalformedProviderBeforeActivation(t *testing.T)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	path := filepath.Join(home, ".codex", "mcp.json")
+	path := filepath.Join(home, ".codex", "config.toml")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
