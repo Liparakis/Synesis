@@ -143,6 +143,17 @@ public final class AgentNextActionService {
                     return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_TO_OWNER_REQUEST, result);
                 }
 
+                // Slice 2: owner must respond to a validation revision
+                List<org.synesis.coordination.CapabilityRequestRecord> validationRevList = capProj.findValidationRevisionForOwner(callerNodeId);
+                if (!validationRevList.isEmpty()) {
+                    org.synesis.coordination.CapabilityRequestRecord topReq = validationRevList.getFirst();
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("request", topReq.handle().value());
+                    result.put("reason", topReq.reason() != null ? topReq.reason() : "Revision required by requester");
+                    result.put("pending", validationRevList.size());
+                    return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_FAILED, AgentNextAction.RESPOND_TO_VALIDATION_REVISION, result);
+                }
+
                 List<org.synesis.coordination.CapabilityRequestRecord> reqPending = capProj.findPendingForRequester(callerNodeId);
                 if (!reqPending.isEmpty()) {
                     org.synesis.coordination.CapabilityRequestRecord topReq = null;
@@ -150,11 +161,15 @@ public final class AgentNextActionService {
                         if (r.state() == org.synesis.coordination.CapabilityLifecycleState.REVISION_REQUESTED) {
                             topReq = r;
                             break;
+                        } else if (r.state() == org.synesis.coordination.CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE && topReq == null) {
+                            topReq = r;
                         } else if (r.state() == org.synesis.coordination.CapabilityLifecycleState.REJECTED && topReq == null) {
                             topReq = r;
                         } else if (r.state() == org.synesis.coordination.CapabilityLifecycleState.AWAITING_OWNER && topReq == null) {
                             topReq = r;
                         } else if (r.state() == org.synesis.coordination.CapabilityLifecycleState.ACCEPTED && topReq == null) {
+                            topReq = r;
+                        } else if (r.state() == org.synesis.coordination.CapabilityLifecycleState.IMPLEMENTING && topReq == null) {
                             topReq = r;
                         }
                     }
@@ -171,6 +186,16 @@ public final class AgentNextActionService {
                             result.put("contract", contractMap);
                             result.put("pending", reqPending.size());
                             return new AgentResponse(AgentStatus.READY, AgentReason.REVISION_REQUIRED, AgentNextAction.REVISE_CAPABILITY_REQUEST, result);
+                        } else if (topReq.state() == org.synesis.coordination.CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE) {
+                            // Slice 2: requester must validate the available implementation
+                            org.synesis.coordination.ImplementationRevisionRecord implRec = capProj.findLatestImplementation(topReq.handle().value()).orElse(null);
+                            int revision = implRec != null ? implRec.revisionNumber() : 1;
+                            Map<String, Object> result = new LinkedHashMap<>();
+                            result.put("request", topReq.handle().value());
+                            result.put("capability", topReq.capability());
+                            result.put("revision", revision);
+                            result.put("pending", reqPending.size());
+                            return new AgentResponse(AgentStatus.READY, null, AgentNextAction.VALIDATE_IMPLEMENTATION, result);
                         } else if (topReq.state() == org.synesis.coordination.CapabilityLifecycleState.REJECTED) {
                             Map<String, Object> result = new LinkedHashMap<>();
                             result.put("request", topReq.handle().value());
@@ -181,7 +206,8 @@ public final class AgentNextActionService {
                             result.put("request", topReq.handle().value());
                             result.put("pending", reqPending.size());
                             return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
-                        } else if (topReq.state() == org.synesis.coordination.CapabilityLifecycleState.ACCEPTED) {
+                        } else if (topReq.state() == org.synesis.coordination.CapabilityLifecycleState.ACCEPTED
+                                || topReq.state() == org.synesis.coordination.CapabilityLifecycleState.IMPLEMENTING) {
                             Map<String, Object> result = new LinkedHashMap<>();
                             result.put("request", topReq.handle().value());
                             result.put("pending", reqPending.size());

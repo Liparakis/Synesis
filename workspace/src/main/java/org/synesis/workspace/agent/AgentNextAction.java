@@ -45,7 +45,17 @@ public enum AgentNextAction {
     /**
      * Revise capability request contract in response to owner feedback.
      */
-    REVISE_CAPABILITY_REQUEST("revise_capability_request");
+    REVISE_CAPABILITY_REQUEST("revise_capability_request"),
+
+    /**
+     * Validate the currently available implementation snapshot.
+     */
+    VALIDATE_IMPLEMENTATION("validate_implementation"),
+
+    /**
+     * Respond to a validation revision request by fixing and republishing the implementation.
+     */
+    RESPOND_TO_VALIDATION_REVISION("respond_to_validation_revision");
 
     private final String value;
 

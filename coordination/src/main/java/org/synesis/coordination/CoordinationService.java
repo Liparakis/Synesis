@@ -141,12 +141,32 @@ public final class CoordinationService {
     }
 
     /**
-     * Returns the durable capability request projection.
+     * Returns the current durable capability request projection.
      *
      * @return capability request projection
      */
     public CapabilityRequestProjection capabilityRequestProjection() {
         return store.capabilityRequestProjection();
+    }
+
+    /**
+     * Returns the latest implementation revision record for a request handle, if published.
+     *
+     * @param handleValue public request handle string
+     * @return latest revision record when found
+     */
+    public java.util.Optional<ImplementationRevisionRecord> latestImplementationRevision(String handleValue) {
+        return store.capabilityRequestProjection().findLatestImplementation(handleValue);
+    }
+
+    /**
+     * Returns the active validation context for a request handle, if one is open.
+     *
+     * @param handleValue public request handle string
+     * @return active validation context when found
+     */
+    public java.util.Optional<ValidationContextRecord> validationContext(String handleValue) {
+        return store.capabilityRequestProjection().findValidationContext(handleValue);
     }
 
     private void authorize(CoordinationCommand command) throws IOException, GeneralSecurityException {
@@ -210,11 +230,12 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.CAPABILITY_REQUEST_ACCEPTED
                 || command.type() == PredictionEventType.CAPABILITY_REQUEST_REJECTED
                 || command.type() == PredictionEventType.CAPABILITY_REQUEST_CANCELLED
-                || command.type() == PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED) {
-            CapabilityRequestPayload payload = CapabilityRequestPayload.decode(command.payload());
-            if (payload == null) {
-                throw new GeneralSecurityException("INVALID_CAPABILITY_REQUEST_PAYLOAD");
-            }
+                || command.type() == PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED
+                || command.type() == PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED
+                || command.type() == PredictionEventType.CAPABILITY_VALIDATION_STARTED
+                || command.type() == PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED
+                || command.type() == PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED) {
+            // Payload-level authorization is enforced in application services before signing.
             return;
         }
         PredictionContract contract = contractFor(command);
@@ -232,7 +253,9 @@ public final class CoordinationService {
             case PREDICTION_EXPIRED -> false;
             case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> false;
             case CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED, CAPABILITY_REQUEST_ACCEPTED,
-                 CAPABILITY_REQUEST_REJECTED, CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED -> true;
+                 CAPABILITY_REQUEST_REJECTED, CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED,
+                 CAPABILITY_IMPLEMENTATION_PUBLISHED, CAPABILITY_VALIDATION_STARTED,
+                 CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED -> true;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");

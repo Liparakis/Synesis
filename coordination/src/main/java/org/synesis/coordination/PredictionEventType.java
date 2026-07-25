@@ -103,5 +103,21 @@ public enum PredictionEventType {
     /**
      * Supersedes a capability request with a replacement.
      */
-    CAPABILITY_REQUEST_SUPERSEDED
+    CAPABILITY_REQUEST_SUPERSEDED,
+    /**
+     * Owner publishes an immutable implementation snapshot for a capability request.
+     */
+    CAPABILITY_IMPLEMENTATION_PUBLISHED,
+    /**
+     * Requester begins active validation of the current implementation revision.
+     */
+    CAPABILITY_VALIDATION_STARTED,
+    /**
+     * Requester accepts the implementation snapshot; capability transitions to VALIDATED.
+     */
+    CAPABILITY_IMPLEMENTATION_VALIDATED,
+    /**
+     * Requester rejects the implementation snapshot and requests a revision.
+     */
+    CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED
 }

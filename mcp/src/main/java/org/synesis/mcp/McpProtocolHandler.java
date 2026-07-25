@@ -13,6 +13,8 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.AgentNextActionService;
 import org.synesis.workspace.application.CapabilityRequestService;
 import org.synesis.workspace.application.CapabilityResponseService;
+import org.synesis.workspace.application.ImplementationPublicationService;
+import org.synesis.workspace.application.ImplementationValidationService;
 import org.synesis.workspace.application.ProjectCommandIntent;
 import org.synesis.workspace.application.ProjectCommandService;
 import org.synesis.workspace.application.WorkspacePatchService;
@@ -37,6 +39,8 @@ public final class McpProtocolHandler {
     private final AgentNextActionService nextActionService;
     private final CapabilityRequestService capabilityRequestService;
     private final CapabilityResponseService capabilityResponseService;
+    private final ImplementationPublicationService publicationService;
+    private final ImplementationValidationService validationService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -60,6 +64,8 @@ public final class McpProtocolHandler {
         this.nextActionService = new AgentNextActionService();
         this.capabilityRequestService = new CapabilityRequestService();
         this.capabilityResponseService = new CapabilityResponseService();
+        this.publicationService = new ImplementationPublicationService();
+        this.validationService = new ImplementationValidationService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -545,8 +551,40 @@ public final class McpProtocolHandler {
         respondTool.put("description", "Responds to a pending capability request as the authorized capability owner.");
         respondTool.put("inputSchema", respondSchema);
 
+        // Tool 8: synesis.publish_implementation
+        Map<String, Object> publishProperties = new LinkedHashMap<>();
+        publishProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
+        publishProperties.put("summary", Map.of("type", "string", "description", "Human-readable summary of this implementation"));
+
+        Map<String, Object> publishSchema = new LinkedHashMap<>();
+        publishSchema.put("type", "object");
+        publishSchema.put("properties", publishProperties);
+        publishSchema.put("required", List.of("request"));
+
+        Map<String, Object> publishTool = new LinkedHashMap<>();
+        publishTool.put("name", "synesis.publish_implementation");
+        publishTool.put("description", "Publishes an immutable implementation snapshot for a capability request as the authorized owner.");
+        publishTool.put("inputSchema", publishSchema);
+
+        // Tool 9: synesis.validate_available_implementation
+        Map<String, Object> validateProperties = new LinkedHashMap<>();
+        validateProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
+        validateProperties.put("result", Map.of("type", "string", "description", "Validation result: accepted or revision_required"));
+        validateProperties.put("reason", Map.of("type", "string", "description", "Failure reason when result is revision_required"));
+        validateProperties.put("failedAcceptanceTests", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Failed acceptance test names"));
+
+        Map<String, Object> validateSchema = new LinkedHashMap<>();
+        validateSchema.put("type", "object");
+        validateSchema.put("properties", validateProperties);
+        validateSchema.put("required", List.of("request", "result"));
+
+        Map<String, Object> validateTool = new LinkedHashMap<>();
+        validateTool.put("name", "synesis.validate_available_implementation");
+        validateTool.put("description", "Validates the available implementation snapshot for a capability request as the authorized requester.");
+        validateTool.put("inputSchema", validateSchema);
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool));
+        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool, publishTool, validateTool));
 
         return createResultResponse(id, result);
     }
@@ -654,6 +692,38 @@ public final class McpProtocolHandler {
                 CapabilityResponseService.OwnerResponseRequest respReq = new CapabilityResponseService.OwnerResponseRequest(
                         activeProjectRoot, provider, connectionInstanceId, reqHandle, response, revision, reason);
                 agentResponse = capabilityResponseService.respondToOwnerRequest(respReq);
+            }
+        } else if ("synesis.publish_implementation".equals(name)) {
+            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+            String summary = arguments != null ? (String) arguments.get("summary") : null;
+
+            if (reqHandle == null || reqHandle.isBlank()) {
+                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+            } else {
+                ImplementationPublicationService.PublishRequest pubReq = new ImplementationPublicationService.PublishRequest(
+                        activeProjectRoot, provider, connectionInstanceId, reqHandle, summary);
+                agentResponse = publicationService.publishImplementation(pubReq);
+            }
+        } else if ("synesis.validate_available_implementation".equals(name)) {
+            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+            String valResult = arguments != null ? (String) arguments.get("result") : null;
+            String valReason = arguments != null ? (String) arguments.get("reason") : null;
+
+            List<String> failedTests = new java.util.ArrayList<>();
+            if (arguments != null && arguments.get("failedAcceptanceTests") instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof String s) {
+                        failedTests.add(s);
+                    }
+                }
+            }
+
+            if (reqHandle == null || valResult == null) {
+                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+            } else {
+                ImplementationValidationService.ValidateRequest valReq = new ImplementationValidationService.ValidateRequest(
+                        activeProjectRoot, provider, connectionInstanceId, reqHandle, valResult, valReason, failedTests);
+                agentResponse = validationService.validateImplementation(valReq);
             }
         } else {
             Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);

@@ -115,7 +115,12 @@ public enum AgentReason {
     /**
      * Implementation snapshot is not yet published or available.
      */
-    IMPLEMENTATION_UNAVAILABLE("implementation_unavailable");
+    IMPLEMENTATION_UNAVAILABLE("implementation_unavailable"),
+
+    /**
+     * Requester validation of the implementation snapshot failed.
+     */
+    VALIDATION_FAILED("validation_failed");
 
     private final String value;
 
