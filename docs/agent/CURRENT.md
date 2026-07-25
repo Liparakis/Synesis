@@ -15,7 +15,7 @@ Complete REAL-PROVIDER ACCEPTANCE AND EVIDENCE CORRECTION — Post-MVP Hardening
 
 ## Immediate slice
 
-Codex TOML migration is committed at `e278ea735318c6dbf84d8bcff3435034335c2322`. The managed table matches the shape emitted by `codex mcp add`; unrelated settings are preserved by bounded editing and CAS migration.
+Codex TOML migration is committed at `e278ea735318c6dbf84d8bcff3435034335c2322`, with updater-path follow-up `fe8b3e3`. The managed table matches the shape emitted by `codex mcp add`; unrelated settings are preserved by bounded editing and CAS migration.
 
 ## Verification target
 
@@ -27,7 +27,7 @@ Run a bounded MCP stdio handshake probe against the stable launcher and classify
 
 ## Work completed
 
-Slice 5C.2 implements Codex TOML configuration correction, preservation, compare-and-set migration, backup/rollback, lifecycle integration, and read-only Doctor inspection. `:workspace:test`, `:workspace:check`, `:cli:check`, `:mcp:check`, `go test ./...`, and `go vet ./...` pass.
+Slice 5C.2 implements Codex TOML configuration correction, preservation, compare-and-set migration, backup/rollback, lifecycle integration, read-only Doctor inspection, and updater TOML path handling. `:workspace:test`, `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, `go test ./...`, and `go vet ./...` pass.
 
 ## Current failures
 

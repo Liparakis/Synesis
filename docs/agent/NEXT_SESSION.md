@@ -3,7 +3,7 @@
 - Active task: SYN-014E ACTIVE at Slice 5C.2 following CP-0202
 - Repository branch: master
 - Last checkpoint: CP-0202
-- Last passing command: `:workspace:check`, `:cli:check`, `:mcp:check`, `go test ./...`, and `go vet ./...`.
+- Last passing command: root `check`, `:workspace:check`, `:cli:check`, `:mcp:check`, `go test ./...`, and `go vet ./...`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Exact next code action: Run one bounded MCP stdio handshake probe against the stable launcher; do not start an unbounded Codex process or mutate unrelated Codex settings.
 - Unresolved limitations: Speculative continuation deferred. Actual worktree cleanup uses non-forced `git worktree remove`. Unregistered orphan resources are quarantined atomically without purge. Session abandonment and task cancellation preserve worktrees non-destructively for operator review. Provider configuration files remain diagnostic-only. Event log and snapshot failures require human review.
