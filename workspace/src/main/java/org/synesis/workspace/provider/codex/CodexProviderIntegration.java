@@ -71,7 +71,11 @@ public final class CodexProviderIntegration implements ProviderIntegration {
 
     @Override
     public Path mcpConfigurationPath(Path projectRoot) {
-        return projectRoot.resolve(".codex/mcp.json");
+        String userHome = System.getProperty("user.home");
+        if (userHome == null || userHome.isBlank()) {
+            return null;
+        }
+        return Path.of(userHome, ".codex", "mcp.json");
     }
 
     @Override

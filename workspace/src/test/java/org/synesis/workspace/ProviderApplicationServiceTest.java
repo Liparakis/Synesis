@@ -176,24 +176,25 @@ final class ProviderApplicationServiceTest {
         System.setProperty("synesis.launcher", launcher.toString());
         try {
             var location = new ProjectApplicationService().init(root).location();
-
-            // Pre-populate with unrelated server entry
-            Path codexMcp = root.resolve(".codex/mcp.json");
-            Files.createDirectories(codexMcp.getParent());
-            Files.writeString(codexMcp, "{\"mcpServers\":{\"other-server\":{\"command\":\"other.cmd\"}}}\n");
+            var provider = org.synesis.workspace.provider.ProviderRegistry.find("codex");
+            Path userMcp = provider.mcpConfigurationPath(root);
+            if (userMcp != null) {
+                Files.createDirectories(userMcp.getParent());
+                Files.writeString(userMcp, "{\"mcpServers\":{\"other-server\":{\"command\":\"other.cmd\"}}}\n");
+            }
 
             ProviderApplicationService service = new ProviderApplicationService();
             service.install(location, "codex");
 
-            assertTrue(Files.exists(codexMcp));
-            Map<?, ?> parsed = (Map<?, ?>) ProviderJson.parse(Files.readString(codexMcp));
+            assertTrue(Files.exists(userMcp));
+            Map<?, ?> parsed = (Map<?, ?>) ProviderJson.parse(Files.readString(userMcp));
             Map<?, ?> servers = (Map<?, ?>) parsed.get("mcpServers");
             assertTrue(servers.containsKey("other-server"));
             assertTrue(servers.containsKey("synesis"));
 
             Map<?, ?> synesisEntry = (Map<?, ?>) servers.get("synesis");
             assertEquals(1, ((Number) synesisEntry.get("version")).intValue());
-            assertEquals(java.util.List.of("mcp", "--provider", "codex", "--project", "."), synesisEntry.get("args"));
+            assertEquals(java.util.List.of("mcp", "--provider", "codex"), synesisEntry.get("args"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");
@@ -234,20 +235,14 @@ final class ProviderApplicationServiceTest {
             assertEquals(java.util.List.of("mcp", "--provider", "antigravity"), synesisEntry.get("args"));
             assertTrue(!synesisEntry.containsKey("connectionInstanceId"));
 
-            // Verify project-local .agents/mcp.json and .gemini/mcp.json are updated with absolute project root path
-            assertTrue(Files.exists(agentsMcp));
-            Map<?, ?> parsedAgents = (Map<?, ?>) ProviderJson.parse(Files.readString(agentsMcp));
-            Map<?, ?> serversAgents = (Map<?, ?>) parsedAgents.get("mcpServers");
-            assertTrue(serversAgents.containsKey("synesis"));
-            Map<?, ?> agentsEntry = (Map<?, ?>) serversAgents.get("synesis");
-            String expectedAbsRoot = root.toAbsolutePath().normalize().toString();
-            assertEquals(java.util.List.of("mcp", "--provider", "antigravity", "--project", expectedAbsRoot), agentsEntry.get("args"));
+            // Verify obsolete project-local pure synesis file was deleted
+            assertTrue(!Files.exists(agentsMcp));
 
-            // Verify project-local file with unrelated entry preserved unrelated key
+            // Verify project-local file with unrelated entry preserved unrelated key but removed synesis
             assertTrue(Files.exists(geminiMcp));
             Map<?, ?> parsedGemini = (Map<?, ?>) ProviderJson.parse(Files.readString(geminiMcp));
             Map<?, ?> geminiServers = (Map<?, ?>) parsedGemini.get("mcpServers");
-            assertTrue(geminiServers.containsKey("synesis"));
+            assertTrue(!geminiServers.containsKey("synesis"));
             assertTrue(geminiServers.containsKey("unrelated"));
 
             // Verify provider trust remains UNVALIDATED (does not promote real maturity)

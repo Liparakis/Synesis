@@ -62,7 +62,7 @@ public interface ProviderIntegration {
                 ? launcher.toAbsolutePath().normalize().toString()
                 : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? "synesis.cmd" : "synesis");
         server.put("command", cmd);
-        server.put("args", List.of("mcp", "--provider", id(), "--project", "."));
+        server.put("args", List.of("mcp", "--provider", id()));
         server.put("version", 1);
         return server;
     }

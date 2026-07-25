@@ -685,36 +685,16 @@ public final class ProviderApplicationService {
                     }
                 }
 
-                // Ensure project-local .agents/mcp.json and .gemini/mcp.json exist with explicit absolute project path
-                String absoluteRoot = location.root().toAbsolutePath().normalize().toString();
-                Map<String, Object> projectEntry = new LinkedHashMap<>(managedEntry);
-                projectEntry.put("args", List.of("mcp", "--provider", provider.id(), "--project", absoluteRoot));
-                ensureProjectMcpFile(location.root().resolve(".agents/mcp.json"), projectEntry);
-                ensureProjectMcpFile(location.root().resolve(".gemini/mcp.json"), projectEntry);
             }
+
+            // Clean up obsolete project-local MCP replication files so project repositories stay clean
+            cleanObsoleteProjectMcpFile(location.root().resolve(".agents/mcp.json"));
+            cleanObsoleteProjectMcpFile(location.root().resolve(".gemini/mcp.json"));
+            cleanObsoleteProjectMcpFile(location.root().resolve(".codex/mcp.json"));
 
             return unchanged ? "UNCHANGED" : "INSTALLED";
         } catch (Exception failure) {
             return "MALFORMED_CONFIG";
-        }
-    }
-
-    private void ensureProjectMcpFile(Path path, Map<String, Object> managedEntry) {
-        if (path == null) {
-            return;
-        }
-        try {
-            Map<String, Object> root = Files.exists(path) ? readObject(path) : new LinkedHashMap<>();
-            @SuppressWarnings("unchecked")
-            Map<String, Object> mcpServers = root.containsKey("mcpServers") && root.get("mcpServers") instanceof Map<?, ?>
-                    ? new LinkedHashMap<>((Map<String, Object>) root.get("mcpServers"))
-                    : new LinkedHashMap<>();
-            if (!managedEntry.equals(mcpServers.get("synesis"))) {
-                mcpServers.put("synesis", managedEntry);
-                root.put("mcpServers", mcpServers);
-                atomicWrite(path, ProviderJson.write(root) + System.lineSeparator());
-            }
-        } catch (Exception ignored) {
         }
     }
 
