@@ -9,6 +9,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.application.AgentNextActionService;
 import org.synesis.workspace.application.ProjectCommandIntent;
 import org.synesis.workspace.application.ProjectCommandService;
 import org.synesis.workspace.application.WorkspacePatchService;
@@ -30,6 +31,7 @@ public final class McpProtocolHandler {
     private final WorkspaceReadService readService;
     private final WorkspacePatchService patchService;
     private final ProjectCommandService commandService;
+    private final AgentNextActionService nextActionService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -50,6 +52,7 @@ public final class McpProtocolHandler {
         this.readService = new WorkspaceReadService();
         this.patchService = new WorkspacePatchService();
         this.commandService = new ProjectCommandService();
+        this.nextActionService = new AgentNextActionService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -483,8 +486,14 @@ public final class McpProtocolHandler {
         runCommandTool.put("description", "Executes an approved project build or git command intent inside the assigned worktree.");
         runCommandTool.put("inputSchema", runCmdSchema);
 
+        Map<String, Object> nextActionSchema = Map.of("type", "object", "properties", Map.of());
+        Map<String, Object> getNextActionTool = new LinkedHashMap<>();
+        getNextActionTool.put("name", "synesis.get_next_action");
+        getNextActionTool.put("description", "Retrieves the single highest-priority actionable coordination item for the active MCP session.");
+        getNextActionTool.put("inputSchema", nextActionSchema);
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool));
+        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool));
 
         return createResultResponse(id, result);
     }
@@ -567,6 +576,10 @@ public final class McpProtocolHandler {
                     agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
                 }
             }
+        } else if ("synesis.get_next_action".equals(name)) {
+            AgentNextActionService.NextActionRequest nextReq = new AgentNextActionService.NextActionRequest(
+                    activeProjectRoot, provider, connectionInstanceId);
+            agentResponse = nextActionService.getNextAction(nextReq);
         } else {
             Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
             Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);

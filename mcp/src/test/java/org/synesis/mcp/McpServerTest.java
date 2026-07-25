@@ -85,7 +85,7 @@ class McpServerTest {
         assertTrue(responseJson.contains("\"name\":\"synesis.read_file\""));
         assertTrue(responseJson.contains("\"name\":\"synesis.apply_patch\""));
         assertTrue(responseJson.contains("\"name\":\"synesis.run_command\""));
-        assertFalse(responseJson.contains("synesis.get_next_action"));
+        assertTrue(responseJson.contains("\"name\":\"synesis.get_next_action\""));
     }
 
     @Test
@@ -366,5 +366,11 @@ class McpServerTest {
         String runCmdResp = handler.handleMessage(runCmdReq);
         assertTrue(runCmdResp.contains("completed"));
         assertTrue(runCmdResp.contains("git_status"));
+
+        // 7. Get Next Action
+        String nextActionReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.get_next_action\",\"arguments\":{}}}";
+        String nextActionResp = handler.handleMessage(nextActionReq);
+        assertTrue(nextActionResp.contains("ready"));
+        assertTrue(nextActionResp.contains("pending"));
     }
 }

@@ -75,7 +75,22 @@ public enum AgentReason {
     /**
      * Requested tool or command adapter is not available or supported for this project.
      */
-    TOOL_UNAVAILABLE("tool_unavailable");
+    TOOL_UNAVAILABLE("tool_unavailable"),
+
+    /**
+     * Dependency or speculative assumption has been invalidated.
+     */
+    DEPENDENCY_INVALIDATED("dependency_invalidated"),
+
+    /**
+     * Request from another worker requiring owner response.
+     */
+    OWNER_REQUEST_PENDING("owner_request_pending"),
+
+    /**
+     * Implementation is available and validation is required.
+     */
+    VALIDATION_REQUIRED("validation_required");
 
     private final String value;
 

@@ -100,7 +100,11 @@ public final class ProviderJson {
         private int index;
 
         private Parser(String text) {
-            this.text = text == null ? "" : text;
+            String clean = text == null ? "" : text;
+            if (clean.startsWith("\uFEFF")) {
+                clean = clean.substring(1);
+            }
+            this.text = clean;
         }
 
         private boolean end() {
