@@ -23,6 +23,7 @@ import org.synesis.workspace.provider.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 import org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration;
+import org.synesis.workspace.migration.CodexTomlConfiguration;
 
 /**
  * Owns provider lifecycle, local metadata, configuration merging, and diagnostics.
@@ -515,7 +516,22 @@ public final class ProviderApplicationService {
      * @return structured result
      */
     public ProviderResult status(ProjectApplicationService.ProjectLocation location, String id) {
-        return decorate(location, id, statusInternal(location, id), null);
+        ProviderResult result = decorate(location, id, statusInternal(location, id), null);
+        if ("codex".equals(id)) {
+            try {
+                Path path = provider(id).mcpConfigurationPath(location.root());
+                CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(path,
+                        stableLauncher(isWindows() ? "synesis.cmd" : "synesis"));
+                Map<String, String> values = new LinkedHashMap<>(result.values());
+                values.put("MCP_CONFIG_PATH", path.toString());
+                values.put("MCP_CONFIG_STATUS", inspection.outcome().name());
+                values.put("MCP_CONFIG_READ_ONLY", "true");
+                return new ProviderResult(result.exitCode(), values);
+            } catch (Exception ignored) {
+                // The hook status remains authoritative when MCP inspection cannot read the file.
+            }
+        }
+        return result;
     }
 
     private ProviderResult statusInternal(ProjectApplicationService.ProjectLocation location, String id) {
@@ -653,6 +669,14 @@ public final class ProviderApplicationService {
             return "UNSUPPORTED";
         }
         try {
+            if ("codex".equals(provider.id())) {
+                CodexTomlConfiguration.Inspection before = CodexTomlConfiguration.inspect(configPath, launcher);
+                if (before.outcome() == CodexTomlConfiguration.Outcome.MALFORMED
+                        || before.outcome() == CodexTomlConfiguration.Outcome.DUPLICATE_SYNSESIS_ENTRY) return "MALFORMED_CONFIG";
+                CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher);
+                return before.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE
+                        && after.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE ? "UNCHANGED" : "INSTALLED";
+            }
             Map<String, Object> managedEntry = provider.managedMcpServer(launcher, location.root());
             Map<String, Object> root = Files.exists(configPath) ? readObject(configPath) : new LinkedHashMap<>();
 
@@ -690,7 +714,6 @@ public final class ProviderApplicationService {
             // Clean up obsolete project-local MCP replication files so project repositories stay clean
             cleanObsoleteProjectMcpFile(location.root().resolve(".agents/mcp.json"));
             cleanObsoleteProjectMcpFile(location.root().resolve(".gemini/mcp.json"));
-            cleanObsoleteProjectMcpFile(location.root().resolve(".codex/mcp.json"));
 
             return unchanged ? "UNCHANGED" : "INSTALLED";
         } catch (Exception failure) {
@@ -727,6 +750,10 @@ public final class ProviderApplicationService {
         Path configPath = provider.mcpConfigurationPath(location.root());
         if (configPath != null && Files.exists(configPath)) {
             try {
+                if ("codex".equals(provider.id())) {
+                    CodexTomlConfiguration.remove(configPath);
+                    return;
+                }
                 Map<String, Object> root = readObject(configPath);
                 if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
                     @SuppressWarnings("unchecked")

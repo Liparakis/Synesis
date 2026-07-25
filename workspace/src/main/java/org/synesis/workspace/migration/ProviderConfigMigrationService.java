@@ -174,6 +174,48 @@ public final class ProviderConfigMigrationService {
         for (Entry planned : plan.entries()) {
             ProviderIntegration provider = provider(planned.provider());
             Entry current = inspect(provider);
+            if ("codex".equals(provider.id())) {
+                if (current.outcome() == Outcome.MALFORMED || current.outcome() == Outcome.DUPLICATE_SYNSESIS_ENTRY
+                        || current.outcome() == Outcome.UNSUPPORTED_SCHEMA || current.outcome() == Outcome.REQUIRES_HUMAN_REVIEW) {
+                    results.add(current);
+                    append(journal, "provider=codex outcome=" + current.outcome());
+                    continue;
+                }
+                if (current.outcome() == Outcome.UP_TO_DATE) {
+                    results.add(current);
+                    append(journal, "provider=codex outcome=UP_TO_DATE");
+                    continue;
+                }
+                if (!current.sourceHash().equals(planned.sourceHash())) {
+                    Entry stale = new Entry("codex", planned.configPath(), current.sourceHash(), Outcome.STALE, launcher.toString());
+                    results.add(stale);
+                    append(journal, "provider=codex outcome=STALE reason=provider_config_stale");
+                    continue;
+                }
+                Path config = Path.of(planned.configPath());
+                Path backup = backupRoot.resolve("codex.toml");
+                boolean existed = Files.exists(config);
+                try {
+                    if (existed) {
+                        Files.copy(config, backup, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                        if (!hash(config).equals(hash(backup))) throw new IOException("backup verification failed");
+                        write(backupRoot.resolve("codex.manifest"), "provider=codex\nsourceHash=" + planned.sourceHash()
+                                + "\nbackupHash=" + hash(backup) + "\nplan=" + plan.planId() + "\nformat=TOML\n");
+                        backups++;
+                    }
+                    CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(config, launcher);
+                    if (after.outcome() != CodexTomlConfiguration.Outcome.UP_TO_DATE) throw new IOException("provider output invalid: " + after.outcome());
+                    Entry migrated = new Entry("codex", config.toString(), after.sourceHash(), Outcome.MIGRATED, launcher.toString());
+                    results.add(migrated);
+                    append(journal, "provider=codex outcome=MIGRATED");
+                } catch (Exception failure) {
+                    if (existed && Files.exists(backup)) Files.copy(backup, config, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                    Entry restored = new Entry("codex", config.toString(), safeHash(config), Outcome.FAILED_RESTORED, launcher.toString());
+                    results.add(restored);
+                    append(journal, "provider=codex outcome=FAILED_RESTORED");
+                }
+                continue;
+            }
             if (current.outcome() == Outcome.MISSING || current.outcome() == Outcome.UP_TO_DATE) {
                 results.add(current);
                 append(journal, "provider=" + planned.provider() + " outcome=" + current.outcome());
@@ -218,6 +260,22 @@ public final class ProviderConfigMigrationService {
         Path config = provider.mcpConfigurationPath(Path.of("."));
         if (config == null) return new Entry(provider.id(), "", "", Outcome.UNSUPPORTED_SCHEMA, launcher.toString());
         config = config.toAbsolutePath().normalize();
+        if ("codex".equals(provider.id())) {
+            try {
+                CodexTomlConfiguration.Inspection inspected = CodexTomlConfiguration.inspect(config, launcher);
+                Outcome outcome = switch (inspected.outcome()) {
+                    case MISSING -> Outcome.MISSING;
+                    case UP_TO_DATE -> Outcome.UP_TO_DATE;
+                    case MIGRATION_REQUIRED -> Outcome.MIGRATION_REQUIRED;
+                    case MALFORMED -> Outcome.MALFORMED;
+                    case DUPLICATE_SYNSESIS_ENTRY -> Outcome.DUPLICATE_SYNSESIS_ENTRY;
+                    case UNSUPPORTED_SCHEMA -> Outcome.UNSUPPORTED_SCHEMA;
+                };
+                return new Entry("codex", config.toString(), inspected.sourceHash(), outcome, launcher.toString());
+            } catch (Exception failure) {
+                return new Entry("codex", config.toString(), safeHash(config), Outcome.MALFORMED, launcher.toString());
+            }
+        }
         try {
             if (!Files.exists(config)) return new Entry(provider.id(), config.toString(), "", Outcome.MISSING, launcher.toString());
             if (Files.isSymbolicLink(config) || Files.readAttributes(config, java.nio.file.attribute.BasicFileAttributes.class).isOther()

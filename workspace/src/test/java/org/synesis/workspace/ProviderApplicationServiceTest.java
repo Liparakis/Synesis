@@ -180,21 +180,18 @@ final class ProviderApplicationServiceTest {
             Path userMcp = provider.mcpConfigurationPath(root);
             if (userMcp != null) {
                 Files.createDirectories(userMcp.getParent());
-                Files.writeString(userMcp, "{\"mcpServers\":{\"other-server\":{\"command\":\"other.cmd\"}}}\n");
+                Files.writeString(userMcp, "notify = [\"keep\"]\n\n[mcp_servers.other-server]\ncommand = \"other.cmd\"\n");
             }
 
             ProviderApplicationService service = new ProviderApplicationService();
             service.install(location, "codex");
 
             assertTrue(Files.exists(userMcp));
-            Map<?, ?> parsed = (Map<?, ?>) ProviderJson.parse(Files.readString(userMcp));
-            Map<?, ?> servers = (Map<?, ?>) parsed.get("mcpServers");
-            assertTrue(servers.containsKey("other-server"));
-            assertTrue(servers.containsKey("synesis"));
-
-            Map<?, ?> synesisEntry = (Map<?, ?>) servers.get("synesis");
-            assertEquals(1, ((Number) synesisEntry.get("version")).intValue());
-            assertEquals(java.util.List.of("mcp", "--provider", "codex"), synesisEntry.get("args"));
+            String parsed = Files.readString(userMcp);
+            assertTrue(parsed.contains("notify = [\"keep\"]"));
+            assertTrue(parsed.contains("[mcp_servers.other-server]"));
+            assertTrue(parsed.contains("[mcp_servers.synesis]"));
+            assertTrue(parsed.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");

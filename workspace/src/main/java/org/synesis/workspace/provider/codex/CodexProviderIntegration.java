@@ -75,7 +75,21 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         if (userHome == null || userHome.isBlank()) {
             return null;
         }
-        return Path.of(userHome, ".codex", "mcp.json");
+        return Path.of(userHome, ".codex", "config.toml");
+    }
+
+    /**
+     * Builds the Codex TOML MCP entry.
+     *
+     * @param launcher stable launcher
+     * @param projectRoot ignored project root
+     * @return TOML-compatible entry values
+     */
+    @Override
+    public Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
+        Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher, projectRoot));
+        server.remove("version");
+        return server;
     }
 
     @Override
