@@ -1,12 +1,12 @@
 # Next Session
 
-- Active task: SYN-014E ACTIVE at CP-0190
+- Active task: SYN-014E ACTIVE at CP-0198
 - Repository branch: master
-- Last checkpoint: CP-0195
-- Last passing command: `.\gradlew.bat check --no-daemon` (49 tasks, BUILD SUCCESSFUL)
+- Last checkpoint: CP-0198
+- Last passing command: `go test -count=1 ./...` and `go vet ./...`; Gradle module and root checks are also passing.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next code action: Resume from the Slice 5B checkpoint and begin only the separately authorized Slice 5C real-provider validation task.
+- Exact next code action: Begin only Slice 5C real Codex/Antigravity acceptance after explicit activation; do not alter the Slice 5B.1 transaction or the five preserved CLI edits.
 - Unresolved limitations: Speculative continuation deferred. Actual worktree cleanup uses non-forced `git worktree remove`. Unregistered orphan resources are quarantined atomically without purge. Session abandonment and task cancellation preserve worktrees non-destructively for operator review. Provider configuration files remain diagnostic-only. Event log and snapshot failures require human review.
 - Facts that must not be forgotten: Handles format must be `req_<random_token>` with at least 96 bits entropy. MCP responses must remain concise and must not leak internal IDs, worktree paths, or event IDs. Exactly 11 MCP tools are currently registered in `tools/list`. `synesis doctor` is strictly read-only by construction. Repair administrative state is stored under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-plans\<plan-id>.json`. Repair execution lock is at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-execution.lock`. Repair execution journals are at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-executions\<execution-id>.jsonl`. Pre-mutation backups are stored under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-backups\<execution-id>\`.
 - Slice 5 boundary: installed payloads are immutable and retained; activation is a validated atomic pointer replacement; update execution requires a prepared plan; provider/project migration is compare-and-set and identity-preserving; no process termination, old-version deletion, remote polling, or MCP tool changes.
-- Slice 5B evidence: provider/project migration tests PASS; workspace/CLI/MCP/root Gradle checks PASS (49 actionable tasks); bootstrap tests/vet PASS. Real Codex/Antigravity validation remains deferred to Slice 5C.
+- Slice 5B.1 evidence: replay/equivalence tests PASS; bootstrap Go tests/vet PASS; `:coordination:check`, `:workspace:check`, `:cli:check`, `:mcp:check`, and root `check` PASS; exactly 11 MCP tools remain. Real Codex/Antigravity validation remains deferred to Slice 5C.

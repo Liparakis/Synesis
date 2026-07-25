@@ -32,6 +32,9 @@ public enum DoctorRecommendation {
     /** Prepare a project schema migration plan. */
     PREPARE_PROJECT_MIGRATION("synesis_migrate_prepare"),
 
+    /** Review and resume the prepared update transaction. */
+    REVIEW_UPDATE_TRANSACTION("review_update_transaction"),
+
     /**
      * Reinstall Synesis CLI / platform distribution.
      */

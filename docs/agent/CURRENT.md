@@ -11,24 +11,24 @@
 
 ## Objective
 
-Implement Post-MVP Hardening Slice 5B: safe provider configuration migration and identity-preserving project schema migration on top of the verified Slice 5A installation/update foundation.
+Implement Post-MVP Hardening Slice 5B.1: durable-state replay verification and migration-aware atomic update transactions on top of the verified Slice 5B foundation.
 
 ## Immediate slice
 
-Slice 5B provider/project migration is implemented. The five pre-existing CLI edits are preserved and excluded from this slice.
+Slice 5B is complete. Slice 5B.1 is limited to replay verification and update transaction integration; the five pre-existing CLI edits are preserved and excluded from this slice.
 
 ## Verification target
 
-Migration tests PASS; `:workspace:check`, `:cli:check`, `:mcp:check`, root `check` PASS (49 tasks); bootstrap `go test -count=1 ./...` and `go vet ./...` PASS.
+Focused replay/transaction tests, workspace/CLI/MCP/root checks, and bootstrap Go tests/vet.
 
 ## Immediate next action
 
-Run `scripts/agent-checkpoint.ps1` after committing the verified Slice 5B changes; preserve the five pre-existing CLI edits and do not begin Slice 5C real-provider validation.
+Create CP-0198 with `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`, then stop before Slice 5C real-provider validation.
 
 ## Work completed
 
-Provider compare-and-set migration, external backup/journal evidence, stable launcher rendering, project schema detection, immutable prepared workflows, identity-preserving no-op verification, Doctor read-only migration findings, CLI workflows, focused tests, and all requested repository checks.
+Slice 5B provider/project migration is complete. Slice 5B.1 adds post-migration replay equivalence, migration-aware update plans, transaction journaling, pre-activation migration ordering, restart-safe idempotence, active-session/schema gates, and rollback evidence. `go test -count=1 ./...`, `go vet ./...`, `:coordination:check`, `:workspace:check`, `:cli:check`, `:mcp:check`, and root `check` all pass.
 
 ## Current failures
 
-No verification failures. Real Codex and Antigravity acceptance remains intentionally deferred to Slice 5C; update-transaction activation integration remains outside this Java migration slice.
+Real Codex and Antigravity acceptance remains intentionally deferred to Slice 5C.

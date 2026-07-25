@@ -554,14 +554,14 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-014E
 - Priority: P0
-- Title: Post-MVP Hardening Slice 5B: Provider configuration and project schema migration
+- Title: Post-MVP Hardening Slice 5B.1: Replay verification and migration-aware atomic updates
 - Status: ACTIVE
-- Purpose: Add safe compare-and-set provider configuration migration and identity-preserving project schema migration on top of the completed Slice 5A installation/update foundation.
+- Purpose: Prove durable-state semantic equivalence after migration and integrate prepared provider/project migrations into the completed Slice 5A update transaction.
 - Dependencies: SYN-014D DONE at CP-0190; existing SYN-009C/SYN-009D bootstrap evidence.
-- Acceptance criteria: provider and project migrations use immutable prepared plans, compare-and-set fingerprints, external backups, atomic replacement, restart-safe journals, identity preservation, read-only Doctor findings, and no provider/project MCP surface changes; applicable tests and full verification pass.
-- Required tests: provider/project migration fixtures for malformed, duplicate, stale, backup/restore, idempotent, identity-preserving, and restart-safe paths; applicable Gradle and bootstrap checks.
-- Scope boundary: no new update architecture, remote update service, process shutdown, malformed-config repair, schema downgrade, event-log rewriting, snapshot deletion, real provider acceptance, or public release work.
-- Evidence: Slice 5A foundation verified at CP-0194; Slice 5B migration tests, workspace/CLI/MCP/root Gradle checks, and bootstrap Go tests PASS before the next checkpoint.
+- Acceptance criteria: replay verifies all existing projections and immutable references; update plans contain migration references and compatibility state; migrations execute only after staged self-test and before pointer activation; failures restore migrations and the old pointer deterministically; active-session/schema safety and read-only Doctor findings are enforced; MCP surface remains unchanged.
+- Required tests: projection replay/equivalence, semantic mismatch, migration ordering, transaction journal/restart, rollback, active-session/schema compatibility, Doctor read-only, and applicable Gradle/bootstrap checks.
+- Scope boundary: no new migration features, remote update service, process shutdown, malformed-config repair, schema downgrade, event-log rewriting, snapshot deletion, real provider acceptance, or public release work.
+- Evidence: Slice 5B committed at 885048bec83370b9178de9a28707dfaa0dd3ad79; Slice 5B.1 replay, semantic-equivalence, migration-ordering, rollback, Doctor, and restart-idempotence checks pass; bootstrap Go tests/vet and all required Gradle module/root checks pass; CP-0198 records the durable checkpoint. Real provider acceptance remains deferred to Slice 5C.
 
 ## SYN-001
 

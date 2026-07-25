@@ -112,6 +112,9 @@ public final class DoctorService {
         // 6. Administrative State Checks
         checkAdministrativeState(root, findings);
 
+        // 6b. Update and migration transaction checks (read-only)
+        checkMigrationTransactions(findings);
+
         // 7. Provider Configuration Checks
         checkProviderConfiguration(findings);
 
@@ -359,6 +362,68 @@ public final class DoctorService {
                         "Duplicate Synesis provider entries", "Provider configuration contains ambiguous Synesis MCP entries.",
                         "provider_config", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED, computeHash(entry.provider() + "_duplicate"), Map.of("provider", entry.provider())));
             }
+        }
+    }
+
+    private void checkMigrationTransactions(List<DoctorFinding> findings) {
+        String base = System.getenv("LOCALAPPDATA");
+        if (base == null || base.isBlank()) {
+            String home = System.getProperty("user.home");
+            if (home == null || home.isBlank()) return;
+            base = Path.of(home, "AppData", "Local").toString();
+        }
+        Path admin = Path.of(base, "Synesis", "admin");
+        checkTransactionJournals(admin.resolve("update-executions"), findings);
+        checkTransactionJournals(admin.resolve("migration-executions"), findings);
+    }
+
+    private void checkTransactionJournals(Path directory, List<DoctorFinding> findings) {
+        if (!Files.isDirectory(directory)) return;
+        try (var stream = Files.list(directory)) {
+            for (Path journal : stream.filter(path -> path.getFileName().toString().endsWith(".jsonl")).toList()) {
+                try {
+                    List<String> lines = Files.readAllLines(journal, StandardCharsets.UTF_8);
+                    if (lines.isEmpty()) throw new IOException("empty journal");
+                    for (String line : lines) {
+                        if (!line.contains("outcome=") && !(ProviderJson.parse(line) instanceof Map<?, ?>)) {
+                            throw new IOException("invalid journal entry");
+                        }
+                    }
+                    String journalText = String.join("\n", lines);
+                    if (journalText.contains("post_migration_replay")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.POST_MIGRATION_REPLAY_FAILED, DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED, "Post-migration replay failed", "Project migration replay did not prove semantic equivalence.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString() + "_replay"), Map.of()));
+                    }
+                    if (journalText.contains("backup_missing") || journalText.contains("restore_failed")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.MIGRATION_BACKUP_MISSING, DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED, "Migration backup unavailable", "Migration rollback evidence is incomplete.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString() + "_backup"), Map.of()));
+                    }
+                    if (journalText.contains("active_session_blocks_project_migration")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.ACTIVE_SESSION_BLOCKS_MIGRATION, DoctorSeverity.WARNING,
+                                DoctorConfidence.CONFIRMED, "Active session blocks migration", "Project migration is waiting for incompatible session state to quiesce.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString() + "_session"), Map.of()));
+                    }
+                    String last = lines.getLast();
+                    if (!last.contains("COMPLETED") && !last.contains("SUCCESS") && !last.contains("ROLLED_BACK")
+                            && !last.contains("MIGRATED") && !last.contains("UP_TO_DATE") && !last.contains("FAILED_RESTORED")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.UPDATE_TRANSACTION_INCOMPLETE, DoctorSeverity.WARNING,
+                                DoctorConfidence.CONFIRMED, "Migration transaction incomplete", "A prepared update or migration journal has not reached a terminal state.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString()), Map.of()));
+                    }
+                } catch (Exception corrupt) {
+                    findings.add(new DoctorFinding(DoctorFindingCode.MIGRATION_STATE_INCOMPLETE, DoctorSeverity.ERROR,
+                            DoctorConfidence.CONFIRMED, "Migration journal corrupt", "Migration transaction evidence is malformed and requires review.",
+                            "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                            computeHash(journal.getFileName().toString() + "_corrupt"), Map.of()));
+                }
+            }
+        } catch (IOException ignored) {
         }
     }
 

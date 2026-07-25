@@ -76,17 +76,23 @@ type activePointer struct {
 }
 
 type updatePlan struct {
-	SchemaVersion       int    `json:"schemaVersion"`
-	PlanID              string `json:"planId"`
-	InstallationRoot    string `json:"installationRoot"`
-	BundlePath          string `json:"bundlePath"`
-	ManifestPath        string `json:"manifestPath"`
-	SignaturePath       string `json:"signaturePath"`
-	BundleFingerprint   string `json:"bundleFingerprint"`
-	ManifestFingerprint string `json:"manifestFingerprint"`
-	TargetVersion       string `json:"targetVersion"`
-	CurrentFingerprint  string `json:"currentFingerprint,omitempty"`
-	CanonicalHash       string `json:"canonicalHash"`
+	SchemaVersion           int                  `json:"schemaVersion"`
+	PlanID                  string               `json:"planId"`
+	InstallationRoot        string               `json:"installationRoot"`
+	BundlePath              string               `json:"bundlePath"`
+	ManifestPath            string               `json:"manifestPath"`
+	SignaturePath           string               `json:"signaturePath"`
+	BundleFingerprint       string               `json:"bundleFingerprint"`
+	ManifestFingerprint     string               `json:"manifestFingerprint"`
+	TargetVersion           string               `json:"targetVersion"`
+	CurrentFingerprint      string               `json:"currentFingerprint,omitempty"`
+	ProviderMigrations      []migrationReference `json:"providerMigrations,omitempty"`
+	ProjectMigration        migrationReference   `json:"projectMigration"`
+	ProjectRoot             string               `json:"projectRoot,omitempty"`
+	MigrationState          string               `json:"migrationState"`
+	RollbackCompatibility   string               `json:"rollbackCompatibility"`
+	LiveProjectSessionState string               `json:"liveProjectSessionState"`
+	CanonicalHash           string               `json:"canonicalHash"`
 }
 
 type updateLock struct {
@@ -211,7 +217,7 @@ func runInstall(operation string, args []string) error {
 		fmt.Printf("UPDATE_RESULT=PREPARED\nPLAN_ID=%s\n", id)
 		return nil
 	}
-	if err := activateVersioned(paths, m, data, archive, "install"); err != nil {
+	if err := activateVersioned(paths, m, data, archive, "install", nil); err != nil {
 		return err
 	}
 	fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
@@ -612,7 +618,22 @@ func prepareUpdatePlan(paths installPaths, m manifest, manifestData, signature, 
 		return "", err
 	}
 	currentData, _ := os.ReadFile(paths.current)
-	plan := updatePlan{SchemaVersion: 1, InstallationRoot: paths.root, BundleFingerprint: digest(archive), ManifestFingerprint: digest(manifestData), TargetVersion: m.Version, CurrentFingerprint: digest(currentData)}
+	migrations, err := collectPreparedMigrations(paths)
+	if err != nil {
+		return "", err
+	}
+	plan := updatePlan{SchemaVersion: 1, InstallationRoot: paths.root, BundleFingerprint: digest(archive), ManifestFingerprint: digest(manifestData), TargetVersion: m.Version, CurrentFingerprint: digest(currentData), ProviderMigrations: migrations.Providers, ProjectMigration: migrations.Project, ProjectRoot: migrations.ProjectRoot, MigrationState: "MIGRATIONS_PREPARED", RollbackCompatibility: "SAFE", LiveProjectSessionState: "NO_MIGRATION_REQUIRED"}
+	if plan.ProjectMigration.State == "NO_PROJECT" {
+		plan.LiveProjectSessionState = "NO_PROJECT"
+	}
+	for _, ref := range plan.ProviderMigrations {
+		if ref.State == "MIGRATION_REQUIRED" {
+			plan.RollbackCompatibility = "MIGRATION_BACKUPS_REQUIRED"
+		}
+	}
+	if plan.ProjectMigration.State == "MIGRATION_REQUIRED" {
+		plan.RollbackCompatibility = "MIGRATION_BACKUPS_REQUIRED"
+	}
 	planBytes, _ := json.Marshal(plan)
 	plan.PlanID = digest(planBytes)[:24]
 	plan.BundlePath = filepath.Join(paths.plans, plan.PlanID+".bundle")
@@ -663,8 +684,13 @@ func executeUpdatePlan(paths installPaths, id string) error {
 	if err != nil {
 		return err
 	}
+	if data, readErr := os.ReadFile(filepath.Join(paths.executions, id+".json")); readErr == nil && strings.Contains(string(data), `"result":"SUCCESS"`) && latestUpdatePlan(paths, id) {
+		return nil
+	}
+	_ = appendUpdateTransactionState(paths, id, "PLANNED", "")
 	currentData, _ := os.ReadFile(paths.current)
 	if digest(currentData) != plan.CurrentFingerprint {
+		_ = appendUpdateTransactionState(paths, id, "FAILED_BEFORE_MUTATION", "update_plan_stale")
 		return errors.New("update plan stale")
 	}
 	manifestData, err := os.ReadFile(plan.ManifestPath)
@@ -680,19 +706,41 @@ func executeUpdatePlan(paths installPaths, id string) error {
 	if err != nil || digest(archive) != plan.BundleFingerprint || digest(manifestData) != plan.ManifestFingerprint {
 		return errors.New("update plan stale")
 	}
-	if err := activateVersioned(paths, m, manifestData, archive, "execute"); err != nil {
+	if plan.ProjectMigration.State == "UNSUPPORTED_SOURCE_SCHEMA" || plan.ProjectMigration.State == "AMBIGUOUS" {
+		_ = appendUpdateTransactionState(paths, id, "FAILED_BEFORE_MUTATION", "project_schema_unsupported")
+		return errors.New("project migration unsupported")
+	}
+	_ = appendUpdateTransactionState(paths, id, "MIGRATIONS_PREPARED", "")
+	if err := activateVersioned(paths, m, manifestData, archive, "execute", &plan); err != nil {
+		_ = appendUpdateTransactionState(paths, id, "FAILED_RESTORED", "update_migration_failed")
 		return err
 	}
+	_ = appendUpdateTransactionState(paths, id, "COMPLETED", "")
 	return atomicWrite(filepath.Join(paths.executions, id+".json"), []byte(fmt.Sprintf("{\"planId\":%q,\"result\":\"SUCCESS\"}\n", id)))
 }
 
-func activateVersioned(paths installPaths, m manifest, manifestData, archive []byte, operation string) error {
+func activateVersioned(paths installPaths, m manifest, manifestData, archive []byte, operation string, migrationPlan *updatePlan) (err error) {
 	release, err := acquireUpdateLock(paths, operation)
 	if err != nil {
 		return err
 	}
 	defer release()
-	previous, sourceHash, err := readPointer(paths, paths.current)
+	var previous *activePointer
+	var sourceHash string
+	var restoreMigrations func() error
+	var migrationsApplied bool
+	var pointerActivated bool
+	defer func() {
+		if err != nil && migrationsApplied && restoreMigrations != nil {
+			if pointerActivated && previous != nil {
+				_ = writePointer(paths, paths.current, *previous, "")
+			}
+			if restoreErr := restoreMigrations(); restoreErr != nil {
+				err = fmt.Errorf("migration rollback failed: %w", restoreErr)
+			}
+		}
+	}()
+	previous, sourceHash, err = readPointer(paths, paths.current)
 	if err != nil {
 		return err
 	}
@@ -737,6 +785,14 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 	if err := writeStableLauncher(paths); err != nil {
 		return err
 	}
+	if migrationPlan != nil {
+		restoreMigrations, err = executePreparedMigrations(paths, *migrationPlan)
+		if err != nil {
+			return err
+		}
+		migrationsApplied = true
+		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "BACKUPS_VERIFIED", "")
+	}
 	if previous != nil {
 		if err := writePointer(paths, paths.previous, *previous, ""); err != nil {
 			return err
@@ -746,13 +802,23 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 	if previous != nil {
 		pointer.PreviousVersion = previous.Version
 	}
+	if migrationPlan != nil {
+		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "POINTER_ACTIVATING", "")
+	}
 	if err := writePointer(paths, paths.current, pointer, sourceHash); err != nil {
 		return err
+	}
+	pointerActivated = true
+	if migrationPlan != nil {
+		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "POINTER_ACTIVATED", "")
 	}
 	// Remove only the obsolete text pointer after the new pointer is durable.
 	_ = os.Remove(filepath.Join(paths.root, "current"))
 	if err := pathUpdater(paths, true); err != nil {
 		return err
+	}
+	if migrationPlan != nil {
+		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "INSTALLED_SMOKE_TEST_PASSED", "")
 	}
 	return nil
 }

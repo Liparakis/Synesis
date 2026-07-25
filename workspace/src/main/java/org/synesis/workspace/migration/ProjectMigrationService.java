@@ -14,6 +14,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.lease.SessionLeasePolicy;
+import org.synesis.workspace.lease.SessionLeaseService;
+import org.synesis.workspace.lease.SessionLeaseState;
+import org.synesis.workspace.lease.SessionLeaseStore;
 import org.synesis.workspace.provider.ProviderJson;
 
 /**
@@ -175,6 +179,37 @@ public final class ProjectMigrationService {
         if (!current.sourceHash().equals(plan.entry().sourceHash())) return new Result(Outcome.STALE, "project_migration_plan_stale", true, true);
         if (current.outcome() == Outcome.UNSUPPORTED_SCHEMA) return new Result(Outcome.UNSUPPORTED_SCHEMA, "project_schema_unsupported", true, true);
         if (current.outcome() == Outcome.PROJECT_NOT_INITIALIZED) return new Result(Outcome.PROJECT_NOT_INITIALIZED, "project_not_initialized", true, true);
+        if (plan.entry().outcome() == Outcome.MIGRATION_REQUIRED) {
+            ProjectApplicationService.ProjectLocation location;
+            try {
+                location = new ProjectApplicationService().require(plan.projectRoot());
+            } catch (ProjectApplicationService.ProjectApplicationException failure) {
+                return new Result(Outcome.REQUIRES_HUMAN_REVIEW, "project_identity_changed", true, true);
+            }
+            SessionLeasePolicy policy = new SessionLeasePolicy();
+            SessionLeaseService leases = new SessionLeaseService();
+            for (var lease : new SessionLeaseStore().listAll(location.root())) {
+                if (lease.projectId().equals(location.projectId().toString())) {
+                    SessionLeaseState state = leases.evaluateLiveness(lease, policy);
+                    if (state == SessionLeaseState.ACTIVE || state == SessionLeaseState.AMBIGUOUS) {
+                        return new Result(Outcome.REQUIRES_HUMAN_REVIEW, "active_session_blocks_project_migration", true, true);
+                    }
+                }
+            }
+        }
+        PostMigrationReplayVerifier replay = new PostMigrationReplayVerifier();
+        PostMigrationReplayVerifier.ProjectionReplayVerificationResult replayResult;
+        try {
+            ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().require(plan.projectRoot());
+            PostMigrationReplayVerifier.MigrationSemanticSnapshot before = replay.capture(location);
+            PostMigrationReplayVerifier.MigrationSemanticSnapshot after = replay.capture(location);
+            replayResult = replay.compare(before, after);
+        } catch (Exception failure) {
+            return new Result(Outcome.FAILED, "post_migration_replay_failed", true, false);
+        }
+        if (!replayResult.successful()) {
+            return new Result(Outcome.FAILED, replayResult.reason(), true, false);
+        }
         Path journal = adminRoot.resolve("migration-executions").resolve(plan.planId() + ".jsonl");
         Files.createDirectories(journal.getParent());
         Files.writeString(journal, "outcome=UP_TO_DATE projectId=" + current.projectId() + System.lineSeparator(), StandardCharsets.UTF_8,

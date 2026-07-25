@@ -217,7 +217,19 @@ public enum DoctorFindingCode {
     PROJECT_SCHEMA_UNSUPPORTED("project_schema_unsupported"),
 
     /** A migration journal or backup is incomplete. */
-    MIGRATION_STATE_INCOMPLETE("migration_state_incomplete");
+    MIGRATION_STATE_INCOMPLETE("migration_state_incomplete"),
+
+    /** Update transaction has not reached a terminal state. */
+    UPDATE_TRANSACTION_INCOMPLETE("update_transaction_incomplete"),
+
+    /** Replay verification failed after migration. */
+    POST_MIGRATION_REPLAY_FAILED("post_migration_replay_failed"),
+
+    /** Migration backup or journal evidence is missing or corrupt. */
+    MIGRATION_BACKUP_MISSING("migration_backup_missing"),
+
+    /** An active session blocks project migration. */
+    ACTIVE_SESSION_BLOCKS_MIGRATION("active_session_blocks_project_migration");
 
     private final String value;
 
