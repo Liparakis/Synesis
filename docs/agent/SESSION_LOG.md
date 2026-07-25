@@ -1118,3 +1118,19 @@ Append-only operational history.
 - `codex mcp get/list` recognizes the stable Synesis command and args. A
   bounded real Codex retry reached the agent loop but did not expose Synesis
   tools because MCP handshake timed out; no real provider success is claimed.
+
+# 2026-07-26 — SYN-014E Slice 5C.3 Codex MCP handshake correction
+
+- Resolved the CP-0202 base discrepancy against actual `HEAD` `b61b0dc`; the
+  reported `fe8b3e3` is a descendant of reported `e278ea7`.
+- Isolated all four local layers. Direct payload and the stable `.cmd` pointer
+  returned clean stdio and exactly 11 tools. Opt-in tracing showed Codex
+  `0.140.0` sending `initialize` with `2025-06-18`, while Synesis serialized
+  integer JSON-RPC IDs as floating-point values (`0.0`), which Codex rejected.
+- Corrected `ProviderJson` integer parsing, added protocol-version negotiation,
+  and added disabled-by-default trace-file diagnostics. Rebuilt and activated
+  Version B `0.1.0-dev-local-5c6`.
+- Real Codex now reaches initialize, receives the valid response, sends
+  `notifications/initialized` and `tools/list`, and receives all 11 tools.
+  Noninteractive Codex runs cancel MCP tool calls, so successful provider tool
+  execution is not claimed. Required Gradle and Go verification passes.

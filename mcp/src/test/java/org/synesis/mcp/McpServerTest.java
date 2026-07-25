@@ -296,6 +296,32 @@ class McpServerTest {
     }
 
     @Test
+    void testInitializeNegotiatesSupportedProtocolVersion() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-version");
+
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
+                + "\"params\":{\"protocolVersion\":\"2025-06-18\"}}";
+        String responseJson = handler.handleMessage(initReq);
+
+        assertNotNull(responseJson);
+        assertTrue(responseJson.contains("\"protocolVersion\":\"2025-06-18\""));
+    }
+
+    @Test
+    void testInitializeFallsBackForUnsupportedProtocolVersion() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-version-fallback");
+
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
+                + "\"params\":{\"protocolVersion\":\"2099-01-01\"}}";
+        String responseJson = handler.handleMessage(initReq);
+
+        assertNotNull(responseJson);
+        assertTrue(responseJson.contains("\"protocolVersion\":\"2024-11-05\""));
+    }
+
+    @Test
     void testStdioServerEventLoopAndCleanEofShutdown() {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");

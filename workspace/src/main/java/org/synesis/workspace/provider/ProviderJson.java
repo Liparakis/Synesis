@@ -238,8 +238,10 @@ public final class ProviderJson {
             }
             try {
                 String value = text.substring(start, index);
-                return value.contains(".") || value.contains("e") || value.contains("E") ? Double.valueOf(value)
-                        : Long.valueOf(value);
+                if (value.contains(".") || value.contains("e") || value.contains("E")) {
+                    return Double.valueOf(value);
+                }
+                return Long.valueOf(value);
             } catch (RuntimeException failure) {
                 throw error("invalid number");
             }

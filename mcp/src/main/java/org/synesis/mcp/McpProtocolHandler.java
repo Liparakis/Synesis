@@ -33,6 +33,10 @@ import org.synesis.workspace.provider.ProviderJson;
  */
 public final class McpProtocolHandler {
 
+    private static final String DEFAULT_PROTOCOL_VERSION = "2024-11-05";
+    private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of(
+            "2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25");
+
     private final AgentSessionService sessionService;
     private final WorkspaceReadService readService;
     private final WorkspacePatchService patchService;
@@ -196,11 +200,28 @@ public final class McpProtocolHandler {
         capabilities.put("roots", Map.of("listChanged", true));
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("protocolVersion", "2024-11-05");
+        result.put("protocolVersion", negotiateProtocolVersion(params));
         result.put("capabilities", capabilities);
         result.put("serverInfo", serverInfo);
 
         return createResultResponse(id, result);
+    }
+
+    /**
+     * Negotiates the MCP protocol version for an initialize request.
+     *
+     * <p>The client-selected version is echoed only when this implementation supports it;
+     * otherwise the oldest supported baseline is returned for compatibility with legacy clients.
+     *
+     * @param params initialize request parameters, or {@code null}
+     * @return negotiated protocol version
+     */
+    private String negotiateProtocolVersion(Map<String, Object> params) {
+        if (params != null && params.get("protocolVersion") instanceof String requested
+                && SUPPORTED_PROTOCOL_VERSIONS.contains(requested)) {
+            return requested;
+        }
+        return DEFAULT_PROTOCOL_VERSION;
     }
 
     private String handleRootsList(Object id) {

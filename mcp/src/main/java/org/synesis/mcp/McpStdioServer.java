@@ -5,6 +5,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 
 /**
@@ -21,6 +24,7 @@ public final class McpStdioServer {
     private final InputStream in;
     private final PrintStream out;
     private final PrintStream err;
+    private final Path traceFile;
 
     /**
      * Creates an MCP stdio server with standard system streams.
@@ -44,6 +48,8 @@ public final class McpStdioServer {
         this.in = Objects.requireNonNull(in, "in");
         this.out = Objects.requireNonNull(out, "out");
         this.err = Objects.requireNonNull(err, "err");
+        String tracePath = System.getenv("SYNESIS_MCP_TRACE_FILE");
+        this.traceFile = tracePath == null || tracePath.isBlank() ? null : Path.of(tracePath);
     }
 
     /**
@@ -59,8 +65,10 @@ public final class McpStdioServer {
                 if (line.isEmpty()) {
                     continue;
                 }
+                trace("IN", line);
                 String responseJson = handler.handleMessage(line);
                 if (responseJson != null) {
+                    trace("OUT", responseJson);
                     out.println(responseJson);
                     out.flush();
                 }
@@ -70,6 +78,18 @@ public final class McpStdioServer {
             err.println("[synesis-mcp] Stdio loop terminated with error: " + failure.getMessage());
             failure.printStackTrace(err);
             return 1;
+        }
+    }
+
+    private void trace(String direction, String message) {
+        if (traceFile == null) {
+            return;
+        }
+        try {
+            Files.writeString(traceFile, direction + "\t" + message + System.lineSeparator(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+            // Opt-in diagnostics must never affect the protocol stream.
         }
     }
 }
