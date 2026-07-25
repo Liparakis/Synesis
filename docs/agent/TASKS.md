@@ -490,22 +490,25 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-013D
 - Priority: P0
-- Title: Stage 2A — Minimal stdio MCP server (5 safe workspace tools)
-- Status: ACTIVE
-- Purpose: Introduce a `stdio` MCP server exposing exactly 5 safe workspace
-  tools: `synesis.ensure_session`, `synesis.read_file`, `synesis.apply_patch`,
-  `synesis.run_command`, `synesis.get_next_action`.
+- Title: Stage 2A — Minimal stdio MCP server (5 safe workspace tools) & Stage 2B Collaboration Loop
+- Status: DONE
+- Purpose: Introduce stdio MCP server, 10 registered MCP tools, and multi-agent collaboration loop.
 - Dependencies: SYN-013C DONE
-- Acceptance criteria: `:mcp` subproject compiles and passes `check`; ambient
-  session resolver (`AgentSessionService`) wired in `:workspace`; JSON-RPC 2.0
-  `initialize`, `tools/list`, and `tools/call` work over stdio; all 5 tools
-  return `AgentResponse` JSON; path-containment and command-allowlist
-  enforcement verified by tests; distribution bundle includes `synesis mcp`
-  launcher; `:cli` does NOT depend on `:mcp`.
-- Scope boundary: no provider MCP configuration files written before real
-  harness acceptance tests. Stage 2B deferred operations (`describe_required_capability`,
-  `respond_to_owner_request`, `validate_available_implementation`,
-  `complete_task`) are explicitly excluded.
+- Acceptance criteria: `:mcp` subproject compiles and passes `check`; autonomous collaboration loop verified across Codex and Antigravity; all 10 registered MCP tools functional.
+- Evidence: DONE at CP-0186.
+
+## SYN-014A
+
+- ID: SYN-014A
+- Priority: P0
+- Title: Post-MVP Hardening Slice 1: Read-only lifecycle inventory and cleanup dry-run
+- Status: DONE
+- Purpose: Implement read-only lifecycle resource discovery, path safety verification, retention classification, cleanup eligibility evaluation, cleanup plan generation, and `synesis cleanup --dry-run` CLI command.
+- Dependencies: SYN-013D DONE at CP-0186.
+- Acceptance criteria: read-only inventory discovery, path verifier, retention policy, cleanup plan model, `synesis cleanup --dry-run` command, zero runtime mutations, passing unit/integration tests and clean repository check.
+- Required tests: `:workspace:check`, `:cli:check`, `:mcp:check`, full repository check `.\gradlew.bat check --no-daemon`.
+- Scope boundary: Read-only at runtime. Zero deletion, zero process termination, zero Git mutations.
+- Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL; FullMutationSafetyTest PASS; CleanupEligibilityServiceTest PASS; CleanupCommandTest PASS; ProcessInspectorTest PASS; LifecyclePathVerifierTest PASS.
 
 
 

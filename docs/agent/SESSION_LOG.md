@@ -16,6 +16,20 @@ Append-only operational history.
 - Remaining work:
 - Exact continuation:
 
+## 2026-07-25 — Post-MVP Hardening Slice 1: Read-only lifecycle inventory and cleanup dry-run
+
+- Timestamp: 2026-07-25 Europe/Athens
+- Checkpoint: CP-0187 (pending)
+- Active task: SYN-014A
+- Completed work: Implemented full read-only lifecycle cleanup planning foundation. Created 12 domain enums and records in `org.synesis.workspace.cleanup`: `LifecycleResourceType`, `CleanupClassification`, `ProcessEvidenceState`, `CleanupReason`, `LifecycleResourceFingerprint`, `RetentionPolicy`, `LifecyclePathVerifier`, `CleanupPlanEntry`, `CleanupPlan`, `ProcessInspector`. Implemented `LifecycleInventoryService`, `CleanupEligibilityService`, and `CleanupPlanService`. Added `synesis cleanup --dry-run` CLI command (`CleanupCommand`) with concise/verbose/JSON output modes registered in `SynesisCli`. Added 5 test classes including `FullMutationSafetyTest` proving zero runtime mutations. All 49 Gradle tasks pass.
+- Files changed: workspace/src/main/java/org/synesis/workspace/cleanup/*, workspace/src/test/java/org/synesis/workspace/cleanup/*, cli/src/main/java/org/synesis/cli/command/CleanupCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java, cli/src/test/java/org/synesis/cli/CleanupCommandTest.java, cli/src/test/java/org/synesis/cli/FullMutationSafetyTest.java, docs/agent/*
+- Commands run: `.\gradlew.bat check --no-daemon`
+- Results: BUILD SUCCESSFUL — 49 actionable tasks, all pass.
+- Decisions: Snapshot types (`TASK_SNAPSHOT`, `IMPLEMENTATION_SNAPSHOT`) are evaluated before path safety to ensure they always receive `PROTECTED`+`SNAPSHOT_CLEANUP_NOT_SUPPORTED` regardless of path location.
+- Failed attempts: Initial `CleanupCommandTest` used non-existent `TestTerminal` and `initialize()` method; corrected to `ConsoleTerminal` pattern from `WorkspaceCliTest`; `FullMutationSafetyTest` initially used `Files.readString` causing `MalformedInputException` on binary files; corrected to SHA-256 byte hashing.
+- Remaining work: SYN-014B through SYN-014E (remaining hardening slices).
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-07-25 — Stage 2B Slice 1 capability negotiation implementation
 
 - Timestamp: 2026-07-25 Europe/Athens

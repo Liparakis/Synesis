@@ -2,6 +2,7 @@ package org.synesis.cli;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.CheckActionCommand;
+import org.synesis.cli.command.CleanupCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
 import org.synesis.cli.command.CoordinationDemoCommand;
@@ -90,6 +91,7 @@ public final class SynesisCli {
                 .get("identity");
         identity.addSubcommand("show", new IdentityShowCommand(runtime));
         command.addSubcommand("doctor", new DoctorCommand(runtime));
+        command.addSubcommand("cleanup", new CleanupCommand(runtime));
         command.addSubcommand("provider", new ProviderCommand());
         command.getSubcommands()
                 .get("provider")

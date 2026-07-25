@@ -52,6 +52,22 @@ Stage 2A Slice 1 (foundation) and Stage 2A Slice 2 (provider MCP configuration i
 - Platform bundle updated (`:cli:platformBundle`), launcher `synesis init` and installed MCP stdio process tested on `SynesisTestProject`.
 - Full root `./gradlew.bat check --no-daemon` passes cleanly (49 tasks).
 
+## SYN-014A implementation state
+
+Post-MVP Hardening Slice 1 is DONE. Read-only lifecycle inventory and cleanup planning foundation implemented:
+- 12 `LifecycleResourceType` values covering all managed resource categories.
+- 6 `CleanupClassification` values: `PROTECTED`, `ACTIVE`, `RECOVERABLE`, `DIAGNOSTIC_RETAINED`, `CLEANUP_ELIGIBLE`, `ORPHANED`.
+- 5 `ProcessEvidenceState` values with conservative liveness evaluation.
+- `LifecyclePathVerifier`: path normalization, canonical real-path traversal check, control-checkout protection, `.git` protection, git common-dir identity verification, fail-closed on error.
+- `RetentionPolicy`: configurable 24h worker/validation/integration, 7d evidence, 1h temp, injectable clock, 2 GB storage warning threshold.
+- `LifecycleInventoryService`: read-only discovery of sessions, worker worktrees, validation/integration worktrees, snapshots, evidence files, temp files, dangling Git worktrees.
+- `CleanupEligibilityService`: evaluates inventory against path verifier, retention policy, process liveness, Git porcelain status.
+- `CleanupPlanService`: orchestrates full plan generation into immutable `CleanupPlan` record.
+- `CleanupCommand` (`synesis cleanup --dry-run`): concise, verbose, and JSON output modes; `--dry-run` required; exits code 10 without it.
+- `synesis cleanup` registered in `SynesisCli`.
+- Tests: `LifecyclePathVerifierTest`, `CleanupEligibilityServiceTest`, `ProcessInspectorTest`, `CleanupCommandTest`, `FullMutationSafetyTest` (proves zero mutations).
+- Full root `./gradlew.bat check --no-daemon` BUILD SUCCESSFUL (49 tasks, all pass).
+
 ## Implementation state
 
 The project contains bounded identity, automatic identity bootstrap, signed
