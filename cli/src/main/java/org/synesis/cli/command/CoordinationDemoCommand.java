@@ -184,16 +184,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
         Path protectedScope = worktree.resolve(
                 "workspace/src/main/java/org/synesis/workspace/application/SupervisorApplicationService.java");
         String beforeHash = hash(protectedScope);
-        OwnershipRegistry ownership = new OwnershipRegistry();
-        ownership.claim("workspace.prediction-query", new OwnershipRegistry.Owner(ownerNode, ownerSupervisor, 1));
-        AntigravityHookAdapter hook = new AntigravityHookAdapter(profile, ownership, identity.nodeId());
-        String hookJson = "{\"name\":\"replace_file_content\",\"TargetFile\":\""
-                + protectedScope.toString()
-                .replace("\\", "\\\\")
-                + "\",\"Description\":\"capability=workspace.prediction-query\",\"workspacePaths\":[\""
-                + worktree.toString()
-                .replace("\\", "\\\\") + "\"]}";
-        var hookResult = hook.processJson(hookJson);
+        var hookResult = getResult(identity, protectedScope);
         System.out.println("timestamp=" + now() + " REQUEST_OWNER_RESULT=" + hookResult.outcome() + " "
                 + hookResult.humanReason());
         System.out.println("UNAUTHORIZED_MUTATION_OCCURRED=false");
@@ -213,7 +204,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
                 cursor = event.sequence();
                 System.out.println("timestamp=" + now() + " A_EVENT sequence=" + cursor + " type=" + event.type());
                 if (event.type() == PredictionEventType.ACCEPTED_EXACT) {
-                    createSpeculation(identity, predictionId, cursor);
+                    createSpeculation(predictionId, cursor);
                     Files.writeString(stateFile,
                             predictionId + "\n" + cursor + "\n" + beforeHash,
                             StandardCharsets.UTF_8);
@@ -223,6 +214,20 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
                 }
             }
         }
+    }
+
+    private AntigravityHookAdapter.Result getResult(NodeIdentity identity, Path protectedScope) {
+        OwnershipRegistry ownership = new OwnershipRegistry();
+        ownership.claim("workspace.prediction-query", new OwnershipRegistry.Owner(ownerNode, ownerSupervisor, 1));
+        AntigravityHookAdapter hook = new AntigravityHookAdapter(profile, ownership, identity.nodeId());
+        String hookJson = "{\"name\":\"replace_file_content\",\"TargetFile\":\""
+                + protectedScope.toString()
+                .replace("\\", "\\\\")
+                + "\",\"Description\":\"capability=workspace.prediction-query\",\"workspacePaths\":[\""
+                + worktree.toString()
+                .replace("\\", "\\\\") + "\"]}";
+        var hookResult = hook.processJson(hookJson);
+        return hookResult;
     }
 
     private int resumeA(NodeIdentity identity) throws Exception {
@@ -326,7 +331,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
         return 0;
     }
 
-    private void createSpeculation(NodeIdentity identity, UUID predictionId, long sequence) throws Exception {
+    private void createSpeculation(UUID predictionId, long sequence) throws Exception {
         SpeculationWorkspace speculation = new SpeculationWorkspace(worktree,
                 worktree.resolve(".synesis/local"),
                 predictionId,

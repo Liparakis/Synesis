@@ -51,6 +51,7 @@ final class CoordinationCliSupport {
         return new CoordinationHttpClient(endpoint).submit(command);
     }
 
+    @SuppressWarnings("SameParameterValue")
     static List<PredictionEvent> replay(URI endpoint, long after) throws Exception {
         return new CoordinationHttpClient(endpoint).replayAfter(after);
     }

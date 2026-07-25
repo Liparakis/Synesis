@@ -3,7 +3,6 @@ package org.synesis.cli.bootstrap;
 import java.nio.file.Path;
 
 import org.synesis.cli.diagnostics.ReadinessInspector;
-import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.cli.terminal.Terminal;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -64,15 +63,6 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
     }
 
     /**
-     * Creates the production runtime using the default profile.
-     *
-     * @return manually composed runtime
-     */
-    public static CliRuntime defaults() {
-        return defaults(new ConsoleTerminal());
-    }
-
-    /**
      * Creates a runtime with a supplied terminal and default Link profile.
      *
      * @param terminal terminal boundary
@@ -102,16 +92,6 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
     @Override
     public Terminal terminal() {
         return terminal;
-    }
-
-    /**
-     * Returns the read-only readiness inspector.
-     *
-     * @return readiness inspector
-     */
-    @Override
-    public ReadinessInspector readinessInspector() {
-        return readinessInspector;
     }
 
     /**
@@ -174,22 +154,4 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
         return providerService;
     }
 
-    /**
-     * Resolves a project profile from an explicit override or discovered project.
-     *
-     * @param project explicit project path, or {@code null} for upward discovery
-     * @param profile explicit advanced profile override, or {@code null}
-     * @return normalized profile path
-     * @throws ProjectApplicationService.ProjectApplicationException if discovery fails
-     */
-    public Path resolveProfile(Path project, Path profile)
-            throws ProjectApplicationService.ProjectApplicationException {
-        if (profile != null) {
-            return profile.toAbsolutePath()
-                    .normalize();
-        }
-        ProjectApplicationService.ProjectLocation location = project == null
-                ? projectService.locate(Path.of(".")) : projectService.require(project);
-        return projectService.profile(location);
-    }
 }

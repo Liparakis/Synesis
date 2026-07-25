@@ -1,5 +1,6 @@
 package org.synesis.cli.command;
 
+import java.io.Serial;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -95,6 +96,7 @@ final class CoordinationEventFollower {
 
     private static final class StreamFailure extends RuntimeException {
 
+        @Serial
         private static final long serialVersionUID = 1L;
         private final Exception cause;
 

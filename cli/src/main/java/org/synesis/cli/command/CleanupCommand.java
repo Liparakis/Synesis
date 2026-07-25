@@ -102,11 +102,8 @@ public final class CleanupCommand implements Callable<Integer> {
             return handleShowPlan(controlRoot, showPlan);
         }
 
-        if (executePlan != null) {
-            return handleExecute(controlRoot, executePlan);
-        }
+        return handleExecute(controlRoot, executePlan);
 
-        return ExitCodes.LOCAL_CONFIGURATION;
     }
 
     private int handleDryRun(Path controlRoot) {
