@@ -2,10 +2,10 @@
 
 - Active task: SYN-014E ACTIVE at Slice 5C.1 following CP-0200
 - Repository branch: master
-- Last checkpoint: CP-0200
+- Last checkpoint: CP-0201
 - Last passing command: `go test -count=1 ./...` and `go vet ./...`; Gradle module and root checks are also passing.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next code action: Review CP-0201 and leave Slice 5C provider-blocked unless supported real Codex and Antigravity sessions become available; do not alter the committed CLI edits.
+- Exact next code action: Leave Slice 5C provider-blocked unless supported real Codex and Antigravity sessions become available; do not alter the committed CLI edits.
 - Unresolved limitations: Speculative continuation deferred. Actual worktree cleanup uses non-forced `git worktree remove`. Unregistered orphan resources are quarantined atomically without purge. Session abandonment and task cancellation preserve worktrees non-destructively for operator review. Provider configuration files remain diagnostic-only. Event log and snapshot failures require human review.
 - Facts that must not be forgotten: Handles format must be `req_<random_token>` with at least 96 bits entropy. MCP responses must remain concise and must not leak internal IDs, worktree paths, or event IDs. Exactly 11 MCP tools are currently registered in `tools/list`. `synesis doctor` is strictly read-only by construction. Repair administrative state is stored under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-plans\<plan-id>.json`. Repair execution lock is at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-execution.lock`. Repair execution journals are at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-executions\<execution-id>.jsonl`. Pre-mutation backups are stored under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-backups\<execution-id>\`.
 - Slice 5 boundary: installed payloads are immutable and retained; activation is a validated atomic pointer replacement; update execution requires a prepared plan; provider/project migration is compare-and-set and identity-preserving; no process termination, old-version deletion, remote polling, or MCP tool changes.

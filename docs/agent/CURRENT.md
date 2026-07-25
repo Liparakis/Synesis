@@ -23,7 +23,7 @@ Bootstrap Go tests/vet, root Gradle checks, signed Version A/B lifecycle evidenc
 
 ## Immediate next action
 
-Create CP-0201 with `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`, then stop with provider-blocked acceptance recorded.
+Stop with provider-blocked acceptance recorded; resume only when supported real Codex and Antigravity sessions are available.
 
 ## Work completed
 
