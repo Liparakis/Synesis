@@ -84,7 +84,9 @@ public final class McpProtocolHandler {
         Object parsed;
         try {
             parsed = ProviderJson.parse(jsonMessage);
-        } catch (Exception parseFailure) {
+        } catch (Throwable parseFailure) {
+            System.err.println("[synesis-mcp] Parse error: " + parseFailure);
+            parseFailure.printStackTrace(System.err);
             return createErrorResponse(null, -32700, "Parse error: " + parseFailure.getMessage());
         }
 
@@ -117,7 +119,9 @@ public final class McpProtocolHandler {
                 case "roots/list" -> handleRootsList(id);
                 default -> createErrorResponse(id, -32601, "Method not found: " + method);
             };
-        } catch (Exception failure) {
+        } catch (Throwable failure) {
+            System.err.println("[synesis-mcp] Error handling method " + method + ": " + failure);
+            failure.printStackTrace(System.err);
             return createErrorResponse(id, -32603, "Internal error: " + failure.getMessage());
         }
     }

@@ -66,8 +66,9 @@ public final class McpStdioServer {
                 }
             }
             return 0;
-        } catch (Exception failure) {
+        } catch (Throwable failure) {
             err.println("[synesis-mcp] Stdio loop terminated with error: " + failure.getMessage());
+            failure.printStackTrace(err);
             return 1;
         }
     }
