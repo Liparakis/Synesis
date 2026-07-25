@@ -78,6 +78,7 @@ type activePointer struct {
 type updatePlan struct {
 	SchemaVersion           int                  `json:"schemaVersion"`
 	PlanID                  string               `json:"planId"`
+	PreparedAt              string               `json:"preparedAt"`
 	InstallationRoot        string               `json:"installationRoot"`
 	BundlePath              string               `json:"bundlePath"`
 	ManifestPath            string               `json:"manifestPath"`
@@ -622,7 +623,7 @@ func prepareUpdatePlan(paths installPaths, m manifest, manifestData, signature, 
 	if err != nil {
 		return "", err
 	}
-	plan := updatePlan{SchemaVersion: 1, InstallationRoot: paths.root, BundleFingerprint: digest(archive), ManifestFingerprint: digest(manifestData), TargetVersion: m.Version, CurrentFingerprint: digest(currentData), ProviderMigrations: migrations.Providers, ProjectMigration: migrations.Project, ProjectRoot: migrations.ProjectRoot, MigrationState: "MIGRATIONS_PREPARED", RollbackCompatibility: "SAFE", LiveProjectSessionState: "NO_MIGRATION_REQUIRED"}
+	plan := updatePlan{SchemaVersion: 1, PreparedAt: time.Now().UTC().Format(time.RFC3339Nano), InstallationRoot: paths.root, BundleFingerprint: digest(archive), ManifestFingerprint: digest(manifestData), TargetVersion: m.Version, CurrentFingerprint: digest(currentData), ProviderMigrations: migrations.Providers, ProjectMigration: migrations.Project, ProjectRoot: migrations.ProjectRoot, MigrationState: "MIGRATIONS_PREPARED", RollbackCompatibility: "SAFE", LiveProjectSessionState: "NO_MIGRATION_REQUIRED"}
 	if plan.ProjectMigration.State == "NO_PROJECT" {
 		plan.LiveProjectSessionState = "NO_PROJECT"
 	}
@@ -891,7 +892,9 @@ if ($p.schemaVersion -ne 1 -or $p.payloadDirectory -notmatch '^[A-Za-z0-9._-]+$'
 $r = Join-Path $root ('versions\' + $p.payloadDirectory)
 $m = Join-Path $r 'manifest.json'
 if (-not (Test-Path -LiteralPath $m)) { exit 1 }
-if ((Get-FileHash -LiteralPath $m -Algorithm SHA256).Hash.ToLower() -ne $p.manifestHash) { exit 1 }
+$sha256 = [Security.Cryptography.SHA256]::Create()
+try { $manifestHash = [BitConverter]::ToString($sha256.ComputeHash([IO.File]::ReadAllBytes($m))).Replace('-', '').ToLowerInvariant() } finally { $sha256.Dispose() }
+if ($manifestHash -ne $p.manifestHash) { exit 1 }
 $e = Join-Path $r 'bin\synesis.cmd'
 if (-not (Test-Path -LiteralPath $e)) { exit 1 }
 & cmd.exe /d /c call $e @ForwardArgs

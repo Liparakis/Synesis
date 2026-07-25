@@ -102,6 +102,14 @@ func TestBootstrapInstallUpdateRollbackDoctorAndUninstall(t *testing.T) {
 	if fileExists(paths.rollback) {
 		t.Fatal("rollback directory retained after successful update")
 	}
+	if err := runInstall("update", []string{"--rollback", "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	assertStableVersion(t, paths, "0.1.0")
+	if err := runPreparedUpdate(t, fileURL(m2), installRoot); err != nil {
+		t.Fatal(err)
+	}
+	assertStableVersion(t, paths, "0.2.0")
 	if err := os.MkdirAll(paths.rollback, 0o755); err != nil {
 		t.Fatal(err)
 	}

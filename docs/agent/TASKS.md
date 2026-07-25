@@ -554,14 +554,14 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-014E
 - Priority: P0
-- Title: Post-MVP Hardening Slice 5B.1: Replay verification and migration-aware atomic updates
+- Title: Post-MVP Hardening Slice 5C: Real-provider acceptance and lifecycle hardening
 - Status: ACTIVE
-- Purpose: Prove durable-state semantic equivalence after migration and integrate prepared provider/project migrations into the completed Slice 5A update transaction.
+- Purpose: Validate real-provider-compatible Version A/B installation, coexistence, rollback, reactivation, and provider/project identity preservation after the completed Slice 5B.2 transaction.
 - Dependencies: SYN-014D DONE at CP-0190; existing SYN-009C/SYN-009D bootstrap evidence.
-- Acceptance criteria: replay verifies all existing projections and immutable references; update plans contain migration references and compatibility state; migrations execute only after staged self-test and before pointer activation; failures restore migrations and the old pointer deterministically; active-session/schema safety and read-only Doctor findings are enforced; MCP surface remains unchanged.
-- Required tests: projection replay/equivalence, semantic mismatch, migration ordering, transaction journal/restart, rollback, active-session/schema compatibility, Doctor read-only, and applicable Gradle/bootstrap checks.
-- Scope boundary: no new migration features, remote update service, process shutdown, malformed-config repair, schema downgrade, event-log rewriting, snapshot deletion, real provider acceptance, or public release work.
-- Evidence: Slice 5B committed at 885048bec83370b9178de9a28707dfaa0dd3ad79 and 5B.1 at f14588defa477585dee76e5d34770552e9cad5c7; Slice 5B.2 exact backup/restoration, injected failure, target-race, restart/idempotency, Doctor, bootstrap, module, and root checks pass; CP-0199 records the durable checkpoint. Real provider acceptance remains deferred to Slice 5C.
+- Acceptance criteria: signed Version A/B lifecycle passes with an old process remaining alive during update; rollback and reactivation use fresh immutable plans; invalid bundles are rejected before pointer mutation; provider/project identities and unrelated settings are preserved; real Codex and Antigravity sessions are validated where available; MCP surface remains unchanged.
+- Required tests: signed bundle verification, old-process coexistence, rollback/reactivation, invalid-bundle rejection, provider/project preservation, real-provider MCP tool discovery, Doctor read-only, and applicable Gradle/bootstrap checks.
+- Scope boundary: no new MCP tools/schemas, process termination, old-version deletion, remote update service, event-log rewriting, snapshot deletion, provider credential fabrication, or public release work.
+- Evidence: Version A `9560b6404e55ca49ba369d3e59b53334670608d8` and Version B `4f1ad221d821b6f77c008f3efe2ef4596005374e` signed bundles installed; A→B coexistence, B→A rollback, and fresh B reactivation passed with 11 tools unchanged; invalid bundle rejected; project and provider settings preserved/restored; bootstrap Go tests/vet and root Gradle check pass. Codex real execution was attempted but blocked by the installed CLI/account model mismatch; Antigravity GUI presence was confirmed but a real MCP session was not established.
 
 ## SYN-001
 
