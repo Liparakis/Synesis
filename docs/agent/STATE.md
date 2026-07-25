@@ -248,3 +248,16 @@ only as the documented transport-failure or liveness-expiry category.
 - Event-store transitions for `SESSION_ABANDONED`, `TASK_CANCELLATION_REQUESTED`, `TASK_CANCELLED`, `DEPENDENCY_INVALIDATED`, `OWNERSHIP_RELEASED`, and `SESSION_FINALIZED`.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0189.
 
+## SYN-014D Post-MVP Hardening Slice 4 implementation state
+
+- Read-only `DoctorService` diagnostics (`synesis doctor`) implementing 38 distinct machine-readable finding codes across Installation, Project/Git, Durable State, Sessions/Ownership/Worktrees, Cleanup/Storage, Admin State, and Provider Config.
+- Actionable Doctor severity levels (`INFO`, `WARNING`, `ERROR`, `CRITICAL`), confidence levels (`CONFIRMED`, `HIGH_CONFIDENCE`, `SUSPECTED`, `AMBIGUOUS`), and overall health states (`HEALTHY`, `DEGRADED`, `UNHEALTHY`, `UNSAFE`).
+- Read-only guarantee: `DoctorService` performs zero file creations, zero file modifications, zero file deletions, zero process terminations, and zero lock acquisitions.
+- Separate, reviewable, narrowly scoped administrative repair system (`synesis repair`): `--dry-run`, `--prepare`, `--show-plan`, `--execute`, `--rollback`.
+- Persisted immutable repair plans (`RepairPlan`, `RepairPlanEntry`, `RepairPlanStore`) stored outside control checkout under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-plans\<plan-id>.json`.
+- Repair execution lock (`RepairExecutionLock`) at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-execution.lock` and append-only execution journal (`RepairExecutionJournal`) at `admin/repair-executions/<execution-id>.jsonl`.
+- Pre-mutation backup and exact atomic rollback service (`RepairBackupService`) under `admin/repair-backups/<execution-id>/`.
+- MCP tools count remains exactly 11 tools; zero MCP surface breaking changes.
+- All 49 Gradle tasks and test suites passed cleanly at CP-0190.
+
+

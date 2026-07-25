@@ -44,4 +44,9 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0030: Immutable reconciliation plans, locks, and journals — accepted for SYN-014C.
 - ADR-0031: Ambient task cancellation via synesis.cancel_task — accepted for SYN-014C.
 - ADR-0032: Strict non-destructive worktree preservation on session abandonment and task cancellation — accepted for SYN-014C.
+- ADR-0033: Unified read-only DoctorService diagnostics — accepted for SYN-014D.
+- ADR-0034: Immutable repair plans and external administration storage — accepted for SYN-014D.
+- ADR-0035: Pre-mutation administrative file backups and exact atomic rollback — accepted for SYN-014D.
+- ADR-0036: Strict repair ownership boundary preserving signed event log, control checkout, and provider config — accepted for SYN-014D.
+
 

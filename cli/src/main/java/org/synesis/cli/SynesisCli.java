@@ -93,6 +93,7 @@ public final class SynesisCli {
         command.addSubcommand("doctor", new DoctorCommand(runtime));
         command.addSubcommand("cleanup", new CleanupCommand(runtime));
         command.addSubcommand("reconcile", new org.synesis.cli.command.ReconcileCommand(runtime));
+        command.addSubcommand("repair", new org.synesis.cli.command.RepairCommand(runtime));
         command.addSubcommand("provider", new ProviderCommand());
         command.getSubcommands()
                 .get("provider")

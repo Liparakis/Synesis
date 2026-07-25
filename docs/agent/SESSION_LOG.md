@@ -16,6 +16,20 @@ Append-only operational history.
 - Remaining work:
 - Exact continuation:
 
+## 2026-07-25 — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair
+
+- Timestamp: 2026-07-25 Europe/Athens
+- Checkpoint: CP-0190
+- Active task: SYN-014D
+- Completed work: Implemented unified read-only `DoctorService` diagnostics (`synesis doctor`), 38 machine-readable finding codes, severity/status/confidence models, actionable recommendations, read-only guarantees, concise/verbose/JSON formatters, and a separate, reviewable, narrowly scoped repair-plan system (`synesis repair`: `--dry-run`, `--prepare`, `--show-plan`, `--execute`, `--rollback`) with immutable persisted plans (`RepairPlanStore`), repair execution lock (`RepairExecutionLock`), append-only journal (`RepairExecutionJournal`), and pre-mutation backup & exact atomic rollback (`RepairBackupService`). Added unit/integration tests for DoctorService, RepairPlan, DoctorCommand, and RepairCommand.
+- Files changed: workspace/src/main/java/org/synesis/workspace/doctor/*, workspace/src/main/java/org/synesis/workspace/repair/*, cli/src/main/java/org/synesis/cli/command/DoctorCommand.java, cli/src/main/java/org/synesis/cli/command/RepairCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java, tests in workspace/cli, docs/agent/*
+- Commands run: `.\gradlew.bat check --no-daemon`, `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Results: BUILD SUCCESSFUL — 49 actionable tasks, all 135+ unit tests and smoke tests passed cleanly.
+- Decisions: DoctorService is strictly read-only by construction; DoctorCommand performs no repair logic; repair actions require prepared immutable plans with SHA-256 content verification; backups stored outside control checkout under admin directory; MCP tools count remains 11; provider config remains diagnostic-only.
+- Failed attempts: `DoctorServiceTest` initially failed on `ProjectApplicationService.init` argument count; fixed by using single Path parameter `init(tempDir)`; Javadoc doclint warning on record constructors; fixed by adding compact constructor doc comments.
+- Remaining work: Post-MVP operational milestone.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-07-25 — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation
 
 - Timestamp: 2026-07-25 Europe/Athens

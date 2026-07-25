@@ -1,108 +1,85 @@
 package org.synesis.cli.command;
 
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
-import org.synesis.cli.diagnostics.ReadinessInspector;
-import org.synesis.cli.diagnostics.ReadinessReport;
 import org.synesis.cli.exit.ExitCodes;
+import org.synesis.workspace.doctor.DoctorRenderer;
+import org.synesis.workspace.doctor.DoctorReport;
+import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.doctor.DoctorStatus;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
- * Runs the local-only {@code synesis doctor} readiness report.
+ * Runs the read-only {@code synesis doctor} repository and runtime diagnostic command.
+ *
+ * <p>Doctor is read-only by construction and performs zero state mutations.
+ *
+ * @since 1.0
  */
-@Command(name = "doctor", description = "Inspect local readiness without repair or networking.", mixinStandardHelpOptions = true)
+@Command(name = "doctor", description = "Executes read-only diagnostics for repository, runtime, durable state, and administrative health.", mixinStandardHelpOptions = true)
 public final class DoctorCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project", description = "Project directory.")
+    private final DoctorService doctorService;
+
+    @Option(names = "--json", description = "Formats diagnostic output as JSON.")
+    private boolean json;
+
+    @Option(names = "--verbose", description = "Outputs detailed per-finding diagnostic explanation and recommendations.")
+    private boolean verbose;
+
+    @Option(names = "--strict", description = "Enforces strict health checking, returning non-zero exit code if WARNING or worse.")
+    private boolean strict;
+
+    @Option(names = "--project", description = "Project directory path.")
     private String project;
 
     /**
-     * Creates a doctor command with one manually composed runtime.
+     * Creates a doctor command with CLI runtime and default doctor service.
      *
-     * @param runtime manually composed CLI runtime
+     * @param runtime CLI runtime
      */
     public DoctorCommand(CliRuntime runtime) {
-        this.runtime = runtime;
-    }
-
-    private static boolean isWindows() {
-        return System.getProperty("os.name", "")
-                .toLowerCase(java.util.Locale.ROOT)
-                .contains("win");
+        this(runtime, new DoctorService());
     }
 
     /**
-     * Runs all bounded local checks. @return 0, 10, or 13
+     * Creates a doctor command with explicit CLI runtime and doctor service.
+     *
+     * @param runtime       CLI runtime
+     * @param doctorService doctor service
      */
+    public DoctorCommand(CliRuntime runtime, DoctorService doctorService) {
+        this.runtime = Objects.requireNonNull(runtime, "runtime");
+        this.doctorService = Objects.requireNonNull(doctorService, "doctorService");
+    }
+
     @Override
     public Integer call() {
-        ReadinessReport report;
-        org.synesis.workspace.application.ProjectApplicationService.ProjectLocation location = null;
+        Path controlRoot = project != null ? Path.of(project) : Path.of(".");
+
         try {
-            if (project != null) {
-                location = runtime.projectService()
-                        .require(Path.of(project));
-                report = new ReadinessInspector(location.profile()).inspect();
+            DoctorReport report = doctorService.diagnose(controlRoot);
+
+            if (json) {
+                runtime.terminal().stdout(DoctorRenderer.renderJson(report));
+            } else if (verbose) {
+                runtime.terminal().stdout(DoctorRenderer.renderVerbose(report));
             } else {
-                try {
-                    location = runtime.projectService()
-                            .locate(Path.of("."));
-                    report = new ReadinessInspector(location.profile()).inspect();
-                } catch (Exception noProject) {
-                    report = runtime.readinessInspector()
-                            .inspect();
-                }
+                runtime.terminal().stdout(DoctorRenderer.renderConcise(report));
             }
-        } catch (Exception failure) {
-            runtime.terminal()
-                    .stdout("DOCTOR_RESULT=BROKEN");
-            return ExitCodes.LOCAL_CONFIGURATION;
-        }
-        runtime.terminal()
-                .stdout("JAVA_RUNTIME=" + (report.javaReady() ? "PASS" : "FAIL"));
-        runtime.terminal()
-                .stdout("PROFILE=" + (report.profileReady() ? "PASS" : "FAIL"));
-        runtime.terminal()
-                .stdout("IDENTITY=" + (report.identityReady() ? report.identityDetail() : "FAIL"));
-        runtime.terminal()
-                .stdout("CANDIDATES=" + (report.candidatesReady() ? report.candidateDetail() : "FAIL"));
-        runtime.terminal()
-                .stdout("QUIC_NATIVE=" + (report.quicReady() ? report.quicDetail() : "FAIL"));
-        runtime.terminal()
-                .stdout("WINDOWS_ACL=" + (isWindows() ? "INFO_UNVERIFIED" : "NOT_APPLICABLE"));
-        runtime.terminal()
-                .stdout("DOCTOR=" + (report.ready() ? "PASS" : "FAIL"));
-        if (location != null) {
-            runtime.terminal()
-                    .stdout("PROJECT_DISCOVERED=PASS");
-            runtime.terminal()
-                    .stdout("PROJECT_METADATA=PASS");
-            runtime.terminal()
-                    .stdout("LOCAL_PROFILE=PASS");
-            try {
-                var providerReport = runtime.providerService()
-                        .diagnose(location);
-                providerReport.lines()
-                        .forEach(line -> runtime.terminal()
-                                .stdout(line));
-                runtime.terminal()
-                        .stdout("DOCTOR_RESULT=" + (report.ready() ? providerReport.result() : "BROKEN"));
-                if ("BROKEN".equals(providerReport.result())) {
-                    return ExitCodes.DOCTOR_BROKEN;
-                }
-            } catch (Exception failure) {
-                runtime.terminal()
-                        .stdout("DOCTOR_RESULT=BROKEN");
+
+            if (strict && report.overallStatus() != DoctorStatus.HEALTHY) {
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
-        }
-        if (report.ready()) {
+
             return ExitCodes.OK;
+        } catch (Exception failure) {
+            runtime.terminal().stderr("Doctor diagnostic execution failed: " + failure.getMessage());
+            return ExitCodes.LOCAL_CONFIGURATION;
         }
-        return report.profileReady() && report.identityReady() ? ExitCodes.SESSION_FAILED
-                : ExitCodes.LOCAL_CONFIGURATION;
     }
 }

@@ -522,22 +522,37 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Scope boundary: No force worktree deletion, no recursive force deletion, no process termination, no Git worktree prune, no MCP tool changes.
 - Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL; PlanPersistenceTest PASS; StalePlanTest PASS; WorkerCleanupTest PASS; ValidationAndIntegrationCleanupTest PASS; TemporaryFileCleanupTest PASS; QuarantineTest PASS; LockAndConcurrencyTest PASS; JournalAndRestartTest PASS; NoForceAndSafetyArchitectureTest PASS; Slice2MutationBoundaryTest PASS.
 
+- [x] **SYN-014C** — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation `[DONE]`
+- [/] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[ACTIVE]`
+
 ## SYN-014C
 
 - ID: SYN-014C
 - Priority: P0
 - Title: Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Implement provider-session lease evidence, strong process verification, suspected-stale grace periods, immutable reconciliation plans, explicit reconciliation execution, safe interrupted integration recovery, durable session abandonment, ambient `synesis.cancel_task` MCP tool (tool #11), dependency invalidation, ownership release, and CLI command `synesis reconcile`.
 - Dependencies: SYN-014B DONE at CP-0188.
 - Acceptance criteria: session lease store, reconciliation plan/lock/journal, `synesis reconcile`, `synesis.cancel_task` MCP tool, unit/integration/MCP tests passing, full `.\gradlew.bat check --no-daemon` passing.
 - Scope boundary: No process termination, no worktree deletion during reconciliation/cancellation, no snapshot deletion, no doctor repair, no MCP surface breaking changes.
+- Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL at CP-0189.
+
+## SYN-014D
+
+- ID: SYN-014D
+- Priority: P0
+- Title: Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair
+- Status: ACTIVE
+- Purpose: Implement unified read-only DoctorService diagnostics (`synesis doctor`), 38 finding codes, severity/status/confidence models, actionable recommendations, read-only guarantees, and a separate, reviewable, narrowly scoped repair-plan system (`synesis repair`) with immutable persisted plans, project repair lock, execution journal, backup & rollback support, and safe administrative repairs.
+- Dependencies: SYN-014C DONE at CP-0189.
+- Acceptance criteria: DoctorService read-only by construction, DoctorCommand read-only, RepairPlan/Store/Lock/Journal, RepairBackupService, rollback support, 11 MCP tools unchanged, comprehensive test suite passing, full `.\gradlew.bat check --no-daemon` passing.
+- Scope boundary: No installer/updater changes, no process termination, no provider config modification, no event log rewriting, no snapshot deletion, no worktree force deletion, no new MCP tools.
+- Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL at CP-0190; DoctorServiceTest PASS; RepairPlanTest PASS; DoctorCommandTest PASS; RepairCommandTest PASS.
 
 ## SYN-001
 
 - ID: SYN-001
 - Priority: P0
-- Title: First signed shared decision-record proof
 - Status: DONE
 - Purpose: Prove that two isolated configured profiles can authenticate,
   publish, persist, inspect, and synchronize exactly one signed decision
