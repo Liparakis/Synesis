@@ -79,5 +79,29 @@ public enum PredictionEventType {
     /**
      * Releases semantic ownership from a task capability.
      */
-    OWNERSHIP_RELEASED
+    OWNERSHIP_RELEASED,
+    /**
+     * Creates a durable capability request handle and contract.
+     */
+    CAPABILITY_REQUEST_CREATED,
+    /**
+     * Revises an existing capability request contract.
+     */
+    CAPABILITY_REQUEST_CONTRACT_REVISED,
+    /**
+     * Accepts a capability request contract.
+     */
+    CAPABILITY_REQUEST_ACCEPTED,
+    /**
+     * Rejects a capability request.
+     */
+    CAPABILITY_REQUEST_REJECTED,
+    /**
+     * Cancels a pending capability request.
+     */
+    CAPABILITY_REQUEST_CANCELLED,
+    /**
+     * Supersedes a capability request with a replacement.
+     */
+    CAPABILITY_REQUEST_SUPERSEDED
 }

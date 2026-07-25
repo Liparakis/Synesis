@@ -140,6 +140,15 @@ public final class CoordinationService {
         return store.coordinationProjection();
     }
 
+    /**
+     * Returns the durable capability request projection.
+     *
+     * @return capability request projection
+     */
+    public CapabilityRequestProjection capabilityRequestProjection() {
+        return store.capabilityRequestProjection();
+    }
+
     private void authorize(CoordinationCommand command) throws IOException, GeneralSecurityException {
         if (command.type() == PredictionEventType.TASK_CREATED) {
             CoordinationTask task = CoordinationTask.decode(command.payload());
@@ -196,6 +205,18 @@ public final class CoordinationService {
             }
             return;
         }
+        if (command.type() == PredictionEventType.CAPABILITY_REQUEST_CREATED
+                || command.type() == PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED
+                || command.type() == PredictionEventType.CAPABILITY_REQUEST_ACCEPTED
+                || command.type() == PredictionEventType.CAPABILITY_REQUEST_REJECTED
+                || command.type() == PredictionEventType.CAPABILITY_REQUEST_CANCELLED
+                || command.type() == PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED) {
+            CapabilityRequestPayload payload = CapabilityRequestPayload.decode(command.payload());
+            if (payload == null) {
+                throw new GeneralSecurityException("INVALID_CAPABILITY_REQUEST_PAYLOAD");
+            }
+            return;
+        }
         PredictionContract contract = contractFor(command);
         String actor = command.actorNodeId();
         boolean requester = actor.equals(contract.requesterNodeId())
@@ -210,6 +231,8 @@ public final class CoordinationService {
             case REQUEST_REJECTED -> requester || owner;
             case PREDICTION_EXPIRED -> false;
             case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> false;
+            case CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED, CAPABILITY_REQUEST_ACCEPTED,
+                 CAPABILITY_REQUEST_REJECTED, CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED -> true;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");

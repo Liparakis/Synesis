@@ -90,7 +90,32 @@ public enum AgentReason {
     /**
      * Implementation is available and validation is required.
      */
-    VALIDATION_REQUIRED("validation_required");
+    VALIDATION_REQUIRED("validation_required"),
+
+    /**
+     * Target capability request was not found.
+     */
+    REQUEST_NOT_FOUND("request_not_found"),
+
+    /**
+     * Capability request or revision state is stale.
+     */
+    STALE_REQUEST("stale_request"),
+
+    /**
+     * Capability request was rejected by the owner.
+     */
+    CAPABILITY_REJECTED("capability_rejected"),
+
+    /**
+     * Contract revision is required by the owner.
+     */
+    REVISION_REQUIRED("revision_required"),
+
+    /**
+     * Implementation snapshot is not yet published or available.
+     */
+    IMPLEMENTATION_UNAVAILABLE("implementation_unavailable");
 
     private final String value;
 

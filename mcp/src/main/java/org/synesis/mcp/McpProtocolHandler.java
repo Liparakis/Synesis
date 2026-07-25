@@ -5,11 +5,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.synesis.coordination.CapabilityContract;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.AgentNextActionService;
+import org.synesis.workspace.application.CapabilityRequestService;
+import org.synesis.workspace.application.CapabilityResponseService;
 import org.synesis.workspace.application.ProjectCommandIntent;
 import org.synesis.workspace.application.ProjectCommandService;
 import org.synesis.workspace.application.WorkspacePatchService;
@@ -32,6 +35,8 @@ public final class McpProtocolHandler {
     private final WorkspacePatchService patchService;
     private final ProjectCommandService commandService;
     private final AgentNextActionService nextActionService;
+    private final CapabilityRequestService capabilityRequestService;
+    private final CapabilityResponseService capabilityResponseService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -53,6 +58,8 @@ public final class McpProtocolHandler {
         this.patchService = new WorkspacePatchService();
         this.commandService = new ProjectCommandService();
         this.nextActionService = new AgentNextActionService();
+        this.capabilityRequestService = new CapabilityRequestService();
+        this.capabilityResponseService = new CapabilityResponseService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -247,6 +254,9 @@ public final class McpProtocolHandler {
      * @return list of fallback candidate paths
      */
     List<Path> extractFallbackCandidates() {
+        if (initialProjectRoot != null && java.nio.file.Files.exists(initialProjectRoot.resolve(".synesis/project.json"))) {
+            return List.of(initialProjectRoot.toAbsolutePath().normalize());
+        }
         List<Path> candidates = new java.util.ArrayList<>();
 
         // Environment variables
@@ -492,8 +502,51 @@ public final class McpProtocolHandler {
         getNextActionTool.put("description", "Retrieves the single highest-priority actionable coordination item for the active MCP session.");
         getNextActionTool.put("inputSchema", nextActionSchema);
 
+        // Tool 6: synesis.describe_required_capability
+        Map<String, Object> contractProperties = new LinkedHashMap<>();
+        contractProperties.put("inputs", Map.of("type", "string", "description", "Input parameter specification"));
+        contractProperties.put("output", Map.of("type", "string", "description", "Output return type and semantics"));
+        contractProperties.put("requiredBehavior", Map.of("type", "array", "items", Map.of("type", "string"), "description", "List of operational behavior requirements"));
+        contractProperties.put("acceptanceTests", Map.of("type", "array", "items", Map.of("type", "string"), "description", "List of acceptance test criteria"));
+
+        Map<String, Object> contractSchema = new LinkedHashMap<>();
+        contractSchema.put("type", "object");
+        contractSchema.put("properties", contractProperties);
+
+        Map<String, Object> describeProperties = new LinkedHashMap<>();
+        describeProperties.put("capability", Map.of("type", "string", "description", "Target capability name (e.g. catalog.product-query)"));
+        describeProperties.put("contract", contractSchema);
+        describeProperties.put("request", Map.of("type", "string", "description", "Public capability request handle locator (for requester revision response)"));
+        describeProperties.put("revisionResponse", Map.of("type", "string", "description", "Requester response type to owner revision: accept, counter, cancel"));
+
+        Map<String, Object> describeSchema = new LinkedHashMap<>();
+        describeSchema.put("type", "object");
+        describeSchema.put("properties", describeProperties);
+
+        Map<String, Object> describeTool = new LinkedHashMap<>();
+        describeTool.put("name", "synesis.describe_required_capability");
+        describeTool.put("description", "Describes required capability contract or responds to owner revision feedback.");
+        describeTool.put("inputSchema", describeSchema);
+
+        // Tool 7: synesis.respond_to_owner_request
+        Map<String, Object> respondProperties = new LinkedHashMap<>();
+        respondProperties.put("request", Map.of("type", "string", "description", "Public capability request handle locator"));
+        respondProperties.put("response", Map.of("type", "string", "description", "Owner response type: accept, revise, reject"));
+        respondProperties.put("revision", contractSchema);
+        respondProperties.put("reason", Map.of("type", "string", "description", "Explanation for revision or rejection"));
+
+        Map<String, Object> respondSchema = new LinkedHashMap<>();
+        respondSchema.put("type", "object");
+        respondSchema.put("properties", respondProperties);
+        respondSchema.put("required", List.of("request", "response"));
+
+        Map<String, Object> respondTool = new LinkedHashMap<>();
+        respondTool.put("name", "synesis.respond_to_owner_request");
+        respondTool.put("description", "Responds to a pending capability request as the authorized capability owner.");
+        respondTool.put("inputSchema", respondSchema);
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool));
+        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool));
 
         return createResultResponse(id, result);
     }
@@ -580,6 +633,28 @@ public final class McpProtocolHandler {
             AgentNextActionService.NextActionRequest nextReq = new AgentNextActionService.NextActionRequest(
                     activeProjectRoot, provider, connectionInstanceId);
             agentResponse = nextActionService.getNextAction(nextReq);
+        } else if ("synesis.describe_required_capability".equals(name)) {
+            String capability = arguments != null ? (String) arguments.get("capability") : null;
+            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+            String revResp = arguments != null ? (String) arguments.get("revisionResponse") : null;
+            CapabilityContract contract = parseContract(arguments != null ? arguments.get("contract") : null);
+
+            CapabilityRequestService.DescribeCapabilityRequest descReq = new CapabilityRequestService.DescribeCapabilityRequest(
+                    activeProjectRoot, provider, connectionInstanceId, capability, contract, reqHandle, revResp);
+            agentResponse = capabilityRequestService.describeRequiredCapability(descReq);
+        } else if ("synesis.respond_to_owner_request".equals(name)) {
+            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+            String response = arguments != null ? (String) arguments.get("response") : null;
+            String reason = arguments != null ? (String) arguments.get("reason") : null;
+            CapabilityContract revision = parseContract(arguments != null ? arguments.get("revision") : null);
+
+            if (reqHandle == null || response == null) {
+                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+            } else {
+                CapabilityResponseService.OwnerResponseRequest respReq = new CapabilityResponseService.OwnerResponseRequest(
+                        activeProjectRoot, provider, connectionInstanceId, reqHandle, response, revision, reason);
+                agentResponse = capabilityResponseService.respondToOwnerRequest(respReq);
+            }
         } else {
             Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
             Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);
@@ -589,6 +664,39 @@ public final class McpProtocolHandler {
         Map<String, Object> textContent = Map.of("type", "text", "text", agentResponse.toJson());
         Map<String, Object> result = Map.of("content", List.of(textContent));
         return createResultResponse(id, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    private CapabilityContract parseContract(Object contractObj) {
+        if (!(contractObj instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Map<String, Object> m = (Map<String, Object>) map;
+        String inputs = (String) m.get("inputs");
+        String output = (String) m.get("output");
+
+        List<String> requiredBehavior = new java.util.ArrayList<>();
+        if (m.get("requiredBehavior") instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof String s) requiredBehavior.add(s);
+            }
+        }
+
+        List<String> acceptanceTests = new java.util.ArrayList<>();
+        if (m.get("acceptanceTests") instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof String s) acceptanceTests.add(s);
+            }
+        }
+
+        if (inputs == null || output == null) {
+            return null;
+        }
+        try {
+            return new CapabilityContract(inputs, output, requiredBehavior, acceptanceTests);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")

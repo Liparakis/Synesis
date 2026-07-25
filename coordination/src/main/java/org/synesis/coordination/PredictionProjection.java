@@ -41,7 +41,9 @@ public final class PredictionProjection {
             case PREDICTION_INVALIDATED -> requireNonTerminal(current, PredictionState.INVALIDATED);
             case REQUEST_REJECTED -> requireNonTerminal(current, PredictionState.REJECTED);
             case PREDICTION_EXPIRED -> requireNonTerminal(current, PredictionState.EXPIRED);
-            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> current;
+            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED,
+                 CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED, CAPABILITY_REQUEST_ACCEPTED,
+                 CAPABILITY_REQUEST_REJECTED, CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED -> current;
         };
     }
 
@@ -68,7 +70,9 @@ public final class PredictionProjection {
 
     private static boolean isPredictionEvent(PredictionEventType type) {
         return switch (type) {
-            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> false;
+            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED,
+                 CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED, CAPABILITY_REQUEST_ACCEPTED,
+                 CAPABILITY_REQUEST_REJECTED, CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED -> false;
             default -> true;
         };
     }

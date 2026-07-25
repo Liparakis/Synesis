@@ -35,7 +35,17 @@ public enum AgentNextAction {
     /**
      * Stop operation and request human intervention.
      */
-    REQUEST_HUMAN_HELP("request_human_help");
+    REQUEST_HUMAN_HELP("request_human_help"),
+
+    /**
+     * Respond to pending capability request from another worker as the capability owner.
+     */
+    RESPOND_TO_OWNER_REQUEST("respond_to_owner_request"),
+
+    /**
+     * Revise capability request contract in response to owner feedback.
+     */
+    REVISE_CAPABILITY_REQUEST("revise_capability_request");
 
     private final String value;
 
