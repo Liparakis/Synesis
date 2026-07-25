@@ -522,6 +522,17 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Scope boundary: No force worktree deletion, no recursive force deletion, no process termination, no Git worktree prune, no MCP tool changes.
 - Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL; PlanPersistenceTest PASS; StalePlanTest PASS; WorkerCleanupTest PASS; ValidationAndIntegrationCleanupTest PASS; TemporaryFileCleanupTest PASS; QuarantineTest PASS; LockAndConcurrencyTest PASS; JournalAndRestartTest PASS; NoForceAndSafetyArchitectureTest PASS; Slice2MutationBoundaryTest PASS.
 
+## SYN-014C
+
+- ID: SYN-014C
+- Priority: P0
+- Title: Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation
+- Status: ACTIVE
+- Purpose: Implement provider-session lease evidence, strong process verification, suspected-stale grace periods, immutable reconciliation plans, explicit reconciliation execution, safe interrupted integration recovery, durable session abandonment, ambient `synesis.cancel_task` MCP tool (tool #11), dependency invalidation, ownership release, and CLI command `synesis reconcile`.
+- Dependencies: SYN-014B DONE at CP-0188.
+- Acceptance criteria: session lease store, reconciliation plan/lock/journal, `synesis reconcile`, `synesis.cancel_task` MCP tool, unit/integration/MCP tests passing, full `.\gradlew.bat check --no-daemon` passing.
+- Scope boundary: No process termination, no worktree deletion during reconciliation/cancellation, no snapshot deletion, no doctor repair, no MCP surface breaking changes.
+
 ## SYN-001
 
 - ID: SYN-001

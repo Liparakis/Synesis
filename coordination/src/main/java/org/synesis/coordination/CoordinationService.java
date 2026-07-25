@@ -253,7 +253,11 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.INTEGRATION_COMMIT_CREATED
                 || command.type() == PredictionEventType.CONTROL_BRANCH_ADVANCED
                 || command.type() == PredictionEventType.TASK_INTEGRATED
-                || command.type() == PredictionEventType.SESSION_FINALIZED) {
+                || command.type() == PredictionEventType.SESSION_FINALIZED
+                || command.type() == PredictionEventType.SESSION_ABANDONED
+                || command.type() == PredictionEventType.TASK_CANCELLATION_REQUESTED
+                || command.type() == PredictionEventType.TASK_CANCELLED
+                || command.type() == PredictionEventType.DEPENDENCY_INVALIDATED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
         }
@@ -277,7 +281,8 @@ public final class CoordinationService {
                  CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
                  TASK_COMPLETION_REQUESTED, TASK_SNAPSHOT_CREATED, TASK_WAITING_FOR_DEPENDENCIES,
                  INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
-                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED -> true;
+                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
+                 SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED, DEPENDENCY_INVALIDATED -> true;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");

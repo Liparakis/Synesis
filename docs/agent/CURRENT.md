@@ -2,24 +2,25 @@
 
 ## Identity
 
-- Task ID: SYN-014B
-- Status: DONE
+- Task ID: SYN-014C
+- Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0187
-- Completed checkpoint: CP-0188
+- Started checkpoint: CP-0188
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032
 
 ## Objective
 
-Post-MVP Hardening Slice 2 COMPLETE: Controlled lifecycle cleanup execution using read-only inventory, classification, and cleanup-plan foundation.
+Implement Post-MVP Hardening Slice 3: Conservative crash detection, deterministic reconciliation, durable abandonment handling, ambient `synesis.cancel_task` MCP tool (tool #11), dependency invalidation, ownership release, and `synesis reconcile` CLI command.
 
-## Verification result
+## Immediate slice
 
-`.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL — 49 tasks, all pass.
-10 new unit/integration/mutation tests PASS. Checkpoint CP-0188 created.
+Completed Post-MVP Hardening Slice 3. All 49 Gradle tasks passed cleanly.
+
+## Verification target
+
+`.\gradlew.bat check --no-daemon` passed cleanly.
 
 ## Immediate next action
 
-Await user directive for Hardening Slice 3 (Crash reconciliation and task cancellation / Doctor diagnostics and safe repair).
-
+Proceed to Post-MVP Hardening Slice 4 or post-MVP operational milestone.

@@ -236,3 +236,15 @@ only as the documented transport-failure or liveness-expiry category.
   `1A73CA051A3BE63084451D3744632F227FB5236BBE3F2334DE20BCF5498D98D9`.
 - Complete sanitized evidence is in
   `docs/evidence/antigravity-real-investigation-2026-07-22/report.md`.
+
+## SYN-014C Post-MVP Hardening Slice 3 implementation state
+
+- Provider-session lease subsystem (`SessionLeaseService`, `SessionLeaseStore`, `SessionLeaseRecord`, `SessionProcessIdentity`, `SessionLeaseState`, `SessionLeasePolicy`) implemented under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\session-leases\<connection>.json`.
+- Strong process identity verification via PID, process start time, executable identity, command-line string, connection nonce.
+- Suspected-stale and abandonment grace period evaluation with configurable policy (30s heartbeat, 2m suspected stale, 5m abandonment grace period).
+- Persisted reconciliation plan/lock/journal (`ReconciliationPlan`, `ReconciliationPlanEntry`, `ReconciliationPlanStore`, `ReconciliationExecutionLock`, `ReconciliationExecutionJournal`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\`.
+- CLI command `synesis reconcile` supporting `--dry-run`, `--prepare`, `--show-plan`, `--execute`.
+- Ambient `synesis.cancel_task` MCP tool (tool #11, bounded reason 1-1000 characters).
+- Event-store transitions for `SESSION_ABANDONED`, `TASK_CANCELLATION_REQUESTED`, `TASK_CANCELLED`, `DEPENDENCY_INVALIDATED`, `OWNERSHIP_RELEASED`, and `SESSION_FINALIZED`.
+- All 49 Gradle tasks and test suites passed cleanly at CP-0189.
+

@@ -23,6 +23,23 @@ public final class PredictionProjection {
             if (type == PredictionEventType.PREDICTION_CREATED) {
                 return PredictionState.PROPOSED;
             }
+            if (type == PredictionEventType.TASK_CREATED || type == PredictionEventType.TASK_CLAIMED
+                    || type == PredictionEventType.TASK_RELEASED || type == PredictionEventType.OWNERSHIP_CLAIMED
+                    || type == PredictionEventType.OWNERSHIP_RELEASED || type == PredictionEventType.CAPABILITY_REQUEST_CREATED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED || type == PredictionEventType.CAPABILITY_REQUEST_ACCEPTED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_REJECTED || type == PredictionEventType.CAPABILITY_REQUEST_CANCELLED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED
+                    || type == PredictionEventType.CAPABILITY_VALIDATION_STARTED || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED
+                    || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED || type == PredictionEventType.TASK_COMPLETION_REQUESTED
+                    || type == PredictionEventType.TASK_SNAPSHOT_CREATED || type == PredictionEventType.TASK_WAITING_FOR_DEPENDENCIES
+                    || type == PredictionEventType.INTEGRATION_ATTEMPT_STARTED || type == PredictionEventType.INTEGRATION_ATTEMPT_FAILED
+                    || type == PredictionEventType.INTEGRATION_CONFLICTED || type == PredictionEventType.INTEGRATION_COMMIT_CREATED
+                    || type == PredictionEventType.CONTROL_BRANCH_ADVANCED || type == PredictionEventType.TASK_INTEGRATED
+                    || type == PredictionEventType.SESSION_FINALIZED || type == PredictionEventType.SESSION_ABANDONED
+                    || type == PredictionEventType.TASK_CANCELLATION_REQUESTED || type == PredictionEventType.TASK_CANCELLED
+                    || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
+                return null;
+            }
             throw new IllegalStateException("prediction must be created first");
         }
         return switch (type) {
@@ -48,7 +65,8 @@ public final class PredictionProjection {
                  CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
                  TASK_COMPLETION_REQUESTED, TASK_SNAPSHOT_CREATED, TASK_WAITING_FOR_DEPENDENCIES,
                  INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
-                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED -> current;
+                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
+                 SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED, DEPENDENCY_INVALIDATED -> current;
         };
     }
 

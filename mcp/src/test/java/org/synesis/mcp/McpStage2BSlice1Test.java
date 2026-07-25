@@ -103,7 +103,7 @@ class McpStage2BSlice1Test {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
-        assertEquals(10, tools.size());
+        assertEquals(11, tools.size());
         assertEquals("synesis.ensure_session", tools.get(0).get("name"));
         assertEquals("synesis.read_file", tools.get(1).get("name"));
         assertEquals("synesis.apply_patch", tools.get(2).get("name"));

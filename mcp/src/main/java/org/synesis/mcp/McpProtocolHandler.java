@@ -43,6 +43,7 @@ public final class McpProtocolHandler {
     private final ImplementationPublicationService publicationService;
     private final ImplementationValidationService validationService;
     private final AgentTaskCompletionService taskCompletionService;
+    private final org.synesis.workspace.application.AgentTaskCancellationService taskCancellationService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -69,6 +70,7 @@ public final class McpProtocolHandler {
         this.publicationService = new ImplementationPublicationService();
         this.validationService = new ImplementationValidationService();
         this.taskCompletionService = new AgentTaskCompletionService();
+        this.taskCancellationService = new org.synesis.workspace.application.AgentTaskCancellationService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -599,8 +601,22 @@ public final class McpProtocolHandler {
         completeTaskTool.put("description", "Requests task completion and triggers dependency integration.");
         completeTaskTool.put("inputSchema", completeSchema);
 
+        // Tool 11: synesis.cancel_task
+        Map<String, Object> cancelProperties = new LinkedHashMap<>();
+        cancelProperties.put("reason", Map.of("type", "string", "description", "Cancellation reason string (1-1000 characters)"));
+
+        Map<String, Object> cancelSchema = new LinkedHashMap<>();
+        cancelSchema.put("type", "object");
+        cancelSchema.put("properties", cancelProperties);
+        cancelSchema.put("required", List.of("reason"));
+
+        Map<String, Object> cancelTaskTool = new LinkedHashMap<>();
+        cancelTaskTool.put("name", "synesis.cancel_task");
+        cancelTaskTool.put("description", "Cancels the active task for the ambient MCP connection.");
+        cancelTaskTool.put("inputSchema", cancelSchema);
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool, publishTool, validateTool, completeTaskTool));
+        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool, publishTool, validateTool, completeTaskTool, cancelTaskTool));
 
         return createResultResponse(id, result);
     }
@@ -746,6 +762,11 @@ public final class McpProtocolHandler {
             AgentTaskCompletionService.CompleteTaskRequest completeReq = new AgentTaskCompletionService.CompleteTaskRequest(
                     activeProjectRoot, provider, connectionInstanceId, summary);
             agentResponse = taskCompletionService.completeTask(completeReq);
+        } else if ("synesis.cancel_task".equals(name)) {
+            String reason = arguments != null ? (String) arguments.get("reason") : null;
+            org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest cancelReq = new org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest(
+                    activeProjectRoot, provider, connectionInstanceId, reason);
+            agentResponse = taskCancellationService.cancelTask(cancelReq);
         } else {
             Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
             Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);

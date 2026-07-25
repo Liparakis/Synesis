@@ -159,5 +159,21 @@ public enum PredictionEventType {
     /**
      * Worker session finalized following successful task integration.
      */
-    SESSION_FINALIZED
+    SESSION_FINALIZED,
+    /**
+     * Provider session marked abandoned due to verified process death beyond grace period.
+     */
+    SESSION_ABANDONED,
+    /**
+     * Ambient worker requests task cancellation.
+     */
+    TASK_CANCELLATION_REQUESTED,
+    /**
+     * Task transitioned to terminal cancelled state.
+     */
+    TASK_CANCELLED,
+    /**
+     * Capability dependency invalidated due to cancellation or abandonment of supplier task.
+     */
+    DEPENDENCY_INVALIDATED
 }

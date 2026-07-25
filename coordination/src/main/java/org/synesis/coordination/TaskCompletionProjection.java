@@ -273,8 +273,11 @@ public final class TaskCompletionProjection {
         taskStates.put(payload.taskId(), TaskCompletionState.INTEGRATED);
     }
 
-    private void processSessionFinalized(PredictionEvent event) throws IOException {
-        TaskSnapshotPayload payload = TaskSnapshotPayload.decode(event.payload());
-        taskStates.put(payload.taskId(), TaskCompletionState.INTEGRATED);
+    private void processSessionFinalized(PredictionEvent event) {
+        try {
+            TaskSnapshotPayload payload = TaskSnapshotPayload.decode(event.payload());
+            taskStates.put(payload.taskId(), TaskCompletionState.INTEGRATED);
+        } catch (Exception ignored) {
+        }
     }
 }

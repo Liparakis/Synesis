@@ -40,3 +40,8 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   OS-conventional root is canonical, sibling staging and temporary rollback
   make activation recoverable, user PATH ownership is explicit, and providers
   never reference version directories.
+- ADR-0029: Provider-session lease evidence and liveness grace periods — accepted for SYN-014C.
+- ADR-0030: Immutable reconciliation plans, locks, and journals — accepted for SYN-014C.
+- ADR-0031: Ambient task cancellation via synesis.cancel_task — accepted for SYN-014C.
+- ADR-0032: Strict non-destructive worktree preservation on session abandonment and task cancellation — accepted for SYN-014C.
+

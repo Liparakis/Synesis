@@ -16,6 +16,20 @@ Append-only operational history.
 - Remaining work:
 - Exact continuation:
 
+## 2026-07-25 — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation
+
+- Timestamp: 2026-07-25 Europe/Athens
+- Checkpoint: CP-0189
+- Active task: SYN-014C
+- Completed work: Implemented provider-session lease evidence, strong process verification, suspected-stale grace periods, immutable reconciliation plans, explicit reconciliation execution CLI (`synesis reconcile`), safe recovery of interrupted integrations, durable session abandonment, ambient `synesis.cancel_task` MCP tool (tool #11), dependency invalidation, and semantic ownership release. Added unit/integration/MCP tests proving non-destructive worktree preservation, lease state evaluation, plan immutability, and 11 MCP tools schema registration.
+- Files changed: workspace/src/main/java/org/synesis/workspace/lease/*, workspace/src/main/java/org/synesis/workspace/reconcile/*, workspace/src/main/java/org/synesis/workspace/application/AgentTaskCancellationService.java, coordination/src/main/java/org/synesis/coordination/*, mcp/src/main/java/org/synesis/mcp/McpProtocolHandler.java, cli/src/main/java/org/synesis/cli/command/ReconcileCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java, tests in workspace/mcp/cli, docs/agent/*
+- Commands run: `.\gradlew.bat check --no-daemon`, `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Results: BUILD SUCCESSFUL — 49 actionable tasks, all 133+ unit tests and smoke tests passed cleanly.
+- Decisions: Non-destructive worktree preservation on session abandonment and task cancellation; external administration directory storage for leases, plans, locks, and journals; ambient task cancellation authorization enforced strictly for owning worker; 11 MCP tools registered in `tools/list`.
+- Failed attempts: `CoordinationService` authorization initially failed for `SESSION_ABANDONED` event due to missing bypass entry; fixed by adding new event types to `CoordinationService` bypass list; `PredictionProjection` initially failed on `current == null` for non-prediction events; fixed in `PredictionProjection.transition`.
+- Remaining work: SYN-014D, SYN-014E (installer/updater, demo fixtures).
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-07-25 — Post-MVP Hardening Slice 2: Controlled lifecycle cleanup execution
 
 - Timestamp: 2026-07-25 Europe/Athens
