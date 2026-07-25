@@ -21,7 +21,7 @@ import org.synesis.workspace.provider.ProviderJson;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-class TwoProcessTaskCompletionProcessTest {
+class SyntheticTwoProcessCollaborationTest {
 
     @TempDir
     Path tempDir;
@@ -47,13 +47,13 @@ class TwoProcessTaskCompletionProcessTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        projectRoot = tempDir.resolve("two-process-completion-test");
+        projectRoot = tempDir.resolve("synthetic-collaboration-test");
         Files.createDirectories(projectRoot);
 
         git(projectRoot, "init");
         git(projectRoot, "config", "user.name", "Test User");
         git(projectRoot, "config", "user.email", "test@example.com");
-        Files.writeString(projectRoot.resolve("README.md"), "# Two Process Completion Test\n");
+        Files.writeString(projectRoot.resolve("README.md"), "# Synthetic Two Process Collaboration Test\n");
         Files.writeString(projectRoot.resolve(".gitignore"), ".synesis/\n");
         git(projectRoot, "add", ".");
         git(projectRoot, "commit", "-m", "Initial commit");
