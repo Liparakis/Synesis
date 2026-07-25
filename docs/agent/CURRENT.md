@@ -27,7 +27,7 @@ Review CP-0204 and decide whether SYN-014E can close; no further provider or Ant
 
 ## Work completed
 
-Slice 5C.2 implements Codex TOML configuration correction, preservation, compare-and-set migration, backup/rollback, lifecycle integration, read-only Doctor inspection, and updater TOML path handling. Slice 5C.3 preserves integral JSON numbers (so JSON-RPC `id: 0` remains `0`), negotiates supported protocol versions including Codex `2025-06-18`, and adds disabled-by-default MCP trace-file diagnostics. The active Version B bundle is `0.1.0-dev-local-5c6`; direct and `.cmd` handshakes return exactly 11 tools. Real Codex now reaches initialize and tools/list; its noninteractive runner cancels tool calls after exposure.
+Slice 5C.2 implements Codex TOML configuration correction, preservation, compare-and-set migration, backup/rollback, lifecycle integration, read-only Doctor inspection, and updater TOML path handling. Slice 5C.3 preserves integral JSON numbers (so JSON-RPC `id: 0` remains `0`), negotiates supported protocol versions including Codex `2025-06-18`, and adds disabled-by-default event-only MCP trace diagnostics. The active Version B bundle is `0.1.0-dev-local-5c7`; direct and `.cmd` handshakes return exactly 11 tools. Real Codex now reaches initialize and tools/list; its noninteractive runner cancels tool calls after exposure.
 
 ## Current failures
 

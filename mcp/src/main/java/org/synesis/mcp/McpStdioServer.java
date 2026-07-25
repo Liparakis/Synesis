@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
+import java.util.Map;
+import org.synesis.workspace.provider.ProviderJson;
 
 /**
  * Runs the stdio message loop for the Synesis Model Context Protocol (MCP) server.
@@ -25,6 +27,7 @@ public final class McpStdioServer {
     private final PrintStream out;
     private final PrintStream err;
     private final Path traceFile;
+    private boolean firstInputObserved;
 
     /**
      * Creates an MCP stdio server with standard system streams.
@@ -65,10 +68,21 @@ public final class McpStdioServer {
                 if (line.isEmpty()) {
                     continue;
                 }
-                trace("IN", line);
+                String method = messageMethod(line);
+                if (!firstInputObserved) {
+                    firstInputObserved = true;
+                    trace("stdin_first_byte_received");
+                }
+                if ("initialize".equals(method)) {
+                    trace("initialize_parsed");
+                } else if ("tools/list".equals(method)) {
+                    trace("tools_list_received");
+                }
                 String responseJson = handler.handleMessage(line);
                 if (responseJson != null) {
-                    trace("OUT", responseJson);
+                    if ("initialize".equals(method)) {
+                        trace("initialize_response_written");
+                    }
                     out.println(responseJson);
                     out.flush();
                 }
@@ -81,12 +95,24 @@ public final class McpStdioServer {
         }
     }
 
-    private void trace(String direction, String message) {
+    private String messageMethod(String line) {
+        try {
+            Object value = ProviderJson.parse(line);
+            if (value instanceof Map<?, ?> map && map.get("method") instanceof String method) {
+                return method;
+            }
+        } catch (RuntimeException ignored) {
+            // Malformed input is handled by the protocol handler.
+        }
+        return null;
+    }
+
+    private void trace(String event) {
         if (traceFile == null) {
             return;
         }
         try {
-            Files.writeString(traceFile, direction + "\t" + message + System.lineSeparator(), StandardCharsets.UTF_8,
+            Files.writeString(traceFile, event + System.lineSeparator(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (Exception ignored) {
             // Opt-in diagnostics must never affect the protocol stream.
