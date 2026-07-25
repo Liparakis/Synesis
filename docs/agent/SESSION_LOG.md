@@ -1106,3 +1106,15 @@ Append-only operational history.
   checkout while resolving patch paths in the assigned tree. The final bundle
   produced a valid external Codex worktree and a no-output assigned-worktree
   hook result; actual Codex interception is still not claimed.
+
+# 2026-07-26 — SYN-014E Slice 5C.2 Codex TOML migration
+
+- Replaced the Codex JSON MCP assumption with bounded editing of the real
+  `%USERPROFILE%\\.codex\\config.toml`, preserving unrelated text and nested
+  tables while managing only `mcp_servers.synesis`.
+- Added compare-and-set migration, verified backup/rollback, idempotent
+  lifecycle integration, and read-only Doctor inspection. Source commit:
+  `e278ea735318c6dbf84d8bcff3435034335c2322`.
+- `codex mcp get/list` recognizes the stable Synesis command and args. A
+  bounded real Codex retry reached the agent loop but did not expose Synesis
+  tools because MCP handshake timed out; no real provider success is claimed.

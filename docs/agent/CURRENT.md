@@ -11,11 +11,11 @@
 
 ## Objective
 
-Complete REAL-PROVIDER ACCEPTANCE AND EVIDENCE CORRECTION — Post-MVP Hardening Slice 5C.1 from CP-0200.
+Complete REAL-PROVIDER ACCEPTANCE AND EVIDENCE CORRECTION — Post-MVP Hardening Slice 5C.2 from CP-0201.
 
 ## Immediate slice
 
-The five intentional CLI edits are committed at `eef0fd89b5d89822f567110f048cd3dcb65a3b25`. Slice 5C.1 corrected preservation evidence semantics: update-only and rollback-only event/snapshot comparisons are true, while collaboration append-only evidence remains unclaimed because real provider sessions are unavailable. The updater remains at Version B with the exact 11-tool MCP surface.
+Codex TOML migration is committed at `e278ea735318c6dbf84d8bcff3435034335c2322`. The managed table matches the shape emitted by `codex mcp add`; unrelated settings are preserved by bounded editing and CAS migration.
 
 ## Verification target
 
@@ -23,12 +23,12 @@ Bootstrap Go tests/vet, root Gradle checks, signed Version A/B lifecycle evidenc
 
 ## Immediate next action
 
-Stop with provider-blocked acceptance recorded; resume only when supported real Codex and Antigravity sessions are available.
+Run a bounded MCP stdio handshake probe against the stable launcher and classify the remaining Codex provider blocker without changing user configuration.
 
 ## Work completed
 
-Slice 5B provider/project migration and 5B.1 transaction integration are complete. Slice 5B.2 adds content-hashed external backup manifests, exact atomic metadata restoration, target-race protection, restart/idempotency journaling, injected partial/replay/malformed/restore-failure tests, and restoration Doctor findings. `go test -count=1 ./...`, `go vet ./...`, `:coordination:check`, `:workspace:check`, `:cli:check`, `:mcp:check`, and root `check` all pass.
+Slice 5C.2 implements Codex TOML configuration correction, preservation, compare-and-set migration, backup/rollback, lifecycle integration, and read-only Doctor inspection. `:workspace:test`, `:workspace:check`, `:cli:check`, `:mcp:check`, `go test ./...`, and `go vet ./...` pass.
 
 ## Current failures
 
-Codex CLI `0.140.0` is authenticated with ChatGPT but rejects the configured `gpt-5.6-luna` model (and the tested `gpt-5` override) before Synesis MCP initialization. Antigravity is installed and configured, but no real workspace/tool-discovery session was established under the non-UI scope. No provider collaboration evidence can be claimed.
+Codex CLI `0.140.0` is authenticated and recognizes Synesis in `config.toml`, but bounded real execution did not expose Synesis tools and timed out during MCP handshake. Antigravity is unchanged and unvalidated. Root `check` is blocked by pre-existing trailing whitespace in CP-0201.
