@@ -199,7 +199,25 @@ public enum DoctorFindingCode {
     /**
      * Duplicate Synesis MCP server entry detected in provider configuration file.
      */
-    PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED("provider_config_duplicate_entry");
+    PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED("provider_config_duplicate_entry"),
+
+    /** Provider configuration requires a prepared migration. */
+    PROVIDER_MIGRATION_REQUIRED("provider_migration_required"),
+
+    /** Provider configuration schema is unsupported. */
+    PROVIDER_CONFIG_UNSUPPORTED_SCHEMA("provider_config_unsupported_schema"),
+
+    /** Provider migration metadata is incomplete or missing. */
+    PROVIDER_MIGRATION_METADATA_MISSING("provider_migration_metadata_missing"),
+
+    /** Project metadata requires a prepared migration. */
+    PROJECT_MIGRATION_REQUIRED("project_migration_required"),
+
+    /** Project schema is newer or otherwise unsupported. */
+    PROJECT_SCHEMA_UNSUPPORTED("project_schema_unsupported"),
+
+    /** A migration journal or backup is incomplete. */
+    MIGRATION_STATE_INCOMPLETE("migration_state_incomplete");
 
     private final String value;
 

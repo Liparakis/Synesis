@@ -26,6 +26,8 @@ import org.synesis.workspace.lease.SessionLeaseService;
 import org.synesis.workspace.lease.SessionLeaseState;
 import org.synesis.workspace.lease.SessionLeaseStore;
 import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.migration.ProviderConfigMigrationService;
+import org.synesis.workspace.migration.ProjectMigrationService;
 
 /**
  * Primary read-only diagnostic service discovering repository, runtime, durable state, and administrative health.
@@ -180,6 +182,14 @@ public final class DoctorService {
         }
 
         try {
+            ProjectMigrationService.Entry migration = new ProjectMigrationService().inspect(root);
+            if (migration.outcome() == ProjectMigrationService.Outcome.UNSUPPORTED_SCHEMA) {
+                findings.add(new DoctorFinding(
+                        DoctorFindingCode.PROJECT_SCHEMA_UNSUPPORTED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED,
+                        "Project schema unsupported", "Project metadata uses a schema this Synesis build cannot migrate.",
+                        "project_schema", false, DoctorRecommendation.PREPARE_PROJECT_MIGRATION, computeHash("project_schema_unsupported"), Map.of()));
+                return migration.projectId().isBlank() ? null : migration.projectId();
+            }
             ProjectApplicationService.ProjectLocation location = projectService.locate(root);
             return location.projectId().toString();
         } catch (Exception ex) {
@@ -335,27 +345,19 @@ public final class DoctorService {
     }
 
     private void checkProviderConfiguration(List<DoctorFinding> findings) {
-        String userHome = System.getProperty("user.home");
-        if (userHome == null) {
-            return;
-        }
-        Path codexConfig = Path.of(userHome, ".codex", "config.json");
-        if (!Files.exists(codexConfig)) {
-            findings.add(new DoctorFinding(
-                    DoctorFindingCode.PROVIDER_CONFIG_MISSING, DoctorSeverity.INFO, DoctorConfidence.CONFIRMED,
-                    "Provider config missing", "Codex provider configuration file is not present.",
-                    "provider_config", false, DoctorRecommendation.REVIEW_PROVIDER_CONFIGURATION, computeHash("codex_missing"), Map.of()
-            ));
-        } else {
-            try {
-                String raw = Files.readString(codexConfig, StandardCharsets.UTF_8);
-                ProviderJson.parse(raw);
-            } catch (Exception ex) {
-                findings.add(new DoctorFinding(
-                        DoctorFindingCode.PROVIDER_CONFIG_MALFORMED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
-                        "Provider config malformed", "Codex provider config contains invalid JSON syntax.",
-                        "provider_config", false, DoctorRecommendation.REVIEW_PROVIDER_CONFIGURATION, computeHash("codex_malformed"), Map.of()
-                ));
+        for (ProviderConfigMigrationService.Entry entry : new ProviderConfigMigrationService().inspect()) {
+            if (entry.outcome() == ProviderConfigMigrationService.Outcome.MIGRATION_REQUIRED) {
+                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_MIGRATION_REQUIRED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
+                        "Provider migration required", "Provider MCP configuration does not reference the stable Synesis launcher.",
+                        "provider_config", false, DoctorRecommendation.PREPARE_PROVIDER_MIGRATION, computeHash(entry.provider()), Map.of("provider", entry.provider())));
+            } else if (entry.outcome() == ProviderConfigMigrationService.Outcome.MALFORMED) {
+                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_MALFORMED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
+                        "Provider config malformed", "Provider MCP configuration is malformed and was not changed.",
+                        "provider_config", false, DoctorRecommendation.REVIEW_PROVIDER_CONFIGURATION, computeHash(entry.provider() + "_malformed"), Map.of("provider", entry.provider())));
+            } else if (entry.outcome() == ProviderConfigMigrationService.Outcome.DUPLICATE_SYNSESIS_ENTRY) {
+                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED,
+                        "Duplicate Synesis provider entries", "Provider configuration contains ambiguous Synesis MCP entries.",
+                        "provider_config", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED, computeHash(entry.provider() + "_duplicate"), Map.of("provider", entry.provider())));
             }
         }
     }

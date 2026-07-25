@@ -40,6 +40,7 @@ import org.synesis.cli.command.ProjectCreateCommand;
 import org.synesis.cli.command.ProviderCommand;
 import org.synesis.cli.command.ProviderInstallCommand;
 import org.synesis.cli.command.ProviderListCommand;
+import org.synesis.cli.command.ProviderMigrateCommand;
 import org.synesis.cli.command.ProviderStatusCommand;
 import org.synesis.cli.command.ProviderUninstallCommand;
 import org.synesis.cli.command.RootCommand;
@@ -62,6 +63,7 @@ import org.synesis.cli.command.VersionPlaceholderCommand;
 import org.synesis.cli.command.WorkspaceCommand;
 import org.synesis.cli.command.WorkspaceMutateCommand;
 import org.synesis.cli.command.WorkspaceVerifyCommand;
+import org.synesis.cli.command.MigrateCommand;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.cli.terminal.ConsoleTerminal;
@@ -91,6 +93,7 @@ public final class SynesisCli {
                 .get("identity");
         identity.addSubcommand("show", new IdentityShowCommand(runtime));
         command.addSubcommand("doctor", new DoctorCommand(runtime));
+        command.addSubcommand("migrate", new MigrateCommand(runtime));
         command.addSubcommand("cleanup", new CleanupCommand(runtime));
         command.addSubcommand("reconcile", new org.synesis.cli.command.ReconcileCommand(runtime));
         command.addSubcommand("repair", new org.synesis.cli.command.RepairCommand(runtime));
@@ -107,6 +110,7 @@ public final class SynesisCli {
         command.getSubcommands()
                 .get("provider")
                 .addSubcommand("uninstall", new ProviderUninstallCommand(runtime));
+        command.getSubcommands().get("provider").addSubcommand("migrate", new ProviderMigrateCommand(runtime));
         CommandLine workspace = new CommandLine(new WorkspaceCommand())
                 .addSubcommand("verify", new WorkspaceVerifyCommand(runtime))
                 .addSubcommand("mutate", new WorkspaceMutateCommand(runtime));

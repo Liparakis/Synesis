@@ -11,16 +11,24 @@
 
 ## Objective
 
-Implement Post-MVP Hardening Slice 5: immutable versioned installation, safe stable-launcher resolution, verified local bundle staging, prepared update execution, atomic activation, rollback evidence, and migration-safe installation administration.
+Implement Post-MVP Hardening Slice 5B: safe provider configuration migration and identity-preserving project schema migration on top of the verified Slice 5A installation/update foundation.
 
 ## Immediate slice
 
-Implemented and verified. New bootstrap installs/updates are versioned; the five pre-existing CLI edits are preserved and excluded from this slice.
+Slice 5B provider/project migration is implemented. The five pre-existing CLI edits are preserved and excluded from this slice.
 
 ## Verification target
 
-`bootstrap`: `go test -count=1 ./...`, `go vet ./...`; root: `.`\gradlew.bat check --no-daemon` (49 actionable tasks, BUILD SUCCESSFUL).
+Migration tests PASS; `:workspace:check`, `:cli:check`, `:mcp:check`, root `check` PASS (49 tasks); bootstrap `go test -count=1 ./...` and `go vet ./...` PASS.
 
 ## Immediate next action
 
-Run `scripts/agent-checkpoint.ps1`, record exact evidence, and stop after Hardening Slice 5. Do not begin provider migration or public release work.
+Run `scripts/agent-checkpoint.ps1` after committing the verified Slice 5B changes; preserve the five pre-existing CLI edits and do not begin Slice 5C real-provider validation.
+
+## Work completed
+
+Provider compare-and-set migration, external backup/journal evidence, stable launcher rendering, project schema detection, immutable prepared workflows, identity-preserving no-op verification, Doctor read-only migration findings, CLI workflows, focused tests, and all requested repository checks.
+
+## Current failures
+
+No verification failures. Real Codex and Antigravity acceptance remains intentionally deferred to Slice 5C; update-transaction activation integration remains outside this Java migration slice.

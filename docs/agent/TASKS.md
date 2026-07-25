@@ -554,14 +554,14 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-014E
 - Priority: P0
-- Title: Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration
+- Title: Post-MVP Hardening Slice 5B: Provider configuration and project schema migration
 - Status: ACTIVE
-- Purpose: Replace the flat installer activation model with immutable versioned payloads, a validated atomic active-version pointer, verified local bundle staging, prepared update execution, rollback evidence, and safe provider/project migration seams.
+- Purpose: Add safe compare-and-set provider configuration migration and identity-preserving project schema migration on top of the completed Slice 5A installation/update foundation.
 - Dependencies: SYN-014D DONE at CP-0190; existing SYN-009C/SYN-009D bootstrap evidence.
-- Acceptance criteria: versioned payloads and stable launcher resolve safely; signed bundle manifests are verified; staged payloads are self-tested before activation; prepared plans, locks, journals, compare-and-set pointer activation, previous-version retention, and exact rollback are implemented; no process termination, old-version deletion, MCP surface change, event-log rewrite, or project/node identity replacement; applicable tests and full verification pass.
-- Required tests: bootstrap unit tests for pointer/path safety, manifest verification, staging, activation, rollback, lock/journal, and old-process coexistence; `go test ./...`; applicable Gradle checks.
-- Scope boundary: local bundles only; no remote update service, background polling, process shutdown, provider repair, event-log rewriting, snapshot deletion, or public release work.
-- Evidence: `bootstrap` `go test -count=1 ./...` and `go vet ./...` PASS; root `.`\gradlew.bat check --no-daemon PASS (49 actionable tasks); versioned pointer, staged self-test, prepared-plan, retention, rollback, and traversal tests PASS. Provider/project migration and real Codex/Antigravity acceptance remain unimplemented and unclaimed.
+- Acceptance criteria: provider and project migrations use immutable prepared plans, compare-and-set fingerprints, external backups, atomic replacement, restart-safe journals, identity preservation, read-only Doctor findings, and no provider/project MCP surface changes; applicable tests and full verification pass.
+- Required tests: provider/project migration fixtures for malformed, duplicate, stale, backup/restore, idempotent, identity-preserving, and restart-safe paths; applicable Gradle and bootstrap checks.
+- Scope boundary: no new update architecture, remote update service, process shutdown, malformed-config repair, schema downgrade, event-log rewriting, snapshot deletion, real provider acceptance, or public release work.
+- Evidence: Slice 5A foundation verified at CP-0194; Slice 5B migration tests, workspace/CLI/MCP/root Gradle checks, and bootstrap Go tests PASS before the next checkpoint.
 
 ## SYN-001
 

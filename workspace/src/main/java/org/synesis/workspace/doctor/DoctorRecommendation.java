@@ -26,6 +26,12 @@ public enum DoctorRecommendation {
      */
     REVIEW_PROVIDER_CONFIGURATION("review_provider_configuration"),
 
+    /** Prepare a provider configuration migration plan. */
+    PREPARE_PROVIDER_MIGRATION("synesis_provider_migrate_prepare"),
+
+    /** Prepare a project schema migration plan. */
+    PREPARE_PROJECT_MIGRATION("synesis_migrate_prepare"),
+
     /**
      * Reinstall Synesis CLI / platform distribution.
      */
