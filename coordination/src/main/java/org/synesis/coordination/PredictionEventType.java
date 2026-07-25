@@ -119,5 +119,45 @@ public enum PredictionEventType {
     /**
      * Requester rejects the implementation snapshot and requests a revision.
      */
-    CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED
+    CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
+    /**
+     * Agent requests task completion.
+     */
+    TASK_COMPLETION_REQUESTED,
+    /**
+     * Immutable task snapshot created from worker worktree commit.
+     */
+    TASK_SNAPSHOT_CREATED,
+    /**
+     * Task snapshot created but waiting for dependent tasks to complete.
+     */
+    TASK_WAITING_FOR_DEPENDENCIES,
+    /**
+     * Dedicated integration attempt started in external integration worktree.
+     */
+    INTEGRATION_ATTEMPT_STARTED,
+    /**
+     * Integration attempt failed build or test gate.
+     */
+    INTEGRATION_ATTEMPT_FAILED,
+    /**
+     * Integration attempt encountered git merge conflict.
+     */
+    INTEGRATION_CONFLICTED,
+    /**
+     * Verified integration commit created in integration worktree.
+     */
+    INTEGRATION_COMMIT_CREATED,
+    /**
+     * Control branch fast-forwarded to integration commit.
+     */
+    CONTROL_BRANCH_ADVANCED,
+    /**
+     * Task successfully integrated into control branch.
+     */
+    TASK_INTEGRATED,
+    /**
+     * Worker session finalized following successful task integration.
+     */
+    SESSION_FINALIZED
 }

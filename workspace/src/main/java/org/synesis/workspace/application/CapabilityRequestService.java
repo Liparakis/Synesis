@@ -190,7 +190,8 @@ public final class CapabilityRequestService {
             // Create new capability request
             CapabilityRequestHandle handle = handleGenerator.generate();
             CapabilityRequestPayload payload = new CapabilityRequestPayload(
-                    handle, capability, requesterNodeId, ownerNodeId, request.contract(), CapabilityLifecycleState.AWAITING_OWNER, null);
+                    handle, capability, requesterNodeId, binding.supervisorId(), binding.workerId(),
+                    ownerNodeId, "", "", request.contract(), CapabilityLifecycleState.AWAITING_OWNER, null);
             store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requesterNodeId, payload.encode(), identity);
 
             Map<String, Object> result = new LinkedHashMap<>();

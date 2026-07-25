@@ -153,7 +153,8 @@ public final class CapabilityResponseService {
             return switch (respType) {
                 case "accept" -> {
                     CapabilityRequestPayload payload = new CapabilityRequestPayload(
-                            record.handle(), record.capability(), record.requesterNodeId(), ownerNodeId,
+                            record.handle(), record.capability(), record.requesterNodeId(), record.requesterSupervisorId(), record.requesterWorkerId(),
+                            ownerNodeId, binding.supervisorId(), binding.workerId(),
                             record.contract(), CapabilityLifecycleState.ACCEPTED, null);
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, ownerNodeId, payload.encode(), identity);
 
@@ -166,7 +167,8 @@ public final class CapabilityResponseService {
                 case "revise" -> {
                     CapabilityContract revContract = request.revision() != null ? request.revision() : record.contract();
                     CapabilityRequestPayload payload = new CapabilityRequestPayload(
-                            record.handle(), record.capability(), record.requesterNodeId(), ownerNodeId,
+                            record.handle(), record.capability(), record.requesterNodeId(), record.requesterSupervisorId(), record.requesterWorkerId(),
+                            ownerNodeId, binding.supervisorId(), binding.workerId(),
                             revContract, CapabilityLifecycleState.REVISION_REQUESTED, request.reason());
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, ownerNodeId, payload.encode(), identity);
 
@@ -179,7 +181,8 @@ public final class CapabilityResponseService {
                 case "reject" -> {
                     String reason = request.reason() != null && !request.reason().isBlank() ? request.reason() : "Capability request rejected by owner";
                     CapabilityRequestPayload payload = new CapabilityRequestPayload(
-                            record.handle(), record.capability(), record.requesterNodeId(), ownerNodeId,
+                            record.handle(), record.capability(), record.requesterNodeId(), record.requesterSupervisorId(), record.requesterWorkerId(),
+                            ownerNodeId, binding.supervisorId(), binding.workerId(),
                             record.contract(), CapabilityLifecycleState.REJECTED, reason);
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_REJECTED, ownerNodeId, payload.encode(), identity);
 

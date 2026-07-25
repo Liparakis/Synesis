@@ -27,6 +27,7 @@ public final class PredictionEventStore {
     private final PredictionProjection projection = new PredictionProjection();
     private final CoordinationProjection coordinationProjection = new CoordinationProjection();
     private final CapabilityRequestProjection capabilityRequestProjection = new CapabilityRequestProjection();
+    private final TaskCompletionProjection taskCompletionProjection = new TaskCompletionProjection();
     private final List<PredictionEvent> events = new ArrayList<>();
 
     /**
@@ -85,6 +86,7 @@ public final class PredictionEventStore {
         projection.validate(event);
         coordinationProjection.validate(event);
         capabilityRequestProjection.validate(event);
+        taskCompletionProjection.validate(event);
         Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
         Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
         try {
@@ -100,6 +102,7 @@ public final class PredictionEventStore {
         projection.apply(event);
         coordinationProjection.apply(event);
         capabilityRequestProjection.apply(event);
+        taskCompletionProjection.apply(event);
         events.add(event);
         return event;
     }
@@ -158,6 +161,15 @@ public final class PredictionEventStore {
         return capabilityRequestProjection;
     }
 
+    /**
+     * Returns the task completion and integration projection reconstructed from the event log.
+     *
+     * @return task completion projection
+     */
+    public TaskCompletionProjection taskCompletionProjection() {
+        return taskCompletionProjection;
+    }
+
     private void load() throws IOException, GeneralSecurityException {
         List<Path> files;
         try (var stream = Files.list(eventsDirectory)) {
@@ -180,6 +192,7 @@ public final class PredictionEventStore {
             projection.apply(event);
             coordinationProjection.apply(event);
             capabilityRequestProjection.apply(event);
+            taskCompletionProjection.apply(event);
             events.add(event);
             previous = event.digest();
             expected++;

@@ -169,6 +169,15 @@ public final class CoordinationService {
         return store.capabilityRequestProjection().findValidationContext(handleValue);
     }
 
+    /**
+     * Returns the task completion and integration projection reconstructed from the event log.
+     *
+     * @return task completion projection
+     */
+    public TaskCompletionProjection taskCompletionProjection() {
+        return store.taskCompletionProjection();
+    }
+
     private void authorize(CoordinationCommand command) throws IOException, GeneralSecurityException {
         if (command.type() == PredictionEventType.TASK_CREATED) {
             CoordinationTask task = CoordinationTask.decode(command.payload());
@@ -234,7 +243,17 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED
                 || command.type() == PredictionEventType.CAPABILITY_VALIDATION_STARTED
                 || command.type() == PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED
-                || command.type() == PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED) {
+                || command.type() == PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED
+                || command.type() == PredictionEventType.TASK_COMPLETION_REQUESTED
+                || command.type() == PredictionEventType.TASK_SNAPSHOT_CREATED
+                || command.type() == PredictionEventType.TASK_WAITING_FOR_DEPENDENCIES
+                || command.type() == PredictionEventType.INTEGRATION_ATTEMPT_STARTED
+                || command.type() == PredictionEventType.INTEGRATION_ATTEMPT_FAILED
+                || command.type() == PredictionEventType.INTEGRATION_CONFLICTED
+                || command.type() == PredictionEventType.INTEGRATION_COMMIT_CREATED
+                || command.type() == PredictionEventType.CONTROL_BRANCH_ADVANCED
+                || command.type() == PredictionEventType.TASK_INTEGRATED
+                || command.type() == PredictionEventType.SESSION_FINALIZED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
         }
@@ -255,7 +274,10 @@ public final class CoordinationService {
             case CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED, CAPABILITY_REQUEST_ACCEPTED,
                  CAPABILITY_REQUEST_REJECTED, CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED,
                  CAPABILITY_IMPLEMENTATION_PUBLISHED, CAPABILITY_VALIDATION_STARTED,
-                 CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED -> true;
+                 CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
+                 TASK_COMPLETION_REQUESTED, TASK_SNAPSHOT_CREATED, TASK_WAITING_FOR_DEPENDENCIES,
+                 INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
+                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED -> true;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");

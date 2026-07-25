@@ -11,6 +11,7 @@ import org.synesis.workspace.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.AgentNextActionService;
+import org.synesis.workspace.application.AgentTaskCompletionService;
 import org.synesis.workspace.application.CapabilityRequestService;
 import org.synesis.workspace.application.CapabilityResponseService;
 import org.synesis.workspace.application.ImplementationPublicationService;
@@ -41,6 +42,7 @@ public final class McpProtocolHandler {
     private final CapabilityResponseService capabilityResponseService;
     private final ImplementationPublicationService publicationService;
     private final ImplementationValidationService validationService;
+    private final AgentTaskCompletionService taskCompletionService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -66,6 +68,7 @@ public final class McpProtocolHandler {
         this.capabilityResponseService = new CapabilityResponseService();
         this.publicationService = new ImplementationPublicationService();
         this.validationService = new ImplementationValidationService();
+        this.taskCompletionService = new AgentTaskCompletionService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -583,8 +586,21 @@ public final class McpProtocolHandler {
         validateTool.put("description", "Validates the available implementation snapshot for a capability request as the authorized requester.");
         validateTool.put("inputSchema", validateSchema);
 
+        // Tool 10: synesis.complete_task
+        Map<String, Object> completeProperties = new LinkedHashMap<>();
+        completeProperties.put("summary", Map.of("type", "string", "description", "Human-readable summary of completed task work"));
+
+        Map<String, Object> completeSchema = new LinkedHashMap<>();
+        completeSchema.put("type", "object");
+        completeSchema.put("properties", completeProperties);
+
+        Map<String, Object> completeTaskTool = new LinkedHashMap<>();
+        completeTaskTool.put("name", "synesis.complete_task");
+        completeTaskTool.put("description", "Requests task completion and triggers dependency integration.");
+        completeTaskTool.put("inputSchema", completeSchema);
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool, publishTool, validateTool));
+        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool, publishTool, validateTool, completeTaskTool));
 
         return createResultResponse(id, result);
     }
@@ -725,6 +741,11 @@ public final class McpProtocolHandler {
                         activeProjectRoot, provider, connectionInstanceId, reqHandle, valResult, valReason, failedTests);
                 agentResponse = validationService.validateImplementation(valReq);
             }
+        } else if ("synesis.complete_task".equals(name)) {
+            String summary = arguments != null ? (String) arguments.get("summary") : null;
+            AgentTaskCompletionService.CompleteTaskRequest completeReq = new AgentTaskCompletionService.CompleteTaskRequest(
+                    activeProjectRoot, provider, connectionInstanceId, summary);
+            agentResponse = taskCompletionService.completeTask(completeReq);
         } else {
             Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
             Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);

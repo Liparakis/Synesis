@@ -121,12 +121,37 @@ public final class AgentNextActionService {
         try {
             org.synesis.link.identity.NodeIdentity callerIdentity = new org.synesis.link.identity.IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
             String callerNodeId = callerIdentity.nodeId();
+            String callerWorkerId = binding.workerId();
             Path coordDir = location.root().resolve(".synesis/coordination");
             if (Files.exists(coordDir.resolve("events"))) {
                 org.synesis.coordination.PredictionEventStore store = new org.synesis.coordination.PredictionEventStore(coordDir, location.projectId());
                 org.synesis.coordination.CapabilityRequestProjection capProj = store.capabilityRequestProjection();
 
                 List<org.synesis.coordination.CapabilityRequestRecord> ownerPending = capProj.findPendingForOwner(callerNodeId);
+
+                // Slice 3: Check active integration projection states
+                var taskCompProj = store.taskCompletionProjection();
+                var activeAttemptOpt = taskCompProj.activeIntegrationAttempt();
+                if (activeAttemptOpt.isPresent()) {
+                    var att = activeAttemptOpt.get();
+                    if ("conflict".equals(att.status())) {
+                        Map<String, Object> result = new LinkedHashMap<>();
+                        result.put("pending", 1);
+                        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, result);
+                    }
+                }
+
+                // Check if worker's task is waiting for dependencies
+                var workerSnapshotOpt = taskCompProj.findLatestSnapshotForWorker(callerNodeId, callerWorkerId);
+                if (workerSnapshotOpt.isPresent()) {
+                    var state = taskCompProj.taskState(workerSnapshotOpt.get().taskId());
+                    if (state == org.synesis.coordination.TaskCompletionState.WAITING_FOR_DEPENDENCIES
+                            || state == org.synesis.coordination.TaskCompletionState.SNAPSHOT_READY) {
+                        Map<String, Object> result = new LinkedHashMap<>();
+                        result.put("pending", 1);
+                        return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, result);
+                    }
+                }
                 if (!ownerPending.isEmpty()) {
                     org.synesis.coordination.CapabilityRequestRecord topReq = ownerPending.getFirst();
                     Map<String, Object> contractMap = new LinkedHashMap<>();

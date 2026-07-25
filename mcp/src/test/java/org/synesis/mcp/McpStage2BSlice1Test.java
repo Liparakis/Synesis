@@ -91,7 +91,7 @@ class McpStage2BSlice1Test {
     }
 
     @Test
-    void toolsListContainsNineTools() {
+    void toolsListContainsTenTools() {
         String req = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}";
         String res = handler.handleMessage(req);
         assertNotNull(res);
@@ -103,7 +103,7 @@ class McpStage2BSlice1Test {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
-        assertEquals(9, tools.size());
+        assertEquals(10, tools.size());
         assertEquals("synesis.ensure_session", tools.get(0).get("name"));
         assertEquals("synesis.read_file", tools.get(1).get("name"));
         assertEquals("synesis.apply_patch", tools.get(2).get("name"));
@@ -113,6 +113,7 @@ class McpStage2BSlice1Test {
         assertEquals("synesis.respond_to_owner_request", tools.get(6).get("name"));
         assertEquals("synesis.publish_implementation", tools.get(7).get("name"));
         assertEquals("synesis.validate_available_implementation", tools.get(8).get("name"));
+        assertEquals("synesis.complete_task", tools.get(9).get("name"));
     }
 
     @Test

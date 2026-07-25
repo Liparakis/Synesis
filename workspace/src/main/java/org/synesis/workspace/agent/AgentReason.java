@@ -120,7 +120,37 @@ public enum AgentReason {
     /**
      * Requester validation of the implementation snapshot failed.
      */
-    VALIDATION_FAILED("validation_failed");
+    VALIDATION_FAILED("validation_failed"),
+
+    /**
+     * Task completion blocked by unresolved capability or task dependencies.
+     */
+    UNRESOLVED_DEPENDENCY("unresolved_dependency"),
+
+    /**
+     * Task is not ready for completion due to active validation or unverified state.
+     */
+    TASK_NOT_READY("task_not_ready"),
+
+    /**
+     * Immutable task snapshot created and waiting for dependent tasks to complete integration.
+     */
+    INTEGRATION_PENDING("integration_pending"),
+
+    /**
+     * Integration attempt encountered git merge conflict.
+     */
+    INTEGRATION_CONFLICT("integration_conflict"),
+
+    /**
+     * Integration attempt failed build or test gate.
+     */
+    INTEGRATION_FAILED("integration_failed"),
+
+    /**
+     * Control branch moved during integration attempt; retry required.
+     */
+    INTEGRATION_STALE("integration_stale");
 
     private final String value;
 

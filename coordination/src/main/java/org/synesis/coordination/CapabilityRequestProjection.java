@@ -185,6 +185,25 @@ public final class CapabilityRequestProjection {
     }
 
     /**
+     * Returns all capability requests created by a requester node, regardless of state.
+     *
+     * @param requesterNodeId requester node ID
+     * @return list of all capability requests for requester
+     */
+    public synchronized List<CapabilityRequestRecord> findAllForRequester(String requesterNodeId) {
+        if (requesterNodeId == null) {
+            return List.of();
+        }
+        List<CapabilityRequestRecord> list = new ArrayList<>();
+        for (CapabilityRequestRecord rec : records.values()) {
+            if (rec.requesterNodeId().equals(requesterNodeId)) {
+                list.add(rec);
+            }
+        }
+        return List.copyOf(list);
+    }
+
+    /**
      * Returns the latest implementation revision record for a given handle, if any.
      *
      * @param handleValue public request handle string

@@ -19,13 +19,15 @@ import org.synesis.coordination.ImplementationRevisionRecord;
  * The worktree is isolated from all active worker worktrees, the owner worktree, and the
  * control checkout.
  *
+ * <p>Validation worktrees are stored externally outside the control checkout under:
+ * {@code %LOCALAPPDATA%\Synesis\workspaces\<project-id>\validation\<request-token>-r<revision>}
+ * or {@code ~/.synesis/workspaces/<project-id>/validation/<request-token>-r<revision>}.
+ *
  * <p>Worktree paths are never exposed to the agent via MCP responses.
  *
  * @since 1.0
  */
 public final class ValidationWorkspaceService {
-
-    private static final String VALIDATION_DIR = ".synesis/validation";
 
     /**
      * Creates a validation workspace service.
@@ -34,16 +36,34 @@ public final class ValidationWorkspaceService {
     }
 
     /**
+     * Resolves the external validation root directory for a given project.
+     *
+     * @param projectRoot control project root path
+     * @return absolute path to external validation directory
+     */
+    public static Path resolveValidationRoot(Path projectRoot) {
+        Objects.requireNonNull(projectRoot, "projectRoot");
+        String projectId = resolveProjectId(projectRoot);
+        String base = System.getenv("LOCALAPPDATA");
+        if (base == null || base.isBlank()) {
+            base = Path.of(System.getProperty("user.home"), ".synesis").toString();
+        }
+        return Path.of(base, "Synesis", "workspaces", projectId, "validation")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
      * Creates a disposable Git validation worktree.
      *
      * <p>The worktree is bound to the request handle and revision number. It is created
-     * at {@code <projectRoot>/.synesis/validation/<handleToken>-r<revisionNumber>}.
+     * outside the control checkout.
      *
-     * @param projectRoot          absolute project root path
-     * @param handle               capability request handle
-     * @param revisionNumber       implementation revision number
+     * @param projectRoot           absolute project root path
+     * @param handle                capability request handle
+     * @param revisionNumber        implementation revision number
      * @param requesterWorktreePath absolute path to the requester's assigned worktree
-     * @param impl                 immutable implementation revision record
+     * @param impl                  immutable implementation revision record
      * @return absolute path to the created validation worktree
      * @throws IOException if worktree creation fails
      */
@@ -59,9 +79,12 @@ public final class ValidationWorkspaceService {
         Objects.requireNonNull(requesterWorktreePath, "requesterWorktreePath");
         Objects.requireNonNull(impl, "impl");
 
+        // Safely migrate obsolete in-tree validation worktrees if present
+        migrateLegacyInTreeValidation(projectRoot);
+
         String token = extractToken(handle);
         String worktreeName = token + "-r" + revisionNumber;
-        Path validationRoot = projectRoot.resolve(VALIDATION_DIR);
+        Path validationRoot = resolveValidationRoot(projectRoot);
         Files.createDirectories(validationRoot);
         Path worktreePath = validationRoot.resolve(worktreeName);
 
@@ -107,7 +130,6 @@ public final class ValidationWorkspaceService {
             return;
         }
         try {
-            // Find the git top-level for this worktree
             Path topLevel = resolveGitTopLevel(worktreePath);
             runGit(topLevel, "worktree", "remove", "--force",
                     worktreePath.toAbsolutePath().toString());
@@ -133,7 +155,7 @@ public final class ValidationWorkspaceService {
         Objects.requireNonNull(handle, "handle");
         String token = extractToken(handle);
         String worktreeName = token + "-r" + revisionNumber;
-        Path candidate = projectRoot.resolve(VALIDATION_DIR).resolve(worktreeName);
+        Path candidate = resolveValidationRoot(projectRoot).resolve(worktreeName);
         if (Files.exists(candidate) && Files.isDirectory(candidate)) {
             return Optional.of(candidate.toAbsolutePath().normalize());
         }
@@ -141,7 +163,7 @@ public final class ValidationWorkspaceService {
     }
 
     /**
-     * Discovers all abandoned validation worktrees under the project root.
+     * Discovers all abandoned validation worktrees under the external validation root.
      * Used for diagnostics and restart cleanup.
      *
      * @param projectRoot absolute project root path
@@ -149,7 +171,7 @@ public final class ValidationWorkspaceService {
      */
     public List<Path> discoverAbandonedWorktrees(Path projectRoot) {
         Objects.requireNonNull(projectRoot, "projectRoot");
-        Path validationRoot = projectRoot.resolve(VALIDATION_DIR);
+        Path validationRoot = resolveValidationRoot(projectRoot);
         if (!Files.isDirectory(validationRoot)) {
             return List.of();
         }
@@ -161,8 +183,46 @@ public final class ValidationWorkspaceService {
         return List.copyOf(result);
     }
 
+    private static void migrateLegacyInTreeValidation(Path projectRoot) {
+        Path legacyDir = projectRoot.resolve(".synesis/validation");
+        if (Files.isDirectory(legacyDir)) {
+            try (var stream = Files.list(legacyDir)) {
+                stream.filter(Files::isDirectory).forEach(dir -> {
+                    try {
+                        runGit(projectRoot, "worktree", "remove", "--force", dir.toAbsolutePath().toString());
+                    } catch (Exception ignored) {
+                    }
+                });
+                try {
+                    Files.deleteIfExists(legacyDir);
+                } catch (Exception ignored) {
+                }
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private static String resolveProjectId(Path projectRoot) {
+        Path projFile = projectRoot.resolve(".synesis/project.json");
+        if (Files.exists(projFile)) {
+            try {
+                String content = Files.readString(projFile);
+                int idx = content.indexOf("\"projectId\"");
+                if (idx != -1) {
+                    int colon = content.indexOf(':', idx);
+                    int q1 = content.indexOf('"', colon + 1);
+                    int q2 = content.indexOf('"', q1 + 1);
+                    if (colon != -1 && q1 != -1 && q2 != -1) {
+                        return content.substring(q1 + 1, q2);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return "default-project";
+    }
+
     private static String extractToken(CapabilityRequestHandle handle) {
-        // req_TOKEN → use the TOKEN part, lowercased for filesystem safety
         String value = handle.value();
         int underscore = value.indexOf('_');
         return (underscore >= 0 ? value.substring(underscore + 1) : value).toLowerCase(java.util.Locale.ROOT);
@@ -193,7 +253,7 @@ public final class ValidationWorkspaceService {
         Process proc = pb.start();
         String diff = new String(proc.getInputStream().readAllBytes());
         try {
-            proc.waitFor(); // non-zero is normal for diffs with changes
+            proc.waitFor();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("git diff interrupted", e);
@@ -250,7 +310,7 @@ public final class ValidationWorkspaceService {
         try {
             int code = proc.waitFor();
             if (code != 0) {
-                return path; // fallback
+                return path;
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

@@ -1,0 +1,185 @@
+package org.synesis.coordination;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
+/**
+ * Binary codec for Stage 2B Slice 3 task snapshot events.
+ *
+ * @param taskId                 task UUID
+ * @param snapshotId             snapshot locator ID
+ * @param nodeId                 worker node ID
+ * @param supervisorId           worker supervisor ID
+ * @param workerId               worker ID
+ * @param providerSessionId      provider session ID
+ * @param baseCommit             base commit SHA
+ * @param commitSha              commit SHA
+ * @param changedPaths           list of changed paths
+ * @param capabilityDependencies list of capability request handles
+ * @param summary                task completion summary
+ * @since 1.0
+ */
+public record TaskSnapshotPayload(
+        UUID taskId,
+        String snapshotId,
+        String nodeId,
+        String supervisorId,
+        String workerId,
+        String providerSessionId,
+        String baseCommit,
+        String commitSha,
+        List<String> changedPaths,
+        List<String> capabilityDependencies,
+        String summary
+) {
+
+    private static final int MAGIC = 0x534E4150; // "SNAP"
+    private static final int VERSION = 1;
+    private static final int MAX_TEXT = 64 * 1024;
+
+    /**
+     * Compact constructor.
+     *
+     * @param taskId                 task UUID
+     * @param snapshotId             snapshot locator ID
+     * @param nodeId                 worker node ID
+     * @param supervisorId           worker supervisor ID
+     * @param workerId               worker ID
+     * @param providerSessionId      provider session ID
+     * @param baseCommit             base commit SHA
+     * @param commitSha              commit SHA
+     * @param changedPaths           list of changed paths
+     * @param capabilityDependencies list of capability dependencies
+     * @param summary                task completion summary
+     */
+    public TaskSnapshotPayload {
+        Objects.requireNonNull(taskId, "taskId");
+        Objects.requireNonNull(snapshotId, "snapshotId");
+        Objects.requireNonNull(nodeId, "nodeId");
+        Objects.requireNonNull(supervisorId, "supervisorId");
+        Objects.requireNonNull(workerId, "workerId");
+        Objects.requireNonNull(providerSessionId, "providerSessionId");
+        Objects.requireNonNull(baseCommit, "baseCommit");
+        Objects.requireNonNull(commitSha, "commitSha");
+        changedPaths = List.copyOf(Objects.requireNonNull(changedPaths, "changedPaths"));
+        capabilityDependencies = List.copyOf(Objects.requireNonNull(capabilityDependencies, "capabilityDependencies"));
+        Objects.requireNonNull(summary, "summary");
+    }
+
+    /**
+     * Encodes this payload into binary format.
+     *
+     * @return encoded bytes
+     */
+    public byte[] encode() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC);
+            out.writeInt(VERSION);
+            writeUuid(out, taskId);
+            writeText(out, snapshotId);
+            writeText(out, nodeId);
+            writeText(out, supervisorId);
+            writeText(out, workerId);
+            writeText(out, providerSessionId);
+            writeText(out, baseCommit);
+            writeText(out, commitSha);
+
+            out.writeInt(changedPaths.size());
+            for (String p : changedPaths) {
+                writeText(out, p);
+            }
+            out.writeInt(capabilityDependencies.size());
+            for (String dep : capabilityDependencies) {
+                writeText(out, dep);
+            }
+            writeText(out, summary);
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    /**
+     * Decodes a {@link TaskSnapshotPayload} from binary format.
+     *
+     * @param encoded encoded bytes
+     * @return decoded payload
+     * @throws IOException if malformed or unsupported format
+     */
+    public static TaskSnapshotPayload decode(byte[] encoded) throws IOException {
+        Objects.requireNonNull(encoded, "encoded payload");
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC || in.readInt() != VERSION) {
+                throw new IOException("Unsupported task snapshot payload format");
+            }
+            UUID taskId = readUuid(in);
+            String snapshotId = readText(in);
+            String nodeId = readText(in);
+            String supervisorId = readText(in);
+            String workerId = readText(in);
+            String providerSessionId = readText(in);
+            String baseCommit = readText(in);
+            String commitSha = readText(in);
+
+            int pathCount = in.readInt();
+            List<String> changedPaths = new ArrayList<>(pathCount);
+            for (int i = 0; i < pathCount; i++) {
+                changedPaths.add(readText(in));
+            }
+
+            int depCount = in.readInt();
+            List<String> deps = new ArrayList<>(depCount);
+            for (int i = 0; i < depCount; i++) {
+                deps.add(readText(in));
+            }
+
+            String summary = readText(in);
+            return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,
+                    providerSessionId, baseCommit, commitSha, changedPaths, deps, summary);
+        } catch (RuntimeException failure) {
+            throw new IOException("Malformed task snapshot payload", failure);
+        }
+    }
+
+    private static void writeUuid(DataOutputStream out, UUID val) throws IOException {
+        out.writeLong(val.getMostSignificantBits());
+        out.writeLong(val.getLeastSignificantBits());
+    }
+
+    private static UUID readUuid(DataInputStream in) throws IOException {
+        return new UUID(in.readLong(), in.readLong());
+    }
+
+    private static void writeText(DataOutputStream out, String val) throws IOException {
+        byte[] b = val.getBytes(StandardCharsets.UTF_8);
+        if (b.length > MAX_TEXT) {
+            throw new IOException("text exceeds payload bound");
+        }
+        out.writeInt(b.length);
+        out.write(b);
+    }
+
+    private static String readText(DataInputStream in) throws IOException {
+        int len = in.readInt();
+        if (len < 0 || len > MAX_TEXT) {
+            throw new IOException("Invalid text length in payload");
+        }
+        byte[] b = in.readNBytes(len);
+        if (b.length != len) {
+            throw new IOException("Truncated payload");
+        }
+        return new String(b, StandardCharsets.UTF_8);
+    }
+}
