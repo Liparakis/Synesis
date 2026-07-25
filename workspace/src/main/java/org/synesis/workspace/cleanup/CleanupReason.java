@@ -3,7 +3,7 @@ package org.synesis.workspace.cleanup;
 import java.util.Objects;
 
 /**
- * Stable, machine-readable cleanup evaluation reason codes.
+ * Stable, machine-readable cleanup evaluation and execution reason codes.
  *
  * @since 1.0
  */
@@ -141,7 +141,132 @@ public enum CleanupReason {
     /**
      * Aggregate storage exceeds warning threshold budget.
      */
-    DISK_BUDGET_WARNING("disk_budget_warning");
+    DISK_BUDGET_WARNING("disk_budget_warning"),
+
+    /**
+     * Persisted cleanup plan could not be found.
+     */
+    CLEANUP_PLAN_NOT_FOUND("cleanup_plan_not_found"),
+
+    /**
+     * Persisted cleanup plan is malformed or invalid.
+     */
+    CLEANUP_PLAN_INVALID("cleanup_plan_invalid"),
+
+    /**
+     * Cleanup plan preconditions changed since preparation.
+     */
+    CLEANUP_PLAN_STALE("cleanup_plan_stale"),
+
+    /**
+     * Project cleanup lock is currently held by another process.
+     */
+    CLEANUP_EXECUTION_BUSY("cleanup_execution_busy"),
+
+    /**
+     * Entry was already completed in a previous execution run.
+     */
+    CLEANUP_ENTRY_ALREADY_COMPLETED("cleanup_entry_already_completed"),
+
+    /**
+     * Preconditions changed at execution time.
+     */
+    CLEANUP_PRECONDITION_CHANGED("cleanup_precondition_changed"),
+
+    /**
+     * Resource is active at execution time.
+     */
+    CLEANUP_RESOURCE_ACTIVE("cleanup_resource_active"),
+
+    /**
+     * Resource is recoverable at execution time.
+     */
+    CLEANUP_RESOURCE_RECOVERABLE("cleanup_resource_recoverable"),
+
+    /**
+     * Resource is dirty at execution time.
+     */
+    CLEANUP_RESOURCE_DIRTY("cleanup_resource_dirty"),
+
+    /**
+     * Retention window has not expired at execution time.
+     */
+    CLEANUP_RETENTION_NOT_EXPIRED("cleanup_retention_not_expired"),
+
+    /**
+     * Canonical path identity changed at execution time.
+     */
+    CLEANUP_PATH_IDENTITY_CHANGED("cleanup_path_identity_changed"),
+
+    /**
+     * Git repository identity changed at execution time.
+     */
+    CLEANUP_GIT_IDENTITY_CHANGED("cleanup_git_identity_changed"),
+
+    /**
+     * Git HEAD commit SHA changed at execution time.
+     */
+    CLEANUP_HEAD_CHANGED("cleanup_head_changed"),
+
+    /**
+     * Git worktree registration status changed at execution time.
+     */
+    CLEANUP_REGISTRATION_CHANGED("cleanup_registration_changed"),
+
+    /**
+     * Durable event or session state changed at execution time.
+     */
+    CLEANUP_DURABLE_STATE_CHANGED("cleanup_durable_state_changed"),
+
+    /**
+     * Ownership claim reference is present.
+     */
+    CLEANUP_OWNERSHIP_REFERENCE_PRESENT("cleanup_ownership_reference_present"),
+
+    /**
+     * Active dependency reference is present.
+     */
+    CLEANUP_DEPENDENCY_REFERENCE_PRESENT("cleanup_dependency_reference_present"),
+
+    /**
+     * Unexpected content encountered in target directory or file.
+     */
+    CLEANUP_UNEXPECTED_CONTENT("cleanup_unexpected_content"),
+
+    /**
+     * Git worktree remove command failed.
+     */
+    CLEANUP_GIT_REMOVAL_FAILED("cleanup_git_removal_failed"),
+
+    /**
+     * Exact file deletion failed.
+     */
+    CLEANUP_EXACT_DELETE_FAILED("cleanup_exact_delete_failed"),
+
+    /**
+     * Orphan resource was successfully quarantined.
+     */
+    CLEANUP_QUARANTINE_COMPLETED("cleanup_quarantine_completed"),
+
+    /**
+     * Resource type does not support quarantine.
+     */
+    CLEANUP_QUARANTINE_NOT_SUPPORTED("cleanup_quarantine_not_supported"),
+
+    /**
+     * Atomic filesystem move unavailable for quarantine.
+     */
+    CLEANUP_ATOMIC_MOVE_UNAVAILABLE("cleanup_atomic_move_unavailable"),
+
+    /**
+     * Postcondition verification failed after operation.
+     */
+    CLEANUP_POSTCONDITION_FAILED("cleanup_postcondition_failed"),
+
+    /**
+     * Resource requires human review or doctor reconciliation.
+     */
+    CLEANUP_REQUIRES_HUMAN_REVIEW("cleanup_requires_human_review");
 
     private final String code;
 

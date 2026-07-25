@@ -68,6 +68,19 @@ Post-MVP Hardening Slice 1 is DONE. Read-only lifecycle inventory and cleanup pl
 - Tests: `LifecyclePathVerifierTest`, `CleanupEligibilityServiceTest`, `ProcessInspectorTest`, `CleanupCommandTest`, `FullMutationSafetyTest` (proves zero mutations).
 - Full root `./gradlew.bat check --no-daemon` BUILD SUCCESSFUL (49 tasks, all pass).
 
+## SYN-014B implementation state
+
+Post-MVP Hardening Slice 2 is DONE at CP-0188. Controlled lifecycle cleanup execution implemented:
+- Immutable persisted cleanup plan store (`CleanupPlanStore`, `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-plans\<plan-id>.json`. Verified canonical SHA-256 content hashes.
+- Project-scoped execution lock (`CleanupExecutionLock`) at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-execution.lock`.
+- Append-only cleanup execution journal (`CleanupExecutionJournal`, `CleanupExecutionRecord`, `CleanupEntryExecutionState`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-executions\<execution-id>.jsonl`.
+- Safe Git worktree removal for finalized worker, completed validation, and integrated integration worktrees using `git worktree remove <path>` (NO `--force`!).
+- Exact temporary file deletion and empty temp parent directory cleanup.
+- Atomic orphan resource quarantine (`LifecycleQuarantineService`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\quarantine\<quarantine-id>\` writing quarantine manifests.
+- CLI command options added: `synesis cleanup --prepare`, `synesis cleanup --show-plan <plan-id>`, `synesis cleanup --execute <plan-id>`.
+- 10 new test classes added (PlanPersistenceTest, StalePlanTest, WorkerCleanupTest, ValidationAndIntegrationCleanupTest, TemporaryFileCleanupTest, QuarantineTest, LockAndConcurrencyTest, JournalAndRestartTest, NoForceAndSafetyArchitectureTest, Slice2MutationBoundaryTest).
+- Full root `./gradlew.bat check --no-daemon` BUILD SUCCESSFUL (49 tasks, all pass).
+
 ## Implementation state
 
 The project contains bounded identity, automatic identity bootstrap, signed

@@ -123,8 +123,12 @@ public final class LifecyclePathVerifier {
 
     private static boolean verifyGitCommonDirectory(Path controlRoot, Path worktreePath) {
         try {
-            Path expectedCommon = Path.of(runGit(controlRoot, "rev-parse", "--git-common-dir")).toAbsolutePath().normalize();
-            Path actualCommon = Path.of(runGit(worktreePath, "rev-parse", "--git-common-dir")).toAbsolutePath().normalize();
+            String expectedStr = runGit(controlRoot, "rev-parse", "--git-common-dir");
+            Path expectedCommon = controlRoot.resolve(expectedStr).toAbsolutePath().normalize();
+
+            String actualStr = runGit(worktreePath, "rev-parse", "--git-common-dir");
+            Path actualCommon = worktreePath.resolve(actualStr).toAbsolutePath().normalize();
+
             Path realExpected = Files.exists(expectedCommon) ? expectedCommon.toRealPath() : expectedCommon;
             Path realActual = Files.exists(actualCommon) ? actualCommon.toRealPath() : actualCommon;
             return realExpected.equals(realActual);

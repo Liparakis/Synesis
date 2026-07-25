@@ -86,7 +86,8 @@ public final class CleanupEligibilityService {
             gitRegState = "REGISTERED";
             try {
                 gitHead = runGit(path, "rev-parse", "HEAD");
-                gitCommonDir = runGit(path, "rev-parse", "--git-common-dir");
+                String rawCommon = runGit(path, "rev-parse", "--git-common-dir");
+                gitCommonDir = path.resolve(rawCommon).toAbsolutePath().normalize().toString();
                 String porcelain = runGit(path, "status", "--porcelain");
                 if (!porcelain.isBlank()) {
                     isDirty = true;

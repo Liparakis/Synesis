@@ -510,7 +510,17 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Scope boundary: Read-only at runtime. Zero deletion, zero process termination, zero Git mutations.
 - Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL; FullMutationSafetyTest PASS; CleanupEligibilityServiceTest PASS; CleanupCommandTest PASS; ProcessInspectorTest PASS; LifecyclePathVerifierTest PASS.
 
+## SYN-014B
 
+- ID: SYN-014B
+- Priority: P0
+- Title: Post-MVP Hardening Slice 2: Controlled lifecycle cleanup execution
+- Status: DONE
+- Purpose: Implement immutable plan persistence, staleness verification, project execution lock, execution journal, safe worktree removal, temporary file deletion, orphan quarantine, and CLI command options (`--prepare`, `--show-plan`, `--execute`).
+- Dependencies: SYN-014A DONE at CP-0187.
+- Acceptance criteria: immutable plan store, project execution lock, execution journal, safe worktree removal via git worktree remove without --force, exact file deletion, quarantine with atomic move, `synesis cleanup --prepare / --show-plan / --execute`, unit/integration/mutation tests passing, full `.\gradlew.bat check --no-daemon` passing.
+- Scope boundary: No force worktree deletion, no recursive force deletion, no process termination, no Git worktree prune, no MCP tool changes.
+- Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL; PlanPersistenceTest PASS; StalePlanTest PASS; WorkerCleanupTest PASS; ValidationAndIntegrationCleanupTest PASS; TemporaryFileCleanupTest PASS; QuarantineTest PASS; LockAndConcurrencyTest PASS; JournalAndRestartTest PASS; NoForceAndSafetyArchitectureTest PASS; Slice2MutationBoundaryTest PASS.
 
 ## SYN-001
 

@@ -53,7 +53,7 @@ class CleanupCommandTest {
         int exitCode = command.call();
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, exitCode);
-        assertTrue(invocation.errorOutput().contains("Cleanup execution is not available in this version. Use --dry-run."));
+        assertTrue(invocation.errorOutput().contains("Cleanup execution is not available in this version"));
     }
 
     @Test

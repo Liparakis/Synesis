@@ -16,6 +16,20 @@ Append-only operational history.
 - Remaining work:
 - Exact continuation:
 
+## 2026-07-25 — Post-MVP Hardening Slice 2: Controlled lifecycle cleanup execution
+
+- Timestamp: 2026-07-25 Europe/Athens
+- Checkpoint: CP-0188
+- Active task: SYN-014B
+- Completed work: Implemented controlled lifecycle cleanup execution using Slice 1 foundation. Created `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`, `CleanupPlanStore`, `CleanupExecutionLock`, `CleanupExecutionRecord`, `CleanupEntryExecutionState`, `CleanupExecutionJournal`, `LifecycleQuarantineService`, and `CleanupExecutionService`. Extended `CleanupCommand` with `--prepare`, `--show-plan <plan-id>`, and `--execute <plan-id>`. Added 10 unit/integration/mutation tests proving safe worktree removal (without `--force`), exact file deletion, atomic quarantine move, lock acquisition, journal idempotency, and zero control checkout / durable state mutations.
+- Files changed: workspace/src/main/java/org/synesis/workspace/cleanup/*, workspace/src/test/java/org/synesis/workspace/cleanup/*, cli/src/main/java/org/synesis/cli/command/CleanupCommand.java, cli/src/test/java/org/synesis/cli/Slice2MutationBoundaryTest.java, cli/src/test/java/org/synesis/cli/CleanupCommandTest.java, docs/agent/*
+- Commands run: `.\gradlew.bat check --no-daemon`, `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Results: BUILD SUCCESSFUL — 49 actionable tasks, all pass. Checkpoint CP-0188 created.
+- Decisions: Atomic move for quarantine; non-forced git worktree removal for worktrees; strict precondition re-verification at execution time; project-scoped lock stored outside control checkout under admin directory.
+- Failed attempts: `NoForceAndSafetyArchitectureTest` initially failed due to comments containing `--force`; fixed by stripping comments before code checks; `WorkerCleanupTest` failed due to relative git-common-dir output resolution; fixed in `LifecyclePathVerifier` and `CleanupEligibilityService`.
+- Remaining work: SYN-014C through SYN-014E (remaining hardening slices).
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-07-25 — Post-MVP Hardening Slice 1: Read-only lifecycle inventory and cleanup dry-run
 
 - Timestamp: 2026-07-25 Europe/Athens
