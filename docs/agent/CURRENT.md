@@ -11,11 +11,11 @@
 
 ## Objective
 
-Complete REAL-PROVIDER ACCEPTANCE — Post-MVP Hardening Slice 5C from CP-0199, preserving the five pre-existing CLI edits and adding only acceptance-proven fixes.
+Complete REAL-PROVIDER ACCEPTANCE AND EVIDENCE CORRECTION — Post-MVP Hardening Slice 5C.1 from CP-0200.
 
 ## Immediate slice
 
-Slice 5B.2 is complete. Slice 5C validated signed Version A/B installation, coexistence, rollback, reactivation, and the unchanged 11-tool MCP surface in an isolated project. A bootstrap defect was fixed: Windows stable launchers now hash manifests through .NET SHA-256 instead of relying on `Get-FileHash` under `-NoProfile`. Real Codex execution reached the installed CLI but was rejected by its ChatGPT-account model configuration; Antigravity is installed as a GUI but no usable real MCP session was established.
+The five intentional CLI edits are committed at `eef0fd89b5d89822f567110f048cd3dcb65a3b25`. Slice 5C.1 corrected preservation evidence semantics: update-only and rollback-only event/snapshot comparisons are true, while collaboration append-only evidence remains unclaimed because real provider sessions are unavailable. The updater remains at Version B with the exact 11-tool MCP surface.
 
 ## Verification target
 
@@ -23,7 +23,7 @@ Bootstrap Go tests/vet, root Gradle checks, signed Version A/B lifecycle evidenc
 
 ## Immediate next action
 
-Review CP-0200 and obtain a supported real Codex/Antigravity session path before claiming Slice 5C complete.
+Create CP-0201 with `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`, then stop with provider-blocked acceptance recorded.
 
 ## Work completed
 
@@ -31,4 +31,4 @@ Slice 5B provider/project migration and 5B.1 transaction integration are complet
 
 ## Current failures
 
-Codex real-session validation failed because the installed CLI rejected both its configured `gpt-5.6-luna` model and a `gpt-5` override for the ChatGPT account; Antigravity has an installed GUI but no verified MCP/session launch path was available. No older production project schema transition exists by design; restoration remains proven through the test-only injected migration seam.
+Codex CLI `0.140.0` is authenticated with ChatGPT but rejects the configured `gpt-5.6-luna` model (and the tested `gpt-5` override) before Synesis MCP initialization. Antigravity is installed and configured, but no real workspace/tool-discovery session was established under the non-UI scope. No provider collaboration evidence can be claimed.

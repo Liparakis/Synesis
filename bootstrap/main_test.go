@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPlatformIDIsSupported(t *testing.T) {
@@ -628,11 +629,21 @@ func runPreparedUpdate(t *testing.T, manifest, installRoot string) error {
 	if err != nil {
 		return err
 	}
+	var newest string
+	var newestAt time.Time
 	for _, entry := range entries {
 		if strings.HasSuffix(entry.Name(), ".plan.json") {
-			id := strings.TrimSuffix(entry.Name(), ".plan.json")
-			return runInstall("update", []string{"--execute", "--plan", id, "--install-dir", installRoot})
+			info, infoErr := entry.Info()
+			if infoErr != nil || info.ModTime().After(newestAt) {
+				newest = strings.TrimSuffix(entry.Name(), ".plan.json")
+				if infoErr == nil {
+					newestAt = info.ModTime()
+				}
+			}
 		}
+	}
+	if newest != "" {
+		return runInstall("update", []string{"--execute", "--plan", newest, "--install-dir", installRoot})
 	}
 	return errors.New("prepared plan missing")
 }

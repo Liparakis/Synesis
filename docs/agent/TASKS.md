@@ -554,14 +554,14 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - ID: SYN-014E
 - Priority: P0
-- Title: Post-MVP Hardening Slice 5C: Real-provider acceptance and lifecycle hardening
+- Title: Post-MVP Hardening Slice 5C.1: Real-provider acceptance and evidence correction
 - Status: ACTIVE
-- Purpose: Validate real-provider-compatible Version A/B installation, coexistence, rollback, reactivation, and provider/project identity preservation after the completed Slice 5B.2 transaction.
+- Purpose: Commit the intentional CLI edits, correct update/rollback preservation evidence boundaries, and complete real-provider acceptance where provider access permits.
 - Dependencies: SYN-014D DONE at CP-0190; existing SYN-009C/SYN-009D bootstrap evidence.
-- Acceptance criteria: signed Version A/B lifecycle passes with an old process remaining alive during update; rollback and reactivation use fresh immutable plans; invalid bundles are rejected before pointer mutation; provider/project identities and unrelated settings are preserved; real Codex and Antigravity sessions are validated where available; MCP surface remains unchanged.
+- Acceptance criteria: five CLI edits committed; update-only and rollback-only history/snapshot comparisons are explicit and pass; real Codex and Antigravity sessions are validated where available; MCP surface remains unchanged; no false collaboration claim is made.
 - Required tests: signed bundle verification, old-process coexistence, rollback/reactivation, invalid-bundle rejection, provider/project preservation, real-provider MCP tool discovery, Doctor read-only, and applicable Gradle/bootstrap checks.
 - Scope boundary: no new MCP tools/schemas, process termination, old-version deletion, remote update service, event-log rewriting, snapshot deletion, provider credential fabrication, or public release work.
-- Evidence: Version A `9560b6404e55ca49ba369d3e59b53334670608d8` and Version B `4f1ad221d821b6f77c008f3efe2ef4596005374e` signed bundles installed; A→B coexistence, B→A rollback, and fresh B reactivation passed with 11 tools unchanged; invalid bundle rejected; project and provider settings preserved/restored; bootstrap Go tests/vet and root Gradle check pass. Codex real execution was attempted but blocked by the installed CLI/account model mismatch; Antigravity GUI presence was confirmed but a real MCP session was not established.
+- Evidence: CLI edits committed at `eef0fd89b5d89822f567110f048cd3dcb65a3b25`; signed A/B lifecycle, invalid-bundle rejection, and 11-tool MCP invariance remain verified; update-only and rollback-only event/snapshot/identity comparisons pass with empty pre-existing coordination sets; Codex `0.140.0` is blocked by external ChatGPT-account model access; Antigravity real MCP discovery/session is unproven; no collaboration claim is made.
 
 ## SYN-001
 
