@@ -561,7 +561,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: replay verifies all existing projections and immutable references; update plans contain migration references and compatibility state; migrations execute only after staged self-test and before pointer activation; failures restore migrations and the old pointer deterministically; active-session/schema safety and read-only Doctor findings are enforced; MCP surface remains unchanged.
 - Required tests: projection replay/equivalence, semantic mismatch, migration ordering, transaction journal/restart, rollback, active-session/schema compatibility, Doctor read-only, and applicable Gradle/bootstrap checks.
 - Scope boundary: no new migration features, remote update service, process shutdown, malformed-config repair, schema downgrade, event-log rewriting, snapshot deletion, real provider acceptance, or public release work.
-- Evidence: Slice 5B committed at 885048bec83370b9178de9a28707dfaa0dd3ad79; Slice 5B.1 replay, semantic-equivalence, migration-ordering, rollback, Doctor, and restart-idempotence checks pass; bootstrap Go tests/vet and all required Gradle module/root checks pass; CP-0198 records the durable checkpoint. Real provider acceptance remains deferred to Slice 5C.
+- Evidence: Slice 5B committed at 885048bec83370b9178de9a28707dfaa0dd3ad79 and 5B.1 at f14588defa477585dee76e5d34770552e9cad5c7; Slice 5B.2 exact backup/restoration, injected failure, target-race, restart/idempotency, Doctor, bootstrap, module, and root checks pass; CP-0199 records the durable checkpoint. Real provider acceptance remains deferred to Slice 5C.
 
 ## SYN-001
 

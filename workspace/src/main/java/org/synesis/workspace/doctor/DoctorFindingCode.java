@@ -229,7 +229,19 @@ public enum DoctorFindingCode {
     MIGRATION_BACKUP_MISSING("migration_backup_missing"),
 
     /** An active session blocks project migration. */
-    ACTIVE_SESSION_BLOCKS_MIGRATION("active_session_blocks_project_migration");
+    ACTIVE_SESSION_BLOCKS_MIGRATION("active_session_blocks_project_migration"),
+
+    /** Project metadata restoration is pending or incomplete. */
+    PROJECT_RESTORATION_PENDING("project_restoration_pending"),
+
+    /** Project metadata restoration failed and needs review. */
+    PROJECT_RESTORATION_REQUIRES_REVIEW("project_restoration_requires_human_review"),
+
+    /** A failed migration was restored successfully. */
+    PROJECT_MIGRATION_RESTORED("project_migration_restored"),
+
+    /** Rollback restoration did not reach a verified terminal state. */
+    ROLLBACK_RESTORATION_INCOMPLETE("rollback_restoration_incomplete");
 
     private final String value;
 

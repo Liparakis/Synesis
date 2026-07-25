@@ -214,7 +214,7 @@ func executePreparedMigrations(paths installPaths, plan updatePlan) (func() erro
 	}
 	refs := append([]migrationReference{}, plan.ProviderMigrations...)
 	refs = append(refs, plan.ProjectMigration)
-	backed := make([]struct{ source, backup string }, 0, len(refs))
+	backed := make([]struct{ source, backup, expected string }, 0, len(refs))
 	seen := map[string]bool{}
 	for _, ref := range refs {
 		if ref.State != "MIGRATION_REQUIRED" || ref.SourcePath == "" || seen[ref.SourcePath] {
@@ -232,16 +232,25 @@ func executePreparedMigrations(paths installPaths, plan updatePlan) (func() erro
 		if err := os.WriteFile(backup, data, 0o600); err != nil {
 			return nil, err
 		}
-		backed = append(backed, struct{ source, backup string }{ref.SourcePath, backup})
+		backed = append(backed, struct{ source, backup, expected string }{ref.SourcePath, backup, ref.SourceHash})
 	}
 	restore := func() error {
 		for _, item := range backed {
+			if info, err := os.Lstat(item.source); err != nil || info.Mode()&os.ModeSymlink != 0 {
+				return errors.New("migration restore target changed")
+			}
 			data, err := os.ReadFile(item.backup)
 			if err != nil {
 				return err
 			}
+			if sha256Hex(data) != item.expected {
+				return errors.New("migration backup hash mismatch")
+			}
 			if err := os.WriteFile(item.source, data, 0o600); err != nil {
 				return err
+			}
+			if restored, err := os.ReadFile(item.source); err != nil || sha256Hex(restored) != sha256Hex(data) {
+				return errors.New("migration restore hash mismatch")
 			}
 		}
 		return nil
@@ -290,7 +299,8 @@ func runStableMigrationCommand(launcher string, args []string, projectRoot strin
 	}
 	text := string(output)
 	if strings.Contains(text, "REQUIRES_HUMAN_REVIEW") || strings.Contains(text, "STALE") ||
-		strings.Contains(text, "MIGRATION_RESULT=FAILED") || strings.Contains(text, "MIGRATION_RESULT=ROLLBACK_UNSAFE") {
+		strings.Contains(text, "MIGRATION_RESULT=FAILED") || strings.Contains(text, "MIGRATION_RESULT=FAILED_RESTORED") ||
+		strings.Contains(text, "MIGRATION_RESULT=ROLLBACK_UNSAFE") {
 		return errors.New("migration command reported unresolved state")
 	}
 	return nil

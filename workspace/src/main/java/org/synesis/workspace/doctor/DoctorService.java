@@ -385,7 +385,7 @@ public final class DoctorService {
                     List<String> lines = Files.readAllLines(journal, StandardCharsets.UTF_8);
                     if (lines.isEmpty()) throw new IOException("empty journal");
                     for (String line : lines) {
-                        if (!line.contains("outcome=") && !(ProviderJson.parse(line) instanceof Map<?, ?>)) {
+                        if (!line.contains("outcome=") && !line.contains("state=") && !(ProviderJson.parse(line) instanceof Map<?, ?>)) {
                             throw new IOException("invalid journal entry");
                         }
                     }
@@ -407,6 +407,31 @@ public final class DoctorService {
                                 DoctorConfidence.CONFIRMED, "Active session blocks migration", "Project migration is waiting for incompatible session state to quiesce.",
                                 "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
                                 computeHash(journal.getFileName().toString() + "_session"), Map.of()));
+                    }
+                    if (journalText.contains("RESTORE_REQUIRED") && !journalText.contains("RESTORE_VERIFIED")
+                            && !journalText.contains("RESTORE_FAILED_REQUIRES_REVIEW")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_RESTORATION_PENDING, DoctorSeverity.WARNING,
+                                DoctorConfidence.CONFIRMED, "Project restoration pending", "Project metadata restoration has not reached a verified terminal state.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString() + "_restore_pending"), Map.of()));
+                    }
+                    if (journalText.contains("RESTORE_FAILED_REQUIRES_REVIEW")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_RESTORATION_REQUIRES_REVIEW, DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED, "Project restoration requires review", "Project metadata restoration could not be proven safe.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString() + "_restore_review"), Map.of()));
+                    }
+                    if (journalText.contains("FAILED_RESTORED")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_MIGRATION_RESTORED, DoctorSeverity.INFO,
+                                DoctorConfidence.CONFIRMED, "Failed migration restored", "Project metadata was restored after migration failure.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString() + "_restored"), Map.of()));
+                    }
+                    if (journalText.contains("ROLLBACK_PENDING") || journalText.contains("ROLLBACK_REQUIRES_HUMAN_REVIEW")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.ROLLBACK_RESTORATION_INCOMPLETE, DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED, "Rollback restoration incomplete", "Rollback did not reach a verified restoration terminal state.",
+                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName().toString() + "_rollback"), Map.of()));
                     }
                     String last = lines.getLast();
                     if (!last.contains("COMPLETED") && !last.contains("SUCCESS") && !last.contains("ROLLED_BACK")

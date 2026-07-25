@@ -43,7 +43,10 @@ public final class MigrateCommand implements Callable<Integer> {
                 var result = service.execute(service.load(execute));
                 runtime.terminal().stdout("PROJECT_MIGRATION_RESULT=" + result.outcome());
                 runtime.terminal().stdout("REASON=" + result.reason());
-                return result.outcome() == ProjectMigrationService.Outcome.STALE ? 10 : 0;
+                return switch (result.outcome()) {
+                    case FAILED, FAILED_RESTORED, REQUIRES_HUMAN_REVIEW, ROLLBACK_UNSAFE, STALE, UNSUPPORTED_SCHEMA -> 10;
+                    default -> 0;
+                };
             }
             var entry = service.inspect(Path.of("."));
             runtime.terminal().stdout("PROJECT_MIGRATION_RESULT=" + (dryRun || !prepare ? "DRY_RUN" : "DRY_RUN"));
