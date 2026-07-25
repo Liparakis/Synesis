@@ -48,5 +48,5 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0034: Immutable repair plans and external administration storage — accepted for SYN-014D.
 - ADR-0035: Pre-mutation administrative file backups and exact atomic rollback — accepted for SYN-014D.
 - ADR-0036: Strict repair ownership boundary preserving signed event log, control checkout, and provider config — accepted for SYN-014D.
-
+- ADR-0037: Versioned immutable installation with atomic pointer activation — accepted for SYN-014E.
 

@@ -523,7 +523,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL; PlanPersistenceTest PASS; StalePlanTest PASS; WorkerCleanupTest PASS; ValidationAndIntegrationCleanupTest PASS; TemporaryFileCleanupTest PASS; QuarantineTest PASS; LockAndConcurrencyTest PASS; JournalAndRestartTest PASS; NoForceAndSafetyArchitectureTest PASS; Slice2MutationBoundaryTest PASS.
 
 - [x] **SYN-014C** — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation `[DONE]`
-- [/] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[ACTIVE]`
+- [x] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[DONE]`
+- [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[ACTIVE]`
 
 ## SYN-014C
 
@@ -542,12 +543,25 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-014D
 - Priority: P0
 - Title: Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Implement unified read-only DoctorService diagnostics (`synesis doctor`), 38 finding codes, severity/status/confidence models, actionable recommendations, read-only guarantees, and a separate, reviewable, narrowly scoped repair-plan system (`synesis repair`) with immutable persisted plans, project repair lock, execution journal, backup & rollback support, and safe administrative repairs.
 - Dependencies: SYN-014C DONE at CP-0189.
 - Acceptance criteria: DoctorService read-only by construction, DoctorCommand read-only, RepairPlan/Store/Lock/Journal, RepairBackupService, rollback support, 11 MCP tools unchanged, comprehensive test suite passing, full `.\gradlew.bat check --no-daemon` passing.
 - Scope boundary: No installer/updater changes, no process termination, no provider config modification, no event log rewriting, no snapshot deletion, no worktree force deletion, no new MCP tools.
 - Evidence: `.\gradlew.bat check --no-daemon` BUILD SUCCESSFUL at CP-0190; DoctorServiceTest PASS; RepairPlanTest PASS; DoctorCommandTest PASS; RepairCommandTest PASS.
+
+## SYN-014E
+
+- ID: SYN-014E
+- Priority: P0
+- Title: Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration
+- Status: ACTIVE
+- Purpose: Replace the flat installer activation model with immutable versioned payloads, a validated atomic active-version pointer, verified local bundle staging, prepared update execution, rollback evidence, and safe provider/project migration seams.
+- Dependencies: SYN-014D DONE at CP-0190; existing SYN-009C/SYN-009D bootstrap evidence.
+- Acceptance criteria: versioned payloads and stable launcher resolve safely; signed bundle manifests are verified; staged payloads are self-tested before activation; prepared plans, locks, journals, compare-and-set pointer activation, previous-version retention, and exact rollback are implemented; no process termination, old-version deletion, MCP surface change, event-log rewrite, or project/node identity replacement; applicable tests and full verification pass.
+- Required tests: bootstrap unit tests for pointer/path safety, manifest verification, staging, activation, rollback, lock/journal, and old-process coexistence; `go test ./...`; applicable Gradle checks.
+- Scope boundary: local bundles only; no remote update service, background polling, process shutdown, provider repair, event-log rewriting, snapshot deletion, or public release work.
+- Evidence: `bootstrap` `go test -count=1 ./...` and `go vet ./...` PASS; root `.`\gradlew.bat check --no-daemon PASS (49 actionable tasks); versioned pointer, staged self-test, prepared-plan, retention, rollback, and traversal tests PASS. Provider/project migration and real Codex/Antigravity acceptance remain unimplemented and unclaimed.
 
 ## SYN-001
 

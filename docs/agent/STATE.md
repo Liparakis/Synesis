@@ -83,6 +83,25 @@ Post-MVP Hardening Slice 2 is DONE at CP-0188. Controlled lifecycle cleanup exec
 
 ## Implementation state
 
+SYN-014E is the only active task at CP-0190. Slice 4 is complete and verified.
+Slice 5 evolves the existing Go bootstrap installer: retain the stable external
+root, move payloads beneath immutable version directories, select the active
+version through a validated pointer, stage and self-test before activation, and
+retain the prior version for rollback. Local bundle input remains the only
+update source. Provider/project migration is bounded by compare-and-set
+fingerprints and must preserve identities and signed history.
+
+Slice 5 evidence: `bootstrap` `go test -count=1 ./...` and `go vet ./...`
+PASS; root `.`\gradlew.bat check --no-daemon` PASS with 49 actionable tasks.
+New installs and updates use `versions/<version-hash>` plus
+`current.json`/`previous.json`; staged payloads carry a verified file manifest
+and are read-only after staging. Prepared plans live under
+`admin/update-plans`, locks under `admin/update-lock.json`, and execution
+evidence under `admin/update-executions`. Existing payloads are retained and
+rollback swaps pointers only. Provider/project migration and real
+Codex/Antigravity acceptance are not claimed because no verified global
+provider migration schema was found during the repository audit.
+
 The project contains bounded identity, automatic identity bootstrap, signed
 candidate descriptors and single-use invitations, direct candidate
 providers/racing, authenticated QUIC sessions, control readiness, graceful
@@ -259,5 +278,3 @@ only as the documented transport-failure or liveness-expiry category.
 - Pre-mutation backup and exact atomic rollback service (`RepairBackupService`) under `admin/repair-backups/<execution-id>/`.
 - MCP tools count remains exactly 11 tools; zero MCP surface breaking changes.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0190.
-
-

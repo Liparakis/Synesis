@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"os"
 	"os/exec"
@@ -89,12 +90,12 @@ func TestBootstrapInstallUpdateRollbackDoctorAndUninstall(t *testing.T) {
 	if err := runDoctor([]string{"--install-dir", installRoot}); err != nil {
 		t.Fatal(err)
 	}
-	if err := runInstall("update", []string{"--manifest", fileURL(m2), "--install-dir", installRoot}); err != nil {
+	if err := runPreparedUpdate(t, fileURL(m2), installRoot); err != nil {
 		t.Fatal(err)
 	}
 	assertStableVersion(t, paths, "0.2.0")
 	assertNoLegacyLayout(t, paths)
-	if err := runInstall("update", []string{"--manifest", fileURL(m3), "--install-dir", installRoot}); err == nil {
+	if err := runPreparedUpdate(t, fileURL(m3), installRoot); err == nil {
 		t.Fatal("invalid update activated")
 	}
 	assertStableVersion(t, paths, "0.2.0")
@@ -146,7 +147,7 @@ func TestLegacyLayoutMigration(t *testing.T) {
 	}
 	archive := writeBundleArchive(t, root, "0.2.0")
 	manifest := writeDevelopmentManifest(t, root, "0.2.0", archive)
-	if err := runInstall("update", []string{"--manifest", fileURL(manifest), "--install-dir", installRoot}); err != nil {
+	if err := runPreparedUpdate(t, fileURL(manifest), installRoot); err != nil {
 		t.Fatal(err)
 	}
 	assertStableVersion(t, paths, "0.2.0")
@@ -178,7 +179,7 @@ func TestLegacyMigrationFailureRestoresLegacyLayout(t *testing.T) {
 	}
 	archive := writeDoctorFailureBundleArchive(t, root, "0.2.0")
 	manifest := writeDevelopmentManifest(t, root, "0.2.0", archive)
-	if err := runInstall("update", []string{"--manifest", fileURL(manifest), "--install-dir", installRoot}); err == nil {
+	if err := runPreparedUpdate(t, fileURL(manifest), installRoot); err == nil {
 		t.Fatal("failed legacy migration activated")
 	}
 	if !fileExists(filepath.Join(paths.root, "current")) || !fileExists(filepath.Join(paths.root, "versions")) {
@@ -197,7 +198,7 @@ func TestFailedActivationRestoresPreviousStableBundle(t *testing.T) {
 	}
 	badArchive := writeDoctorFailureBundleArchive(t, root, "0.2.0")
 	badManifest := writeDevelopmentManifest(t, root, "0.2.0", badArchive)
-	if err := runInstall("update", []string{"--manifest", fileURL(badManifest), "--install-dir", installRoot}); err == nil {
+	if err := runPreparedUpdate(t, fileURL(badManifest), installRoot); err == nil {
 		t.Fatal("doctor failure activated")
 	}
 	paths, err := installationPaths(installRoot)
@@ -207,6 +208,73 @@ func TestFailedActivationRestoresPreviousStableBundle(t *testing.T) {
 	assertStableVersion(t, paths, "0.1.0")
 	if fileExists(paths.rollback) {
 		t.Fatal("rollback directory retained after failed activation")
+	}
+}
+
+func TestPreparedVersionedUpdateRetainsPayloadAndRollsBack(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	installRoot := filepath.Join(root, "install")
+	v1 := writeBundleArchive(t, root, "0.1.0")
+	v2 := writeBundleArchive(t, root, "0.2.0")
+	m1 := writeDevelopmentManifest(t, root, "0.1.0", v1)
+	m2 := writeDevelopmentManifest(t, root, "0.2.0", v2)
+	if err := runInstall("install", []string{"--manifest", fileURL(m1), "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runInstall("update", []string{"--prepare", "--manifest", fileURL(m2), "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	assertStableVersion(t, paths, "0.1.0")
+	entries, err := os.ReadDir(paths.plans)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planID := ""
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".plan.json") {
+			planID = strings.TrimSuffix(entry.Name(), ".plan.json")
+			break
+		}
+	}
+	if planID == "" {
+		t.Fatal("prepared plan was not persisted")
+	}
+	if err := runInstall("update", []string{"--execute", "--plan", planID, "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	assertStableVersion(t, paths, "0.2.0")
+	previous, _, err := readPointer(paths, paths.previous)
+	if err != nil || previous == nil || !fileExists(filepath.Join(paths.versions, previous.PayloadDirectory)) {
+		t.Fatal("previous immutable payload was not retained")
+	}
+	versionDirs, err := os.ReadDir(paths.versions)
+	if err != nil || len(versionDirs) != 2 {
+		t.Fatalf("retained payload count = %d, err=%v", len(versionDirs), err)
+	}
+	if err := runInstall("update", []string{"--rollback", "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	assertStableVersion(t, paths, "0.1.0")
+}
+
+func TestActivePointerRejectsTraversal(t *testing.T) {
+	paths, err := installationPaths(filepath.Join(t.TempDir(), "install"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(paths.root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.current, []byte(`{"schemaVersion":1,"version":"0.1.0","payloadDirectory":"../escape","manifestHash":"`+strings.Repeat("0", 64)+`"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readPointer(paths, paths.current); err == nil {
+		t.Fatal("pointer traversal accepted")
 	}
 }
 
@@ -234,7 +302,17 @@ func TestNativeBootstrapProcess(t *testing.T) {
 	m2 := writeDevelopmentManifest(t, root, "0.2.0", v2)
 	installRoot := filepath.Join(root, "install root")
 	runBootstrapBinary(t, binary, "install", "--manifest", fileURL(m1), "--install-dir", installRoot)
-	runBootstrapBinary(t, binary, "update", "--manifest", fileURL(m2), "--install-dir", installRoot)
+	output := runBootstrapBinaryOutput(t, binary, "update", "--prepare", "--manifest", fileURL(m2), "--install-dir", installRoot)
+	planID := ""
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.HasPrefix(line, "PLAN_ID=") {
+			planID = strings.TrimPrefix(line, "PLAN_ID=")
+		}
+	}
+	if planID == "" {
+		t.Fatal("native prepared update did not return a plan")
+	}
+	runBootstrapBinary(t, binary, "update", "--execute", "--plan", planID, "--install-dir", installRoot)
 	runBootstrapBinary(t, binary, "doctor", "--install-dir", installRoot)
 	runBootstrapBinary(t, binary, "uninstall", "--install-dir", installRoot)
 }
@@ -336,9 +414,16 @@ func TestRejectsInvalidSignatureAndArtifactMismatch(t *testing.T) {
 
 func runBootstrapBinary(t *testing.T, binary string, args ...string) {
 	t.Helper()
-	if output, err := exec.Command(binary, args...).CombinedOutput(); err != nil {
+	runBootstrapBinaryOutput(t, binary, args...)
+}
+
+func runBootstrapBinaryOutput(t *testing.T, binary string, args ...string) []byte {
+	t.Helper()
+	output, err := exec.Command(binary, args...).CombinedOutput()
+	if err != nil {
 		t.Fatalf("bootstrap %v failed: %v\n%s", args, err, output)
 	}
+	return output
 }
 
 func runInstalledBinary(t *testing.T, launcher string, args ...string) {
@@ -498,16 +583,20 @@ func fileURL(path string) string {
 
 func assertStableVersion(t *testing.T, paths installPaths, expected string) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(paths.root, "VERSION"))
-	if err != nil || strings.TrimSpace(string(data)) != expected {
-		t.Fatalf("stable version = %q, want %q", strings.TrimSpace(string(data)), expected)
+	pointer, _, err := readPointer(paths, paths.current)
+	if err != nil || pointer == nil || pointer.Version != expected {
+		actual := ""
+		if pointer != nil {
+			actual = pointer.Version
+		}
+		t.Fatalf("stable version = %q, want %q", actual, expected)
 	}
 }
 
 func assertNoLegacyLayout(t *testing.T, paths installPaths) {
 	t.Helper()
-	if fileExists(filepath.Join(paths.root, "versions")) || fileExists(filepath.Join(paths.root, "current")) {
-		t.Fatal("legacy layout remains under stable root")
+	if !fileExists(paths.versions) || !fileExists(paths.current) || fileExists(filepath.Join(paths.root, "current")) {
+		t.Fatal("versioned layout missing or legacy pointer remains under stable root")
 	}
 }
 
@@ -516,6 +605,28 @@ func withoutPathMutation(t *testing.T) {
 	previous := pathUpdater
 	pathUpdater = func(installPaths, bool) error { return nil }
 	t.Cleanup(func() { pathUpdater = previous })
+}
+
+func runPreparedUpdate(t *testing.T, manifest, installRoot string) error {
+	t.Helper()
+	if err := runInstall("update", []string{"--prepare", "--manifest", manifest, "--install-dir", installRoot}); err != nil {
+		return err
+	}
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(paths.plans)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".plan.json") {
+			id := strings.TrimSuffix(entry.Name(), ".plan.json")
+			return runInstall("update", []string{"--execute", "--plan", id, "--install-dir", installRoot})
+		}
+	}
+	return errors.New("prepared plan missing")
 }
 
 func TestRejectsArchiveTraversal(t *testing.T) {

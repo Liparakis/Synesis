@@ -128,6 +128,11 @@
 | Provider launcher resolution uses PATH or stable fallback without version paths | Java provider lifecycle/strict check | `ProviderApplicationServiceTest`, `:cli:bundleSmokeTest` | pass | PASS | SYN-009D |
 | Bounded prediction contract encoding, signed/hash-chained event persistence, deterministic lifecycle projection, restart replay, and illegal transition rejection | coordination unit tests | `PredictionCoordinationTest.signedEventsReplayAndRejectInvalidTransitions` | pass | PASS | SYN-012-CP-0136 |
 | Signed coordination commands, duplicate idempotency, durable command replay, and subscriber replay from a sequence cursor | coordination unit tests | `PredictionCoordinationTest.signedCommandsAreIdempotentAndReplayToSubscribers` | pass | PASS | SYN-012-CP-0136 |
+
+| Versioned immutable bootstrap payloads, safe pointer resolution, staged self-test, prepared plans, retention, rollback, and traversal rejection | Go unit/integration tests | `bootstrap/main_test.go` | pass | PASS (`go test -count=1 ./...`; `go vet ./...`) | SYN-014E |
+| Repository regression verification after bootstrap evolution | Gradle repository check | `./gradlew.bat check --no-daemon` (PowerShell `.\gradlew.bat`) | pass | PASS (49 actionable tasks) | SYN-014E |
+| Provider configuration migration for Codex and Antigravity | real provider migration/acceptance | no verified global schema or migration implementation in repository | required | NOT CLAIMED | SYN-014E |
+| Existing-project schema migration with identity/event/snapshot preservation | project migration tests | no Slice 5 implementation | required | NOT CLAIMED | SYN-014E |
 | Loopback HTTP command acceptance and SSE replay from an exclusive sequence cursor | coordination process/unit test | `PredictionCoordinationTest.loopbackHttpAcceptsCommandsAndReplaysSse` | pass | PASS | SYN-012-CP-0137 |
 | Semantic ownership returns `REQUEST_OWNER` without transferring a foreign claim | coordination unit test | `PredictionCoordinationTest.ownershipNeverTransfersWhenRequesterIsForeign` | pass | PASS | SYN-012-CP-0138 |
 | Two foreground supervisor inboxes submit, receive, accept, and locally replay one prediction | coordination integration test | `PredictionCoordinationTest.twoForegroundSupervisorsCoordinateWithoutTransferringOwnership` | pass | PASS | SYN-012-CP-0138 |

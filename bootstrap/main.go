@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/ed25519"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -23,8 +24,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -60,7 +63,53 @@ type manifest struct {
 
 // installPaths is the resolved on-disk layout for one installation root.
 type installPaths struct {
-	root, bin, launcher, rollback string
+	root, bin, launcher, rollback, versions, current, previous, admin, lock, plans, executions string
+}
+
+type activePointer struct {
+	SchemaVersion    int    `json:"schemaVersion"`
+	Version          string `json:"version"`
+	PayloadDirectory string `json:"payloadDirectory"`
+	ManifestHash     string `json:"manifestHash"`
+	ActivatedAt      string `json:"activatedAt"`
+	PreviousVersion  string `json:"previousVersion,omitempty"`
+}
+
+type updatePlan struct {
+	SchemaVersion       int    `json:"schemaVersion"`
+	PlanID              string `json:"planId"`
+	InstallationRoot    string `json:"installationRoot"`
+	BundlePath          string `json:"bundlePath"`
+	ManifestPath        string `json:"manifestPath"`
+	SignaturePath       string `json:"signaturePath"`
+	BundleFingerprint   string `json:"bundleFingerprint"`
+	ManifestFingerprint string `json:"manifestFingerprint"`
+	TargetVersion       string `json:"targetVersion"`
+	CurrentFingerprint  string `json:"currentFingerprint,omitempty"`
+	CanonicalHash       string `json:"canonicalHash"`
+}
+
+type updateLock struct {
+	SchemaVersion    int    `json:"schemaVersion"`
+	PID              int    `json:"pid"`
+	AcquiredAt       string `json:"acquiredAt"`
+	Executable       string `json:"executable"`
+	Nonce            string `json:"nonce"`
+	Operation        string `json:"operation"`
+	InstallationRoot string `json:"installationRoot"`
+}
+
+type payloadFileEntry struct {
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+type payloadManifest struct {
+	SchemaVersion      int                `json:"schemaVersion"`
+	Version            string             `json:"version"`
+	SourceManifestHash string             `json:"sourceManifestHash"`
+	Files              []payloadFileEntry `json:"files"`
 }
 
 func main() {
@@ -100,16 +149,33 @@ func usage() { fmt.Println("synesis-bootstrap install|update|uninstall|doctor|ve
 func runInstall(operation string, args []string) error {
 	flags := flag.NewFlagSet(operation, flag.ContinueOnError)
 	manifestURL := flags.String("manifest", os.Getenv("SYNESIS_MANIFEST_URL"), "manifest URL")
+	bundlePath := flags.String("bundle", "", "verified local bundle path")
 	installDir := flags.String("install-dir", "", "installation root")
+	prepare := flags.Bool("prepare", false, "prepare an immutable update plan")
+	execute := flags.Bool("execute", false, "execute a prepared update plan")
+	planID := flags.String("plan", "", "prepared update plan ID")
+	rollback := flags.Bool("rollback", false, "roll back the last successful update")
 	if err := flags.Parse(args); err != nil {
 		return err
-	}
-	if *manifestURL == "" {
-		return errors.New("SYNESIS_MANIFEST_URL or --manifest is required")
 	}
 	paths, err := installationPaths(*installDir)
 	if err != nil {
 		return err
+	}
+	if *rollback {
+		return rollbackVersioned(paths)
+	}
+	if *execute {
+		if *planID == "" {
+			return errors.New("--execute requires --plan")
+		}
+		return executeUpdatePlan(paths, *planID)
+	}
+	if operation == "update" && !*prepare && !*rollback {
+		return errors.New("update requires --prepare or --execute")
+	}
+	if *manifestURL == "" {
+		return errors.New("SYNESIS_MANIFEST_URL or --manifest is required")
 	}
 	data, signature, err := fetchManifest(*manifestURL)
 	if err != nil {
@@ -122,28 +188,30 @@ func runInstall(operation string, args []string) error {
 	if err := verifyManifestAuthenticity(m, data, signature); err != nil {
 		return err
 	}
-	if operation == "update" && isFlatLayout(paths) {
-		installed := installedVersion(paths)
-		if installed != "" && compareVersions(m.Version, installed) <= 0 {
-			if err := pathUpdater(paths, true); err != nil {
-				return err
-			}
-			fmt.Println("UPDATE_RESULT=NOOP")
-			return nil
-		}
-	}
 	selected, ok := m.Artifacts[platformID()]
 	if !ok {
 		return fmt.Errorf("unsupported platform: %s", platformID())
 	}
-	archive, err := fetch(resolveArtifactURL(*manifestURL, selected.URL))
+	archiveURL := resolveArtifactURL(*manifestURL, selected.URL)
+	if *bundlePath != "" {
+		archiveURL = fileURLForPath(*bundlePath)
+	}
+	archive, err := fetch(archiveURL)
 	if err != nil {
 		return err
 	}
 	if int64(len(archive)) != selected.Size || !matchesSHA256(archive, selected.SHA256) {
 		return errors.New("artifact size or SHA-256 mismatch")
 	}
-	if err := activate(paths, m.Version, archive); err != nil {
+	if *prepare {
+		id, err := prepareUpdatePlan(paths, m, data, signature, archive)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("UPDATE_RESULT=PREPARED\nPLAN_ID=%s\n", id)
+		return nil
+	}
+	if err := activateVersioned(paths, m, data, archive, "install"); err != nil {
 		return err
 	}
 	fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
@@ -190,7 +258,14 @@ func installationPaths(explicit string) (installPaths, error) {
 		launcherName = "synesis.cmd"
 	}
 	bin := filepath.Join(root, "bin")
-	return installPaths{root: root, bin: bin, launcher: filepath.Join(bin, launcherName), rollback: root + ".rollback"}, nil
+	admin := filepath.Join(root, "admin")
+	return installPaths{
+		root: root, bin: bin, launcher: filepath.Join(bin, launcherName), rollback: root + ".rollback",
+		versions: filepath.Join(root, "versions"), current: filepath.Join(root, "current.json"),
+		previous: filepath.Join(root, "previous.json"), admin: admin,
+		lock: filepath.Join(admin, "update-lock.json"), plans: filepath.Join(admin, "update-plans"),
+		executions: filepath.Join(admin, "update-executions"),
+	}, nil
 }
 
 // defaultInstallBase returns the OS-conventional parent directory for
@@ -343,6 +418,448 @@ func validVersion(value string) bool {
 		}
 	}
 	return value != "." && value != ".."
+}
+
+func fileURLForPath(path string) string {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return (&url.URL{Scheme: "file", Path: "/" + strings.TrimLeft(filepath.ToSlash(absolute), "/")}).String()
+}
+
+func digest(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func atomicWrite(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".synesis-atomic-")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if _, err := temporary.Write(data); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, path)
+}
+
+func validPayloadToken(value string) bool {
+	if value == "" || len(value) > 160 || filepath.IsAbs(value) || filepath.VolumeName(value) != "" {
+		return false
+	}
+	for _, character := range value {
+		if !(unicode.IsLetter(character) || unicode.IsDigit(character) || strings.ContainsRune(".-_", character)) {
+			return false
+		}
+	}
+	return value != "." && value != ".." && !strings.Contains(value, "..")
+}
+
+func readPointer(paths installPaths, path string) (*activePointer, string, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	var pointer activePointer
+	if err := json.Unmarshal(data, &pointer); err != nil || pointer.SchemaVersion != 1 || !validVersion(pointer.Version) || !validPayloadToken(pointer.PayloadDirectory) || len(pointer.ManifestHash) != sha256.Size*2 {
+		return nil, "", errors.New("active pointer invalid")
+	}
+	if _, err := hex.DecodeString(pointer.ManifestHash); err != nil {
+		return nil, "", errors.New("active pointer hash invalid")
+	}
+	root := filepath.Join(paths.versions, pointer.PayloadDirectory)
+	inside, err := filepath.Abs(root)
+	if err != nil || !pathWithin(paths.versions, inside) {
+		return nil, "", errors.New("active pointer payload path invalid")
+	}
+	manifestPath := filepath.Join(root, "manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil || digest(manifestData) != pointer.ManifestHash {
+		return nil, "", errors.New("active payload manifest invalid")
+	}
+	if err := verifyPayloadManifest(root, pointer.Version, manifestData); err != nil {
+		return nil, "", err
+	}
+	if _, err := os.Stat(filepath.Join(root, "bin", launcherName())); err != nil {
+		return nil, "", errors.New("active payload missing launcher")
+	}
+	return &pointer, digest(data), nil
+}
+
+func verifyPayloadManifest(root, expectedVersion string, data []byte) error {
+	var manifest payloadManifest
+	if json.Unmarshal(data, &manifest) != nil || manifest.SchemaVersion != 1 || manifest.Version != expectedVersion {
+		return errors.New("payload manifest invalid")
+	}
+	declared := make(map[string]payloadFileEntry, len(manifest.Files))
+	for _, entry := range manifest.Files {
+		name, err := safeArchiveName(entry.Path)
+		if err != nil || filepath.ToSlash(name) != entry.Path || entry.Size < 0 || len(entry.SHA256) != sha256.Size*2 {
+			return errors.New("payload manifest entry invalid")
+		}
+		if _, exists := declared[entry.Path]; exists {
+			return errors.New("payload manifest duplicate entry")
+		}
+		declared[entry.Path] = entry
+	}
+	seen := make(map[string]bool, len(declared))
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		relative = filepath.ToSlash(relative)
+		if relative == "manifest.json" {
+			return nil
+		}
+		entry, ok := declared[relative]
+		if !ok || !info.Mode().IsRegular() {
+			return errors.New("payload file is undeclared")
+		}
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if int64(len(bytes)) != entry.Size || digest(bytes) != entry.SHA256 {
+			return errors.New("payload file hash mismatch")
+		}
+		seen[relative] = true
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if len(seen) != len(declared) {
+		return errors.New("payload manifest file missing")
+	}
+	return nil
+}
+
+func pathWithin(parent, child string) bool {
+	parent, _ = filepath.Abs(parent)
+	child, _ = filepath.Abs(child)
+	relative, err := filepath.Rel(parent, child)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
+}
+
+func writePointer(paths installPaths, path string, pointer activePointer, expectedHash string) error {
+	if expectedHash != "" {
+		_, actual, err := readPointer(paths, path)
+		if err != nil || actual != expectedHash {
+			return errors.New("pointer changed during update")
+		}
+	}
+	data, err := json.Marshal(pointer)
+	if err != nil {
+		return err
+	}
+	return atomicWrite(path, data)
+}
+
+func acquireUpdateLock(paths installPaths, operation string) (func(), error) {
+	if err := os.MkdirAll(paths.admin, 0o755); err != nil {
+		return nil, err
+	}
+	nonceBytes := make([]byte, 16)
+	if _, err := crand.Read(nonceBytes); err != nil {
+		return nil, err
+	}
+	lock := updateLock{SchemaVersion: 1, PID: os.Getpid(), AcquiredAt: time.Now().UTC().Format(time.RFC3339Nano), Executable: os.Args[0], Nonce: hex.EncodeToString(nonceBytes), Operation: operation, InstallationRoot: paths.root}
+	data, _ := json.Marshal(lock)
+	file, err := os.OpenFile(paths.lock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, errors.New("update execution busy")
+		}
+		return nil, err
+	}
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		os.Remove(paths.lock)
+		return nil, err
+	}
+	if err := file.Close(); err != nil {
+		os.Remove(paths.lock)
+		return nil, err
+	}
+	return func() { _ = os.Remove(paths.lock) }, nil
+}
+
+func prepareUpdatePlan(paths installPaths, m manifest, manifestData, signature, archive []byte) (string, error) {
+	if _, _, err := readPointer(paths, paths.current); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(paths.plans, 0o755); err != nil {
+		return "", err
+	}
+	currentData, _ := os.ReadFile(paths.current)
+	plan := updatePlan{SchemaVersion: 1, InstallationRoot: paths.root, BundleFingerprint: digest(archive), ManifestFingerprint: digest(manifestData), TargetVersion: m.Version, CurrentFingerprint: digest(currentData)}
+	planBytes, _ := json.Marshal(plan)
+	plan.PlanID = digest(planBytes)[:24]
+	plan.BundlePath = filepath.Join(paths.plans, plan.PlanID+".bundle")
+	plan.ManifestPath = filepath.Join(paths.plans, plan.PlanID+".json")
+	plan.SignaturePath = filepath.Join(paths.plans, plan.PlanID+".sig")
+	planBytes, _ = json.Marshal(plan)
+	plan.CanonicalHash = digest(planBytes)
+	planBytes, _ = json.MarshalIndent(plan, "", "  ")
+	if err := os.WriteFile(plan.BundlePath, archive, 0o600); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(plan.ManifestPath, manifestData, 0o600); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(plan.SignaturePath, signature, 0o600); err != nil {
+		return "", err
+	}
+	if err := atomicWrite(filepath.Join(paths.plans, plan.PlanID+".plan.json"), planBytes); err != nil {
+		return "", err
+	}
+	return plan.PlanID, nil
+}
+
+func readUpdatePlan(paths installPaths, id string) (updatePlan, error) {
+	if !validPayloadToken(id) {
+		return updatePlan{}, errors.New("update plan invalid")
+	}
+	data, err := os.ReadFile(filepath.Join(paths.plans, id+".plan.json"))
+	if err != nil {
+		return updatePlan{}, errors.New("update plan not found")
+	}
+	var plan updatePlan
+	if json.Unmarshal(data, &plan) != nil || plan.SchemaVersion != 1 || plan.PlanID != id || plan.InstallationRoot != paths.root {
+		return updatePlan{}, errors.New("update plan invalid")
+	}
+	hash := plan.CanonicalHash
+	plan.CanonicalHash = ""
+	canonical, _ := json.Marshal(plan)
+	if digest(canonical) != hash {
+		return updatePlan{}, errors.New("update plan invalid")
+	}
+	plan.CanonicalHash = hash
+	return plan, nil
+}
+
+func executeUpdatePlan(paths installPaths, id string) error {
+	plan, err := readUpdatePlan(paths, id)
+	if err != nil {
+		return err
+	}
+	currentData, _ := os.ReadFile(paths.current)
+	if digest(currentData) != plan.CurrentFingerprint {
+		return errors.New("update plan stale")
+	}
+	manifestData, err := os.ReadFile(plan.ManifestPath)
+	if err != nil {
+		return err
+	}
+	signature, _ := os.ReadFile(plan.SignaturePath)
+	m, err := parseManifest(manifestData)
+	if err != nil || verifyManifestAuthenticity(m, manifestData, signature) != nil {
+		return errors.New("update plan bundle verification failed")
+	}
+	archive, err := os.ReadFile(plan.BundlePath)
+	if err != nil || digest(archive) != plan.BundleFingerprint || digest(manifestData) != plan.ManifestFingerprint {
+		return errors.New("update plan stale")
+	}
+	if err := activateVersioned(paths, m, manifestData, archive, "execute"); err != nil {
+		return err
+	}
+	return atomicWrite(filepath.Join(paths.executions, id+".json"), []byte(fmt.Sprintf("{\"planId\":%q,\"result\":\"SUCCESS\"}\n", id)))
+}
+
+func activateVersioned(paths installPaths, m manifest, manifestData, archive []byte, operation string) error {
+	release, err := acquireUpdateLock(paths, operation)
+	if err != nil {
+		return err
+	}
+	defer release()
+	previous, sourceHash, err := readPointer(paths, paths.current)
+	if err != nil {
+		return err
+	}
+	staging, err := os.MkdirTemp(filepath.Dir(paths.root), filepath.Base(paths.root)+".staging-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(staging)
+	if err := extractArchive(bytes.NewReader(archive), staging); err != nil {
+		return err
+	}
+	bundle := flattenBundle(staging)
+	if err := validateBundleVersion(bundle, m.Version); err != nil {
+		return err
+	}
+	if err := runBundleDoctor(bundle); err != nil {
+		return err
+	}
+	token := m.Version + "-" + digest(archive)[:12]
+	if !validPayloadToken(token) {
+		return errors.New("payload directory invalid")
+	}
+	if err := os.MkdirAll(paths.versions, 0o755); err != nil {
+		return err
+	}
+	target := filepath.Join(paths.versions, token)
+	if !fileExists(target) {
+		if err := writePayloadManifest(bundle, m.Version, manifestData); err != nil {
+			return err
+		}
+		if err := makePayloadImmutable(bundle); err != nil {
+			return err
+		}
+		if err := os.Rename(bundle, target); err != nil {
+			return err
+		}
+	}
+	payloadManifest, err := os.ReadFile(filepath.Join(target, "manifest.json"))
+	if err != nil {
+		return err
+	}
+	if err := writeStableLauncher(paths); err != nil {
+		return err
+	}
+	if previous != nil {
+		if err := writePointer(paths, paths.previous, *previous, ""); err != nil {
+			return err
+		}
+	}
+	pointer := activePointer{SchemaVersion: 1, Version: m.Version, PayloadDirectory: token, ManifestHash: digest(payloadManifest), ActivatedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	if previous != nil {
+		pointer.PreviousVersion = previous.Version
+	}
+	if err := writePointer(paths, paths.current, pointer, sourceHash); err != nil {
+		return err
+	}
+	// Remove only the obsolete text pointer after the new pointer is durable.
+	_ = os.Remove(filepath.Join(paths.root, "current"))
+	if err := pathUpdater(paths, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writePayloadManifest(bundle, version string, sourceManifest []byte) error {
+	type fileEntry struct {
+		Path   string `json:"path"`
+		Size   int64  `json:"size"`
+		SHA256 string `json:"sha256"`
+	}
+	entries := make([]fileEntry, 0)
+	err := filepath.Walk(bundle, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || filepath.Base(path) == "manifest.json" {
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return errors.New("payload contains unsupported entry")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(bundle, path)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, fileEntry{Path: filepath.ToSlash(relative), Size: int64(len(data)), SHA256: digest(data)})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	// filepath.Walk is deterministic on supported Go versions; sorting is cheap
+	// and keeps the manifest stable if that implementation detail changes.
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	manifest := struct {
+		SchemaVersion      int         `json:"schemaVersion"`
+		Version            string      `json:"version"`
+		SourceManifestHash string      `json:"sourceManifestHash"`
+		Files              []fileEntry `json:"files"`
+	}{1, version, digest(sourceManifest), entries}
+	data, _ := json.Marshal(manifest)
+	return os.WriteFile(filepath.Join(bundle, "manifest.json"), data, 0o444)
+}
+
+func makePayloadImmutable(bundle string) error {
+	return filepath.Walk(bundle, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return os.Chmod(path, 0o555)
+		}
+		if info.Mode()&0o111 != 0 || filepath.Base(path) == launcherName() {
+			return os.Chmod(path, 0o555)
+		}
+		return os.Chmod(path, 0o444)
+	})
+}
+
+func writeStableLauncher(paths installPaths) error {
+	if runtime.GOOS == "windows" {
+		ps1 := `param([Parameter(ValueFromRemainingArguments=$true)][string[]]$ForwardArgs)
+$root = Split-Path -Parent $PSScriptRoot
+try { $p = Get-Content -Raw -LiteralPath (Join-Path $root 'current.json') | ConvertFrom-Json } catch { exit 1 }
+if ($p.schemaVersion -ne 1 -or $p.payloadDirectory -notmatch '^[A-Za-z0-9._-]+$' -or $p.payloadDirectory.Contains('..')) { exit 1 }
+$r = Join-Path $root ('versions\' + $p.payloadDirectory)
+$m = Join-Path $r 'manifest.json'
+if (-not (Test-Path -LiteralPath $m)) { exit 1 }
+if ((Get-FileHash -LiteralPath $m -Algorithm SHA256).Hash.ToLower() -ne $p.manifestHash) { exit 1 }
+$e = Join-Path $r 'bin\synesis.cmd'
+if (-not (Test-Path -LiteralPath $e)) { exit 1 }
+& cmd.exe /d /c call $e @ForwardArgs
+exit $LASTEXITCODE
+`
+		if err := atomicWrite(filepath.Join(paths.bin, "synesis-launcher.ps1"), []byte(ps1)); err != nil {
+			return err
+		}
+		return atomicWrite(paths.launcher, []byte("@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0synesis-launcher.ps1\" %*\r\nexit /b %ERRORLEVEL%\r\n"))
+	}
+	return atomicWrite(paths.launcher, []byte("#!/bin/sh\nset -eu\nr=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\np=\"$(sed -n 's/.*\"payloadDirectory\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$r/current.json\")\"\ncase \"$p\" in (''|*..*|*/*|*\\\\*) exit 1;; esac\ne=\"$r/versions/$p/bin/synesis\"\nexec \"$e\" \"$@\"\n"))
+}
+
+func rollbackVersioned(paths installPaths) error {
+	release, err := acquireUpdateLock(paths, "rollback")
+	if err != nil {
+		return err
+	}
+	defer release()
+	previous, _, err := readPointer(paths, paths.previous)
+	if err != nil || previous == nil {
+		return errors.New("update rollback unavailable")
+	}
+	current, currentHash, err := readPointer(paths, paths.current)
+	if err != nil || current == nil {
+		return errors.New("active pointer invalid")
+	}
+	if err := writePointer(paths, paths.previous, *current, ""); err != nil {
+		return err
+	}
+	if err := writePointer(paths, paths.current, *previous, currentHash); err != nil {
+		return err
+	}
+	return atomicWrite(filepath.Join(paths.executions, "rollback-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".json"), []byte("{\"result\":\"ROLLBACK_SUCCESS\"}\n"))
 }
 
 // activate extracts, validates, and atomically swaps in the stable bundle.
@@ -520,6 +1037,9 @@ func isFlatLayout(paths installPaths) bool {
 }
 
 func installedVersion(paths installPaths) string {
+	if pointer, _, err := readPointer(paths, paths.current); err == nil && pointer != nil {
+		return pointer.Version
+	}
 	if data, err := os.ReadFile(filepath.Join(paths.root, "VERSION")); err == nil && validVersion(strings.TrimSpace(string(data))) {
 		return strings.TrimSpace(string(data))
 	}
@@ -769,18 +1289,22 @@ func runDoctor(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := validateBundle(paths.root); err != nil {
+	pointer, _, err := readPointer(paths, paths.current)
+	if err != nil || pointer == nil {
+		return errors.New("installed pointer invalid")
+	}
+	bundle := filepath.Join(paths.versions, pointer.PayloadDirectory)
+	if err := validateBundleVersion(bundle, pointer.Version); err != nil {
 		return err
 	}
-	if err := runBundleDoctor(paths.root); err != nil {
+	if err := runBundleDoctor(bundle); err != nil {
 		return err
 	}
-	version := installedVersion(paths)
 	pathStatus := "MISSING"
 	if userPathContains(paths) {
 		pathStatus = "PASS"
 	}
-	fmt.Printf("INSTALL_ROOT=%s\nINSTALL_LAYOUT=FLAT_STABLE\nINSTALLED_VERSION=%s\nLAUNCHER=%s\nPATH_STATUS=%s\nDOCTOR_RESULT=PASS\n", paths.root, version, paths.launcher, pathStatus)
+	fmt.Printf("INSTALL_ROOT=%s\nINSTALL_LAYOUT=VERSIONED_IMMUTABLE\nINSTALLED_VERSION=%s\nACTIVE_PAYLOAD=%s\nLAUNCHER=%s\nPATH_STATUS=%s\nDOCTOR_RESULT=PASS\n", paths.root, pointer.Version, pointer.PayloadDirectory, paths.launcher, pathStatus)
 	return nil
 }
 
