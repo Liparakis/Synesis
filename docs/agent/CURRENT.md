@@ -23,7 +23,7 @@ Bootstrap Go tests/vet, root Gradle checks, direct/stable/`.cmd` 11-tool handsha
 
 ## Immediate next action
 
-Record CP-0203 and run `scripts/agent-checkpoint.ps1`; no further provider or Antigravity work belongs to this slice.
+Review CP-0204 and decide whether SYN-014E can close; no further provider or Antigravity work belongs to this slice.
 
 ## Work completed
 

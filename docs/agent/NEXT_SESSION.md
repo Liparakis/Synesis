@@ -1,8 +1,8 @@
 # Next Session
 
-- Active task: SYN-014E ACTIVE at Slice 5C.3 following CP-0203
+- Active task: SYN-014E ACTIVE at Slice 5C.3 following CP-0204
 - Repository branch: master
-- Last checkpoint: CP-0203
+- Last checkpoint: CP-0204
 - Last passing command: `:coordination:check :workspace:check :cli:check :mcp:check check`, `go test ./...`, and `go vet ./...`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Exact next code action: Review CP-0203 evidence and decide whether SYN-014E can close; do not start another Codex acceptance run or mutate unrelated Codex settings.
