@@ -16,6 +16,20 @@ Append-only operational history.
 - Remaining work:
 - Exact continuation:
 
+## 2026-07-25 — Stage 2B Slice 1 capability negotiation implementation
+
+- Timestamp: 2026-07-25 Europe/Athens
+- Checkpoint: CP-0179
+- Active task: SYN-013D
+- Completed work: Implemented Stage 2B Slice 1 capability negotiation with durable handle domain types, binary payload codecs, event store projections, application services, and 2 new MCP tools (synesis.describe_required_capability, synesis.respond_to_owner_request).
+- Files changed: coordination/src/main/java/org/synesis/coordination/*, workspace/src/main/java/org/synesis/workspace/*, mcp/src/main/java/org/synesis/mcp/*, docs/agent/*
+- Commands run: `.\gradlew.bat :coordination:check --no-daemon`; `.\gradlew.bat :workspace:check --no-daemon`; `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `git commit -m "Add Synesis MCP capability negotiation"`; `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Results: PASS; full test suite passed (49 actionable tasks); git commit 1fb83df; checkpoint CP-0179 created.
+- Decisions: Handles use SecureRandom Base32 tokens with req_ prefix and upper-case normalization; total tools exposed via tools/list is exactly 7.
+- Failed attempts: None.
+- Remaining work: Awaiting Stage 2B Slice 2 implementation instructions.
+- Exact continuation: powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1
+
 ## 2026-07-20 — persistence installation
 
 - Timestamp: 2026-07-20 Europe/Athens

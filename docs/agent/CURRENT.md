@@ -5,37 +5,33 @@
 - Task ID: SYN-013D
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0165
-- Latest checkpoint: CP-0172
+- Started checkpoint: CP-0178
+- Latest checkpoint: CP-0179
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0027, ADR-0028, ADR-0029, ADR-0030
 
 ## Objective
 
-Implement Stage 2A: minimal stdio MCP server for safe workspace operations and provider configuration integration for Codex and Antigravity.
+Implement Synesis Stage 2B Slice 1: Durable Capability Negotiation & Request State Machine.
 
 ## Immediate slice
 
-Stage 2A complete at CP-0172: project-local .agents/mcp.json now embeds absolute project root path so ensure_session returns ready even when Antigravity launches MCP with cwd=user home and no rootUri in initialize.
+Stage 2B Slice 1 complete at CP-0179: Capability handle generation (`req_<random_token>`), binary payload codec, capability request projection and replay, application services (`CapabilityRequestService`, `CapabilityResponseService`), MCP tool handlers (`synesis.describe_required_capability`, `synesis.respond_to_owner_request`), and `get_next_action` projections.
 
 ## Evidence ledger
 
-- VERIFIED: Provider MCP capability discovery audit completed for Codex and Antigravity (`MCP_CONFIG_DISCOVERED`).
-- VERIFIED: `AgentSessionService` created in `org.synesis.workspace.agent` with `ensureSession` method. All `:workspace:check` tests pass (74 tests).
-- VERIFIED: `:mcp` Gradle module created, `:mcp:check` passes (18 tests), `:mcp:architectureCheck` passes.
-- VERIFIED: JSON-RPC 2.0 stdio protocol handler (`McpProtocolHandler`), stdio server (`McpStdioServer`), and entrypoint (`SynesisMcpServer`) created in `org.synesis.mcp`.
-- VERIFIED: Stale background MCP process PID 22360 terminated; stderr diagnostic startup log added to `SynesisMcpServer` logging PID, version, build commit, connection ID, provider, and cwd.
-- VERIFIED: Root-source state machine implemented in `McpProtocolHandler` with URI percent-decoding, `rootUri`, `workspaceFolders`, `roots`, `roots/list`, and `notifications/roots/list_changed` handling.
-- VERIFIED: Registered tool `synesis.ensure_session` returns concise status output `{"status":"ready","result":{"workspace":"isolated","pending":0}}`.
-- VERIFIED: `ProviderApplicationService` and `synesis init` automatically install user-level Antigravity MCP configuration (`~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity/mcp_config.json`) and project-local Codex config (`.codex/mcp.json`) idempotently while preserving unrelated entries and migrating obsolete project-local files.
-- VERIFIED: Platform bundle updated (`:cli:platformBundle`), installed launcher `synesis init` tested on `SynesisTestProject`.
-- VERIFIED: project-local `.agents/mcp.json` now embeds absolute project root path (`--project C:\Users\Liparakis\Desktop\SynesisTestProject`) so MCP boots with correct root regardless of provider launch cwd.
-- VERIFIED: Installed MCP stdio process tested across 5/5 fresh launches with `initialize` (no rootUri, cwd=user home), `tools/list`, and two `synesis.ensure_session` calls — all returned `status: ready` 100% reproducibly.
-- VERIFIED: Full root `./gradlew.bat check --no-daemon` passes cleanly (49 tasks).
+- VERIFIED: Durable handle domain types (`CapabilityRequestHandle`, `CapabilityRequestHandleGenerator`, `SecureRandomCapabilityRequestHandleGenerator`) created and unit tested in `:coordination`.
+- VERIFIED: Bounded contract validation record (`CapabilityContract`) and binary event payload codec (`CapabilityRequestPayload`) created and tested in `:coordination`.
+- VERIFIED: `CapabilityRequestProjection` integrated into `PredictionEventStore` replay and event append validation.
+- VERIFIED: `CapabilityRequestService` and `CapabilityResponseService` created in `:workspace` handling requester initial description, owner accept/revise/reject responses, and requester counter/accept/cancel responses.
+- VERIFIED: `AgentNextActionService` updated to project high-priority `RESPOND_TO_OWNER_REQUEST` and `REVISE_CAPABILITY_REQUEST` next actions for owner and requester node IDs.
+- VERIFIED: MCP protocol handler registered tools `synesis.describe_required_capability` and `synesis.respond_to_owner_request` (total 7 tools in `tools/list`).
+- VERIFIED: Unit and multi-process stdio negotiation tests (`CapabilityRequestHandleTest`, `CapabilityContractTest`, `CapabilityProjectionRestartTest`, `CapabilityNegotiationTest`, `McpStage2BSlice1Test`, `TwoProcessCapabilityNegotiationProcessTest`) pass cleanly without path leaks.
+- VERIFIED: Full repository build verification `.\gradlew.bat check --no-daemon` passes cleanly (49 actionable tasks).
 
 ## Current limitations
 
-- Stage 2B tools (`synesis.read_file`, `synesis.apply_patch`, `synesis.run_command`, `synesis.get_next_action`) are deferred to Stage 2B.
+- Stage 2B Slice 2 (Implementation publication, validation worktrees, safe integration) is deferred.
 
 ## Verification target
 
@@ -43,4 +39,4 @@ Stage 2A complete at CP-0172: project-local .agents/mcp.json now embeds absolute
 
 ## Immediate next action
 
-Proceed with Stage 2B tool additions or task lifecycle operations as directed.
+Awaiting next slice directive or instructions for Stage 2B Slice 2 implementation.
