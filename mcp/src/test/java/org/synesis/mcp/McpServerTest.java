@@ -84,7 +84,7 @@ class McpServerTest {
         assertTrue(responseJson.contains("\"name\":\"synesis.ensure_session\""));
         assertTrue(responseJson.contains("\"name\":\"synesis.read_file\""));
         assertTrue(responseJson.contains("\"name\":\"synesis.apply_patch\""));
-        assertFalse(responseJson.contains("synesis.run_command"));
+        assertTrue(responseJson.contains("\"name\":\"synesis.run_command\""));
         assertFalse(responseJson.contains("synesis.get_next_action"));
     }
 
@@ -360,5 +360,11 @@ class McpServerTest {
         // 5. Read Modified File
         String readModResp = handler.handleMessage(readReq);
         assertTrue(readModResp.contains("Hello MCP Antigravity"));
+
+        // 6. Run Command (git_status)
+        String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.run_command\",\"arguments\":{\"type\":\"git_status\"}}}";
+        String runCmdResp = handler.handleMessage(runCmdReq);
+        assertTrue(runCmdResp.contains("completed"));
+        assertTrue(runCmdResp.contains("git_status"));
     }
 }

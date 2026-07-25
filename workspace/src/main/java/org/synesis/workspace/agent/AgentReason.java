@@ -60,7 +60,22 @@ public enum AgentReason {
     /**
      * An internal system or safety failure occurred.
      */
-    INTERNAL_FAILURE("internal_failure");
+    INTERNAL_FAILURE("internal_failure"),
+
+    /**
+     * Project command failed with a non-zero exit code.
+     */
+    COMMAND_FAILED("command_failed"),
+
+    /**
+     * Project command execution exceeded the maximum allowed time limit.
+     */
+    COMMAND_TIMEOUT("command_timeout"),
+
+    /**
+     * Requested tool or command adapter is not available or supported for this project.
+     */
+    TOOL_UNAVAILABLE("tool_unavailable");
 
     private final String value;
 

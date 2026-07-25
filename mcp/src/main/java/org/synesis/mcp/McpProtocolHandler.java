@@ -8,6 +8,9 @@ import java.util.Objects;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.application.ProjectCommandIntent;
+import org.synesis.workspace.application.ProjectCommandService;
 import org.synesis.workspace.application.WorkspacePatchService;
 import org.synesis.workspace.application.WorkspaceReadService;
 import org.synesis.workspace.provider.ProviderJson;
@@ -26,6 +29,7 @@ public final class McpProtocolHandler {
     private final AgentSessionService sessionService;
     private final WorkspaceReadService readService;
     private final WorkspacePatchService patchService;
+    private final ProjectCommandService commandService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -45,6 +49,7 @@ public final class McpProtocolHandler {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
         this.readService = new WorkspaceReadService();
         this.patchService = new WorkspacePatchService();
+        this.commandService = new ProjectCommandService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -463,8 +468,23 @@ public final class McpProtocolHandler {
         applyPatchTool.put("description", "Applies a structured file creation or modification patch to the assigned worktree.");
         applyPatchTool.put("inputSchema", patchSchema);
 
+        Map<String, Object> runCmdProperties = new LinkedHashMap<>();
+        runCmdProperties.put("type", Map.of("type", "string", "description", "Command intent classification: build, test, lint, format_check, git_status, git_diff, git_log"));
+        runCmdProperties.put("target", Map.of("type", "string", "description", "Optional target specifier or test filter"));
+        runCmdProperties.put("arguments", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Optional additional arguments"));
+
+        Map<String, Object> runCmdSchema = new LinkedHashMap<>();
+        runCmdSchema.put("type", "object");
+        runCmdSchema.put("properties", runCmdProperties);
+        runCmdSchema.put("required", List.of("type"));
+
+        Map<String, Object> runCommandTool = new LinkedHashMap<>();
+        runCommandTool.put("name", "synesis.run_command");
+        runCommandTool.put("description", "Executes an approved project build or git command intent inside the assigned worktree.");
+        runCommandTool.put("inputSchema", runCmdSchema);
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool));
+        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool));
 
         return createResultResponse(id, result);
     }
@@ -523,6 +543,30 @@ public final class McpProtocolHandler {
             WorkspacePatchService.PatchRequest patchReq = new WorkspacePatchService.PatchRequest(
                     activeProjectRoot, provider, connectionInstanceId, path, create, content, expectedHash, patchEdits);
             agentResponse = patchService.applyPatch(patchReq);
+        } else if ("synesis.run_command".equals(name)) {
+            String type = arguments != null ? (String) arguments.get("type") : null;
+            String target = arguments != null ? (String) arguments.get("target") : null;
+            List<String> commandArgs = new java.util.ArrayList<>();
+            if (arguments != null && arguments.get("arguments") instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof String s) {
+                        commandArgs.add(s);
+                    }
+                }
+            }
+
+            if (type == null || type.isBlank()) {
+                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+            } else {
+                try {
+                    ProjectCommandIntent intent = new ProjectCommandIntent(type, target, commandArgs);
+                    ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(
+                            activeProjectRoot, provider, connectionInstanceId, intent);
+                    agentResponse = commandService.runCommand(cmdReq);
+                } catch (IllegalArgumentException ex) {
+                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+                }
+            }
         } else {
             Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
             Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);
