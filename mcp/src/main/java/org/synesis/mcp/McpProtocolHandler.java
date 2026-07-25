@@ -8,6 +8,8 @@ import java.util.Objects;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.WorkspacePatchService;
+import org.synesis.workspace.application.WorkspaceReadService;
 import org.synesis.workspace.provider.ProviderJson;
 
 /**
@@ -22,6 +24,8 @@ import org.synesis.workspace.provider.ProviderJson;
 public final class McpProtocolHandler {
 
     private final AgentSessionService sessionService;
+    private final WorkspaceReadService readService;
+    private final WorkspacePatchService patchService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -39,6 +43,8 @@ public final class McpProtocolHandler {
      */
     public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
+        this.readService = new WorkspaceReadService();
+        this.patchService = new WorkspacePatchService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -308,9 +314,17 @@ public final class McpProtocolHandler {
         if (input == null || input.isBlank()) {
             return null;
         }
+
         String trimmed = input.trim();
         try {
-            trimmed = java.net.URLDecoder.decode(trimmed, java.nio.charset.StandardCharsets.UTF_8);
+            String decoded = java.net.URLDecoder.decode(trimmed, java.nio.charset.StandardCharsets.UTF_8);
+            if (decoded.startsWith("file:")) {
+                String raw = decoded.substring(5);
+                while (raw.startsWith("/")) {
+                    raw = raw.substring(1);
+                }
+                return Path.of(raw).toAbsolutePath().normalize();
+            }
         } catch (Exception ignored) {
         }
 
@@ -380,6 +394,7 @@ public final class McpProtocolHandler {
     }
 
     private String handleToolsList(Object id) {
+        // Tool 1: synesis.ensure_session
         Map<String, Object> taskProperties = new LinkedHashMap<>();
         taskProperties.put("goal", Map.of("type", "string"));
         taskProperties.put("acceptance", Map.of("type", "string"));
@@ -390,21 +405,66 @@ public final class McpProtocolHandler {
         taskSchema.put("type", "object");
         taskSchema.put("properties", taskProperties);
 
-        Map<String, Object> inputProperties = new LinkedHashMap<>();
-        inputProperties.put("task", taskSchema);
-        inputProperties.put("refresh", Map.of("type", "boolean"));
+        Map<String, Object> ensureSessionProperties = new LinkedHashMap<>();
+        ensureSessionProperties.put("task", taskSchema);
+        ensureSessionProperties.put("refresh", Map.of("type", "boolean"));
 
-        Map<String, Object> inputSchema = new LinkedHashMap<>();
-        inputSchema.put("type", "object");
-        inputSchema.put("properties", inputProperties);
+        Map<String, Object> ensureSessionSchema = new LinkedHashMap<>();
+        ensureSessionSchema.put("type", "object");
+        ensureSessionSchema.put("properties", ensureSessionProperties);
 
         Map<String, Object> ensureSessionTool = new LinkedHashMap<>();
         ensureSessionTool.put("name", "synesis.ensure_session");
         ensureSessionTool.put("description", "Ensures an active, verified Synesis workspace session.");
-        ensureSessionTool.put("inputSchema", inputSchema);
+        ensureSessionTool.put("inputSchema", ensureSessionSchema);
+
+        // Tool 2: synesis.read_file
+        Map<String, Object> readProperties = new LinkedHashMap<>();
+        readProperties.put("path", Map.of("type", "string", "description", "Repository-relative file path"));
+        readProperties.put("startLine", Map.of("type", "integer", "description", "1-based starting line number (default: 1)"));
+        readProperties.put("endLine", Map.of("type", "integer", "description", "1-based ending line number (default: EOF)"));
+        readProperties.put("maxBytes", Map.of("type", "integer", "description", "Maximum UTF-8 bytes to return (default: 65536)"));
+
+        Map<String, Object> readSchema = new LinkedHashMap<>();
+        readSchema.put("type", "object");
+        readSchema.put("properties", readProperties);
+        readSchema.put("required", List.of("path"));
+
+        Map<String, Object> readFileTool = new LinkedHashMap<>();
+        readFileTool.put("name", "synesis.read_file");
+        readFileTool.put("description", "Reads text file content from the assigned worktree.");
+        readFileTool.put("inputSchema", readSchema);
+
+        // Tool 3: synesis.apply_patch
+        Map<String, Object> editProperties = new LinkedHashMap<>();
+        editProperties.put("find", Map.of("type", "string"));
+        editProperties.put("replace", Map.of("type", "string"));
+        editProperties.put("expectedOccurrences", Map.of("type", "integer"));
+
+        Map<String, Object> editSchema = new LinkedHashMap<>();
+        editSchema.put("type", "object");
+        editSchema.put("properties", editProperties);
+        editSchema.put("required", List.of("find", "replace", "expectedOccurrences"));
+
+        Map<String, Object> patchProperties = new LinkedHashMap<>();
+        patchProperties.put("path", Map.of("type", "string", "description", "Repository-relative file path"));
+        patchProperties.put("create", Map.of("type", "boolean", "description", "Set true for new file creation"));
+        patchProperties.put("content", Map.of("type", "string", "description", "Full file content for creation mode"));
+        patchProperties.put("expectedHash", Map.of("type", "string", "description", "SHA-256 hex string of existing content (required for modification)"));
+        patchProperties.put("edits", Map.of("type", "array", "items", editSchema, "description", "List of replacement edits (required for modification)"));
+
+        Map<String, Object> patchSchema = new LinkedHashMap<>();
+        patchSchema.put("type", "object");
+        patchSchema.put("properties", patchProperties);
+        patchSchema.put("required", List.of("path"));
+
+        Map<String, Object> applyPatchTool = new LinkedHashMap<>();
+        applyPatchTool.put("name", "synesis.apply_patch");
+        applyPatchTool.put("description", "Applies a structured file creation or modification patch to the assigned worktree.");
+        applyPatchTool.put("inputSchema", patchSchema);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool));
+        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool));
 
         return createResultResponse(id, result);
     }
@@ -416,22 +476,57 @@ public final class McpProtocolHandler {
         }
 
         String name = (String) params.get("name");
-        if (!"synesis.ensure_session".equals(name)) {
+        Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
+
+        AgentResponse agentResponse;
+
+        if ("synesis.ensure_session".equals(name)) {
+            AgentSessionService.AgentTaskIntent taskIntent = parseTaskIntent(arguments);
+            boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
+
+            AgentSessionService.SessionResolutionRequest resolutionRequest = new AgentSessionService.SessionResolutionRequest(
+                    activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
+
+            agentResponse = sessionService.ensureSession(resolutionRequest);
+            if (agentResponse.status() == AgentStatus.READY) {
+                isSessionBound = true;
+            }
+        } else if ("synesis.read_file".equals(name)) {
+            String path = arguments != null ? (String) arguments.get("path") : null;
+            Integer startLine = (arguments != null && arguments.get("startLine") instanceof Number n) ? n.intValue() : null;
+            Integer endLine = (arguments != null && arguments.get("endLine") instanceof Number n) ? n.intValue() : null;
+            Integer maxBytes = (arguments != null && arguments.get("maxBytes") instanceof Number n) ? n.intValue() : null;
+
+            WorkspaceReadService.ReadRequest readReq = new WorkspaceReadService.ReadRequest(
+                    activeProjectRoot, provider, connectionInstanceId, path, startLine, endLine, maxBytes);
+            agentResponse = readService.readFile(readReq);
+        } else if ("synesis.apply_patch".equals(name)) {
+            String path = arguments != null ? (String) arguments.get("path") : null;
+            boolean create = arguments != null && Boolean.TRUE.equals(arguments.get("create"));
+            String content = arguments != null ? (String) arguments.get("content") : null;
+            String expectedHash = arguments != null ? (String) arguments.get("expectedHash") : null;
+
+            List<WorkspacePatchService.PatchEdit> patchEdits = new java.util.ArrayList<>();
+            if (arguments != null && arguments.get("edits") instanceof List<?> editsList) {
+                for (Object item : editsList) {
+                    if (item instanceof Map<?, ?> editMap) {
+                        String find = (String) editMap.get("find");
+                        String replace = (String) editMap.get("replace");
+                        int expectedOccurrences = (editMap.get("expectedOccurrences") instanceof Number n) ? n.intValue() : 0;
+                        if (find != null && replace != null && expectedOccurrences >= 1) {
+                            patchEdits.add(new WorkspacePatchService.PatchEdit(find, replace, expectedOccurrences));
+                        }
+                    }
+                }
+            }
+
+            WorkspacePatchService.PatchRequest patchReq = new WorkspacePatchService.PatchRequest(
+                    activeProjectRoot, provider, connectionInstanceId, path, create, content, expectedHash, patchEdits);
+            agentResponse = patchService.applyPatch(patchReq);
+        } else {
             Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
             Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);
             return createResultResponse(id, result);
-        }
-
-        Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
-        AgentSessionService.AgentTaskIntent taskIntent = parseTaskIntent(arguments);
-        boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
-
-        AgentSessionService.SessionResolutionRequest resolutionRequest = new AgentSessionService.SessionResolutionRequest(
-                activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
-
-        AgentResponse agentResponse = sessionService.ensureSession(resolutionRequest);
-        if (agentResponse.status() == AgentStatus.READY) {
-            isSessionBound = true;
         }
 
         Map<String, Object> textContent = Map.of("type", "text", "text", agentResponse.toJson());

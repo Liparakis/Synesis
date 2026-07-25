@@ -82,8 +82,8 @@ class McpServerTest {
 
         assertNotNull(responseJson);
         assertTrue(responseJson.contains("\"name\":\"synesis.ensure_session\""));
-        assertFalse(responseJson.contains("synesis.read_file"));
-        assertFalse(responseJson.contains("synesis.apply_patch"));
+        assertTrue(responseJson.contains("\"name\":\"synesis.read_file\""));
+        assertTrue(responseJson.contains("\"name\":\"synesis.apply_patch\""));
         assertFalse(responseJson.contains("synesis.run_command"));
         assertFalse(responseJson.contains("synesis.get_next_action"));
     }
@@ -320,5 +320,45 @@ class McpServerTest {
         assertTrue(lines.get(0).contains("\"id\":1"));
         assertTrue(lines.get(1).contains("\"id\":2"));
         assertTrue(lines.get(2).contains("\"id\":3"));
+    }
+
+    @Test
+    void testMcpReadFileAndApplyPatchEndToEnd() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-mcp-tools");
+
+        // 1. Ensure Session
+        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String ensureResp = handler.handleMessage(ensureReq);
+        assertTrue(ensureResp.contains("ready"));
+
+        // 2. Apply Patch Create Mode
+        String createReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"create\":true,\"content\":\"Hello MCP World\\n\"}}}";
+        String createResp = handler.handleMessage(createReq);
+        assertTrue(createResp.contains("completed"));
+        assertTrue(createResp.contains("src/McpFile.txt"));
+
+        // 3. Read File
+        String readReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.read_file\",\"arguments\":{\"path\":\"src/McpFile.txt\"}}}";
+        String readResp = handler.handleMessage(readReq);
+        assertTrue(readResp.contains("completed"));
+        assertTrue(readResp.contains("Hello MCP World"));
+
+        // 4. Apply Patch Modify Mode
+        byte[] bytes = "Hello MCP World\n".getBytes(StandardCharsets.UTF_8);
+        String hash;
+        try {
+            hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        String modifyReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"expectedHash\":\"" + hash + "\",\"edits\":[{\"find\":\"World\",\"replace\":\"Antigravity\",\"expectedOccurrences\":1}]}}}";
+        String modifyResp = handler.handleMessage(modifyReq);
+        assertTrue(modifyResp.contains("completed"));
+
+        // 5. Read Modified File
+        String readModResp = handler.handleMessage(readReq);
+        assertTrue(readModResp.contains("Hello MCP Antigravity"));
     }
 }
