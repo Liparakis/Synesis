@@ -12,13 +12,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.synesis.coordination.domain.CapabilityLifecycleState;
-import org.synesis.coordination.domain.CapabilityRequestRecord;
+import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.domain.PredictionEventType;
-import org.synesis.coordination.domain.TaskSnapshotPayload;
-import org.synesis.coordination.domain.TaskSnapshotRecord;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.agent.AgentNextAction;

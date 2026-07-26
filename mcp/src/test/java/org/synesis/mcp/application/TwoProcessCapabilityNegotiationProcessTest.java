@@ -8,10 +8,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.coordination.domain.CoordinationCommand;
-import org.synesis.coordination.domain.OwnershipClaim;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.domain.PredictionEventType;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.application.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -79,13 +79,13 @@ class TwoProcessCapabilityNegotiationProcessTest {
         PredictionEventStore store = new PredictionEventStore(
                 location.root().resolve(".synesis/coordination"), location.projectId());
         UUID taskId = UUID.randomUUID();
-        org.synesis.coordination.domain.CoordinationTask task = new org.synesis.coordination.domain.CoordinationTask(
+        org.synesis.coordination.domain.task.CoordinationTask task = new org.synesis.coordination.domain.task.CoordinationTask(
                 taskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 codexIdentity.nodeId(), "supervisor-owner", "worker-owner");
         CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), task.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), cmd1.encoded(), codexIdentity);
 
-        org.synesis.coordination.domain.TaskClaim claim1 = new org.synesis.coordination.domain.TaskClaim(
+        org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
                 taskId, codexIdentity.nodeId(), "supervisor-owner", "worker-owner");
         CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), claim1.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), cmd2.encoded(), codexIdentity);

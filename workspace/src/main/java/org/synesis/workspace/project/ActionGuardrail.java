@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.coordination.domain.OwnershipRegistry;
+import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.domain.ProjectConfig;

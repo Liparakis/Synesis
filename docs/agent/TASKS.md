@@ -627,7 +627,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: QUALITY-GOD
 - Priority: P1
 - Title: Focused god-class splitting
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Split only the strongest evidence-based oversized orchestration classes while preserving stable facades and behavior.
 - Dependencies: QUALITY-WARNINGS DONE; clean working tree; durable state activated before production edits.
 - Evidence: PASS — ranked candidates by size and responsibility concentration; extracted MCP configuration persistence from `ProviderApplicationService` into lifecycle-owned `ProviderMcpConfigurationService` while preserving the public facade; `:workspace:check` and focused provider tests passed; commit `04977b9`.
@@ -644,7 +644,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Required tests: `:coordination:check`, root `check`, focused coordination tests, stale-FQN scan, package-cycle scan, and Go tests/vet.
 - Scope boundary: no implementation rewrites, no cross-module moves, no new Gradle dependencies, no deduplication, warning cleanup, or god-class work.
 - Package map: `org.synesis.coordination.domain.capability`, `.task`, `.ownership`, `.prediction`, `.integration`, `.speculation`, and `.command`.
-- Evidence: active; package inventory complete; production moves pending.
+- Evidence: PASS — moved 35 domain types and four mirrored tests; added responsibility-boundary architecture coverage; `:coordination:check`, root `check`, Go tests/vet, stale-FQN scan, and no-flat-package scan passed.
 
 ## SYN-014C
 

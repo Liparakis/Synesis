@@ -23,7 +23,7 @@ No stale production FQNs, package cycles, surface changes, or module dependency 
 
 ## Immediate next action
 
-Inventory is complete. The next code action is the coordinated package move, followed by `:coordination:check`.
+Implementation and validation are complete. The next action is to checkpoint and commit SYN-016.
 
 ## Work completed
 

@@ -11,9 +11,9 @@ import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.CoordinationCommand;
-import org.synesis.coordination.domain.OwnershipClaim;
-import org.synesis.coordination.domain.PredictionEventType;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.ownership.OwnershipClaim;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

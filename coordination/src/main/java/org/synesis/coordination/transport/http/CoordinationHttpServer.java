@@ -12,8 +12,8 @@ import java.util.Base64;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.synesis.coordination.application.CoordinationService;
-import org.synesis.coordination.domain.CoordinationCommand;
-import org.synesis.coordination.domain.PredictionEvent;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 
 /**
  * Loopback HTTP command and server-sent-event adapter for one coordinator.

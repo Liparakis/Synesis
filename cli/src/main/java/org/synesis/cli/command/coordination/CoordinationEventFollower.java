@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.synesis.coordination.transport.http.CoordinationHttpClient;
-import org.synesis.coordination.domain.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 
 /**
  * Shared durable-cursor SSE follower for supervisor and events commands.

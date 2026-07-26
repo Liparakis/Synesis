@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.coordination.domain.CapabilityContract;
+import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.application.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
@@ -63,7 +63,10 @@ public final class McpProtocolHandler {
      * @param provider             stable provider name
      * @param connectionInstanceId unique process connection-instance ID
      */
-    public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId) {
+    public McpProtocolHandler(AgentSessionService sessionService,
+            Path projectRoot,
+            String provider,
+            String connectionInstanceId) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
         this.readService = new WorkspaceReadService();
         this.patchService = new WorkspacePatchService();
@@ -149,7 +152,8 @@ public final class McpProtocolHandler {
             return switch (method) {
                 case "initialize" -> handleInitialize(id, (Map<String, Object>) request.get("params"));
                 case "initialized", "notifications/initialized" -> null;
-                case "notifications/roots/list_changed", "roots/list_changed" -> handleRootsListChanged(request.get("params"));
+                case "notifications/roots/list_changed", "roots/list_changed" ->
+                        handleRootsListChanged(request.get("params"));
                 case "tools/list" -> handleToolsList(id);
                 case "tools/call" -> handleToolsCall(id, (Map<String, Object>) request.get("params"));
                 case "roots/list" -> handleRootsList(id);
@@ -226,8 +230,12 @@ public final class McpProtocolHandler {
 
     private String handleRootsList(Object id) {
         Map<String, Object> rootItem = new LinkedHashMap<>();
-        rootItem.put("uri", activeProjectRoot.toUri().toString());
-        rootItem.put("name", activeProjectRoot.getFileName() != null ? activeProjectRoot.getFileName().toString() : "root");
+        rootItem.put("uri",
+                activeProjectRoot.toUri()
+                        .toString());
+        rootItem.put("name",
+                activeProjectRoot.getFileName() != null ? activeProjectRoot.getFileName()
+                                                          .toString() : "root");
 
         Map<String, Object> result = Map.of("roots", List.of(rootItem));
         return createResultResponse(id, result);
@@ -248,7 +256,7 @@ public final class McpProtocolHandler {
 
         if (params.get("rootUri") instanceof String rootUriStr) {
             Path p = parseUriOrPath(rootUriStr);
-            if (p != null && !candidates.contains(p)) {
+            if (p != null) {
                 candidates.add(p);
             }
         }
@@ -286,17 +294,19 @@ public final class McpProtocolHandler {
      * @return list of fallback candidate paths
      */
     List<Path> extractFallbackCandidates() {
-        if (initialProjectRoot != null && java.nio.file.Files.exists(initialProjectRoot.resolve(".synesis/project.json"))) {
-            return List.of(initialProjectRoot.toAbsolutePath().normalize());
+        if (initialProjectRoot != null
+                && java.nio.file.Files.exists(initialProjectRoot.resolve(".synesis/project.json"))) {
+            return List.of(initialProjectRoot.toAbsolutePath()
+                    .normalize());
         }
         List<Path> candidates = new java.util.ArrayList<>();
 
         // Environment variables
         String[] envKeys = {
-            "WORKSPACE_ROOT", "WORKSPACE_FOLDER", "WORKSPACE_DIR",
-            "PROJECT_ROOT", "PROJECT_DIR",
-            "GEMINI_WORKSPACE", "ANTIGRAVITY_WORKSPACE", "ANTIGRAVITY_PROJECT",
-            "VSCODE_WORKSPACE_FOLDER", "INIT_CWD", "PWD"
+                "WORKSPACE_ROOT", "WORKSPACE_FOLDER", "WORKSPACE_DIR",
+                "PROJECT_ROOT", "PROJECT_DIR",
+                "GEMINI_WORKSPACE", "ANTIGRAVITY_WORKSPACE", "ANTIGRAVITY_PROJECT",
+                "VSCODE_WORKSPACE_FOLDER", "INIT_CWD", "PWD"
         };
         for (String envKey : envKeys) {
             String envVal = System.getenv(envKey);
@@ -310,33 +320,37 @@ public final class McpProtocolHandler {
 
         // Explicit initial project root (e.g. --project argument)
         if (initialProjectRoot != null && !candidates.contains(initialProjectRoot)) {
-            candidates.add(initialProjectRoot.toAbsolutePath().normalize());
+            candidates.add(initialProjectRoot.toAbsolutePath()
+                    .normalize());
         }
 
         // Scan Antigravity per-project configs (~/.gemini/config/projects/*.json)
         try {
             if (antigravityProjectsDir != null && java.nio.file.Files.isDirectory(antigravityProjectsDir)) {
                 try (java.util.stream.Stream<Path> files = java.nio.file.Files.list(antigravityProjectsDir)) {
-                    files.filter(f -> f.getFileName().toString().endsWith(".json")).forEach(configFile -> {
-                        try {
-                            String json = java.nio.file.Files.readString(configFile);
-                            int idx = 0;
-                            while ((idx = json.indexOf("\"folderUri\"", idx)) != -1) {
-                                int colon = json.indexOf(':', idx);
-                                int quote1 = json.indexOf('"', colon + 1);
-                                int quote2 = json.indexOf('"', quote1 + 1);
-                                if (colon != -1 && quote1 != -1 && quote2 != -1) {
-                                    String uri = json.substring(quote1 + 1, quote2);
-                                    Path p = parseUriOrPath(uri);
-                                    if (p != null && !candidates.contains(p)) {
-                                        candidates.add(p);
+                    files.filter(f -> f.getFileName()
+                                    .toString()
+                                    .endsWith(".json"))
+                            .forEach(configFile -> {
+                                try {
+                                    String json = java.nio.file.Files.readString(configFile);
+                                    int idx = 0;
+                                    while ((idx = json.indexOf("\"folderUri\"", idx)) != -1) {
+                                        int colon = json.indexOf(':', idx);
+                                        int quote1 = json.indexOf('"', colon + 1);
+                                        int quote2 = json.indexOf('"', quote1 + 1);
+                                        if (colon != -1 && quote1 != -1 && quote2 != -1) {
+                                            String uri = json.substring(quote1 + 1, quote2);
+                                            Path p = parseUriOrPath(uri);
+                                            if (p != null && !candidates.contains(p)) {
+                                                candidates.add(p);
+                                            }
+                                        }
+                                        idx = quote2 + 1;
                                     }
+                                } catch (Exception ignored) {
                                 }
-                                idx = quote2 + 1;
-                            }
-                        } catch (Exception ignored) {
-                        }
-                    });
+                            });
                 }
             }
         } catch (Exception ignored) {
@@ -344,7 +358,9 @@ public final class McpProtocolHandler {
 
         // Current working directory (last resort)
         try {
-            Path cwd = Path.of(".").toAbsolutePath().normalize();
+            Path cwd = Path.of(".")
+                    .toAbsolutePath()
+                    .normalize();
             if (!candidates.contains(cwd)) {
                 candidates.add(cwd);
             }
@@ -373,25 +389,33 @@ public final class McpProtocolHandler {
                 while (raw.startsWith("/")) {
                     raw = raw.substring(1);
                 }
-                return Path.of(raw).toAbsolutePath().normalize();
+                return Path.of(raw)
+                        .toAbsolutePath()
+                        .normalize();
             }
         } catch (Exception ignored) {
         }
 
         if (trimmed.startsWith("file:")) {
             try {
-                return Path.of(java.net.URI.create(trimmed)).toAbsolutePath().normalize();
+                return Path.of(java.net.URI.create(trimmed))
+                        .toAbsolutePath()
+                        .normalize();
             } catch (Exception ex) {
                 String raw = trimmed.substring(5);
                 while (raw.startsWith("/")) {
                     raw = raw.substring(1);
                 }
-                return Path.of(raw).toAbsolutePath().normalize();
+                return Path.of(raw)
+                        .toAbsolutePath()
+                        .normalize();
             }
         }
 
         try {
-            return Path.of(trimmed).toAbsolutePath().normalize();
+            return Path.of(trimmed)
+                    .toAbsolutePath()
+                    .normalize();
         } catch (Exception ex) {
             return null;
         }
@@ -410,16 +434,20 @@ public final class McpProtocolHandler {
 
         List<Path> initializedRoots = new java.util.ArrayList<>();
         String userHome = System.getProperty("user.home");
-        Path homePath = (userHome != null && !userHome.isBlank()) ? Path.of(userHome).toAbsolutePath().normalize() : null;
+        Path homePath = (userHome != null && !userHome.isBlank()) ? Path.of(userHome)
+                                                                    .toAbsolutePath()
+                                                                    .normalize() : null;
 
         for (Path candidate : candidates) {
             try {
-                Path normalized = candidate.toAbsolutePath().normalize();
-                String normStr = normalized.toString().replace('\\', '/');
+                Path normalized = candidate.toAbsolutePath()
+                        .normalize();
+                String normStr = normalized.toString()
+                        .replace('\\', '/');
                 if (normStr.contains("/.synesis/local/worktrees/")) {
                     continue; // Reject assigned worktree path as control project root
                 }
-                if (homePath != null && normalized.equals(homePath)) {
+                if (normalized.equals(homePath)) {
                     continue; // Reject user home directory as control project root
                 }
                 if (java.nio.file.Files.exists(normalized.resolve(".synesis/project.json"))) {
@@ -471,9 +499,12 @@ public final class McpProtocolHandler {
         // Tool 2: synesis.read_file
         Map<String, Object> readProperties = new LinkedHashMap<>();
         readProperties.put("path", Map.of("type", "string", "description", "Repository-relative file path"));
-        readProperties.put("startLine", Map.of("type", "integer", "description", "1-based starting line number (default: 1)"));
-        readProperties.put("endLine", Map.of("type", "integer", "description", "1-based ending line number (default: EOF)"));
-        readProperties.put("maxBytes", Map.of("type", "integer", "description", "Maximum UTF-8 bytes to return (default: 65536)"));
+        readProperties.put("startLine",
+                Map.of("type", "integer", "description", "1-based starting line number (default: 1)"));
+        readProperties.put("endLine",
+                Map.of("type", "integer", "description", "1-based ending line number (default: EOF)"));
+        readProperties.put("maxBytes",
+                Map.of("type", "integer", "description", "Maximum UTF-8 bytes to return (default: 65536)"));
 
         Map<String, Object> readSchema = new LinkedHashMap<>();
         readSchema.put("type", "object");
@@ -500,8 +531,18 @@ public final class McpProtocolHandler {
         patchProperties.put("path", Map.of("type", "string", "description", "Repository-relative file path"));
         patchProperties.put("create", Map.of("type", "boolean", "description", "Set true for new file creation"));
         patchProperties.put("content", Map.of("type", "string", "description", "Full file content for creation mode"));
-        patchProperties.put("expectedHash", Map.of("type", "string", "description", "SHA-256 hex string of existing contentHash returned by synesis.read_file (required for modification)"));
-        patchProperties.put("edits", Map.of("type", "array", "items", editSchema, "description", "List of replacement edits (required for modification)"));
+        patchProperties.put("expectedHash",
+                Map.of("type",
+                        "string",
+                        "description",
+                        "SHA-256 hex string of existing contentHash returned by synesis.read_file (required for modification)"));
+        patchProperties.put("edits",
+                Map.of("type",
+                        "array",
+                        "items",
+                        editSchema,
+                        "description",
+                        "List of replacement edits (required for modification)"));
 
         Map<String, Object> patchSchema = new LinkedHashMap<>();
         patchSchema.put("type", "object");
@@ -510,13 +551,25 @@ public final class McpProtocolHandler {
 
         Map<String, Object> applyPatchTool = new LinkedHashMap<>();
         applyPatchTool.put("name", "synesis.apply_patch");
-        applyPatchTool.put("description", "Applies a structured file creation or modification patch to the assigned worktree.");
+        applyPatchTool.put("description",
+                "Applies a structured file creation or modification patch to the assigned worktree.");
         applyPatchTool.put("inputSchema", patchSchema);
 
         Map<String, Object> runCmdProperties = new LinkedHashMap<>();
-        runCmdProperties.put("type", Map.of("type", "string", "description", "Command intent classification: build, test, lint, format_check, git_status, git_diff, git_log"));
-        runCmdProperties.put("target", Map.of("type", "string", "description", "Optional target specifier or test filter"));
-        runCmdProperties.put("arguments", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Optional additional arguments"));
+        runCmdProperties.put("type",
+                Map.of("type",
+                        "string",
+                        "description",
+                        "Command intent classification: build, test, lint, format_check, git_status, git_diff, git_log"));
+        runCmdProperties.put("target",
+                Map.of("type", "string", "description", "Optional target specifier or test filter"));
+        runCmdProperties.put("arguments",
+                Map.of("type",
+                        "array",
+                        "items",
+                        Map.of("type", "string"),
+                        "description",
+                        "Optional additional arguments"));
 
         Map<String, Object> runCmdSchema = new LinkedHashMap<>();
         runCmdSchema.put("type", "object");
@@ -525,31 +578,54 @@ public final class McpProtocolHandler {
 
         Map<String, Object> runCommandTool = new LinkedHashMap<>();
         runCommandTool.put("name", "synesis.run_command");
-        runCommandTool.put("description", "Executes an approved project build or git command intent inside the assigned worktree.");
+        runCommandTool.put("description",
+                "Executes an approved project build or git command intent inside the assigned worktree.");
         runCommandTool.put("inputSchema", runCmdSchema);
 
         Map<String, Object> nextActionSchema = Map.of("type", "object", "properties", Map.of());
         Map<String, Object> getNextActionTool = new LinkedHashMap<>();
         getNextActionTool.put("name", "synesis.get_next_action");
-        getNextActionTool.put("description", "Retrieves the single highest-priority actionable coordination item for the active MCP session.");
+        getNextActionTool.put("description",
+                "Retrieves the single highest-priority actionable coordination item for the active MCP session.");
         getNextActionTool.put("inputSchema", nextActionSchema);
 
         // Tool 6: synesis.describe_required_capability
         Map<String, Object> contractProperties = new LinkedHashMap<>();
         contractProperties.put("inputs", Map.of("type", "string", "description", "Input parameter specification"));
         contractProperties.put("output", Map.of("type", "string", "description", "Output return type and semantics"));
-        contractProperties.put("requiredBehavior", Map.of("type", "array", "items", Map.of("type", "string"), "description", "List of operational behavior requirements"));
-        contractProperties.put("acceptanceTests", Map.of("type", "array", "items", Map.of("type", "string"), "description", "List of acceptance test criteria"));
+        contractProperties.put("requiredBehavior",
+                Map.of("type",
+                        "array",
+                        "items",
+                        Map.of("type", "string"),
+                        "description",
+                        "List of operational behavior requirements"));
+        contractProperties.put("acceptanceTests",
+                Map.of("type",
+                        "array",
+                        "items",
+                        Map.of("type", "string"),
+                        "description",
+                        "List of acceptance test criteria"));
 
         Map<String, Object> contractSchema = new LinkedHashMap<>();
         contractSchema.put("type", "object");
         contractSchema.put("properties", contractProperties);
 
         Map<String, Object> describeProperties = new LinkedHashMap<>();
-        describeProperties.put("capability", Map.of("type", "string", "description", "Target capability name (e.g. catalog.product-query)"));
+        describeProperties.put("capability",
+                Map.of("type", "string", "description", "Target capability name (e.g. catalog.product-query)"));
         describeProperties.put("contract", contractSchema);
-        describeProperties.put("request", Map.of("type", "string", "description", "Public capability request handle locator (for requester revision response)"));
-        describeProperties.put("revisionResponse", Map.of("type", "string", "description", "Requester response type to owner revision: accept, counter, cancel"));
+        describeProperties.put("request",
+                Map.of("type",
+                        "string",
+                        "description",
+                        "Public capability request handle locator (for requester revision response)"));
+        describeProperties.put("revisionResponse",
+                Map.of("type",
+                        "string",
+                        "description",
+                        "Requester response type to owner revision: accept, counter, cancel"));
 
         Map<String, Object> describeSchema = new LinkedHashMap<>();
         describeSchema.put("type", "object");
@@ -557,15 +633,19 @@ public final class McpProtocolHandler {
 
         Map<String, Object> describeTool = new LinkedHashMap<>();
         describeTool.put("name", "synesis.describe_required_capability");
-        describeTool.put("description", "Describes required capability contract or responds to owner revision feedback.");
+        describeTool.put("description",
+                "Describes required capability contract or responds to owner revision feedback.");
         describeTool.put("inputSchema", describeSchema);
 
         // Tool 7: synesis.respond_to_owner_request
         Map<String, Object> respondProperties = new LinkedHashMap<>();
-        respondProperties.put("request", Map.of("type", "string", "description", "Public capability request handle locator"));
-        respondProperties.put("response", Map.of("type", "string", "description", "Owner response type: accept, revise, reject"));
+        respondProperties.put("request",
+                Map.of("type", "string", "description", "Public capability request handle locator"));
+        respondProperties.put("response",
+                Map.of("type", "string", "description", "Owner response type: accept, revise, reject"));
         respondProperties.put("revision", contractSchema);
-        respondProperties.put("reason", Map.of("type", "string", "description", "Explanation for revision or rejection"));
+        respondProperties.put("reason",
+                Map.of("type", "string", "description", "Explanation for revision or rejection"));
 
         Map<String, Object> respondSchema = new LinkedHashMap<>();
         respondSchema.put("type", "object");
@@ -580,7 +660,8 @@ public final class McpProtocolHandler {
         // Tool 8: synesis.publish_implementation
         Map<String, Object> publishProperties = new LinkedHashMap<>();
         publishProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
-        publishProperties.put("summary", Map.of("type", "string", "description", "Human-readable summary of this implementation"));
+        publishProperties.put("summary",
+                Map.of("type", "string", "description", "Human-readable summary of this implementation"));
 
         Map<String, Object> publishSchema = new LinkedHashMap<>();
         publishSchema.put("type", "object");
@@ -589,15 +670,24 @@ public final class McpProtocolHandler {
 
         Map<String, Object> publishTool = new LinkedHashMap<>();
         publishTool.put("name", "synesis.publish_implementation");
-        publishTool.put("description", "Publishes an immutable implementation snapshot for a capability request as the authorized owner.");
+        publishTool.put("description",
+                "Publishes an immutable implementation snapshot for a capability request as the authorized owner.");
         publishTool.put("inputSchema", publishSchema);
 
         // Tool 9: synesis.validate_available_implementation
         Map<String, Object> validateProperties = new LinkedHashMap<>();
         validateProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
-        validateProperties.put("result", Map.of("type", "string", "description", "Validation result: accepted or revision_required"));
-        validateProperties.put("reason", Map.of("type", "string", "description", "Failure reason when result is revision_required"));
-        validateProperties.put("failedAcceptanceTests", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Failed acceptance test names"));
+        validateProperties.put("result",
+                Map.of("type", "string", "description", "Validation result: accepted or revision_required"));
+        validateProperties.put("reason",
+                Map.of("type", "string", "description", "Failure reason when result is revision_required"));
+        validateProperties.put("failedAcceptanceTests",
+                Map.of("type",
+                        "array",
+                        "items",
+                        Map.of("type", "string"),
+                        "description",
+                        "Failed acceptance test names"));
 
         Map<String, Object> validateSchema = new LinkedHashMap<>();
         validateSchema.put("type", "object");
@@ -606,12 +696,14 @@ public final class McpProtocolHandler {
 
         Map<String, Object> validateTool = new LinkedHashMap<>();
         validateTool.put("name", "synesis.validate_available_implementation");
-        validateTool.put("description", "Validates the available implementation snapshot for a capability request as the authorized requester.");
+        validateTool.put("description",
+                "Validates the available implementation snapshot for a capability request as the authorized requester.");
         validateTool.put("inputSchema", validateSchema);
 
         // Tool 10: synesis.complete_task
         Map<String, Object> completeProperties = new LinkedHashMap<>();
-        completeProperties.put("summary", Map.of("type", "string", "description", "Human-readable summary of completed task work"));
+        completeProperties.put("summary",
+                Map.of("type", "string", "description", "Human-readable summary of completed task work"));
 
         Map<String, Object> completeSchema = new LinkedHashMap<>();
         completeSchema.put("type", "object");
@@ -624,7 +716,8 @@ public final class McpProtocolHandler {
 
         // Tool 11: synesis.cancel_task
         Map<String, Object> cancelProperties = new LinkedHashMap<>();
-        cancelProperties.put("reason", Map.of("type", "string", "description", "Cancellation reason string (1-1000 characters)"));
+        cancelProperties.put("reason",
+                Map.of("type", "string", "description", "Cancellation reason string (1-1000 characters)"));
 
         Map<String, Object> cancelSchema = new LinkedHashMap<>();
         cancelSchema.put("type", "object");
@@ -637,7 +730,18 @@ public final class McpProtocolHandler {
         cancelTaskTool.put("inputSchema", cancelSchema);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tools", List.of(ensureSessionTool, readFileTool, applyPatchTool, runCommandTool, getNextActionTool, describeTool, respondTool, publishTool, validateTool, completeTaskTool, cancelTaskTool));
+        result.put("tools",
+                List.of(ensureSessionTool,
+                        readFileTool,
+                        applyPatchTool,
+                        runCommandTool,
+                        getNextActionTool,
+                        describeTool,
+                        respondTool,
+                        publishTool,
+                        validateTool,
+                        completeTaskTool,
+                        cancelTaskTool));
 
         return createResultResponse(id, result);
     }
@@ -653,145 +757,175 @@ public final class McpProtocolHandler {
 
         AgentResponse agentResponse;
 
-        if ("synesis.ensure_session".equals(name)) {
-            AgentSessionService.AgentTaskIntent taskIntent = parseTaskIntent(arguments);
-            boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
+        switch (name) {
+            case "synesis.ensure_session" -> {
+                AgentSessionService.AgentTaskIntent taskIntent = parseTaskIntent(arguments);
+                boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
 
-            AgentSessionService.SessionResolutionRequest resolutionRequest = new AgentSessionService.SessionResolutionRequest(
-                    activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
+                AgentSessionService.SessionResolutionRequest resolutionRequest = new AgentSessionService.SessionResolutionRequest(
+                        activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
 
-            agentResponse = sessionService.ensureSession(resolutionRequest);
-            if (agentResponse.status() == AgentStatus.READY) {
-                isSessionBound = true;
+                agentResponse = sessionService.ensureSession(resolutionRequest);
+                if (agentResponse.status() == AgentStatus.READY) {
+                    isSessionBound = true;
+                }
             }
-        } else if ("synesis.read_file".equals(name)) {
-            String path = arguments != null ? (String) arguments.get("path") : null;
-            Integer startLine = (arguments != null && arguments.get("startLine") instanceof Number n) ? n.intValue() : null;
-            Integer endLine = (arguments != null && arguments.get("endLine") instanceof Number n) ? n.intValue() : null;
-            Integer maxBytes = (arguments != null && arguments.get("maxBytes") instanceof Number n) ? n.intValue() : null;
+            case "synesis.read_file" -> {
+                String path = arguments != null ? (String) arguments.get("path") : null;
+                Integer startLine =
+                        (arguments != null && arguments.get("startLine") instanceof Number n) ? n.intValue() : null;
+                Integer endLine =
+                        (arguments != null && arguments.get("endLine") instanceof Number n) ? n.intValue() : null;
+                Integer maxBytes =
+                        (arguments != null && arguments.get("maxBytes") instanceof Number n) ? n.intValue() : null;
 
-            WorkspaceReadService.ReadRequest readReq = new WorkspaceReadService.ReadRequest(
-                    activeProjectRoot, provider, connectionInstanceId, path, startLine, endLine, maxBytes);
-            agentResponse = readService.readFile(readReq);
-        } else if ("synesis.apply_patch".equals(name)) {
-            String path = arguments != null ? (String) arguments.get("path") : null;
-            boolean create = arguments != null && Boolean.TRUE.equals(arguments.get("create"));
-            String content = arguments != null ? (String) arguments.get("content") : null;
-            String expectedHash = arguments != null ? (String) arguments.get("expectedHash") : null;
+                WorkspaceReadService.ReadRequest readReq = new WorkspaceReadService.ReadRequest(
+                        activeProjectRoot, provider, connectionInstanceId, path, startLine, endLine, maxBytes);
+                agentResponse = readService.readFile(readReq);
+            }
+            case "synesis.apply_patch" -> {
+                String path = arguments != null ? (String) arguments.get("path") : null;
+                boolean create = arguments != null && Boolean.TRUE.equals(arguments.get("create"));
+                String content = arguments != null ? (String) arguments.get("content") : null;
+                String expectedHash = arguments != null ? (String) arguments.get("expectedHash") : null;
 
-            List<WorkspacePatchService.PatchEdit> patchEdits = new java.util.ArrayList<>();
-            if (arguments != null && arguments.get("edits") instanceof List<?> editsList) {
-                for (Object item : editsList) {
-                    if (item instanceof Map<?, ?> editMap) {
-                        String find = (String) editMap.get("find");
-                        String replace = (String) editMap.get("replace");
-                        int expectedOccurrences = (editMap.get("expectedOccurrences") instanceof Number n) ? n.intValue() : 0;
-                        if (find != null && replace != null && expectedOccurrences >= 1) {
-                            patchEdits.add(new WorkspacePatchService.PatchEdit(find, replace, expectedOccurrences));
+                List<WorkspacePatchService.PatchEdit> patchEdits = new java.util.ArrayList<>();
+                if (arguments != null && arguments.get("edits") instanceof List<?> editsList) {
+                    for (Object item : editsList) {
+                        if (item instanceof Map<?, ?> editMap) {
+                            String find = (String) editMap.get("find");
+                            String replace = (String) editMap.get("replace");
+                            int expectedOccurrences =
+                                    (editMap.get("expectedOccurrences") instanceof Number n) ? n.intValue() : 0;
+                            if (find != null && replace != null && expectedOccurrences >= 1) {
+                                patchEdits.add(new WorkspacePatchService.PatchEdit(find, replace, expectedOccurrences));
+                            }
                         }
                     }
                 }
-            }
 
-            WorkspacePatchService.PatchRequest patchReq = new WorkspacePatchService.PatchRequest(
-                    activeProjectRoot, provider, connectionInstanceId, path, create, content, expectedHash, patchEdits);
-            agentResponse = patchService.applyPatch(patchReq);
-        } else if ("synesis.run_command".equals(name)) {
-            String type = arguments != null ? (String) arguments.get("type") : null;
-            String target = arguments != null ? (String) arguments.get("target") : null;
-            List<String> commandArgs = new java.util.ArrayList<>();
-            if (arguments != null && arguments.get("arguments") instanceof List<?> list) {
-                for (Object item : list) {
-                    if (item instanceof String s) {
-                        commandArgs.add(s);
+                WorkspacePatchService.PatchRequest patchReq = new WorkspacePatchService.PatchRequest(
+                        activeProjectRoot,
+                        provider,
+                        connectionInstanceId,
+                        path,
+                        create,
+                        content,
+                        expectedHash,
+                        patchEdits);
+                agentResponse = patchService.applyPatch(patchReq);
+            }
+            case "synesis.run_command" -> {
+                String type = arguments != null ? (String) arguments.get("type") : null;
+                String target = arguments != null ? (String) arguments.get("target") : null;
+                List<String> commandArgs = new java.util.ArrayList<>();
+                if (arguments != null && arguments.get("arguments") instanceof List<?> list) {
+                    for (Object item : list) {
+                        if (item instanceof String s) {
+                            commandArgs.add(s);
+                        }
                     }
                 }
-            }
 
-            if (type == null || type.isBlank()) {
-                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-            } else {
-                try {
-                    ProjectCommandIntent intent = new ProjectCommandIntent(type, target, commandArgs);
-                    ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(
-                            activeProjectRoot, provider, connectionInstanceId, intent);
-                    agentResponse = commandService.runCommand(cmdReq);
-                } catch (IllegalArgumentException ex) {
+                if (type == null || type.isBlank()) {
                     agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-                }
-            }
-        } else if ("synesis.get_next_action".equals(name)) {
-            AgentNextActionService.NextActionRequest nextReq = new AgentNextActionService.NextActionRequest(
-                    activeProjectRoot, provider, connectionInstanceId);
-            agentResponse = nextActionService.getNextAction(nextReq);
-        } else if ("synesis.describe_required_capability".equals(name)) {
-            String capability = arguments != null ? (String) arguments.get("capability") : null;
-            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
-            String revResp = arguments != null ? (String) arguments.get("revisionResponse") : null;
-            CapabilityContract contract = parseContract(arguments != null ? arguments.get("contract") : null);
-
-            CapabilityRequestService.DescribeCapabilityRequest descReq = new CapabilityRequestService.DescribeCapabilityRequest(
-                    activeProjectRoot, provider, connectionInstanceId, capability, contract, reqHandle, revResp);
-            agentResponse = capabilityRequestService.describeRequiredCapability(descReq);
-        } else if ("synesis.respond_to_owner_request".equals(name)) {
-            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
-            String response = arguments != null ? (String) arguments.get("response") : null;
-            String reason = arguments != null ? (String) arguments.get("reason") : null;
-            CapabilityContract revision = parseContract(arguments != null ? arguments.get("revision") : null);
-
-            if (reqHandle == null || response == null) {
-                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-            } else {
-                CapabilityResponseService.OwnerResponseRequest respReq = new CapabilityResponseService.OwnerResponseRequest(
-                        activeProjectRoot, provider, connectionInstanceId, reqHandle, response, revision, reason);
-                agentResponse = capabilityResponseService.respondToOwnerRequest(respReq);
-            }
-        } else if ("synesis.publish_implementation".equals(name)) {
-            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
-            String summary = arguments != null ? (String) arguments.get("summary") : null;
-
-            if (reqHandle == null || reqHandle.isBlank()) {
-                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-            } else {
-                ImplementationPublicationService.PublishRequest pubReq = new ImplementationPublicationService.PublishRequest(
-                        activeProjectRoot, provider, connectionInstanceId, reqHandle, summary);
-                agentResponse = publicationService.publishImplementation(pubReq);
-            }
-        } else if ("synesis.validate_available_implementation".equals(name)) {
-            String reqHandle = arguments != null ? (String) arguments.get("request") : null;
-            String valResult = arguments != null ? (String) arguments.get("result") : null;
-            String valReason = arguments != null ? (String) arguments.get("reason") : null;
-
-            List<String> failedTests = new java.util.ArrayList<>();
-            if (arguments != null && arguments.get("failedAcceptanceTests") instanceof List<?> list) {
-                for (Object item : list) {
-                    if (item instanceof String s) {
-                        failedTests.add(s);
+                } else {
+                    try {
+                        ProjectCommandIntent intent = new ProjectCommandIntent(type, target, commandArgs);
+                        ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(
+                                activeProjectRoot, provider, connectionInstanceId, intent);
+                        agentResponse = commandService.runCommand(cmdReq);
+                    } catch (IllegalArgumentException ex) {
+                        agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
                     }
                 }
             }
-
-            if (reqHandle == null || valResult == null) {
-                agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-            } else {
-                ImplementationValidationService.ValidateRequest valReq = new ImplementationValidationService.ValidateRequest(
-                        activeProjectRoot, provider, connectionInstanceId, reqHandle, valResult, valReason, failedTests);
-                agentResponse = validationService.validateImplementation(valReq);
+            case "synesis.get_next_action" -> {
+                AgentNextActionService.NextActionRequest nextReq = new AgentNextActionService.NextActionRequest(
+                        activeProjectRoot, provider, connectionInstanceId);
+                agentResponse = nextActionService.getNextAction(nextReq);
             }
-        } else if ("synesis.complete_task".equals(name)) {
-            String summary = arguments != null ? (String) arguments.get("summary") : null;
-            AgentTaskCompletionService.CompleteTaskRequest completeReq = new AgentTaskCompletionService.CompleteTaskRequest(
-                    activeProjectRoot, provider, connectionInstanceId, summary);
-            agentResponse = taskCompletionService.completeTask(completeReq);
-        } else if ("synesis.cancel_task".equals(name)) {
-            String reason = arguments != null ? (String) arguments.get("reason") : null;
-            org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest cancelReq = new org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest(
-                    activeProjectRoot, provider, connectionInstanceId, reason);
-            agentResponse = taskCancellationService.cancelTask(cancelReq);
-        } else {
-            Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
-            Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);
-            return createResultResponse(id, result);
+            case "synesis.describe_required_capability" -> {
+                String capability = arguments != null ? (String) arguments.get("capability") : null;
+                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+                String revResp = arguments != null ? (String) arguments.get("revisionResponse") : null;
+                CapabilityContract contract = parseContract(arguments != null ? arguments.get("contract") : null);
+
+                CapabilityRequestService.DescribeCapabilityRequest descReq = new CapabilityRequestService.DescribeCapabilityRequest(
+                        activeProjectRoot, provider, connectionInstanceId, capability, contract, reqHandle, revResp);
+                agentResponse = capabilityRequestService.describeRequiredCapability(descReq);
+            }
+            case "synesis.respond_to_owner_request" -> {
+                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+                String response = arguments != null ? (String) arguments.get("response") : null;
+                String reason = arguments != null ? (String) arguments.get("reason") : null;
+                CapabilityContract revision = parseContract(arguments != null ? arguments.get("revision") : null);
+
+                if (reqHandle == null || response == null) {
+                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+                } else {
+                    CapabilityResponseService.OwnerResponseRequest respReq = new CapabilityResponseService.OwnerResponseRequest(
+                            activeProjectRoot, provider, connectionInstanceId, reqHandle, response, revision, reason);
+                    agentResponse = capabilityResponseService.respondToOwnerRequest(respReq);
+                }
+            }
+            case "synesis.publish_implementation" -> {
+                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+                String summary = arguments != null ? (String) arguments.get("summary") : null;
+
+                if (reqHandle == null || reqHandle.isBlank()) {
+                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+                } else {
+                    ImplementationPublicationService.PublishRequest pubReq = new ImplementationPublicationService.PublishRequest(
+                            activeProjectRoot, provider, connectionInstanceId, reqHandle, summary);
+                    agentResponse = publicationService.publishImplementation(pubReq);
+                }
+            }
+            case "synesis.validate_available_implementation" -> {
+                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+                String valResult = arguments != null ? (String) arguments.get("result") : null;
+                String valReason = arguments != null ? (String) arguments.get("reason") : null;
+
+                List<String> failedTests = new java.util.ArrayList<>();
+                if (arguments != null && arguments.get("failedAcceptanceTests") instanceof List<?> list) {
+                    for (Object item : list) {
+                        if (item instanceof String s) {
+                            failedTests.add(s);
+                        }
+                    }
+                }
+
+                if (reqHandle == null || valResult == null) {
+                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+                } else {
+                    ImplementationValidationService.ValidateRequest valReq = new ImplementationValidationService.ValidateRequest(
+                            activeProjectRoot,
+                            provider,
+                            connectionInstanceId,
+                            reqHandle,
+                            valResult,
+                            valReason,
+                            failedTests);
+                    agentResponse = validationService.validateImplementation(valReq);
+                }
+            }
+            case "synesis.complete_task" -> {
+                String summary = arguments != null ? (String) arguments.get("summary") : null;
+                AgentTaskCompletionService.CompleteTaskRequest completeReq = new AgentTaskCompletionService.CompleteTaskRequest(
+                        activeProjectRoot, provider, connectionInstanceId, summary);
+                agentResponse = taskCompletionService.completeTask(completeReq);
+            }
+            case "synesis.cancel_task" -> {
+                String reason = arguments != null ? (String) arguments.get("reason") : null;
+                org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest cancelReq = new org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest(
+                        activeProjectRoot, provider, connectionInstanceId, reason);
+                agentResponse = taskCancellationService.cancelTask(cancelReq);
+            }
+            case null, default -> {
+                Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
+                Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);
+                return createResultResponse(id, result);
+            }
         }
 
         Map<String, Object> textContent = Map.of("type", "text", "text", agentResponse.toJson());
@@ -811,14 +945,18 @@ public final class McpProtocolHandler {
         List<String> requiredBehavior = new java.util.ArrayList<>();
         if (m.get("requiredBehavior") instanceof List<?> list) {
             for (Object item : list) {
-                if (item instanceof String s) requiredBehavior.add(s);
+                if (item instanceof String s) {
+                    requiredBehavior.add(s);
+                }
             }
         }
 
         List<String> acceptanceTests = new java.util.ArrayList<>();
         if (m.get("acceptanceTests") instanceof List<?> list) {
             for (Object item : list) {
-                if (item instanceof String s) acceptanceTests.add(s);
+                if (item instanceof String s) {
+                    acceptanceTests.add(s);
+                }
             }
         }
 

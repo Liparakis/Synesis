@@ -12,17 +12,17 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import org.synesis.coordination.domain.CoordinationCommand;
+import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.transport.http.CoordinationHttpClient;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
-import org.synesis.coordination.domain.OwnershipRegistry;
-import org.synesis.coordination.domain.PredictionContract;
-import org.synesis.coordination.domain.PredictionEvent;
+import org.synesis.coordination.domain.ownership.OwnershipRegistry;
+import org.synesis.coordination.domain.prediction.PredictionContract;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.domain.PredictionEventType;
-import org.synesis.coordination.domain.PredictionIntegrationGate;
-import org.synesis.coordination.domain.PredictionState;
-import org.synesis.coordination.domain.SpeculationWorkspace;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.prediction.PredictionIntegrationGate;
+import org.synesis.coordination.domain.prediction.PredictionState;
+import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
@@ -95,7 +95,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
     }
 
     private static String implementationSource() {
-        return "package org.synesis.workspace.application;\n\nimport java.util.UUID;\nimport org.synesis.coordination.domain.PredictionProjection;\nimport org.synesis.coordination.domain.PredictionState;\n\n/** Owner capability for querying prediction state. */\npublic final class SupervisorApplicationService {\n    private final PredictionProjection projection;\n    /** Creates the service. */\n    public SupervisorApplicationService(PredictionProjection projection) { this.projection = projection; }\n    /** Returns one prediction state. */\n    public PredictionState predictionStatus(UUID predictionId) { return projection.state(predictionId).orElseThrow(); }\n}\n";
+        return "package org.synesis.workspace.application;\n\nimport java.util.UUID;\nimport org.synesis.coordination.domain.prediction.PredictionProjection;\nimport org.synesis.coordination.domain.prediction.PredictionState;\n\n/** Owner capability for querying prediction state. */\npublic final class SupervisorApplicationService {\n    private final PredictionProjection projection;\n    /** Creates the service. */\n    public SupervisorApplicationService(PredictionProjection projection) { this.projection = projection; }\n    /** Returns one prediction state. */\n    public PredictionState predictionStatus(UUID predictionId) { return projection.state(predictionId).orElseThrow(); }\n}\n";
     }
 
     private static String run(Path directory, String... command) throws Exception {

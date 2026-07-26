@@ -8,8 +8,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.synesis.coordination.domain.CapabilityRequestRecord;
-import org.synesis.coordination.domain.TaskSnapshotRecord;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 
 /**
  * Service for creating and verifying immutable task snapshots from worker worktrees.

@@ -2,7 +2,7 @@ package org.synesis.workspace.application;
 
 import java.util.Objects;
 
-import org.synesis.coordination.domain.ImplementationRevisionRecord;
+import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 
 /**
  * Helper service for determining implementation snapshot idempotency.

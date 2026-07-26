@@ -7,13 +7,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-import org.synesis.coordination.domain.CoordinationCommand;
-import org.synesis.coordination.domain.IntegrationAttemptPayload;
-import org.synesis.coordination.domain.OwnershipClaim;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
+import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.domain.PredictionEventType;
-import org.synesis.coordination.domain.TaskSnapshotPayload;
-import org.synesis.coordination.domain.TaskSnapshotRecord;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.link.identity.NodeIdentity;
 
 /**

@@ -13,12 +13,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.coordination.domain.CapabilityRequestProjection;
-import org.synesis.coordination.domain.CoordinationProjection;
-import org.synesis.coordination.domain.PredictionEvent;
-import org.synesis.coordination.domain.PredictionEventType;
-import org.synesis.coordination.domain.PredictionProjection;
-import org.synesis.coordination.domain.TaskCompletionProjection;
+import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
+import org.synesis.coordination.domain.task.CoordinationProjection;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.prediction.PredictionProjection;
+import org.synesis.coordination.domain.task.TaskCompletionProjection;
 
 /**
  * Crash-safe per-project event store. Each event is one immutable file; the

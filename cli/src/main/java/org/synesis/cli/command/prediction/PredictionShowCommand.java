@@ -10,10 +10,10 @@ import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.CoordinationCommand;
-import org.synesis.coordination.domain.PredictionContract;
-import org.synesis.coordination.domain.PredictionEventType;
-import org.synesis.coordination.domain.PredictionProjection;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.prediction.PredictionContract;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.prediction.PredictionProjection;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

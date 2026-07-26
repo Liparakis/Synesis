@@ -11,8 +11,8 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
-import org.synesis.coordination.domain.CoordinationCommand;
-import org.synesis.coordination.domain.PredictionEvent;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 
 /**
  * Minimal JDK HTTP client for signed coordination commands and replay.

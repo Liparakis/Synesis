@@ -1240,3 +1240,8 @@ Append-only operational history.
 - Focused MCP server/tool tests passed with exactly 11 tools; stale production FQN and production-to-test scans were clean; no module dependency changes were found.
 - CLI help/version and command-family help passed; the disposable CLI MCP launcher retains its pre-existing missing MCP runtime classpath limitation.
 - Working tree was clean before this final durable checkpoint; `SYN-015` is complete and `SYN-014E` remains paused.
+# 2026-07-26 — SYN-016 coordination domain organization
+
+- Reorganized the flat coordination domain into `capability`, `task`, `ownership`, `prediction`, `integration`, `speculation`, and `command` packages.
+- Updated production/test references and mirrored coordination tests; added a package ownership architecture test without adding package-info files.
+- Verified `:coordination:check`, root `check`, Go tests/vet, stale-FQN scans, and no-flat-package scans.

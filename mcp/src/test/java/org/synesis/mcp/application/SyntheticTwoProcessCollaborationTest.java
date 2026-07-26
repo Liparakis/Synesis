@@ -8,10 +8,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.coordination.domain.CoordinationCommand;
-import org.synesis.coordination.domain.OwnershipClaim;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.domain.PredictionEventType;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.application.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -88,13 +88,13 @@ class SyntheticTwoProcessCollaborationTest {
 
         // 1. Task for owner (Codex)
         UUID ownerTaskId = UUID.randomUUID();
-        org.synesis.coordination.domain.CoordinationTask ownerTask = new org.synesis.coordination.domain.CoordinationTask(
+        org.synesis.coordination.domain.task.CoordinationTask ownerTask = new org.synesis.coordination.domain.task.CoordinationTask(
                 ownerTaskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 identity.nodeId(), b2.supervisorId(), b2.workerId());
         CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), ownerTask.encoded(), identity);
         store.append(ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), cmd1.encoded(), identity);
 
-        org.synesis.coordination.domain.TaskClaim claim1 = new org.synesis.coordination.domain.TaskClaim(
+        org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
                 ownerTaskId, identity.nodeId(), b2.supervisorId(), b2.workerId());
         CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), claim1.encoded(), identity);
         store.append(ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), cmd2.encoded(), identity);
@@ -105,13 +105,13 @@ class SyntheticTwoProcessCollaborationTest {
 
         // 2. Task for requester (Antigravity)
         UUID reqTaskId = UUID.randomUUID();
-        org.synesis.coordination.domain.CoordinationTask reqTask = new org.synesis.coordination.domain.CoordinationTask(
+        org.synesis.coordination.domain.task.CoordinationTask reqTask = new org.synesis.coordination.domain.task.CoordinationTask(
                 reqTaskId, location.projectId(), "Product CLI Task", "catalog.product-cli",
                 identity.nodeId(), b1.supervisorId(), b1.workerId());
         CoordinationCommand cmd4 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), reqTask.encoded(), identity);
         store.append(reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), cmd4.encoded(), identity);
 
-        org.synesis.coordination.domain.TaskClaim claim3 = new org.synesis.coordination.domain.TaskClaim(
+        org.synesis.coordination.domain.task.TaskClaim claim3 = new org.synesis.coordination.domain.task.TaskClaim(
                 reqTaskId, identity.nodeId(), b1.supervisorId(), b1.workerId());
         CoordinationCommand cmd5 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), claim3.encoded(), identity);
         store.append(reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), cmd5.encoded(), identity);

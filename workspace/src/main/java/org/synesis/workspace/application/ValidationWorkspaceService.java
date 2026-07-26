@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.synesis.coordination.domain.CapabilityRequestHandle;
-import org.synesis.coordination.domain.ImplementationRevisionRecord;
+import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
+import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 
 /**
  * Manages disposable Git validation worktrees for capability request validation.
