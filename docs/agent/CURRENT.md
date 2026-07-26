@@ -15,19 +15,19 @@ Complete the staged package-structure refactor task in independently validated s
 
 ## Immediate slice
 
-Complete `STRUCT-1D — CLI packages` only, then checkpoint and stop before deduplication.
+Complete `QUALITY-DEDUP — Evidence-based deduplication` only, then checkpoint and stop before warning cleanup.
 
 ## Verification target
 
-Reorganize only CLI command packages by responsibility while preserving all command surfaces, help/output contracts, provider aliases, and zero stale production references.
+Audit and remove only genuinely identical duplicated infrastructure or lifecycle logic with narrow ownership, direct tests, and no behavior changes.
 
 ## Immediate next action
 
-Inventory current CLI command FQNs, move one coherent command-family group, run affected CLI/MCP checks, and continue only within STRUCT-1D until validation and checkpoint are complete.
+Inventory and rank duplicated infrastructure/lifecycle logic, record the audit, and extract only one proven identical group at a time with affected-test validation.
 
 ## Work completed
 
-`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` across commits `b67ac1c` and corrective ownership commit `248889a`. `STRUCT-1C` completed in `mcp` at `5cb0656`, preserving the 11-tool surface. Required module, root Gradle, and focused MCP checks passed.
+`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` across commits `b67ac1c` and corrective ownership commit `248889a`. `STRUCT-1C` completed in `mcp` at `5cb0656`; `STRUCT-1D` completed in `cli` at `958a039`. Required module and root validation passed; the disposable CLI MCP launcher still reports its pre-existing missing MCP runtime classpath.
 
 ## Current failures
 

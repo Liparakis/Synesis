@@ -1208,3 +1208,10 @@ Append-only operational history.
 - Added narrow MCP package architecture tests and protocol/transport package markers; moved MCP tests to mirror the application package.
 - Verified `:mcp:check`, focused persistent MCP tests, `:cli:check`, root `check`, and stale production FQN scans.
 - Committed as `5cb0656`; STRUCT-1D is now the sole active subtask.
+
+# 2026-07-26 — SYN-015 STRUCT-1D CLI package completion
+
+- Moved command implementations into identity, sync, provider, hook, project, workspace, coordination, prediction, ownership, task, speculation, and lifecycle packages; retained cross-cutting root command wiring.
+- Moved representative CLI tests to mirror production command families and added CLI package architecture checks.
+- Verified CLI/MCP/root Gradle checks, launcher help/version/init/doctor/provider/workspace/lifecycle acceptance, and stale command-FQN scanning.
+- Committed as `958a039`; QUALITY-DEDUP is now the sole active subtask.

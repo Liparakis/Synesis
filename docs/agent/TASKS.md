@@ -528,7 +528,10 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
 - [x] **STRUCT-1C** — MCP packages `[DONE]`
-- [/] **STRUCT-1D** — CLI packages `[ACTIVE]`
+- [x] **STRUCT-1D** — CLI packages `[DONE]`
+- [/] **QUALITY-DEDUP** — Evidence-based deduplication `[ACTIVE]`
+- [ ] **QUALITY-WARNINGS** — Legitimate warning cleanup `[READY]`
+- [ ] **QUALITY-GOD** — Focused god-class splitting `[READY]`
 - [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
 
 ## SYN-015
@@ -588,13 +591,45 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: STRUCT-1D
 - Priority: P0
 - Title: CLI packages
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Split the flat CLI command package by command family and align tests to production package ownership.
 - Dependencies: STRUCT-1C DONE.
 - Acceptance criteria: command-family packages applied; `SynesisCli` remains in `org.synesis.cli`; CLI tests mirror the production package they exercise; CLI help and provider commands remain unchanged.
 - Required tests: `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
 - Scope boundary: no surface changes, no new dependencies, and no unrelated implementation cleanup.
-- Evidence: active after STRUCT-1C checkpoint; no CLI production edits yet.
+- Evidence: PASS — `:cli:check`; `:mcp:check`; root `check`; launcher help/version/init/doctor/provider/workspace/lifecycle acceptance; stale command-FQN scan; commit `958a039`.
+
+### QUALITY-DEDUP
+
+- ID: QUALITY-DEDUP
+- Priority: P1
+- Title: Evidence-based deduplication
+- Status: ACTIVE
+- Purpose: Remove only genuinely identical duplicated infrastructure or lifecycle logic with narrow ownership and direct tests.
+- Dependencies: STRUCT-1D DONE; clean working tree; durable state activated before production edits.
+- Acceptance criteria: duplication audit recorded; only behavior-identical groups extracted; no generic dumping-ground abstraction; affected and full tests pass.
+- Scope boundary: no warning cleanup, god-class splitting, feature work, or behavior changes.
+- Evidence: active after STRUCT-1D checkpoint; audit pending.
+
+### QUALITY-WARNINGS
+
+- ID: QUALITY-WARNINGS
+- Priority: P1
+- Title: Legitimate warning cleanup
+- Status: READY
+- Purpose: Resolve verified compiler, static-analysis, and IDE warnings without broad suppression.
+- Dependencies: QUALITY-DEDUP DONE.
+- Evidence: pending.
+
+### QUALITY-GOD
+
+- ID: QUALITY-GOD
+- Priority: P1
+- Title: Focused god-class splitting
+- Status: READY
+- Purpose: Split only the strongest evidence-based oversized orchestration classes while preserving stable facades and behavior.
+- Dependencies: QUALITY-WARNINGS DONE.
+- Evidence: pending.
 
 ## SYN-014C
 
