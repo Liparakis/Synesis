@@ -82,6 +82,9 @@ public final class WorkspaceReadinessService {
     }
 
     private static ReadinessResult unavailable(AgentReason reason, String internalReason) {
+        if ("WORKSPACE_GENERATION_MISMATCH".equals(internalReason)) {
+            reason = AgentReason.WORKSPACE_GENERATION_CHANGED;
+        }
         AgentNextAction action = AgentNextAction.ENSURE_SESSION;
         AgentResponse response = new AgentResponse(AgentStatus.RETRY_REQUIRED, reason, action, null);
         return new ReadinessResult(false, null, null, response, internalReason);

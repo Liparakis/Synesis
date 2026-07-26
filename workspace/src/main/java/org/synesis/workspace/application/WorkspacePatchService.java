@@ -203,7 +203,7 @@ public final class WorkspacePatchService {
             String actualHash = computeSha256Hex(currentBytes);
 
             if (!actualHash.equalsIgnoreCase(request.expectedHash().trim())) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_STALE, AgentNextAction.ENSURE_SESSION, null);
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.FILE_REVISION_STALE, AgentNextAction.RETRY, null);
             }
 
             // Apply edits against one deterministic snapshot
@@ -211,7 +211,7 @@ public final class WorkspacePatchService {
             for (PatchEdit edit : request.edits()) {
                 int count = countOccurrences(snapshot, edit.find());
                 if (count != edit.expectedOccurrences()) {
-                    return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_STALE, AgentNextAction.ENSURE_SESSION, null);
+                    return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.PATCH_CONTEXT_MISMATCH, AgentNextAction.RETRY, null);
                 }
                 snapshot = snapshot.replace(edit.find(), edit.replace());
             }
@@ -222,6 +222,7 @@ public final class WorkspacePatchService {
         WorkspaceMutationBroker.MutationRequest mutReq = new WorkspaceMutationBroker.MutationRequest(
                 location,
                 request.provider(),
+                request.connectionInstanceId(),
                 resolvedRelative,
                 "synesis.apply_patch",
                 proposedNewContent,

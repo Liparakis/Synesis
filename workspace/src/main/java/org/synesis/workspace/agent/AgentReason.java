@@ -47,6 +47,15 @@ public enum AgentReason {
      */
     PATCH_PRECONDITION_REQUIRED("patch_precondition_required"),
 
+    /** Target file content differs from the revision supplied by the agent. */
+    FILE_REVISION_STALE("file_revision_stale"),
+
+    /** The requested edit context no longer applies to the target file. */
+    PATCH_CONTEXT_MISMATCH("patch_context_mismatch"),
+
+    /** The assigned worker generation changed and must be re-established. */
+    WORKSPACE_GENERATION_CHANGED("workspace_generation_changed"),
+
     /**
      * Requested path or target specification is invalid.
      */

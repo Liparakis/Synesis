@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,12 @@ class WorkspacePatchServiceTest {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
     }
 
+    private static String revisionOf(AgentResponse response) {
+        Matcher matcher = Pattern.compile("\\\"revision\\\":\\\"([0-9a-f]+)\\\"").matcher(response.toJson());
+        assertTrue(matcher.find(), "successful patch must return a revision: " + response.toJson());
+        return matcher.group(1);
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         controlRoot = Files.createTempDirectory("synesis-patch-test-");
@@ -51,6 +59,7 @@ class WorkspacePatchServiceTest {
 
         Files.createDirectories(controlRoot.resolve("src"));
         Files.writeString(controlRoot.resolve("src/Product.java"), "public class Product {\n    int count = 1;\n    String label = \"old\";\n}\n");
+        Files.writeString(controlRoot.resolve("src/Other.java"), "public class Other {\n    String value = \"old\";\n}\n");
 
         git(controlRoot, "add", ".");
         git(controlRoot, "commit", "-m", "Initial commit");
@@ -118,6 +127,55 @@ class WorkspacePatchServiceTest {
     }
 
     @Test
+    void sequentialMultiFilePatchesPreserveUntouchedRevision() throws Exception {
+        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "conn-patch-multi", null, false);
+        AgentSessionService sessionService = new AgentSessionService();
+        sessionService.ensureSession(req);
+        Path worktree = sessionService.resolveSessionContext(req).worktreePath();
+        String productHash = sha256Hex(Files.readString(worktree.resolve("src/Product.java")));
+        String otherHash = sha256Hex(Files.readString(worktree.resolve("src/Other.java")));
+        WorkspacePatchService service = new WorkspacePatchService();
+
+        AgentResponse first = service.applyPatch(new WorkspacePatchService.PatchRequest(controlRoot, "codex",
+                "conn-patch-multi", "src/Product.java", false, null, productHash,
+                List.of(new WorkspacePatchService.PatchEdit("int count = 1;", "int count = 2;", 1))));
+        assertEquals(AgentStatus.COMPLETED, first.status());
+        assertNotNull(revisionOf(first));
+
+        AgentResponse second = service.applyPatch(new WorkspacePatchService.PatchRequest(controlRoot, "codex",
+                "conn-patch-multi", "src/Other.java", false, null, otherHash,
+                List.of(new WorkspacePatchService.PatchEdit("String value = \"old\";", "String value = \"new\";", 1))));
+        assertEquals(AgentStatus.COMPLETED, second.status());
+        assertTrue(Files.readString(worktree.resolve("src/Product.java")).contains("int count = 2;"));
+        assertTrue(Files.readString(worktree.resolve("src/Other.java")).contains("String value = \"new\";"));
+        assertTrue(Files.readString(controlRoot.resolve("src/Product.java")).contains("int count = 1;"));
+        assertTrue(Files.readString(controlRoot.resolve("src/Other.java")).contains("String value = \"old\";"));
+    }
+
+    @Test
+    void repeatedSameFileUsesReturnedRevisionAndRejectsOldRevision() throws Exception {
+        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "conn-patch-repeat", null, false);
+        AgentSessionService sessionService = new AgentSessionService();
+        sessionService.ensureSession(req);
+        Path worktree = sessionService.resolveSessionContext(req).worktreePath();
+        String firstHash = sha256Hex(Files.readString(worktree.resolve("src/Product.java")));
+        WorkspacePatchService service = new WorkspacePatchService();
+        WorkspacePatchService.PatchRequest patch = new WorkspacePatchService.PatchRequest(controlRoot, "codex",
+                "conn-patch-repeat", "src/Product.java", false, null, firstHash,
+                List.of(new WorkspacePatchService.PatchEdit("int count = 1;", "int count = 2;", 1)));
+        AgentResponse first = service.applyPatch(patch);
+        String secondHash = revisionOf(first);
+        AgentResponse old = service.applyPatch(patch);
+        assertTrue(old.toJson().contains("file_revision_stale"));
+        AgentResponse next = service.applyPatch(new WorkspacePatchService.PatchRequest(controlRoot, "codex",
+                "conn-patch-repeat", "src/Product.java", false, null, secondHash,
+                List.of(new WorkspacePatchService.PatchEdit("int count = 2;", "int count = 3;", 1))));
+        assertEquals(AgentStatus.COMPLETED, next.status());
+    }
+
+    @Test
     void testRejectsStaleHashWithNoMutation() throws Exception {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
@@ -137,7 +195,7 @@ class WorkspacePatchServiceTest {
 
         AgentResponse response = patchService.applyPatch(modifyReq);
         assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
-        assertTrue(response.toJson().contains("workspace_stale"));
+        assertTrue(response.toJson().contains("file_revision_stale"));
 
         // Content in worktree is unchanged
         assertEquals(originalContent, Files.readString(worktreePath.resolve("src/Product.java")));
@@ -183,7 +241,7 @@ class WorkspacePatchServiceTest {
 
         AgentResponse response = patchService.applyPatch(modifyReq);
         assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
-        assertTrue(response.toJson().contains("workspace_stale"));
+        assertTrue(response.toJson().contains("patch_context_mismatch"));
 
         // Verify edit1 was NOT applied (complete rollback)
         assertEquals(originalContent, Files.readString(worktreePath.resolve("src/Product.java")));

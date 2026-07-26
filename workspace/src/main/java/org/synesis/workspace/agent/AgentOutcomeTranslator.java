@@ -41,7 +41,7 @@ public final class AgentOutcomeTranslator {
 
         return switch (decision) {
             case ALLOW -> new TranslatedOutcome(
-                    AgentResponse.completed(path),
+                    AgentResponse.completed(path, result.updatedRevision()),
                     decision,
                     reasonCode,
                     result.decisionId(),

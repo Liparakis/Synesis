@@ -77,6 +77,15 @@ public final class WorkspaceMutationBroker {
                     message);
         } catch (Exception ignored) {
         }
+        String updatedRevision = null;
+        if (success && mutatedPath != null) {
+            try {
+                updatedRevision = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                        .digest(Files.readAllBytes(mutatedPath)));
+            } catch (Exception ignored) {
+                updatedRevision = null;
+            }
+        }
         return new MutationResult(success,
                 decision,
                 reasonCode,
@@ -84,7 +93,8 @@ public final class WorkspaceMutationBroker {
                 decisionId,
                 interceptionEvidence,
                 mutatedPath,
-                true);
+                true,
+                updatedRevision);
     }
 
     private static void recordEvidence(
@@ -149,7 +159,10 @@ public final class WorkspaceMutationBroker {
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
         ProviderSessionBindingService.Binding binding = null;
         try {
-            var bindings = bindingService.list(request.location(), request.provider());
+            var bindings = request.connectionInstanceId() == null
+                    ? bindingService.list(request.location(), request.provider())
+                    : bindingService.find(request.location(), request.provider(), request.connectionInstanceId())
+                            .map(java.util.List::of).orElseGet(java.util.List::of);
             if (bindings.isEmpty()) {
                 return evaluateAndRecord(false,
                         Decision.SESSION_UNBOUND,
@@ -524,6 +537,7 @@ public final class WorkspaceMutationBroker {
      *
      * @param location         initialized project location
      * @param provider         provider identifier
+     * @param connectionInstanceId exact provider connection identity, or {@code null}
      * @param relativePath     target repository-relative path
      * @param toolName         tool or action identifier
      * @param newContent       new proposed file content
@@ -533,6 +547,7 @@ public final class WorkspaceMutationBroker {
     public record MutationRequest(
             ProjectApplicationService.ProjectLocation location,
             String provider,
+            String connectionInstanceId,
             String relativePath,
             String toolName,
             String newContent,
@@ -549,6 +564,21 @@ public final class WorkspaceMutationBroker {
             Objects.requireNonNull(relativePath, "relativePath");
             Objects.requireNonNull(toolName, "toolName");
         }
+
+        /** Backward-compatible constructor for internal callers without a connection identity.
+         * @param location initialized project location
+         * @param provider provider identifier
+         * @param relativePath target repository-relative path
+         * @param toolName tool or action identifier
+         * @param newContent proposed file content
+         * @param hookIntercepted whether Synesis intercepted the mutation
+         * @param isSyntheticCheck whether execution is synthetic
+         */
+        public MutationRequest(ProjectApplicationService.ProjectLocation location, String provider,
+                String relativePath, String toolName, String newContent, boolean hookIntercepted,
+                boolean isSyntheticCheck) {
+            this(location, provider, null, relativePath, toolName, newContent, hookIntercepted, isSyntheticCheck);
+        }
     }
 
     /**
@@ -562,6 +592,7 @@ public final class WorkspaceMutationBroker {
      * @param interceptionEvidence     SHA-256 interception evidence hash
      * @param mutatedPath              path of the mutated file in the assigned worktree, or {@code null}
      * @param controlCheckoutUnchanged whether the control checkout remained unchanged
+     * @param updatedRevision          updated opaque file revision, or {@code null}
      */
     public record MutationResult(
             boolean success,
@@ -571,8 +602,26 @@ public final class WorkspaceMutationBroker {
             String decisionId,
             String interceptionEvidence,
             Path mutatedPath,
-            boolean controlCheckoutUnchanged
+            boolean controlCheckoutUnchanged,
+            String updatedRevision
     ) {
+
+        /** Backward-compatible constructor for callers without a returned revision.
+         * @param success whether mutation succeeded
+         * @param decision broker decision
+         * @param reasonCode bounded reason code
+         * @param message bounded message
+         * @param decisionId internal decision identifier
+         * @param interceptionEvidence internal evidence
+         * @param mutatedPath mutated path
+         * @param controlCheckoutUnchanged whether control checkout stayed unchanged
+         */
+        public MutationResult(boolean success, Decision decision, String reasonCode, String message,
+                String decisionId, String interceptionEvidence, Path mutatedPath,
+                boolean controlCheckoutUnchanged) {
+            this(success, decision, reasonCode, message, decisionId, interceptionEvidence,
+                    mutatedPath, controlCheckoutUnchanged, null);
+        }
 
         /**
          * Validates the result shape.

@@ -49,6 +49,15 @@ public record AgentResponse(
         return new AgentResponse(AgentStatus.COMPLETED, null, null, new AgentMutationResult(relativePath));
     }
 
+    /** Creates a mutation success response carrying the updated file revision.
+     * @param relativePath repository-relative target path
+     * @param revision updated opaque file revision
+     * @return completed response
+     */
+    public static AgentResponse completed(String relativePath, String revision) {
+        return new AgentResponse(AgentStatus.COMPLETED, null, null, new AgentMutationResult(relativePath, revision, 1));
+    }
+
     /**
      * Creates a ready response with workspace readiness status.
      *
@@ -86,7 +95,15 @@ public record AgentResponse(
         }
         if (result != null) {
             if (result instanceof AgentMutationResult mut) {
-                map.put("result", Map.of("path", mut.path()));
+                Map<String, Object> mutation = new LinkedHashMap<>();
+                mutation.put("path", mut.path());
+                if (mut.revision() != null && !mut.revision().isBlank()) {
+                    mutation.put("revision", mut.revision());
+                }
+                if (mut.revision() != null && !mut.revision().isBlank()) {
+                    mutation.put("changedFiles", mut.changedFiles());
+                }
+                map.put("result", mutation);
             } else if (result instanceof AgentCapabilityResult cap) {
                 Map<String, Object> capMap = new LinkedHashMap<>();
                 if (cap.capability() != null) {
