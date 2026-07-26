@@ -25,8 +25,9 @@ No broken maintained links or script references, no machine-specific paths in us
 
 ## Immediate next action
 
-Create the final durable checkpoint after recording the focused verification
-passes and the pre-existing full-check architecture-test blocker.
+Keep `SYN-014E` paused and leave the pre-existing workspace architecture-test
+mismatch for a separately authorized structural task; do not change production
+code under this hygiene task.
 
 ## Work completed
 
