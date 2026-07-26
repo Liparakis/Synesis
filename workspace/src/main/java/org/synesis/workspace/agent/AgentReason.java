@@ -56,6 +56,9 @@ public enum AgentReason {
     /** The assigned worker generation changed and must be re-established. */
     WORKSPACE_GENERATION_CHANGED("workspace_generation_changed"),
 
+    /** Mutation of a mixed-line-ending file requires explicit review. */
+    MIXED_LINE_ENDINGS_REQUIRES_REVIEW("mixed_line_endings_require_review"),
+
     /**
      * Requested path or target specification is invalid.
      */

@@ -199,8 +199,14 @@ public final class WorkspacePatchService {
                 return AgentResponse.blocked(AgentReason.INVALID_PATH);
             }
 
-            String currentContent = new String(currentBytes, StandardCharsets.UTF_8);
-            String actualHash = computeSha256Hex(currentBytes);
+            final TextFileDocument document;
+            try {
+                document = TextFileDocument.decode(currentBytes);
+            } catch (IOException ex) {
+                return AgentResponse.blocked(AgentReason.INVALID_PATH);
+            }
+            String currentContent = document.logicalText();
+            String actualHash = document.revision();
 
             if (!actualHash.equalsIgnoreCase(request.expectedHash().trim())) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.FILE_REVISION_STALE, AgentNextAction.RETRY, null);
@@ -215,7 +221,32 @@ public final class WorkspacePatchService {
                 }
                 snapshot = snapshot.replace(edit.find(), edit.replace());
             }
+            if (document.lineEndingStyle() == TextFileDocument.LineEndingStyle.MIXED) {
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                        AgentReason.MIXED_LINE_ENDINGS_REQUIRES_REVIEW, AgentNextAction.RETRY, null);
+            }
+            final byte[] proposedBytes;
+            try {
+                proposedBytes = document.encode(snapshot);
+            } catch (IOException ex) {
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                        AgentReason.MIXED_LINE_ENDINGS_REQUIRES_REVIEW, AgentNextAction.RETRY, null);
+            }
             proposedNewContent = snapshot;
+
+            WorkspaceMutationBroker.MutationRequest mutReq = new WorkspaceMutationBroker.MutationRequest(
+                    location,
+                    request.provider(),
+                    request.connectionInstanceId(),
+                    resolvedRelative,
+                    "synesis.apply_patch",
+                    proposedNewContent,
+                    proposedBytes,
+                    true,
+                    false);
+            WorkspaceMutationBroker.MutationResult mutResult = mutationBroker.applyMutation(mutReq);
+            TranslatedOutcome outcome = translator.translateMutationResult(mutResult, resolvedRelative);
+            return outcome.publicResponse();
         }
 
         // 3. Evaluate and Apply Mutation through WorkspaceMutationBroker
@@ -226,6 +257,7 @@ public final class WorkspacePatchService {
                 resolvedRelative,
                 "synesis.apply_patch",
                 proposedNewContent,
+                null,
                 true,  // hookIntercepted = true
                 false  // isSyntheticCheck = false
         );

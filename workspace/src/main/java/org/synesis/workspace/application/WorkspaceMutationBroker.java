@@ -431,8 +431,10 @@ public final class WorkspaceMutationBroker {
 
         try {
             Files.createDirectories(targetFile.getParent());
-            byte[] contentBytes = request.newContent() == null ? new byte[0] : request.newContent()
-                                                                               .getBytes(StandardCharsets.UTF_8);
+            byte[] contentBytes = request.newContentBytes() != null
+                    ? request.newContentBytes().clone()
+                    : (request.newContent() == null ? new byte[0] : request.newContent()
+                                                                               .getBytes(StandardCharsets.UTF_8));
             atomicWrite(targetFile, contentBytes);
         } catch (Exception failure) {
             return evaluateAndRecord(false,
@@ -541,6 +543,7 @@ public final class WorkspaceMutationBroker {
      * @param relativePath     target repository-relative path
      * @param toolName         tool or action identifier
      * @param newContent       new proposed file content
+     * @param newContentBytes  exact encoded bytes to persist, or {@code null} for UTF-8 encoding
      * @param hookIntercepted  whether Synesis intercepted the proposed mutation
      * @param isSyntheticCheck whether execution is a synthetic check
      */
@@ -551,6 +554,7 @@ public final class WorkspaceMutationBroker {
             String relativePath,
             String toolName,
             String newContent,
+            byte[] newContentBytes,
             boolean hookIntercepted,
             boolean isSyntheticCheck
     ) {
@@ -577,7 +581,27 @@ public final class WorkspaceMutationBroker {
         public MutationRequest(ProjectApplicationService.ProjectLocation location, String provider,
                 String relativePath, String toolName, String newContent, boolean hookIntercepted,
                 boolean isSyntheticCheck) {
-            this(location, provider, null, relativePath, toolName, newContent, hookIntercepted, isSyntheticCheck);
+            this(location, provider, null, relativePath, toolName, newContent, null, hookIntercepted,
+                    isSyntheticCheck);
+        }
+
+        /**
+         * Backward-compatible connection-aware constructor using default UTF-8 persistence.
+         *
+         * @param location initialized project location
+         * @param provider provider identifier
+         * @param connectionInstanceId exact connection identity
+         * @param relativePath target repository-relative path
+         * @param toolName tool or action identifier
+         * @param newContent proposed file content
+         * @param hookIntercepted whether Synesis intercepted the mutation
+         * @param isSyntheticCheck whether execution is synthetic
+         */
+        public MutationRequest(ProjectApplicationService.ProjectLocation location, String provider,
+                String connectionInstanceId, String relativePath, String toolName, String newContent,
+                boolean hookIntercepted, boolean isSyntheticCheck) {
+            this(location, provider, connectionInstanceId, relativePath, toolName, newContent, null,
+                    hookIntercepted, isSyntheticCheck);
         }
     }
 

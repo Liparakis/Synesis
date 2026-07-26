@@ -44,6 +44,10 @@ class WorkspacePatchServiceTest {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
     }
 
+    private static String sha256Hex(byte[] bytes) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    }
+
     private static String revisionOf(AgentResponse response) {
         Matcher matcher = Pattern.compile("\\\"revision\\\":\\\"([0-9a-f]+)\\\"").matcher(response.toJson());
         assertTrue(matcher.find(), "successful patch must return a revision: " + response.toJson());
@@ -124,6 +128,32 @@ class WorkspacePatchServiceTest {
         // Control checkout remains unchanged
         String controlContent = Files.readString(controlRoot.resolve("src/Product.java"));
         assertTrue(controlContent.contains("int count = 1;"));
+    }
+
+    @Test
+    void crlfReadContentCanBePatchedDirectlyAndPhysicalBytesRemainCrlf() throws Exception {
+        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "conn-crlf-1", null, false);
+        AgentSessionService sessionService = new AgentSessionService();
+        sessionService.ensureSession(req);
+        Path worktreePath = sessionService.resolveSessionContext(req).worktreePath();
+        Path target = worktreePath.resolve("src/Product.java");
+        byte[] raw = "public class Product {\r\n    int count = 1;\r\n}\r\n".getBytes(StandardCharsets.UTF_8);
+        Files.write(target, raw);
+
+        String logical = "public class Product {\n    int count = 1;\n}\n";
+        WorkspacePatchService.PatchRequest request = new WorkspacePatchService.PatchRequest(
+                controlRoot, "codex", "conn-crlf-1", "src/Product.java", false, null,
+                sha256Hex(raw), List.of(new WorkspacePatchService.PatchEdit(
+                        logical.substring(logical.indexOf("    int"), logical.indexOf("}\n")),
+                        "    int count = 2;\n", 1)));
+
+        AgentResponse response = new WorkspacePatchService().applyPatch(request);
+        assertEquals(AgentStatus.COMPLETED, response.status());
+        byte[] changed = Files.readAllBytes(target);
+        assertEquals("public class Product {\r\n    int count = 2;\r\n}\r\n",
+                new String(changed, StandardCharsets.UTF_8));
+        assertEquals(sha256Hex(changed), revisionOf(response));
     }
 
     @Test

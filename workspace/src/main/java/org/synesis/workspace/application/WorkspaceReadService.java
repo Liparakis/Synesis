@@ -147,8 +147,14 @@ public final class WorkspaceReadService {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
-        // 4. Line Range & Bounded UTF-8 Output
-        String fullContent = new String(bytes, StandardCharsets.UTF_8);
+        // 4. Logical LF text with raw-byte revision preservation
+        final TextFileDocument document;
+        try {
+            document = TextFileDocument.decode(bytes);
+        } catch (IOException ex) {
+            return AgentResponse.blocked(AgentReason.INVALID_PATH);
+        }
+        String fullContent = document.logicalText();
         List<String> lines = fullContent.lines().toList();
 
         int start = (request.startLine() == null || request.startLine() < 1) ? 1 : request.startLine();
@@ -156,7 +162,7 @@ public final class WorkspaceReadService {
             Map<String, Object> res = new LinkedHashMap<>();
             res.put("path", resolvedRelative);
             res.put("content", "");
-            res.put("contentHash", computeSha256Hex(bytes));
+            res.put("contentHash", document.revision());
             res.put("truncated", true);
             return new AgentResponse(AgentStatus.COMPLETED, null, null, res);
         }
@@ -166,12 +172,17 @@ public final class WorkspaceReadService {
             end = start - 1;
         }
 
-        StringBuilder sb = new StringBuilder();
         boolean lineSliced = (start > 1) || (request.endLine() != null && request.endLine() < lines.size());
-        for (int i = start - 1; i < end && i < lines.size(); i++) {
-            sb.append(lines.get(i)).append("\n");
+        String slicedContent;
+        if (!lineSliced) {
+            slicedContent = fullContent;
+        } else {
+            StringBuilder sb = new StringBuilder();
+            for (int i = start - 1; i < end && i < lines.size(); i++) {
+                sb.append(lines.get(i)).append("\n");
+            }
+            slicedContent = sb.toString();
         }
-        String slicedContent = sb.toString();
 
         int requestedMax = (request.maxBytes() == null || request.maxBytes() <= 0) ? 65536 : Math.min(request.maxBytes(), 65536);
         byte[] slicedBytes = slicedContent.getBytes(StandardCharsets.UTF_8);
@@ -187,7 +198,7 @@ public final class WorkspaceReadService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("path", resolvedRelative);
         result.put("content", finalContent);
-        result.put("contentHash", computeSha256Hex(bytes));
+        result.put("contentHash", document.revision());
         result.put("truncated", truncated);
 
         return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
