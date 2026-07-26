@@ -15,7 +15,9 @@ Inventory and clean maintained documentation, Markdown, and repository scripts w
 
 ## Immediate slice
 
-Preflight and initial inventory are complete. Maintained documentation and script references are being reconciled; historical checkpoints, evidence, ADRs, and signed records are excluded from modernization edits.
+Inventory, documentation cleanup, generated-instruction update, script review,
+and hygiene-check implementation are complete. Historical checkpoints,
+evidence, ADRs, and signed records were excluded from modernization edits.
 
 ## Verification target
 
@@ -23,12 +25,24 @@ No broken maintained links or script references, no machine-specific paths in us
 
 ## Immediate next action
 
-Create the maintained-file inventory and classify current versus historical documentation before editing any user-facing Markdown.
+Create the final durable checkpoint after recording the focused verification
+passes and the pre-existing full-check architecture-test blocker.
 
 ## Work completed
 
-`SYN-015` and `SYN-016` are complete. The prior `SYN-017` package slice is preserved as historical implementation work, but its current architecture test must not be repaired as part of hygiene. `SYN-014E` remains paused.
+`SYN-015` and `SYN-016` are complete. The prior `SYN-017` package slice is
+preserved as historical implementation work, but its current architecture test
+was not repaired as part of hygiene. `SYN-014E` remains paused. Documentation
+commit `4b7f530` and hygiene-check commit `59f7c63` are complete. No safe script
+consolidation was identified.
 
 ## Current failures
 
-Baseline root `check --no-daemon` failed at `a67dd00`: the workspace package architecture test expects root facades that the current source has moved into subpackages, and parallel test execution also reported missing in-progress binary result files. The requested hygiene task does not alter production package behavior; final verification must report whether these failures clear under a controlled rerun. The prompt's `bootstrap\go` path is absent; equivalent Go commands run from the `bootstrap` module with the installed `go` executable.
+The exact final root `check --no-daemon` fails only at the pre-existing
+`WorkspaceApplicationPackageArchitectureTest.rootContainsOnlyStableFacades`
+assertion. The earlier parallel-test result-file race is gone in the sequential
+rerun. Focused MCP tests, Go test/vet, CLI help/version, provider list, init
+instruction generation, and `repositoryHygieneCheck` pass. The prompt's
+`bootstrap\go` path is absent; equivalent Go commands run from the `bootstrap`
+module with the installed `go` executable. This hygiene task does not alter
+production package behavior to hide the architecture-test blocker.

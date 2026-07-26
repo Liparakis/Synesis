@@ -98,6 +98,14 @@ moved into responsibility packages, and Gradle's parallel test result reader
 reported missing in-progress binary result files. This workstream records the
 failure and does not change package behavior to hide it.
 
+SYN-018 hygiene implementation is complete through commits `4b7f530` and
+`59f7c63`. The final sequential root check still fails only on the stale
+`WorkspaceApplicationPackageArchitectureTest.rootContainsOnlyStableFacades`
+assertion. `repositoryHygieneCheck`, focused MCP initialize/tools-list tests,
+Go tests/vet, CLI help/version, provider list, and generated init instructions
+pass. No safe script consolidation was identified; no historical evidence was
+deleted or rewritten.
+
 `STRUCT-1B` was restricted to intra-module package restructuring inside
 `:workspace`. It completed with `workspace.application`, `workspace.project`,
 `workspace.provider` and provider-specific subtrees, lifecycle packages, and

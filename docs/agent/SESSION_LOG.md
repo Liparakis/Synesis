@@ -1246,3 +1246,21 @@ Append-only operational history.
 - Updated production/test references and mirrored coordination tests; added a package ownership architecture test without adding package-info files.
 - Verified `:coordination:check`, root `check`, Go tests/vet, stale-FQN scans, and no-flat-package scans.
 - Committed as `195fc95`; SYN-016 is complete and `SYN-014E` remains paused.
+# 2026-07-27 — SYN-018 repository hygiene
+
+- Promoted `SYN-018` as the sole active task; `SYN-014E` remains paused.
+- Inventoried 353 Markdown files (228 checkpoints, 32 ADRs, 16 evidence files)
+  and 12 scripts/launchers. Preserved all historical evidence and found no safe
+  duplicate script entrypoint to consolidate.
+- Updated the README, maintained navigation, provider commands/paths, current
+  state, generated `AGENTS.md` instructions, and the durable inventory. The
+  generated template source is `ProjectApplicationService`.
+- Added root `repositoryHygieneCheck` for maintained links, script references,
+  machine paths, canonical provider commands, duplicate script names, and MCP
+  tool-count claims. It passes on 39 maintained Markdown files.
+- Focused MCP tests and exact 11-tool confirmation, Go test/vet, CLI help/version,
+  provider list, and generated-init instructions pass. Sequential root check
+  still fails only at the pre-existing workspace architecture-test assertion.
+- Commits: `4b7f530` documentation; `59f7c63` hygiene checks. No script cleanup
+  commit was needed. Exact continuation: preserve the final checkpoint and
+  leave the architecture-test mismatch for a separately authorized task.
