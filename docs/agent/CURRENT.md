@@ -27,8 +27,8 @@ schema, or event-format changes occurred.
 
 ## Immediate next action
 
-Run the final resume/doctor checks, confirm the narrow commit and checkpoint,
-and leave the unrelated README edit untouched.
+Leave the unrelated README edit untouched; no further architecture changes are
+authorized under this closure task.
 
 ## Work completed
 
