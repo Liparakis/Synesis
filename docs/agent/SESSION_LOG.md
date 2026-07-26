@@ -1177,3 +1177,18 @@ Append-only operational history.
 - Required validation passed: `.\gradlew.bat :project-record:check --no-daemon`, `.\gradlew.bat :coordination:check --no-daemon`, `.\gradlew.bat :link:check --no-daemon`, `.\gradlew.bat check --no-daemon`, `go test -count=1 ./...`, and `go vet ./...`.
 - Committed the slice as `Reorganize Synesis foundational packages` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`.
 - Stopped before `STRUCT-1B`; the only remaining work in this session is durable-state reconciliation and checkpoint creation for the completed slice.
+
+# 2026-07-26 — SYN-015 STRUCT-1B activation
+
+- Sealed the STRUCT-1A durable-state reconciliation in `95f696cc6442b426b28d7e2f2d7b7dd54a43b541`.
+- Confirmed a clean worktree and passing `:workspace:check`, `:cli:check`, and `:mcp:check` preflight from that commit.
+- Activated `STRUCT-1B — Workspace packages` as the sole active subtask under `SYN-015`; `STRUCT-1C` and `STRUCT-1D` remain inactive.
+- No workspace production edits have started. The next action is the required workspace FQN reference inventory.
+
+# 2026-07-26 — SYN-015 STRUCT-1B workspace package completion
+
+- Reorganized only the `:workspace` module: project/bootstrap ownership, provider-specific adapters, JSON/configuration, lifecycle cleanup/reconciliation/repair/lease, and responsibility-specific infrastructure packages.
+- Removed production references to the old `workspace.integration`, flat lifecycle, guardrail, provider JSON, and migration Codex TOML package names; aligned moved tests with production packages.
+- Added narrow workspace architecture tests for removed integration ownership, delivery isolation, provider-neutral contracts, and production/test separation.
+- Required validation passed: `:workspace:check`, `:coordination:check`, `:cli:check`, `:mcp:check`, root `check`, `go test -count=1 ./...`, `go vet ./...`, and focused `McpTool11Test`.
+- Committed as `Reorganize Synesis workspace packages` at `b67ac1c`; stopped before `STRUCT-1C`.

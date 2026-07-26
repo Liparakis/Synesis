@@ -2,7 +2,7 @@
 
 - Product: Synesis, with Synesis Link as the first implemented transport/session module
 - Repository type: modular-monolith Gradle project
-- Current phase: staged package-structure refactor Phase 1 with `STRUCT-1A` complete and `STRUCT-1B` not yet activated; SYN-012 is complete at CP-0144; SYN-011 remains VERIFYING, SYN-010B remains VERIFYING, and SYN-010A remains VERIFYING
+- Current phase: staged package-structure refactor Phase 1 with `STRUCT-1B` complete and `STRUCT-1C` not activated; SYN-012 is complete at CP-0144; SYN-011 remains VERIFYING, SYN-010B remains VERIFYING, and SYN-010A remains VERIFYING
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope until explicitly tasked
 - Goal revision: 5
@@ -13,4 +13,4 @@
 - Evidence: SYN-009C release evidence is complete at CP-0110; SYN-010A
   publication audit, current/reachable-history scan, documentation preparation,
   strict Java verification, and repository validators are recorded at CP-0111.
-- Exact continuation: keep the working tree clean, checkpoint the completed `STRUCT-1A` slice, and do not activate `STRUCT-1B` until continuation is explicitly requested.
+- Exact continuation: checkpoint the completed `STRUCT-1B` slice and stop; activate `STRUCT-1C` only after explicit continuation.
