@@ -1221,3 +1221,9 @@ Append-only operational history.
 - Audited repeated infrastructure and lifecycle logic. One strong identical group was confirmed: SHA-256 UTF-8 plan hashing duplicated in cleanup, reconciliation, and repair plan stores.
 - Extracted lifecycle-owned `PlanIntegrity` with direct coverage; no generic utility or behavior rewrite introduced.
 - Verified `:workspace:check`; committed as `98755b3`; QUALITY-WARNINGS is now the sole active subtask.
+
+# 2026-07-26 — SYN-015 warning cleanup completion
+
+- Warning-mode Gradle audit identified four execution-time `project.file(...)` deprecations in verification tasks.
+- Replaced those lookups with `layout` providers without changing the files scanned or runtime behavior.
+- Verified root `check --warning-mode all` with zero warning lines; committed as `98cda05`; QUALITY-GOD is now the sole active subtask.

@@ -1,10 +1,10 @@
 # Next Session
 
-- Active task: SYN-015 ACTIVE under Reorganize Synesis package structure; `QUALITY-WARNINGS` ACTIVE following CP-0218
+- Active task: SYN-015 ACTIVE under Reorganize Synesis package structure; `QUALITY-GOD` ACTIVE following warning cleanup commit `98cda05`
 - Repository branch: master
-- Last checkpoint: CP-0218
+- Last checkpoint: CP-0218; warning cleanup commit `98cda05` awaits durable god-class checkpoint
 - Last passing command: `:coordination:check :workspace:check :cli:check :mcp:check check`, `go test ./...`, and `go vet ./...`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next code action: Collect compiler/static-analysis warning output and classify legitimate production warnings before making any warning edits.
+- Exact next code action: Inventory and rank oversized orchestration candidates before making god-class edits.
 - Unresolved limitations: `STRUCT-1B` is complete at `b67ac1c` plus corrective commit `248889a`; stop after its checkpoint and do not activate `STRUCT-1C` automatically. Existing application-to-provider-specific orchestration remains for a later structural slice.
 - Facts that must not be forgotten: Exactly 11 MCP tools must remain registered in `tools/list`. `DemoCli` moves only to `org.synesis.link.cli` and its Gradle main-class string must be updated. No type may move across Gradle modules. No Go bootstrap edits are permitted in this structural phase.

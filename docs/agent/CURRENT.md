@@ -15,19 +15,19 @@ Complete the staged package-structure refactor task in independently validated s
 
 ## Immediate slice
 
-Complete `QUALITY-WARNINGS — Legitimate warning cleanup` only, then checkpoint and stop before god-class splitting.
+Complete `QUALITY-GOD — Focused god-class splitting` only, then checkpoint before final validation.
 
 ## Verification target
 
-Collect and resolve only legitimate compiler, static-analysis, and IDE warnings without broad suppression or behavior changes.
+Split only the strongest evidence-based oversized orchestration class while preserving stable facades and behavior.
 
 ## Immediate next action
 
-Collect warning output from the configured Gradle/Java/static-analysis tasks, classify each warning, and fix only verified production issues with affected-test validation.
+Inventory and rank oversized orchestration candidates, record the selection, then make one conservative split with focused tests.
 
 ## Work completed
 
-`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` across commits `b67ac1c` and corrective ownership commit `248889a`. `STRUCT-1C` completed in `mcp` at `5cb0656`; `STRUCT-1D` completed in `cli` at `958a039`. Required module and root validation passed; the disposable CLI MCP launcher still reports its pre-existing missing MCP runtime classpath.
+`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` across commits `b67ac1c` and corrective ownership commit `248889a`. `STRUCT-1C` completed in `mcp` at `5cb0656`; `STRUCT-1D` completed in `cli` at `958a039`; deduplication completed at `98755b3`; warning cleanup completed at `98cda05`. Required module and root validation passed; the disposable CLI MCP launcher still reports its pre-existing missing MCP runtime classpath.
 
 ## Current failures
 

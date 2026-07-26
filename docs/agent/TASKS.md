@@ -530,8 +530,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [x] **STRUCT-1C** — MCP packages `[DONE]`
 - [x] **STRUCT-1D** — CLI packages `[DONE]`
 - [x] **QUALITY-DEDUP** — Evidence-based deduplication `[DONE]`
-- [/] **QUALITY-WARNINGS** — Legitimate warning cleanup `[ACTIVE]`
-- [ ] **QUALITY-GOD** — Focused god-class splitting `[READY]`
+- [x] **QUALITY-WARNINGS** — Legitimate warning cleanup `[DONE]`
+- [/] **QUALITY-GOD** — Focused god-class splitting `[ACTIVE]`
 - [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
 
 ## SYN-015
@@ -544,8 +544,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Dependencies: clean working tree; existing module boundaries preserved.
 - Acceptance criteria: `STRUCT-1A` through `STRUCT-1D` each complete with clean preflight, zero stale production references for moved package names, required verification passing, checkpoint evidence, and one coherent commit per slice.
 - Required tests: per-subtask Gradle verification, root `check`, bootstrap Go test/vet, MCP 11-tool verification where required, and stale-reference searches.
-- Scope boundary: no module moves, no new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, no provider/schema/reason-code/event-format changes, and no deduplication/warning/god-class cleanup.
-- Evidence: `STRUCT-1A` completed at commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B` completed across `b67ac1c` and corrective commit `248889a`; checkpoint recorded after validation.
+- Scope boundary: no module moves, no new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, and no provider/schema/reason-code/event-format changes.
+- Evidence: `STRUCT-1A` completed at commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B` completed across `b67ac1c` and corrective commit `248889a`; `STRUCT-1C` at `5cb0656`; `STRUCT-1D` at `958a039`; deduplication at `98755b3`; warning cleanup at `98cda05`.
 
 ### STRUCT-1A
 
@@ -604,7 +604,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: QUALITY-DEDUP
 - Priority: P1
 - Title: Evidence-based deduplication
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Remove only genuinely identical duplicated infrastructure or lifecycle logic with narrow ownership and direct tests.
 - Dependencies: STRUCT-1D DONE; clean working tree; durable state activated before production edits.
 - Acceptance criteria: duplication audit recorded; only behavior-identical groups extracted; no generic dumping-ground abstraction; affected and full tests pass.
@@ -616,20 +616,20 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: QUALITY-WARNINGS
 - Priority: P1
 - Title: Legitimate warning cleanup
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Resolve verified compiler, static-analysis, and IDE warnings without broad suppression.
 - Dependencies: QUALITY-DEDUP DONE.
-- Evidence: active after QUALITY-DEDUP checkpoint; warning inventory pending.
+- Evidence: PASS — warning-mode Gradle audit found four execution-time `project.file(...)` deprecations across verification tasks; replaced them with `layout` providers; root `check --warning-mode all` passed with zero warning lines; commit `98cda05`.
 
 ### QUALITY-GOD
 
 - ID: QUALITY-GOD
 - Priority: P1
 - Title: Focused god-class splitting
-- Status: READY
+- Status: ACTIVE
 - Purpose: Split only the strongest evidence-based oversized orchestration classes while preserving stable facades and behavior.
-- Dependencies: QUALITY-WARNINGS DONE.
-- Evidence: pending.
+- Dependencies: QUALITY-WARNINGS DONE; clean working tree; durable state activated before production edits.
+- Evidence: active after warning-cleanup checkpoint; candidate inventory pending.
 
 ## SYN-014C
 
