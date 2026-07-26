@@ -1,7 +1,13 @@
-package org.synesis.workspace.agent;
+package org.synesis.workspace.application;
 
 import java.util.List;
 import java.util.Objects;
+import org.synesis.workspace.agent.AgentCapabilityResult;
+import org.synesis.workspace.agent.AgentNextAction;
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.agent.AgentStatusResult;
 import org.synesis.workspace.application.WorkspaceMutationBroker;
 import org.synesis.workspace.application.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.WorkspaceMutationBroker.MutationResult;

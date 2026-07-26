@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.synesis.coordination.domain.CapabilityContract;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.agent.AgentSessionService;
+import org.synesis.workspace.application.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.AgentNextActionService;

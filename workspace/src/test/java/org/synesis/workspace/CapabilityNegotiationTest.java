@@ -17,12 +17,12 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.agent.AgentSessionService;
+import org.synesis.workspace.application.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.AgentNextActionService;
 import org.synesis.workspace.application.CapabilityRequestService;
 import org.synesis.workspace.application.CapabilityResponseService;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

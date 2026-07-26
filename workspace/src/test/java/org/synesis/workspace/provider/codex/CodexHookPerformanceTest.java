@@ -1,6 +1,6 @@
 package org.synesis.workspace.provider.codex;
 
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -34,7 +34,7 @@ final class CodexHookPerformanceTest {
     void measuresTwentySyntheticInvocations() throws Exception {
         Path root = Files.createTempDirectory("codex-hook-perf-");
         try {
-            var location = new org.synesis.workspace.project.ProjectApplicationService().init(root)
+            var location = new org.synesis.workspace.application.ProjectApplicationService().init(root)
                     .location();
             new ProjectConfig(location.projectId(), java.util.Set.of("sl1-" + "0".repeat(64)))
                     .save(location.profile()

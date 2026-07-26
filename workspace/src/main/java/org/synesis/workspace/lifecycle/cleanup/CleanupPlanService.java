@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
  * Application service that coordinates lifecycle resource inventory discovery, path safety verification,

@@ -9,7 +9,7 @@ import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;

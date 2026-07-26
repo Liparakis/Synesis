@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.workspace.application.ConstraintApplicationService;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 import org.synesis.workspace.application.ProviderSessionBindingService.WorkspaceVerificationResult;
 import org.synesis.workspace.application.WorkspaceMutationBroker;

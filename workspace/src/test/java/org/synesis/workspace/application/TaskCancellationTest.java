@@ -1,6 +1,6 @@
 package org.synesis.workspace.application;
 
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.agent.AgentResponse;
 
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.agent.AgentSessionService;
+import org.synesis.workspace.application.AgentSessionService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

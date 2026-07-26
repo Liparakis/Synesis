@@ -2,7 +2,7 @@ package org.synesis.mcp;
 
 import java.nio.file.Path;
 import java.util.UUID;
-import org.synesis.workspace.agent.AgentSessionService;
+import org.synesis.workspace.application.AgentSessionService;
 
 /**
  * Main process entrypoint for the Synesis Model Context Protocol (MCP) server.

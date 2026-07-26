@@ -39,7 +39,7 @@ public final class SpeculationRetireCommand implements Callable<Integer> {
         this.runtime = runtime;
     }
 
-    static void close(org.synesis.workspace.project.ProjectApplicationService.ProjectLocation location, UUID id)
+    static void close(org.synesis.workspace.application.ProjectApplicationService.ProjectLocation location, UUID id)
             throws Exception {
         Path metadata = location.synesisDirectory()
                 .resolve("local")

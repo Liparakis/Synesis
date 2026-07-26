@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.HookApplicationService;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 
 /**

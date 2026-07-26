@@ -1,4 +1,4 @@
-package org.synesis.workspace.agent;
+package org.synesis.workspace.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -11,6 +11,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.WorkspaceMutationBroker.MutationResult;
+import org.synesis.workspace.agent.AgentNextAction;
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentStatus;
 
 class AgentOutcomeTranslatorTest {
 

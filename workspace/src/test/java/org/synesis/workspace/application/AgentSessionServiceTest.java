@@ -1,4 +1,4 @@
-package org.synesis.workspace.agent;
+package org.synesis.workspace.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,7 +12,11 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.agent.AgentNextAction;
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
 
 class AgentSessionServiceTest {
 

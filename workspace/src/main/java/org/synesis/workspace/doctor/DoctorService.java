@@ -15,7 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.cleanup.CleanupEligibilityService;
 import org.synesis.workspace.lifecycle.cleanup.LifecycleInventoryService;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;

@@ -1,6 +1,6 @@
 package org.synesis.workspace.application;
 
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -11,11 +11,10 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import org.synesis.workspace.agent.AgentNextAction;
-import org.synesis.workspace.agent.AgentOutcomeTranslator;
+import org.synesis.workspace.application.AgentOutcomeTranslator;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.agent.TranslatedOutcome;
 import org.synesis.workspace.infrastructure.filesystem.TextFileDocument;
 import org.synesis.workspace.project.ProjectPathResolver;
 

@@ -1,6 +1,6 @@
 package org.synesis.workspace.application;
 
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

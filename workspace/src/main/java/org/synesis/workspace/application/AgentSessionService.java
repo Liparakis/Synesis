@@ -1,10 +1,14 @@
-package org.synesis.workspace.agent;
+package org.synesis.workspace.application;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.agent.AgentNextAction;
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 import org.synesis.workspace.application.WorkspaceReadinessService;
 

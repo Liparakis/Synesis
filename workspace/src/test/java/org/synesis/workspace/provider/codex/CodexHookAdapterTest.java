@@ -1,6 +1,6 @@
 package org.synesis.workspace.provider.codex;
 
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,7 +29,7 @@ final class CodexHookAdapterTest {
     private static Path fixture(ProjectConstraint.Effect effect, String scope, String title, String rationale)
             throws Exception {
         Path root = Files.createTempDirectory("codex-hook-");
-        var location = new org.synesis.workspace.project.ProjectApplicationService().init(root)
+        var location = new org.synesis.workspace.application.ProjectApplicationService().init(root)
                 .location();
         var identity = new IdentityBootstrap(location.profile()
                 .resolve("link")).loadOrCreate()

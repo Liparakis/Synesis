@@ -1,7 +1,7 @@
-package org.synesis.workspace.agent;
+package org.synesis.workspace.application;
 
 import java.util.Objects;
-import org.synesis.workspace.application.WorkspaceMutationBroker;
+import org.synesis.workspace.agent.AgentResponse;
 
 /**
  * Result of translating an internal application outcome into a public agent response.

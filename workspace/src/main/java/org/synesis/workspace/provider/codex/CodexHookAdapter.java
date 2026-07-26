@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.project.ActionGuardrail;
 import org.synesis.workspace.project.ProjectPathResolver;
 import org.synesis.workspace.infrastructure.json.ProviderJson;

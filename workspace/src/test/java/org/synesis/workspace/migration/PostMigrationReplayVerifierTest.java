@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 /** Verifies durable-state replay comparison is semantic and mutation-free. */
 final class PostMigrationReplayVerifierTest {
