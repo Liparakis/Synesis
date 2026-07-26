@@ -666,138 +666,23 @@ public final class ProviderApplicationService {
      * @param launcher stable launcher path
      * @return installation status identifier
      */
-    @SuppressWarnings("unchecked")
-    public String ensureMcpConfig(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider, Path launcher) {
-        Path configPath = provider.mcpConfigurationPath(location.root());
-        if (configPath == null) {
-            return "UNSUPPORTED";
-        }
-        try {
-            if ("codex".equals(provider.id())) {
-                CodexTomlConfiguration.Inspection before = CodexTomlConfiguration.inspect(configPath, launcher);
-                if (before.outcome() == CodexTomlConfiguration.Outcome.MALFORMED
-                        || before.outcome() == CodexTomlConfiguration.Outcome.DUPLICATE_SYNSESIS_ENTRY) return "MALFORMED_CONFIG";
-                CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher);
-                return before.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE
-                        && after.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE ? "UNCHANGED" : "INSTALLED";
-            }
-            Map<String, Object> managedEntry = provider.managedMcpServer(launcher, location.root());
-            Map<String, Object> root = Files.exists(configPath) ? readObject(configPath) : new LinkedHashMap<>();
+    private final ProviderMcpConfigurationService mcpConfiguration = new ProviderMcpConfigurationService();
 
-            Map<String, Object> mcpServers = root.containsKey("mcpServers") && root.get("mcpServers") instanceof Map<?, ?>
-                    ? new LinkedHashMap<>((Map<String, Object>) root.get("mcpServers"))
-                    : new LinkedHashMap<>();
-
-            Object existing = mcpServers.get("synesis");
-            boolean unchanged = managedEntry.equals(existing);
-            if (!unchanged) {
-                mcpServers.put("synesis", managedEntry);
-                root.put("mcpServers", mcpServers);
-                atomicWrite(configPath, ProviderJson.write(root) + System.lineSeparator());
-            }
-
-            if ("antigravity".equals(provider.id())) {
-                String userHome = System.getProperty("user.home");
-                if (userHome != null && !userHome.isBlank()) {
-                    Path secondaryConfig = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
-                    if (Files.exists(secondaryConfig) || Files.isDirectory(secondaryConfig.getParent())) {
-                        Map<String, Object> secRoot = Files.exists(secondaryConfig) ? readObject(secondaryConfig) : new LinkedHashMap<>();
-                        Map<String, Object> secServers = secRoot.containsKey("mcpServers") && secRoot.get("mcpServers") instanceof Map<?, ?>
-                                ? new LinkedHashMap<>((Map<String, Object>) secRoot.get("mcpServers"))
-                                : new LinkedHashMap<>();
-                        if (!managedEntry.equals(secServers.get("synesis"))) {
-                            secServers.put("synesis", managedEntry);
-                            secRoot.put("mcpServers", secServers);
-                            atomicWrite(secondaryConfig, ProviderJson.write(secRoot) + System.lineSeparator());
-                        }
-                    }
-                }
-
-            }
-
-            // Clean up obsolete project-local MCP replication files so project repositories stay clean
-            cleanObsoleteProjectMcpFile(location.root().resolve(".agents/mcp.json"));
-            cleanObsoleteProjectMcpFile(location.root().resolve(".gemini/mcp.json"));
-
-            return unchanged ? "UNCHANGED" : "INSTALLED";
-        } catch (Exception failure) {
-            return "MALFORMED_CONFIG";
-        }
-    }
-
-    private void cleanObsoleteProjectMcpFile(Path path) {
-        if (path == null || !Files.exists(path)) {
-            return;
-        }
-        try {
-            Map<String, Object> root = readObject(path);
-            if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
-                mcpServers.remove("synesis");
-                if (mcpServers.isEmpty()) {
-                    root.remove("mcpServers");
-                } else {
-                    root.put("mcpServers", mcpServers);
-                }
-                if (root.isEmpty()) {
-                    Files.deleteIfExists(path);
-                } else {
-                    atomicWrite(path, ProviderJson.write(root) + System.lineSeparator());
-                }
-            }
-        } catch (Exception ignored) {
-        }
+    /**
+     * Ensures provider-neutral Model Context Protocol (MCP) server configuration is installed.
+     *
+     * @param location project location
+     * @param provider provider integration
+     * @param launcher stable launcher path
+     * @return installation status identifier
+     */
+    public String ensureMcpConfig(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider,
+            Path launcher) {
+        return mcpConfiguration.ensure(location, provider, launcher);
     }
 
     private void removeMcpConfig(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) {
-        Path configPath = provider.mcpConfigurationPath(location.root());
-        if (configPath != null && Files.exists(configPath)) {
-            try {
-                if ("codex".equals(provider.id())) {
-                    CodexTomlConfiguration.remove(configPath);
-                    return;
-                }
-                Map<String, Object> root = readObject(configPath);
-                if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
-                    mcpServers.remove("synesis");
-                    if (mcpServers.isEmpty()) {
-                        root.remove("mcpServers");
-                    } else {
-                        root.put("mcpServers", mcpServers);
-                    }
-                    atomicWrite(configPath, ProviderJson.write(root) + System.lineSeparator());
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        if ("antigravity".equals(provider.id())) {
-            String userHome = System.getProperty("user.home");
-            if (userHome != null && !userHome.isBlank()) {
-                Path secondaryConfig = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
-                if (Files.exists(secondaryConfig)) {
-                    try {
-                        Map<String, Object> root = readObject(secondaryConfig);
-                        if (root.get("mcpServers") instanceof Map<?, ?> mcpMap) {
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> mcpServers = new LinkedHashMap<>((Map<String, Object>) mcpMap);
-                            mcpServers.remove("synesis");
-                            if (mcpServers.isEmpty()) {
-                                root.remove("mcpServers");
-                            } else {
-                                root.put("mcpServers", mcpServers);
-                            }
-                            atomicWrite(secondaryConfig, ProviderJson.write(root) + System.lineSeparator());
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-            }
-            cleanObsoleteProjectMcpFile(location.root().resolve(".agents/mcp.json"));
-            cleanObsoleteProjectMcpFile(location.root().resolve(".gemini/mcp.json"));
-        }
+        mcpConfiguration.remove(location, provider);
     }
 
     /**
