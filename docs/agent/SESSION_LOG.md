@@ -1169,3 +1169,11 @@ Append-only operational history.
 - Renamed the canonical provider ID to `claude` and retained `claude-code` as a registry input alias. Claude Code hook configuration remains `.claude/settings.json`.
 - Added project-scoped `.mcp.json` management with append/update-only `mcpServers.synesis`, launcher command preservation, `mcp --provider claude` arguments, idempotent reinstall, and unrelated-entry-preserving uninstall. Claude Desktop configuration was not added.
 - Focused `ProviderApplicationServiceTest`, provider/module checks, root Gradle `check`, and bootstrap `go test ./...`/`go vet ./...` pass. Existing 11-tool MCP surface is unchanged.
+
+# 2026-07-26 — SYN-015 STRUCT-1A foundational package completion
+
+- Paused `SYN-014E` before production edits and promoted `SYN-015` as the sole validator-recognized ACTIVE primary task for the staged package-structure refactor.
+- Completed `STRUCT-1A` only: reorganized packages within `:project-record`, `:coordination`, and `:link`, moved `DemoCli` to `org.synesis.link.cli`, and updated the `link` Gradle main-class reference.
+- Required validation passed: `.\gradlew.bat :project-record:check --no-daemon`, `.\gradlew.bat :coordination:check --no-daemon`, `.\gradlew.bat :link:check --no-daemon`, `.\gradlew.bat check --no-daemon`, `go test -count=1 ./...`, and `go vet ./...`.
+- Committed the slice as `Reorganize Synesis foundational packages` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`.
+- Stopped before `STRUCT-1B`; the only remaining work in this session is durable-state reconciliation and checkpoint creation for the completed slice.

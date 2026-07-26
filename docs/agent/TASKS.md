@@ -524,16 +524,16 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - [x] **SYN-014C** — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation `[DONE]`
 - [x] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[DONE]`
-- [ ] **STRUCT-1** — Reorganize Synesis package structure `[ACTIVE]`
-- [/] **STRUCT-1A** — Foundational packages `[ACTIVE]`
+- [/] **SYN-015** — Reorganize Synesis package structure `[ACTIVE]`
+- [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [ ] **STRUCT-1B** — Workspace packages `[READY]`
 - [ ] **STRUCT-1C** — MCP packages `[READY]`
 - [ ] **STRUCT-1D** — CLI packages `[READY]`
 - [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
 
-## STRUCT-1
+## SYN-015
 
-- ID: STRUCT-1
+- ID: SYN-015
 - Priority: P0
 - Title: Reorganize Synesis package structure
 - Status: ACTIVE
@@ -542,22 +542,22 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: `STRUCT-1A` through `STRUCT-1D` each complete with clean preflight, zero stale production references for moved package names, required verification passing, checkpoint evidence, and one coherent commit per slice.
 - Required tests: per-subtask Gradle verification, root `check`, bootstrap Go test/vet, MCP 11-tool verification where required, and stale-reference searches.
 - Scope boundary: no module moves, no new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, no provider/schema/reason-code/event-format changes, and no deduplication/warning/god-class cleanup.
-- Evidence: pending; `STRUCT-1A` is active.
+- Evidence: `STRUCT-1A` completed at commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; checkpoint and later subtasks remain pending.
 
-## STRUCT-1A
+### STRUCT-1A
 
 - ID: STRUCT-1A
 - Priority: P0
 - Title: Foundational packages
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Reorganize foundational packages inside `:project-record`, `:coordination`, and `:link` only.
-- Dependencies: STRUCT-1 ACTIVE; clean working tree; durable state reconciled before production edits.
+- Dependencies: SYN-015 ACTIVE; clean working tree; durable state reconciled before production edits.
 - Acceptance criteria: `project-record` split into `domain`, `persistence`, `security`, `sync`, `sync.protocol`, and `guardrail`; `coordination` split into `domain`, `application`, `persistence`, and `transport.http`; `link` split into `transport.quic`, `transport.control`, `onboarding`, and `cli`; `DemoCli` moved to `org.synesis.link.cli`; Gradle main-class string updated; zero stale production references to moved foundational-package FQNs remain.
 - Required tests: `.\gradlew.bat :project-record:check --no-daemon`; `.\gradlew.bat :coordination:check --no-daemon`; `.\gradlew.bat :link:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
 - Scope boundary: no cross-module type moves, no new abstractions except minimal access-preservation changes forced by package movement, no behavioral rewrites.
-- Evidence: pending.
+- Evidence: PASS — `.\gradlew.bat :project-record:check --no-daemon`; `.\gradlew.bat :coordination:check --no-daemon`; `.\gradlew.bat :link:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `go test -count=1 ./...`; `go vet ./...`; commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`.
 
-## STRUCT-1B
+### STRUCT-1B
 
 - ID: STRUCT-1B
 - Priority: P0
@@ -570,7 +570,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Scope boundary: no CLI/MCP/package work outside what workspace references require to compile and verify; no behavior changes.
 - Evidence: pending.
 
-## STRUCT-1C
+### STRUCT-1C
 
 - ID: STRUCT-1C
 - Priority: P0
@@ -583,7 +583,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Scope boundary: no MCP schema/tool-count changes and no unrelated CLI/package cleanup.
 - Evidence: pending.
 
-## STRUCT-1D
+### STRUCT-1D
 
 - ID: STRUCT-1D
 - Priority: P0

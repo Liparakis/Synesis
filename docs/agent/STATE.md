@@ -83,9 +83,10 @@ Post-MVP Hardening Slice 2 is DONE at CP-0188. Controlled lifecycle cleanup exec
 
 ## Implementation state
 
-`Reorganize Synesis package structure` is the sole active primary task.
-`STRUCT-1A — Foundational packages` is the only active subtask as of
-2026-07-26. `SYN-014E` is paused with its prior evidence preserved and without
+`Reorganize Synesis package structure` is the sole active primary task under
+`SYN-015`. `STRUCT-1A — Foundational packages` completed on 2026-07-26 at
+commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B` is not active
+yet. `SYN-014E` is paused with its prior evidence preserved and without
 production rollback.
 
 `STRUCT-1A` is restricted to intra-module package restructuring inside
@@ -103,6 +104,15 @@ preserved, and no deduplication/warning/god-class cleanup.
 Pre-STRUCT-1A baseline: clean working tree at
 `8dc7d90e8286c5f954111c9619c88fc8b5c8d355`; `.\gradlew.bat check --no-daemon`
 PASS; `bootstrap\go test -count=1 ./...` PASS; `bootstrap\go vet ./...` PASS.
+
+`STRUCT-1A` completion evidence: foundational packages were reorganized within
+`:project-record`, `:coordination`, and `:link`; `DemoCli` moved to
+`org.synesis.link.cli` with the `link/build.gradle.kts` main-class update; the
+required validations passed: `.\gradlew.bat :project-record:check --no-daemon`,
+`.\gradlew.bat :coordination:check --no-daemon`,
+`.\gradlew.bat :link:check --no-daemon`, `.\gradlew.bat check --no-daemon`,
+`go test -count=1 ./...`, and `go vet ./...`; the slice was committed as
+`Reorganize Synesis foundational packages` (`376f2d2ce6003b32d28994b19b6728926ab0af6e`).
 
 The project contains bounded identity, automatic identity bootstrap, signed
 candidate descriptors and single-use invitations, direct candidate
