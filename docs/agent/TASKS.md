@@ -524,7 +524,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - [x] **SYN-014C** — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation `[DONE]`
 - [x] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[DONE]`
-- [/] **SYN-015** — Reorganize Synesis package structure `[ACTIVE]`
+- [x] **SYN-015** — Reorganize Synesis package structure `[DONE]`
 - [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
 - [x] **STRUCT-1C** — MCP packages `[DONE]`
@@ -539,13 +539,13 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-015
 - Priority: P0
 - Title: Reorganize Synesis package structure
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Improve package organization and dependency direction in staged, independently validated slices without changing runtime behavior or public surfaces.
 - Dependencies: clean working tree; existing module boundaries preserved.
-- Acceptance criteria: `STRUCT-1A` through `STRUCT-1D` each complete with clean preflight, zero stale production references for moved package names, required verification passing, checkpoint evidence, and one coherent commit per slice.
+- Acceptance criteria: staged structure, evidence-based deduplication, legitimate warning cleanup, and focused god-class splitting complete with clean validation, zero stale production references, preserved surfaces, and checkpoint evidence.
 - Required tests: per-subtask Gradle verification, root `check`, bootstrap Go test/vet, MCP 11-tool verification where required, and stale-reference searches.
 - Scope boundary: no module moves, no new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, and no provider/schema/reason-code/event-format changes.
-- Evidence: `STRUCT-1A` completed at commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B` completed across `b67ac1c` and corrective commit `248889a`; `STRUCT-1C` at `5cb0656`; `STRUCT-1D` at `958a039`; deduplication at `98755b3`; warning cleanup at `98cda05`.
+- Evidence: `STRUCT-1A` completed at commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B` completed across `b67ac1c` and corrective commit `248889a`; `STRUCT-1C` at `5cb0656`; `STRUCT-1D` at `958a039`; deduplication at `98755b3`; warning cleanup at `98cda05`; god-class split at `04977b9`; final checkpoint `CP-0221`.
 
 ### STRUCT-1A
 
