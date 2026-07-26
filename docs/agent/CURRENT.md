@@ -15,15 +15,15 @@ Complete the staged package-structure refactor task in independently validated s
 
 ## Immediate slice
 
-Record the completed `STRUCT-1B — Workspace packages` slice and stop before `STRUCT-1C`.
+Complete `STRUCT-1C — MCP packages` only, then checkpoint and stop before `STRUCT-1D`.
 
 ## Verification target
 
-Require the committed `STRUCT-1B` refactor to remain code-clean, preserve the exact 11-tool MCP surface and provider behavior, keep zero stale production references to moved workspace FQNs, and pass checkpoint validation with durable state aligned to repository reality.
+Reorganize only the `mcp` module into stable entrypoint, application, protocol, and stdio transport packages while preserving the exact 11-tool MCP surface, wire schemas, provider behavior, and zero stale production references.
 
 ## Immediate next action
 
-If continuation is explicitly requested, activate `STRUCT-1C` in durable state, verify a clean worktree, and inventory current MCP package FQNs before production edits. Do not activate it automatically.
+Inventory current MCP package FQNs, move one coherent package group, run `:mcp:check`, and continue only within STRUCT-1C until its validation and checkpoint are complete.
 
 ## Work completed
 

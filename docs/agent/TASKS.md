@@ -527,7 +527,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [/] **SYN-015** — Reorganize Synesis package structure `[ACTIVE]`
 - [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
-- [ ] **STRUCT-1C** — MCP packages `[READY]`
+- [/] **STRUCT-1C** — MCP packages `[ACTIVE]`
 - [ ] **STRUCT-1D** — CLI packages `[READY]`
 - [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
 
@@ -575,13 +575,13 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: STRUCT-1C
 - Priority: P0
 - Title: MCP packages
-- Status: READY
+- Status: ACTIVE
 - Purpose: Separate MCP protocol, stdio transport, and application routing packages while preserving the stable server entrypoint where practical.
 - Dependencies: STRUCT-1B DONE.
 - Acceptance criteria: `org.synesis.mcp.protocol`, `org.synesis.mcp.transport.stdio`, and `org.synesis.mcp.application` implemented; only necessary main-class and process-test references updated; a real MCP wire sequence completes `initialize`, `tools/list`, and exact 11-tool confirmation.
 - Required tests: `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
 - Scope boundary: no MCP schema/tool-count changes and no unrelated CLI/package cleanup.
-- Evidence: pending.
+- Evidence: active; baseline Gradle and Go validation passed at `c29e10d` before production edits.
 
 ### STRUCT-1D
 
