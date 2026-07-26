@@ -39,5 +39,7 @@ production type moved and the stale allowlist was narrowed to
 ## Current failures
 
 All requested architecture, module, root Gradle, Go, MCP, CLI, provider, and
-hygiene checks pass. An unrelated README edit is uncommitted and was preserved;
-it is outside this task and must not be reverted or included.
+hygiene checks passed before the unrelated README edit appeared. That preserved
+uncommitted README edit currently makes `repositoryHygieneCheck` misread its
+`MCP%20tools-11` badge URL as a 20-tool claim. It is outside this task and must
+not be reverted or included.

@@ -111,7 +111,9 @@ SYN-019 closes that stale architecture rule at `a87d3d8`. Inspection found only
 allowlist was narrowed to that deliberate stable facade. No production type,
 runtime behavior, module dependency, CLI/MCP/provider surface, schema, or event
 format changed. All requested Gradle, Go, MCP, CLI, provider, init, and hygiene
-checks pass. An unrelated README edit was preserved outside this task.
+checks passed before an unrelated README edit appeared. That preserved edit
+currently makes the existing hygiene count regex misread its `%20tools-11`
+badge URL as a 20-tool claim; it remains outside this task.
 
 `STRUCT-1B` was restricted to intra-module package restructuring inside
 `:workspace`. It completed with `workspace.application`, `workspace.project`,

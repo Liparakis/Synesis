@@ -1286,4 +1286,6 @@ Append-only operational history.
   no production type moved and no behavior or public surface changed.
 - `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go test/vet,
   focused MCP 11-tool tests, CLI help/version, provider list, init, and hygiene
-  checks pass. Commit: `a87d3d8`.
+  checks pass before the unrelated README edit appeared. That edit triggers a
+  false positive in the existing hygiene count regex (`%20tools-11`) and was
+  preserved outside this task. Commit: `a87d3d8`.
