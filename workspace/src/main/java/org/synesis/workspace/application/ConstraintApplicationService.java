@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.io.Serial;
 import java.util.Objects;
 import java.util.UUID;

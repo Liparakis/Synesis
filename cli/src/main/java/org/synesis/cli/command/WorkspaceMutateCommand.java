@@ -11,13 +11,13 @@ import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 import org.synesis.workspace.application.WorkspaceMutationBroker;
 import org.synesis.workspace.application.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.WorkspaceMutationBroker.MutationRequest;
 import org.synesis.workspace.application.WorkspaceMutationBroker.MutationResult;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

@@ -22,7 +22,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.AgentNextActionService;
 import org.synesis.workspace.application.CapabilityRequestService;
 import org.synesis.workspace.application.CapabilityResponseService;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

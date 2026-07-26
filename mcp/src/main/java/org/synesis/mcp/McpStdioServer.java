@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Map;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Runs the stdio message loop for the Synesis Model Context Protocol (MCP) server.

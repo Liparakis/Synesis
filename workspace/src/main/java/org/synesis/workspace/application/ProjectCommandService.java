@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +19,11 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.infrastructure.command.DotNetProjectCommandAdapter;
+import org.synesis.workspace.infrastructure.command.GradleProjectCommandAdapter;
+import org.synesis.workspace.infrastructure.command.MavenProjectCommandAdapter;
+import org.synesis.workspace.infrastructure.command.NpmProjectCommandAdapter;
+import org.synesis.workspace.infrastructure.git.GitProjectCommandAdapter;
 
 /**
  * Application service for executing bounded, session-verified project build and git commands

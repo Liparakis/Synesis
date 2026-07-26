@@ -14,12 +14,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.lease.SessionLeasePolicy;
-import org.synesis.workspace.lease.SessionLeaseService;
-import org.synesis.workspace.lease.SessionLeaseState;
-import org.synesis.workspace.lease.SessionLeaseStore;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Detects and plans identity-preserving project schema migrations.

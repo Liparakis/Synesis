@@ -6,9 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
-import org.synesis.workspace.integration.antigravity.AntigravityHookAdapter;
+import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 
 /**

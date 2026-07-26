@@ -16,7 +16,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 import org.synesis.workspace.provider.ProviderRegistry;
 
 /**

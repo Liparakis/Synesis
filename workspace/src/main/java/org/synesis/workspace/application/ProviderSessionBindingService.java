@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,7 +17,7 @@ import java.util.UUID;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Creates and resumes project-scoped provider session bindings.

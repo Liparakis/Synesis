@@ -17,8 +17,8 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.cleanup.LifecyclePathVerifier;
+import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

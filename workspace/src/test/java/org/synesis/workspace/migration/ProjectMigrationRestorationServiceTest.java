@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 
 /** Failure-injection tests for exact project metadata restoration. */
 final class ProjectMigrationRestorationServiceTest {

@@ -4,7 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 import org.synesis.workspace.application.WorkspaceReadinessService;
 

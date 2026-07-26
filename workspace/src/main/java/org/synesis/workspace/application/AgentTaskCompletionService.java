@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;

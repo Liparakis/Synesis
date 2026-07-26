@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,7 +16,7 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Application service for retrieving the single highest-priority actionable coordination item

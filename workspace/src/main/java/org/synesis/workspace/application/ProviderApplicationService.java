@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,11 +21,11 @@ import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 import org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration;
-import org.synesis.workspace.migration.CodexTomlConfiguration;
+import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 
 /**
  * Owns provider lifecycle, local metadata, configuration merging, and diagnostics.

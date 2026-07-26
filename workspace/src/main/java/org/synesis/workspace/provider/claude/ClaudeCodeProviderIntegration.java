@@ -2,9 +2,9 @@ package org.synesis.workspace.provider.claude;
 
 import java.nio.file.Path;
 
-import org.synesis.workspace.integration.claude.ClaudeCodeHookAdapter;
+import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 
 /**

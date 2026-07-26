@@ -45,7 +45,7 @@ class McpServerTest {
         git(tempRoot, "add", ".");
         git(tempRoot, "commit", "-m", "Initial commit");
 
-        new org.synesis.workspace.application.ProjectApplicationService().init(tempRoot);
+        new org.synesis.workspace.project.ProjectApplicationService().init(tempRoot);
     }
 
     @Test
@@ -193,7 +193,7 @@ class McpServerTest {
         Files.writeString(secondProject.resolve("README.md"), "# Second Repo\n");
         git(secondProject, "add", ".");
         git(secondProject, "commit", "-m", "Initial commit");
-        new org.synesis.workspace.application.ProjectApplicationService().init(secondProject);
+        new org.synesis.workspace.project.ProjectApplicationService().init(secondProject);
 
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot.getParent(), "antigravity", "conn-ambiguous");

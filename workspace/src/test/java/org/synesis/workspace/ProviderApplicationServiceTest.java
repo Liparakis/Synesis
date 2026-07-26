@@ -8,9 +8,9 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderApplicationService;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
 
 /**

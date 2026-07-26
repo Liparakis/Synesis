@@ -7,9 +7,9 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.doctor.DoctorFinding;
 import org.synesis.workspace.doctor.DoctorReport;
-import org.synesis.workspace.repair.RepairPlan;
-import org.synesis.workspace.repair.RepairPlanEntry;
-import org.synesis.workspace.repair.RepairService;
+import org.synesis.workspace.lifecycle.repair.RepairPlan;
+import org.synesis.workspace.lifecycle.repair.RepairPlanEntry;
+import org.synesis.workspace.lifecycle.repair.RepairService;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

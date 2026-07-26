@@ -20,7 +20,7 @@ import org.synesis.workspace.application.ProjectCommandIntent;
 import org.synesis.workspace.application.ProjectCommandService;
 import org.synesis.workspace.application.WorkspacePatchService;
 import org.synesis.workspace.application.WorkspaceReadService;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Handles JSON-RPC 2.0 requests for the Synesis Model Context Protocol (MCP) server over stdio.

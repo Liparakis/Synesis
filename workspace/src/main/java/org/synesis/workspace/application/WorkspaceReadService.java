@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,7 +14,8 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.guardrail.ProjectPathResolver;
+import org.synesis.workspace.infrastructure.filesystem.TextFileDocument;
+import org.synesis.workspace.project.ProjectPathResolver;
 
 /**
  * Application service for executing safe, bounded, session-verified workspace file reads.

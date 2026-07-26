@@ -74,12 +74,6 @@ tasks.register("architectureCheck") {
     group = "verification"
     description = "Checks workspace package and module import boundaries."
     doLast {
-        val guardrailHits = linesContaining(
-            project.file("src/main/java/org/synesis/workspace/guardrail"),
-            "org.synesis.workspace.integration"
-        )
-        require(guardrailHits.none()) { "Guardrail imports provider adapter: $guardrailHits" }
-
         val reverseHits = linesContaining(
             project.file("../project-record/src/main/java"),
             "org.synesis.workspace"

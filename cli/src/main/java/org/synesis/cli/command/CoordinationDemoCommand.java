@@ -26,7 +26,7 @@ import org.synesis.coordination.domain.SpeculationWorkspace;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
-import org.synesis.workspace.integration.antigravity.AntigravityHookAdapter;
+import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

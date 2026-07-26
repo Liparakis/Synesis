@@ -10,7 +10,7 @@ import org.synesis.coordination.transport.http.CoordinationHttpClient;
 import org.synesis.coordination.domain.PredictionEvent;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 
 /**
  * Shared project/profile resolution for public coordination commands.

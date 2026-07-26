@@ -10,7 +10,7 @@ import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ConstraintApplicationService;
 import org.synesis.workspace.application.GuardrailApplicationService;
 import org.synesis.workspace.application.HookApplicationService;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderApplicationService;
 import org.synesis.workspace.application.SyncApplicationService;
 

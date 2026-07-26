@@ -7,11 +7,11 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.workspace.provider.ProviderJson;
-import org.synesis.workspace.reconcile.ReconciliationPlan;
-import org.synesis.workspace.reconcile.ReconciliationPlanEntry;
-import org.synesis.workspace.reconcile.ReconciliationPlanStore;
-import org.synesis.workspace.reconcile.ReconciliationService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.reconciliation.ReconciliationPlan;
+import org.synesis.workspace.lifecycle.reconciliation.ReconciliationPlanEntry;
+import org.synesis.workspace.lifecycle.reconciliation.ReconciliationPlanStore;
+import org.synesis.workspace.lifecycle.reconciliation.ReconciliationService;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

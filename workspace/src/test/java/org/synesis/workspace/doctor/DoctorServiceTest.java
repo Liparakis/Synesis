@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 
 public class DoctorServiceTest {
 
@@ -45,7 +45,7 @@ public class DoctorServiceTest {
         ProjectApplicationService projectService = new ProjectApplicationService();
         projectService.init(tempDir);
 
-        Path workspaceRoot = org.synesis.workspace.cleanup.LifecyclePathVerifier.resolveWorkspaceRoot(tempDir);
+        Path workspaceRoot = org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier.resolveWorkspaceRoot(tempDir);
         Path adminDir = workspaceRoot.resolve("admin");
         Files.createDirectories(adminDir);
         Files.writeString(adminDir.resolve("cleanup-execution.lock"), "{ \"pid\": 9999999 }");

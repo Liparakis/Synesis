@@ -23,7 +23,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.TaskCompletionProjection;
 import org.synesis.coordination.domain.TaskSnapshotRecord;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 
 /**
  * Replays the existing durable event store and compares canonical semantic

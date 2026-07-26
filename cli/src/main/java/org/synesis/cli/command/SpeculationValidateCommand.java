@@ -39,7 +39,7 @@ public final class SpeculationValidateCommand implements Callable<Integer> {
         this.runtime = runtime;
     }
 
-    private static String readBaseCommit(org.synesis.workspace.application.ProjectApplicationService.ProjectLocation location,
+    private static String readBaseCommit(org.synesis.workspace.project.ProjectApplicationService.ProjectLocation location,
             UUID prediction) throws java.io.IOException {
         Path metadata = location.synesisDirectory()
                 .resolve("local")

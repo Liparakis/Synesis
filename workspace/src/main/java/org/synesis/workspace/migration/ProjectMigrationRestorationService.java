@@ -17,8 +17,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.project.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Creates verified project-metadata backups and restores only the files in a

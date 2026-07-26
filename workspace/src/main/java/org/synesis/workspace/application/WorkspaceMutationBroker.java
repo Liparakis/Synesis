@@ -1,5 +1,7 @@
 package org.synesis.workspace.application;
 
+import org.synesis.workspace.project.ProjectApplicationService;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,9 +16,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-import org.synesis.workspace.guardrail.ActionGuardrail;
-import org.synesis.workspace.guardrail.ProjectPathResolver;
-import org.synesis.workspace.provider.ProviderJson;
+import org.synesis.workspace.project.ActionGuardrail;
+import org.synesis.workspace.project.ProjectPathResolver;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Broker enforcing workspace mutation invariants across providers.

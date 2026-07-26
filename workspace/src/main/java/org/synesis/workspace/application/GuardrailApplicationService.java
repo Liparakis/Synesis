@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.guardrail.ActionGuardrail;
+import org.synesis.workspace.project.ActionGuardrail;
 
 /**
  * Evaluates proposed actions against verified project constraints.

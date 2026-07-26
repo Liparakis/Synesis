@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.project.ProjectApplicationService;
 import org.synesis.workspace.application.WorkspacePatchService;
 
 class WorkspacePatchServiceTest {
