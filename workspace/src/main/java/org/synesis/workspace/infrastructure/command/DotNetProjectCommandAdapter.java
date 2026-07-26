@@ -1,7 +1,7 @@
 package org.synesis.workspace.infrastructure.command;
 
-import org.synesis.workspace.application.ProjectCommandAdapter;
-import org.synesis.workspace.application.ProjectCommandIntent;
+import org.synesis.workspace.application.project.ProjectCommandAdapter;
+import org.synesis.workspace.application.project.ProjectCommandIntent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

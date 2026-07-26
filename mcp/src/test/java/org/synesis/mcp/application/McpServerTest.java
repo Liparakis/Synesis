@@ -17,7 +17,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
-import org.synesis.workspace.application.AgentSessionService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 
 class McpServerTest {
 

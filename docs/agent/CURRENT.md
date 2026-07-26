@@ -5,7 +5,7 @@
 - Task ID: SYN-017
 - Status: ACTIVE
 - Priority: P1
-- Started checkpoint: pending activation checkpoint
+- Started checkpoint: CP-0225
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0001, ADR-0008
 
@@ -15,20 +15,20 @@ Organize the flat `workspace.application` package into responsibility-based appl
 
 ## Immediate slice
 
-Inventory the 30 workspace application types and their FQN references, then define the first small coherent move set. Do not edit production code until the reference inventory is recorded.
+Inventory and implementation complete. Map: `application.agent`, `application.capability`, `application.control`, `application.guardrail`, `application.hook`, `application.integration`, `application.project`, `application.provider`, `application.sync`, `application.task`, and `application.workspace`. The root retains `ConstraintApplicationService`, `ProjectApplicationService`, `ProviderApplicationService`, and `ProviderSessionBindingService` as cross-responsibility facades.
 
 ## Verification target
 
-No stale production FQNs, package cycles, surface changes, or module dependency changes after each move set.
+No stale production FQNs, package cycles, surface changes, or module dependency changes after the completed move set.
 
 ## Immediate next action
 
-Run the activation checkpoint after confirming exactly one ACTIVE task, then inventory `workspace.application` imports, fully qualified references, tests, launch strings, reflection, resources, scripts, and test-used documentation.
+Commit the verified workspace application package moves as one coherent slice; keep `SYN-014E` paused and do not activate later structural or quality tasks automatically.
 
 ## Work completed
 
-`SYN-015` and `SYN-016` are complete. `SYN-017` is the sole ACTIVE task. `coordination.application` is one service; the 30-file application cluster is `workspace.application`. `SYN-014E` remains paused.
+`SYN-015` and `SYN-016` are complete. `SYN-017` remains the sole ACTIVE task until its implementation commit is recorded. `coordination.application` is one service; the 30-file application cluster was `workspace.application`. `SYN-014E` remains paused.
 
 ## Current failures
 
-No verified failures. An unrelated deletion of `mcp/src/main/java/org/synesis/mcp/transport/stdio/package-info.java` was present at startup and remains outside this task.
+No verified failures. The first MCP rerun encountered a transient Gradle result-file race after a timed-out chained invocation; the clean rerun and final root check passed. An unrelated deletion of `mcp/src/main/java/org/synesis/mcp/transport/stdio/package-info.java` was present at startup and remains outside this task.

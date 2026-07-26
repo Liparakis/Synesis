@@ -1,4 +1,6 @@
 package org.synesis.workspace.application;
+import org.synesis.workspace.application.ConstraintApplicationService;
+import org.synesis.workspace.application.ProviderMcpConfigurationService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 

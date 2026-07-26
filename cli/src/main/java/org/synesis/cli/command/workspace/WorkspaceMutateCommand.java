@@ -13,10 +13,10 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
-import org.synesis.workspace.application.WorkspaceMutationBroker;
-import org.synesis.workspace.application.WorkspaceMutationBroker.Decision;
-import org.synesis.workspace.application.WorkspaceMutationBroker.MutationRequest;
-import org.synesis.workspace.application.WorkspaceMutationBroker.MutationResult;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationRequest;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import picocli.CommandLine.Command;
@@ -223,8 +223,8 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
 
             String jsonOutput = ProviderJson.write(output);
             if ("agent".equalsIgnoreCase(outputMode)) {
-                org.synesis.workspace.application.AgentOutcomeTranslator translator = new org.synesis.workspace.application.AgentOutcomeTranslator();
-                org.synesis.workspace.application.TranslatedOutcome translated = translator.translateMutationResult(res, target);
+                org.synesis.workspace.application.workspace.AgentOutcomeTranslator translator = new org.synesis.workspace.application.workspace.AgentOutcomeTranslator();
+                org.synesis.workspace.application.workspace.TranslatedOutcome translated = translator.translateMutationResult(res, target);
                 runtime.terminal()
                         .stdout(translated.publicResponse()
                                 .toJson()
@@ -270,8 +270,8 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
             String sessionId,
             String worktree) {
         if ("agent".equalsIgnoreCase(outputMode)) {
-            org.synesis.workspace.application.AgentOutcomeTranslator translator = new org.synesis.workspace.application.AgentOutcomeTranslator();
-            org.synesis.workspace.application.TranslatedOutcome translated = translator.translateException(
+            org.synesis.workspace.application.workspace.AgentOutcomeTranslator translator = new org.synesis.workspace.application.workspace.AgentOutcomeTranslator();
+            org.synesis.workspace.application.workspace.TranslatedOutcome translated = translator.translateException(
                     new IllegalArgumentException(message != null ? message : reasonCode));
             runtime.terminal()
                     .stdout(translated.publicResponse()

@@ -1,4 +1,5 @@
 package org.synesis.workspace.application;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

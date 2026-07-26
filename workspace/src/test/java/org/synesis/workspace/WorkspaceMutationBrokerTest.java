@@ -20,10 +20,10 @@ import org.synesis.workspace.application.ConstraintApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 import org.synesis.workspace.application.ProviderSessionBindingService.WorkspaceVerificationResult;
-import org.synesis.workspace.application.WorkspaceMutationBroker;
-import org.synesis.workspace.application.WorkspaceMutationBroker.Decision;
-import org.synesis.workspace.application.WorkspaceMutationBroker.MutationRequest;
-import org.synesis.workspace.application.WorkspaceMutationBroker.MutationResult;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationRequest;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 class WorkspaceMutationBrokerTest {

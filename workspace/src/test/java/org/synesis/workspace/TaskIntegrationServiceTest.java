@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.workspace.application.TaskSnapshotService;
+import org.synesis.workspace.application.task.TaskSnapshotService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

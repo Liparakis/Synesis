@@ -12,11 +12,11 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.application.AgentSessionService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProjectCommandIntent;
-import org.synesis.workspace.application.ProjectCommandService;
+import org.synesis.workspace.application.project.ProjectCommandIntent;
+import org.synesis.workspace.application.project.ProjectCommandService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 
 class ProjectCommandServiceTest {

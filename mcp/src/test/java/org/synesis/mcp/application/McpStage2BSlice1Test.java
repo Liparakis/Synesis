@@ -13,7 +13,7 @@ import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.workspace.application.AgentSessionService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;

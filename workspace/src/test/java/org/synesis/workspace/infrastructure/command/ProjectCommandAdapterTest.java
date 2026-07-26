@@ -16,7 +16,7 @@ import org.synesis.workspace.infrastructure.git.GitProjectCommandAdapter;
 import org.synesis.workspace.infrastructure.command.GradleProjectCommandAdapter;
 import org.synesis.workspace.infrastructure.command.MavenProjectCommandAdapter;
 import org.synesis.workspace.infrastructure.command.NpmProjectCommandAdapter;
-import org.synesis.workspace.application.ProjectCommandIntent;
+import org.synesis.workspace.application.project.ProjectCommandIntent;
 
 class ProjectCommandAdapterTest {
 

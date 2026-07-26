@@ -658,7 +658,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: application services are grouped by responsibility without moving types between Gradle modules; zero stale production FQNs remain; no runtime behavior, public method signatures, CLI/MCP surfaces, provider identifiers, schemas, reason codes, event formats, or durable identifiers change; no package-info files are added.
 - Required tests: affected workspace tests after each coherent move; `:workspace:check`; `:cli:check`; `:mcp:check`; root `check`; bootstrap Go tests/vet; stale-reference and package-cycle scans.
 - Scope boundary: workspace module only; no deduplication, warning cleanup, god-class splitting, implementation rewrite, new Gradle dependency, Go bootstrap change, or automatic progression to another task.
-- Evidence: audit in progress; `workspace.application` contains 30 production types across agent, capability, constraint, control, guardrail, hook, integration, project, provider, sync, task, and workspace responsibilities. `coordination.application` contains one cohesive `CoordinationService` and is not the 30-file cluster.
+- Evidence: PASS — organized the flat application cluster into explicit agent, capability, control, guardrail, hook, integration, project, provider, sync, task, and workspace packages; retained only four root facades where existing package access and dependency direction require it; mirrored application tests; added `WorkspaceApplicationPackageArchitectureTest`; zero stale moved FQNs; no application-package cycles; `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go tests, and Go vet passed.
 
 ## SYN-014C
 

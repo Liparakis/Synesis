@@ -7,19 +7,19 @@ import java.util.Map;
 import java.util.Objects;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.application.AgentSessionService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentReason;
-import org.synesis.workspace.application.AgentNextActionService;
-import org.synesis.workspace.application.AgentTaskCompletionService;
-import org.synesis.workspace.application.CapabilityRequestService;
-import org.synesis.workspace.application.CapabilityResponseService;
-import org.synesis.workspace.application.ImplementationPublicationService;
-import org.synesis.workspace.application.ImplementationValidationService;
-import org.synesis.workspace.application.ProjectCommandIntent;
-import org.synesis.workspace.application.ProjectCommandService;
-import org.synesis.workspace.application.WorkspacePatchService;
-import org.synesis.workspace.application.WorkspaceReadService;
+import org.synesis.workspace.application.agent.AgentNextActionService;
+import org.synesis.workspace.application.agent.AgentTaskCompletionService;
+import org.synesis.workspace.application.capability.CapabilityRequestService;
+import org.synesis.workspace.application.capability.CapabilityResponseService;
+import org.synesis.workspace.application.integration.ImplementationPublicationService;
+import org.synesis.workspace.application.integration.ImplementationValidationService;
+import org.synesis.workspace.application.project.ProjectCommandIntent;
+import org.synesis.workspace.application.project.ProjectCommandService;
+import org.synesis.workspace.application.workspace.WorkspacePatchService;
+import org.synesis.workspace.application.workspace.WorkspaceReadService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -47,7 +47,7 @@ public final class McpProtocolHandler {
     private final ImplementationPublicationService publicationService;
     private final ImplementationValidationService validationService;
     private final AgentTaskCompletionService taskCompletionService;
-    private final org.synesis.workspace.application.AgentTaskCancellationService taskCancellationService;
+    private final org.synesis.workspace.application.agent.AgentTaskCancellationService taskCancellationService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -77,7 +77,7 @@ public final class McpProtocolHandler {
         this.publicationService = new ImplementationPublicationService();
         this.validationService = new ImplementationValidationService();
         this.taskCompletionService = new AgentTaskCompletionService();
-        this.taskCancellationService = new org.synesis.workspace.application.AgentTaskCancellationService();
+        this.taskCancellationService = new org.synesis.workspace.application.agent.AgentTaskCancellationService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -917,7 +917,7 @@ public final class McpProtocolHandler {
             }
             case "synesis.cancel_task" -> {
                 String reason = arguments != null ? (String) arguments.get("reason") : null;
-                org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest cancelReq = new org.synesis.workspace.application.AgentTaskCancellationService.CancelTaskRequest(
+                org.synesis.workspace.application.agent.AgentTaskCancellationService.CancelTaskRequest cancelReq = new org.synesis.workspace.application.agent.AgentTaskCancellationService.CancelTaskRequest(
                         activeProjectRoot, provider, connectionInstanceId, reason);
                 agentResponse = taskCancellationService.cancelTask(cancelReq);
             }
