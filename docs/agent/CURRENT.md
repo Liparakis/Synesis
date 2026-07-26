@@ -2,8 +2,8 @@
 
 ## Identity
 
-- Task ID: SYN-015
-- Status: DONE
+- Task ID: SYN-016
+- Status: ACTIVE
 - Priority: P0
 - Started checkpoint: CP-0212
 - Responsible agent: primary implementation engineer
@@ -11,24 +11,24 @@
 
 ## Objective
 
-Complete the staged package-structure refactor task in independently validated slices without changing runtime behavior.
+Organize the flat coordination domain package into responsibility-based packages without changing runtime behavior.
 
 ## Immediate slice
 
-No further production work. `SYN-015` is complete; do not begin unrelated cleanup.
+Move only coordination domain types into the approved responsibility packages, then validate and checkpoint.
 
 ## Verification target
 
-All required module, Go, MCP, stale-reference, dependency, cycle, and working-tree conditions are verified after the staged refactor.
+No stale production FQNs, package cycles, surface changes, or module dependency changes after the move.
 
 ## Immediate next action
 
-Final validation passed; preserve the completed state and keep `SYN-014E` paused.
+Inventory is complete. The next code action is the coordinated package move, followed by `:coordination:check`.
 
 ## Work completed
 
-`SYN-014E` remains paused. `STRUCT-1A` through `STRUCT-1D`, deduplication, warning cleanup, and god-class splitting are complete. Final Gradle/Go checks, focused MCP tests, stale-reference scans, dependency checks, and clean-tree verification passed. The disposable CLI MCP launcher still reports its pre-existing missing MCP runtime classpath.
+`SYN-015` is complete. `SYN-016` is the sole active task. The coordination domain map is capability, task, ownership, prediction, integration, speculation, and command. `SYN-014E` remains paused.
 
 ## Current failures
 
-None in verified behavior. The disposable CLI MCP launcher remains limited by its existing missing MCP runtime classpath; the MCP module wire tests pass.
+No verified failures. An unrelated deletion of `mcp/src/main/java/org/synesis/mcp/transport/stdio/package-info.java` was present at startup and remains outside this task.
