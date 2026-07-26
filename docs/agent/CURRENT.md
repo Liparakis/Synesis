@@ -23,11 +23,11 @@ No stale production FQNs, package cycles, surface changes, or module dependency 
 
 ## Immediate next action
 
-Commit the verified workspace application package moves as one coherent slice; keep `SYN-014E` paused and do not activate later structural or quality tasks automatically.
+Re-read the committed package map at `27595c1`; keep `SYN-014E` paused and do not activate later structural or quality tasks automatically.
 
 ## Work completed
 
-`SYN-015` and `SYN-016` are complete. `SYN-017` remains the sole ACTIVE task until its implementation commit is recorded. `coordination.application` is one service; the 30-file application cluster was `workspace.application`. `SYN-014E` remains paused.
+`SYN-015` and `SYN-016` are complete. `SYN-017` remains the sole ACTIVE task with implementation committed at `27595c1`. `coordination.application` is one service; the 30-file application cluster was `workspace.application`. `SYN-014E` remains paused.
 
 ## Current failures
 
