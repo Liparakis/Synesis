@@ -478,41 +478,19 @@ public final class ProviderSessionBindingService {
                         .equals("COMPLETED")
                         && !binding.status()
                         .equals("ABANDONED")) {
+                    if (binding.worktreePath() != null && !workspaceGenerationFresh(location, binding)) {
+                        if (!isWorktreeClean(binding)) {
+                            throw new BindingException("WORKSPACE_STALE_DIRTY",
+                                    "Stored provider workspace contains uncommitted work");
+                        }
+                        binding = newBinding(location, identity, provider, fingerprint);
+                    }
                     Binding refreshed = withWorktree(location, binding).touch();
                     write(bindingPath, refreshed);
                     return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
                 }
             }
-            String sessionId = "session-" + UUID.randomUUID();
-            String supervisorId = "supervisor-" + UUID.randomUUID();
-            String workerId = "worker-" + UUID.randomUUID();
-            long now = System.currentTimeMillis();
-            Binding binding = new Binding(SCHEMA_VERSION,
-                    sessionId,
-                    location.projectId()
-                            .toString(),
-                    identity.nodeId(),
-                    provider,
-                    fingerprint,
-                    supervisorId,
-                    workerId,
-                    null,
-                    null,
-                    location.root()
-                            .toString(),
-                    null,
-                    currentCommit(location.root()),
-                    null,
-                    "UNASSIGNED",
-                    "UNVERIFIED",
-                    "BOOTSTRAPPED",
-                    "BOUND",
-                    now,
-                    now,
-                    0L,
-                    "WORKSPACE_UNVERIFIED",
-                    1,
-                    null);
+            Binding binding = newBinding(location, identity, provider, fingerprint);
             binding = withWorktree(location, binding);
             write(bindingPath, binding);
             return new BindingResult(binding, instanceEvidence == null || instanceEvidence.isBlank());
@@ -520,6 +498,64 @@ public final class ProviderSessionBindingService {
             throw failure;
         } catch (Exception failure) {
             throw new BindingException("SESSION_BINDING_FAILED", "Could not establish provider session", failure);
+        }
+    }
+
+    private static Binding newBinding(ProjectApplicationService.ProjectLocation location,
+            NodeIdentity identity, String provider, String fingerprint) {
+        long now = System.currentTimeMillis();
+        return new Binding(SCHEMA_VERSION,
+                "session-" + UUID.randomUUID(),
+                location.projectId().toString(),
+                identity.nodeId(),
+                provider,
+                fingerprint,
+                "supervisor-" + UUID.randomUUID(),
+                "worker-" + UUID.randomUUID(),
+                null,
+                null,
+                location.root().toString(),
+                null,
+                currentCommit(location.root()),
+                null,
+                "UNASSIGNED",
+                "UNVERIFIED",
+                "BOOTSTRAPPED",
+                "BOUND",
+                now,
+                now,
+                0L,
+                "WORKSPACE_UNVERIFIED",
+                1,
+                null);
+    }
+
+    private static boolean workspaceGenerationFresh(ProjectApplicationService.ProjectLocation location,
+            Binding binding) {
+        if (binding == null || binding.worktreePath() == null || !validCommit(binding.baseCommit())) {
+            return false;
+        }
+        try {
+            Path worker = Path.of(binding.worktreePath());
+            return Files.isDirectory(worker)
+                    && binding.baseCommit().equals(currentCommit(worker))
+                    && binding.baseCommit().equals(currentCommit(location.root()));
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    private static boolean isWorktreeClean(Binding binding) {
+        if (binding == null || binding.worktreePath() == null) {
+            return false;
+        }
+        try {
+            String status = git(Path.of(binding.worktreePath()), "status", "--porcelain", "--untracked-files=all");
+            return status.lines().map(String::trim)
+                    .filter(line -> !line.isBlank())
+                    .noneMatch(line -> !(line.endsWith(".synesis") || line.contains(".synesis/")));
+        } catch (Exception failure) {
+            return false;
         }
     }
 
@@ -707,6 +743,12 @@ public final class ProviderSessionBindingService {
             }
             if (!isBaseAncestor(assigned, binding.baseCommit())) {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
+            }
+            if (!binding.baseCommit().equals(git(assigned, "rev-parse", "HEAD"))) {
+                return new WorkspaceCheck(false, "WORKSPACE_GENERATION_MISMATCH");
+            }
+            if (!binding.baseCommit().equals(git(root, "rev-parse", "HEAD"))) {
+                return new WorkspaceCheck(false, "CONTROL_BASE_ADVANCED");
             }
             return new WorkspaceCheck(true, "WORKSPACE_VERIFIED");
         } catch (Exception failure) {

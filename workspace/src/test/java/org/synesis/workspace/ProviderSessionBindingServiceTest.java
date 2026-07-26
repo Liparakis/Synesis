@@ -107,6 +107,36 @@ final class ProviderSessionBindingServiceTest {
     }
 
     @Test
+    void reallocatesAStaleCleanWorkerAndBlocksAStaleDirtyWorker() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-recovery-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "recovery@example.invalid");
+        git(root, "config", "user.name", "Recovery Test");
+        git(root, "commit", "-m", "baseline");
+        var service = new ProviderSessionBindingService();
+        var first = service.ensure(location, "codex", "recovery-clean").binding();
+        Path cleanWorker = Path.of(first.worktreePath());
+        Files.writeString(cleanWorker.resolve("README.md"), "advanced\n");
+        git(cleanWorker, "add", "README.md");
+        git(cleanWorker, "commit", "-m", "unexpected worker advance");
+        var recovered = service.ensure(location, "codex", "recovery-clean").binding();
+        assertNotEquals(first.sessionId(), recovered.sessionId());
+        assertNotEquals(first.worktreePath(), recovered.worktreePath());
+
+        var dirty = service.ensure(location, "codex", "recovery-dirty").binding();
+        Files.writeString(Path.of(dirty.worktreePath()).resolve("README.md"), "dirty\n");
+        git(Path.of(dirty.worktreePath()), "add", "README.md");
+        git(Path.of(dirty.worktreePath()), "commit", "-m", "worker change");
+        Files.writeString(Path.of(dirty.worktreePath()).resolve("README.md"), "dirty again\n");
+        assertThrows(ProviderSessionBindingService.BindingException.class,
+                () -> service.ensure(location, "codex", "recovery-dirty"));
+        assertTrue(Files.exists(Path.of(dirty.worktreePath())));
+    }
+
+    @Test
     void allocatesDistinctWorktreeOnlyForACommittedGitProject() throws Exception {
         Path root = Files.createTempDirectory("synesis-session-worktree-");
         var location = new ProjectApplicationService().init(root)
