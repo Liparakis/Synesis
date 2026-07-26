@@ -1148,3 +1148,11 @@ Append-only operational history.
 - Verified matching-key acceptance, tampered-manifest rejection, wrong-key rejection, unsigned acceptance rejection, and release isolation. Built and activated signed `0.1.0-dev-local-5c11` from `b5f264a`; previous `5c10` remains retained.
 - Corrected the Codex MCP launcher entry through supported `codex mcp remove/add`, preserving `other-server` and `notify`; the real Codex process loaded the global config, discovered 11 tools, and executed ensure/read/apply/run/get. A complete final mutation/test closure was not claimed because repeated refreshes caused genuine workspace-generation rejections on later test patches.
 - Gradle checks, Go tests, and Go vet passed. Fixture control checkout stayed clean; no process termination or forced worktree removal was used.
+
+# 2026-07-26 — SYN-014E Slice 5C.8 multi-file freshness
+
+- Resolved lineage from reported `b5f264a`/`35cc7bd` to actual implementation base `49da341ae33123cd040ce96f9d393ef8f7aa12ac`.
+- Added per-file revisions and explicit reason codes for file revision staleness, patch-context mismatch, and workspace-generation change; exact connection-instance binding is preserved.
+- Workspace tests (154), full Gradle checks, Go tests, and Go vet passed. Sequential multi-file and same-file old/new revision tests pass.
+- Built, verified, prepared, and activated signed `0.1.0-dev-local-5c12`; active pointer retains `0.1.0-dev-local-5c11` as previous.
+- Real noninteractive Codex loaded the preserved TOML, discovered 11 Synesis tools, executed ensure/read/read/apply/apply/run/get, passed `run-tests.cmd`, and returned no pending action. Fixture control checkout remained clean; no process termination or forced worktree removal was used.

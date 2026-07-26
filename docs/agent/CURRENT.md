@@ -11,11 +11,11 @@
 
 ## Objective
 
-Complete LOCAL ACCEPTANCE SIGNING PROVISIONING AND REAL CODEX CLOSURE — Hardening Slice 5C.7 from CP-0207.
+Complete IMPLEMENTATION AND REAL ACCEPTANCE — Multi-file patch freshness, Hardening Slice 5C.8 from CP-0208.
 
 ## Immediate slice
 
-The actual signing-support commit is `b5f264a486d8bd721334ae638af74add015f0195`, descended from the CP-0207 evidence commit. Slice 5C.7 provisioned a user-scoped Ed25519 acceptance key outside Git, added an explicit acceptance-only trust root, built and activated signed `0.1.0-dev-local-5c11`, and retried through a real Codex process.
+The implementation commit is `49da341ae33123cd040ce96f9d393ef8f7aa12ac`, descended from the CP-0208 evidence commit. Slice 5C.8 separates workspace-generation changes from per-file revision/content races, returns revisions from reads and successful patches, binds mutations to the exact connection instance, and adds sequential multi-file and same-file revision regression coverage.
 
 ## Verification target
 
@@ -31,4 +31,4 @@ Slice 5C.2 implements Codex TOML configuration correction, preservation, compare
 
 ## Current failures
 
-The signed update path is complete. Real Codex loaded the preserved TOML, discovered 11 tools, and executed ensure/read/apply/run/get; however, later test-file patches were rejected by the genuine workspace-generation guard after concurrent refreshes, so CODEX_REAL_VALIDATED remains false. Five dirty legacy worktrees remain preserved; no force removal or process termination was used.
+Signed `0.1.0-dev-local-5c12` was prepared, verified, and activated with `5c11` retained as previous. Real Codex loaded the preserved TOML, discovered 11 tools, executed ensure/read/read/apply/apply/run/get, successfully mutated both service and test files through Synesis, and passed `run-tests.cmd`; control checkout remained clean. Five dirty legacy worktrees remain preserved; no force removal or process termination was used.
