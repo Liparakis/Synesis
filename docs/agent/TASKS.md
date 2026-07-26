@@ -526,6 +526,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [x] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[DONE]`
 - [x] **SYN-015** — Reorganize Synesis package structure `[DONE]`
 - [x] **SYN-016** — Organize coordination domain packages `[DONE]`
+- [/] **SYN-017** — Organize workspace application packages `[ACTIVE]`
 - [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
 - [x] **STRUCT-1C** — MCP packages `[DONE]`
@@ -645,6 +646,19 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Scope boundary: no implementation rewrites, no cross-module moves, no new Gradle dependencies, no deduplication, warning cleanup, or god-class work.
 - Package map: `org.synesis.coordination.domain.capability`, `.task`, `.ownership`, `.prediction`, `.integration`, `.speculation`, and `.command`.
 - Evidence: PASS — moved 35 domain types and four mirrored tests; added responsibility-boundary architecture coverage without package-info files; `:coordination:check`, root `check`, Go tests/vet, stale-FQN scan, and no-flat-package scan passed; commit `195fc95`.
+
+## SYN-017
+
+- ID: SYN-017
+- Priority: P1
+- Title: Organize workspace application packages
+- Status: ACTIVE
+- Purpose: Replace the flat `org.synesis.workspace.application` package with responsibility-based application packages supported by the existing workspace services.
+- Dependencies: SYN-016 DONE; clean working tree; durable state reconciled before production edits.
+- Acceptance criteria: application services are grouped by responsibility without moving types between Gradle modules; zero stale production FQNs remain; no runtime behavior, public method signatures, CLI/MCP surfaces, provider identifiers, schemas, reason codes, event formats, or durable identifiers change; no package-info files are added.
+- Required tests: affected workspace tests after each coherent move; `:workspace:check`; `:cli:check`; `:mcp:check`; root `check`; bootstrap Go tests/vet; stale-reference and package-cycle scans.
+- Scope boundary: workspace module only; no deduplication, warning cleanup, god-class splitting, implementation rewrite, new Gradle dependency, Go bootstrap change, or automatic progression to another task.
+- Evidence: audit in progress; `workspace.application` contains 30 production types across agent, capability, constraint, control, guardrail, hook, integration, project, provider, sync, task, and workspace responsibilities. `coordination.application` contains one cohesive `CoordinationService` and is not the 30-file cluster.
 
 ## SYN-014C
 

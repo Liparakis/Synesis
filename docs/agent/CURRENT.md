@@ -2,32 +2,32 @@
 
 ## Identity
 
-- Task ID: SYN-016
-- Status: DONE
-- Priority: P0
-- Started checkpoint: CP-0212
+- Task ID: SYN-017
+- Status: ACTIVE
+- Priority: P1
+- Started checkpoint: pending activation checkpoint
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0001, ADR-0008
 
 ## Objective
 
-Organize the flat coordination domain package into responsibility-based packages without changing runtime behavior.
+Organize the flat `workspace.application` package into responsibility-based application packages without changing runtime behavior.
 
 ## Immediate slice
 
-Coordination domain types are organized and validated; no further production work is active.
+Inventory the 30 workspace application types and their FQN references, then define the first small coherent move set. Do not edit production code until the reference inventory is recorded.
 
 ## Verification target
 
-No stale production FQNs, package cycles, surface changes, or module dependency changes after the move.
+No stale production FQNs, package cycles, surface changes, or module dependency changes after each move set.
 
 ## Immediate next action
 
-Implementation and validation are complete. The next action is to checkpoint and commit SYN-016.
+Run the activation checkpoint after confirming exactly one ACTIVE task, then inventory `workspace.application` imports, fully qualified references, tests, launch strings, reflection, resources, scripts, and test-used documentation.
 
 ## Work completed
 
-`SYN-015` and `SYN-016` are complete. The coordination domain map is capability, task, ownership, prediction, integration, speculation, and command. `SYN-014E` remains paused.
+`SYN-015` and `SYN-016` are complete. `SYN-017` is the sole ACTIVE task. `coordination.application` is one service; the 30-file application cluster is `workspace.application`. `SYN-014E` remains paused.
 
 ## Current failures
 
