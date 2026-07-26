@@ -11,11 +11,11 @@
 
 ## Objective
 
-Complete IMPLEMENTATION AND ACCEPTANCE CLOSURE — signed Codex validation, Hardening Slice 5C.6 from CP-0206.
+Complete LOCAL ACCEPTANCE SIGNING PROVISIONING AND REAL CODEX CLOSURE — Hardening Slice 5C.7 from CP-0207.
 
 ## Immediate slice
 
-The actual source HEAD is `8d5447b35772a99f7097faa10f401c6c6156a714`; fixes `1a97373` and `0df0ff7` are ancestors. Slice 5C.6 verified the signer contract and built an unsigned candidate `0.1.0-dev-local-5c10`, but no trusted `SYNESIS_MANIFEST_PRIVATE_KEY_B64` was available, so the release-mode manifest was correctly rejected before update planning.
+The actual signing-support commit is `b5f264a486d8bd721334ae638af74add015f0195`, descended from the CP-0207 evidence commit. Slice 5C.7 provisioned a user-scoped Ed25519 acceptance key outside Git, added an explicit acceptance-only trust root, built and activated signed `0.1.0-dev-local-5c11`, and retried through a real Codex process.
 
 ## Verification target
 
@@ -23,7 +23,7 @@ Bootstrap Go tests/vet, root Gradle checks, direct/stable/`.cmd` 11-tool handsha
 
 ## Immediate next action
 
-Record the signed-acceptance blocker and stop before Antigravity; do not mutate global configuration.
+Record the signed activation and honest real-Codex result; stop before Antigravity.
 
 ## Work completed
 
@@ -31,4 +31,4 @@ Slice 5C.2 implements Codex TOML configuration correction, preservation, compare
 
 ## Current failures
 
-The successful tool calls are attributable only to the synthetic MCP harness, not a real Codex process. The release-mode candidate was rejected because the established signing key environment variable is absent; signed update activation and final real-Codex retry remain unclaimed. Five dirty legacy worktrees remain preserved for operator review; no force removal or process termination was used, and global Codex configuration was not changed.
+The signed update path is complete. Real Codex loaded the preserved TOML, discovered 11 tools, and executed ensure/read/apply/run/get; however, later test-file patches were rejected by the genuine workspace-generation guard after concurrent refreshes, so CODEX_REAL_VALIDATED remains false. Five dirty legacy worktrees remain preserved; no force removal or process termination was used.

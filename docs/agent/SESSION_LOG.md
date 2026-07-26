@@ -1141,3 +1141,10 @@ Append-only operational history.
 - Audited the unchanged 11-tool MCP surface: the content-hash precondition is an explicit backward-compatible optional/clarifying contract, with `patch_precondition_required` for omission.
 - Built candidate `0.1.0-dev-local-5c10` from the actual HEAD with deterministic payload hash metadata. The established signer requires `SYNESIS_MANIFEST_PRIVATE_KEY_B64`; it is absent, and the unsigned release-mode manifest was rejected before update planning.
 - Required Gradle checks, Go tests, and Go vet passed. Existing active `0.1.0-dev-local-5c9`, fixture control checkout, and preserved worker evidence were not altered. No processes were terminated and no worktrees were force-removed.
+# 2026-07-26 — SYN-014E Slice 5C.7 signing provisioning and real Codex retry
+
+- Audited the trust model: Ed25519 detached signatures, embedded release public key, signer private key supplied only through `SYNESIS_MANIFEST_PRIVATE_KEY_B64`, and no pre-existing matching local credential or registration path.
+- Added explicit acceptance-only trust validation and `provision-acceptance-key`; generated the user-scoped private key outside Git with restrictive ACLs. Acceptance mode requires a signed `developmentOnly` manifest, matching public-key identifier, and explicit `--acceptance`; release verification remains isolated.
+- Verified matching-key acceptance, tampered-manifest rejection, wrong-key rejection, unsigned acceptance rejection, and release isolation. Built and activated signed `0.1.0-dev-local-5c11` from `b5f264a`; previous `5c10` remains retained.
+- Corrected the Codex MCP launcher entry through supported `codex mcp remove/add`, preserving `other-server` and `notify`; the real Codex process loaded the global config, discovered 11 tools, and executed ensure/read/apply/run/get. A complete final mutation/test closure was not claimed because repeated refreshes caused genuine workspace-generation rejections on later test patches.
+- Gradle checks, Go tests, and Go vet passed. Fixture control checkout stayed clean; no process termination or forced worktree removal was used.
