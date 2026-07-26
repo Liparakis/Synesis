@@ -529,8 +529,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
 - [x] **STRUCT-1C** — MCP packages `[DONE]`
 - [x] **STRUCT-1D** — CLI packages `[DONE]`
-- [/] **QUALITY-DEDUP** — Evidence-based deduplication `[ACTIVE]`
-- [ ] **QUALITY-WARNINGS** — Legitimate warning cleanup `[READY]`
+- [x] **QUALITY-DEDUP** — Evidence-based deduplication `[DONE]`
+- [/] **QUALITY-WARNINGS** — Legitimate warning cleanup `[ACTIVE]`
 - [ ] **QUALITY-GOD** — Focused god-class splitting `[READY]`
 - [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
 
@@ -609,17 +609,17 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Dependencies: STRUCT-1D DONE; clean working tree; durable state activated before production edits.
 - Acceptance criteria: duplication audit recorded; only behavior-identical groups extracted; no generic dumping-ground abstraction; affected and full tests pass.
 - Scope boundary: no warning cleanup, god-class splitting, feature work, or behavior changes.
-- Evidence: active after STRUCT-1D checkpoint; audit pending.
+- Evidence: PASS — audit identified identical SHA-256 UTF-8 plan hashing in cleanup, reconciliation, and repair; extracted lifecycle-owned `PlanIntegrity` with direct test; `:workspace:check`; commit `98755b3`.
 
 ### QUALITY-WARNINGS
 
 - ID: QUALITY-WARNINGS
 - Priority: P1
 - Title: Legitimate warning cleanup
-- Status: READY
+- Status: ACTIVE
 - Purpose: Resolve verified compiler, static-analysis, and IDE warnings without broad suppression.
 - Dependencies: QUALITY-DEDUP DONE.
-- Evidence: pending.
+- Evidence: active after QUALITY-DEDUP checkpoint; warning inventory pending.
 
 ### QUALITY-GOD
 

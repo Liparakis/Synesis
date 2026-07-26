@@ -15,15 +15,15 @@ Complete the staged package-structure refactor task in independently validated s
 
 ## Immediate slice
 
-Complete `QUALITY-DEDUP — Evidence-based deduplication` only, then checkpoint and stop before warning cleanup.
+Complete `QUALITY-WARNINGS — Legitimate warning cleanup` only, then checkpoint and stop before god-class splitting.
 
 ## Verification target
 
-Audit and remove only genuinely identical duplicated infrastructure or lifecycle logic with narrow ownership, direct tests, and no behavior changes.
+Collect and resolve only legitimate compiler, static-analysis, and IDE warnings without broad suppression or behavior changes.
 
 ## Immediate next action
 
-Inventory and rank duplicated infrastructure/lifecycle logic, record the audit, and extract only one proven identical group at a time with affected-test validation.
+Collect warning output from the configured Gradle/Java/static-analysis tasks, classify each warning, and fix only verified production issues with affected-test validation.
 
 ## Work completed
 

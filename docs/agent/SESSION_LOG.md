@@ -1215,3 +1215,9 @@ Append-only operational history.
 - Moved representative CLI tests to mirror production command families and added CLI package architecture checks.
 - Verified CLI/MCP/root Gradle checks, launcher help/version/init/doctor/provider/workspace/lifecycle acceptance, and stale command-FQN scanning.
 - Committed as `958a039`; QUALITY-DEDUP is now the sole active subtask.
+
+# 2026-07-26 — SYN-015 deduplication completion
+
+- Audited repeated infrastructure and lifecycle logic. One strong identical group was confirmed: SHA-256 UTF-8 plan hashing duplicated in cleanup, reconciliation, and repair plan stores.
+- Extracted lifecycle-owned `PlanIntegrity` with direct coverage; no generic utility or behavior rewrite introduced.
+- Verified `:workspace:check`; committed as `98755b3`; QUALITY-WARNINGS is now the sole active subtask.
