@@ -2,6 +2,8 @@ package org.synesis.mcp;
 
 import java.nio.file.Path;
 import java.util.UUID;
+import org.synesis.mcp.application.McpProtocolHandler;
+import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.AgentSessionService;
 
 /**

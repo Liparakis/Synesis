@@ -1,4 +1,4 @@
-package org.synesis.mcp;
+package org.synesis.mcp.transport.stdio;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -11,6 +11,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Map;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.mcp.application.McpProtocolHandler;
 
 /**
  * Runs the stdio message loop for the Synesis Model Context Protocol (MCP) server.

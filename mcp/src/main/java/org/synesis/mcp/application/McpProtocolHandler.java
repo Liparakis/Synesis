@@ -1,4 +1,4 @@
-package org.synesis.mcp;
+package org.synesis.mcp.application;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
