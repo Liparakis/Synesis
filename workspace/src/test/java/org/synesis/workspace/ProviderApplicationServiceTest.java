@@ -20,11 +20,12 @@ final class ProviderApplicationServiceTest {
 
     @Test
     void registryIsDeterministicAndListsCodexAsExperimental() {
-        assertEquals(java.util.List.of("antigravity", "claude-code", "codex"),
+        assertEquals(java.util.List.of("antigravity", "claude", "codex"),
                 ProviderRegistry.providers()
                         .stream()
                         .map(provider -> provider.id())
                         .toList());
+        assertEquals("claude", ProviderRegistry.find("claude-code").id());
         assertEquals(org.synesis.workspace.provider.ProviderSupportLevel.EXPERIMENTAL,
                 ProviderRegistry.find("codex")
                         .supportLevel());
@@ -192,6 +193,46 @@ final class ProviderApplicationServiceTest {
             assertTrue(parsed.contains("[mcp_servers.other-server]"));
             assertTrue(parsed.contains("[mcp_servers.synesis]"));
             assertTrue(parsed.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
+        } finally {
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
+        }
+    }
+
+    @Test
+    void claudeCodeMcpInstallUsesProjectConfigAndAliasPreservesUnrelatedEntries() throws Exception {
+        Path root = Files.createTempDirectory("claude-mcp-config-test-");
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        String previous = System.getProperty("synesis.launcher");
+        System.setProperty("synesis.launcher", launcher.toString());
+        try {
+            var location = new ProjectApplicationService().init(root).location();
+            Path mcp = root.resolve(".mcp.json");
+            Files.writeString(mcp, "{\"mcpServers\":{\"other\":{\"command\":\"other.cmd\"}},\"custom\":true}\n");
+            ProviderApplicationService service = new ProviderApplicationService();
+
+            var installed = service.install(location, "claude");
+            assertEquals("INSTALLED", installed.values().get("MCP_CONFIG_STATUS"));
+            Map<?, ?> parsed = (Map<?, ?>) ProviderJson.parse(Files.readString(mcp));
+            assertEquals(Boolean.TRUE, parsed.get("custom"));
+            Map<?, ?> servers = (Map<?, ?>) parsed.get("mcpServers");
+            assertTrue(servers.containsKey("other"));
+            Map<?, ?> synesis = (Map<?, ?>) servers.get("synesis");
+            assertEquals(service.launcherPath().toAbsolutePath().normalize().toString(), synesis.get("command"));
+            assertEquals(java.util.List.of("mcp", "--provider", "claude"), synesis.get("args"));
+
+            var reinstalled = service.install(location, "claude-code");
+            assertEquals("ALREADY_INSTALLED", reinstalled.values().get("PROVIDER_INSTALL_RESULT"));
+
+            var uninstalled = service.uninstall(location, "claude");
+            assertEquals("SUCCESS", uninstalled.values().get("PROVIDER_UNINSTALL_RESULT"));
+            Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(mcp));
+            assertEquals(Boolean.TRUE, after.get("custom"));
+            assertTrue(((Map<?, ?>) after.get("mcpServers")).containsKey("other"));
+            assertTrue(!((Map<?, ?>) after.get("mcpServers")).containsKey("synesis"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");

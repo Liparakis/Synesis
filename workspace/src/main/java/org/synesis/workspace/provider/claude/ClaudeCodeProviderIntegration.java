@@ -28,7 +28,7 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
 
     @Override
     public String id() {
-        return "claude-code";
+        return "claude";
     }
 
     @Override
@@ -39,6 +39,17 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     @Override
     public Path configurationPath(Path projectRoot) {
         return projectRoot.resolve(".claude/settings.json");
+    }
+
+    /**
+     * Resolves the Claude Code project-scoped MCP configuration.
+     *
+     * @param projectRoot project root
+     * @return Claude Code project MCP configuration
+     */
+    @Override
+    public Path mcpConfigurationPath(Path projectRoot) {
+        return projectRoot.resolve(".mcp.json");
     }
 
     @Override

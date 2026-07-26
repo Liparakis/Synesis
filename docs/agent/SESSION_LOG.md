@@ -1163,3 +1163,9 @@ Append-only operational history.
 - Verified the sole Synesis entry uses the stable `synesis.cmd` launcher and exact `mcp --provider antigravity` arguments, with no worker path, fixture path, credentials, or model override. No migration was needed and no unrelated settings were changed.
 - Gradle checks and Go tests/vet passed. Fixture control checkout remains clean; signed `0.1.0-dev-local-5c12` remains active with `5c11` previous. Read-only cleanup/reconciliation found no executable actions or ambiguous active leases.
 - Real Antigravity GUI discovery and tool execution remain unproven pending the operator's required close/reopen/open-workspace action. No production Synesis defect has been demonstrated.
+
+# 2026-07-26 — SYN-014E Claude Code MCP provider support
+
+- Renamed the canonical provider ID to `claude` and retained `claude-code` as a registry input alias. Claude Code hook configuration remains `.claude/settings.json`.
+- Added project-scoped `.mcp.json` management with append/update-only `mcpServers.synesis`, launcher command preservation, `mcp --provider claude` arguments, idempotent reinstall, and unrelated-entry-preserving uninstall. Claude Desktop configuration was not added.
+- Focused `ProviderApplicationServiceTest`, provider/module checks, root Gradle `check`, and bootstrap `go test ./...`/`go vet ./...` pass. Existing 11-tool MCP surface is unchanged.

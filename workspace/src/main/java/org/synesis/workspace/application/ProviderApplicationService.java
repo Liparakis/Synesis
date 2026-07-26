@@ -516,10 +516,12 @@ public final class ProviderApplicationService {
      * @return structured result
      */
     public ProviderResult status(ProjectApplicationService.ProjectLocation location, String id) {
-        ProviderResult result = decorate(location, id, statusInternal(location, id), null);
-        if ("codex".equals(id)) {
+        ProviderIntegration resolvedProvider = provider(id);
+        String resolvedId = resolvedProvider == null ? id : resolvedProvider.id();
+        ProviderResult result = decorate(location, resolvedId, statusInternal(location, resolvedId), null);
+        if ("codex".equals(resolvedId)) {
             try {
-                Path path = provider(id).mcpConfigurationPath(location.root());
+                Path path = resolvedProvider.mcpConfigurationPath(location.root());
                 CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(path,
                         stableLauncher(isWindows() ? "synesis.cmd" : "synesis"));
                 Map<String, String> values = new LinkedHashMap<>(result.values());
