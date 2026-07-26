@@ -15,9 +15,9 @@ import org.junit.jupiter.api.Timeout;
  * Verifies the generated platform launcher smoke path.
  */
 @Timeout(45)
-final class DistributionLauncherTest {
+public final class DistributionLauncherTest {
 
-    static Path launcher() {
+    public static Path launcher() {
         String executable = isWindows() ? "synesis.bat" : "synesis";
         Path local = Path.of("build", "install", "synesis", "bin", executable);
         return Files.exists(local) ? local.toAbsolutePath() : Path.of("cli")
@@ -25,7 +25,7 @@ final class DistributionLauncherTest {
                                                               .toAbsolutePath();
     }
 
-    static Process start(Path launcher, Path profile, String... arguments) throws IOException {
+    public static Process start(Path launcher, Path profile, String... arguments) throws IOException {
         java.util.ArrayList<String> command = new java.util.ArrayList<>();
         if (isWindows()) {
             command.add("cmd.exe");
@@ -49,7 +49,7 @@ final class DistributionLauncherTest {
                 .contains("win");
     }
 
-    static String output(Process process) throws IOException {
+    public static String output(Process process) throws IOException {
         return new String(process.getInputStream()
                 .readAllBytes(), StandardCharsets.UTF_8);
     }
