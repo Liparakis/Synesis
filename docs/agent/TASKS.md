@@ -527,8 +527,8 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [/] **SYN-015** — Reorganize Synesis package structure `[ACTIVE]`
 - [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
-- [/] **STRUCT-1C** — MCP packages `[ACTIVE]`
-- [ ] **STRUCT-1D** — CLI packages `[READY]`
+- [x] **STRUCT-1C** — MCP packages `[DONE]`
+- [/] **STRUCT-1D** — CLI packages `[ACTIVE]`
 - [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
 
 ## SYN-015
@@ -575,26 +575,26 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: STRUCT-1C
 - Priority: P0
 - Title: MCP packages
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Separate MCP protocol, stdio transport, and application routing packages while preserving the stable server entrypoint where practical.
 - Dependencies: STRUCT-1B DONE.
 - Acceptance criteria: `org.synesis.mcp.protocol`, `org.synesis.mcp.transport.stdio`, and `org.synesis.mcp.application` implemented; only necessary main-class and process-test references updated; a real MCP wire sequence completes `initialize`, `tools/list`, and exact 11-tool confirmation.
 - Required tests: `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
 - Scope boundary: no MCP schema/tool-count changes and no unrelated CLI/package cleanup.
-- Evidence: active; baseline Gradle and Go validation passed at `c29e10d` before production edits.
+- Evidence: PASS — `:mcp:check`; focused persistent `McpServerTest` and `McpTool11Test`; `:cli:check`; root `check`; stale production FQN scan; commit `5cb0656`.
 
 ### STRUCT-1D
 
 - ID: STRUCT-1D
 - Priority: P0
 - Title: CLI packages
-- Status: READY
+- Status: ACTIVE
 - Purpose: Split the flat CLI command package by command family and align tests to production package ownership.
 - Dependencies: STRUCT-1C DONE.
 - Acceptance criteria: command-family packages applied; `SynesisCli` remains in `org.synesis.cli`; CLI tests mirror the production package they exercise; CLI help and provider commands remain unchanged.
 - Required tests: `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
 - Scope boundary: no surface changes, no new dependencies, and no unrelated implementation cleanup.
-- Evidence: pending.
+- Evidence: active after STRUCT-1C checkpoint; no CLI production edits yet.
 
 ## SYN-014C
 

@@ -1200,3 +1200,11 @@ Append-only operational history.
 - Updated the required CLI FQNs and architecture/test package references. No new interface or durable/public format was introduced.
 - Verified `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go tests, Go vet, focused `McpTool11Test`, stale FQN scan, and an acyclic production workspace package graph.
 - Committed the correction as `248889a`; created checkpoint `CP-0214`; stopped before `STRUCT-1C`.
+
+# 2026-07-26 — SYN-015 STRUCT-1C MCP package completion
+
+- Activated STRUCT-1C after baseline Gradle and Go validation passed.
+- Moved `McpProtocolHandler` to `org.synesis.mcp.application` and `McpStdioServer` to `org.synesis.mcp.transport.stdio`; retained `SynesisMcpServer` at the stable root package.
+- Added narrow MCP package architecture tests and protocol/transport package markers; moved MCP tests to mirror the application package.
+- Verified `:mcp:check`, focused persistent MCP tests, `:cli:check`, root `check`, and stale production FQN scans.
+- Committed as `5cb0656`; STRUCT-1D is now the sole active subtask.
