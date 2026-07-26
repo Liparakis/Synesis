@@ -11,11 +11,11 @@
 
 ## Objective
 
-Complete IMPLEMENTATION AND REAL ACCEPTANCE — Codex workspace freshness consistency, Hardening Slice 5C.5 from CP-0205.
+Complete IMPLEMENTATION AND ACCEPTANCE CLOSURE — signed Codex validation, Hardening Slice 5C.6 from CP-0206.
 
 ## Immediate slice
 
-The source base for this slice was `24751a60aaf4836a51835fe6388830b6a9719cec`; the fix commits are `1a97373` and `0df0ff7`. The active Codex entry remains the version-independent `.cmd` wrapper; the stale PATH-preferred `.bat` is not used. Slice 5C.5 adds exact connection binding resolution, one shared workspace-readiness predicate, read content hashes for mutation preconditions, exact worker/control generation checks, clean stale-worker reallocation, and bounded `run-tests.cmd` execution through `run_command`.
+The actual source HEAD is `8d5447b35772a99f7097faa10f401c6c6156a714`; fixes `1a97373` and `0df0ff7` are ancestors. Slice 5C.6 verified the signer contract and built an unsigned candidate `0.1.0-dev-local-5c10`, but no trusted `SYNESIS_MANIFEST_PRIVATE_KEY_B64` was available, so the release-mode manifest was correctly rejected before update planning.
 
 ## Verification target
 
@@ -23,7 +23,7 @@ Bootstrap Go tests/vet, root Gradle checks, direct/stable/`.cmd` 11-tool handsha
 
 ## Immediate next action
 
-Finalize the Slice 5C.5 acceptance report from the recorded source, updater, and MCP evidence; do not mutate global configuration.
+Record the signed-acceptance blocker and stop before Antigravity; do not mutate global configuration.
 
 ## Work completed
 
@@ -31,4 +31,4 @@ Slice 5C.2 implements Codex TOML configuration correction, preservation, compare
 
 ## Current failures
 
-The API still has no approval-capable interactive Codex prompt driver, so the post-fix wire acceptance is not claimed as a desktop interactive run. The updater accepted the development-only local manifest without a release signature; signed-update activation remains unclaimed. Five dirty legacy worktrees remain preserved for operator review; no force removal or process termination was used, and global Codex configuration was not changed.
+The successful tool calls are attributable only to the synthetic MCP harness, not a real Codex process. The release-mode candidate was rejected because the established signing key environment variable is absent; signed update activation and final real-Codex retry remain unclaimed. Five dirty legacy worktrees remain preserved for operator review; no force removal or process termination was used, and global Codex configuration was not changed.

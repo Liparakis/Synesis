@@ -1134,3 +1134,10 @@ Append-only operational history.
   `notifications/initialized` and `tools/list`, and receives all 11 tools.
   Noninteractive Codex runs cancel MCP tool calls, so successful provider tool
   execution is not claimed. Required Gradle and Go verification passes.
+# 2026-07-26 — SYN-014E Slice 5C.6 signed Codex closure
+
+- Resolved actual source lineage: `HEAD=8d5447b35772a99f7097faa10f401c6c6156a714`; both reported freshness fixes are ancestors and the source tree is clean.
+- Classified prior successful tool calls as `SYNTHETIC_MCP_HARNESS`; no evidence attributes them to a real Codex process.
+- Audited the unchanged 11-tool MCP surface: the content-hash precondition is an explicit backward-compatible optional/clarifying contract, with `patch_precondition_required` for omission.
+- Built candidate `0.1.0-dev-local-5c10` from the actual HEAD with deterministic payload hash metadata. The established signer requires `SYNESIS_MANIFEST_PRIVATE_KEY_B64`; it is absent, and the unsigned release-mode manifest was rejected before update planning.
+- Required Gradle checks, Go tests, and Go vet passed. Existing active `0.1.0-dev-local-5c9`, fixture control checkout, and preserved worker evidence were not altered. No processes were terminated and no worktrees were force-removed.
