@@ -4,10 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +12,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.PlanIntegrity;
 
 /**
  * Storage service for persisting and loading immutable reconciliation plans outside the control checkout.
@@ -82,7 +80,7 @@ public final class ReconciliationPlanStore {
         );
 
         String canonicalContent = serializeCanonical(unsignedPlan);
-        String contentHash = computeSha256(canonicalContent);
+        String contentHash = PlanIntegrity.sha256Utf8(canonicalContent);
 
         ReconciliationPlan finalPlan = new ReconciliationPlan(
                 unsignedPlan.schemaVersion(),
@@ -142,7 +140,7 @@ public final class ReconciliationPlanStore {
                 plan.externalWorkspaceRoot(), plan.createdAtEpochMillis(), plan.totalInspectedCount(),
                 plan.executableCount(), "UNSIGNED", plan.entries()
         );
-        String expectedHash = computeSha256(serializeCanonical(unsigned));
+        String expectedHash = PlanIntegrity.sha256Utf8(serializeCanonical(unsigned));
         if (!expectedHash.equals(plan.contentHash())) {
             throw new IOException("Reconciliation plan content hash integrity verification failed for " + planId);
         }
@@ -219,13 +217,4 @@ public final class ReconciliationPlanStore {
         }
     }
 
-    private static String computeSha256(String text) throws IOException {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(text.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IOException("SHA-256 algorithm unavailable", ex);
-        }
-    }
 }
