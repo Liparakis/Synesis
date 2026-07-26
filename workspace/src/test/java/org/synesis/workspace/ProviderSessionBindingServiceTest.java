@@ -94,6 +94,19 @@ final class ProviderSessionBindingServiceTest {
     }
 
     @Test
+    void resolvesTheExactConnectionInsteadOfTheNewestProviderBinding() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-exact-connection-");
+        var location = new ProjectApplicationService().init(root).location();
+        var service = new ProviderSessionBindingService();
+        var first = service.ensure(location, "codex", "connection-a").binding();
+        var second = service.ensure(location, "codex", "connection-b").binding();
+
+        assertEquals(first.sessionId(), service.find(location, "codex", "connection-a").orElseThrow().sessionId());
+        assertEquals(second.sessionId(), service.find(location, "codex", "connection-b").orElseThrow().sessionId());
+        assertTrue(service.find(location, "codex", "connection-missing").isEmpty());
+    }
+
+    @Test
     void allocatesDistinctWorktreeOnlyForACommittedGitProject() throws Exception {
         Path root = Files.createTempDirectory("synesis-session-worktree-");
         var location = new ProjectApplicationService().init(root)

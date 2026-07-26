@@ -500,7 +500,7 @@ public final class McpProtocolHandler {
         patchProperties.put("path", Map.of("type", "string", "description", "Repository-relative file path"));
         patchProperties.put("create", Map.of("type", "boolean", "description", "Set true for new file creation"));
         patchProperties.put("content", Map.of("type", "string", "description", "Full file content for creation mode"));
-        patchProperties.put("expectedHash", Map.of("type", "string", "description", "SHA-256 hex string of existing content (required for modification)"));
+        patchProperties.put("expectedHash", Map.of("type", "string", "description", "SHA-256 hex string of existing contentHash returned by synesis.read_file (required for modification)"));
         patchProperties.put("edits", Map.of("type", "array", "items", editSchema, "description", "List of replacement edits (required for modification)"));
 
         Map<String, Object> patchSchema = new LinkedHashMap<>();

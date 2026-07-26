@@ -74,6 +74,7 @@ class WorkspaceReadServiceTest {
 
         String json = response.toJson();
         assertTrue(json.contains("worktree_line1"));
+        assertTrue(json.contains("contentHash"));
         assertFalse(json.contains("line3")); // Original control content was not read
 
         // Verify control checkout is unchanged

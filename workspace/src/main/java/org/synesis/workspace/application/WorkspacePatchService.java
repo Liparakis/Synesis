@@ -27,7 +27,7 @@ import org.synesis.workspace.guardrail.ProjectPathResolver;
 public final class WorkspacePatchService {
 
     private final ProjectApplicationService projectService;
-    private final ProviderSessionBindingService bindingService;
+    private final WorkspaceReadinessService readinessService;
     private final WorkspaceMutationBroker mutationBroker;
     private final AgentOutcomeTranslator translator;
 
@@ -93,7 +93,7 @@ public final class WorkspacePatchService {
      */
     public WorkspacePatchService() {
         this.projectService = new ProjectApplicationService();
-        this.bindingService = new ProviderSessionBindingService();
+        this.readinessService = new WorkspaceReadinessService();
         this.mutationBroker = new WorkspaceMutationBroker();
         this.translator = new AgentOutcomeTranslator();
     }
@@ -116,33 +116,17 @@ public final class WorkspacePatchService {
         }
 
         ProjectApplicationService.ProjectLocation location;
-        ProviderSessionBindingService.Binding binding;
+        WorkspaceReadinessService.ReadinessResult readiness;
         try {
             location = projectService.locate(root);
-            var bindings = bindingService.list(location, request.provider());
-            if (bindings.isEmpty()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            binding = bindings.getLast();
-            if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
+            readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
-
-        Path assignedWorktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
-        var wsCheck = bindingService.verifyWorkspace(location, binding, assignedWorktree);
-        if (!wsCheck.verified()) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        if (!readiness.ready()) {
+            return readiness.response();
         }
-
-        if (!"VERIFIED".equals(binding.providerTrustState())) {
-            var trustRes = bindingService.verifyWorkspaceTrust(location, request.provider(), binding.sessionId(), assignedWorktree);
-            if (!trustRes.verified()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-        }
+        Path assignedWorktree = readiness.worktree();
 
         // 2. Relative Path & Traversal Validation
         String rawPath = request.relativePath();
@@ -200,7 +184,8 @@ public final class WorkspacePatchService {
             }
 
             if (request.expectedHash() == null || request.expectedHash().isBlank()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_STALE, AgentNextAction.ENSURE_SESSION, null);
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.PATCH_PRECONDITION_REQUIRED,
+                        AgentNextAction.RETRY, null);
             }
 
             if (request.edits() == null || request.edits().isEmpty()) {

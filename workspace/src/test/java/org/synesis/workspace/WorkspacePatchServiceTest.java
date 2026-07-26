@@ -144,6 +144,24 @@ class WorkspacePatchServiceTest {
     }
 
     @Test
+    void missingHashIsReportedAsARequiredPatchPreconditionNotWorkspaceStaleness() throws Exception {
+        AgentSessionService sessionService = new AgentSessionService();
+        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "conn-patch-missing-hash", null, false);
+        sessionService.ensureSession(req);
+
+        WorkspacePatchService.PatchEdit edit = new WorkspacePatchService.PatchEdit(
+                "int count = 1;", "int count = 2;", 1);
+        AgentResponse response = new WorkspacePatchService().applyPatch(new WorkspacePatchService.PatchRequest(
+                controlRoot, "codex", "conn-patch-missing-hash", "src/Product.java", false,
+                null, null, List.of(edit)));
+
+        assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
+        assertTrue(response.toJson().contains("patch_precondition_required"));
+        assertFalse(response.toJson().contains("workspace_stale"));
+    }
+
+    @Test
     void testRejectsOccurrenceMismatchAndRollsBackCompletely() throws Exception {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(

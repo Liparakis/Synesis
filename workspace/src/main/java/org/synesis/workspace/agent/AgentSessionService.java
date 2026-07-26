@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.WorkspaceReadinessService;
 
 /**
  * Resolves and establishes provider session context ambiently for agent transports.
@@ -21,6 +22,7 @@ public final class AgentSessionService {
 
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
+    private final WorkspaceReadinessService readinessService;
 
     /**
      * Creates an agent session service using default application services.
@@ -38,6 +40,7 @@ public final class AgentSessionService {
     public AgentSessionService(ProjectApplicationService projectService, ProviderSessionBindingService bindingService) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         this.bindingService = Objects.requireNonNull(bindingService, "bindingService");
+        this.readinessService = new WorkspaceReadinessService(this.bindingService);
     }
 
     /**
@@ -178,6 +181,13 @@ public final class AgentSessionService {
 
         ProviderSessionBindingService.Binding binding = bindingResult.binding();
 
+        WorkspaceReadinessService.ReadinessResult readiness = readinessService.assess(
+                location, request.provider(), request.connectionInstanceId());
+        if (!readiness.ready()) {
+            throw new IllegalStateException("Workspace readiness failed: " + readiness.internalReason());
+        }
+        binding = readiness.binding();
+
         if ("REVOKED".equalsIgnoreCase(binding.status())
                 || "COMPLETED".equalsIgnoreCase(binding.status())
                 || "ABANDONED".equalsIgnoreCase(binding.status())) {
@@ -201,7 +211,7 @@ public final class AgentSessionService {
                 worktreePath,
                 binding.branch(),
                 binding.baseCommit(),
-                binding.providerTrustState(),
+                bindingResult.binding().providerTrustState(),
                 0,
                 isIsolated,
                 binding

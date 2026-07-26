@@ -558,6 +558,56 @@ public final class ProviderSessionBindingService {
     }
 
     /**
+     * Resolves the durable binding for one exact provider connection instance.
+     *
+     * <p>Operations must never fall back to the newest provider binding: a single
+     * project can legitimately contain several concurrent workers. The same evidence
+     * normalization and fingerprinting used by {@link #ensure(ProjectApplicationService.ProjectLocation,
+     * String, String)} is therefore applied here.
+     *
+     * @param location initialized project location
+     * @param provider stable provider identifier
+     * @param instanceEvidence provider connection identity
+     * @return the matching binding, or empty when this connection has not been ensured
+     * @throws BindingException when the binding is malformed or identity-mismatched
+     */
+    public synchronized java.util.Optional<Binding> find(ProjectApplicationService.ProjectLocation location,
+            String provider, String instanceEvidence) throws BindingException {
+        Objects.requireNonNull(location, "location");
+        requireText(provider, "provider");
+        try {
+            String evidence = instanceEvidence == null || instanceEvidence.isBlank()
+                    ? fallbackEvidence(location, provider) : instanceEvidence.trim();
+            String instanceFingerprint = fingerprint(evidence);
+            Path bindingPath = location.synesisDirectory()
+                    .resolve("local")
+                    .resolve(SESSIONS_DIRECTORY)
+                    .resolve(provider + "-" + instanceFingerprint + ".json");
+            if (!Files.isRegularFile(bindingPath)) {
+                return java.util.Optional.empty();
+            }
+            Binding binding = read(bindingPath);
+            NodeIdentity identity = new IdentityBootstrap(location.profile()
+                    .resolve("link"))
+                    .loadOrCreate()
+                    .identity();
+            if (!location.projectId().toString().equals(binding.projectId())
+                    || !identity.nodeId().equals(binding.nodeId())
+                    || !provider.equals(binding.provider())
+                    || !instanceFingerprint.equals(binding.providerInstanceFingerprint())) {
+                throw new BindingException("SESSION_IDENTITY_MISMATCH",
+                        "Stored provider binding does not match this project or connection");
+            }
+            return java.util.Optional.of(binding);
+        } catch (BindingException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BindingException("SESSION_BINDING_READ_FAILED",
+                    "Could not resolve provider connection binding", failure);
+        }
+    }
+
+    /**
      * Revokes all sessions for a provider while preserving their audit records.
      *
      * @param location initialized project location

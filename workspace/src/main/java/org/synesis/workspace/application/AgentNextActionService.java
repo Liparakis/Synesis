@@ -25,14 +25,14 @@ import org.synesis.workspace.provider.ProviderJson;
 public final class AgentNextActionService {
 
     private final ProjectApplicationService projectService;
-    private final ProviderSessionBindingService bindingService;
+    private final WorkspaceReadinessService readinessService;
 
     /**
      * Creates a next-action retrieval application service.
      */
     public AgentNextActionService() {
         this.projectService = new ProjectApplicationService();
-        this.bindingService = new ProviderSessionBindingService();
+        this.readinessService = new WorkspaceReadinessService();
     }
 
     /**
@@ -90,33 +90,18 @@ public final class AgentNextActionService {
         }
 
         ProjectApplicationService.ProjectLocation location;
-        ProviderSessionBindingService.Binding binding;
+        WorkspaceReadinessService.ReadinessResult readiness;
         try {
             location = projectService.locate(root);
-            var bindings = bindingService.list(location, request.provider());
-            if (bindings.isEmpty()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            binding = bindings.getLast();
-            if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
+            readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
-
-        Path assignedWorktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
-        var wsCheck = bindingService.verifyWorkspace(location, binding, assignedWorktree);
-        if (!wsCheck.verified()) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        if (!readiness.ready()) {
+            return readiness.response();
         }
-
-        if (!"VERIFIED".equals(binding.providerTrustState())) {
-            var trustRes = bindingService.verifyWorkspaceTrust(location, request.provider(), binding.sessionId(), assignedWorktree);
-            if (!trustRes.verified()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-        }
+        ProviderSessionBindingService.Binding binding = readiness.binding();
+        Path assignedWorktree = readiness.worktree();
 
         try {
             org.synesis.link.identity.NodeIdentity callerIdentity = new org.synesis.link.identity.IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();

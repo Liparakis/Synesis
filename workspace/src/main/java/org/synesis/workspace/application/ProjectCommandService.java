@@ -29,7 +29,7 @@ public final class ProjectCommandService {
     private static final int MAX_OUTPUT_BYTES = 65536;
 
     private final ProjectApplicationService projectService;
-    private final ProviderSessionBindingService bindingService;
+    private final WorkspaceReadinessService readinessService;
     private final List<ProjectCommandAdapter> adapters;
 
     /**
@@ -37,7 +37,7 @@ public final class ProjectCommandService {
      */
     public ProjectCommandService() {
         this.projectService = new ProjectApplicationService();
-        this.bindingService = new ProviderSessionBindingService();
+        this.readinessService = new WorkspaceReadinessService();
         this.adapters = List.of(
                 new GitProjectCommandAdapter(),
                 new GradleProjectCommandAdapter(),
@@ -87,33 +87,17 @@ public final class ProjectCommandService {
         }
 
         ProjectApplicationService.ProjectLocation location;
-        ProviderSessionBindingService.Binding binding;
+        WorkspaceReadinessService.ReadinessResult readiness;
         try {
             location = projectService.locate(root);
-            var bindings = bindingService.list(location, request.provider());
-            if (bindings.isEmpty()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            binding = bindings.getLast();
-            if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
+            readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
-
-        Path assignedWorktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
-        var wsCheck = bindingService.verifyWorkspace(location, binding, assignedWorktree);
-        if (!wsCheck.verified()) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        if (!readiness.ready()) {
+            return readiness.response();
         }
-
-        if (!"VERIFIED".equals(binding.providerTrustState())) {
-            var trustRes = bindingService.verifyWorkspaceTrust(location, request.provider(), binding.sessionId(), assignedWorktree);
-            if (!trustRes.verified()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-        }
+        Path assignedWorktree = readiness.worktree();
 
         // 2. Validate Command Intent Type
         ProjectCommandIntent intent = request.intent();
@@ -137,15 +121,21 @@ public final class ProjectCommandService {
                     .orElse(null);
         }
 
-        if (selectedAdapter == null) {
+        boolean scriptTest = "test".equals(type) && "run-tests.cmd".equalsIgnoreCase(intent.target())
+                && Files.isRegularFile(assignedWorktree.resolve("run-tests.cmd"));
+        if (selectedAdapter == null && !scriptTest) {
             return AgentResponse.blocked(AgentReason.TOOL_UNAVAILABLE);
         }
 
         List<String> commandTokens;
         try {
-            commandTokens = new ArrayList<>(selectedAdapter.buildCommandTokens(assignedWorktree, intent));
-            if (intent.arguments() != null && !intent.arguments().isEmpty()) {
-                commandTokens.addAll(intent.arguments());
+            if (scriptTest) {
+                commandTokens = new ArrayList<>(List.of("cmd.exe", "/d", "/c", "run-tests.cmd"));
+            } else {
+                commandTokens = new ArrayList<>(selectedAdapter.buildCommandTokens(assignedWorktree, intent));
+                if (intent.arguments() != null && !intent.arguments().isEmpty()) {
+                    commandTokens.addAll(intent.arguments());
+                }
             }
         } catch (IllegalArgumentException ex) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);

@@ -43,6 +43,11 @@ public enum AgentReason {
     WORKSPACE_STALE("workspace_stale"),
 
     /**
+     * A modifying patch omitted the optimistic content precondition returned by a read.
+     */
+    PATCH_PRECONDITION_REQUIRED("patch_precondition_required"),
+
+    /**
      * Requested path or target specification is invalid.
      */
     INVALID_PATH("invalid_path"),
