@@ -42,9 +42,11 @@ public final class ProjectApplicationService {
             This repository uses Synesis.
 
             - Use Synesis tools for project reads, file changes, and commands.
+            - One persistent MCP connection owns one provider binding and one isolated worker context.
+            - Reads carry revisions; provide the matching revision when applying a patch.
             - Do not modify the control checkout or another worker's files directly.
-            - When Synesis reports that another worker owns a capability, provide the requested contract details.
-            - Stop when Synesis reports an unrecoverable safety failure.
+            - When Synesis reports an identity, ownership, freshness, or workspace failure, stop mutation and inspect read-only state.
+            - The MCP surface currently contains exactly 11 tools; use the managed Synesis tools for work.
             """;
 
     /**

@@ -2,33 +2,33 @@
 
 ## Identity
 
-- Task ID: SYN-017
+- Task ID: SYN-018
 - Status: ACTIVE
 - Priority: P1
-- Started checkpoint: CP-0225
-- Responsible agent: primary implementation engineer
-- Related decisions: ADR-0001, ADR-0008
+- Started checkpoint: pending hygiene checkpoint
+- Responsible agent: primary repository-hygiene engineer
+- Related decisions: ADR-0001, ADR-0008; no architecture change
 
 ## Objective
 
-Organize the flat `workspace.application` package into responsibility-based application packages without changing runtime behavior.
+Inventory and clean maintained documentation, Markdown, and repository scripts without changing production behavior or public surfaces.
 
 ## Immediate slice
 
-Inventory and implementation complete. Map: `application.agent`, `application.capability`, `application.control`, `application.guardrail`, `application.hook`, `application.integration`, `application.project`, `application.provider`, `application.sync`, `application.task`, and `application.workspace`. The root retains `ConstraintApplicationService`, `ProjectApplicationService`, `ProviderApplicationService`, and `ProviderSessionBindingService` as cross-responsibility facades.
+Preflight and initial inventory are complete. Maintained documentation and script references are being reconciled; historical checkpoints, evidence, ADRs, and signed records are excluded from modernization edits.
 
 ## Verification target
 
-No stale production FQNs, package cycles, surface changes, or module dependency changes after the completed move set.
+No broken maintained links or script references, no machine-specific paths in user-facing docs, no stale canonical-provider command examples, no inaccurate MCP tool-count claims, and no CLI/MCP/provider behavior changes.
 
 ## Immediate next action
 
-Re-read the committed package map at `27595c1`; keep `SYN-014E` paused and do not activate later structural or quality tasks automatically.
+Create the maintained-file inventory and classify current versus historical documentation before editing any user-facing Markdown.
 
 ## Work completed
 
-`SYN-015` and `SYN-016` are complete. `SYN-017` remains the sole ACTIVE task with implementation committed at `27595c1`. `coordination.application` is one service; the 30-file application cluster was `workspace.application`. `SYN-014E` remains paused.
+`SYN-015` and `SYN-016` are complete. The prior `SYN-017` package slice is preserved as historical implementation work, but its current architecture test must not be repaired as part of hygiene. `SYN-014E` remains paused.
 
 ## Current failures
 
-No verified failures. The first MCP rerun encountered a transient Gradle result-file race after a timed-out chained invocation; the clean rerun and final root check passed. An unrelated deletion of `mcp/src/main/java/org/synesis/mcp/transport/stdio/package-info.java` was present at startup and remains outside this task.
+Baseline root `check --no-daemon` failed at `a67dd00`: the workspace package architecture test expects root facades that the current source has moved into subpackages, and parallel test execution also reported missing in-progress binary result files. The requested hygiene task does not alter production package behavior; final verification must report whether these failures clear under a controlled rerun. The prompt's `bootstrap\go` path is absent; equivalent Go commands run from the `bootstrap` module with the installed `go` executable.

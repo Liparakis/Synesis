@@ -652,13 +652,13 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-017
 - Priority: P1
 - Title: Organize workspace application packages
-- Status: ACTIVE
+- Status: VERIFYING
 - Purpose: Replace the flat `org.synesis.workspace.application` package with responsibility-based application packages supported by the existing workspace services.
 - Dependencies: SYN-016 DONE; clean working tree; durable state reconciled before production edits.
 - Acceptance criteria: application services are grouped by responsibility without moving types between Gradle modules; zero stale production FQNs remain; no runtime behavior, public method signatures, CLI/MCP surfaces, provider identifiers, schemas, reason codes, event formats, or durable identifiers change; no package-info files are added.
 - Required tests: affected workspace tests after each coherent move; `:workspace:check`; `:cli:check`; `:mcp:check`; root `check`; bootstrap Go tests/vet; stale-reference and package-cycle scans.
 - Scope boundary: workspace module only; no deduplication, warning cleanup, god-class splitting, implementation rewrite, new Gradle dependency, Go bootstrap change, or automatic progression to another task.
-- Evidence: PASS — organized the flat application cluster into explicit agent, capability, control, guardrail, hook, integration, project, provider, sync, task, and workspace packages; retained only four root facades where existing package access and dependency direction require it; mirrored application tests; added `WorkspaceApplicationPackageArchitectureTest`; zero stale moved FQNs; no application-package cycles; `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go tests, and Go vet passed.
+- Evidence: prior package work was committed through `a67dd00`; the hygiene preflight exposed a current architecture-test assertion mismatch and parallel Gradle result-file race, so this task remains VERIFYING rather than being reactivated or silently declared DONE.
 
 ## SYN-014C
 
@@ -999,3 +999,32 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - Required tests: CLI and two-machine tests.
 - Required documentation: operations guide, release notes, release checklist.
 - Evidence: pending.
+
+## SYN-018
+
+- ID: SYN-018
+- Priority: P1
+- Title: Repository documentation and script hygiene
+- Status: ACTIVE
+- Purpose: Inventory, reconcile, organize, and verify maintained Markdown,
+  generated agent instructions, repository scripts, and documentation links
+  without changing product behavior or the CLI/MCP/provider surfaces.
+- Dependencies: prior package and code-quality slices; `SYN-014E` remains paused.
+- Acceptance criteria: maintained documentation matches the implemented
+  command/provider/MCP surfaces; historical records remain intact; genuinely
+  duplicate or obsolete scripts are removed only with evidence; internal links,
+  repository paths, script references, machine-path policy, and MCP tool-count
+  claims have narrow automated checks; required verification and checkpoint
+  evidence are recorded; exactly 11 MCP tools remain exposed.
+- Required tests: repository hygiene checks, root Gradle check, Go test/vet,
+  CLI help/version, direct MCP initialize/tools-list, provider list, init
+  instruction generation, and maintained-link/script reachability checks.
+- Required documentation: README, maintained guides, generated AGENTS.md
+  source, inventory, durable state, and final hygiene evidence.
+- Scope boundary: no production behavior, CLI/MCP surface, provider ID/alias,
+  durable schema, event history, signed evidence, updater/signing semantics,
+  remote networking, provider-process termination, or forced worktree removal.
+- Evidence: in progress; baseline at `a67dd00` exposed a failing stale
+  `WorkspaceApplicationPackageArchitectureTest` assertion and parallel-test
+  result-file races, which are preserved as pre-existing blockers for final
+  verification rather than fixed in this hygiene task.

@@ -83,12 +83,20 @@ Post-MVP Hardening Slice 2 is DONE at CP-0188. Controlled lifecycle cleanup exec
 
 ## Implementation state
 
-`Reorganize Synesis package structure` is the sole active primary task under
-`SYN-015`. `STRUCT-1A — Foundational packages` completed on 2026-07-26 at
+Repository hygiene is the sole active primary task under `SYN-018`.
+`Reorganize Synesis package structure` and its `SYN-016`/`SYN-017` follow-up
+slices are preserved as prior implementation work. `STRUCT-1A — Foundational
+packages` completed on 2026-07-26 at
 commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B — Workspace
 packages` completed on 2026-07-26 across commits `b67ac1c` and `248889a`. `STRUCT-1C` and
 `STRUCT-1D` remain inactive. `SYN-014E` is paused with its prior evidence preserved and without
 production rollback.
+
+The hygiene preflight at `a67dd00` did not pass the exact root check: the
+workspace architecture test expects root facades that the current source has
+moved into responsibility packages, and Gradle's parallel test result reader
+reported missing in-progress binary result files. This workstream records the
+failure and does not change package behavior to hide it.
 
 `STRUCT-1B` was restricted to intra-module package restructuring inside
 `:workspace`. It completed with `workspace.application`, `workspace.project`,

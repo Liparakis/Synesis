@@ -4,19 +4,18 @@
 
 ```text
 <!-- SYNESIS-BEGIN -->
-This project is Synesis-enabled. Before any mutation, establish or resume the
-Synesis session for this provider and task. Work only in the assigned Synesis
-workspace. Synesis may stop a mutation when another task owns the capability;
-describe the required behavior when prompted and do not edit the owner scope.
-Do not run coordinator, supervisor, event, prediction, speculation, or
-integration diagnostic commands as part of normal work. Do not bypass provider
-hooks, write another session's worktree, or treat a prompt-supplied path as
-workspace proof. If Synesis reports identity, freshness, ownership, or workspace
-verification failure, pause mutation and continue only with safe read-only
-inspection until the provider reports READY.
+- Use Synesis tools for project reads, file changes, and commands.
+- One persistent MCP connection owns one provider binding and one isolated
+  worker context.
+- Reads carry revisions; provide the matching revision when applying a patch.
+- Do not modify the control checkout or another worker's files directly.
+- If Synesis reports identity, ownership, freshness, or workspace failure, stop
+  mutation and inspect only read-only state.
+- The current MCP surface contains exactly 11 tools.
 <!-- SYNESIS-END -->
 ```
 
-The section is guidance, not an authorization mechanism. Authorization remains
-coordinator-side and provider enforcement remains a release gate.
-
+The exact generated text is owned by `ProjectApplicationService`; this document
+describes its contract rather than being a second template. The section is
+guidance, not an authorization mechanism. Authorization remains coordinator-side
+and provider enforcement remains a release gate.

@@ -1,10 +1,10 @@
 # Next Session
 
-- Active task: SYN-017 ACTIVE under Organize workspace application packages
+- Active task: SYN-018 ACTIVE under Repository documentation and script hygiene
 - Repository branch: master
-- Last checkpoint: CP-0227; coordination commit `195fc95`; workspace application commit `27595c1`.
-- Last passing command: root `check --no-daemon`, `:workspace:check`, `:cli:check`, `:mcp:check`, `go test -count=1 ./...`, and `go vet ./...`.
+- Last checkpoint: CP-0228; current HEAD is `a67dd00`.
+- Last passing command: prior package work passed focused and root checks; the current preflight root check exposed a stale architecture assertion and parallel test-result race.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next code action: Verify `SYN-017` durable state and review the committed package map; do not activate later structural or quality tasks automatically.
-- Unresolved limitations: `STRUCT-1B` is complete at `b67ac1c` plus corrective commit `248889a`; stop after its checkpoint and do not activate `STRUCT-1C` automatically. Existing application-to-provider-specific orchestration remains for a later structural slice.
+- Exact next documentation action: Finish the maintained-file inventory and use it to drive the documentation cleanup commit; do not reactivate `SYN-014E`.
+- Unresolved limitations: the current architecture-test failure and test-result race are pre-existing verification blockers; do not fix them under repository hygiene.
 - Facts that must not be forgotten: Exactly 11 MCP tools must remain registered in `tools/list`. `DemoCli` moves only to `org.synesis.link.cli` and its Gradle main-class string must be updated. No type may move across Gradle modules. No Go bootstrap edits are permitted in this structural phase.

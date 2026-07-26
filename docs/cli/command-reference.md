@@ -4,20 +4,17 @@ The only public application launcher is `synesis`.
 
 ```text
 synesis
-  help
-  version
-  host
-  join
-  identity show
+  help | version
   init [--project <path>]
-  project create --peer <node-id>
-  sync host
-  sync join <invitation>
-  constraint create --title <text> --rationale <text> --scope <scope> [--effect block|warn]
-  check-action --scope <scope> --action <text>
-  hook antigravity
-  hook claude-code
-  doctor
+  identity show
+  provider list|install|status|uninstall|migrate <provider>
+  project create
+  sync host|join
+  constraint create
+  workspace check-action|verify|mutate
+  hook antigravity|claude-code|codex
+  doctor | cleanup | reconcile | repair | migrate
+  mcp --provider <codex|antigravity|claude>
 ```
 
 Ordinary project commands discover `.synesis` from the current directory. An
@@ -27,4 +24,7 @@ experiments. Hook JSON stays on stdout; diagnostics stay on stderr and hook
 exit code remains 0 for provider contract responses.
 
 Provider installation commands are project-local. `synesis version` is safe to
-run without a project and reports embedded build metadata.
+run without a project and reports embedded build metadata. `claude` is the
+canonical provider ID; `claude-code` is accepted only as a compatibility input
+alias for provider installation/status/uninstall. The hook subcommand remains
+`hook claude-code`.

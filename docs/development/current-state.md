@@ -1,9 +1,17 @@
 # Synesis Repository State Audit
 
-**Date**: July 22, 2026
+**Date**: July 27, 2026
 **Repository Branch**: `master`
-**Latest Checkpoint**: `CP-0131` (SYN-009D stable flat installation promotion)
-**Build Status**: `PASS` (`.\gradlew.bat clean check --dependency-verification=strict`)
+**Latest repository state**: documentation/script hygiene under `SYN-018`; `SYN-014E` remains paused.
+**Verification note**: the hygiene preflight at `a67dd00` exposed a stale
+workspace architecture assertion and a parallel Gradle test-result race; those
+are not fixed by this documentation-only workstream.
+
+The stdio MCP server exposes exactly 11 tools. `claude` is the canonical
+provider ID; `claude-code` is only a compatibility input alias, while
+`hook claude-code` remains the Claude Code adapter command. One persistent MCP
+connection owns one provider binding, reads are revision-bearing, and worker
+contexts are isolated.
 
 ---
 

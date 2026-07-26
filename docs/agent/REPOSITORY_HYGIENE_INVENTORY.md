@@ -1,0 +1,44 @@
+# Repository hygiene inventory
+
+This inventory was produced for `SYN-018` from the clean baseline at
+`a67dd00`. Paths are grouped where a directory is a deliberate immutable
+record set; no historical file is made current by this inventory.
+
+| Path or set | Category | Audience | Authority/source | Form | State and references | Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `README.md`, `CONTRIBUTING.md`, `SECURITY.md` | current entry docs | users/developers | handwritten; implementation and contract tests | handwritten | active; linked from repository root | update links, commands, and claims |
+| `AGENTS.md` | repository instructions | agents/developers | handwritten contract | handwritten | active; read by startup | keep concise and provider-neutral |
+| `docs/getting-started/**`, `docs/providers/**`, `docs/operations/README.md`, `docs/development/build-and-test.md` | navigation/current guides | users/developers/operators | implementation plus linked detailed guides | handwritten | active; linked by README | add and maintain as current indexes |
+| `docs/installation/**`, `docs/integration/**`, `docs/cli/**`, `docs/diagnostics/**` | current operator/provider docs | operators/developers | implementation and CLI/provider tests | handwritten | active; command/provider references | correct stale names and paths |
+| `docs/architecture/**`, `docs/protocol/**`, `docs/security/**`, `docs/development/current-state.md` | architecture/security/current state | developers/reviewers | accepted design plus implementation evidence | handwritten | active; some documents are bounded historical plans | correct current descriptions; preserve decisions |
+| `docs/adr/**` (32 files) | architectural decisions | maintainers/reviewers | accepted ADR history | handwritten, immutable | historical/authoritative at decision time | preserve content; repair navigation only |
+| `docs/evidence/**` (16 Markdown files plus process transcript) | verification evidence | maintainers/auditors | captured command/test evidence | handwritten/captured | historical immutable | preserve; exclude from terminology checks |
+| `docs/agent/checkpoints/**` (CP-0001 through CP-0228) | signed/durable checkpoints | agents/maintainers | checkpoint script and durable state | generated/captured | historical immutable; paths are tooling-sensitive | preserve content and paths |
+| `docs/agent/CONTRACT.md`, `GOAL.md`, `STATE.md`, `TASKS.md`, `CURRENT.md`, `NEXT_SESSION.md`, `DECISIONS.md`, `FAILED_ATTEMPTS.md`, `TEST_MATRIX.md`, `SESSION_LOG.md`, `DEFERRED.md` | active durable state | agents/maintainers | repository contract and checkpoint scripts | handwritten/captured | active state plus historical log | update only for SYN-018 state/evidence |
+| `docs/agent/*IMPLEMENTATION_NOTE.md`, `PRODUCT_REVIEW.md`, design/plan docs | task reports/plans | maintainers | task evidence and ADRs | handwritten | historical or superseded unless explicitly linked as current | preserve; do not modernize history |
+| `docs/release/**`, `docs/installation/bootstrap-install.md` | release/install guidance | operators/release maintainers | bootstrap Go code, workflows, signing ADRs | handwritten | active but release claims bounded | correct paths only; no signing/updater changes |
+| `link/src/test/resources/agent-persistence-fixtures/**` | test fixture documentation | developers | fixture validator | handwritten | active test references | preserve and validate links |
+| `scripts/agent-resume.ps1`, `agent-checkpoint.ps1`, `agent-doctor.ps1`, `agent-validate-deferred.ps1`, `agent-validate-fixtures.ps1` | durable-state/test helpers | agents/developers | scripts and contract | handwritten | active; referenced by startup/tests/docs | preserve entrypoints; harden only if needed |
+| `scripts/aggregate-release-candidate.ps1` | release helper | release maintainers | bootstrap aggregation tests/Go code | handwritten | active; referenced by release docs | preserve semantics |
+| `scripts/run-antigravity-guardrail-experiment.ps1`, `run-synesis-guardrail-experiment.ps1`, `run-speculative-coordination-real.ps1` | acceptance/experiment helpers | maintainers | evidence reports and task records | handwritten | historical or bounded acceptance; unique behavior | preserve; do not consolidate without duplicate evidence |
+| `install/install.ps1`, `install/install.sh` | installer launchers | operators | bootstrap artifact contract and Go tests | handwritten platform wrappers | active; referenced by artifact aggregation | preserve as platform pair |
+| `gradlew.bat` | generated build launcher | all developers | Gradle Wrapper | generated | active; do not hand-rewrite | preserve |
+
+## Counts and decisions
+
+- 353 tracked Markdown files were reviewed by path; 228 checkpoints, 32 ADRs,
+  and 16 evidence Markdown files are immutable record sets.
+- 12 tracked script/launcher files were reviewed. No genuinely duplicate active
+  script entrypoint was proven. The installer pair is a required platform pair;
+  the three experiment runners have different evidence scopes.
+- One historical `process-transcript.log` remains under evidence because it is
+  part of a recorded acceptance run.
+- No file was deleted or archived during inventory. Current documentation edits
+  intentionally exclude checkpoints, evidence, ADRs, and signed records.
+
+## Generated documentation source
+
+The initialized-project `AGENTS.md` managed section is generated by
+`workspace/src/main/java/org/synesis/workspace/application/ProjectApplicationService.java`.
+`docs/architecture/agents-md-contract.md` describes that source; it is not a
+second generator. Root `AGENTS.md` is handwritten repository contract text.

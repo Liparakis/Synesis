@@ -7,9 +7,9 @@ synesis provider list
 synesis provider install antigravity
 synesis provider status antigravity
 synesis provider uninstall antigravity
-synesis provider install claude-code
-synesis provider status claude-code
-synesis provider uninstall claude-code
+synesis provider install claude
+synesis provider status claude
+synesis provider uninstall claude
 synesis provider install codex
 synesis provider status codex
 synesis provider uninstall codex
@@ -52,3 +52,8 @@ platform stable-root `bin` launcher on Unix. Provider commands never contain a
 Malformed configuration is never repaired or overwritten. Review it manually,
 then rerun installation. Uninstall removes only the stable Synesis-managed
 entry and its local metadata.
+
+`claude-code` is retained as a compatibility alias for the canonical `claude`
+provider ID. It is not a second provider. Claude Code's hook command remains
+`synesis hook claude-code` because that is the provider's hook event adapter
+name.

@@ -3,7 +3,7 @@
 Install the project-local integration with:
 
 ```powershell
-synesis provider install claude-code
+synesis provider install claude
 ```
 
 The managed `PreToolUse` entry is written to
