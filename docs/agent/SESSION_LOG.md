@@ -1156,3 +1156,10 @@ Append-only operational history.
 - Workspace tests (154), full Gradle checks, Go tests, and Go vet passed. Sequential multi-file and same-file old/new revision tests pass.
 - Built, verified, prepared, and activated signed `0.1.0-dev-local-5c12`; active pointer retains `0.1.0-dev-local-5c11` as previous.
 - Real noninteractive Codex loaded the preserved TOML, discovered 11 Synesis tools, executed ensure/read/read/apply/apply/run/get, passed `run-tests.cmd`, and returned no pending action. Fixture control checkout remained clean; no process termination or forced worktree removal was used.
+
+# 2026-07-26 — SYN-014E Slice 5C.9 Antigravity discovery preflight
+
+- Resolved the installed Antigravity surface: version 2.3.1 at the local Windows application path; production MCP configuration is `%USERPROFILE%\\.gemini\\antigravity\\mcp_config.json`, with the matching `%USERPROFILE%\\.gemini\\config\\mcp_config.json` mirror.
+- Verified the sole Synesis entry uses the stable `synesis.cmd` launcher and exact `mcp --provider antigravity` arguments, with no worker path, fixture path, credentials, or model override. No migration was needed and no unrelated settings were changed.
+- Gradle checks and Go tests/vet passed. Fixture control checkout remains clean; signed `0.1.0-dev-local-5c12` remains active with `5c11` previous. Read-only cleanup/reconciliation found no executable actions or ambiguous active leases.
+- Real Antigravity GUI discovery and tool execution remain unproven pending the operator's required close/reopen/open-workspace action. No production Synesis defect has been demonstrated.

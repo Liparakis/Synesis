@@ -11,11 +11,11 @@
 
 ## Objective
 
-Complete IMPLEMENTATION AND REAL ACCEPTANCE — Multi-file patch freshness, Hardening Slice 5C.8 from CP-0208.
+Complete REAL ANTIGRAVITY DISCOVERY AND TOOL EXECUTION — Hardening Slice 5C.9 from CP-0209.
 
 ## Immediate slice
 
-The implementation commit is `49da341ae33123cd040ce96f9d393ef8f7aa12ac`, descended from the CP-0208 evidence commit. Slice 5C.8 separates workspace-generation changes from per-file revision/content races, returns revisions from reads and successful patches, binds mutations to the exact connection instance, and adds sequential multi-file and same-file revision regression coverage.
+The implementation commit is `49da341ae33123cd040ce96f9d393ef8f7aa12ac`, and CP-0209 records its signed 5C.12 activation and real Codex closure. Slice 5C.9 has verified the installed Antigravity 2.3.1 surface and its real user configuration path; no production defect has been demonstrated.
 
 ## Verification target
 
@@ -31,4 +31,4 @@ Slice 5C.2 implements Codex TOML configuration correction, preservation, compare
 
 ## Current failures
 
-Signed `0.1.0-dev-local-5c12` was prepared, verified, and activated with `5c11` retained as previous. Real Codex loaded the preserved TOML, discovered 11 tools, executed ensure/read/read/apply/apply/run/get, successfully mutated both service and test files through Synesis, and passed `run-tests.cmd`; control checkout remained clean. Five dirty legacy worktrees remain preserved; no force removal or process termination was used.
+Signed `0.1.0-dev-local-5c12` remains active with `5c11` retained as previous. Antigravity 2.3.1 is installed and the verified production configuration is `%USERPROFILE%\\.gemini\\antigravity\\mcp_config.json`; its sole Synesis entry uses the stable `synesis.cmd` launcher with `mcp --provider antigravity`. Gradle and Go checks pass. A fresh GUI session has not yet been operated, so real Antigravity discovery is unclaimed. Five dirty legacy worktrees remain preserved; no force removal or process termination was used.
