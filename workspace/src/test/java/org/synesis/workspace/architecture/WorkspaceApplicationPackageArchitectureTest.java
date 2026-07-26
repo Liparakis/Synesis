@@ -14,7 +14,7 @@ final class WorkspaceApplicationPackageArchitectureTest {
 
     private static final Path APPLICATION_ROOT = Path.of("src/main/java/org/synesis/workspace/application");
 
-    /** Ensures only the intentionally retained cross-responsibility facades remain at the root. */
+    /** Ensures only the intentionally retained project application facade remains at the root. */
     @Test
     void rootContainsOnlyStableFacades() throws Exception {
         Set<String> rootTypes;
@@ -25,12 +25,7 @@ final class WorkspaceApplicationPackageArchitectureTest {
         }
 
         assertEquals(
-                Set.of(
-                        "ConstraintApplicationService.java",
-                        "ProjectApplicationService.java",
-                        "ProviderApplicationService.java",
-                        "ProviderMcpConfigurationService.java",
-                        "ProviderSessionBindingService.java"),
+                Set.of("ProjectApplicationService.java"),
                 rootTypes);
     }
 
