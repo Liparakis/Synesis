@@ -3,7 +3,7 @@
 ## Identity
 
 - Task ID: SYN-016
-- Status: ACTIVE
+- Status: DONE
 - Priority: P0
 - Started checkpoint: CP-0212
 - Responsible agent: primary implementation engineer
@@ -15,7 +15,7 @@ Organize the flat coordination domain package into responsibility-based packages
 
 ## Immediate slice
 
-Move only coordination domain types into the approved responsibility packages, then validate and checkpoint.
+Coordination domain types are organized and validated; no further production work is active.
 
 ## Verification target
 
@@ -27,7 +27,7 @@ Implementation and validation are complete. The next action is to checkpoint and
 
 ## Work completed
 
-`SYN-015` is complete. `SYN-016` is the sole active task. The coordination domain map is capability, task, ownership, prediction, integration, speculation, and command. `SYN-014E` remains paused.
+`SYN-015` and `SYN-016` are complete. The coordination domain map is capability, task, ownership, prediction, integration, speculation, and command. `SYN-014E` remains paused.
 
 ## Current failures
 

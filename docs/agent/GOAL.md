@@ -2,7 +2,7 @@
 
 - Product: Synesis, with Synesis Link as the first implemented transport/session module
 - Repository type: modular-monolith Gradle project
-- Current phase: coordination domain package organization under SYN-016; prior package and code-quality work remains complete; SYN-012 is complete at CP-0144; SYN-011 remains VERIFYING, SYN-010B remains VERIFYING, and SYN-010A remains VERIFYING
+- Current phase: coordination domain package organization complete under SYN-016; prior package and code-quality work remains complete; SYN-012 is complete at CP-0144; SYN-011 remains VERIFYING, SYN-010B remains VERIFYING, and SYN-010A remains VERIFYING
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope until explicitly tasked
 - Goal revision: 5
@@ -13,4 +13,4 @@
 - Evidence: SYN-009C release evidence is complete at CP-0110; SYN-010A
   publication audit, current/reachable-history scan, documentation preparation,
   strict Java verification, and repository validators are recorded at CP-0111.
-- Exact continuation: move only coordination domain types into responsibility-based packages, validate, and checkpoint; keep SYN-014E paused.
+- Exact continuation: no production continuation; keep `SYN-014E` paused unless a new task is explicitly activated.

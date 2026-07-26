@@ -525,7 +525,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [x] **SYN-014C** — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation `[DONE]`
 - [x] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[DONE]`
 - [x] **SYN-015** — Reorganize Synesis package structure `[DONE]`
-- [/] **SYN-016** — Organize coordination domain packages `[ACTIVE]`
+- [x] **SYN-016** — Organize coordination domain packages `[DONE]`
 - [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
 - [x] **STRUCT-1C** — MCP packages `[DONE]`
@@ -637,14 +637,14 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-016
 - Priority: P1
 - Title: Organize coordination domain packages
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Replace the oversized flat `org.synesis.coordination.domain` package with responsibility-based packages inside `:coordination` only.
 - Dependencies: SYN-015 DONE; clean production baseline; existing module boundaries preserved.
 - Acceptance criteria: capability, task, ownership, prediction, integration, speculation, and command responsibilities have explicit package ownership; zero stale production FQNs remain; no serialized names, event formats, reason codes, CLI/MCP surfaces, or module dependencies change.
 - Required tests: `:coordination:check`, root `check`, focused coordination tests, stale-FQN scan, package-cycle scan, and Go tests/vet.
 - Scope boundary: no implementation rewrites, no cross-module moves, no new Gradle dependencies, no deduplication, warning cleanup, or god-class work.
 - Package map: `org.synesis.coordination.domain.capability`, `.task`, `.ownership`, `.prediction`, `.integration`, `.speculation`, and `.command`.
-- Evidence: PASS — moved 35 domain types and four mirrored tests; added responsibility-boundary architecture coverage; `:coordination:check`, root `check`, Go tests/vet, stale-FQN scan, and no-flat-package scan passed.
+- Evidence: PASS — moved 35 domain types and four mirrored tests; added responsibility-boundary architecture coverage without package-info files; `:coordination:check`, root `check`, Go tests/vet, stale-FQN scan, and no-flat-package scan passed; commit `195fc95`.
 
 ## SYN-014C
 
