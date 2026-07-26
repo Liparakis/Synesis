@@ -58,6 +58,7 @@ type manifest struct {
 	PublishedAt             string              `json:"publishedAt"`
 	MinimumBootstrapVersion string              `json:"minimumBootstrapVersion"`
 	DevelopmentOnly         bool                `json:"developmentOnly"`
+	SigningKeyID             string              `json:"signingKeyId,omitempty"`
 	Artifacts               map[string]artifact `json:"artifacts"`
 }
 
@@ -93,6 +94,7 @@ type updatePlan struct {
 	MigrationState          string               `json:"migrationState"`
 	RollbackCompatibility   string               `json:"rollbackCompatibility"`
 	LiveProjectSessionState string               `json:"liveProjectSessionState"`
+	AcceptanceMode          bool                `json:"acceptanceMode,omitempty"`
 	CanonicalHash           string               `json:"canonicalHash"`
 }
 
@@ -160,6 +162,7 @@ func runInstall(operation string, args []string) error {
 	installDir := flags.String("install-dir", "", "installation root")
 	prepare := flags.Bool("prepare", false, "prepare an immutable update plan")
 	execute := flags.Bool("execute", false, "execute a prepared update plan")
+	acceptance := flags.Bool("acceptance", false, "use the explicitly configured local acceptance trust root")
 	planID := flags.String("plan", "", "prepared update plan ID")
 	rollback := flags.Bool("rollback", false, "roll back the last successful update")
 	if err := flags.Parse(args); err != nil {
@@ -192,7 +195,7 @@ func runInstall(operation string, args []string) error {
 	if err != nil {
 		return errors.New("manifest signature or contents invalid")
 	}
-	if err := verifyManifestAuthenticity(m, data, signature); err != nil {
+	if err := verifyManifestAuthenticity(m, data, signature, *acceptance); err != nil {
 		return err
 	}
 	selected, ok := m.Artifacts[platformID()]
@@ -211,7 +214,7 @@ func runInstall(operation string, args []string) error {
 		return errors.New("artifact size or SHA-256 mismatch")
 	}
 	if *prepare {
-		id, err := prepareUpdatePlan(paths, m, data, signature, archive)
+		id, err := prepareUpdatePlan(paths, m, data, signature, archive, *acceptance)
 		if err != nil {
 			return err
 		}
@@ -231,8 +234,18 @@ func runInstall(operation string, args []string) error {
 // A nil signature can only reach this function via the one bypass path in
 // fetchManifest (local file:// URL with no .sig present), so this is the
 // single place that decides whether that bypass is actually honored.
-func verifyManifestAuthenticity(m manifest, data, signature []byte) error {
+func verifyManifestAuthenticity(m manifest, data, signature []byte, acceptance bool) error {
 	unsigned := len(signature) == 0
+	if acceptance {
+		if !m.DevelopmentOnly || unsigned {
+			return errors.New("acceptance manifest must be signed development bundle")
+		}
+		public, err := acceptancePublicKey()
+		if err != nil || m.SigningKeyID != acceptanceKeyID(public) || !ed25519.Verify(public, data, signature) {
+			return errors.New("manifest signature or contents invalid")
+		}
+		return nil
+	}
 	if unsigned && !m.DevelopmentOnly {
 		return errors.New("manifest signature or contents invalid")
 	}
@@ -240,6 +253,24 @@ func verifyManifestAuthenticity(m manifest, data, signature []byte) error {
 		return errors.New("manifest signature or contents invalid")
 	}
 	return nil
+}
+
+func acceptancePublicKey() (ed25519.PublicKey, error) {
+	encoded := strings.TrimSpace(os.Getenv("SYNESIS_ACCEPTANCE_MANIFEST_PUBLIC_KEY_B64"))
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(data) != ed25519.PublicKeySize {
+		return nil, errors.New("acceptance public key is not a valid Ed25519 key")
+	}
+	return ed25519.PublicKey(data), nil
+}
+
+func acceptanceKeyID(public ed25519.PublicKey) string {
+	return hex.EncodeToString(digestBytes(public))
+}
+
+func digestBytes(data []byte) []byte {
+	h := sha256.Sum256(data)
+	return h[:]
 }
 
 // installationPaths resolves the on-disk layout for a Synesis installation.
@@ -611,7 +642,7 @@ func acquireUpdateLock(paths installPaths, operation string) (func(), error) {
 	return func() { _ = os.Remove(paths.lock) }, nil
 }
 
-func prepareUpdatePlan(paths installPaths, m manifest, manifestData, signature, archive []byte) (string, error) {
+func prepareUpdatePlan(paths installPaths, m manifest, manifestData, signature, archive []byte, acceptance bool) (string, error) {
 	if _, _, err := readPointer(paths, paths.current); err != nil {
 		return "", err
 	}
@@ -623,7 +654,7 @@ func prepareUpdatePlan(paths installPaths, m manifest, manifestData, signature, 
 	if err != nil {
 		return "", err
 	}
-	plan := updatePlan{SchemaVersion: 1, PreparedAt: time.Now().UTC().Format(time.RFC3339Nano), InstallationRoot: paths.root, BundleFingerprint: digest(archive), ManifestFingerprint: digest(manifestData), TargetVersion: m.Version, CurrentFingerprint: digest(currentData), ProviderMigrations: migrations.Providers, ProjectMigration: migrations.Project, ProjectRoot: migrations.ProjectRoot, MigrationState: "MIGRATIONS_PREPARED", RollbackCompatibility: "SAFE", LiveProjectSessionState: "NO_MIGRATION_REQUIRED"}
+	plan := updatePlan{SchemaVersion: 1, PreparedAt: time.Now().UTC().Format(time.RFC3339Nano), InstallationRoot: paths.root, BundleFingerprint: digest(archive), ManifestFingerprint: digest(manifestData), TargetVersion: m.Version, CurrentFingerprint: digest(currentData), ProviderMigrations: migrations.Providers, ProjectMigration: migrations.Project, ProjectRoot: migrations.ProjectRoot, MigrationState: "MIGRATIONS_PREPARED", RollbackCompatibility: "SAFE", LiveProjectSessionState: "NO_MIGRATION_REQUIRED", AcceptanceMode: acceptance}
 	if plan.ProjectMigration.State == "NO_PROJECT" {
 		plan.LiveProjectSessionState = "NO_PROJECT"
 	}
@@ -700,7 +731,7 @@ func executeUpdatePlan(paths installPaths, id string) error {
 	}
 	signature, _ := os.ReadFile(plan.SignaturePath)
 	m, err := parseManifest(manifestData)
-	if err != nil || verifyManifestAuthenticity(m, manifestData, signature) != nil {
+	if err != nil || verifyManifestAuthenticity(m, manifestData, signature, plan.AcceptanceMode) != nil {
 		return errors.New("update plan bundle verification failed")
 	}
 	archive, err := os.ReadFile(plan.BundlePath)
