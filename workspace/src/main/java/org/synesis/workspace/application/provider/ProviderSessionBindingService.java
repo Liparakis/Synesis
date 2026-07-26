@@ -1,4 +1,4 @@
-package org.synesis.workspace.application;
+package org.synesis.workspace.application.provider;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 

@@ -1,12 +1,11 @@
 package org.synesis.workspace.application.capability;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -20,7 +19,6 @@ import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.capability.SecureRandomCapabilityRequestHandleGenerator;

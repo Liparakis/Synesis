@@ -1,10 +1,9 @@
 package org.synesis.workspace.application.agent;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -13,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import org.synesis.workspace.agent.AgentCapabilityResult;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;

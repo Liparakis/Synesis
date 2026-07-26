@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**

@@ -9,7 +9,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 /**

@@ -2,7 +2,7 @@ package org.synesis.cli.command.workspace;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

@@ -17,7 +17,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectCommandIntent;
 import org.synesis.workspace.application.project.ProjectCommandService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 class ProjectCommandServiceTest {
 

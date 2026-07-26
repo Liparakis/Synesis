@@ -12,7 +12,7 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationRequest;

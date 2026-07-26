@@ -1,6 +1,6 @@
 package org.synesis.workspace.application.agent;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 
 import org.synesis.workspace.application.ProjectApplicationService;

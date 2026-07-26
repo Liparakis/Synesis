@@ -1,18 +1,16 @@
 package org.synesis.workspace.application.agent;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
-import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 

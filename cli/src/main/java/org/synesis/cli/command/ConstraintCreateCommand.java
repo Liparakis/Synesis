@@ -5,7 +5,7 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.application.ConstraintApplicationService;
+import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

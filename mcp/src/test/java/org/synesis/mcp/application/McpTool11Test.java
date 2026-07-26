@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,7 +43,7 @@ class McpTool11Test {
         new ProjectApplicationService().init(projectRoot);
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        org.synesis.workspace.application.ProviderSessionBindingService bindingService = new org.synesis.workspace.application.ProviderSessionBindingService();
+        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
         var location = projectService.locate(projectRoot);
         bindingService.ensure(location, "codex", "conn-mcp-11");
         var bindings = bindingService.list(location, "codex");

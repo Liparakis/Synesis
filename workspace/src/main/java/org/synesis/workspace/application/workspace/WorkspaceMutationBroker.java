@@ -1,5 +1,5 @@
 package org.synesis.workspace.application.workspace;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 

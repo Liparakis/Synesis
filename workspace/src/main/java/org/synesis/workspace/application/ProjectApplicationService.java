@@ -1,7 +1,5 @@
 package org.synesis.workspace.application;
 
-import org.synesis.workspace.application.ProjectApplicationService;
-
 import java.io.IOException;
 import java.io.Serial;
 import java.nio.charset.StandardCharsets;
@@ -15,7 +13,7 @@ import java.util.UUID;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
-import org.synesis.workspace.application.ProviderApplicationService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 
 /**
  * Owns project discovery, initialization, and project-local profile paths.

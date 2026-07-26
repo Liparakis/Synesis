@@ -12,7 +12,7 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.hook.HookApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 /**
  * Verifies project-scoped provider session identity and trust bootstrap.

@@ -15,7 +15,7 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,5 +1,5 @@
 package org.synesis.workspace.application.agent;
-import org.synesis.workspace.application.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -11,7 +11,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.agent.AgentResponse;
 
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.application.agent.AgentSessionService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

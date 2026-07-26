@@ -7,11 +7,11 @@ import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.cli.terminal.Terminal;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.onboarding.Onboarding;
-import org.synesis.workspace.application.ConstraintApplicationService;
+import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 import org.synesis.workspace.application.guardrail.GuardrailApplicationService;
 import org.synesis.workspace.application.hook.HookApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProviderApplicationService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.sync.SyncApplicationService;
 
 /**

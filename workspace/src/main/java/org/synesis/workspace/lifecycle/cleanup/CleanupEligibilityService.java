@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.workspace.application.ProviderSessionBindingService;
 
 /**
  * Evaluates raw discovered lifecycle resources against path verifiers, process inspectors,
