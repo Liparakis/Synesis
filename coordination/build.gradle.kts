@@ -39,7 +39,7 @@ tasks.test { useJUnitPlatform() }
 tasks.register("formatCheck") {
     group = "verification"
     doLast {
-        val files = project.file("src").walkTopDown().filter { it.isFile && it.extension == "java" }
+        val files = layout.projectDirectory.dir("src").asFile.walkTopDown().filter { it.isFile && it.extension == "java" }
         require(files.none { file -> file.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } } })
     }
 }

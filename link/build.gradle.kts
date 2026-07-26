@@ -70,13 +70,16 @@ tasks.register("formatCheck") {
     description = "Rejects trailing whitespace in tracked source and documentation files."
     doLast {
         val extensions = setOf("java", "kt", "kts", "md", "xml", "toml")
-        val directoryRoots = listOf(project.file("src"), rootProject.file("docs"))
+        val directoryRoots = listOf(
+            layout.projectDirectory.dir("src").asFile,
+            rootProject.layout.projectDirectory.dir("docs").asFile
+        )
         val singleFileRoots = listOf(
-            project.file("build.gradle.kts"),
-            rootProject.file("README.md"),
-            rootProject.file("AGENTS.md"),
-            rootProject.file("CONTRIBUTING.md"),
-            rootProject.file("SECURITY.md"),
+            layout.projectDirectory.file("build.gradle.kts").asFile,
+            rootProject.layout.projectDirectory.file("README.md").asFile,
+            rootProject.layout.projectDirectory.file("AGENTS.md").asFile,
+            rootProject.layout.projectDirectory.file("CONTRIBUTING.md").asFile,
+            rootProject.layout.projectDirectory.file("SECURITY.md").asFile,
             rootProject.file("settings.gradle.kts"),
             rootProject.file("build.gradle.kts")
         )

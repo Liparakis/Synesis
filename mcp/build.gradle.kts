@@ -54,8 +54,8 @@ tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in MCP sources."
     doLast {
-        val files = filesUnder(project.file("src"), setOf("java", "kt", "kts")) +
-                filesUnder(project.file("build.gradle.kts"), setOf("kts"))
+        val files = filesUnder(layout.projectDirectory.dir("src").asFile, setOf("java", "kt", "kts")) +
+                filesUnder(layout.projectDirectory.file("build.gradle.kts").asFile, setOf("kts"))
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }
@@ -74,13 +74,13 @@ tasks.register("architectureCheck") {
     description = "Checks MCP subproject import boundaries."
     doLast {
         val cliHits = linesContaining(
-            project.file("src/main/java"),
+            layout.projectDirectory.dir("src/main/java").asFile,
             "import org.synesis.cli"
         )
         require(cliHits.none()) { "MCP imports CLI code: $cliHits" }
 
         val reverseHits = linesContaining(
-            project.file("../cli/src/main/java"),
+            layout.projectDirectory.dir("../cli/src/main/java").asFile,
             "import org.synesis.mcp"
         )
         require(reverseHits.none()) { "CLI imports MCP code: $reverseHits" }

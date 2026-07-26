@@ -113,7 +113,8 @@ tasks.register("formatCheck") {
     doLast {
         val extensions = setOf("java", "kt", "kts")
         val files =
-            filesUnder(project.file("src"), extensions) + filesUnder(project.file("build.gradle.kts"), extensions)
+            filesUnder(layout.projectDirectory.dir("src").asFile, extensions) +
+                    filesUnder(layout.projectDirectory.file("build.gradle.kts").asFile, extensions)
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }

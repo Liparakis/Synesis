@@ -48,8 +48,8 @@ tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in project-record sources."
     doLast {
-        val files = filesUnder(project.file("src"), setOf("java", "kt", "kts")) +
-                filesUnder(project.file("build.gradle.kts"), setOf("kts"))
+        val files = filesUnder(layout.projectDirectory.dir("src").asFile, setOf("java", "kt", "kts")) +
+                filesUnder(layout.projectDirectory.file("build.gradle.kts").asFile, setOf("kts"))
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }
