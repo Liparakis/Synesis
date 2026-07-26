@@ -2,7 +2,7 @@
 
 - Product: Synesis, with Synesis Link as the first implemented transport/session module
 - Repository type: modular-monolith Gradle project
-- Current phase: autonomous code-quality completion with QUALITY-DEDUP and QUALITY-WARNINGS complete and QUALITY-GOD active; SYN-012 is complete at CP-0144; SYN-011 remains VERIFYING, SYN-010B remains VERIFYING, and SYN-010A remains VERIFYING
+- Current phase: autonomous code-quality completion with QUALITY-DEDUP, QUALITY-WARNINGS, and QUALITY-GOD complete; final validation is active; SYN-012 is complete at CP-0144; SYN-011 remains VERIFYING, SYN-010B remains VERIFYING, and SYN-010A remains VERIFYING
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope until explicitly tasked
 - Goal revision: 5
@@ -13,4 +13,4 @@
 - Evidence: SYN-009C release evidence is complete at CP-0110; SYN-010A
   publication audit, current/reachable-history scan, documentation preparation,
   strict Java verification, and repository validators are recorded at CP-0111.
-- Exact continuation: inventory and rank oversized orchestration candidates, then split only the strongest safe candidate; final validation follows the god-class checkpoint.
+- Exact continuation: run final Gradle/Go/MCP and repository-structure validation, then close SYN-015 without beginning unrelated cleanup.

@@ -531,7 +531,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [x] **STRUCT-1D** — CLI packages `[DONE]`
 - [x] **QUALITY-DEDUP** — Evidence-based deduplication `[DONE]`
 - [x] **QUALITY-WARNINGS** — Legitimate warning cleanup `[DONE]`
-- [/] **QUALITY-GOD** — Focused god-class splitting `[ACTIVE]`
+- [x] **QUALITY-GOD** — Focused god-class splitting `[DONE]`
 - [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
 
 ## SYN-015
@@ -629,7 +629,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Status: ACTIVE
 - Purpose: Split only the strongest evidence-based oversized orchestration classes while preserving stable facades and behavior.
 - Dependencies: QUALITY-WARNINGS DONE; clean working tree; durable state activated before production edits.
-- Evidence: active after warning-cleanup checkpoint; candidate inventory pending.
+- Evidence: PASS — ranked candidates by size and responsibility concentration; extracted MCP configuration persistence from `ProviderApplicationService` into lifecycle-owned `ProviderMcpConfigurationService` while preserving the public facade; `:workspace:check` and focused provider tests passed; commit `04977b9`.
 
 ## SYN-014C
 

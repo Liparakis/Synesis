@@ -1227,3 +1227,9 @@ Append-only operational history.
 - Warning-mode Gradle audit identified four execution-time `project.file(...)` deprecations in verification tasks.
 - Replaced those lookups with `layout` providers without changing the files scanned or runtime behavior.
 - Verified root `check --warning-mode all` with zero warning lines; committed as `98cda05`; QUALITY-GOD is now the sole active subtask.
+
+# 2026-07-26 — SYN-015 god-class split completion
+
+- Ranked oversized classes by size and responsibility concentration; selected `ProviderApplicationService` as the strongest safe candidate.
+- Extracted MCP configuration persistence into `ProviderMcpConfigurationService` while preserving the stable facade and provider result strings.
+- Verified `:workspace:check` and focused provider tests; committed as `04977b9`; final repository validation is next.

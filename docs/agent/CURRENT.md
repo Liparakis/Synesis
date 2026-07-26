@@ -15,19 +15,19 @@ Complete the staged package-structure refactor task in independently validated s
 
 ## Immediate slice
 
-Complete `QUALITY-GOD — Focused god-class splitting` only, then checkpoint before final validation.
+Complete final repository validation and close `SYN-015`; do not begin unrelated cleanup.
 
 ## Verification target
 
-Split only the strongest evidence-based oversized orchestration class while preserving stable facades and behavior.
+Verify all required module, Go, MCP, stale-reference, dependency, cycle, and working-tree conditions after the completed staged refactor.
 
 ## Immediate next action
 
-Inventory and rank oversized orchestration candidates, record the selection, then make one conservative split with focused tests.
+Run the complete Gradle and Go validation suites, the real MCP handshake with exactly 11 tools, and final repository scans.
 
 ## Work completed
 
-`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` across commits `b67ac1c` and corrective ownership commit `248889a`. `STRUCT-1C` completed in `mcp` at `5cb0656`; `STRUCT-1D` completed in `cli` at `958a039`; deduplication completed at `98755b3`; warning cleanup completed at `98cda05`. Required module and root validation passed; the disposable CLI MCP launcher still reports its pre-existing missing MCP runtime classpath.
+`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` across commits `b67ac1c` and corrective ownership commit `248889a`. `STRUCT-1C` completed in `mcp` at `5cb0656`; `STRUCT-1D` completed in `cli` at `958a039`; deduplication completed at `98755b3`; warning cleanup completed at `98cda05`; god-class split completed at `04977b9`. Final validation is pending; the disposable CLI MCP launcher still reports its pre-existing missing MCP runtime classpath.
 
 ## Current failures
 
