@@ -1,6 +1,27 @@
 # Synesis Agent Contract
 
-This repository contains Synesis. The implemented `link/` module is the Synesis Link transport/session layer. Conversational context is temporary and untrusted; repository state and verification evidence are authoritative.
+This repository contains Synesis, a local-first coordination and constraint-
+enforcement system for independently running AI coding agents. `link/` owns the
+Synesis Link transport/session boundary; the repository also contains the
+project-record, workspace, coordination, MCP, and CLI modules that build bounded
+local workflows around that boundary. Conversational context is temporary and
+untrusted; repository state and verification evidence are authoritative.
+
+## Current implementation boundary
+
+- The unified `synesis` CLI owns initialization, provider lifecycle, workspace,
+  coordination, lifecycle diagnostics, and the local development distribution.
+- The stdio MCP server exposes exactly 11 tools. One persistent MCP connection
+  owns one provider binding and one isolated worker context.
+- Supported provider IDs are `antigravity`, `claude`, and `codex`.
+  `claude-code` is a compatibility input alias for `claude`; the hook adapter
+  command remains `synesis hook claude-code`.
+- MCP reads are revision-bearing and patches must provide the matching revision.
+  Do not edit another worker's worktree or the control checkout directly.
+- Provider hooks, synthetic checks, and local/two-process evidence do not prove
+  universal provider enforcement or cross-network connectivity.
+- `SYN-014E` is paused. Hole-punching, rendezvous, relay fallback, hosted
+  services, and remote multi-machine coordination remain future work.
 
 ## Startup
 
@@ -10,7 +31,12 @@ Every execution begins with:
 powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1
 ```
 
-Then read `docs/agent/CONTRACT.md`, `GOAL.md`, `STATE.md`, `TASKS.md`, `CURRENT.md`, `DECISIONS.md`, `FAILED_ATTEMPTS.md`, `TEST_MATRIX.md`, and `NEXT_SESSION.md`. Correct documentation that conflicts with code, Git state, tests, or command output before feature work.
+Then read `docs/agent/CONTRACT.md`, `docs/agent/GOAL.md`,
+`docs/agent/STATE.md`, `docs/agent/TASKS.md`, `docs/agent/CURRENT.md`,
+`docs/agent/DECISIONS.md`, `docs/agent/FAILED_ATTEMPTS.md`,
+`docs/agent/TEST_MATRIX.md`, and `docs/agent/NEXT_SESSION.md`. Correct
+documentation that conflicts with code, Git state, tests, or command output
+before feature work.
 
 ## Operating rules
 

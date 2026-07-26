@@ -1264,3 +1264,14 @@ Append-only operational history.
 - Commits: `4b7f530` documentation; `59f7c63` hygiene checks. No script cleanup
   commit was needed. Exact continuation: preserve the final checkpoint and
   leave the architecture-test mismatch for a separately authorized task.
+# 2026-07-27 — Root AGENTS.md current-boundary correction
+
+- Corrected the handwritten repository `AGENTS.md`, which still described only
+  the Link-stage repository. It now names the current CLI, workspace,
+  coordination, MCP, and provider boundaries, the exact 11-tool surface,
+  revision-bearing MCP reads/patches, canonical provider IDs, and deferred
+  remote-networking claims.
+- Corrected startup references to the durable files under `docs/agent/`.
+- The initialized-project generated template remains owned by
+  `ProjectApplicationService` and was not conflated with the repository
+  contract.
