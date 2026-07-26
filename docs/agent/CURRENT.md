@@ -27,7 +27,7 @@ If continuation is explicitly requested, activate `STRUCT-1C` in durable state, 
 
 ## Work completed
 
-`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` at `b67ac1c`, including project, provider, lifecycle, and infrastructure package moves, test-package alignment, and architecture tests. Required module, root Gradle, Go, and focused MCP checks passed.
+`SYN-014E` is paused pending structural work. `STRUCT-1A` completed in `:project-record`, `:coordination`, and `:link` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`. `STRUCT-1B` completed in `:workspace` across commits `b67ac1c` and corrective ownership commit `248889a`, including project, provider, lifecycle, and infrastructure package moves, test-package alignment, and architecture tests. Required module, root Gradle, Go, and focused MCP checks passed.
 
 ## Current failures
 

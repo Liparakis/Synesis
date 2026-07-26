@@ -86,7 +86,7 @@ Post-MVP Hardening Slice 2 is DONE at CP-0188. Controlled lifecycle cleanup exec
 `Reorganize Synesis package structure` is the sole active primary task under
 `SYN-015`. `STRUCT-1A — Foundational packages` completed on 2026-07-26 at
 commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B — Workspace
-packages` completed on 2026-07-26 at commit `b67ac1c`. `STRUCT-1C` and
+packages` completed on 2026-07-26 across commits `b67ac1c` and `248889a`. `STRUCT-1C` and
 `STRUCT-1D` remain inactive. `SYN-014E` is paused with its prior evidence preserved and without
 production rollback.
 

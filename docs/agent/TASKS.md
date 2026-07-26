@@ -542,7 +542,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: `STRUCT-1A` through `STRUCT-1D` each complete with clean preflight, zero stale production references for moved package names, required verification passing, checkpoint evidence, and one coherent commit per slice.
 - Required tests: per-subtask Gradle verification, root `check`, bootstrap Go test/vet, MCP 11-tool verification where required, and stale-reference searches.
 - Scope boundary: no module moves, no new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, no provider/schema/reason-code/event-format changes, and no deduplication/warning/god-class cleanup.
-- Evidence: `STRUCT-1A` completed at commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B` completed at commit `b67ac1c`; checkpoint recorded after validation.
+- Evidence: `STRUCT-1A` completed at commit `376f2d2ce6003b32d28994b19b6728926ab0af6e`; `STRUCT-1B` completed across `b67ac1c` and corrective commit `248889a`; checkpoint recorded after validation.
 
 ### STRUCT-1A
 
@@ -568,7 +568,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: approved workspace package map applied; provider-specific adapters moved under provider packages; no `workspace.infrastructure.workspace`; only the proven package cycles are resolved; any new interface/value type remains within the allowed narrow exceptions; architecture tests enforce the new dependency direction.
 - Required tests: `.\gradlew.bat :workspace:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
 - Scope boundary: no CLI/MCP/package work outside what workspace references require to compile and verify; no behavior changes.
-- Evidence: PASS — preflight clean at `95f696cc6442b426b28d7e2f2d7b7dd54a43b541`; `:workspace:check`; `:coordination:check`; `:cli:check`; `:mcp:check`; root `check`; `go test -count=1 ./...`; `go vet ./...`; focused `McpTool11Test`; commit `b67ac1c`.
+- Evidence: PASS — preflight clean at `95f696cc6442b426b28d7e2f2d7b7dd54a43b541`; `:workspace:check`; `:coordination:check`; `:cli:check`; `:mcp:check`; root `check`; `go test -count=1 ./...`; `go vet ./...`; focused `McpTool11Test`; stale FQN scan; acyclic production package graph; commits `b67ac1c` and `248889a`.
 
 ### STRUCT-1C
 

@@ -1192,3 +1192,11 @@ Append-only operational history.
 - Added narrow workspace architecture tests for removed integration ownership, delivery isolation, provider-neutral contracts, and production/test separation.
 - Required validation passed: `:workspace:check`, `:coordination:check`, `:cli:check`, `:mcp:check`, root `check`, `go test -count=1 ./...`, `go vet ./...`, and focused `McpTool11Test`.
 - Committed as `Reorganize Synesis workspace packages` at `b67ac1c`; stopped before `STRUCT-1C`.
+
+# 2026-07-26 — SYN-015 STRUCT-1B ownership correction and final checkpoint
+
+- The initial workspace move exposed an accidental `application -> provider -> project -> application` package cycle.
+- Restored `ProjectApplicationService` to `workspace.application` and moved application-facing agent services and `TranslatedOutcome` into `workspace.application`; retained agent response/value records in `workspace.agent`.
+- Updated the required CLI FQNs and architecture/test package references. No new interface or durable/public format was introduced.
+- Verified `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go tests, Go vet, focused `McpTool11Test`, stale FQN scan, and an acyclic production workspace package graph.
+- Committed the correction as `248889a`; created checkpoint `CP-0214`; stopped before `STRUCT-1C`.
