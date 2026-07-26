@@ -9,7 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
-import org.synesis.projectrecord.ProjectConfig;
+import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.integration.codex.CodexHookAdapter;
 import org.synesis.workspace.provider.ProviderJson;
 

@@ -3,7 +3,7 @@ package org.synesis.workspace.application;
 import java.nio.file.Path;
 import java.util.Objects;
 
-import org.synesis.projectrecord.ProjectConstraint;
+import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.workspace.guardrail.ActionGuardrail;
 
 /**

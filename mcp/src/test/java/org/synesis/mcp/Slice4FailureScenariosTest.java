@@ -8,10 +8,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.coordination.CoordinationCommand;
-import org.synesis.coordination.OwnershipClaim;
-import org.synesis.coordination.PredictionEventStore;
-import org.synesis.coordination.PredictionEventType;
+import org.synesis.coordination.domain.CoordinationCommand;
+import org.synesis.coordination.domain.OwnershipClaim;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -89,13 +89,13 @@ class Slice4FailureScenariosTest {
                 location.root().resolve(".synesis/coordination"), location.projectId());
 
         UUID ownerTaskId = UUID.randomUUID();
-        org.synesis.coordination.CoordinationTask ownerTask = new org.synesis.coordination.CoordinationTask(
+        org.synesis.coordination.domain.CoordinationTask ownerTask = new org.synesis.coordination.domain.CoordinationTask(
                 ownerTaskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 identity.nodeId(), b2.supervisorId(), b2.workerId());
         store.append(ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(),
                 CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), ownerTask.encoded(), identity).encoded(), identity);
 
-        org.synesis.coordination.TaskClaim claim1 = new org.synesis.coordination.TaskClaim(
+        org.synesis.coordination.domain.TaskClaim claim1 = new org.synesis.coordination.domain.TaskClaim(
                 ownerTaskId, identity.nodeId(), b2.supervisorId(), b2.workerId());
         store.append(ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(),
                 CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), claim1.encoded(), identity).encoded(), identity);
@@ -105,13 +105,13 @@ class Slice4FailureScenariosTest {
                 CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(), claim2.encoded(), identity).encoded(), identity);
 
         UUID reqTaskId = UUID.randomUUID();
-        org.synesis.coordination.CoordinationTask reqTask = new org.synesis.coordination.CoordinationTask(
+        org.synesis.coordination.domain.CoordinationTask reqTask = new org.synesis.coordination.domain.CoordinationTask(
                 reqTaskId, location.projectId(), "Product CLI Task", "catalog.product-cli",
                 identity.nodeId(), b1.supervisorId(), b1.workerId());
         store.append(reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(),
                 CoordinationCommand.create(UUID.randomUUID(), location.projectId(), reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), reqTask.encoded(), identity).encoded(), identity);
 
-        org.synesis.coordination.TaskClaim claim3 = new org.synesis.coordination.TaskClaim(
+        org.synesis.coordination.domain.TaskClaim claim3 = new org.synesis.coordination.domain.TaskClaim(
                 reqTaskId, identity.nodeId(), b1.supervisorId(), b1.workerId());
         store.append(reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(),
                 CoordinationCommand.create(UUID.randomUUID(), location.projectId(), reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), claim3.encoded(), identity).encoded(), identity);

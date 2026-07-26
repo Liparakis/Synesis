@@ -18,8 +18,8 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
-import org.synesis.link.transport.Onboarding;
-import org.synesis.projectrecord.ProjectConfig;
+import org.synesis.link.onboarding.Onboarding;
+import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;
 

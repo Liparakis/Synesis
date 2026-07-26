@@ -8,7 +8,7 @@ are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
   DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
   SYN-010A is VERIFYING, SYN-010B is VERIFYING, SYN-011 is VERIFYING, and
 SYN-012 is DONE at CP-0144, SYN-013's planning package is complete, and
-SYN-013A is DONE and SYN-013B is the only ACTIVE task at CP-0151;
+SYN-013A is DONE and SYN-013B is DONE at CP-0151;
 SYN-009D is complete. SYN-001 is DONE at
 CP-R4 and CP-R5 is deferred; SL-DEMO-001 is VERIFYING; SL-ARCH-001 is
 complete and SL-009 is deferred. The repository is a Synesis root with Link as the first
@@ -83,24 +83,26 @@ Post-MVP Hardening Slice 2 is DONE at CP-0188. Controlled lifecycle cleanup exec
 
 ## Implementation state
 
-SYN-014E is the only active task at CP-0190. Slice 4 is complete and verified.
-Slice 5 evolves the existing Go bootstrap installer: retain the stable external
-root, move payloads beneath immutable version directories, select the active
-version through a validated pointer, stage and self-test before activation, and
-retain the prior version for rollback. Local bundle input remains the only
-update source. Provider/project migration is bounded by compare-and-set
-fingerprints and must preserve identities and signed history.
+`Reorganize Synesis package structure` is the sole active primary task.
+`STRUCT-1A — Foundational packages` is the only active subtask as of
+2026-07-26. `SYN-014E` is paused with its prior evidence preserved and without
+production rollback.
 
-Slice 5 evidence: `bootstrap` `go test -count=1 ./...` and `go vet ./...`
-PASS; root `.`\gradlew.bat check --no-daemon` PASS with 49 actionable tasks.
-New installs and updates use `versions/<version-hash>` plus
-`current.json`/`previous.json`; staged payloads carry a verified file manifest
-and are read-only after staging. Prepared plans live under
-`admin/update-plans`, locks under `admin/update-lock.json`, and execution
-evidence under `admin/update-executions`. Existing payloads are retained and
-rollback swaps pointers only. Provider/project migration and real
-Codex/Antigravity acceptance are not claimed because no verified global
-provider migration schema was found during the repository audit.
+`STRUCT-1A` is restricted to intra-module package restructuring inside
+`:project-record`, `:coordination`, and `:link`. The approved direction is:
+- `project-record`: `domain`, `persistence`, `security`, `sync`,
+  `sync.protocol`, `guardrail`
+- `coordination`: `domain`, `application`, `persistence`, `transport.http`
+- `link`: `transport.quic`, `transport.control`, `onboarding`, `cli`
+
+Global structural-phase constraints: no type moves across Gradle modules, no
+new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, no
+provider/schema/reason-code/event-format changes, exactly 11 MCP tools
+preserved, and no deduplication/warning/god-class cleanup.
+
+Pre-STRUCT-1A baseline: clean working tree at
+`8dc7d90e8286c5f954111c9619c88fc8b5c8d355`; `.\gradlew.bat check --no-daemon`
+PASS; `bootstrap\go test -count=1 ./...` PASS; `bootstrap\go vet ./...` PASS.
 
 The project contains bounded identity, automatic identity bootstrap, signed
 candidate descriptors and single-use invitations, direct candidate

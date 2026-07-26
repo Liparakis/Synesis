@@ -3,9 +3,9 @@ package org.synesis.workspace.application;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.synesis.coordination.CapabilityContract;
-import org.synesis.coordination.CapabilityRequestHandle;
-import org.synesis.coordination.ImplementationRevisionRecord;
+import org.synesis.coordination.domain.CapabilityContract;
+import org.synesis.coordination.domain.CapabilityRequestHandle;
+import org.synesis.coordination.domain.ImplementationRevisionRecord;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

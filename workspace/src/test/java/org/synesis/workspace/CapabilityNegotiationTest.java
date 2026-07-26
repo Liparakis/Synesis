@@ -8,11 +8,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.coordination.CapabilityContract;
-import org.synesis.coordination.CoordinationCommand;
-import org.synesis.coordination.OwnershipClaim;
-import org.synesis.coordination.PredictionEventStore;
-import org.synesis.coordination.PredictionEventType;
+import org.synesis.coordination.domain.CapabilityContract;
+import org.synesis.coordination.domain.CoordinationCommand;
+import org.synesis.coordination.domain.OwnershipClaim;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -95,13 +95,13 @@ class CapabilityNegotiationTest {
                 location.root().resolve(".synesis/coordination"), location.projectId());
         UUID taskId = UUID.randomUUID();
 
-        org.synesis.coordination.CoordinationTask task = new org.synesis.coordination.CoordinationTask(
+        org.synesis.coordination.domain.CoordinationTask task = new org.synesis.coordination.domain.CoordinationTask(
                 taskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 codexIdentity.nodeId(), "supervisor-codex", "worker-codex");
         CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), task.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), cmd1.encoded(), codexIdentity);
 
-        org.synesis.coordination.TaskClaim claim1 = new org.synesis.coordination.TaskClaim(
+        org.synesis.coordination.domain.TaskClaim claim1 = new org.synesis.coordination.domain.TaskClaim(
                 taskId, codexIdentity.nodeId(), "supervisor-codex", "worker-codex");
         CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), claim1.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), cmd2.encoded(), codexIdentity);

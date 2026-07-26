@@ -15,7 +15,7 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
-import org.synesis.link.transport.Onboarding;
+import org.synesis.link.onboarding.Onboarding;
 
 /**
  * Verifies command parsing without mutating global console streams.

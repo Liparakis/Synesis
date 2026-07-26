@@ -3,7 +3,7 @@ package org.synesis.workspace.guardrail;
 import java.nio.file.Path;
 import java.util.Objects;
 
-import org.synesis.projectrecord.ScopeMatcher;
+import org.synesis.projectrecord.guardrail.ScopeMatcher;
 
 /**
  * Resolves trusted hook paths to normalized project-relative scopes.

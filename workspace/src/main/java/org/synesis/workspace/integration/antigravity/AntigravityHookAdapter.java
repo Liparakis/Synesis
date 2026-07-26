@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.coordination.OwnershipRegistry;
+import org.synesis.coordination.domain.OwnershipRegistry;
 import org.synesis.workspace.guardrail.ActionGuardrail;
 import org.synesis.workspace.guardrail.ProjectPathResolver;
 

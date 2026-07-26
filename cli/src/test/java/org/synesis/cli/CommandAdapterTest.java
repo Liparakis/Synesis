@@ -13,10 +13,10 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
-import org.synesis.link.transport.OnboardingEvent;
-import org.synesis.link.transport.OnboardingEventType;
-import org.synesis.link.transport.OnboardingFailure;
-import org.synesis.link.transport.OnboardingFailureCode;
+import org.synesis.link.onboarding.OnboardingEvent;
+import org.synesis.link.onboarding.OnboardingEventType;
+import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.onboarding.OnboardingFailureCode;
 
 /**
  * Verifies adapter output and typed failure mapping with injected streams.

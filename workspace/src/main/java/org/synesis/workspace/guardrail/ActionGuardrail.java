@@ -5,11 +5,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.coordination.OwnershipRegistry;
-import org.synesis.projectrecord.DecisionRecord;
-import org.synesis.projectrecord.DecisionStore;
-import org.synesis.projectrecord.ProjectConfig;
-import org.synesis.projectrecord.ProjectConstraint;
+import org.synesis.coordination.domain.OwnershipRegistry;
+import org.synesis.projectrecord.domain.DecisionRecord;
+import org.synesis.projectrecord.persistence.DecisionStore;
+import org.synesis.projectrecord.domain.ProjectConfig;
+import org.synesis.projectrecord.domain.ProjectConstraint;
 
 /**
  * Harness-neutral action guardrail evaluator.

@@ -57,7 +57,7 @@ tasks.register<JavaExec>("demoCli") {
     group = "application"
     description = "Runs the source-only physical Synesis Link demonstration CLI."
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass = "org.synesis.link.transport.DemoCli"
+    mainClass = "org.synesis.link.cli.DemoCli"
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 

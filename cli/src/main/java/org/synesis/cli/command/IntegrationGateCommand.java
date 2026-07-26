@@ -6,9 +6,9 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.PredictionIntegrationGate;
-import org.synesis.coordination.PredictionProjection;
-import org.synesis.coordination.SpeculationWorkspace;
+import org.synesis.coordination.domain.PredictionIntegrationGate;
+import org.synesis.coordination.domain.PredictionProjection;
+import org.synesis.coordination.domain.SpeculationWorkspace;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

@@ -12,10 +12,10 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.projectrecord.DecisionStore;
-import org.synesis.projectrecord.Ed25519Signer;
-import org.synesis.projectrecord.ProjectConfig;
-import org.synesis.projectrecord.ProjectConstraint;
+import org.synesis.projectrecord.persistence.DecisionStore;
+import org.synesis.projectrecord.security.Ed25519Signer;
+import org.synesis.projectrecord.domain.ProjectConfig;
+import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.workspace.integration.codex.CodexHookAdapter;
 import org.synesis.workspace.provider.ProviderJson;
 

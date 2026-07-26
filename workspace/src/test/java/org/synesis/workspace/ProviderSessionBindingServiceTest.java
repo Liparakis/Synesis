@@ -9,7 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.projectrecord.ProjectConfig;
+import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.HookApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.ProviderSessionBindingService;

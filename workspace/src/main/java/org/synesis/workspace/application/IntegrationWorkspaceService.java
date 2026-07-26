@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import org.synesis.coordination.TaskSnapshotRecord;
+import org.synesis.coordination.domain.TaskSnapshotRecord;
 
 /**
  * Manages dedicated Git integration worktrees for task integration.

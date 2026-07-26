@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import org.synesis.coordination.PredictionEventStore;
-import org.synesis.coordination.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -300,7 +300,7 @@ public final class ReconciliationService {
                             for (var entryOwnership : coordProj.ownerships().entrySet()) {
                                 var claim = entryOwnership.getValue();
                                 if (entry.targetResourceId().equals(claim.taskId().toString())) {
-                                    org.synesis.coordination.CoordinationCommand relCmd = org.synesis.coordination.CoordinationCommand.create(
+                                    org.synesis.coordination.domain.CoordinationCommand relCmd = org.synesis.coordination.domain.CoordinationCommand.create(
                                             UUID.randomUUID(), store.projectId(), claim.taskId(),
                                             PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(),
                                             claim.encoded(), identity);

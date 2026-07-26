@@ -17,11 +17,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
-import org.synesis.coordination.CapabilityRequestProjection;
-import org.synesis.coordination.CapabilityRequestRecord;
-import org.synesis.coordination.PredictionEventStore;
-import org.synesis.coordination.TaskCompletionProjection;
-import org.synesis.coordination.TaskSnapshotRecord;
+import org.synesis.coordination.domain.CapabilityRequestProjection;
+import org.synesis.coordination.domain.CapabilityRequestRecord;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.TaskCompletionProjection;
+import org.synesis.coordination.domain.TaskSnapshotRecord;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.application.ProjectApplicationService;
 

@@ -8,10 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.coordination.CapabilityRequestRecord;
-import org.synesis.coordination.OwnershipRegistry;
-import org.synesis.coordination.PredictionEventStore;
-import org.synesis.coordination.PredictionEventType;
+import org.synesis.coordination.domain.CapabilityRequestRecord;
+import org.synesis.coordination.domain.OwnershipRegistry;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.PredictionEventType;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
@@ -113,7 +113,7 @@ public final class AgentTaskCancellationService {
             UUID taskId = deriveTaskId(binding);
 
             // Check if task is already integrated or integrating
-            if (store.taskCompletionProjection().taskState(taskId) == org.synesis.coordination.TaskCompletionState.INTEGRATED) {
+            if (store.taskCompletionProjection().taskState(taskId) == org.synesis.coordination.domain.TaskCompletionState.INTEGRATED) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.WAIT, Map.of("reason", "task_not_cancellable"));
             }
 
@@ -149,7 +149,7 @@ public final class AgentTaskCancellationService {
             for (var entry : coordProj.ownerships().entrySet()) {
                 var claim = entry.getValue();
                 if (callerNodeId.equals(claim.ownerNodeId()) && taskId.equals(claim.taskId())) {
-                    org.synesis.coordination.CoordinationCommand relCmd = org.synesis.coordination.CoordinationCommand.create(
+                    org.synesis.coordination.domain.CoordinationCommand relCmd = org.synesis.coordination.domain.CoordinationCommand.create(
                             UUID.randomUUID(), store.projectId(), claim.taskId(),
                             PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(),
                             claim.encoded(), identity);

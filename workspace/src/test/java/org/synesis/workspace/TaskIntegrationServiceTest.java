@@ -3,7 +3,7 @@ package org.synesis.workspace;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.synesis.coordination.TaskSnapshotRecord;
+import org.synesis.coordination.domain.TaskSnapshotRecord;
 import org.synesis.workspace.application.TaskSnapshotService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

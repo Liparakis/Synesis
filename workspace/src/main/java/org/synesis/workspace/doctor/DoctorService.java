@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import org.synesis.coordination.PredictionEventStore;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.cleanup.CleanupEligibilityService;
 import org.synesis.workspace.cleanup.LifecycleInventoryService;

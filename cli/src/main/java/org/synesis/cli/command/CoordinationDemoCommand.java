@@ -12,20 +12,20 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import org.synesis.coordination.CoordinationCommand;
-import org.synesis.coordination.CoordinationHttpClient;
-import org.synesis.coordination.CoordinationHttpServer;
-import org.synesis.coordination.OwnershipRegistry;
-import org.synesis.coordination.PredictionContract;
-import org.synesis.coordination.PredictionEvent;
-import org.synesis.coordination.PredictionEventStore;
-import org.synesis.coordination.PredictionEventType;
-import org.synesis.coordination.PredictionIntegrationGate;
-import org.synesis.coordination.PredictionState;
-import org.synesis.coordination.SpeculationWorkspace;
+import org.synesis.coordination.domain.CoordinationCommand;
+import org.synesis.coordination.transport.http.CoordinationHttpClient;
+import org.synesis.coordination.transport.http.CoordinationHttpServer;
+import org.synesis.coordination.domain.OwnershipRegistry;
+import org.synesis.coordination.domain.PredictionContract;
+import org.synesis.coordination.domain.PredictionEvent;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.PredictionEventType;
+import org.synesis.coordination.domain.PredictionIntegrationGate;
+import org.synesis.coordination.domain.PredictionState;
+import org.synesis.coordination.domain.SpeculationWorkspace;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.projectrecord.ProjectConfig;
+import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.integration.antigravity.AntigravityHookAdapter;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -95,7 +95,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
     }
 
     private static String implementationSource() {
-        return "package org.synesis.workspace.application;\n\nimport java.util.UUID;\nimport org.synesis.coordination.PredictionProjection;\nimport org.synesis.coordination.PredictionState;\n\n/** Owner capability for querying prediction state. */\npublic final class SupervisorApplicationService {\n    private final PredictionProjection projection;\n    /** Creates the service. */\n    public SupervisorApplicationService(PredictionProjection projection) { this.projection = projection; }\n    /** Returns one prediction state. */\n    public PredictionState predictionStatus(UUID predictionId) { return projection.state(predictionId).orElseThrow(); }\n}\n";
+        return "package org.synesis.workspace.application;\n\nimport java.util.UUID;\nimport org.synesis.coordination.domain.PredictionProjection;\nimport org.synesis.coordination.domain.PredictionState;\n\n/** Owner capability for querying prediction state. */\npublic final class SupervisorApplicationService {\n    private final PredictionProjection projection;\n    /** Creates the service. */\n    public SupervisorApplicationService(PredictionProjection projection) { this.projection = projection; }\n    /** Returns one prediction state. */\n    public PredictionState predictionStatus(UUID predictionId) { return projection.state(predictionId).orElseThrow(); }\n}\n";
     }
 
     private static String run(Path directory, String... command) throws Exception {
@@ -152,7 +152,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
     private int coordinator() throws Exception {
         NodeIdentity identity = identity();
         var store = new PredictionEventStore(data, projectId);
-        var service = new org.synesis.coordination.CoordinationService(store, identity);
+        var service = new org.synesis.coordination.application.CoordinationService(store, identity);
         try (CoordinationHttpServer server = new CoordinationHttpServer(service,
                 new InetSocketAddress("127.0.0.1", port))) {
             server.start();

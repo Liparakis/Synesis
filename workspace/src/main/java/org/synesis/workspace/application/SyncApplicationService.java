@@ -14,14 +14,14 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
-import org.synesis.link.transport.Onboarding;
-import org.synesis.link.transport.OnboardingEventType;
-import org.synesis.link.transport.OnboardingFailure;
-import org.synesis.link.transport.OnboardingFailureCode;
-import org.synesis.projectrecord.DecisionStore;
-import org.synesis.projectrecord.ProjectConfig;
-import org.synesis.projectrecord.ProjectReconciliationSync;
-import org.synesis.projectrecord.ProjectRecordSync;
+import org.synesis.link.onboarding.Onboarding;
+import org.synesis.link.onboarding.OnboardingEventType;
+import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.onboarding.OnboardingFailureCode;
+import org.synesis.projectrecord.persistence.DecisionStore;
+import org.synesis.projectrecord.domain.ProjectConfig;
+import org.synesis.projectrecord.sync.ProjectReconciliationSync;
+import org.synesis.projectrecord.sync.ProjectRecordSync;
 
 /**
  * Owns project synchronization orchestration for the unified CLI.

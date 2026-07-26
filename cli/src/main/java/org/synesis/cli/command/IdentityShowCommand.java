@@ -6,7 +6,7 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.link.transport.OnboardingFailure;
+import org.synesis.link.onboarding.OnboardingFailure;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

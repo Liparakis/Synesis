@@ -524,7 +524,77 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 - [x] **SYN-014C** — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation `[DONE]`
 - [x] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[DONE]`
-- [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[ACTIVE]`
+- [ ] **STRUCT-1** — Reorganize Synesis package structure `[ACTIVE]`
+- [/] **STRUCT-1A** — Foundational packages `[ACTIVE]`
+- [ ] **STRUCT-1B** — Workspace packages `[READY]`
+- [ ] **STRUCT-1C** — MCP packages `[READY]`
+- [ ] **STRUCT-1D** — CLI packages `[READY]`
+- [/] **SYN-014E** — Post-MVP Hardening Slice 5: Versioned installation, atomic activation, and migration `[READY]`
+
+## STRUCT-1
+
+- ID: STRUCT-1
+- Priority: P0
+- Title: Reorganize Synesis package structure
+- Status: ACTIVE
+- Purpose: Improve package organization and dependency direction in staged, independently validated slices without changing runtime behavior or public surfaces.
+- Dependencies: clean working tree; existing module boundaries preserved.
+- Acceptance criteria: `STRUCT-1A` through `STRUCT-1D` each complete with clean preflight, zero stale production references for moved package names, required verification passing, checkpoint evidence, and one coherent commit per slice.
+- Required tests: per-subtask Gradle verification, root `check`, bootstrap Go test/vet, MCP 11-tool verification where required, and stale-reference searches.
+- Scope boundary: no module moves, no new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, no provider/schema/reason-code/event-format changes, and no deduplication/warning/god-class cleanup.
+- Evidence: pending; `STRUCT-1A` is active.
+
+## STRUCT-1A
+
+- ID: STRUCT-1A
+- Priority: P0
+- Title: Foundational packages
+- Status: ACTIVE
+- Purpose: Reorganize foundational packages inside `:project-record`, `:coordination`, and `:link` only.
+- Dependencies: STRUCT-1 ACTIVE; clean working tree; durable state reconciled before production edits.
+- Acceptance criteria: `project-record` split into `domain`, `persistence`, `security`, `sync`, `sync.protocol`, and `guardrail`; `coordination` split into `domain`, `application`, `persistence`, and `transport.http`; `link` split into `transport.quic`, `transport.control`, `onboarding`, and `cli`; `DemoCli` moved to `org.synesis.link.cli`; Gradle main-class string updated; zero stale production references to moved foundational-package FQNs remain.
+- Required tests: `.\gradlew.bat :project-record:check --no-daemon`; `.\gradlew.bat :coordination:check --no-daemon`; `.\gradlew.bat :link:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
+- Scope boundary: no cross-module type moves, no new abstractions except minimal access-preservation changes forced by package movement, no behavioral rewrites.
+- Evidence: pending.
+
+## STRUCT-1B
+
+- ID: STRUCT-1B
+- Priority: P0
+- Title: Workspace packages
+- Status: READY
+- Purpose: Reorganize the `:workspace` module into application, provider, lifecycle, project, and responsibility-specific infrastructure packages.
+- Dependencies: STRUCT-1A DONE.
+- Acceptance criteria: approved workspace package map applied; provider-specific adapters moved under provider packages; no `workspace.infrastructure.workspace`; only the proven package cycles are resolved; any new interface/value type remains within the allowed narrow exceptions; architecture tests enforce the new dependency direction.
+- Required tests: `.\gradlew.bat :workspace:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
+- Scope boundary: no CLI/MCP/package work outside what workspace references require to compile and verify; no behavior changes.
+- Evidence: pending.
+
+## STRUCT-1C
+
+- ID: STRUCT-1C
+- Priority: P0
+- Title: MCP packages
+- Status: READY
+- Purpose: Separate MCP protocol, stdio transport, and application routing packages while preserving the stable server entrypoint where practical.
+- Dependencies: STRUCT-1B DONE.
+- Acceptance criteria: `org.synesis.mcp.protocol`, `org.synesis.mcp.transport.stdio`, and `org.synesis.mcp.application` implemented; only necessary main-class and process-test references updated; a real MCP wire sequence completes `initialize`, `tools/list`, and exact 11-tool confirmation.
+- Required tests: `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
+- Scope boundary: no MCP schema/tool-count changes and no unrelated CLI/package cleanup.
+- Evidence: pending.
+
+## STRUCT-1D
+
+- ID: STRUCT-1D
+- Priority: P0
+- Title: CLI packages
+- Status: READY
+- Purpose: Split the flat CLI command package by command family and align tests to production package ownership.
+- Dependencies: STRUCT-1C DONE.
+- Acceptance criteria: command-family packages applied; `SynesisCli` remains in `org.synesis.cli`; CLI tests mirror the production package they exercise; CLI help and provider commands remain unchanged.
+- Required tests: `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `bootstrap\go test -count=1 ./...`; `bootstrap\go vet ./...`.
+- Scope boundary: no surface changes, no new dependencies, and no unrelated implementation cleanup.
+- Evidence: pending.
 
 ## SYN-014C
 
@@ -555,7 +625,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - ID: SYN-014E
 - Priority: P0
 - Title: Post-MVP Hardening Slice 5C.1: Real-provider acceptance and evidence correction
-- Status: ACTIVE
+- Status: READY
 - Purpose: Commit the intentional CLI edits, correct update/rollback preservation evidence boundaries, and complete real-provider acceptance where provider access permits.
 - Dependencies: SYN-014D DONE at CP-0190; existing SYN-009C/SYN-009D bootstrap evidence.
 - Acceptance criteria: five CLI edits committed; update-only and rollback-only history/snapshot comparisons are explicit and pass; real Codex and Antigravity sessions are validated where available; MCP surface remains unchanged; no false collaboration claim is made. Current slice additionally requires canonical `claude` provider installation for Claude Code project `.mcp.json`, `claude-code` input compatibility, unrelated configuration preservation, and no Claude Desktop changes.

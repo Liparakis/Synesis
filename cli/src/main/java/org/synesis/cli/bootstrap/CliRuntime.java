@@ -6,7 +6,7 @@ import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.cli.terminal.Terminal;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.link.transport.Onboarding;
+import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ConstraintApplicationService;
 import org.synesis.workspace.application.GuardrailApplicationService;
 import org.synesis.workspace.application.HookApplicationService;

@@ -2,8 +2,8 @@ package org.synesis.cli.terminal;
 
 import java.util.function.Consumer;
 
-import org.synesis.link.transport.OnboardingEvent;
-import org.synesis.link.transport.OnboardingEventType;
+import org.synesis.link.onboarding.OnboardingEvent;
+import org.synesis.link.onboarding.OnboardingEventType;
 
 /**
  * Maps typed Link events to the stable terminal status contract.

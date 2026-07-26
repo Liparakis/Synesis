@@ -1,8 +1,8 @@
 package org.synesis.cli.exit;
 
 import org.synesis.cli.terminal.Terminal;
-import org.synesis.link.transport.OnboardingFailure;
-import org.synesis.link.transport.OnboardingFailureCode;
+import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.onboarding.OnboardingFailureCode;
 
 /**
  * Maps typed Link failures to stable numeric exits and redacted diagnostics.

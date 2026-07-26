@@ -5,7 +5,7 @@ import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.PredictionEventStore;
+import org.synesis.coordination.persistence.PredictionEventStore;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

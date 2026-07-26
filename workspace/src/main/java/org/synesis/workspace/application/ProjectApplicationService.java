@@ -12,7 +12,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.projectrecord.ProjectConfig;
+import org.synesis.projectrecord.domain.ProjectConfig;
 
 /**
  * Owns project discovery, initialization, and project-local profile paths.
