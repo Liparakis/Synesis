@@ -1275,3 +1275,15 @@ Append-only operational history.
 - The initialized-project generated template remains owned by
   `ProjectApplicationService` and was not conflated with the repository
   contract.
+# 2026-07-27 — SYN-019 workspace architecture-test closure
+
+- Reproduced `WorkspaceApplicationPackageArchitectureTest` failure.
+- Inspected the production root and callers: only `ProjectApplicationService`
+  remains directly under `org.synesis.workspace.application`; the other names
+  in the test allowlist already live in `application.constraint` or
+  `application.provider` and have updated callers.
+- Narrowed the architecture-test allowlist to `ProjectApplicationService` only;
+  no production type moved and no behavior or public surface changed.
+- `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go test/vet,
+  focused MCP 11-tool tests, CLI help/version, provider list, init, and hygiene
+  checks pass. Commit: `a87d3d8`.

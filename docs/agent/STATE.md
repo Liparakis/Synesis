@@ -106,6 +106,13 @@ Go tests/vet, CLI help/version, provider list, and generated init instructions
 pass. No safe script consolidation was identified; no historical evidence was
 deleted or rewritten.
 
+SYN-019 closes that stale architecture rule at `a87d3d8`. Inspection found only
+`ProjectApplicationService.java` directly under the application root; the test
+allowlist was narrowed to that deliberate stable facade. No production type,
+runtime behavior, module dependency, CLI/MCP/provider surface, schema, or event
+format changed. All requested Gradle, Go, MCP, CLI, provider, init, and hygiene
+checks pass. An unrelated README edit was preserved outside this task.
+
 `STRUCT-1B` was restricted to intra-module package restructuring inside
 `:workspace`. It completed with `workspace.application`, `workspace.project`,
 `workspace.provider` and provider-specific subtrees, lifecycle packages, and

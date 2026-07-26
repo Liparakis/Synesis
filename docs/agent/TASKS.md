@@ -1005,7 +1005,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-018
 - Priority: P1
 - Title: Repository documentation and script hygiene
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Inventory, reconcile, organize, and verify maintained Markdown,
   generated agent instructions, repository scripts, and documentation links
   without changing product behavior or the CLI/MCP/provider surfaces.
@@ -1024,7 +1024,27 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - Scope boundary: no production behavior, CLI/MCP surface, provider ID/alias,
   durable schema, event history, signed evidence, updater/signing semantics,
   remote networking, provider-process termination, or forced worktree removal.
-- Evidence: in progress; baseline at `a67dd00` exposed a failing stale
-  `WorkspaceApplicationPackageArchitectureTest` assertion and parallel-test
-  result-file races, which are preserved as pre-existing blockers for final
-  verification rather than fixed in this hygiene task.
+- Evidence: PASS — complete at commits `4b7f530`, `59f7c63`, `39f7ff4`, and `501bbca`;
+  maintained documentation, generated instructions, hygiene checks, and
+  checkpoint evidence are recorded. The architecture-test mismatch was
+  promoted to SYN-019 and closed separately.
+
+## SYN-019
+
+- ID: SYN-019
+- Priority: P1
+- Title: Close workspace application package architecture rule
+- Status: ACTIVE
+- Purpose: Reconcile the workspace application root-package architecture test
+  with the completed package refactor without changing runtime behavior.
+- Dependencies: SYN-018 hygiene complete; `SYN-014E` remains paused.
+- Acceptance criteria: only deliberate stable application facades remain under
+  `org.synesis.workspace.application`; internal collaborators remain in
+  responsibility-specific packages; the focused architecture test, module
+  checks, full Gradle check, Go test/vet, MCP 11-tool tests, and CLI/provider
+  invariants pass; exactly one narrow correction commit and checkpoint are
+  recorded.
+- Scope boundary: no production behavior, runtime/package redesign, duplication
+  cleanup, CLI/MCP/provider changes, schemas, event formats, documentation
+  modernization, live demos, or networking work.
+- Evidence: the root production directory contains only `ProjectApplicationService.java`; the stale test allowlist was corrected in commit `a87d3d8`.

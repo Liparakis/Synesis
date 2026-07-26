@@ -2,48 +2,42 @@
 
 ## Identity
 
-- Task ID: SYN-018
+- Task ID: SYN-019
 - Status: ACTIVE
 - Priority: P1
-- Started checkpoint: pending hygiene checkpoint
-- Responsible agent: primary repository-hygiene engineer
+- Started checkpoint: CP-0230
+- Responsible agent: primary architecture-closure engineer
 - Related decisions: ADR-0001, ADR-0008; no architecture change
 
 ## Objective
 
-Inventory and clean maintained documentation, Markdown, and repository scripts without changing production behavior or public surfaces.
+Close the workspace application package architecture test without changing runtime behavior or public surfaces.
 
 ## Immediate slice
 
-Inventory, documentation cleanup, generated-instruction update, script review,
-and hygiene-check implementation are complete. Historical checkpoints,
-evidence, ADRs, and signed records were excluded from modernization edits.
+Inspection found one root production type, `ProjectApplicationService`, and the
+architecture test had a stale five-type allowlist after the completed package
+refactor. The allowlist was narrowed to the one deliberate stable facade.
 
 ## Verification target
 
-No broken maintained links or script references, no machine-specific paths in user-facing docs, no stale canonical-provider command examples, no inaccurate MCP tool-count claims, and no CLI/MCP/provider behavior changes.
+Only deliberate stable application facades remain at the root; internal
+responsibilities remain in subpackages; no runtime, module, CLI, MCP, provider,
+schema, or event-format changes occurred.
 
 ## Immediate next action
 
-Keep `SYN-014E` paused and leave the pre-existing workspace architecture-test
-mismatch for a separately authorized structural task; do not change production
-code under this hygiene task.
+Run the final resume/doctor checks, confirm the narrow commit and checkpoint,
+and leave the unrelated README edit untouched.
 
 ## Work completed
 
-`SYN-015` and `SYN-016` are complete. The prior `SYN-017` package slice is
-preserved as historical implementation work, but its current architecture test
-was not repaired as part of hygiene. `SYN-014E` remains paused. Documentation
-commit `4b7f530` and hygiene-check commit `59f7c63` are complete. No safe script
-consolidation was identified.
+`SYN-018` hygiene is complete. `SYN-019` is corrected in `a87d3d8`; no
+production type moved and the stale allowlist was narrowed to
+`ProjectApplicationService.java`. `SYN-014E` remains paused.
 
 ## Current failures
 
-The exact final root `check --no-daemon` fails only at the pre-existing
-`WorkspaceApplicationPackageArchitectureTest.rootContainsOnlyStableFacades`
-assertion. The earlier parallel-test result-file race is gone in the sequential
-rerun. Focused MCP tests, Go test/vet, CLI help/version, provider list, init
-instruction generation, and `repositoryHygieneCheck` pass. The prompt's
-`bootstrap\go` path is absent; equivalent Go commands run from the `bootstrap`
-module with the installed `go` executable. This hygiene task does not alter
-production package behavior to hide the architecture-test blocker.
+All requested architecture, module, root Gradle, Go, MCP, CLI, provider, and
+hygiene checks pass. An unrelated README edit is uncommitted and was preserved;
+it is outside this task and must not be reverted or included.
