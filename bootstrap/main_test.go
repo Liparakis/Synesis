@@ -308,6 +308,28 @@ func TestPreparedVersionedUpdateRetainsPayloadAndRollsBack(t *testing.T) {
 	assertStableVersion(t, paths, "0.1.0")
 }
 
+func TestVersionedActivationMovesBeforePayloadHardening(t *testing.T) {
+	root := t.TempDir()
+	staging := filepath.Join(root, "install.staging")
+	targetParent := filepath.Join(root, "install", "versions")
+	target := filepath.Join(targetParent, "0.1.0-test")
+	if err := os.MkdirAll(filepath.Join(staging, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "bin", "synesis"), []byte("payload"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(targetParent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := makePayloadImmutable(staging); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(staging, target); err != nil {
+		t.Fatalf("immutable staging bundle could not be moved: %v", err)
+	}
+}
+
 func TestActivePointerRejectsTraversal(t *testing.T) {
 	paths, err := installationPaths(filepath.Join(t.TempDir(), "install"))
 	if err != nil {

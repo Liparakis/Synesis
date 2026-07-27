@@ -27,19 +27,22 @@ schema, or event-format changes occurred.
 
 ## Immediate next action
 
-Leave the unrelated README edit untouched; no further architecture changes are
-authorized under this closure task.
+Record the verified bootstrap portability correction and leave the unrelated
+README edit untouched. No further implementation is authorized in this slice.
 
 ## Work completed
 
 `SYN-018` hygiene is complete. `SYN-019` is corrected in `a87d3d8`; no
 production type moved and the stale allowlist was narrowed to
-`ProjectApplicationService.java`. `SYN-014E` remains paused.
+`ProjectApplicationService.java`. The user explicitly authorized one narrow
+bootstrap portability correction for the GitHub Actions failure; `SYN-014E`
+remains paused. The correction moves a validated versioned payload before
+applying immutable permissions and restores/removes a partially hardened
+payload if hardening fails.
 
 ## Current failures
 
-All requested architecture, module, root Gradle, Go, MCP, CLI, provider, and
-hygiene checks passed before the unrelated README edit appeared. That preserved
-uncommitted README edit currently makes `repositoryHygieneCheck` misread its
-`MCP%20tools-11` badge URL as a 20-tool claim. It is outside this task and must
-not be reverted or included.
+The original GitHub Actions failure is not reproducible on this Windows host.
+Bootstrap `go test -count=1 ./...`, `go vet ./...`, `git diff --check`, and all
+six CI target cross-builds pass after the portability correction. The unrelated
+README edit remains outside this task and must not be reverted or included.

@@ -1046,5 +1046,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   recorded.
 - Scope boundary: no production behavior, runtime/package redesign, duplication
   cleanup, CLI/MCP/provider changes, schemas, event formats, documentation
-  modernization, live demos, or networking work.
+  modernization, live demos, or networking work. Explicit exception authorized
+  by the user: one narrow Go bootstrap portability fix for versioned activation
+  ordering, with no broader installer behavior change.
 - Evidence: the root production directory contains only `ProjectApplicationService.java`; the stale test allowlist was corrected in commit `a87d3d8`.

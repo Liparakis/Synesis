@@ -1289,3 +1289,18 @@ Append-only operational history.
   checks pass before the unrelated README edit appeared. That edit triggers a
   false positive in the existing hygiene count regex (`%20tools-11`) and was
   preserved outside this task. Commit: `a87d3d8`.
+## 2026-07-27 — Bootstrap versioned activation portability correction
+
+- Checkpoint: CP-0235
+- Active task: SYN-019, with explicit user authorization for one narrow Go
+  bootstrap portability correction.
+- Completed work: Versioned activation now moves the validated payload into its
+  final version directory before applying immutable permissions. If hardening
+  fails, the partially hardened payload is made removable and deleted.
+- Verification: `go test -count=1 ./...`, `go vet ./...`, `git diff --check`, and
+  all six CI target cross-builds pass. The original failure is not reproducible
+  on the local Windows host.
+- Failed attempts: None.
+- Remaining work: Review and commit disposition; do not modify the unrelated
+  README edit.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

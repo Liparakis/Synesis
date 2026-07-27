@@ -58,7 +58,7 @@ type manifest struct {
 	PublishedAt             string              `json:"publishedAt"`
 	MinimumBootstrapVersion string              `json:"minimumBootstrapVersion"`
 	DevelopmentOnly         bool                `json:"developmentOnly"`
-	SigningKeyID             string              `json:"signingKeyId,omitempty"`
+	SigningKeyID            string              `json:"signingKeyId,omitempty"`
 	Artifacts               map[string]artifact `json:"artifacts"`
 }
 
@@ -94,7 +94,7 @@ type updatePlan struct {
 	MigrationState          string               `json:"migrationState"`
 	RollbackCompatibility   string               `json:"rollbackCompatibility"`
 	LiveProjectSessionState string               `json:"liveProjectSessionState"`
-	AcceptanceMode          bool                `json:"acceptanceMode,omitempty"`
+	AcceptanceMode          bool                 `json:"acceptanceMode,omitempty"`
 	CanonicalHash           string               `json:"canonicalHash"`
 }
 
@@ -803,10 +803,13 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 		if err := writePayloadManifest(bundle, m.Version, manifestData); err != nil {
 			return err
 		}
-		if err := makePayloadImmutable(bundle); err != nil {
+		if err := os.Rename(bundle, target); err != nil {
 			return err
 		}
-		if err := os.Rename(bundle, target); err != nil {
+		if err := makePayloadImmutable(target); err != nil {
+			if restoreErr := removePayload(target); restoreErr != nil {
+				return fmt.Errorf("payload hardening failed: %w; cleanup failed: %v", err, restoreErr)
+			}
 			return err
 		}
 	}
@@ -912,6 +915,26 @@ func makePayloadImmutable(bundle string) error {
 		}
 		return os.Chmod(path, 0o444)
 	})
+}
+
+// removePayload makes a partially hardened payload removable before cleanup.
+func removePayload(bundle string) error {
+	if err := filepath.Walk(bundle, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return os.Chmod(path, 0o755)
+		}
+		mode := os.FileMode(0o644)
+		if info.Mode()&0o111 != 0 || filepath.Base(path) == launcherName() {
+			mode = 0o755
+		}
+		return os.Chmod(path, mode)
+	}); err != nil {
+		return err
+	}
+	return os.RemoveAll(bundle)
 }
 
 func writeStableLauncher(paths installPaths) error {
