@@ -5,10 +5,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.synesis.workspace.provider.codex.CodexHookAdapter;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderSupportLevel;
+import org.synesis.workspace.provider.ProviderMcpEvidenceTier;
 
 /**
  * Codex project-local PreToolUse provider integration.
@@ -62,6 +62,11 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     @Override
     public ProviderSupportLevel supportLevel() {
         return ProviderSupportLevel.EXPERIMENTAL;
+    }
+
+    @Override
+    public ProviderMcpEvidenceTier mcpEvidenceTier() {
+        return ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING;
     }
 
     @Override

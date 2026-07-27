@@ -2,10 +2,10 @@ package org.synesis.workspace.provider.claude;
 
 import java.nio.file.Path;
 
-import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderSupportLevel;
+import org.synesis.workspace.provider.ProviderMcpEvidenceTier;
 
 /**
  * Claude Code provider configuration and synthetic hook contract.
@@ -34,6 +34,11 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     @Override
     public ProviderSupportLevel supportLevel() {
         return ProviderSupportLevel.EXPERIMENTAL;
+    }
+
+    @Override
+    public ProviderMcpEvidenceTier mcpEvidenceTier() {
+        return ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING;
     }
 
     @Override

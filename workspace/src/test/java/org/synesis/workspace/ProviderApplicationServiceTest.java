@@ -42,6 +42,12 @@ final class ProviderApplicationServiceTest {
         assertEquals(org.synesis.workspace.provider.ProviderSupportLevel.EXPERIMENTAL,
                 ProviderRegistry.find("codex")
                         .supportLevel());
+        assertEquals(org.synesis.workspace.provider.ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING,
+                ProviderRegistry.find("codex")
+                        .mcpEvidenceTier());
+        assertEquals(org.synesis.workspace.provider.ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING,
+                ProviderRegistry.find("claude")
+                        .mcpEvidenceTier());
         assertEquals("REVIEW_REQUIRED",
                 ProviderRegistry.find("codex")
                         .trustStatus());

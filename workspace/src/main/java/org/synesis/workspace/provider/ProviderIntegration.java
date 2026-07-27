@@ -32,6 +32,15 @@ public interface ProviderIntegration {
     ProviderSupportLevel supportLevel();
 
     /**
+     * Returns the independently tracked MCP evidence tier.
+     *
+     * @return MCP evidence tier
+     */
+    default ProviderMcpEvidenceTier mcpEvidenceTier() {
+        return ProviderMcpEvidenceTier.MCP_CONFIG_DISCOVERED;
+    }
+
+    /**
      * Resolves the provider configuration path.
      *
      * @param projectRoot project root

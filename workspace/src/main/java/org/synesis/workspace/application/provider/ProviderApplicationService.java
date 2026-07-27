@@ -1,4 +1,5 @@
 package org.synesis.workspace.application.provider;
+
 import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -70,9 +71,9 @@ public final class ProviderApplicationService {
                 values.put("ASSIGNED_WORKTREE", binding.worktreePath() == null ? "UNASSIGNED" : binding.worktreePath());
                 values.put("ACTIVE_WORKSPACE",
                         hasEvidence && binding.worktreePath() != null ? binding.worktreePath() : "UNPROVEN");
-                values.put("HOOK_INTERCEPTED", hasEvidence ? "true" : "false");
+                values.put("HOOK_INTERCEPTED", Boolean.toString(hasEvidence));
                 values.put("DECISION", hasEvidence ? "ALLOW" : "UNKNOWN");
-                values.put("MUTATION_WITHOUT_ALLOW_POSSIBLE", hasEvidence ? "false" : "true");
+                values.put("MUTATION_WITHOUT_ALLOW_POSSIBLE", Boolean.toString(!hasEvidence));
                 if ("codex".equals(provider) && "VERIFIED".equals(binding.providerTrustState())) {
                     values.put("CODEX_PROVIDER_STATUS", "BROKERED_MUTATION_READY");
                 }
@@ -312,7 +313,8 @@ public final class ProviderApplicationService {
             throws IOException {
         Path config = provider.configurationPath(worktree);
         Map<String, Object> root = Files.exists(config) ? readObject(config) : new LinkedHashMap<>();
-        Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(), ignored -> new LinkedHashMap<>()));
+        Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(),
+                ignored -> new LinkedHashMap<>()));
         List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
         hooks.removeIf(provider::isManagedHook);
         hooks.add(provider.managedHook(launcher, profile));
@@ -343,6 +345,9 @@ public final class ProviderApplicationService {
                 provider.id(),
                 "SUPPORT_LEVEL",
                 provider.supportLevel()
+                        .name(),
+                "MCP_EVIDENCE_TIER",
+                provider.mcpEvidenceTier()
                         .name(),
                 "CONFIG_PATH",
                 config.toString(),
@@ -377,6 +382,9 @@ public final class ProviderApplicationService {
                 provider.id(),
                 "SUPPORT_LEVEL",
                 provider.supportLevel()
+                        .name(),
+                "MCP_EVIDENCE_TIER",
+                provider.mcpEvidenceTier()
                         .name(),
                 "METADATA_PRESENT",
                 Boolean.toString(metadata),
@@ -536,8 +544,10 @@ public final class ProviderApplicationService {
             try {
                 ProviderSessionBindingService.BindingResult ensured = new ProviderSessionBindingService().ensure(
                         location, provider.id(), null);
-                if (ensured.binding().worktreePath() != null) {
-                    materializeHook(Path.of(ensured.binding().worktreePath()), provider, launcher, profile);
+                if (ensured.binding()
+                        .worktreePath() != null) {
+                    materializeHook(Path.of(ensured.binding()
+                            .worktreePath()), provider, launcher, profile);
                 }
                 return decorate(location, provider.id(), installedResult, ensured);
             } catch (ProviderSessionBindingService.BindingException bindingFailure) {
@@ -568,7 +578,9 @@ public final class ProviderApplicationService {
                         stableLauncher(isWindows() ? "synesis.cmd" : "synesis"));
                 Map<String, String> values = new LinkedHashMap<>(result.values());
                 values.put("MCP_CONFIG_PATH", path.toString());
-                values.put("MCP_CONFIG_STATUS", inspection.outcome().name());
+                values.put("MCP_CONFIG_STATUS",
+                        inspection.outcome()
+                                .name());
                 values.put("MCP_CONFIG_READ_ONLY", "true");
                 return new ProviderResult(result.exitCode(), values);
             } catch (Exception ignored) {
