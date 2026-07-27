@@ -21,7 +21,14 @@ public final class CodexNativePatchRouter {
     public CodexNativePatchRouter() {
     }
 
-    /** Routes one complete Codex patch into the assigned worktree. */
+    /**
+     * Routes one complete Codex patch into the assigned worktree.
+     *
+     * @param location initialized project location
+     * @param binding provider session binding
+     * @param patch complete Codex apply-patch payload
+     * @return route result
+     */
     public RouteResult route(ProjectApplicationService.ProjectLocation location,
             ProviderSessionBindingService.Binding binding, String patch) {
         Objects.requireNonNull(location, "location");
@@ -140,7 +147,12 @@ public final class CodexNativePatchRouter {
         return -1;
     }
 
-    /** Result of a routed native patch. */
+    /**
+     * Result of a routed native patch.
+     *
+     * @param handled whether Synesis handled the patch
+     * @param message bounded result message
+     */
     public record RouteResult(boolean handled, String message) {
         /** Validates the route result. */
         public RouteResult {

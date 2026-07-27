@@ -69,7 +69,14 @@ public record AgentResponse(
         return new AgentResponse(AgentStatus.READY, null, null, new AgentStatusResult(workspace, pending));
     }
 
-    /** Creates a readiness response with explicit assigned-worktree guidance. */
+    /**
+     * Creates a readiness response with explicit assigned-worktree guidance.
+     *
+     * @param workspace workspace state identifier
+     * @param pending pending coordination item count
+     * @param worktree assigned worktree path
+     * @return ready agent response
+     */
     public static AgentResponse ready(String workspace, int pending, String worktree) {
         return new AgentResponse(AgentStatus.READY, null, null,
                 new AgentStatusResult(workspace, pending, worktree,

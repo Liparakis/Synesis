@@ -115,12 +115,23 @@ public interface ProviderIntegration {
         return hook;
     }
 
-    /** Returns an optional managed session-start hook. */
+    /**
+     * Returns an optional managed session-start hook.
+     *
+     * @param launcher generated Synesis launcher
+     * @param profile local provider profile
+     * @return hook object, or {@code null} when unsupported
+     */
     default Map<String, Object> managedSessionHook(Path launcher, Path profile) {
         return null;
     }
 
-    /** Identifies an optional managed session-start hook. */
+    /**
+     * Identifies an optional managed session-start hook.
+     *
+     * @param value candidate JSON value
+     * @return true when the value belongs to this integration
+     */
     default boolean isManagedSessionHook(Object value) {
         return false;
     }
