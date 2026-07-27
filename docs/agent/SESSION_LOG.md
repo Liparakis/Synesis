@@ -42,6 +42,13 @@ Append-only operational history.
 - Remaining work: GitHub Actions verification.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
+## 2026-07-27 — Immutable bootstrap test cleanup
+
+- Completed work: Versioned-install tests now remove immutable installation roots
+  through the safe cleanup helper before Go's `TempDir` cleanup runs.
+- Verification: `go test -count=1 ./...` and `go vet ./...` pass locally.
+- Remaining work: GitHub Actions verification.
+
 ## 2026-07-25 — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation
 
 - Timestamp: 2026-07-25 Europe/Athens

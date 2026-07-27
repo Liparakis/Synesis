@@ -169,6 +169,10 @@ func TestLegacyLayoutMigration(t *testing.T) {
 	withoutPathMutation(t)
 	root := t.TempDir()
 	installRoot := filepath.Join(root, "Synesis with spaces")
+	t.Cleanup(func() {
+		_ = removeInstallationTree(installRoot)
+		_ = removeInstallationTree(installRoot + ".rollback")
+	})
 	paths, err := installationPaths(installRoot)
 	if err != nil {
 		t.Fatal(err)
@@ -237,6 +241,10 @@ func TestFailedActivationRestoresPreviousStableBundle(t *testing.T) {
 	withoutPathMutation(t)
 	root := t.TempDir()
 	installRoot := filepath.Join(root, "install")
+	t.Cleanup(func() {
+		_ = removeInstallationTree(installRoot)
+		_ = removeInstallationTree(installRoot + ".rollback")
+	})
 	oldArchive := writeBundleArchive(t, root, "0.1.0")
 	oldManifest := writeDevelopmentManifest(t, root, "0.1.0", oldArchive)
 	if err := runInstall("install", []string{"--manifest", fileURL(oldManifest), "--install-dir", installRoot}); err != nil {
@@ -261,6 +269,10 @@ func TestPreparedVersionedUpdateRetainsPayloadAndRollsBack(t *testing.T) {
 	withoutPathMutation(t)
 	root := t.TempDir()
 	installRoot := filepath.Join(root, "install")
+	t.Cleanup(func() {
+		_ = removeInstallationTree(installRoot)
+		_ = removeInstallationTree(installRoot + ".rollback")
+	})
 	v1 := writeBundleArchive(t, root, "0.1.0")
 	v2 := writeBundleArchive(t, root, "0.2.0")
 	m1 := writeDevelopmentManifest(t, root, "0.1.0", v1)

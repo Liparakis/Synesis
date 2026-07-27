@@ -47,4 +47,5 @@ The original GitHub Actions failure is not reproducible on this Windows host.
 Bootstrap `go test -count=1 ./...`, `go vet ./...`, and `git diff --check` pass
 after the follow-up launcher/removal correction. All six CI target
 cross-builds pass. The unrelated README edit remains outside this task and must
-not be reverted or included.
+not be reverted or included. Linux test cleanup now explicitly removes
+immutable installation roots before `t.TempDir` cleanup.
