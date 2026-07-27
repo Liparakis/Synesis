@@ -383,37 +383,16 @@ public final class McpProtocolHandler {
 
         String trimmed = input.trim();
         try {
-            String decoded = java.net.URLDecoder.decode(trimmed, java.nio.charset.StandardCharsets.UTF_8);
-            if (decoded.startsWith("file:")) {
-                String raw = decoded.substring(5);
-                while (raw.startsWith("/")) {
-                    raw = raw.substring(1);
-                }
-                return Path.of(raw)
+            if (trimmed.startsWith("file:")) {
+                return Path.of(java.net.URI.create(trimmed))
                         .toAbsolutePath()
                         .normalize();
             }
         } catch (Exception ignored) {
         }
 
-        if (trimmed.startsWith("file:")) {
-            try {
-                return Path.of(java.net.URI.create(trimmed))
-                        .toAbsolutePath()
-                        .normalize();
-            } catch (Exception ex) {
-                String raw = trimmed.substring(5);
-                while (raw.startsWith("/")) {
-                    raw = raw.substring(1);
-                }
-                return Path.of(raw)
-                        .toAbsolutePath()
-                        .normalize();
-            }
-        }
-
         try {
-            return Path.of(trimmed)
+            return Path.of(java.net.URLDecoder.decode(trimmed, java.nio.charset.StandardCharsets.UTF_8))
                     .toAbsolutePath()
                     .normalize();
         } catch (Exception ex) {

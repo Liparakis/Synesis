@@ -253,6 +253,9 @@ class McpServerTest {
         Path p2 = McpProtocolHandler.parseUriOrPath("file:///c%3A/Users/Liparakis/Desktop/SynesisTestProject");
         assertNotNull(p2);
         assertTrue(p2.toString().replace('\\', '/').toLowerCase().contains("synesistestproject"));
+
+        Path absoluteUnixUri = McpProtocolHandler.parseUriOrPath(tempRoot.toUri().toString());
+        assertEquals(tempRoot, absoluteUnixUri);
     }
 
     @Test

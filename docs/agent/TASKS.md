@@ -1048,5 +1048,6 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   cleanup, CLI/MCP/provider changes, schemas, event formats, documentation
   modernization, live demos, or networking work. Explicit exception authorized
   by the user: one narrow Go bootstrap portability fix for versioned activation
-  ordering, with no broader installer behavior change.
+  ordering, with no broader installer behavior change, plus the narrow Linux
+  MCP absolute-file-URI parsing regression reported by CI.
 - Evidence: the root production directory contains only `ProjectApplicationService.java`; the stale test allowlist was corrected in commit `a87d3d8`.

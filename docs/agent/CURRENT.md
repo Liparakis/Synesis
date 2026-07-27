@@ -27,8 +27,9 @@ schema, or event-format changes occurred.
 
 ## Immediate next action
 
-Record the verified bootstrap portability correction and leave the unrelated
-README edit untouched. No further implementation is authorized in this slice.
+Record the verified portability corrections, including the authorized Linux MCP
+file-URI regression fix, and leave the unrelated README edit untouched. No
+further implementation is authorized in this slice.
 
 ## Work completed
 
@@ -48,4 +49,8 @@ Bootstrap `go test -count=1 ./...`, `go vet ./...`, and `git diff --check` pass
 after the follow-up launcher/removal correction. All six CI target
 cross-builds pass. The unrelated README edit remains outside this task and must
 not be reverted or included. Linux test cleanup now explicitly removes
-immutable installation roots before `t.TempDir` cleanup.
+immutable installation roots before `t.TempDir` cleanup. A subsequent Linux CI
+failure identified incorrect stripping of leading slashes from absolute
+`file:` URIs in MCP root binding; that fix is now authorized for this slice.
+`McpServerTest` and `./gradlew.bat clean check --no-daemon
+--dependency-verification=strict` now pass locally.

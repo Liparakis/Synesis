@@ -40,6 +40,19 @@ Append-only operational history.
 - Failed attempts: The first portability correction fixed the staging rename but
   exposed launcher mode and immutable cleanup failures on Linux CI.
 - Remaining work: GitHub Actions verification.
+
+## 2026-07-27 — Linux MCP absolute file-URI binding correction
+
+- Completed work: `McpProtocolHandler.parseUriOrPath` now preserves absolute
+  Unix paths by parsing `file:` values through `Path.of(URI)`; a portable
+  absolute-file-URI regression assertion was added.
+- Root cause: the previous parser stripped all leading slashes from decoded
+  `file:` URIs, turning `/tmp/...` into a relative path on Linux while Windows
+  remained masked by drive-letter paths.
+- Verification: focused `McpServerTest` and full
+  `./gradlew.bat clean check --no-daemon --dependency-verification=strict`
+  pass locally.
+- Remaining work: review/commit disposition and GitHub Actions verification.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## 2026-07-27 — Immutable bootstrap test cleanup
