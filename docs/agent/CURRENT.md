@@ -38,11 +38,13 @@ production type moved and the stale allowlist was narrowed to
 bootstrap portability correction for the GitHub Actions failure; `SYN-014E`
 remains paused. The correction moves a validated versioned payload before
 applying immutable permissions and restores/removes a partially hardened
-payload if hardening fails.
+payload if hardening fails. The Unix stable launcher is explicitly restored to
+0755 after atomic replacement, and uninstall makes immutable trees removable.
 
 ## Current failures
 
 The original GitHub Actions failure is not reproducible on this Windows host.
-Bootstrap `go test -count=1 ./...`, `go vet ./...`, `git diff --check`, and all
-six CI target cross-builds pass after the portability correction. The unrelated
-README edit remains outside this task and must not be reverted or included.
+Bootstrap `go test -count=1 ./...`, `go vet ./...`, and `git diff --check` pass
+after the follow-up launcher/removal correction. All six CI target
+cross-builds pass. The unrelated README edit remains outside this task and must
+not be reverted or included.

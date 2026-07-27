@@ -30,6 +30,18 @@ Append-only operational history.
 - Remaining work: Post-MVP operational milestone.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
+## 2026-07-27 — Bootstrap launcher and immutable-tree cleanup correction
+
+- Checkpoint: CP-0236
+- Completed work: The Unix stable launcher is chmodded `0755` after atomic
+  replacement, and uninstall makes immutable installation trees removable.
+- Verification: `go test -count=1 ./...`, `go vet ./...`, and `git diff --check`
+  pass on the local Windows host. Docker was unavailable for a local Linux run.
+- Failed attempts: The first portability correction fixed the staging rename but
+  exposed launcher mode and immutable cleanup failures on Linux CI.
+- Remaining work: GitHub Actions verification.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-07-25 — Post-MVP Hardening Slice 3: Crash reconciliation and task cancellation
 
 - Timestamp: 2026-07-25 Europe/Athens

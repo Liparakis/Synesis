@@ -937,6 +937,25 @@ func removePayload(bundle string) error {
 	return os.RemoveAll(bundle)
 }
 
+// removeInstallationTree makes immutable installation directories removable.
+func removeInstallationTree(root string) error {
+	if !fileExists(root) {
+		return nil
+	}
+	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return os.Chmod(path, 0o755)
+		}
+		return os.Chmod(path, info.Mode().Perm()|0o200)
+	}); err != nil {
+		return err
+	}
+	return os.RemoveAll(root)
+}
+
 func writeStableLauncher(paths installPaths) error {
 	if runtime.GOOS == "windows" {
 		ps1 := `param([Parameter(ValueFromRemainingArguments=$true)][string[]]$ForwardArgs)
@@ -959,7 +978,10 @@ exit $LASTEXITCODE
 		}
 		return atomicWrite(paths.launcher, []byte("@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0synesis-launcher.ps1\" %*\r\nexit /b %ERRORLEVEL%\r\n"))
 	}
-	return atomicWrite(paths.launcher, []byte("#!/bin/sh\nset -eu\nr=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\np=\"$(sed -n 's/.*\"payloadDirectory\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$r/current.json\")\"\ncase \"$p\" in (''|*..*|*/*|*\\\\*) exit 1;; esac\ne=\"$r/versions/$p/bin/synesis\"\nexec \"$e\" \"$@\"\n"))
+	if err := atomicWrite(paths.launcher, []byte("#!/bin/sh\nset -eu\nr=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\np=\"$(sed -n 's/.*\"payloadDirectory\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$r/current.json\")\"\ncase \"$p\" in (''|*..*|*/*|*\\\\*) exit 1;; esac\ne=\"$r/versions/$p/bin/synesis\"\nexec \"$e\" \"$@\"\n")); err != nil {
+		return err
+	}
+	return os.Chmod(paths.launcher, 0o755)
 }
 
 func rollbackVersioned(paths installPaths) error {
@@ -1447,10 +1469,10 @@ func runUninstall(args []string) error {
 	if err := pathUpdater(paths, false); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(paths.root); err != nil {
+	if err := removeInstallationTree(paths.root); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(paths.rollback); err != nil {
+	if err := removeInstallationTree(paths.rollback); err != nil {
 		return err
 	}
 	entries, err := os.ReadDir(filepath.Dir(paths.root))
