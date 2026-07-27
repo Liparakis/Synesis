@@ -23,7 +23,7 @@ computer are `TWO_PROCESS_VERIFIED`, not `TWO_MACHINE_VERIFIED`.
 | Understandable CLI operation | MINIMAL_IMPLEMENTATION_REQUIRED | No production/demo entry point exists. Add a small source-run CLI using existing internal transport seams. |
 | Safe output suitable for recording | MINIMAL_IMPLEMENTATION_REQUIRED | CLI must redact keys, paths, and full endpoints by default. |
 | Reproducible commands | MINIMAL_IMPLEMENTATION_REQUIRED | Add `docs/demo/FIRST_DEMO.md` and CLI command contract. |
-| Truthful public claims | READY | Constrain claims with `DEFERRED.md`; physical claims remain blocked. |
+| Truthful public claims | READY | Constrain claims with `DEFERRED.md` and `NETWORK_VALIDATION_MATRIX.md`; physical claims remain blocked. |
 
 ## Minimum implementation
 
@@ -38,7 +38,8 @@ The CLI is a validation tool, not a production management application. It may
 use the existing internal Netty adapter behind a small public-free executable
 surface, but must not expose Netty types or private keys. The first source-run
 version can use explicit identity/descriptor files and a supplied TLS keystore;
-packaging remains SL-D-024.
+packaging is governed by SYN-009D evidence; historical `SL-D-024` is preserved
+in the deferred-functionality archive.
 
 No wire change to the existing SLH1 control protocol is required. The demo
 application stream gets its own magic/version and a bounded frame. Tests must
@@ -50,4 +51,5 @@ two-process exchange.
 NAT traversal, router mapping, STUN/TURN, relays, CGNAT, rendezvous, path
 migration, reconnection, session resumption, physical IPv6/public-IPv4 tests,
 temporary silence recovery, GUI, packaging, and production Synesis semantics
-are deferred in `DEFERRED.md`. Do not add them to this slice.
+are bounded by `DEFERRED.md` and the network validation matrix. Do not add
+them to this slice.

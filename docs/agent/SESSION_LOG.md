@@ -1336,3 +1336,18 @@ Append-only operational history.
 - Remaining work: Review and commit disposition; do not modify the unrelated
   README edit.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-07-27 — Deferred register refinement
+
+- Active task: SYN-019; documentation-only deferred-register cleanup authorized
+  by the user.
+- Completed work: Reduced the active register to nine realistic capabilities,
+  added contract invalidation, out-of-band mutation enforcement, and wait-for
+  deadlock detection, merged connectivity capabilities, archived historical
+  IDs SL-D-001 through SL-D-030, and created the network validation matrix.
+- Product boundary: no Synesis-hosted server, third-party rendezvous, STUN,
+  TURN, relay infrastructure, or production peer discovery dependency; no
+  harness intelligence or automatic harness-code rewriting claim.
+- Verification: deferred validator PASS (9 entries); `./gradlew.bat check
+  --no-daemon --dependency-verification=strict` PASS; bootstrap Go test and vet
+  PASS; repository hygiene and maintained Markdown link checks PASS.
+- Remaining work: Review, checkpoint, and commit this documentation slice.

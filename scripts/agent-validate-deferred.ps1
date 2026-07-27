@@ -20,9 +20,8 @@ if (-not (Test-Path $path -PathType Leaf))
 $text = Get-Content -Raw $path
 $allowed = @('DEFERRED', 'RESEARCH_REQUIRED', 'BLOCKED', 'READY_FOR_PLANNING', 'SUPERSEDED', 'CANCELLED')
 $required = @('Status', 'Area', 'Current verified capability', 'Missing capability', 'Reason deferred',
-'Dependencies', 'Activation trigger', 'Evidence required before planning', 'Security questions',
-'Privacy questions', 'Operational questions', 'Public-claims impact', 'Potential future task',
-'Related ADRs', 'Related documents', 'Code extension seams', 'Last reviewed')
+'Activation trigger', 'Evidence required before planning', 'Public-claims impact',
+'Related documents', 'Last reviewed')
 $entries = [regex]::Matches($text, '(?ms)^##\s+(SL-D-\d{3})\s+—[^\r\n]*\r?\n(?<body>.*?)(?=^##\s+|\z)')
 if ($entries.Count -eq 0)
 {
@@ -85,13 +84,22 @@ foreach ($file in $sourceFiles)
         }
     }
 }
-if ($text -notmatch '(?m)^## SL-D-001')
+$historyPath = Join-Path $RepositoryRoot 'docs/archive/DEFERRED_FUNCTIONALITY_HISTORY.md'
+if (-not (Test-Path $historyPath -PathType Leaf))
 {
-    Fail 'NAT traversal entry missing'
+    Fail 'Missing deferred functionality history archive'
 }
-if ($text -notmatch '(?m)^## SL-D-026')
+else
 {
-    Fail 'reserved relay entry missing'
+    $history = Get-Content -Raw $historyPath
+    foreach ($historicalId in 1..30)
+    {
+        $formattedId = 'SL-D-{0:D3}' -f $historicalId
+        if ($history -notmatch [regex]::Escape($formattedId))
+        {
+            Fail "Historical deferred ID missing from archive: $formattedId"
+        }
+    }
 }
 if ($errors -gt 0)
 {

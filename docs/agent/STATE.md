@@ -179,7 +179,8 @@ allowed.
 - Package-info files and the package-info verification task were intentionally removed at the user's request; strict Javadocs for public/protected API elements remain enabled.
 - Latest candidate-provider fix: targeted PASS; full strict check PASS.
 - Source/tooling artifact verification metadata: PASS; twenty-three exact SHA-256 entries cover main, test, Gradle, and Kotlin resolution.
-- Deferred register validation: PASS, 27 entries.
+- Deferred register validation: PASS, 9 active entries; historical IDs SL-D-001
+  through SL-D-030 are preserved in the deferred-functionality archive.
 - Local and two-process demo request/result: PASS.
 - CLI help and identity creation: PASS.
 - Invitation, identity-bootstrap, admission, QR, and strict Javadoc checks: PASS.
@@ -269,12 +270,15 @@ allowed.
 
 ## Honest limitations
 
-NAT traversal, router mappings, STUN/TURN, hole punching, CGNAT, relays,
-rendezvous, production discovery, physical path migration, reconnect,
-resumption, physical IPv6/public IPv4, temporary application-silence recovery,
-all-firewall operation, production installation/signing, GUI, and production
-Synesis semantics are not claimed. Abrupt child-process loss remains classified
-only as the documented transport-failure or liveness-expiry category.
+Serverless direct internet connectivity, manual forwarding, router mapping,
+hole punching, reconnection, physical IPv6/public IPv4, temporary
+application-silence recovery, and all-firewall operation are not claimed; see
+the deferred register and network validation matrix. Synesis intentionally has
+no STUN, TURN, relay, hosted rendezvous, or production peer-discovery
+dependency. Production installation/signing, GUI, and broad production
+cooperation semantics are also not claimed. Abrupt child-process loss remains
+classified only as the documented transport-failure or liveness-expiry
+category.
 ## SYN-011 Antigravity real-integration investigation
 
 - Preserved pre-change test-project evidence before modifications under

@@ -1,658 +1,131 @@
-﻿# Deferred Functionality Register
+# Deferred Functionality Register
 
-This register records intentionally postponed, unsupported, partially verified,
-research-dependent, physically unverified, or currently non-claimable work. It
-is not a roadmap, release promise, implementation permission, or evidence that
-a capability exists. `TASKS.md` contains committed implementation work.
+This is the active register of realistic future Synesis capabilities. It is
+not a roadmap, release promise, implementation permission, or evidence that a
+capability exists. Committed implementation work belongs in `TASKS.md`.
 
-Allowed statuses: `DEFERRED`, `RESEARCH_REQUIRED`, `BLOCKED`,
-`READY_FOR_PLANNING`, `SUPERSEDED`, `CANCELLED`.
+Synesis coordinates independent development harnesses; it does not own harness
+intelligence, model context, memory, reasoning, task decomposition, ranking, or
+automatic harness-code rewriting. Direct connectivity is serverless and
+operator-mediated. Unsupported topologies must fail explicitly.
 
-Promotion lifecycle: a deferred item stays here until its activation trigger
-and required evidence exist. Then it may become `READY_FOR_PLANNING`; a
-concrete task with acceptance criteria must be created and explicitly made the
-only `ACTIVE` task. Keep the entry until the task replaces it; then mark it
-`SUPERSEDED` with the task and checkpoint. Use `CANCELLED` only for a deliberate
-permanent scope decision and record the reason.
+Promotion requires an activation trigger, the listed evidence, an explicit task
+with acceptance criteria, and exactly one `ACTIVE` task. Historical IDs and
+dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/DEFERRED_FUNCTIONALITY_HISTORY.md).
 
-## SL-D-001 â€” NAT traversal
-
-**Status:** SUPERSEDED
-**Area:** Connectivity
-**Current verified capability:** Bounded direct connectivity using manual and eligible local-interface candidates, normalization, compatible pairing, and racing.
-**Missing capability:** General reachability through NATs and firewalls.
-**Reason deferred:** Connection racing is not NAT traversal.
-**Dependencies:** Router mapping/discovery, server-reflexive candidates, coordinated attempts, QUIC constraints.
-**Activation trigger:** A product requirement for topologies not served by direct candidates.
-**Evidence required before planning:** Two-machine router matrix covering firewall/NAT classes and failure cleanup.
-**Security questions:** Endpoint authenticity, spoofing, amplification, consent, and abuse limits.
-**Privacy questions:** Address disclosure, router metadata, and third-party observation.
-**Operational questions:** Support ownership, timeouts, diagnostics, and failure policy.
-**Public-claims impact:** Do not claim universal peer-to-peer connectivity.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/protocol/SYNESIS_LINK_V1.md`, `docs/security/THREAT_MODEL.md`, `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** Candidate provider/racer APIs only; no traversal implementation.
-**Last reviewed:** CP-0030
-
-## SL-D-030 — Real Codex and Antigravity provider validation
-
-**Status:** DEFERRED
-**Area:** Provider trust and zero-touch mutation
-**Current verified capability:** Project-scoped provider-session bindings are
-created automatically and remain `READY_FOR_REAL_VALIDATION`; synthetic hook
-checks pass.
-**Missing capability:** Independent real-harness evidence for workspace
-transition, pre-mutation interception, denial, and safe re-plan.
-**Reason deferred:** The current task removes the identity blocker but does not
-authorize real provider mutation validation.
-**Activation trigger:** A controlled validation run with disposable targets,
-captured provider hook evidence, and rollback/cleanup checks.
-**Evidence required before planning:** One real Codex `apply_patch` and one
-real Antigravity structured edit, with project/node/session/actor/worktree
-binding and denial evidence.
-**Public-claims impact:** Do not claim zero-touch provider completion or
-`REAL_VALIDATED`/`ZERO_TOUCH_VALIDATED`.
-**Related ADRs:** ADR-0030
-**Last reviewed:** CP-0151
-
-## SL-D-002 â€” PCP external port mapping
-
-**Status:** RESEARCH_REQUIRED
-**Area:** Connectivity
-**Current verified capability:** No PCP provider; direct candidates only.
-**Missing capability:** Authenticated, owned, renewable PCP mappings.
-**Reason deferred:** Gateway discovery, ownership, cleanup, and router compatibility are unspecified.
-**Dependencies:** NAT traversal decision and physical router evidence.
-**Activation trigger:** Approved mapping requirement and router test plan.
-**Evidence required before planning:** Physical PCP matrix, mapping lifetime/cleanup tests, and privacy review.
-**Security questions:** Unauthorized mapping, gateway spoofing, stale mappings, and abuse.
-**Privacy questions:** Gateway identity and exposed port disclosure.
-**Operational questions:** Renewal, crash cleanup, diagnostics, and support.
-**Public-claims impact:** No automatic router mapping claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
-
-## SL-D-003 â€” NAT-PMP external port mapping
-
-**Status:** RESEARCH_REQUIRED
-**Area:** Connectivity
-**Current verified capability:** No NAT-PMP provider.
-**Missing capability:** Owned NAT-PMP mapping lifecycle.
-**Reason deferred:** Protocol support, gateway trust, cleanup, and platform coverage are unverified.
-**Dependencies:** NAT traversal decision and physical router evidence.
-**Activation trigger:** Approved platform scope and mapping ownership model.
-**Evidence required before planning:** Physical router tests, expiry/renewal, and crash cleanup.
-**Security questions:** Gateway spoofing, unauthorized mapping, and exposed services.
-**Privacy questions:** Gateway/network metadata disclosure.
-**Operational questions:** Renewal failure and support diagnostics.
-**Public-claims impact:** No automatic router mapping claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
-
-## SL-D-004 â€” UPnP IGD external port mapping
-
-**Status:** RESEARCH_REQUIRED
-**Area:** Connectivity
-**Current verified capability:** No UPnP implementation.
-**Missing capability:** Consentful, bounded IGD discovery and mapping cleanup.
-**Reason deferred:** UPnP trust and exposure risks require a separate security decision.
-**Dependencies:** NAT traversal decision, explicit user consent, router matrix.
-**Activation trigger:** Security-approved requirement with opt-in policy.
-**Evidence required before planning:** Physical IGD compatibility and abuse tests.
-**Security questions:** Untrusted LAN devices, forged SSDP, arbitrary mappings, and revocation.
-**Privacy questions:** LAN topology and device identity disclosure.
-**Operational questions:** Consent UI, cleanup, renewal, and diagnostics.
-**Public-claims impact:** No automatic router mapping claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/security/THREAT_MODEL.md`, `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
-
-## SL-D-005 â€” STUN server-reflexive candidates
-
-**Status:** RESEARCH_REQUIRED
-**Area:** Connectivity
-**Current verified capability:** `SERVER_REFLEXIVE` candidates are policy-rejected by default; no STUN client exists.
-**Missing capability:** Optional authenticated/managed server-reflexive discovery.
-**Reason deferred:** Server dependency, address privacy, and NAT behavior are unverified.
-**Dependencies:** NAT traversal threat model, server policy, physical cross-network tests.
-**Activation trigger:** A bounded STUN service and privacy policy are approved.
-**Evidence required before planning:** Multi-NAT two-machine tests and timeout/metadata measurements.
-**Security questions:** STUN trust, response spoofing, reflection, and candidate poisoning.
-**Privacy questions:** Public address disclosure and service-provider logs.
-**Operational questions:** Service availability, rate limits, cost, and fallback.
-**Public-claims impact:** No STUN reachability claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/protocol/WIRE_FORMAT.md`, `docs/security/THREAT_MODEL.md`
-**Code extension seams:** `CandidateProvider` only.
-**Last reviewed:** CP-0030
-
-## SL-D-006 â€” Coordinated UDP hole punching
+## SL-D-031 — Serverless direct internet connectivity
 
 **Status:** DEFERRED
 **Area:** Connectivity
-**Current verified capability:** No coordinated outbound-attempt protocol.
-**Missing capability:** Consentful endpoint coordination and endpoint reuse.
-**Reason deferred:** Requires rendezvous, NAT behavior evidence, and new abuse controls.
-**Dependencies:** STUN/rendezvous research, QUIC-library constraints, NAT matrix.
-**Activation trigger:** Approved non-relay traversal requirement.
-**Evidence required before planning:** Physical multi-NAT matrix and packet/resource limits.
-**Security questions:** Spoofing, port prediction, reflection, and consent.
-**Privacy questions:** Endpoint sharing and coordination metadata.
-**Operational questions:** Coordination timeout, retry, and failure reporting.
-**Public-claims impact:** No hole-punching claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/security/THREAT_MODEL.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
+**Current verified capability:** Authenticated direct QUIC works with bounded local candidates and local/two-process evidence.
+**Missing capability:** A serverless direct-internet path that reports unsupported topologies explicitly.
+**Reason deferred:** Cross-network behavior, candidate exchange, NAT behavior, and firewall support boundaries are not physically verified.
+**Activation trigger:** A requirement for direct internet operation without a Synesis-hosted or third-party service.
+**Evidence required before planning:** Two-machine matrix covering direct IPv6, manual forwarding, router mapping, hole punching, unsupported NATs, identity, cleanup, and failure diagnostics.
+**Public-claims impact:** No universal internet reachability claim; no hosted service dependency is implied.
+**Related documents:** [`NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md), `docs/protocol/SYNESIS_LINK_V1.md`, `docs/security/THREAT_MODEL.md`
+**Last reviewed:** 2026-07-27
 
-## SL-D-007 â€” Relay fallback
+## SL-D-032 — Offer/answer invitation exchange
+
+**Status:** DEFERRED
+**Area:** Connectivity and onboarding
+**Current verified capability:** Signed, single-use invitations and bounded candidate descriptors exist for the current direct-session path.
+**Missing capability:** A short-lived project-bound offer/answer exchange carrying ephemeral peer keys, candidates, and synchronized-attempt information.
+**Reason deferred:** The complete exchange contract, expiry, replay handling, and out-of-band operator flow are not promoted as one capability.
+**Activation trigger:** A serverless direct-connectivity task requires coordinated endpoint attempts.
+**Evidence required before planning:** Signed vectors for expiry, single use, project binding, ephemeral keys, candidate integrity, synchronized-attempt bounds, replay, and wrong-project rejection.
+**Public-claims impact:** Invitations remain operator-exchanged; no discovery or rendezvous service is claimed.
+**Related documents:** `docs/protocol/SYNESIS_LINK_V1.md`, `docs/security/THREAT_MODEL.md`, `docs/demo/FIRST_DEMO.md`
+**Last reviewed:** 2026-07-27
+
+## SL-D-033 — Manual port-forwarded endpoint support
 
 **Status:** DEFERRED
 **Area:** Connectivity
-**Current verified capability:** No mandatory central relay exists; `RELAY` is reserved and rejected by direct racing.
-**Missing capability:** Authenticated relay selection and fallback.
-**Reason deferred:** Hosting, identity, cost, metadata, and abuse ownership are undecided.
-**Dependencies:** Relay threat model and operational owner.
-**Activation trigger:** Product requirement for otherwise unreachable peers.
-**Evidence required before planning:** Relay prototype threat/cost review and two-machine tests.
-**Security questions:** Relay identity, authorization, payload confidentiality, abuse, and DoS.
-**Privacy questions:** Metadata visibility and traffic correlation.
-**Operational questions:** Hosting, bandwidth limits, cost, rate limits, and failure behavior.
-**Public-claims impact:** No relay or zero-server-in-every-topology claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/security/THREAT_MODEL.md`, `docs/protocol/WIRE_FORMAT.md`
-**Code extension seams:** Reserved `CandidateType.RELAY`; no transport.
-**Last reviewed:** CP-0030
+**Current verified capability:** Operators can exchange bounded direct candidates; public endpoint support is not verified.
+**Missing capability:** A user-supplied public host/IP and UDP port path with authenticated direct connection and clear failure reporting.
+**Reason deferred:** Endpoint authorization, address-family handling, firewall guidance, and cleanup evidence are incomplete.
+**Activation trigger:** Users need a dependable direct-connectivity escape hatch without router mutation.
+**Evidence required before planning:** Two-machine IPv4/IPv6 manual-forward tests, wrong-endpoint rejection, firewall diagnostics, identity checks, and cleanup.
+**Public-claims impact:** Manual forwarding would be an explicit operator setup path, not automatic reachability.
+**Related documents:** [`NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md), `docs/operations/TWO_MACHINE_TESTING.md`
+**Last reviewed:** 2026-07-27
 
-## SL-D-008 â€” TURN-style relaying
-
-**Status:** RESEARCH_REQUIRED
-**Area:** Connectivity
-**Current verified capability:** No TURN client or relay transport.
-**Missing capability:** Allocation, authentication, permissions, refresh, and relay teardown.
-**Reason deferred:** Separate service/security/cost model required.
-**Dependencies:** Relay fallback decision and hosting owner.
-**Activation trigger:** Explicit decision to operate or depend on TURN infrastructure.
-**Evidence required before planning:** Provider/security review and bandwidth/abuse tests.
-**Security questions:** Allocation auth, credential scope, exhaustion, and payload handling.
-**Privacy questions:** Relay metadata and operator visibility.
-**Operational questions:** SLA, cost, capacity, abuse response, and outages.
-**Public-claims impact:** No TURN support claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/security/THREAT_MODEL.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
-
-## SL-D-009 â€” CGNAT connectivity
+## SL-D-034 — Optional router port mapping
 
 **Status:** DEFERRED
 **Area:** Connectivity
-**Current verified capability:** No CGNAT-specific evidence; direct local/process evidence only.
-**Missing capability:** Reliable connectivity through carrier-grade NAT.
-**Reason deferred:** Depends on traversal or relay capabilities not implemented.
-**Dependencies:** NAT traversal, STUN, hole punching, or relay decisions.
-**Activation trigger:** Physical requirement for carrier networks.
-**Evidence required before planning:** Two-machine CGNAT topology evidence.
-**Security questions:** Shared-address spoofing and abuse controls.
-**Privacy questions:** Carrier metadata and endpoint exposure.
-**Operational questions:** Failure classification and support diagnostics.
-**Public-claims impact:** No CGNAT claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
+**Current verified capability:** No router mapping implementation is claimed.
+**Missing capability:** One opt-in product capability covering PCP, NAT-PMP, and UPnP IGD mapping with explicit ownership and cleanup.
+**Reason deferred:** Router trust, consent, renewal, crash cleanup, exposure, and protocol coverage require one security and operations decision.
+**Activation trigger:** A supported router-mapping requirement is approved with an explicit user-consent model.
+**Evidence required before planning:** Protocol-specific adapter tests, mapping ownership/renewal/cleanup evidence, forged-gateway tests, exposure review, and physical router matrix results.
+**Public-claims impact:** No automatic router mapping claim until opt-in, ownership, and cleanup are verified.
+**Related documents:** [`NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md), `docs/security/THREAT_MODEL.md`
+**Last reviewed:** 2026-07-27
 
-## SL-D-010 â€” Hosted rendezvous infrastructure
+## SL-D-035 — Coordinated UDP/QUIC hole punching
 
 **Status:** DEFERRED
-**Area:** Operations
-**Current verified capability:** Descriptor exchange is manual/out-of-band.
-**Missing capability:** Hosted rendezvous service.
-**Reason deferred:** No production hosted infrastructure is in scope.
-**Dependencies:** Discovery/traversal threat model and service ownership.
-**Activation trigger:** Requirement for automated exchange across machines.
-**Evidence required before planning:** Service threat model, availability, cost, and privacy review.
-**Security questions:** Registration auth, impersonation, retention, and abuse.
-**Privacy questions:** Peer metadata and relationship visibility.
-**Operational questions:** Hosting, uptime, rate limits, and incident response.
-**Public-claims impact:** No hosted rendezvous claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
+**Area:** Connectivity
+**Current verified capability:** Direct candidate racing exists; coordinated simultaneous outbound attempts do not.
+**Missing capability:** Bounded, authenticated simultaneous attempts using exchanged invitation candidates.
+**Reason deferred:** NAT behavior, consent, resource limits, and failure classification are not physically verified.
+**Activation trigger:** A serverless direct-connectivity task requires traversal of compatible NATs without relay infrastructure.
+**Evidence required before planning:** Cone-NAT, symmetric-NAT, CGNAT, firewall, replay, spoofing, timeout, resource-limit, and unsupported-topology tests.
+**Public-claims impact:** No universal NAT-traversal claim; incompatible topologies must fail explicitly.
+**Related documents:** [`NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md), `docs/security/THREAT_MODEL.md`, `docs/protocol/SYNESIS_LINK_V1.md`
+**Last reviewed:** 2026-07-27
 
-## SL-D-011 â€” Production peer discovery
-
-**Status:** DEFERRED
-**Area:** Discovery
-**Current verified capability:** Signed descriptor can be exchanged manually.
-**Missing capability:** Production discovery and trust policy.
-**Reason deferred:** Higher-level ownership and deployment semantics are not specified.
-**Dependencies:** Rendezvous, identity directory, or project-level authority.
-**Activation trigger:** Explicit discovery product requirement.
-**Evidence required before planning:** Threat, privacy, availability, and abuse analysis.
-**Security questions:** Enumeration, impersonation, revocation, and poisoning.
-**Privacy questions:** Peer graph and presence disclosure.
-**Operational questions:** Directory ownership, retention, and outages.
-**Public-claims impact:** No automatic peer discovery claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/security/THREAT_MODEL.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
-
-## SL-D-012 â€” Physical QUIC path migration validation
-
-**Status:** BLOCKED
-**Area:** Physical validation
-**Current verified capability:** Local QUIC sessions and liveness are tested; no two-machine migration evidence.
-**Missing capability:** Two physical computers changing network paths while preserving expected semantics.
-**Reason deferred:** Requires two machines and controlled network changes.
-**Dependencies:** Physical test operator and documented topology.
-**Activation trigger:** Two-machine test access.
-**Evidence required before planning:** Wi-Fi/Ethernet and interface-loss timelines.
-**Security questions:** Path validation and stale-path injection.
-**Privacy questions:** New address disclosure.
-**Operational questions:** User-visible state, deadlines, and cleanup.
-**Public-claims impact:** Do not claim path migration.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** Internal QUIC adapter only.
-**Last reviewed:** CP-0030
-
-## SL-D-013 â€” Path migration orchestration or policy
-
-**Status:** DEFERRED
-**Area:** Transport lifecycle
-**Current verified capability:** No application migration policy.
-**Missing capability:** Explicit path-change reporting, policy, and failure semantics.
-**Reason deferred:** Physical adapter behavior is unverified.
-**Dependencies:** SL-D-012.
-**Activation trigger:** Physical migration evidence and product need.
-**Evidence required before planning:** Adapter events, identity/session invariants, and fault tests.
-**Security questions:** Stale-path traffic and rebinding authorization.
-**Privacy questions:** Address/interface history.
-**Operational questions:** Metrics, user state, and timeout policy.
-**Public-claims impact:** No migration orchestration claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/protocol/STATE_MACHINES.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
-
-## SL-D-014 â€” Transparent reconnection
+## SL-D-036 — Direct-session reconnection
 
 **Status:** DEFERRED
 **Area:** Session lifecycle
-**Current verified capability:** Closed/expired sessions do not resurrect.
-**Missing capability:** New authenticated sessions with application recovery semantics.
-**Reason deferred:** Reconnection changes authority, epochs, streams, and work safety.
-**Dependencies:** Session epoch/replay design and application semantics.
-**Activation trigger:** Explicit requirement for recovery after session loss.
-**Evidence required before planning:** Duplicate-work and stale-callback tests.
-**Security questions:** Rebinding authority, replay, stale sessions, and cancellation.
-**Privacy questions:** Reconnection metadata and peer presence.
-**Operational questions:** Retry limits, backoff, and user-visible state.
-**Public-claims impact:** No transparent reconnection claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/protocol/STATE_MACHINES.md`, `docs/security/THREAT_MODEL.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
+**Current verified capability:** Closed or expired sessions do not resurrect; fresh authenticated sessions are supported.
+**Missing capability:** Explicit recovery using fresh authenticated authority, including reconnect state, replay protection, and epoch rebinding.
+**Reason deferred:** Transparent reconnection, resumption, and rebinding must be one coherent authority and work-safety design.
+**Activation trigger:** A product requirement for recovery after direct-session loss.
+**Evidence required before planning:** Duplicate-work, stale-callback, replay, stale-ticket, epoch, authority rollover, cancellation, and recovery tests.
+**Public-claims impact:** No transparent reconnection, resumption, or session resurrection claim.
+**Related documents:** `docs/protocol/STATE_MACHINES.md`, `docs/security/THREAT_MODEL.md`, [`NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md)
+**Last reviewed:** 2026-07-27
 
-## SL-D-015 â€” Session resumption
+## SL-D-037 — Contract revision and dependency invalidation
 
 **Status:** DEFERRED
-**Area:** Session lifecycle
-**Current verified capability:** Full fresh authenticated sessions only.
-**Missing capability:** Safe resumption of prior session state.
-**Reason deferred:** 0-RTT/resumption semantics are intentionally absent.
-**Dependencies:** Replay protection, epochs, transcript evolution, stream retry safety.
-**Activation trigger:** Performance requirement with explicit replay model.
-**Evidence required before planning:** Replay, stale-ticket, and application recovery tests.
-**Security questions:** Ticket theft, replay, key separation, and authority freshness.
-**Privacy questions:** Linkability across sessions.
-**Operational questions:** Ticket expiry, rotation, revocation, and storage.
-**Public-claims impact:** No session resumption or 0-RTT claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/protocol/SYNESIS_LINK_V1.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
+**Area:** Coordination correctness
+**Current verified capability:** Bounded task and capability records carry explicit identity and revision data where implemented.
+**Missing capability:** Immutable harness-contract identity, revision, owner, consumers, status, superseded revision, and invalidation of dependent work.
+**Reason deferred:** Contract lifecycle semantics are not yet a promoted coordination slice.
+**Activation trigger:** Multiple independent harnesses need accepted contracts to survive revision and replanning safely.
+**Evidence required before planning:** Revision vectors proving stale publication rejection, consumer invalidation, supersession, replan signaling, and no automatic harness-code rewrite.
+**Public-claims impact:** Synesis does not own or rewrite harness behavior; it may communicate contract invalidation only.
+**Related documents:** `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, `docs/security/THREAT_MODEL.md`
+**Last reviewed:** 2026-07-27
 
-## SL-D-016 â€” Session epoch rebinding after reconnect
+## SL-D-038 — Out-of-band mutation detection and integration enforcement
 
 **Status:** DEFERRED
-**Area:** Session lifecycle
-**Current verified capability:** Epochs are transcript-bound values on fresh sessions.
-**Missing capability:** Rebinding authority and stale-work rejection across reconnect.
-**Reason deferred:** Requires higher-level work semantics.
-**Dependencies:** SL-D-014 and application request identity model.
-**Activation trigger:** Reconnection design approval.
-**Evidence required before planning:** Old-session message and duplicate-work tests.
-**Security questions:** Authority rollover and stale operation fencing.
-**Privacy questions:** Session linkage.
-**Operational questions:** Recovery, observability, and cleanup.
-**Public-claims impact:** No session resurrection claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/protocol/STATE_MACHINES.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
+**Area:** Coordination correctness and workspace safety
+**Current verified capability:** MCP-managed writes are revision-checked and isolated worktrees are preserved; shell/IDE bypass is not portable filesystem prevention.
+**Missing capability:** Detection and recording of unauthorized or unowned changes, with publication, validation, completion, and integration blocked until review.
+**Reason deferred:** Harnesses can mutate through shells, IDE tools, scripts, or other integrations outside MCP.
+**Activation trigger:** A product requirement for ownership enforcement across supported integrations.
+**Evidence required before planning:** Out-of-band mutation fixtures, ownership-violation records, publication/integration fencing, isolated-worktree preservation, and restart/recovery evidence.
+**Public-claims impact:** Do not claim portable filesystem-level write prevention. Preventive sandboxing remains research only.
+**Related documents:** `docs/architecture/zero-touch-agent-collaboration.md`, `docs/architecture/autonomous-workspace-broker.md`, `docs/security/THREAT_MODEL.md`
+**Last reviewed:** 2026-07-27
 
-## SL-D-017 â€” Temporary application-silence suppression and recovery
-
-**Status:** BLOCKED
-**Area:** Liveness validation
-**Current verified capability:** Healthy heartbeat exchange, deterministic expiry, and abrupt process-loss classification.
-**Missing capability:** Physically or deterministically suppressing application/control processing and then recovering without false expiry.
-**Reason deferred:** No contrary evidence exists.
-**Dependencies:** Controlled two-machine fault injection.
-**Activation trigger:** Test harness or physical operator can pause/resume processing safely.
-**Evidence required before planning:** Timeline proving suppression, recovery, and terminal-state behavior.
-**Security questions:** Stale callbacks and delayed messages.
-**Privacy questions:** None beyond normal diagnostics.
-**Operational questions:** Pause duration and user-visible uncertainty.
-**Public-claims impact:** Do not claim suppression recovery.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0005
-**Related documents:** `docs/security/THREAT_MODEL.md`, `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** Liveness test hooks only.
-**Last reviewed:** CP-0030
-
-## SL-D-018 â€” Physical global-IPv6 validation
-
-**Status:** BLOCKED
-**Area:** Physical validation
-**Current verified capability:** IPv6 candidate normalization and same-family pairing are implemented; physical global-IPv6 reachability is unverified.
-**Missing capability:** Two-machine global-IPv6 evidence.
-**Reason deferred:** No second physical machine/topology evidence.
-**Dependencies:** Two-machine IPv6 network.
-**Activation trigger:** Physical test access.
-**Evidence required before planning:** Address class, firewall, authentication, and cleanup record.
-**Security questions:** Scope and address authorization.
-**Privacy questions:** Global address disclosure.
-**Operational questions:** Interface selection and diagnostics.
-**Public-claims impact:** No global-IPv6 claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** Local-interface provider.
-**Last reviewed:** CP-0030
-
-## SL-D-019 â€” Physical mapped-public-IPv4 validation
-
-**Status:** BLOCKED
-**Area:** Physical validation
-**Current verified capability:** IPv4-mapped IPv6 normalization is unit-tested; public reachability is not.
-**Missing capability:** Physical mapped/public IPv4 evidence.
-**Reason deferred:** No second physical machine/network evidence.
-**Dependencies:** Two-machine topology and privacy-safe recording.
-**Activation trigger:** Physical test access.
-**Evidence required before planning:** Sanitized address class and authenticated result.
-**Security questions:** Address spoofing and exposure.
-**Privacy questions:** Public address handling.
-**Operational questions:** Firewall and cleanup.
-**Public-claims impact:** No mapped-public-IPv4 claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** Candidate normalizer.
-**Last reviewed:** CP-0030
-
-## SL-D-020 â€” Physical automatic-router-mapping validation
-
-**Status:** BLOCKED
-**Area:** Physical validation
-**Current verified capability:** No automatic router mapping implementation.
-**Missing capability:** Physical evidence of an approved mapping protocol.
-**Reason deferred:** Protocols are not implemented.
-**Dependencies:** SL-D-002, SL-D-003, SL-D-004.
-**Activation trigger:** One mapping protocol is promoted and implemented.
-**Evidence required before planning:** Router lifecycle and security evidence.
-**Security questions:** Consent, gateway trust, stale mappings, and abuse.
-**Privacy questions:** LAN/router metadata.
-**Operational questions:** Renewal, cleanup, and support.
-**Public-claims impact:** No automatic-router-mapping claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/security/THREAT_MODEL.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
-
-## SL-D-021 â€” Physical cross-network internet validation
-
-**Status:** BLOCKED
-**Area:** Physical validation
-**Current verified capability:** Local and two-process evidence only.
-**Missing capability:** Two separate computers across a documented internet topology.
-**Reason deferred:** Requires user-provided second machine and network access.
-**Dependencies:** Demo CLI/application path and two-machine operator.
-**Activation trigger:** Two physical computers available.
-**Evidence required before planning:** Normal, abrupt-loss, wrong-identity, and cleanup scenarios.
-**Security questions:** Public endpoint exposure, identity, and firewall policy.
-**Privacy questions:** Avoid recording personal addresses/usernames.
-**Operational questions:** Reproducible setup, firewall, and cleanup.
-**Public-claims impact:** No physical two-machine claim until executed.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`, `docs/demo/FIRST_DEMO.md`
-**Code extension seams:** Demo CLI.
-**Last reviewed:** CP-0030
-
-## SL-D-022 â€” VPN or overlay-network validation
-
-**Status:** RESEARCH_REQUIRED
-**Area:** Physical validation
-**Current verified capability:** No VPN/overlay evidence.
-**Missing capability:** Documented behavior over an overlay interface.
-**Reason deferred:** Overlay ownership and address semantics are unknown.
-**Dependencies:** Physical two-machine baseline.
-**Activation trigger:** A supported overlay topology is selected.
-**Evidence required before planning:** Two-machine overlay test and interface/provider diagnostics.
-**Security questions:** Overlay trust, identity layering, and route spoofing.
-**Privacy questions:** Provider metadata and endpoint disclosure.
-**Operational questions:** MTU, outages, and support.
-**Public-claims impact:** No VPN/overlay claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** Local-interface provider.
-**Last reviewed:** CP-0030
-
-## SL-D-023 â€” Production Synesis cooperation semantics
-
-**Status:** SUPERSEDED
-**Area:** Application semantics
-**Current verified capability:** CP-R4 adds configured peer authorization,
-bounded one-shot decision publish/sync, deterministic outcomes, and conflict
-quarantine above the verified Link seam.
-**Missing capability:** Background synchronization, reconnect, discovery,
-membership, retries, task delegation, leases, patch governance, or agent
-authority.
-**Reason deferred:** These remain higher-level CAF slices. CP-R4 is pairwise,
-one-shot, and local-process evidence only; Link and CLI remain frozen.
-**Dependencies:** First physical Link demonstration, explicit product contract,
-and an approved transport-neutral bounded Link application-stream seam.
-**Activation trigger:** User approval of ADR-0011 and promotion of `SYN-001`
-after the Link prerequisite was separately scoped and verified (satisfied;
-CP-R4 is now verified).
-**Evidence:** `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md` and the
-CP-R4 process/unit tests.
-**Evidence required before planning:** Any future background or multi-peer CAF
-slice requires a new explicit task, authority model, and failure evidence.
-**Security questions:** Authorization, delegation, leases, fencing, and replay.
-**Privacy questions:** Project/task data and participant visibility.
-**Operational questions:** Recovery, ownership, and audit.
-**Public-claims impact:** Demo messages are not production agent cooperation.
-**Superseded by:** SYN-012 activation at CP-0135; broader CAF work remains deferred.
-**Potential future task:** SYN-012 speculative capability coordination MVP.
-**Related ADRs:** ADR-0006, ADR-0011
-**Related documents:** `docs/agent/CONTRACT.md`, `docs/demo/FIRST_DEMO.md`,
-`docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`
-**Code extension seams:** No background or broader CAF behavior is activated;
-future slices must add explicit tasks and evidence.
-**Last reviewed:** 2026-07-23 CP-0144 completion
-
-## SL-D-028 — CP-R5 physical decision-record transfer claim
+## SL-D-039 — Wait-for dependency graph and deadlock detection
 
 **Status:** DEFERRED
-**Area:** Physical validation and operations
-**Current verified capability:** CP-R4 proves one-shot decision publish/sync
-between two isolated JVM profiles on the same host.
-**Missing capability:** Physical two-machine evidence for the existing CP-R4
-initial publish, duplicate, successor, stale, conflict, and cleanup cases.
-**Reason deferred:** The current product slice does not require a physical
-record-transfer claim; two-process evidence is sufficient and safer to keep
-reproducible.
-**Dependencies:** Explicit operator demand, two physical profiles, network
-security review, and sanitized evidence capture.
-**Activation trigger:** A documented need to make a physical record-transfer
-claim, followed by explicit promotion of SYN-001-CP-R5.
-**Evidence required before planning:** Network topology, identity handling,
-failure/cleanup plan, and a test matrix covering all CP-R4 outcomes.
-**Security questions:** Physical endpoint exposure, identity pinning, replay,
-and evidence redaction.
-**Privacy questions:** Profile paths, node identifiers, project content, and
-network metadata in captured evidence.
-**Operational questions:** Clock skew, firewall behavior, cleanup, and repeatability.
-**Public-claims impact:** No physical project-record transfer or reachability
-claim is made.
-**Potential future task:** SYN-001-CP-R5.
-**Related ADRs:** ADR-0011, ADR-0012.
-**Related documents:** `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`,
-`docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`.
-**Code extension seams:** Existing Link seam and `:project-record` CP-R4
-exchange; no new transport or protocol is implied.
-**Last reviewed:** 2026-07-21 CP-R4 closure.
-
-## SL-D-029 — Zero-touch provider workspace transition
-
-**Status:** DEFERRED
-**Area:** Provider automation and workspace isolation
-**Current verified capability:** Provider-local mutation adapters and detached
-speculation worktrees exist; the real Antigravity hook was not observed and
-Codex real trust/enforcement evidence is incomplete.
-**Missing capability:** Trusted proof that each supported harness can bootstrap
-or resume a session in its allocated worktree and intercept every supported
-mutation before it occurs.
-**Reason deferred:** Prompt instructions and synthetic hook tests cannot prove
-workspace routing or fail-closed enforcement.
-**Dependencies:** SYN-013 plan acceptance, provider-specific capability probes,
-and real harness evidence for both requester/owner directions.
-**Activation trigger:** A provider passes workspace-transition, mutation
-interception, safe-boundary injection, and recovery tests with sanitized
-evidence.
-**Evidence required before planning implementation:** Provider version and
-trust state, authenticated session/worktree binding, protected-file hash before
-and after attempted mutation, denial/reason delivery, and restart/replay proof.
-**Security questions:** Hook bypass, shell writes, profile/worktree escape,
-provider spoofing, and stale session authority.
-**Operational questions:** Hidden runtime lifecycle, crash recovery, orphan
-cleanup, and degraded read-only behavior.
-**Public-claims impact:** No zero-touch Codex or Antigravity claim until the
-provider gate passes.
-**Potential future task:** SYN-013 implementation slices after plan approval.
-**Related ADRs:** ADR-0029, ADR-0022, ADR-0019.
-**Related documents:** `docs/architecture/zero-touch-agent-collaboration.md`,
-`docs/architecture/autonomous-workspace-broker.md`.
-**Last reviewed:** 2026-07-24 CP-0147.
-
-## SL-D-024 â€” CLI packaging, installation, and distribution
-
-**Status:** SUPERSEDED
-**Superseded by:** SYN-009D (CP-0131 promotion)
-**Area:** Release operations
-**Current verified capability:** Gradle Application development distribution
-with generated Windows and Unix launchers is verified; no production installer
-or supported package is claimed.
-**Missing capability:** Signed, supported installation/distribution workflow.
-**Reason deferred:** First demo uses reproducible local Java/Gradle commands.
-**Dependencies:** Physical demo evidence and release ownership.
-**Activation trigger:** External operator needs installation outside the repository; satisfied by the supplied SYN-009C goal.
-**Evidence required before planning:** Clean-machine installation, upgrade, rollback, and secret handling.
-**Security questions:** Artifact signing, dependency supply chain, and secret storage.
-**Privacy questions:** Logs, paths, and telemetry.
-**Operational questions:** Platform matrix, support, and uninstall.
-**Public-claims impact:** No packaged production client claim.
-**Potential future task:** None; stable-layout work is tracked by SYN-009D.
-**Related ADRs:** ADR-0010, ADR-0026
-**Related documents:** `docs/demo/FIRST_DEMO.md`
-**Code extension seams:** Gradle application packaging only if promoted.
-**Last reviewed:** CP-0131
-
-## SL-D-025 â€” Unresolved physical firewall behavior
-
-**Status:** BLOCKED
-**Area:** Physical validation
-**Current verified capability:** Local direct QUIC and two-process behavior.
-**Missing capability:** Documented behavior across real host/network firewalls.
-**Reason deferred:** No physical two-machine run has been performed.
-**Dependencies:** SL-D-021.
-**Activation trigger:** Physical demonstration access.
-**Evidence required before planning:** Safe firewall matrix with exact failure classification.
-**Security questions:** Required ports, exposure, and least privilege.
-**Privacy questions:** Network inventory leakage.
-**Operational questions:** User setup and troubleshooting.
-**Public-claims impact:** Do not claim operation across all firewalls.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/operations/TWO_MACHINE_TESTING.md`
-**Code extension seams:** Candidate diagnostics only.
-**Last reviewed:** CP-0030
-
-## SL-D-026 â€” Reserved relay candidate representation
-
-**Status:** DEFERRED
-**Area:** Wire/model compatibility
-**Current verified capability:** `CandidateType.RELAY` is an appended reserved enum value and direct racing rejects it.
-**Missing capability:** Relay endpoint semantics and authenticated relay transport.
-**Reason deferred:** A wire/model placeholder is not a relay implementation.
-**Dependencies:** SL-D-007 and SL-D-008.
-**Activation trigger:** Relay architecture is explicitly approved.
-**Evidence required before planning:** Compatibility analysis, relay threat model, and transport tests.
-**Security questions:** Relay identity, authorization, confidentiality, and abuse.
-**Privacy questions:** Metadata visibility and traffic correlation.
-**Operational questions:** Hosting, capacity, cost, and failure.
-**Public-claims impact:** No relay candidate support claim.
-**Potential future task:** Unassigned
-**Related ADRs:** ADR-0006
-**Related documents:** `docs/protocol/WIRE_FORMAT.md`, `docs/security/THREAT_MODEL.md`
-**Code extension seams:** `CandidateType.RELAY`; direct racer rejection.
-**Last reviewed:** CP-0030
-
-## SL-D-027 â€” Production GUI and management surface
-
-**Status:** DEFERRED
-**Area:** Product surface
-**Current verified capability:** No GUI; source CLI/demo commands are sufficient for validation.
-**Missing capability:** Production management UI.
-**Reason deferred:** Explicitly outside the first demonstration.
-**Dependencies:** Product semantics and release ownership.
-**Activation trigger:** Explicit UI requirement.
-**Evidence required before planning:** User workflows, threat model, accessibility, and packaging.
-**Security questions:** Secret display, authorization, and remote-control risks.
-**Privacy questions:** Diagnostic and peer-data exposure.
-**Operational questions:** Support, updates, and offline behavior.
-**Public-claims impact:** No production GUI claim.
-**Potential future task:** Unassigned
-**Related ADRs:** None
-**Related documents:** `docs/demo/FIRST_DEMO.md`
-**Code extension seams:** None.
-**Last reviewed:** CP-0030
+**Area:** Coordination correctness
+**Current verified capability:** Task ownership and bounded coordination records exist; no wait-for graph is maintained.
+**Missing capability:** Cycle detection before accepting a blocking dependency, rejection of the newest cycle-forming edge, and bounded resolution options.
+**Reason deferred:** Cross-task dependency semantics and operator resolution policy are not yet specified.
+**Activation trigger:** Multiple owners need explicit blocking dependencies rather than implicit coordination stalls.
+**Evidence required before planning:** Acyclic edge acceptance, cycle rejection, concurrent updates, stale-edge handling, bounded deadlock reason, resolution options, and lease-independent behavior.
+**Public-claims impact:** Lease expiry is not a deadlock solution; no autonomous task decomposition or ranking is implied.
+**Related documents:** `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, `docs/security/THREAT_MODEL.md`
+**Last reviewed:** 2026-07-27

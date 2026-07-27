@@ -143,7 +143,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Acceptance criteria: old sessions and streams cannot affect a new session.
 - Required tests: reconnect, migration, rebinding where supported.
 - Required documentation: state-machine and operations updates.
-- Evidence: Deferred after CP-0030; reconnect/path behavior is intentionally postponed until after the first physical cooperation demonstration. See `docs/agent/DEFERRED.md` entries SL-D-012 through SL-D-016.
+- Evidence: Deferred after CP-0030; reconnect/path behavior is intentionally postponed until after the first physical cooperation demonstration. See `docs/agent/DEFERRED.md` entry SL-D-036 and `docs/operations/NETWORK_VALIDATION_MATRIX.md`.
 
 ## SL-ARCH-001
 
@@ -328,7 +328,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - Purpose: Make one OS-conventional `Synesis` root the only persistent
   application installation, with sibling staging and temporary rollback during
   signed install/update activation.
-- Dependencies: SYN-009C DONE at CP-0110; SL-D-024 activation trigger supplied
+- Dependencies: SYN-009C DONE at CP-0110; SYN-009D activation supplied
   by the user; SYN-011 evidence preserved and moved to VERIFYING.
 - Acceptance criteria: Windows/Linux/macOS stable roots are resolved; bundles
   install directly under the stable root; signed manifest and SHA-256 checks,
@@ -363,7 +363,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   ordered events, capability prediction, logical actor authorization, isolated
   speculation, and auditable retirement.
 - Dependencies: SYN-009D DONE; SYN-011 remains VERIFYING; explicit user
-  activation of deferred SL-D-023; existing Link identity, SDR2 records,
+  activation of the historical CAF slice; existing Link identity, SDR2 records,
   ScopeMatcher, provider hooks, and unified CLI.
 - Acceptance criteria: required public command trees and help are present; two
   independent CLI profiles coordinate through a deterministic loopback
@@ -726,8 +726,9 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   claims, or `:cli` changes.
 - Evidence: `docs/evidence/DECISION-RECORD-CP-R4-2026-07-21.md`; focused
   CP-R4 tests and full strict root verification PASS. Closed at CP-R4.
-- CP-R5 physical two-profile record transfer is explicitly deferred; see
-  `SL-D-028`.
+- CP-R5 physical two-profile record transfer is a validation claim boundary in
+  `docs/operations/NETWORK_VALIDATION_MATRIX.md`; historical ID `SL-D-028` is
+  preserved in the archive.
 
 ## SYN-001-CP-R5
 
@@ -743,7 +744,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
   scenarios with sanitized evidence, or the claim remains explicitly absent.
 - Required tests: physical initial publish, duplicate retry, successor,
   stale, conflict, and cleanup; no protocol expansion is implied.
-- Required documentation: `SL-D-027`, physical evidence, threat review, and
+- Required documentation: network validation matrix, physical evidence, threat review, and
   checkpoint state.
 - Evidence: deferred; no physical record-transfer claim is made.
 

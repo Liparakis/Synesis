@@ -27,9 +27,8 @@ schema, or event-format changes occurred.
 
 ## Immediate next action
 
-Record the verified portability corrections, including the authorized Linux MCP
-file-URI regression fix, and leave the unrelated README edit untouched. No
-further implementation is authorized in this slice.
+Record and commit the deferred-register refinement checkpoint. Leave the
+unrelated README edit untouched; no capability implementation is authorized.
 
 ## Work completed
 
@@ -54,3 +53,6 @@ failure identified incorrect stripping of leading slashes from absolute
 `file:` URIs in MCP root binding; that fix is now authorized for this slice.
 `McpServerTest` and `./gradlew.bat clean check --no-daemon
 --dependency-verification=strict` now pass locally.
+The deferred-register cleanup leaves nine active capabilities, archives all
+historical `SL-D-001` through `SL-D-030` IDs, and moves network cases to the
+validation matrix.

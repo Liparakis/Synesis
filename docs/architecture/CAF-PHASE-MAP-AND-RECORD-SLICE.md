@@ -267,7 +267,7 @@ durable milestones if the user later activates the work.
 | CP-R2 | Canonical decision model, signature, local immutable store, and inspection launcher | Unit/store tests, strict build, storage recovery evidence. |
 | CP-R3 | Bounded transport-neutral Link application-stream seam | Link unit/integration checks for authentication, bounds, and cleanup; no project terminology in Link. |
 | CP-R4 | Record protocol, peer allowlist, publish/sync, duplicate/conflict/staleness handling | `ProjectRecordSyncProcessTest`, bounded codec/config tests, and strict build; PASS; SYN-001 DONE. |
-| CP-R5 | Physical two-profile record transfer claim | DEFERRED as `SL-D-027`; no physical claim is made. |
+| CP-R5 | Physical two-profile record transfer claim | Validation claim boundary in `docs/operations/NETWORK_VALIDATION_MATRIX.md`; no physical claim is made. Historical ID `SL-D-028` is archived. |
 | CP-R6 | Review SYN-002 query contract and prove whether existing read-only APIs suffice | ADR-0013, task/CURRENT agreement, and validated-head blocker review; PASS. |
 | CP-R7 | Minimal local searchable decision view | Bounded query tests, corruption/no-mutation tests, and strict build; PASS. |
 | CP-R8 | Evidence and re-evaluation of second record type | Restart-equivalence and safe projection evidence; second record remains deferred; PASS. |

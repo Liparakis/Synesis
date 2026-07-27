@@ -30,7 +30,8 @@ copyable `SHARE_LINK` remains the complete onboarding path.
 
 The generated launcher is a development distribution, not a production
 installer. Signing, permanent PATH changes, MSI, native image, publishing,
-upgrade, rollback, and production support remain deferred under `SL-D-024`.
+upgrade, rollback, and production support remain outside this diagnostic demo
+and are governed by SYN-009D evidence.
 The existing manual `DemoCli` procedure below stays available as a diagnostic
 fallback.
 
@@ -145,9 +146,11 @@ one bounded demo request/result, application heartbeat/liveness, graceful
 shutdown, and deterministic cleanup for the tested topology.
 
 It is not valid to claim universal reachability, NAT traversal, router mapping,
-STUN/TURN, hole punching, relays, CGNAT support, path migration, reconnection,
-session resumption, global IPv6/public IPv4 reachability, operation across all
-firewalls, or production-ready agent cooperation.
+STUN, TURN, hosted rendezvous, relays, production discovery, hole punching,
+CGNAT support, path migration, reconnection, session resumption, global
+IPv6/public IPv4 reachability, operation across all firewalls, or
+production-ready agent cooperation. See the
+[`NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md).
 
 ## Troubleshooting boundary
 

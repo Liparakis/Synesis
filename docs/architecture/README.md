@@ -11,6 +11,10 @@ these modules.
 - [AGENTS.md contract](agents-md-contract.md)
 - [Zero-touch provider maturity](zero-touch-provider-maturity.md)
 
-Remote networking, rendezvous, relay fallback, hole-punching, and hosted
-coordination remain deferred. The [deferred register](../agent/DEFERRED.md)
-controls those claims.
+Serverless direct internet connectivity, operator-exchanged invitations,
+manual forwarding, optional router mapping, and coordinated hole punching are
+deferred capabilities. Hosted rendezvous, STUN, TURN, relay infrastructure, and
+production peer discovery are intentionally not product dependencies. The
+[deferred register](../agent/DEFERRED.md) and
+[network validation matrix](../operations/NETWORK_VALIDATION_MATRIX.md) control
+these claims.

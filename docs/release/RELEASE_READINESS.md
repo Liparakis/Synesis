@@ -11,10 +11,12 @@ the procedure in `docs/demo/FIRST_DEMO.md` is executed and recorded.
 
 ## Must remain explicit
 
-NAT traversal, PCP, NAT-PMP, UPnP, STUN/TURN, hole punching, CGNAT, relays,
-rendezvous, production discovery, path migration, reconnection, resumption,
-physical IPv6/public IPv4, all-firewall operation, packaging, GUI, and
-production Synesis cooperation are not included claims. See `DEFERRED.md`.
+Serverless direct internet connectivity, manual forwarding, router mapping,
+hole punching, reconnection, physical IPv6/public IPv4, and all-firewall
+operation are not included claims. STUN, TURN, relay infrastructure, hosted
+rendezvous, production discovery, GUI, and production Synesis cooperation are
+not product dependencies. See [`DEFERRED.md`](../agent/DEFERRED.md) and the
+[`NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md).
 
 ## Security and release checks
 
