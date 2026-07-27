@@ -415,8 +415,6 @@ synesis/
 â”œâ”€â”€ AGENTS.md
 â”œâ”€â”€ README.md
 â”œâ”€â”€ LICENSE
-â”œâ”€â”€ SECURITY.md
-â”œâ”€â”€ CONTRIBUTING.md
 â”œâ”€â”€ build.gradle.kts
 â”œâ”€â”€ settings.gradle.kts
 â”œâ”€â”€ gradlew

@@ -71,6 +71,14 @@ patches, and stop when identity, ownership, freshness, or workspace verification
 
 📖 See the [getting-started guide](docs/getting-started/README.md) and [provider guides](docs/providers/README.md).
 
+## Contributing
+
+Read [`AGENTS.md`](AGENTS.md) and run `scripts/agent-resume.ps1` before making
+changes. Keep work scoped to one active task, add tests for behavior changes,
+and run the Java and Go verification commands above. Record architecture
+changes as ADRs under [`docs/adr/`](docs/adr/), and keep secrets, local state,
+generated files, transcripts, and machine-specific paths out of commits.
+
 ## Roadmap
 
 - [x] Local project initialization and isolated provider workspace state
@@ -98,7 +106,6 @@ patches, and stop when identity, ownership, freshness, or workspace verification
 | Security model             | [docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)           |
 | Release & signing notes    | [docs/release/RELEASE_READINESS.md](docs/release/RELEASE_READINESS.md)   |
 | Repository agent contract  | [AGENTS.md](AGENTS.md)                                                   |
-| Security reporting         | [SECURITY.md](SECURITY.md)                                               |
 
 ## License
 
