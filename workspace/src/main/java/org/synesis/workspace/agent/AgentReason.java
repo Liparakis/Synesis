@@ -42,6 +42,9 @@ public enum AgentReason {
      */
     WORKSPACE_STALE("workspace_stale"),
 
+    /** The agent is operating from the control checkout instead of its assigned worktree. */
+    WORKSPACE_MISMATCH("workspace_mismatch"),
+
     /**
      * A modifying patch omitted the optimistic content precondition returned by a read.
      */

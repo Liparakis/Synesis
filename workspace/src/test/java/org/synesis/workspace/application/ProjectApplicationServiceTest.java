@@ -44,6 +44,8 @@ final class ProjectApplicationServiceTest {
         String agents = Files.readString(root.resolve("AGENTS.md"));
         assertTrue(agents.startsWith("<!-- SYNESIS-BEGIN -->"));
         assertTrue(agents.contains("This repository uses Synesis."));
+        assertTrue(agents.contains("use Synesis MCP for all reads, writes, and commands"));
+        assertTrue(agents.contains("Native provider hooks are optional"));
         String metadata = Files.readString(root.resolve(".synesis/project.json"));
         assertFalse(metadata.contains("identity.bin"));
         assertFalse(metadata.contains("private"));

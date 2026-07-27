@@ -179,7 +179,13 @@ public final class ProviderApplicationService {
             return false;
         }
         String windowsCommand = provider.windowsHookCommand(launcher, profile);
-        return windowsCommand == null || windowsCommand.equals(command.get("commandWindows"));
+        Object configuredWindows = command.containsKey("commandWindows")
+                ? command.get("commandWindows")
+                : command.get("command_windows");
+        if (configuredWindows == null) {
+            configuredWindows = command.get("commandWindows");
+        }
+        return windowsCommand == null || windowsCommand.equals(configuredWindows);
     }
 
     private static boolean schemaVersion(Object value) {
@@ -300,6 +306,24 @@ public final class ProviderApplicationService {
         } finally {
             Files.deleteIfExists(temporary);
         }
+    }
+
+    static void materializeHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile)
+            throws IOException {
+        Path config = provider.configurationPath(worktree);
+        Map<String, Object> root = Files.exists(config) ? readObject(config) : new LinkedHashMap<>();
+        Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(), ignored -> new LinkedHashMap<>()));
+        List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
+        hooks.removeIf(provider::isManagedHook);
+        hooks.add(provider.managedHook(launcher, profile));
+        List<Object> sessionHooks = list(group.get("SessionStart"));
+        sessionHooks.removeIf(provider::isManagedSessionHook);
+        Map<String, Object> sessionHook = provider.managedSessionHook(launcher, profile);
+        if (sessionHook != null) {
+            sessionHooks.add(sessionHook);
+        }
+        group.put("SessionStart", sessionHooks);
+        atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
     }
 
     private static ProviderResult result(ProviderIntegration provider,
@@ -457,6 +481,17 @@ public final class ProviderApplicationService {
                     && Files.exists(metadata(location, provider));
             hooks.removeIf(provider::isManagedHook);
             hooks.add(expectedHook);
+            List<Object> sessionHooks = list(group.get("SessionStart"));
+            sessionHooks.removeIf(provider::isManagedSessionHook);
+            Map<String, Object> expectedSessionHook = provider.managedSessionHook(launcher, profile);
+            if (expectedSessionHook != null) {
+                sessionHooks.add(expectedSessionHook);
+            }
+            if (sessionHooks.isEmpty()) {
+                group.remove("SessionStart");
+            } else {
+                group.put("SessionStart", sessionHooks);
+            }
             atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
             String mcpStatus = ensureMcpConfig(location, provider, launcher);
             ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(location, provider);
@@ -499,8 +534,12 @@ public final class ProviderApplicationService {
                     mcpStatus,
                     0);
             try {
-                return decorate(location, provider.id(), installedResult,
-                        new ProviderSessionBindingService().ensure(location, provider.id(), null));
+                ProviderSessionBindingService.BindingResult ensured = new ProviderSessionBindingService().ensure(
+                        location, provider.id(), null);
+                if (ensured.binding().worktreePath() != null) {
+                    materializeHook(Path.of(ensured.binding().worktreePath()), provider, launcher, profile);
+                }
+                return decorate(location, provider.id(), installedResult, ensured);
             } catch (ProviderSessionBindingService.BindingException bindingFailure) {
                 return decorate(location, provider.id(), installedResult, null);
             }
@@ -630,6 +669,14 @@ public final class ProviderApplicationService {
                 if (group != null) {
                     List<Object> hooks = list(group.get("PreToolUse"));
                     removed = hooks.removeIf(provider::isManagedHook);
+                    List<Object> sessionHooks = list(group.get("SessionStart"));
+                    boolean removedSession = sessionHooks.removeIf(provider::isManagedSessionHook);
+                    removed = removed || removedSession;
+                    if (sessionHooks.isEmpty()) {
+                        group.remove("SessionStart");
+                    } else {
+                        group.put("SessionStart", sessionHooks);
+                    }
                     if (hooks.isEmpty()) {
                         group.remove("PreToolUse");
                     }

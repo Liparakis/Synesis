@@ -165,7 +165,13 @@ public final class WorkspaceMutationBroker {
             var bindings = request.connectionInstanceId() == null
                     ? bindingService.list(request.location(), request.provider())
                     : bindingService.find(request.location(), request.provider(), request.connectionInstanceId())
-                            .map(java.util.List::of).orElseGet(java.util.List::of);
+                            .map(java.util.List::of)
+                            .orElseGet(java.util.List::of);
+            if (request.connectionInstanceId() != null && bindings.isEmpty()) {
+                bindings = bindingService.list(request.location(), request.provider()).stream()
+                        .filter(candidate -> request.connectionInstanceId().equals(candidate.sessionId()))
+                        .toList();
+            }
             if (bindings.isEmpty()) {
                 return evaluateAndRecord(false,
                         Decision.SESSION_UNBOUND,

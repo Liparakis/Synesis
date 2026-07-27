@@ -16,6 +16,7 @@ import org.synesis.workspace.application.workspace.AgentOutcomeTranslator;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.agent.AgentWorkspaceGuidance;
 import org.synesis.workspace.infrastructure.filesystem.TextFileDocument;
 import org.synesis.workspace.project.ProjectPathResolver;
 
@@ -157,6 +158,9 @@ public final class WorkspacePatchService {
         if (!targetFile.startsWith(assignedWorktree)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
+        if (!Files.exists(targetFile) && Files.exists(root.resolve(resolvedRelative))) {
+            return workspaceMismatch(root, assignedWorktree);
+        }
 
         // Symlink Escape Check on Parent
         try {
@@ -268,6 +272,13 @@ public final class WorkspacePatchService {
         WorkspaceMutationBroker.MutationResult mutResult = mutationBroker.applyMutation(mutReq);
         TranslatedOutcome outcome = translator.translateMutationResult(mutResult, resolvedRelative);
         return outcome.publicResponse();
+    }
+
+    private static AgentResponse workspaceMismatch(Path controlRoot, Path assignedWorktree) {
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_MISMATCH, null,
+                new AgentWorkspaceGuidance(controlRoot.toString(), assignedWorktree.toString(),
+                        "The target exists in the control checkout, not this assigned worktree. "
+                                + "Stop native mutations and relaunch the provider from assignedWorktree."));
     }
 
     private static String computeSha256Hex(byte[] bytes) {

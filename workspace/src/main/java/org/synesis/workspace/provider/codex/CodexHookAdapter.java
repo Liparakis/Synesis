@@ -138,7 +138,17 @@ public final class CodexHookAdapter {
             try {
                 location = new ProjectApplicationService().locate(Path.of(cwd));
             } catch (Exception failure) {
-                return invalid("Codex cwd is not an initialized Synesis project");
+                if (policyLocation == null) {
+                    return invalid("Codex cwd is not an initialized Synesis project");
+                }
+                Path assignedRoot = Path.of(cwd).toAbsolutePath().normalize();
+                location = new ProjectApplicationService.ProjectLocation(
+                        assignedRoot,
+                        assignedRoot.resolve(".synesis"),
+                        assignedRoot.resolve(".synesis/project.json"),
+                        policyLocation.profile(),
+                        policyLocation.projectId(),
+                        policyLocation.createdAt());
             }
             CodexApplyPatchParser.ParseResult parsed = new CodexApplyPatchParser().parse(command);
             if (!parsed.valid()) {

@@ -18,6 +18,8 @@ import java.util.UUID;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.provider.ProviderRegistry;
 
 /**
  * Creates and resumes project-scoped provider session bindings.
@@ -82,6 +84,13 @@ public final class ProviderSessionBindingService {
                 }
             }
             writeWorkspaceMarker(path, location, binding, branch);
+            ProviderIntegration provider = ProviderRegistry.find(binding.provider());
+            if (provider != null) {
+                ProviderApplicationService.materializeHook(path,
+                        provider,
+                        new ProviderApplicationService().launcherPath(),
+                        location.profile());
+            }
             Binding allocated = copy(binding,
                     worktreeId,
                     location.root()
@@ -92,7 +101,7 @@ public final class ProviderSessionBindingService {
                     "ALLOCATED",
                     "UNVERIFIED",
                     "WORKTREE_ALLOCATED",
-                    "WORKSPACE_UNVERIFIED");
+                    binding.providerTrustState());
             return verifyBinding(location.root(), allocated);
         } catch (Exception failure) {
             return copy(binding,
@@ -118,6 +127,8 @@ public final class ProviderSessionBindingService {
                     && binding.branch()
                     .equals(git(assigned, "symbolic-ref", "--short", "HEAD"))
                     && isBaseAncestor(assigned, binding.baseCommit());
+            String trust = verified && "VERIFIED".equals(binding.providerTrustState())
+                    ? "VERIFIED" : "WORKSPACE_UNVERIFIED";
             return new Binding(SCHEMA_VERSION,
                     binding.sessionId(),
                     binding.projectId(),
@@ -139,7 +150,7 @@ public final class ProviderSessionBindingService {
                     binding.createdAtEpochMillis(),
                     System.currentTimeMillis(),
                     binding.lastVerifiedProjectSequence(),
-                    verified ? "WORKSPACE_UNVERIFIED" : "WORKSPACE_UNVERIFIED",
+                    trust,
                     binding.bindingVersion(),
                     binding.completedAt());
         } catch (Exception failure) {
@@ -503,6 +514,25 @@ public final class ProviderSessionBindingService {
         }
     }
 
+    /**
+     * Finds the active provider binding that owns an assigned worktree.
+     *
+     * @param location initialized control project
+     * @param provider stable provider identifier
+     * @param worktree assigned worktree path
+     * @return matching binding, or empty when the worktree is not bound
+     * @throws BindingException when stored bindings are malformed
+     */
+    public synchronized java.util.Optional<Binding> findByWorktree(
+            ProjectApplicationService.ProjectLocation location, String provider, Path worktree)
+            throws BindingException {
+        Path normalized = Objects.requireNonNull(worktree, "worktree").toAbsolutePath().normalize();
+        return list(location, provider).stream()
+                .filter(binding -> "BOUND".equals(binding.status()) && binding.worktreePath() != null)
+                .filter(binding -> normalized.equals(Path.of(binding.worktreePath()).toAbsolutePath().normalize()))
+                .findFirst();
+    }
+
     private static Binding newBinding(ProjectApplicationService.ProjectLocation location,
             NodeIdentity identity, String provider, String fingerprint) {
         long now = System.currentTimeMillis();
@@ -555,7 +585,9 @@ public final class ProviderSessionBindingService {
             String status = git(Path.of(binding.worktreePath()), "status", "--porcelain", "--untracked-files=all");
             return status.lines().map(String::trim)
                     .filter(line -> !line.isBlank())
-                    .noneMatch(line -> !(line.endsWith(".synesis") || line.contains(".synesis/")));
+                    .noneMatch(line -> !(line.endsWith(".synesis") || line.contains(".synesis/")
+                            || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
+                            || line.contains(".codex/hooks.json")));
         } catch (Exception failure) {
             return false;
         }

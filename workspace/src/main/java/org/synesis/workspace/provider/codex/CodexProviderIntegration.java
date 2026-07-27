@@ -140,6 +140,24 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     }
 
     @Override
+    public Map<String, Object> managedSessionHook(Path launcher, Path profile) {
+        Map<String, Object> hook = new LinkedHashMap<>();
+        hook.put("id", "synesis-codex-session");
+        hook.put("matcher", "startup|resume");
+        Map<String, Object> command = new LinkedHashMap<>();
+        command.put("type", "command");
+        command.put("command", hookCommand(launcher, profile));
+        command.put("commandWindows", windowsHookCommand(launcher));
+        hook.put("hooks", List.of(command));
+        return hook;
+    }
+
+    @Override
+    public boolean isManagedSessionHook(Object value) {
+        return value instanceof Map<?, ?> hook && "synesis-codex-session".equals(hook.get("id"));
+    }
+
+    @Override
     public boolean isManagedHook(Object value) {
         if (!(value instanceof Map<?, ?> hook) || !matcher().equals(hook.get("matcher"))) {
             return false;

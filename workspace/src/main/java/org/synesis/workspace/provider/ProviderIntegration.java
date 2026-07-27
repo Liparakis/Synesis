@@ -106,6 +106,16 @@ public interface ProviderIntegration {
         return hook;
     }
 
+    /** Returns an optional managed session-start hook. */
+    default Map<String, Object> managedSessionHook(Path launcher, Path profile) {
+        return null;
+    }
+
+    /** Identifies an optional managed session-start hook. */
+    default boolean isManagedSessionHook(Object value) {
+        return false;
+    }
+
     /**
      * Identifies a managed hook entry during lifecycle operations.
      *

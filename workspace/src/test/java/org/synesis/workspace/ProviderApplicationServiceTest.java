@@ -18,6 +18,19 @@ import org.synesis.workspace.provider.ProviderRegistry;
  */
 final class ProviderApplicationServiceTest {
 
+    private static void git(Path root, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        if (process.waitFor() != 0) {
+            throw new IllegalStateException(output);
+        }
+    }
+
     @Test
     void registryIsDeterministicAndListsCodexAsExperimental() {
         assertEquals(java.util.List.of("antigravity", "claude", "codex"),
@@ -233,6 +246,45 @@ final class ProviderApplicationServiceTest {
             assertEquals(Boolean.TRUE, after.get("custom"));
             assertTrue(((Map<?, ?>) after.get("mcpServers")).containsKey("other"));
             assertTrue(!((Map<?, ?>) after.get("mcpServers")).containsKey("synesis"));
+        } finally {
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
+        }
+    }
+
+    @Test
+    void claudeCodeHookUsesCompatibilityCommandName() throws Exception {
+        Path launcher = Path.of("C:/tools/synesis.cmd");
+        Path profile = Path.of("C:/project/.synesis/local/profile");
+
+        String command = ProviderRegistry.find("claude")
+                .hookCommand(launcher, profile);
+
+        assertTrue(command.contains(" hook claude-code --profile "));
+        assertTrue(!command.contains(" hook claude --profile "));
+    }
+
+    @Test
+    void codexInstallationMaterializesHookIntoAssignedWorktree() throws Exception {
+        Path root = Files.createTempDirectory("codex-worktree-hook-");
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "init");
+        git(root, "config", "user.email", "synesis-test@example.invalid");
+        git(root, "config", "user.name", "Synesis Test");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "baseline");
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        String previous = System.getProperty("synesis.launcher");
+        System.setProperty("synesis.launcher", launcher.toString());
+        try {
+            var location = new ProjectApplicationService().init(root).location();
+            var result = new ProviderApplicationService().install(location, "codex");
+            Path worktree = Path.of(result.values().get("ASSIGNED_WORKTREE"));
+            assertTrue(Files.isRegularFile(worktree.resolve(".codex/hooks.json")));
+            assertTrue(Files.readString(worktree.resolve(".codex/hooks.json")).contains("hook codex"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");

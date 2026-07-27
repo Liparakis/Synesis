@@ -34,6 +34,27 @@ Promotion requires a trusted real run proving the complete column set, not only
 the parser or a generated wrapper. A provider that fails a column remains
 installed for diagnostics but cannot enter zero-touch mutation mode.
 
+## MCP integration evidence tiers
+
+These tiers describe MCP connection evidence only. They do not promote a
+provider's hook, workspace, mutation-interception, or zero-touch maturity.
+
+| Tier | Meaning |
+|---|---|
+| `MCP_CONFIG_DISCOVERED` | The expected provider configuration location and schema were identified, but a live MCP connection has not been verified. |
+| `MCP_CONNECTED` | A live MCP process initialized successfully and exposed the expected Synesis tool surface. |
+| `MCP_CONFIRMED_WORKING` | A live MCP process initialized, exposed the expected tools, read a repository-relative file, created a file in the assigned worktree, reread it, and preserved the returned content revision/hash. |
+
+Current confirmed evidence:
+
+| Integration | Tier | Scope and evidence |
+|---|---|---|
+| Claude Desktop via Synesis MCP on `SynesisTestProject` | `MCP_CONFIRMED_WORKING` | One isolated session; all 11 tools visible; `AGENTS.md` read; `scratch.txt` created and reread; creation and reread hashes matched. This does not prove Claude hook enforcement or full-project workspace population. |
+
+The confirmed tier is evidence that the MCP transport and basic managed-file
+operations work for that integration. It is not evidence that every provider,
+every project path, or every provider-native mutation hook is enforced.
+
 `READY_FOR_REAL_VALIDATION` means the project/node/provider session binding,
 actor separation, and exact installed hook path are present. It is not evidence
 that a real provider denied or intercepted a mutation.

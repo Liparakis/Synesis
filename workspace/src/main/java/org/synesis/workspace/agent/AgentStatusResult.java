@@ -9,7 +9,12 @@ import java.util.Objects;
  * @param pending   number of pending coordination items
  * @since 1.0
  */
-public record AgentStatusResult(String workspace, int pending) {
+public record AgentStatusResult(String workspace, int pending, String worktree, String instruction) {
+
+    /** Creates a status result without worktree guidance. */
+    public AgentStatusResult(String workspace, int pending) {
+        this(workspace, pending, null, null);
+    }
 
     /**
      * Validates status fields.

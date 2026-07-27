@@ -12,6 +12,7 @@ import java.util.Objects;
 import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
+import org.synesis.workspace.provider.codex.CodexNativePatchRouter;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -98,19 +99,26 @@ public final class HookApplicationService {
     }
 
     private static Path controlRoot(Path cwd) throws Exception {
-        var located = new ProjectApplicationService().locate(cwd);
-        Path marker = located.synesisDirectory()
-                .resolve("local/workspace-binding.json");
-        if (!java.nio.file.Files.isRegularFile(marker)) {
-            return located.root();
+        Path current = Objects.requireNonNull(cwd, "cwd")
+                .toAbsolutePath()
+                .normalize();
+        while (current != null) {
+            Path marker = current.resolve(".synesis/local/workspace-binding.json");
+            if (java.nio.file.Files.isRegularFile(marker)) {
+                Map<String, Object> value = object(ProviderJson.parse(java.nio.file.Files.readString(marker)));
+                Path control = Path.of(text(value, "controlCheckoutPath"));
+                var controlLocation = new ProjectApplicationService().require(control);
+                if (!controlLocation.projectId()
+                        .toString()
+                        .equals(text(value, "projectId"))) {
+                    throw new IllegalArgumentException("workspace marker project mismatch");
+                }
+                return controlLocation.root();
+            }
+            Path parent = current.getParent();
+            current = parent == null || parent.equals(current) ? null : parent;
         }
-        Map<String, Object> value = object(ProviderJson.parse(java.nio.file.Files.readString(marker)));
-        if (!located.projectId()
-                .toString()
-                .equals(text(value, "projectId"))) {
-            throw new IllegalArgumentException("workspace marker project mismatch");
-        }
-        return Path.of(text(value, "controlCheckoutPath"));
+        return new ProjectApplicationService().locate(cwd).root();
     }
 
     /**
@@ -180,12 +188,47 @@ public final class HookApplicationService {
             String cwd = text(event, "cwd");
             Path eventCwd = Path.of(cwd);
             var location = new ProjectApplicationService().require(controlRoot(eventCwd));
-            ProviderSessionBindingService.BindingResult binding = bindings.ensure(location, "codex",
-                    evidence(json));
+            String eventName = text(event, "hook_event_name");
+            if ("SessionStart".equals(eventName)) {
+                ProviderSessionBindingService.BindingResult session = bindings.ensure(location, "codex",
+                        evidence(json));
+                if (session.binding().worktreePath() == null || session.binding().worktreePath().isBlank()) {
+                    return denied("WORKSPACE_UNASSIGNED");
+                }
+                ProviderSessionBindingService.WorkspaceVerificationResult trust = bindings.verifyWorkspaceTrust(
+                        location, "codex", session.binding().sessionId(),
+                        Path.of(session.binding().worktreePath()));
+                if (!trust.verified()) {
+                    return denied(trust.code());
+                }
+                String response = "{\"systemMessage\":\"Synesis bound this Codex session to its assigned worktree. Native mutations will be routed through Synesis.\"}";
+                return withBinding(new HookExecutionResult("SESSION_BOUND", response,
+                        "Synesis session bound"), new ProviderSessionBindingService.BindingResult(
+                                trust.binding(), false));
+            }
+            ProviderSessionBindingService.BindingResult binding = bindings.findByWorktree(location, "codex", eventCwd)
+                    .map(existing -> new ProviderSessionBindingService.BindingResult(existing, false))
+                    .orElseGet(() -> {
+                        try {
+                            return bindings.ensure(location, "codex", evidence(json));
+                        } catch (ProviderSessionBindingService.BindingException failure) {
+                            throw new IllegalStateException(failure);
+                        }
+                    });
             ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
                     binding.binding(), eventCwd);
-            if (!workspace.verified()) {
+            if (!workspace.verified() && !eventCwd.toAbsolutePath().normalize().equals(location.root())) {
                 return denied(workspace.code());
+            }
+            if (eventCwd.toAbsolutePath().normalize().equals(location.root())) {
+                if (binding.binding().worktreePath() == null || binding.binding().worktreePath().isBlank()) {
+                    return denied("GIT_HEAD_UNAVAILABLE");
+                }
+                Map<String, Object> toolInput = object(event.get("tool_input"));
+                String command = text(toolInput, "command");
+                CodexNativePatchRouter.RouteResult routed = new CodexNativePatchRouter().route(location,
+                        binding.binding(), command);
+                return denied(routed.message());
             }
             CodexHookAdapter.Result result = new CodexHookAdapter().processJson(json, location);
             return withBinding(new HookExecutionResult(result.outcome()

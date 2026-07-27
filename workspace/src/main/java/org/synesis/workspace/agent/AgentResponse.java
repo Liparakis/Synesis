@@ -10,9 +10,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * Shared provider-neutral agent response contract envelope.
  *
  * <p>All normal agent-facing outcomes serialize into this bounded envelope. Unused
- * fields (reason, nextAction, result) are omitted rather than serializing unnecessary
- * nulls. Internal diagnostic details (IDs, commit SHAs, evidence hashes, worktree paths)
- * are strictly prohibited from appearing in standard agent responses.
+     * fields (reason, nextAction, result) are omitted rather than serializing unnecessary
+     * nulls. The assigned worktree is returned as Synesis coordination context; provider
+     * hooks route native mutations there without requiring the agent to change directory.
  *
  * @param status     public operational status
  * @param reason     optional public reason code
@@ -69,6 +69,17 @@ public record AgentResponse(
         return new AgentResponse(AgentStatus.READY, null, null, new AgentStatusResult(workspace, pending));
     }
 
+    /** Creates a readiness response with explicit assigned-worktree guidance. */
+    public static AgentResponse ready(String workspace, int pending, String worktree) {
+        return new AgentResponse(AgentStatus.READY, null, null,
+                new AgentStatusResult(workspace, pending, worktree,
+                        "Keep the provider in its current project directory. Use Synesis MCP for all reads, writes, "
+                                + "and commands; Synesis applies them internally in this assigned worktree. Do not "
+                                + "switch branches, cd, or relaunch into the worktree. Native provider hooks are "
+                                + "optional and may be unavailable in desktop harnesses. If native editing is attempted "
+                                + "and Synesis reports workspace_mismatch, stop native mutations and verify with Synesis MCP."));
+    }
+
     /**
      * Creates a blocked response with a public reason code.
      *
@@ -114,7 +125,21 @@ public record AgentResponse(
                 }
                 map.put("result", capMap);
             } else if (result instanceof AgentStatusResult stat) {
-                map.put("result", Map.of("workspace", stat.workspace(), "pending", stat.pending()));
+                Map<String, Object> status = new LinkedHashMap<>();
+                status.put("workspace", stat.workspace());
+                status.put("pending", stat.pending());
+                if (stat.worktree() != null) {
+                    status.put("worktree", stat.worktree());
+                }
+                if (stat.instruction() != null) {
+                    status.put("instruction", stat.instruction());
+                }
+                map.put("result", status);
+            } else if (result instanceof AgentWorkspaceGuidance guidance) {
+                map.put("result", Map.of(
+                        "controlCheckout", guidance.controlCheckout(),
+                        "assignedWorktree", guidance.assignedWorktree(),
+                        "instruction", guidance.instruction()));
             } else if (result instanceof Map<?, ?> resMap) {
                 map.put("result", resMap);
             } else {

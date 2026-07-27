@@ -232,7 +232,10 @@ public final class AgentSessionService {
         try {
             AgentSessionContext context = resolveSessionContext(request);
             String workspaceState = context.isIsolatedWorkspace() ? "isolated" : "ready";
-            return AgentResponse.ready(workspaceState, context.pendingCount());
+            String worktree = context.worktreePath() == null ? null : context.worktreePath().toString();
+            return worktree == null
+                    ? AgentResponse.ready(workspaceState, context.pendingCount())
+                    : AgentResponse.ready(workspaceState, context.pendingCount(), worktree);
         } catch (IllegalArgumentException ex) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         } catch (IllegalStateException ex) {
