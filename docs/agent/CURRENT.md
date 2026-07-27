@@ -27,8 +27,8 @@ schema, or event-format changes occurred.
 
 ## Immediate next action
 
-Record and commit the deferred-register refinement checkpoint. Leave the
-unrelated README edit untouched; no capability implementation is authorized.
+Record and commit the deferred coordination-feature register update. Leave
+unrelated edits untouched; no capability implementation is authorized.
 
 ## Work completed
 
@@ -55,4 +55,13 @@ failure identified incorrect stripping of leading slashes from absolute
 --dependency-verification=strict` now pass locally.
 The deferred-register cleanup leaves nine active capabilities, archives all
 historical `SL-D-001` through `SL-D-030` IDs, and moves network cases to the
-validation matrix.
+validation matrix. The three coordination-correctness entries
+(`SL-D-037`–`SL-D-039`) now explicitly define revision invalidation,
+out-of-band mutation enforcement, and wait-for cycle detection without
+claiming implementation.
+
+## Current verification
+
+The deferred validator, Gradle check with strict dependency verification,
+bootstrap Go tests, and bootstrap Go vet all pass for this documentation-only
+slice. No production, CLI, or MCP files changed.

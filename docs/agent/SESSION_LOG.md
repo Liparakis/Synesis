@@ -1351,3 +1351,20 @@ Append-only operational history.
   --no-daemon --dependency-verification=strict` PASS; bootstrap Go test and vet
   PASS; repository hygiene and maintained Markdown link checks PASS.
 - Remaining work: Review, checkpoint, and commit this documentation slice.
+
+## 2026-07-27 — Deferred coordination correctness features
+
+- Active task: SYN-019; documentation-only deferred-feature addition.
+- Completed work: Reused and expanded `SL-D-037`–`SL-D-039` with explicit
+  contract revision/dependency invalidation, out-of-band mutation detection and
+  integration enforcement, and wait-for dependency graph/deadlock detection.
+  No duplicate IDs or separate parking-lot documents were created.
+- Product boundary: Synesis communicates invalidation and enforcement evidence
+  but does not rewrite, regenerate, or repair harness code; no portable
+  filesystem prevention claim is made; lease expiry is not treated as deadlock
+  resolution.
+- Verification: deferred validator PASS; Gradle strict check PASS; bootstrap
+  Go test and vet PASS; no production, CLI, or MCP changes.
+- Remaining work: Create CP-0241 and commit this documentation slice.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`

@@ -94,38 +94,41 @@ dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/D
 ## SL-D-037 — Contract revision and dependency invalidation
 
 **Status:** DEFERRED
+**Priority:** Later
 **Area:** Coordination correctness
-**Current verified capability:** Bounded task and capability records carry explicit identity and revision data where implemented.
-**Missing capability:** Immutable harness-contract identity, revision, owner, consumers, status, superseded revision, and invalidation of dependent work.
-**Reason deferred:** Contract lifecycle semantics are not yet a promoted coordination slice.
-**Activation trigger:** Multiple independent harnesses need accepted contracts to survive revision and replanning safely.
-**Evidence required before planning:** Revision vectors proving stale publication rejection, consumer invalidation, supersession, replan signaling, and no automatic harness-code rewrite.
-**Public-claims impact:** Synesis does not own or rewrite harness behavior; it may communicate contract invalidation only.
+**Current verified capability:** Bounded task and capability records carry explicit identity and revision data where implemented; no general accepted-harness-contract lifecycle exists.
+**Missing capability:** Stable contract identity; explicit revision; owner; known consumers/dependants; contract status; superseded-revision linkage; revision and invalidation events; stale-dependent-work classification; rejection of publication against a superseded revision; and bounded notification to affected harnesses.
+**Reason deferred:** Real multi-harness contract lifecycle semantics are not yet a promoted coordination slice.
+**Activation trigger:** Real multi-harness work where one harness begins implementation against another harness's accepted but not yet finalized function signature, schema, message shape, return type, or parameter set.
+**Evidence required before planning:** Two harnesses depend on one revision; the owner publishes a new revision; dependants become stale or replanning-required; old-revision publication is rejected as current; and old/new revisions plus invalidation events remain auditable.
+**Public-claims impact:** Synesis records and communicates changed agreements and invalidates stale coordination claims. It does not rewrite, regenerate, repair, or automatically stub-regenerate harness code.
 **Related documents:** `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, `docs/security/THREAT_MODEL.md`
 **Last reviewed:** 2026-07-27
 
 ## SL-D-038 — Out-of-band mutation detection and integration enforcement
 
 **Status:** DEFERRED
+**Priority:** Later
 **Area:** Coordination correctness and workspace safety
-**Current verified capability:** MCP-managed writes are revision-checked and isolated worktrees are preserved; shell/IDE bypass is not portable filesystem prevention.
-**Missing capability:** Detection and recording of unauthorized or unowned changes, with publication, validation, completion, and integration blocked until review.
-**Reason deferred:** Harnesses can mutate through shells, IDE tools, scripts, or other integrations outside MCP.
-**Activation trigger:** A product requirement for ownership enforcement across supported integrations.
-**Evidence required before planning:** Out-of-band mutation fixtures, ownership-violation records, publication/integration fencing, isolated-worktree preservation, and restart/recovery evidence.
-**Public-claims impact:** Do not claim portable filesystem-level write prevention. Preventive sandboxing remains research only.
+**Current verified capability:** MCP-managed writes are revision-checked and isolated worktrees are preserved; shell, IDE-native editing, scripts, provider-native tools, other MCP servers, and direct filesystem access are outside portable pre-write enforcement.
+**Missing capability:** Detection of worker changes outside Synesis-managed mutation paths; comparison with current ownership and allowed mutation scope; an ownership/mutation-violation record; blocking publication, validation, completion, and integration while unresolved; preserved worktree boundaries; and bounded review, revert, reclassify, or authorize recovery.
+**Reason deferred:** General-purpose harnesses may bypass Synesis-managed mutation tools, and portable filesystem-level prevention cannot be claimed.
+**Activation trigger:** General-purpose harness adoption where Synesis cannot guarantee that every write passes through its MCP mutation tools.
+**Evidence required before planning:** An unauthorized direct write is detected; the worker/task enters a violation state; publication and integration are blocked; and reverting or explicitly resolving the violation restores normal operation without destroying isolated work.
+**Public-claims impact:** Synesis may enforce publication and integration boundaries but must not claim portable prevention of every filesystem write or default OS file locking. Preventive sandboxing is optional future research only.
 **Related documents:** `docs/architecture/zero-touch-agent-collaboration.md`, `docs/architecture/autonomous-workspace-broker.md`, `docs/security/THREAT_MODEL.md`
 **Last reviewed:** 2026-07-27
 
 ## SL-D-039 — Wait-for dependency graph and deadlock detection
 
 **Status:** DEFERRED
+**Priority:** Later
 **Area:** Coordination correctness
 **Current verified capability:** Task ownership and bounded coordination records exist; no wait-for graph is maintained.
-**Missing capability:** Cycle detection before accepting a blocking dependency, rejection of the newest cycle-forming edge, and bounded resolution options.
-**Reason deferred:** Cross-task dependency semantics and operator resolution policy are not yet specified.
-**Activation trigger:** Multiple owners need explicit blocking dependencies rather than implicit coordination stalls.
-**Evidence required before planning:** Acyclic edge acceptance, cycle rejection, concurrent updates, stale-edge handling, bounded deadlock reason, resolution options, and lease-independent behavior.
-**Public-claims impact:** Lease expiry is not a deadlock solution; no autonomous task decomposition or ranking is implied.
+**Missing capability:** Explicit blocking edges and a graph across tasks, owners, or contracts; cycle detection before accepting a new edge; rejection of the newest cycle-forming edge; preservation of existing ownership and completed work; and a bounded deadlock result with resolution options.
+**Reason deferred:** Cross-task dependency semantics and operator resolution policy are not yet specified. A typical unresolved cycle is task A waiting on task B while task B waits on task A.
+**Activation trigger:** Concurrent multi-owner work with blocking cross-task requests.
+**Evidence required before planning:** Create A→B and B→A dependencies; reject the second cycle-forming edge; report a deterministic bounded cycle; preserve healthy ownership; and demonstrate resolution by making a request non-blocking, transferring/relinquishing ownership, assigning one owner to both sides, revising the dependency, or escalating to the operator.
+**Public-claims impact:** Synesis detects and reports coordination cycles but does not choose the correct implementation or architecture. Lease expiry is for abandoned participants, not healthy circular waits, and no task decomposition or ranking is implied.
 **Related documents:** `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, `docs/security/THREAT_MODEL.md`
 **Last reviewed:** 2026-07-27
