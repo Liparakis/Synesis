@@ -41,6 +41,8 @@ events now replay successfully after stable legacy dependency wire-code
 decoding. A read-only reconciliation inspection classified one provider
 session as `suspectedStale` without transferring ownership; the dirty fixture
 was not altered. Its current Python acceptance suite passes all 45 tests.
+The repository-wide Gradle check also passes with strict dependency
+verification (50 actionable tasks).
 
 ## Work completed
 

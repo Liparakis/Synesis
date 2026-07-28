@@ -1209,5 +1209,6 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   read-only reconciliation classified one ended provider session as
   suspected-stale without transferring its claims. The task-tracker fixture's
   current `python -m pytest -q` run passes all 45 tests.
+  The repository-wide Gradle check passes with strict dependency verification.
 - Scope boundary: no remote publication, provider credential changes, or
   universal native-hook enforcement claim.
