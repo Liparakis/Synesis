@@ -1154,5 +1154,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   compare-and-fast-forward.
 - Required documentation: integration ADR, deferred-register activation note,
   checkpoint, test matrix, and task-tracker integration evidence.
+- Evidence: CP-0269; `IntegrationCompatibilityServiceTest`, synthetic
+  two-process pytest-backed integration, workspace Javadocs, and focused
+  workspace/MCP tests pass.
 - Scope boundary: no general language API inference, broker, or control-checkout
   mutation path.

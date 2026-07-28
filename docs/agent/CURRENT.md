@@ -28,8 +28,8 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Define the shared integration-check result and add deterministic compatible,
-stale, uncovered-path, overlap, and Python-project tests.
+Wire compatibility results into shared integration-readiness adapters and
+preserve contract/path provenance in immutable task snapshots.
 
 ## Work completed
 
@@ -105,3 +105,10 @@ reconciliation remains idempotent when a dead session held no collaboration
 claims.
 
 SYN-022 contract revision slice is implemented: signed publication, exact consumer bindings, supersession, deterministic REPLAN_REQUIRED invalidation, content hashes, and replay fixtures are covered by ContractServiceTest.
+
+SYN-023 first slice is implemented: `IntegrationCompatibilityService` produces
+deterministic actionable results for stale ancestry, overlapping snapshots,
+uncovered claims, stale contracts, out-of-band paths, and failed tests;
+orchestration blocks stale/overlapping metadata before worktree preparation;
+Python projects use `python -m pytest -q` and the synthetic two-process fixture
+contains a real pytest smoke target.

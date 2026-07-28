@@ -54,6 +54,9 @@ class SyntheticTwoProcessCollaborationTest {
         git(projectRoot, "config", "user.name", "Test User");
         git(projectRoot, "config", "user.email", "test@example.com");
         Files.writeString(projectRoot.resolve("README.md"), "# Synthetic Two Process Collaboration Test\n");
+        Files.writeString(projectRoot.resolve("pyproject.toml"), "[tool.pytest.ini_options]\ntestpaths = ['tests']\n");
+        Files.createDirectories(projectRoot.resolve("tests"));
+        Files.writeString(projectRoot.resolve("tests/test_smoke.py"), "def test_smoke():\n    assert True\n");
         Files.writeString(projectRoot.resolve(".gitignore"), ".synesis/\n");
         git(projectRoot, "add", ".");
         git(projectRoot, "commit", "-m", "Initial commit");

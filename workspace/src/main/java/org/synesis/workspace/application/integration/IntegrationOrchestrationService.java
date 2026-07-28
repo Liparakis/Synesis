@@ -95,6 +95,14 @@ public final class IntegrationOrchestrationService {
                 return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
             }
 
+            // Fail before creating any integration worktree when immutable snapshot
+            // metadata already proves a stale base or overlapping change set.
+            List<String> metadataFailures = validateSnapshotMetadata(controlRoot, ordered, expectedControlHead);
+            if (!metadataFailures.isEmpty()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
+                        AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failures", metadataFailures));
+            }
+
             // 3. Allocate integration attempt ID
             String attemptToken = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
             String attemptId = "att_" + attemptToken;
@@ -253,7 +261,7 @@ public final class IntegrationOrchestrationService {
     }
 
     private static boolean runIntegrationGate(Path integrationWorktree) {
-        // Run gradle test inside integration worktree if build.gradle exists, otherwise git status check
+        // Use the configured project adapter; unsupported project types fail closed.
         if (Files.exists(integrationWorktree.resolve("build.gradle")) || Files.exists(integrationWorktree.resolve("build.gradle.kts"))) {
             try {
                 String gradlew = System.getProperty("os.name").toLowerCase().contains("win") ? ".\\gradlew.bat" : "./gradlew";
@@ -268,7 +276,50 @@ public final class IntegrationOrchestrationService {
                 return false;
             }
         }
-        return true;
+        if (Files.exists(integrationWorktree.resolve("pyproject.toml"))
+                || Files.exists(integrationWorktree.resolve("pytest.ini"))
+                || Files.exists(integrationWorktree.resolve("setup.cfg"))
+                || Files.exists(integrationWorktree.resolve("tests"))) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder("python", "-m", "pytest", "-q");
+                pb.directory(integrationWorktree.toFile());
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                proc.getInputStream().readAllBytes();
+                int code = proc.waitFor();
+                return code == 0;
+            } catch (Exception ex) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots, String controlHead) {
+        Set<String> changed = new java.util.HashSet<>();
+        List<String> failures = new ArrayList<>();
+        for (TaskSnapshotRecord snapshot : snapshots) {
+            if (!isAncestor(controlRoot, snapshot.baseCommit(), controlHead)) {
+                failures.add("STALE_BASE:" + snapshot.snapshotId());
+            }
+            for (String path : snapshot.changedPaths()) {
+                String normalized = path.replace('\\', '/');
+                if (!changed.add(normalized)) {
+                    failures.add("OVERLAPPING_SNAPSHOT:" + normalized);
+                }
+            }
+        }
+        return List.copyOf(failures);
+    }
+
+    private static boolean isAncestor(Path workdir, String base, String head) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("git", "merge-base", "--is-ancestor", base, head);
+            pb.directory(workdir.toFile());
+            return pb.start().waitFor() == 0;
+        } catch (Exception failure) {
+            return false;
+        }
     }
 
     private static String runGitOutput(Path workdir, String... args) throws IOException {
