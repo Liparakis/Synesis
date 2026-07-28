@@ -39,6 +39,7 @@ public final class CollaborationProjection {
             case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
             case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
             case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
+            case PARTICIPANT_ABANDONED -> abandoned(CollaborationCodec.decodeHeartbeat(event.payload()));
             default -> {
             }
         }
@@ -179,5 +180,13 @@ public final class CollaborationProjection {
         }
         participantHistory.put(handoff.target(), new Participant(target.id(), target.provider(), target.goal(),
                 Participant.State.ACTIVE, target.lastVerifiedActivity(), transferred.selectors()));
+    }
+
+    private void abandoned(String participant) throws IOException {
+        Participant current = participantHistory.get(participant);
+        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
+                Participant.State.ABANDONED, current.lastVerifiedActivity(), List.of()));
+        intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
     }
 }

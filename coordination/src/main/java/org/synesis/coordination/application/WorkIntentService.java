@@ -210,6 +210,20 @@ public final class WorkIntentService {
         }
     }
 
+    /** Records verified owner-independent abandonment and releases the participant's claims. */
+    public void abandon(String participant) throws IOException, GeneralSecurityException {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            boolean known = current.collaborationProjection().participants().stream()
+                    .anyMatch(candidate -> candidate.id().equals(participant));
+            if (!known) return;
+            current.append(UUID.nameUUIDFromBytes(participant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    PredictionEventType.PARTICIPANT_ABANDONED, signer.nodeId(),
+                    CollaborationCodec.encodeHeartbeat(participant), signer);
+        }
+    }
+
     private List<WorkIntent> freshIntents() {
         try {
             return freshStore().collaborationProjection().activeIntents();

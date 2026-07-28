@@ -98,4 +98,7 @@ stale recovery now plans and executes `RELEASE_ABANDONED_CLAIMS` through the
 shared event service. Atomic two-party handoff is implemented with pending
 ownership retention, target-only acceptance, append-lock serialization, and
 intent-version fencing. Lease boundary tests and dirty-artifact handoff
-validation remain next.
+validation remain next. Verified process absence now appends
+`PARTICIPANT_ABANDONED` and preserves an auditable terminal projection;
+reconciliation remains idempotent when a dead session held no collaboration
+claims.

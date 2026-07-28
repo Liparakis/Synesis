@@ -190,7 +190,9 @@ public enum PredictionEventType {
     /** Records verified activity for an authenticated participant. */
     PARTICIPANT_HEARTBEAT,
     /** Atomically transfers an intent after an accepted handoff request. */
-    CLAIM_HANDOFF_ACCEPTED;
+    CLAIM_HANDOFF_ACCEPTED,
+    /** Marks a participant abandoned after verified process absence beyond grace. */
+    PARTICIPANT_ABANDONED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -203,6 +205,7 @@ public enum PredictionEventType {
             case COORDINATION_RESPONDED -> 46;
             case PARTICIPANT_HEARTBEAT -> 47;
             case CLAIM_HANDOFF_ACCEPTED -> 48;
+            case PARTICIPANT_ABANDONED -> 49;
             default -> ordinal();
         };
     }

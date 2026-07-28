@@ -324,6 +324,7 @@ public final class ReconciliationService {
                         case RELEASE_ABANDONED_CLAIMS -> {
                             String participant = WorkspaceCollaborationService.participantHandle(entry.targetResourceId());
                             WorkIntentService intentService = new WorkIntentService(store, identity);
+                            intentService.abandon(participant);
                             for (var intent : intentService.activeIntents()) {
                                 if (participant.equals(intent.participant())) {
                                     intentService.release(intent.intentId(), participant);

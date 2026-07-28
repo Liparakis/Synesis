@@ -43,6 +43,7 @@ public final class PredictionProjection {
                     || type == PredictionEventType.WORK_INTENT_ANNOUNCED || type == PredictionEventType.WORK_INTENT_RELEASED
                     || type == PredictionEventType.COORDINATION_REQUESTED || type == PredictionEventType.COORDINATION_RESPONDED
                     || type == PredictionEventType.PARTICIPANT_HEARTBEAT || type == PredictionEventType.CLAIM_HANDOFF_ACCEPTED
+                    || type == PredictionEventType.PARTICIPANT_ABANDONED
                     || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
                 return null;
             }
@@ -75,6 +76,7 @@ public final class PredictionProjection {
                  SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED,
                  WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
                  COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
+                 PARTICIPANT_ABANDONED,
                  DEPENDENCY_INVALIDATED -> current;
         };
     }

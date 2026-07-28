@@ -276,6 +276,7 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.COORDINATION_RESPONDED
                 || command.type() == PredictionEventType.PARTICIPANT_HEARTBEAT
                 || command.type() == PredictionEventType.CLAIM_HANDOFF_ACCEPTED
+                || command.type() == PredictionEventType.PARTICIPANT_ABANDONED
                 || command.type() == PredictionEventType.DEPENDENCY_INVALIDATED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
@@ -304,6 +305,7 @@ public final class CoordinationService {
                  SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED,
                  WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
                  COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
+                 PARTICIPANT_ABANDONED,
                  DEPENDENCY_INVALIDATED -> true;
         };
         if (!allowed) {
