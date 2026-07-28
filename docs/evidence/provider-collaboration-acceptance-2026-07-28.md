@@ -48,6 +48,7 @@ automatic ownership transfer. The fixture's existing claims remain untouched.
 - authenticated Claude lifecycle run → `ensure_session(refresh=true, task.claims=[])` returned `status=ready`; a subsequent exact claim reacquired `claude_release_probe.txt` successfully
 - authenticated Claude contract run → `describe_required_capability(collaborationOperation=publish)` returned JSON-safe contract revision 1 with content hash `975e11eb6fa9b7987fd1bfe3845d902f0a70a80524d4e707166e5dd373bfea0a` after the MCP serialization fix
 - `./gradlew.bat :mcp:test --no-daemon` → PASS; `./gradlew.bat :cli:installDist --no-daemon` → PASS after the fix
+- `./gradlew.bat check --no-daemon --dependency-verification=strict` → `BUILD SUCCESSFUL` (50 actionable tasks) after the MCP projection fix
 - `codex mcp remove synesis` followed by `codex mcp add synesis -- ...\synesis.bat mcp --provider codex` → current local install
 - `codex exec --ephemeral --json ...` → first attempt was cancelled by the harness before a result
 - `codex exec --ephemeral --json --dangerously-bypass-approvals-and-sandbox ...` → real `ensure_session` completed with `status=ready` and an isolated worktree; no source file was edited

@@ -50,6 +50,8 @@ The real Claude contract publication probe initially exposed an MCP
 serialization defect; contract/dependency records are now projected to
 JSON-safe maps, the focused MCP regression passes, and the reinstalled
 distribution returns contract revision and content hash successfully.
+The subsequent full Gradle check with strict dependency verification also
+passes (50 actionable tasks).
 
 ## Work completed
 

@@ -1208,7 +1208,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   conflict blocking, isolated mutation/readback, and explicit
   release/reacquisition; Antigravity CLI is installed but quota-exhausted
   before MCP startup; a real Claude contract publish now returns a JSON-safe
-  revision/content hash after the MCP projection fix.
+  revision/content hash after the MCP projection fix; the subsequent full
+  strict Gradle check passes.
   read-only reconciliation classified one ended provider session as
   suspected-stale without transferring its claims. The task-tracker fixture's
   current `python -m pytest -q` run passes all 45 tests.
