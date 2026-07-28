@@ -1357,8 +1357,9 @@ Append-only operational history.
 - Active task: SYN-019; documentation-only deferred-feature addition.
 - Completed work: Reused and expanded `SL-D-037`–`SL-D-039` with explicit
   contract revision/dependency invalidation, out-of-band mutation detection and
-  integration enforcement, and wait-for dependency graph/deadlock detection.
-  No duplicate IDs or separate parking-lot documents were created.
+  integration enforcement, and wait-for dependency detection without claiming
+  implementation. No duplicate IDs or separate parking-lot documents were
+  created.
 - Product boundary: Synesis communicates invalidation and enforcement evidence
   but does not rewrite, regenerate, or repair harness code; no portable
   filesystem prevention claim is made; lease expiry is not treated as deadlock
@@ -1368,3 +1369,20 @@ Append-only operational history.
 - Remaining work: Create CP-0241 and commit this documentation slice.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1`
+
+## 2026-07-29 — SYN-025 provider collaboration roadmap completion
+
+- Active task: SYN-025 provider collaboration acceptance and evidence.
+- Completed work: Reconciled the final MCP parity slice, direct Codex/Claude/
+  Antigravity process evidence, handoff, release, deleted-chat recovery, and
+  JSON-safe discovery projections. Marked SYN-025 DONE at CP-0292.
+- Provider boundary: direct MCP configuration, connections, mutations, claims,
+  handoff, release, and recovery are evidenced for all three providers where
+  available. Antigravity model-driven prompting and native-hook maturity remain
+  explicitly unclaimed after the recorded harness limitation.
+- Verification: `./gradlew.bat check :cli:installDist --no-daemon
+  --dependency-verification=strict` BUILD SUCCESSFUL (50 actionable tasks);
+  bootstrap `go test -count=1 ./...`; `go vet ./...`; task-tracker `python -m
+  pytest -q` (45 passed); deferred validator; and `git diff --check` PASS.
+- Remaining work: No collaboration roadmap task remains active. Do not publish,
+  push, or claim native provider enforcement without new evidence.

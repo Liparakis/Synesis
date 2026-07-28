@@ -1187,7 +1187,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-025
 - Priority: P0
 - Title: Provider collaboration acceptance and evidence
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Run real Claude, Codex, and Antigravity collaboration scenarios
   where provider access exists, and record unavailable-provider limits honestly.
 - Dependencies: SYN-024 DONE at CP-0271; local distribution installed; MCP
@@ -1223,7 +1223,13 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   old-epoch `workspace_generation_changed` fencing. The task-tracker fixture's
   current `python -m pytest -q` run passes all 45 tests.
   Additive MCP request/handoff operations and exact-session `get_next_action`
-  collaboration details are covered by the fixed 11-tool parity tests.
-  The repository-wide Gradle check passes with strict dependency verification.
+  collaboration details are covered by the fixed 11-tool parity tests. The
+  final strict Gradle check, local installation, bootstrap Go tests/vet,
+  deferred validator, and task-tracker pytest suite all pass. Antigravity
+  direct MCP evidence is complete; model-driven prompting and native hooks are
+  explicitly not claimed.
+- Completion: DONE at CP-0292. The roadmap's provider acceptance criteria are
+  satisfied for available real MCP paths; the recorded Antigravity harness
+  limitation is external and does not block completion.
 - Scope boundary: no remote publication, provider credential changes, or
   universal native-hook enforcement claim.

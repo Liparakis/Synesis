@@ -3,7 +3,7 @@
 ## Identity
 
 - Task ID: SYN-025
-- Status: ACTIVE
+- Status: DONE
 - Priority: P1
 - Started checkpoint: CP-0230
 - Responsible agent: primary architecture-closure engineer
@@ -27,7 +27,14 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Installed distribution includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
+No collaboration roadmap task remains active; run
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
+any separately authorized future task.
+
+## Completion state
+
+The collaboration roadmap is complete at CP-0292. The installed distribution
+includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
 initialize passes. Codex global MCP entry and the task-tracker Claude project
 entry point to that install. A real Codex CLI run completed `ensure_session`
 with an exact `src/task_tracker.py` claim and isolated worktree; no source file
@@ -36,8 +43,9 @@ with a matching revision hash through MCP. Claude is now authenticated and a
 real run blocked on Codex's `src/task_tracker.py` claim before mutation; a
 separate real Claude run created and reread an isolated file with a matching
 revision hash and exercised explicit release/reacquisition. Antigravity is
-installed and authenticated locally but its CLI reports individual quota
-exhausted, so no MCP call was made. Two
+installed and authenticated locally; its direct MCP process completed the
+bounded transport acceptance while model-driven prompting remained limited by
+harness behavior. Two
 independent installed MCP processes demonstrated Codex claim → Claude overlap
 denial → clean-EOF release → Claude reacquisition. Historical task-tracker
 events now replay successfully after stable legacy dependency wire-code
@@ -163,4 +171,7 @@ native hooks remain separately unclaimed.
 The fixed 11-tool MCP surface now exposes additive coordination request and
 handoff operations through `describe_required_capability`, structured response
 fields through `respond_to_owner_request`, and JSON-safe collaboration details
-through `get_next_action`; CLI and MCP parity tests pass.
+through `get_next_action`; CLI and MCP parity tests pass. SYN-025 is DONE:
+direct MCP acceptance is verified for Codex, Claude, and Antigravity, while
+Antigravity model-driven prompting and native-hook maturity remain explicitly
+unclaimed.

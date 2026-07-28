@@ -21,12 +21,11 @@ Matrix outputs are short-retention internal artifacts; the final job retains
 one 30-day `synesis-release-candidate` artifact and removes internal artifacts
 on ordinary writable-token runs. No GitHub Release was created.
 
-SYN-020 through SYN-024 are DONE (latest collaboration checkpoint CP-0271).
-SYN-025 is the sole ACTIVE task and covers authenticated real-provider
-collaboration acceptance and evidence. Direct Antigravity MCP transport now
-has isolated claim, mutation/readback, and clean-EOF evidence; model-driven
-Antigravity mutation remains a harness limitation and is not a native-hook
-maturity claim.
+SYN-020 through SYN-025 are DONE (collaboration roadmap complete at CP-0292).
+SYN-025 covers authenticated real-provider collaboration acceptance and
+evidence. Direct Antigravity MCP transport has isolated claim,
+mutation/readback, handoff, and clean-EOF evidence; model-driven Antigravity
+mutation remains a harness limitation and is not a native-hook maturity claim.
 
 ## SYN-012 implementation state
 

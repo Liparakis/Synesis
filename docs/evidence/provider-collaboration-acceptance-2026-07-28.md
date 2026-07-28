@@ -72,3 +72,4 @@ automatic ownership transfer. The fixture's existing claims remain untouched.
 - `./gradlew.bat check --no-daemon --dependency-verification=strict` → `BUILD SUCCESSFUL` (50 actionable tasks)
 - direct installed launcher probe → valid MCP `initialize` response with server name `synesis`
 - `./gradlew.bat check --no-daemon --dependency-verification=strict` → PASS
+- Final completion verification on 2026-07-29: `./gradlew.bat check :cli:installDist --no-daemon --dependency-verification=strict` → `BUILD SUCCESSFUL` (50 actionable tasks); `go test -count=1 ./...` and `go vet ./...` → PASS; `python -m pytest -q` in the task-tracker fixture → `45 passed`; deferred validator and `git diff --check` → PASS. SYN-025 is complete at CP-0292. The remaining Antigravity model-driven/native-hook limitation is explicitly outside the MCP evidence tier and is not claimed as provider enforcement.
