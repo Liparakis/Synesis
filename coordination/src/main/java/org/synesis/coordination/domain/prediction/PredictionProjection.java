@@ -41,6 +41,7 @@ public final class PredictionProjection {
                     || type == PredictionEventType.SESSION_FINALIZED || type == PredictionEventType.SESSION_ABANDONED
                     || type == PredictionEventType.TASK_CANCELLATION_REQUESTED || type == PredictionEventType.TASK_CANCELLED
                     || type == PredictionEventType.WORK_INTENT_ANNOUNCED || type == PredictionEventType.WORK_INTENT_RELEASED
+                    || type == PredictionEventType.COORDINATION_REQUESTED || type == PredictionEventType.COORDINATION_RESPONDED
                     || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
                 return null;
             }
@@ -71,7 +72,8 @@ public final class PredictionProjection {
                  INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
                  INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
                  SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED,
-                 WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, DEPENDENCY_INVALIDATED -> current;
+                 WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
+                 COORDINATION_RESPONDED, DEPENDENCY_INVALIDATED -> current;
         };
     }
 

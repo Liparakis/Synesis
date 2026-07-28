@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -66,6 +67,21 @@ final class WorkIntentServiceTest {
         service.release(intent.intentId(), "agt-owner");
         PredictionEventStore replayed = new PredictionEventStore(temp, project);
         assertTrue(replayed.collaborationProjection().activated());
+    }
+
+    @Test
+    void conflictingParticipantsCanDiscoverAndResolveNegotiation(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+        CoordinationRequest request = service.request("agt-contender", owner.intentId(),
+                CoordinationRequest.Kind.CONTRACT, "Agree on TaskTracker API v1");
+        assertEquals(CoordinationRequest.Status.PENDING, service.requests().get(0).status());
+        service.respond("agt-owner", request.requestId(), CoordinationRequest.Status.ACCEPTED, "API accepted");
+        assertEquals(CoordinationRequest.Status.ACCEPTED, service.requests().get(0).status());
+        assertTrue(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
     }
 
     private static WorkIntent intent(UUID project, String participant, ResourceSelector selector) {

@@ -21,6 +21,7 @@ import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
@@ -906,6 +907,19 @@ public final class McpProtocolHandler {
                 agentResponse = nextActionService.getNextAction(nextReq);
             }
             case "synesis.describe_required_capability" -> {
+                if (arguments != null && arguments.get("coordinationRequest") instanceof String requestValue) {
+                    try {
+                        var snapshot = collaborationService.status(activeProjectRoot);
+                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
+                                Map.of("intents", snapshot.intents(), "requests", snapshot.requests(),
+                                        "participants", snapshot.participants()));
+                        break;
+                    } catch (Exception failure) {
+                        agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                                AgentNextAction.REQUEST_HUMAN_HELP, null);
+                        break;
+                    }
+                }
                 String capability = arguments != null ? (String) arguments.get("capability") : null;
                 String reqHandle = arguments != null ? (String) arguments.get("request") : null;
                 String revResp = arguments != null ? (String) arguments.get("revisionResponse") : null;
@@ -916,6 +930,22 @@ public final class McpProtocolHandler {
                 agentResponse = capabilityRequestService.describeRequiredCapability(descReq);
             }
             case "synesis.respond_to_owner_request" -> {
+                if (arguments != null && arguments.get("coordinationRequest") instanceof String requestValue) {
+                    try {
+                        CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(
+                                String.valueOf(arguments.getOrDefault("coordinationStatus", "REJECTED")));
+                        collaborationService.respond(activeProjectRoot, provider, connectionInstanceId,
+                                java.util.UUID.fromString(requestValue), status,
+                                String.valueOf(arguments.getOrDefault("proposal", "")));
+                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
+                                Map.of("coordinationRequest", requestValue, "status", status.name()));
+                        break;
+                    } catch (Exception failure) {
+                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                                AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
+                        break;
+                    }
+                }
                 String reqHandle = arguments != null ? (String) arguments.get("request") : null;
                 String response = arguments != null ? (String) arguments.get("response") : null;
                 String reason = arguments != null ? (String) arguments.get("reason") : null;

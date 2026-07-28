@@ -14,6 +14,7 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 /** Deterministic projection of active work intents and resource claims. */
 public final class CollaborationProjection {
     private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
+    private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
     private boolean activated;
 
     /** Creates an empty collaboration projection. */
@@ -33,6 +34,8 @@ public final class CollaborationProjection {
                 announce(CollaborationCodec.decodeIntent(event.payload()));
             }
             case WORK_INTENT_RELEASED -> release(CollaborationCodec.decodeRelease(event.payload()));
+            case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
+            case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
             default -> {
             }
         }
@@ -46,6 +49,7 @@ public final class CollaborationProjection {
     public synchronized void validate(PredictionEvent event) throws IOException {
         CollaborationProjection candidate = new CollaborationProjection();
         candidate.intents.putAll(intents);
+        candidate.requests.putAll(requests);
         candidate.activated = activated;
         candidate.apply(event);
     }
@@ -67,9 +71,20 @@ public final class CollaborationProjection {
         return List.copyOf(intents.values());
     }
 
+    /** Returns active participant projections without connection or worktree details. */
+    public synchronized List<Participant> participants() {
+        return intents.values().stream().map(intent -> new Participant(intent.participant(), intent.provider(),
+                intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors())).toList();
+    }
+
     /** Returns whether this project has durable collaboration enforcement enabled. */
     public synchronized boolean activated() {
         return activated;
+    }
+
+    /** Returns all durable coordination requests. */
+    public synchronized List<CoordinationRequest> requests() {
+        return List.copyOf(requests.values());
     }
 
     /**
@@ -102,5 +117,23 @@ public final class CollaborationProjection {
         if (intents.remove(id) == null) {
             throw new IOException("INTENT_NOT_FOUND");
         }
+    }
+
+    private void request(CoordinationRequest request) throws IOException {
+        if (requests.containsKey(request.requestId())) throw new IOException("REQUEST_EXISTS");
+        if (!intents.containsKey(request.conflictingIntentId())) throw new IOException("INTENT_NOT_FOUND");
+        requests.put(request.requestId(), request);
+    }
+
+    private void respond(CollaborationCodec.Response response) throws IOException {
+        CoordinationRequest current = requests.get(response.requestId());
+        if (current == null) throw new IOException("REQUEST_NOT_FOUND");
+        if (current.status() != CoordinationRequest.Status.PENDING) {
+            if (current.status() == response.status()) return;
+            throw new IOException("REQUEST_ALREADY_RESOLVED");
+        }
+        requests.put(current.requestId(), new CoordinationRequest(current.requestId(), current.projectId(),
+                current.requester(), current.target(), current.conflictingIntentId(), current.kind(),
+                response.proposal().isBlank() ? current.proposal() : response.proposal(), response.status()));
     }
 }

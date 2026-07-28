@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.synesis.coordination.domain.collaboration.ClaimConflict;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -94,6 +95,47 @@ public final class WorkIntentService {
      */
     public List<WorkIntent> activeIntents() {
         return freshIntents();
+    }
+
+    /** Opens a negotiation request against the owner of a conflicting intent. */
+    public CoordinationRequest request(String requester, UUID conflictingIntentId,
+            CoordinationRequest.Kind kind, String proposal) throws IOException, GeneralSecurityException {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            WorkIntent conflict = current.collaborationProjection().intent(conflictingIntentId)
+                    .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+            CoordinationRequest request = new CoordinationRequest(UUID.randomUUID(), current.projectId(), requester,
+                    conflict.participant(), conflictingIntentId, kind, proposal, CoordinationRequest.Status.PENDING);
+            current.append(request.requestId(), PredictionEventType.COORDINATION_REQUESTED, signer.nodeId(),
+                    CollaborationCodec.encodeRequest(request), signer);
+            return request;
+        }
+    }
+
+    /** Responds idempotently to a request addressed to the participant. */
+    public void respond(String participant, UUID requestId, CoordinationRequest.Status status, String proposal)
+            throws IOException, GeneralSecurityException {
+        if (status == CoordinationRequest.Status.PENDING) throw new IllegalArgumentException("pending is not a response");
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            CoordinationRequest request = current.collaborationProjection().requests().stream()
+                    .filter(candidate -> candidate.requestId().equals(requestId)).findFirst()
+                    .orElseThrow(() -> new IOException("REQUEST_NOT_FOUND"));
+            if (!request.target().equals(participant)) throw new IOException("REQUEST_TARGET_MISMATCH");
+            current.append(requestId, PredictionEventType.COORDINATION_RESPONDED, signer.nodeId(),
+                    CollaborationCodec.encodeResponse(requestId, status, proposal), signer);
+        }
+    }
+
+    /** Returns durable coordination requests for discovery. */
+    public List<CoordinationRequest> requests() {
+        try {
+            return freshStore().collaborationProjection().requests();
+        } catch (Exception failure) {
+            throw new IllegalStateException("COLLABORATION_STATE_UNAVAILABLE", failure);
+        }
     }
 
     private List<WorkIntent> freshIntents() {

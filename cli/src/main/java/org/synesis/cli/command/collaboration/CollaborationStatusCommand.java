@@ -4,8 +4,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -28,11 +27,18 @@ public final class CollaborationStatusCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = new ProjectApplicationService().locate(project.toAbsolutePath().normalize());
-            var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-            for (var intent : store.collaborationProjection().activeIntents()) {
+            var snapshot = new WorkspaceCollaborationService().status(project.toAbsolutePath().normalize());
+            for (var intent : snapshot.intents()) {
                 runtime.terminal().stdout("PARTICIPANT=" + intent.participant() + " PROVIDER=" + intent.provider()
                         + " INTENT=" + intent.intentId() + " CLAIMS=" + intent.selectors());
+            }
+            for (var participant : snapshot.participants()) {
+                runtime.terminal().stdout("AGENT=" + participant.id() + " PROVIDER=" + participant.provider()
+                        + " STATE=" + participant.state() + " GOAL=" + participant.goal());
+            }
+            for (var request : snapshot.requests()) {
+                runtime.terminal().stdout("REQUEST=" + request.requestId() + " FROM=" + request.requester()
+                        + " TO=" + request.target() + " STATUS=" + request.status() + " KIND=" + request.kind());
             }
             return ExitCodes.OK;
         } catch (Exception failure) {

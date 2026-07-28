@@ -84,6 +84,12 @@ provider sessions and Antigravity remain separate evidence tasks. The earlier
 combined test run hit the known CLI in-progress result-file race; the final
 sequential root check passed.
 
-The remaining SYN-020 closure evidence is historical-log replay fixtures and
-durable-state reconciliation; SYN-021 presence/recovery and SYN-022 negotiation
-must not be promoted until that evidence is recorded.
+SYN-020 closure evidence is recorded in CP-0260; historical event compatibility
+is covered by the wire-code replay test and durable state is reconciled.
+
+SYN-021 negotiation slice is now implemented: signed coordination requests and
+responses replay through the collaboration projection; opaque participant
+projections expose provider, goal, state, and claims; CLI status/request/respond
+and additive MCP coordination request/response fields use the shared workspace
+service. `WorkIntentServiceTest.conflictingParticipantsCanDiscoverAndResolveNegotiation`
+passes. Lease-backed stale recovery and accepted handoff remain the next slice.

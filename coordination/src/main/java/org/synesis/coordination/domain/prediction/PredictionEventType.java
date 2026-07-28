@@ -182,13 +182,19 @@ public enum PredictionEventType {
     /** Announces an authenticated worker intent and atomically requested claims. */
     WORK_INTENT_ANNOUNCED,
     /** Releases all claims associated with an authenticated worker intent. */
-    WORK_INTENT_RELEASED;
+    WORK_INTENT_RELEASED,
+    /** Creates a signed coordination request between conflicting participants. */
+    COORDINATION_REQUESTED,
+    /** Records the target participant's coordination response. */
+    COORDINATION_RESPONDED;
 
     /** Returns the stable persisted wire code for this event kind. */
     public int wireCode() {
         return switch (this) {
             case WORK_INTENT_ANNOUNCED -> 43;
             case WORK_INTENT_RELEASED -> 44;
+            case COORDINATION_REQUESTED -> 45;
+            case COORDINATION_RESPONDED -> 46;
             default -> ordinal();
         };
     }

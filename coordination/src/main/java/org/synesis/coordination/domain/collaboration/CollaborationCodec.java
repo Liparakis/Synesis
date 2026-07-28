@@ -14,6 +14,8 @@ import java.util.UUID;
 public final class CollaborationCodec {
     private static final int MAGIC_INTENT = 0x53494e31;
     private static final int MAGIC_RELEASE = 0x53524c31;
+    private static final int MAGIC_REQUEST = 0x53525131;
+    private static final int MAGIC_RESPONSE = 0x53525331;
 
     private CollaborationCodec() {
     }
@@ -128,6 +130,61 @@ public final class CollaborationCodec {
         return id;
     }
 
+    /** Encodes a coordination request. */
+    public static byte[] encodeRequest(CoordinationRequest request) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_REQUEST);
+            uuid(out, request.requestId()); uuid(out, request.projectId());
+            text(out, request.requester()); text(out, request.target());
+            uuid(out, request.conflictingIntentId()); out.writeByte(request.kind().ordinal());
+            text(out, request.proposal()); out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) { throw new AssertionError(impossible); }
+    }
+
+    /** Decodes a coordination request. */
+    public static CoordinationRequest decodeRequest(byte[] encoded) throws IOException {
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_REQUEST) throw new IOException("unsupported request format");
+            UUID requestId = readUuid(in), projectId = readUuid(in);
+            String requester = readText(in), target = readText(in);
+            UUID conflict = readUuid(in);
+            int kind = in.readUnsignedByte();
+            if (kind >= CoordinationRequest.Kind.values().length) throw new IOException("request kind");
+            String proposal = readText(in);
+            if (in.available() != 0) throw new IOException("trailing request bytes");
+            return new CoordinationRequest(requestId, projectId, requester, target, conflict,
+                    CoordinationRequest.Kind.values()[kind], proposal, CoordinationRequest.Status.PENDING);
+        } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed request", failure); }
+    }
+
+    /** Encodes a request response and optional revised proposal. */
+    public static byte[] encodeResponse(UUID requestId, CoordinationRequest.Status status, String proposal) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_RESPONSE); uuid(out, requestId); out.writeByte(status.ordinal()); text(out, proposal == null ? "" : proposal);
+            out.flush(); return bytes.toByteArray();
+        } catch (IOException impossible) { throw new AssertionError(impossible); }
+    }
+
+    /** Decodes a request response. */
+    public static Response decodeResponse(byte[] encoded) throws IOException {
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_RESPONSE) throw new IOException("unsupported response format");
+            UUID id = readUuid(in); int status = in.readUnsignedByte();
+            if (status < 0 || status >= CoordinationRequest.Status.values().length) throw new IOException("request status");
+            String proposal = readTextAllowEmpty(in); if (in.available() != 0) throw new IOException("trailing response bytes");
+            return new Response(id, CoordinationRequest.Status.values()[status], proposal);
+        } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed response", failure); }
+    }
+
+    /** Decoded request response. */
+    public record Response(UUID requestId, CoordinationRequest.Status status, String proposal) { }
+
     private static void uuid(DataOutputStream out, UUID id) throws IOException {
         out.writeLong(id.getMostSignificantBits());
         out.writeLong(id.getLeastSignificantBits());
@@ -152,6 +209,14 @@ public final class CollaborationCodec {
         if (bytes.length != length) {
             throw new IOException("truncated text");
         }
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private static String readTextAllowEmpty(DataInputStream in) throws IOException {
+        int length = in.readInt();
+        if (length < 0 || length > 8192) throw new IOException("text bound");
+        byte[] bytes = in.readNBytes(length);
+        if (bytes.length != length) throw new IOException("truncated text");
         return new String(bytes, StandardCharsets.UTF_8);
     }
 }

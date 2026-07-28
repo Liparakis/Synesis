@@ -13,6 +13,8 @@ import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
@@ -64,6 +66,40 @@ public final class WorkspaceCollaborationService {
         UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
         new WorkIntentService(store, identity).release(intentId, participantHandle(binding.sessionId()));
     }
+
+    /** Opens a request against a conflicting intent owned by another participant. */
+    public CoordinationRequest request(Path projectRoot, String provider, String connectionInstanceId,
+            UUID conflictingIntentId, CoordinationRequest.Kind kind, String proposal) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        return new WorkIntentService(store, identity).request(participantHandle(binding.sessionId()), conflictingIntentId, kind, proposal);
+    }
+
+    /** Responds to a request addressed to the exact provider session. */
+    public void respond(Path projectRoot, String provider, String connectionInstanceId,
+            UUID requestId, CoordinationRequest.Status status, String proposal) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()), requestId, status, proposal);
+    }
+
+    /** Lists active intents and pending/resolved coordination requests. */
+    public CollaborationSnapshot status(Path projectRoot) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        WorkIntentService service = new WorkIntentService(store,
+                new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
+        return new CollaborationSnapshot(service.activeIntents(), service.requests(),
+                store.collaborationProjection().participants());
+    }
+
+    /** Shared collaboration discovery result used by CLI and MCP adapters. */
+    public record CollaborationSnapshot(List<WorkIntent> intents, List<CoordinationRequest> requests,
+            List<Participant> participants) { }
 
     /** Returns whether the session owns the target or no collaboration protocol is active.
      * @param projectRoot project root
