@@ -44,6 +44,8 @@ public final class PredictionProjection {
                     || type == PredictionEventType.COORDINATION_REQUESTED || type == PredictionEventType.COORDINATION_RESPONDED
                     || type == PredictionEventType.PARTICIPANT_HEARTBEAT || type == PredictionEventType.CLAIM_HANDOFF_ACCEPTED
                     || type == PredictionEventType.PARTICIPANT_ABANDONED
+                    || type == PredictionEventType.CONTRACT_PUBLISHED || type == PredictionEventType.CONTRACT_DEPENDENCY_BOUND
+                    || type == PredictionEventType.CONTRACT_SUPERSEDED
                     || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
                 return null;
             }
@@ -77,6 +79,7 @@ public final class PredictionProjection {
                  WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
                  COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
                  PARTICIPANT_ABANDONED,
+                 CONTRACT_PUBLISHED, CONTRACT_DEPENDENCY_BOUND, CONTRACT_SUPERSEDED,
                  DEPENDENCY_INVALIDATED -> current;
         };
     }

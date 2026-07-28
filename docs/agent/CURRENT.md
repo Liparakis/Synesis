@@ -2,7 +2,7 @@
 
 ## Identity
 
-- Task ID: SYN-021
+- Task ID: SYN-022
 - Status: ACTIVE
 - Priority: P1
 - Started checkpoint: CP-0230
@@ -11,13 +11,12 @@
 
 ## Objective
 
-Implement authenticated claim lifecycle, presence, and stale fencing without adding a broker, remote service, or control-checkout mutation path.
+Implement stable contract revisions and explicit dependency invalidation without adding a broker, remote service, or control-checkout mutation path.
 
 ## Immediate slice
 
-Add participant presence projection, lease-backed lifecycle, explicit release,
-verified-abandonment recovery, and claim-epoch fencing on top of the completed
-SYN-020 claim service.
+Add contract identity, revision, content hash, consumer bindings, supersession,
+and deterministic REPLAN_REQUIRED invalidation on top of the collaboration log.
 
 ## Verification target
 
@@ -27,8 +26,8 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Add deterministic lifecycle events and tests for lease renewal, stale/grace
-classification, owner-independent abandonment recovery, and old-epoch fencing.
+Run repository-wide verification, checkpoint SYN-022 contract invalidation,
+then promote the pre-merge compatibility slice.
 
 ## Work completed
 
@@ -102,3 +101,5 @@ validation remain next. Verified process absence now appends
 `PARTICIPANT_ABANDONED` and preserves an auditable terminal projection;
 reconciliation remains idempotent when a dead session held no collaboration
 claims.
+
+SYN-022 contract revision slice is implemented: signed publication, exact consumer bindings, supersession, deterministic REPLAN_REQUIRED invalidation, content hashes, and replay fixtures are covered by ContractServiceTest.

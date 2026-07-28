@@ -129,6 +129,8 @@
 | Bounded prediction contract encoding, signed/hash-chained event persistence, deterministic lifecycle projection, restart replay, and illegal transition rejection | coordination unit tests | `PredictionCoordinationTest.signedEventsReplayAndRejectInvalidTransitions` | pass | PASS | SYN-012-CP-0136 |
 | Signed coordination commands, duplicate idempotency, durable command replay, and subscriber replay from a sequence cursor | coordination unit tests | `PredictionCoordinationTest.signedCommandsAreIdempotentAndReplayToSubscribers` | pass | PASS | SYN-012-CP-0136 |
 
+| Exact contract publication, revision binding, supersession invalidation, stale rejection, and signed replay | coordination unit tests | `ContractServiceTest` | pass | PASS (`:coordination:test`, CP-0267) | SYN-022 |
+
 | Versioned immutable bootstrap payloads, safe pointer resolution, staged self-test, prepared plans, retention, rollback, and traversal rejection | Go unit/integration tests | `bootstrap/main_test.go` | pass | PASS (`go test -count=1 ./...`; `go vet ./...`) | SYN-014E |
 | Repository regression verification after bootstrap evolution | Gradle repository check | `./gradlew.bat check --no-daemon` (PowerShell `.\gradlew.bat`) | pass | PASS (49 actionable tasks) | SYN-014E |
 | Provider configuration migration for Codex and Antigravity | real provider migration/acceptance | no verified global schema or migration implementation in repository | required | NOT CLAIMED | SYN-014E |

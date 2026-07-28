@@ -93,12 +93,12 @@ dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/D
 
 ## SL-D-037 — Contract revision and dependency invalidation
 
-**Status:** DEFERRED
+**Status:** READY_FOR_PLANNING
 **Priority:** Later
 **Area:** Coordination correctness
 **Current verified capability:** Bounded task and capability records carry explicit identity and revision data where implemented; no general accepted-harness-contract lifecycle exists.
 **Missing capability:** Stable contract identity; explicit revision; owner; known consumers/dependants; contract status; superseded-revision linkage; revision and invalidation events; stale-dependent-work classification; rejection of publication against a superseded revision; and bounded notification to affected harnesses.
-**Reason deferred:** Real multi-harness contract lifecycle semantics are not yet a promoted coordination slice.
+**Reason deferred:** No longer deferred; SYN-022 is the single active task implementing the bounded contract lifecycle.
 **Activation trigger:** Real multi-harness work where one harness begins implementation against another harness's accepted but not yet finalized function signature, schema, message shape, return type, or parameter set.
 **Evidence required before planning:** Two harnesses depend on one revision; the owner publishes a new revision; dependants become stale or replanning-required; old-revision publication is rejected as current; and old/new revisions plus invalidation events remain auditable.
 **Public-claims impact:** Synesis records and communicates changed agreements and invalidates stale coordination claims. It does not rewrite, regenerate, repair, or automatically stub-regenerate harness code.

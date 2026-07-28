@@ -210,7 +210,11 @@ public final class WorkIntentService {
         }
     }
 
-    /** Records verified owner-independent abandonment and releases the participant's claims. */
+    /** Records verified owner-independent abandonment and releases the participant's claims.
+     * @param participant participant handle
+     * @throws IOException if persistence or validation fails
+     * @throws GeneralSecurityException if signing fails
+     */
     public void abandon(String participant) throws IOException, GeneralSecurityException {
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) throw new IOException("event append lock unavailable");

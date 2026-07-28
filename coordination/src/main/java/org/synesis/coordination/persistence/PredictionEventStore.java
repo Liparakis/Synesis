@@ -20,6 +20,7 @@ import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.prediction.PredictionProjection;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
+import org.synesis.coordination.domain.contract.ContractProjection;
 
 /**
  * Crash-safe per-project event store. Each event is one immutable file; the
@@ -36,6 +37,7 @@ public final class PredictionEventStore {
     private final CapabilityRequestProjection capabilityRequestProjection = new CapabilityRequestProjection();
     private final TaskCompletionProjection taskCompletionProjection = new TaskCompletionProjection();
     private final CollaborationProjection collaborationProjection = new CollaborationProjection();
+    private final ContractProjection contractProjection = new ContractProjection();
     private final List<PredictionEvent> events = new ArrayList<>();
 
     /**
@@ -97,6 +99,7 @@ public final class PredictionEventStore {
         capabilityRequestProjection.validate(event);
         taskCompletionProjection.validate(event);
         collaborationProjection.validate(event);
+        contractProjection.validate(event);
         Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
         Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
         try {
@@ -114,6 +117,7 @@ public final class PredictionEventStore {
         capabilityRequestProjection.apply(event);
         taskCompletionProjection.apply(event);
         collaborationProjection.apply(event);
+        contractProjection.apply(event);
         events.add(event);
         return event;
     }
@@ -195,6 +199,13 @@ public final class PredictionEventStore {
         return collaborationProjection;
     }
 
+    /** Returns the replayed contract projection.
+     * @return contract projection
+     */
+    public ContractProjection contractProjection() {
+        return contractProjection;
+    }
+
     private void load() throws IOException, GeneralSecurityException {
         List<Path> files;
         try (var stream = Files.list(eventsDirectory)) {
@@ -219,6 +230,7 @@ public final class PredictionEventStore {
             capabilityRequestProjection.apply(event);
             taskCompletionProjection.apply(event);
             collaborationProjection.apply(event);
+            contractProjection.apply(event);
             events.add(event);
             previous = event.digest();
             expected++;

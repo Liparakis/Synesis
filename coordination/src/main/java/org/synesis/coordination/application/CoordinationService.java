@@ -277,6 +277,9 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.PARTICIPANT_HEARTBEAT
                 || command.type() == PredictionEventType.CLAIM_HANDOFF_ACCEPTED
                 || command.type() == PredictionEventType.PARTICIPANT_ABANDONED
+                || command.type() == PredictionEventType.CONTRACT_PUBLISHED
+                || command.type() == PredictionEventType.CONTRACT_DEPENDENCY_BOUND
+                || command.type() == PredictionEventType.CONTRACT_SUPERSEDED
                 || command.type() == PredictionEventType.DEPENDENCY_INVALIDATED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
@@ -306,6 +309,7 @@ public final class CoordinationService {
                  WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
                  COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
                  PARTICIPANT_ABANDONED,
+                 CONTRACT_PUBLISHED, CONTRACT_DEPENDENCY_BOUND, CONTRACT_SUPERSEDED,
                  DEPENDENCY_INVALIDATED -> true;
         };
         if (!allowed) {

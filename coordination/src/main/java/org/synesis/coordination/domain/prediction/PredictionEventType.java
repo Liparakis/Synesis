@@ -192,7 +192,13 @@ public enum PredictionEventType {
     /** Atomically transfers an intent after an accepted handoff request. */
     CLAIM_HANDOFF_ACCEPTED,
     /** Marks a participant abandoned after verified process absence beyond grace. */
-    PARTICIPANT_ABANDONED;
+    PARTICIPANT_ABANDONED,
+    /** Publishes a stable contract revision. */
+    CONTRACT_PUBLISHED,
+    /** Binds an intent to an exact contract revision. */
+    CONTRACT_DEPENDENCY_BOUND,
+    /** Supersedes the current contract revision. */
+    CONTRACT_SUPERSEDED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -206,6 +212,9 @@ public enum PredictionEventType {
             case PARTICIPANT_HEARTBEAT -> 47;
             case CLAIM_HANDOFF_ACCEPTED -> 48;
             case PARTICIPANT_ABANDONED -> 49;
+            case CONTRACT_PUBLISHED -> 50;
+            case CONTRACT_DEPENDENCY_BOUND -> 51;
+            case CONTRACT_SUPERSEDED -> 52;
             default -> ordinal();
         };
     }

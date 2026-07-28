@@ -1090,7 +1090,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-021
 - Priority: P0
 - Title: Authenticated claim lifecycle, presence, and stale fencing
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Project active participants, lease-backed presence, explicit and
   owner-independent claim recovery, and epoch fencing through shared CLI/MCP
   collaboration services.
@@ -1105,5 +1105,28 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   rejection, concurrent unrelated claims, and adapter equivalence.
 - Required documentation: lifecycle ADR, replay evidence, checkpoint, test
   matrix updates, and provider evidence boundaries.
+- Evidence: CP-0266; `WorkIntentServiceTest`, `AbandonmentTest`, focused
+  coordination/workspace/MCP/CLI checks, and full Gradle verification pass.
 - Scope boundary: no handoff negotiation, contract revision, out-of-band
   integration enforcement, deadlock detection, or MCP naming migration.
+
+## SYN-022
+
+- ID: SYN-022
+- Priority: P0
+- Title: Contract revisions and dependency invalidation
+- Status: ACTIVE
+- Purpose: Publish stable shared contracts, track explicit consumers, and
+  invalidate stale dependent work before implementation or integration.
+- Dependencies: SYN-021 DONE at CP-0266; SL-D-037 activated; signed event log
+  and shared collaboration application service.
+- Acceptance criteria: contract ID/revision/content hash/owner/status are
+  durable; consumers bind to exact revisions; superseding a revision marks
+  consumers REPLAN_REQUIRED; stale publication is rejected; history replays;
+  CLI and MCP expose equivalent contract inspection/publication behavior.
+- Required tests: publish, accept, consume, supersede, stale revision reject,
+  explicit dependency invalidation, replay, and compatible independent work.
+- Required documentation: contract ADR, deferred-register activation note,
+  checkpoint, test matrix, and task-tracker API/schema evidence.
+- Scope boundary: no general semantic API inference, out-of-band mutation
+  enforcement, deadlock detection, or provider maturity claims.
