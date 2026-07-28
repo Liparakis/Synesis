@@ -144,6 +144,20 @@ class McpServerTest {
     }
 
     @Test
+    void collaborationDiscoveryReturnsJsonSafeParticipantsIntentsAndClaims() {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-discovery-json");
+        String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"discoverable goal\",\"acceptance\":\"status is readable\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/discovery.json\"}]}}}}";
+        assertTrue(handler.handleMessage(ensure).contains("ready"));
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
+        String response = handler.handleMessage(status);
+        assertFalse(response.contains("-32603"));
+        assertTrue(response.contains("participants"));
+        assertTrue(response.contains("intents"));
+        assertTrue(response.contains("tests/discovery.json"));
+        assertTrue(response.contains("discoverable goal"));
+    }
+
+    @Test
     void testUnknownMethodReturnsMethodNotFound() {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");

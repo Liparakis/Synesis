@@ -137,3 +137,16 @@ uncovered claims, stale contracts, out-of-band paths, and failed tests;
 orchestration blocks stale/overlapping metadata before worktree preparation;
 Python projects use `python -m pytest -q` and the synthetic two-process fixture
 contains a real pytest smoke target.
+
+SYN-025 provider acceptance now has direct Antigravity MCP evidence: the
+installed `antigravity` server initialized, acquired an isolated exact claim,
+mutated and read back a probe with a matching revision hash, and released on
+clean EOF. The Antigravity model CLI still failed to carry the structured claim
+through a mutation prompt (`coordination_intent_required`, then provider
+`internal_failure`); this is recorded as harness behavior and does not alter
+native-hook maturity. Claude and Codex real-provider evidence remains valid.
+Direct Codex/Claude MCP processes also exposed and then exercised the shared
+JSON-safe collaboration discovery projection. An accepted handoff transferred
+an intent from Codex to Claude with version fencing, and Claude mutated the
+transferred path successfully. Timed deleted-chat recovery remains an
+additional evidence case; deterministic stale/abandonment tests already pass.

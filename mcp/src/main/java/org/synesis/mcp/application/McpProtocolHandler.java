@@ -25,7 +25,9 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
@@ -986,8 +988,7 @@ public final class McpProtocolHandler {
                     try {
                         var snapshot = collaborationService.status(activeProjectRoot);
                         agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
-                                Map.of("intents", snapshot.intents(), "requests", snapshot.requests(),
-                                        "participants", snapshot.participants()));
+                                collaborationStatusMap(snapshot));
                         break;
                     } catch (Exception failure) {
                         agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
@@ -1118,6 +1119,63 @@ public final class McpProtocolHandler {
                 "contractId", dependency.contractId().toString(),
                 "revision", dependency.revision(),
                 "state", dependency.state().name());
+    }
+
+    /** Converts the collaboration projection to a JSON-safe discovery payload. */
+    private static Map<String, Object> collaborationStatusMap(WorkspaceCollaborationService.CollaborationSnapshot snapshot) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("intents", snapshot.intents().stream().map(McpProtocolHandler::intentMap).toList());
+        result.put("requests", snapshot.requests().stream().map(McpProtocolHandler::requestMap).toList());
+        result.put("participants", snapshot.participants().stream().map(McpProtocolHandler::participantMap).toList());
+        return result;
+    }
+
+    /** Converts one work intent to a JSON-safe map. */
+    private static Map<String, Object> intentMap(WorkIntent intent) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("intentId", intent.intentId().toString());
+        result.put("projectId", intent.projectId().toString());
+        result.put("participant", intent.participant());
+        result.put("provider", intent.provider());
+        result.put("taskId", intent.taskId().toString());
+        result.put("goal", intent.goal());
+        result.put("acceptance", intent.acceptance());
+        result.put("baseCommit", intent.baseCommit());
+        result.put("selectors", intent.selectors().stream().map(McpProtocolHandler::selectorMap).toList());
+        result.put("version", intent.version());
+        result.put("status", intent.status().name());
+        return result;
+    }
+
+    /** Converts one participant projection to a JSON-safe map. */
+    private static Map<String, Object> participantMap(Participant participant) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", participant.id());
+        result.put("provider", participant.provider());
+        result.put("goal", participant.goal());
+        result.put("state", participant.state().name());
+        result.put("lastVerifiedActivity", participant.lastVerifiedActivity());
+        result.put("claims", participant.claims().stream().map(McpProtocolHandler::selectorMap).toList());
+        return result;
+    }
+
+    /** Converts one coordination request to a JSON-safe map. */
+    private static Map<String, Object> requestMap(CoordinationRequest request) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("requestId", request.requestId().toString());
+        result.put("projectId", request.projectId().toString());
+        result.put("requester", request.requester());
+        result.put("target", request.target());
+        result.put("conflictingIntentId", request.conflictingIntentId().toString());
+        result.put("kind", request.kind().name());
+        result.put("proposal", request.proposal());
+        result.put("status", request.status().name());
+        return result;
+    }
+
+    /** Converts one selector to a JSON-safe map. */
+    private static Map<String, Object> selectorMap(ResourceSelector selector) {
+        return Map.of("kind", selector.kind().name(), "path", selector.value());
     }
 
     @SuppressWarnings("unchecked")

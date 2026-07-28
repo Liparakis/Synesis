@@ -1206,8 +1206,13 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   probe file through MCP with a matching revision hash; two-process
   conflict/EOF evidence also passes; authenticated Claude now proves exact
   conflict blocking, isolated mutation/readback, and explicit
-  release/reacquisition; Antigravity CLI is installed but quota-exhausted
-  before MCP startup; a real Claude contract publish now returns a JSON-safe
+  release/reacquisition; direct Antigravity MCP process acceptance now proves
+  initialize, isolated exact claim, mutation/readback hash equality, and clean
+  EOF release; the Antigravity model CLI still fails to carry structured claims
+  through the mutation prompt and is recorded as a harness limitation; a real
+  direct Codex/Claude MCP processes now prove JSON-safe collaboration discovery
+  and accepted handoff with intent-version fencing; a real
+  Claude contract publish now returns a JSON-safe
   revision/content hash after the MCP projection fix; the subsequent full
   strict Gradle check passes; real Claude contract status inspection returns
   JSON-safe revision and supersession data; deterministic MCP publish/status
