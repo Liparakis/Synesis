@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.contract.ContractDependency;
+import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.application.agent.AgentSessionService;
@@ -951,7 +953,8 @@ public final class McpProtocolHandler {
                         var result = switch (collaborationOperation) {
                             case "status" -> {
                                 var snapshot = collaborationService.contractStatus(activeProjectRoot);
-                                yield Map.of("contracts", snapshot.contracts(), "dependencies", snapshot.dependencies());
+                                yield Map.of("contracts", snapshot.contracts().stream().map(McpProtocolHandler::contractMap).toList(),
+                                        "dependencies", snapshot.dependencies().stream().map(McpProtocolHandler::dependencyMap).toList());
                             }
                             case "publish" -> {
                                 UUID contractId = UUID.fromString(String.valueOf(arguments.get("collaborationContractId")));
@@ -960,7 +963,7 @@ public final class McpProtocolHandler {
                                         ? values.stream().filter(String.class::isInstance).map(String.class::cast).toList() : List.of();
                                 var contract = collaborationService.publishContract(activeProjectRoot, provider, connectionInstanceId,
                                         contractId, body, selectors);
-                                yield Map.of("contract", contract);
+                                yield Map.of("contract", contractMap(contract));
                             }
                             case "bind" -> {
                                 UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
@@ -1093,6 +1096,28 @@ public final class McpProtocolHandler {
         Map<String, Object> textContent = Map.of("type", "text", "text", agentResponse.toJson());
         Map<String, Object> result = Map.of("content", List.of(textContent));
         return createResultResponse(id, result);
+    }
+
+    private static Map<String, Object> contractMap(ContractRecord contract) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("contractId", contract.contractId().toString());
+        map.put("projectId", contract.projectId().toString());
+        map.put("revision", contract.revision());
+        map.put("owner", contract.owner());
+        map.put("contentHash", contract.contentHash());
+        map.put("body", contract.body());
+        map.put("status", contract.status().name());
+        map.put("supersedes", contract.supersedes() == null ? null : contract.supersedes().toString());
+        map.put("selectorRefs", contract.selectorRefs());
+        return map;
+    }
+
+    private static Map<String, Object> dependencyMap(ContractDependency dependency) {
+        return Map.of("intentId", dependency.intentId().toString(),
+                "participant", dependency.participant(),
+                "contractId", dependency.contractId().toString(),
+                "revision", dependency.revision(),
+                "state", dependency.state().name());
     }
 
     @SuppressWarnings("unchecked")

@@ -2,7 +2,7 @@
 
 - Active task: SYN-025 ACTIVE under Provider collaboration acceptance and evidence
 - Repository branch: master
-- Last checkpoint: CP-0280; real Claude conflict, mutation/readback, and release evidence are recorded; Antigravity quota remains blocked.
+- Last checkpoint: CP-0281; real Claude contract publication and MCP serialization fix are recorded; Antigravity quota remains blocked.
 - Last passing command: `./gradlew.bat check --no-daemon --dependency-verification=strict`; bootstrap `go test -count=1 ./...`; bootstrap `go vet ./...`; deferred validator.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Exact next code action: retry authenticated Claude and uncancelled Codex collaboration scenarios when provider harness access permits; do not alter native-hook maturity from MCP evidence.

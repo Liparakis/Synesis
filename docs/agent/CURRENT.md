@@ -46,6 +46,10 @@ session as `suspectedStale` without transferring ownership; the dirty fixture
 was not altered. Its current Python acceptance suite passes all 45 tests.
 The repository-wide Gradle check also passes with strict dependency
 verification (50 actionable tasks).
+The real Claude contract publication probe initially exposed an MCP
+serialization defect; contract/dependency records are now projected to
+JSON-safe maps, the focused MCP regression passes, and the reinstalled
+distribution returns contract revision and content hash successfully.
 
 ## Work completed
 

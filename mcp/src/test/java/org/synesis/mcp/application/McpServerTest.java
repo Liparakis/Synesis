@@ -118,6 +118,18 @@ class McpServerTest {
     }
 
     @Test
+    void collaborationContractPublishReturnsJsonSafeContractProjection() {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-json");
+        String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/task_tracker_contract.md\"}]}}}}";
+        assertTrue(handler.handleMessage(ensure).contains("ready"));
+        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"publish\",\"collaborationContractId\":\"2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31\",\"collaborationBody\":\"Task tracker API v1\",\"collaborationSelectors\":[\"src/task_tracker.py\"]}}}";
+        String response = handler.handleMessage(publish);
+        assertFalse(response.contains("-32603"));
+        assertTrue(response.contains("contentHash"));
+        assertTrue(response.contains("2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31"));
+    }
+
+    @Test
     void testUnknownMethodReturnsMethodNotFound() {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");

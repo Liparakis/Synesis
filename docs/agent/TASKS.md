@@ -1201,13 +1201,14 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   bounded Antigravity attempt when available.
 - Required documentation: provider evidence report, checkpoint, test matrix,
   configuration paths, and limitations.
-- Evidence: CP-0280; installed MCP jar and direct initialize probe pass; real
+- Evidence: CP-0281; installed MCP jar and direct initialize probe pass; real
   Codex CLI completed `ensure_session`, then created and reread an isolated
   probe file through MCP with a matching revision hash; two-process
   conflict/EOF evidence also passes; authenticated Claude now proves exact
   conflict blocking, isolated mutation/readback, and explicit
   release/reacquisition; Antigravity CLI is installed but quota-exhausted
-  before MCP startup;
+  before MCP startup; a real Claude contract publish now returns a JSON-safe
+  revision/content hash after the MCP projection fix.
   read-only reconciliation classified one ended provider session as
   suspected-stale without transferring its claims. The task-tracker fixture's
   current `python -m pytest -q` run passes all 45 tests.
