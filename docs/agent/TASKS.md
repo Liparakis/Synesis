@@ -1205,7 +1205,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   Codex CLI completed `ensure_session`, then created and reread an isolated
   probe file through MCP with a matching revision hash; two-process
   conflict/EOF evidence also passes; Claude is unauthenticated and
-  Antigravity unavailable; read-only reconciliation classified one ended
-  provider session as suspected-stale without transferring its claims.
+  Antigravity CLI is installed but quota-exhausted before MCP startup;
+  read-only reconciliation classified one ended provider session as
+  suspected-stale without transferring its claims.
 - Scope boundary: no remote publication, provider credential changes, or
   universal native-hook enforcement claim.
