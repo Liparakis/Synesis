@@ -2,7 +2,7 @@
 
 ## Identity
 
-- Task ID: SYN-024
+- Task ID: SYN-025
 - Status: ACTIVE
 - Priority: P1
 - Started checkpoint: CP-0230
@@ -11,13 +11,13 @@
 
 ## Objective
 
-Finish unified collaboration CLI/MCP behavior and raw MCP naming without adding
-a broker, remote service, or control-checkout mutation path.
+Run bounded real-provider collaboration acceptance and record evidence without
+claiming unavailable auth, quota, or native-hook enforcement.
 
 ## Immediate slice
 
-Expose equivalent readiness and collaboration outcomes through shared adapters;
-keep exactly 11 raw advertised MCP tools and accept legacy names.
+Validate provider sessions against the task-tracker acceptance and preserve
+clear MCP/native-hook evidence tiers.
 
 ## Verification target
 
@@ -27,8 +27,8 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Add integration-readiness adapters, raw/legacy MCP contract tests, and provider
-configuration migration evidence.
+Retry Codex/Claude real sessions when provider configuration is available;
+Antigravity remains bounded by external availability.
 
 ## Work completed
 

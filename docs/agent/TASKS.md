@@ -1165,7 +1165,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-024
 - Priority: P0
 - Title: Unified collaboration CLI/MCP surface and raw MCP names
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Keep collaboration capabilities in shared services while exposing
   equivalent CLI/MCP operations and a stable raw 11-tool wire contract.
 - Dependencies: SYN-023 DONE at CP-0269; existing 11-tool MCP server and
@@ -1178,4 +1178,28 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   registration, shared-service outcome equivalence, and provider config smoke.
 - Required documentation: naming ADR, checkpoint, provider documentation,
   test matrix, and migration limitations.
+- Evidence: CP-0271; raw tools/list and legacy call tests, CLI registration,
+  readiness adapters, strict Javadocs, and full Gradle verification pass.
 - Scope boundary: no provider maturity claim or remote service.
+
+## SYN-025
+
+- ID: SYN-025
+- Priority: P0
+- Title: Provider collaboration acceptance and evidence
+- Status: ACTIVE
+- Purpose: Run real Claude, Codex, and Antigravity collaboration scenarios
+  where provider access exists, and record unavailable-provider limits honestly.
+- Dependencies: SYN-024 DONE at CP-0271; local distribution installed; MCP
+  server and collaboration protocol tests green.
+- Acceptance criteria: successful provider sessions prove claims, conflict
+  negotiation, handoff, release, recovery, and MCP mutation through real
+  processes; unavailable auth/quota is recorded without a false completion or
+  native-hook claim.
+- Required tests: separate Claude/Codex sessions, task-tracker conflict and
+  compatible work, handoff/reacquisition, deleted-session recovery, and a
+  bounded Antigravity attempt when available.
+- Required documentation: provider evidence report, checkpoint, test matrix,
+  configuration paths, and limitations.
+- Scope boundary: no remote publication, provider credential changes, or
+  universal native-hook enforcement claim.

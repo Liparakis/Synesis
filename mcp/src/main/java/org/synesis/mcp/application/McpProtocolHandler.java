@@ -28,6 +28,8 @@ import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
 import org.synesis.workspace.application.integration.ImplementationValidationService;
+import org.synesis.workspace.application.integration.IntegrationCompatibilityService;
+import org.synesis.workspace.application.integration.WorkspaceIntegrationReadinessService;
 import org.synesis.workspace.application.project.ProjectCommandIntent;
 import org.synesis.workspace.application.project.ProjectCommandService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
@@ -609,7 +611,8 @@ public final class McpProtocolHandler {
                 "Executes an approved project build or git command intent inside the assigned worktree.");
         runCommandTool.put("inputSchema", runCmdSchema);
 
-        Map<String, Object> nextActionSchema = Map.of("type", "object", "properties", Map.of());
+        Map<String, Object> nextActionSchema = Map.of("type", "object", "properties", Map.of(
+                "integrationCheck", Map.of("type", "object", "description", "Explicit pre-merge candidate facts")));
         Map<String, Object> getNextActionTool = new LinkedHashMap<>();
         getNextActionTool.put("name", "get_next_action");
         getNextActionTool.put("description",
@@ -917,9 +920,29 @@ public final class McpProtocolHandler {
                 }
             }
             case "synesis.get_next_action" -> {
-                AgentNextActionService.NextActionRequest nextReq = new AgentNextActionService.NextActionRequest(
-                        activeProjectRoot, provider, connectionInstanceId);
-                agentResponse = nextActionService.getNextAction(nextReq);
+                if (arguments != null && arguments.get("integrationCheck") instanceof Map<?, ?> check) {
+                    try {
+                        String head = String.valueOf(check.get("controlHead"));
+                        String base = String.valueOf(check.get("base"));
+                        List<String> paths = strings(check.get("paths"));
+                        List<String> claims = strings(check.get("claims"));
+                        var snapshot = new IntegrationCompatibilityService.SnapshotInput("mcp-candidate", base, paths,
+                                claims.stream().map(ResourceSelector::pathExact).toList(), List.of(), List.of());
+                        var result = new WorkspaceIntegrationReadinessService().check(new IntegrationCompatibilityService.CheckRequest(
+                                head, List.of(snapshot), List.of(), Boolean.TRUE.equals(check.get("testsPassed"))));
+                        agentResponse = new AgentResponse(result.accepted() ? AgentStatus.COMPLETED : AgentStatus.BLOCKED,
+                                result.accepted() ? null : AgentReason.INTEGRATION_CONFLICT,
+                                result.accepted() ? null : AgentNextAction.REQUEST_HUMAN_HELP,
+                                Map.of("accepted", result.accepted(), "failures", result.failures(), "actions", result.actions()));
+                    } catch (Exception failure) {
+                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                                AgentNextAction.RETRY, Map.of("error", failure.getMessage()));
+                    }
+                } else {
+                    AgentNextActionService.NextActionRequest nextReq = new AgentNextActionService.NextActionRequest(
+                            activeProjectRoot, provider, connectionInstanceId);
+                    agentResponse = nextActionService.getNextAction(nextReq);
+                }
             }
             case "synesis.describe_required_capability" -> {
                 String collaborationOperation = arguments != null ? (String) arguments.get("collaborationOperation") : null;
@@ -1149,6 +1172,13 @@ public final class McpProtocolHandler {
     private boolean claimsFieldSpecified(Map<String, Object> arguments) {
         return arguments != null && arguments.get("task") instanceof Map<?, ?> taskMap
                 && taskMap.containsKey("claims");
+    }
+
+    private static List<String> strings(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
     }
 
     private String createResultResponse(Object id, Map<String, Object> result) {
