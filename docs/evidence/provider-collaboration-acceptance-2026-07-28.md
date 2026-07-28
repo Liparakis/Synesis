@@ -66,6 +66,8 @@ automatic ownership transfer. The fixture's existing claims remain untouched.
 - real deleted-chat recovery v3 → direct Claude MCP process acquired `deleted_chat_direct_probe_v3.txt`; its lease file existed before forced JVM termination; dry-run classified the session as suspected-stale during grace and abandonment-eligible after 300 seconds; prepared/executed reconciliation completed 15/15 actions with `controlCheckoutModified=false`; status then reported participant `agt_5953b5cf-60be-383f-8f64-7c93c6a90016` as `ABANDONED` with no active claim
 - old-epoch fencing → a new MCP process reusing the abandoned connection ID received `status=blocked`, `reason=workspace_generation_changed` when attempting to reacquire the path; no mutation was attempted
 - the recovery run also exposed and fixed first-ensure lease creation and reconciliation event-head refresh defects; deterministic lease, reconciliation, and MCP fencing regressions now pass
+- MCP parity regression → the fixed 11-tool surface now accepts additive `describe_required_capability` operations `request`/`request_coordination` and `handoff`, plus structured coordination response fields on `respond_to_owner_request`; two-handler tests prove JSON-safe pending requests and handoff offers
+- `get_next_action` now returns JSON-safe participants, intents, claims, and pending coordination for the exact session binding; the MCP discovery regression covers this path
 - `python -m pytest -q` in the task-tracker fixture → `45 passed in 0.11s`
 - `./gradlew.bat check --no-daemon --dependency-verification=strict` → `BUILD SUCCESSFUL` (50 actionable tasks)
 - direct installed launcher probe → valid MCP `initialize` response with server name `synesis`

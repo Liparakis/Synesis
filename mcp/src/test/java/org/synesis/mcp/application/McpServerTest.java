@@ -156,6 +156,47 @@ class McpServerTest {
         assertTrue(response.contains("intents"));
         assertTrue(response.contains("tests/discovery.json"));
         assertTrue(response.contains("discoverable goal"));
+        String next = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}");
+        assertFalse(next.contains("-32603"));
+        assertTrue(next.contains("participants"));
+        assertTrue(next.contains("tests/discovery.json"));
+    }
+
+    @Test
+    void collaborationRequestAndHandoffOperationsAreAvailableThroughMcp() {
+        McpProtocolHandler owner = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-mcp-owner");
+        McpProtocolHandler requester = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-mcp-requester");
+        String ownerEnsure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"owner\",\"acceptance\":\"contract\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/mcp-request-owner.txt\"}]}}}}";
+        String requesterEnsure = ownerEnsure.replace("conn-mcp-owner", "conn-mcp-requester")
+                .replace("\\\"id\\\":1", "\\\"id\\\":2")
+                .replace("owner", "requester").replace("mcp-request-owner", "mcp-requester");
+        assertTrue(owner.handleMessage(ownerEnsure).contains("ready"));
+        assertTrue(requester.handleMessage(requesterEnsure).contains("ready"));
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
+        String statusResponse = owner.handleMessage(status);
+        String marker = "\\\"intentId\\\":\\\"";
+        int markerStart = statusResponse.indexOf(marker);
+        String intentId = markerStart >= 0
+                ? statusResponse.substring(markerStart + marker.length(), markerStart + marker.length() + 36)
+                : "";
+        assertFalse(intentId.isBlank(), statusResponse);
+        String request = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"request\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationRequestKind\":\"CONTRACT\",\"collaborationProposal\":\"agree on API v1\"}}}";
+        String requestResponse = requester.handleMessage(request);
+        assertFalse(requestResponse.contains("-32603"));
+        assertTrue(requestResponse.contains("CONTRACT"));
+        assertTrue(requestResponse.contains("PENDING"));
+        String participantMarker = "\\\"id\\\":\\\"agt_";
+        int firstParticipant = statusResponse.indexOf(participantMarker);
+        int secondParticipant = statusResponse.indexOf(participantMarker, firstParticipant + participantMarker.length());
+        String targetParticipant = secondParticipant >= 0
+                ? "agt_" + statusResponse.substring(secondParticipant + participantMarker.length(),
+                        secondParticipant + participantMarker.length() + 36)
+                : "";
+        String handoff = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"handoff\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationTarget\":\"" + targetParticipant + "\",\"collaborationProposal\":\"clean-worktree-claim-only\"}}}";
+        String handoffResponse = owner.handleMessage(handoff);
+        assertFalse(handoffResponse.contains("-32603"));
+        assertTrue(handoffResponse.contains("HANDOFF"));
+        assertTrue(handoffResponse.contains("PENDING"));
     }
 
     @Test

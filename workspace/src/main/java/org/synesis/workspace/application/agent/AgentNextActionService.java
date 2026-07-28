@@ -6,6 +6,8 @@ import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,6 +19,11 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.Participant;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 
 /**
  * Application service for retrieving the single highest-priority actionable coordination item
@@ -113,6 +120,13 @@ public final class AgentNextActionService {
             if (Files.exists(coordDir.resolve("events"))) {
                 org.synesis.coordination.persistence.PredictionEventStore store = new org.synesis.coordination.persistence.PredictionEventStore(coordDir, location.projectId());
                 org.synesis.coordination.domain.capability.CapabilityRequestProjection capProj = store.capabilityRequestProjection();
+                Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> pendingCoordination = (List<Map<String, Object>>) collaboration.get("pendingCoordination");
+                if (!pendingCoordination.isEmpty()) {
+                    return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
+                            AgentNextAction.RESPOND_TO_OWNER_REQUEST, collaboration);
+                }
 
                 List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerPending = capProj.findPendingForOwner(callerNodeId);
 
@@ -233,7 +247,8 @@ public final class AgentNextActionService {
 
         List<CoordinationItem> items = loadCoordinationItems(assignedWorktree, location.root(), request.provider());
         if (items.isEmpty()) {
-            return AgentResponse.ready("isolated", 0);
+            Map<String, Object> collaboration = collaborationDetailsForRequest(location, request);
+            return new AgentResponse(AgentStatus.READY, null, null, collaboration);
         }
 
         // Priority Order:
@@ -306,6 +321,92 @@ public final class AgentNextActionService {
             }
             default -> AgentResponse.ready("isolated", pendingCount);
         };
+    }
+
+    /** Builds a JSON-safe collaboration discovery and pending-request projection. */
+    private Map<String, Object> collaborationDetailsForRequest(ProjectApplicationService.ProjectLocation location,
+            NextActionRequest request) {
+        try {
+            Path coordDir = location.root().resolve(".synesis/coordination");
+            if (Files.exists(coordDir.resolve("events"))) {
+                var store = new org.synesis.coordination.persistence.PredictionEventStore(coordDir, location.projectId());
+                String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                        .digest(request.connectionInstanceId().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                var binding = new ProviderSessionBindingService().list(location, request.provider()).stream()
+                        .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()))
+                        .findFirst().orElse(null);
+                if (binding != null) {
+                    return collaborationDetails(store, binding.sessionId());
+                }
+                return collaborationDetails(store, "");
+            }
+        } catch (Exception ignored) {
+        }
+        return Map.of("workspace", "isolated", "pending", 0,
+                "participants", List.of(), "intents", List.of(), "pendingCoordination", List.of());
+    }
+
+    /** Converts collaboration records to a provider-safe next-action payload. */
+    private Map<String, Object> collaborationDetails(
+            org.synesis.coordination.persistence.PredictionEventStore store, String sessionId) {
+        String participantId = sessionId == null || sessionId.isBlank()
+                ? "" : WorkspaceCollaborationService.participantHandle(sessionId);
+        List<Map<String, Object>> intents = store.collaborationProjection().activeIntents().stream()
+                .map(AgentNextActionService::intentMap).toList();
+        List<Map<String, Object>> participants = store.collaborationProjection().participants().stream()
+                .map(AgentNextActionService::participantMap).toList();
+        List<Map<String, Object>> pending = store.collaborationProjection().requests().stream()
+                .filter(request -> request.status() == CoordinationRequest.Status.PENDING)
+                .filter(request -> participantId.isBlank() || request.target().equals(participantId))
+                .map(AgentNextActionService::requestMap).toList();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("workspace", "isolated");
+        result.put("pending", pending.size());
+        result.put("participants", participants);
+        result.put("intents", intents);
+        result.put("pendingCoordination", pending);
+        result.put("claimConflicts", List.of());
+        return result;
+    }
+
+    private static Map<String, Object> intentMap(WorkIntent intent) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("intentId", intent.intentId().toString());
+        map.put("participant", intent.participant());
+        map.put("provider", intent.provider());
+        map.put("goal", intent.goal());
+        map.put("acceptance", intent.acceptance());
+        map.put("selectors", intent.selectors().stream().map(AgentNextActionService::selectorMap).toList());
+        map.put("version", intent.version());
+        map.put("status", intent.status().name());
+        return map;
+    }
+
+    private static Map<String, Object> participantMap(Participant participant) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", participant.id());
+        map.put("provider", participant.provider());
+        map.put("goal", participant.goal());
+        map.put("state", participant.state().name());
+        map.put("lastVerifiedActivity", participant.lastVerifiedActivity());
+        map.put("claims", participant.claims().stream().map(AgentNextActionService::selectorMap).toList());
+        return map;
+    }
+
+    private static Map<String, Object> requestMap(CoordinationRequest request) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("requestId", request.requestId().toString());
+        map.put("requester", request.requester());
+        map.put("target", request.target());
+        map.put("conflictingIntentId", request.conflictingIntentId().toString());
+        map.put("kind", request.kind().name());
+        map.put("proposal", request.proposal());
+        map.put("status", request.status().name());
+        return map;
+    }
+
+    private static Map<String, Object> selectorMap(ResourceSelector selector) {
+        return Map.of("kind", selector.kind().name(), "path", selector.value());
     }
 
     private static int priorityOf(String type) {

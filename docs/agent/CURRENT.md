@@ -160,3 +160,7 @@ after owner-independent claim release.
 An additional direct Codex/Antigravity MCP process probe completed an accepted
 handoff and revision-checked mutation. Antigravity model-prompt behavior and
 native hooks remain separately unclaimed.
+The fixed 11-tool MCP surface now exposes additive coordination request and
+handoff operations through `describe_required_capability`, structured response
+fields through `respond_to_owner_request`, and JSON-safe collaboration details
+through `get_next_action`; CLI and MCP parity tests pass.

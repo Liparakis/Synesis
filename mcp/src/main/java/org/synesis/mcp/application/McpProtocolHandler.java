@@ -661,13 +661,16 @@ public final class McpProtocolHandler {
                         "description",
                         "Requester response type to owner revision: accept, counter, cancel"));
         describeProperties.put("collaborationOperation",
-                Map.of("type", "string", "enum", List.of("status", "publish", "bind"),
-                        "description", "Shared contract operation through the collaboration service"));
+                Map.of("type", "string", "enum", List.of("status", "publish", "bind", "request", "request_coordination", "handoff"),
+                        "description", "Shared contract or coordination operation through the collaboration service"));
         describeProperties.put("collaborationContractId", Map.of("type", "string", "description", "UUID of shared contract"));
         describeProperties.put("collaborationIntentId", Map.of("type", "string", "description", "UUID of consuming intent"));
         describeProperties.put("collaborationRevision", Map.of("type", "integer", "description", "Exact contract revision"));
         describeProperties.put("collaborationBody", Map.of("type", "string", "description", "Bounded shared contract body"));
         describeProperties.put("collaborationSelectors", Map.of("type", "array", "items", Map.of("type", "string")));
+        describeProperties.put("collaborationRequestKind", Map.of("type", "string", "enum", List.of("CONTRACT", "HANDOFF", "SCOPE_REVISION")));
+        describeProperties.put("collaborationProposal", Map.of("type", "string", "description", "Bounded coordination or handoff proposal"));
+        describeProperties.put("collaborationTarget", Map.of("type", "string", "description", "Opaque participant target for handoff"));
 
         Map<String, Object> describeSchema = new LinkedHashMap<>();
         describeSchema.put("type", "object");
@@ -688,6 +691,9 @@ public final class McpProtocolHandler {
         respondProperties.put("revision", contractSchema);
         respondProperties.put("reason",
                 Map.of("type", "string", "description", "Explanation for revision or rejection"));
+        respondProperties.put("coordinationRequest", Map.of("type", "string", "description", "UUID of coordination or handoff request"));
+        respondProperties.put("coordinationStatus", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
+        respondProperties.put("proposal", Map.of("type", "string", "description", "Coordination response proposal"));
 
         Map<String, Object> respondSchema = new LinkedHashMap<>();
         respondSchema.put("type", "object");
@@ -982,6 +988,23 @@ public final class McpProtocolHandler {
                                 long revision = ((Number) arguments.get("collaborationRevision")).longValue();
                                 collaborationService.bindContract(activeProjectRoot, provider, connectionInstanceId, intentId, contractId, revision);
                                 yield Map.of("intent", intentId.toString(), "contract", contractId.toString(), "revision", revision);
+                            }
+                            case "request", "request_coordination" -> {
+                                UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
+                                CoordinationRequest.Kind kind = CoordinationRequest.Kind.valueOf(
+                                        String.valueOf(arguments.getOrDefault("collaborationRequestKind", "CONTRACT")).toUpperCase(java.util.Locale.ROOT));
+                                String proposal = String.valueOf(arguments.getOrDefault("collaborationProposal", ""));
+                                var request = collaborationService.request(activeProjectRoot, provider, connectionInstanceId,
+                                        intentId, kind, proposal);
+                                yield Map.of("request", requestMap(request));
+                            }
+                            case "handoff" -> {
+                                UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
+                                String target = String.valueOf(arguments.get("collaborationTarget"));
+                                String proposal = String.valueOf(arguments.getOrDefault("collaborationProposal", ""));
+                                var request = collaborationService.handoff(activeProjectRoot, provider, connectionInstanceId,
+                                        intentId, target, proposal);
+                                yield Map.of("request", requestMap(request));
                             }
                             default -> throw new IllegalArgumentException("unknown collaboration operation");
                         };

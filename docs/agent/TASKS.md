@@ -1222,6 +1222,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   owner-independent reconciliation, claim release, ABANDONED projection, and
   old-epoch `workspace_generation_changed` fencing. The task-tracker fixture's
   current `python -m pytest -q` run passes all 45 tests.
+  Additive MCP request/handoff operations and exact-session `get_next_action`
+  collaboration details are covered by the fixed 11-tool parity tests.
   The repository-wide Gradle check passes with strict dependency verification.
 - Scope boundary: no remote publication, provider credential changes, or
   universal native-hook enforcement claim.
