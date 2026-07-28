@@ -8,7 +8,7 @@ MCP session completed.
 
 | Provider | Configuration discovered | Real MCP connection | MCP mutation | Native hook |
 |---|---|---|---|---|
-| Codex 0.140.0 | `codex mcp list` found `synesis`; entry points to the current local install | Real `codex exec --ephemeral --json --dangerously-bypass-approvals-and-sandbox` initialized Synesis and completed `ensure_session` | Confirmed: exact `src/task_tracker.py` claim returned `status=ready`; no source file was edited | Not claimed |
+| Codex 0.140.0 | `codex mcp list` found `synesis`; entry points to the current local install | Real `codex exec --ephemeral --json --dangerously-bypass-approvals-and-sandbox` initialized Synesis and completed `ensure_session` | Confirmed: exact `src/task_tracker.py` claim returned `status=ready`; a separate claimed probe file was created with `apply_patch` and verified by `read_file` with matching revision hash | Not claimed |
 | Claude Code 2.1.59 | Project `.mcp.json` now points at the current local install | Not completed: `claude auth status` reports `loggedIn: false` | Not claimed | Not claimed |
 | Antigravity | No executable or configured provider found | Blocked by unavailable provider/quota | Not claimed | Not claimed |
 
@@ -41,5 +41,7 @@ replays the existing dirty fixture successfully without deleting events.
 - `codex mcp remove synesis` followed by `codex mcp add synesis -- ...\synesis.bat mcp --provider codex` → current local install
 - `codex exec --ephemeral --json ...` → first attempt was cancelled by the harness before a result
 - `codex exec --ephemeral --json --dangerously-bypass-approvals-and-sandbox ...` → real `ensure_session` completed with `status=ready` and an isolated worktree; no source file was edited
+- real Codex MCP mutation probe → `apply_patch` created `provider_acceptance_probe.txt` in the isolated worktree with revision `1fb78c34cf37b61394f119294c12ccc71333f571bcc8d2a4e9ed58916433be72`; `read_file` returned the same content hash
+- `claude -p ... --output-format json --permission-mode bypassPermissions` → `Not logged in · Please run /login`
 - direct installed launcher probe → valid MCP `initialize` response with server name `synesis`
 - `./gradlew.bat check --no-daemon --dependency-verification=strict` → PASS

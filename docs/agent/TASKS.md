@@ -1201,9 +1201,10 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   bounded Antigravity attempt when available.
 - Required documentation: provider evidence report, checkpoint, test matrix,
   configuration paths, and limitations.
-- Evidence: CP-0274; installed MCP jar and direct initialize probe pass; a real
-  Codex CLI completed `ensure_session` with an exact claim and isolated
-  worktree; two-process conflict/EOF evidence also passes; Claude is
-  unauthenticated and Antigravity unavailable.
+- Evidence: CP-0275; installed MCP jar and direct initialize probe pass; a real
+  Codex CLI completed `ensure_session`, then created and reread an isolated
+  probe file through MCP with a matching revision hash; two-process
+  conflict/EOF evidence also passes; Claude is unauthenticated and
+  Antigravity unavailable.
 - Scope boundary: no remote publication, provider credential changes, or
   universal native-hook enforcement claim.
