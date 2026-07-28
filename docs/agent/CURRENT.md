@@ -27,8 +27,11 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Retry Codex/Claude real sessions when provider configuration is available;
-Antigravity remains bounded by external availability.
+Installed distribution now includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
+initialize passes. Codex global MCP entry and the task-tracker Claude project
+entry point to that install. Codex launched a real `ensure_session` call but
+the harness cancelled it before a result; Claude remains unauthenticated and
+Antigravity unavailable.
 
 ## Work completed
 

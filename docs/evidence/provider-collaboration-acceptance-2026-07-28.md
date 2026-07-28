@@ -8,8 +8,8 @@ MCP session completed.
 
 | Provider | Configuration discovered | Real MCP connection | MCP mutation | Native hook |
 |---|---|---|---|---|
-| Codex 0.140.0 | `codex mcp list` found `synesis` | Attempted with `codex exec --ephemeral --json`; the configured installed path was stale and the bounded override did not expose Synesis tools | Not claimed | Not claimed |
-| Claude Code 2.1.59 | CLI installed; `claude mcp list` reports no configured servers | Not attempted successfully: `claude auth status` reports `loggedIn: false` | Not claimed | Not claimed |
+| Codex 0.140.0 | `codex mcp list` found `synesis`; entry was updated to the current local install | Real `codex exec --ephemeral --json` launched Synesis and emitted a real `ensure_session` call; the harness cancelled the call before a result | Not claimed (no mutation) | Not claimed |
+| Claude Code 2.1.59 | Project `.mcp.json` now points at the current local install | Not completed: `claude auth status` reports `loggedIn: false` | Not claimed | Not claimed |
 | Antigravity | No executable or configured provider found | Blocked by unavailable provider/quota | Not claimed | Not claimed |
 
 The local Synesis MCP server itself passes the two-process, 11-tool, revision,
@@ -20,7 +20,9 @@ dirty by design and was not reset or modified by this validation.
 ## Exact commands
 
 - `claude auth status` → `loggedIn: false`
-- `claude mcp list` → no MCP servers configured
-- `codex mcp list` → `synesis` configured but unsupported/stale executable path
-- `codex exec --ephemeral --json ...` → MCP startup/handshake failure; no mutation
+- `claude mcp add --scope project ...` → task-tracker `.mcp.json` updated to the current local install
+- `claude auth status` → `loggedIn: false`; no authenticated provider run
+- `codex mcp remove synesis` followed by `codex mcp add synesis -- ...\synesis.bat mcp --provider codex` → current local install
+- `codex exec --ephemeral --json ...` → real `ensure_session` call started; harness cancellation prevented a result; no mutation
+- direct installed launcher probe → valid MCP `initialize` response with server name `synesis`
 - `./gradlew.bat check --no-daemon --dependency-verification=strict` → PASS
