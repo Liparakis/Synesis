@@ -40,7 +40,7 @@ denial → clean-EOF release → Claude reacquisition. Historical task-tracker
 events now replay successfully after stable legacy dependency wire-code
 decoding. A read-only reconciliation inspection classified one provider
 session as `suspectedStale` without transferring ownership; the dirty fixture
-was not altered.
+was not altered. Its current Python acceptance suite passes all 45 tests.
 
 ## Work completed
 

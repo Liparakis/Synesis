@@ -51,5 +51,6 @@ automatic ownership transfer. The fixture's existing claims remain untouched.
 - `claude -p ... --output-format json --permission-mode bypassPermissions` → `Not logged in · Please run /login`
 - `synesis reconcile --dry-run --verbose --json --project "C:\\Users\\Liparakis\\Desktop\\Test case"` → one `suspectedStale`, zero executable abandonment actions
 - `C:\\Users\\Liparakis\\AppData\\Local\\agy\\bin\\agy.exe --print ...` → provider returned `Individual quota reached`; no Antigravity MCP call was made
+- `python -m pytest -q` in the task-tracker fixture → `45 passed in 0.11s`
 - direct installed launcher probe → valid MCP `initialize` response with server name `synesis`
 - `./gradlew.bat check --no-daemon --dependency-verification=strict` → PASS
