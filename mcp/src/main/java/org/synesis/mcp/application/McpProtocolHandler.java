@@ -240,7 +240,7 @@ public final class McpProtocolHandler {
         }
 
         Map<String, Object> serverInfo = new LinkedHashMap<>();
-        serverInfo.put("name", "synesis-mcp");
+        serverInfo.put("name", "synesis");
         serverInfo.put("version", "0.1.0-SNAPSHOT");
 
         Map<String, Object> capabilities = new LinkedHashMap<>();
@@ -519,7 +519,7 @@ public final class McpProtocolHandler {
         ensureSessionSchema.put("properties", ensureSessionProperties);
 
         Map<String, Object> ensureSessionTool = new LinkedHashMap<>();
-        ensureSessionTool.put("name", "synesis.ensure_session");
+        ensureSessionTool.put("name", "ensure_session");
         ensureSessionTool.put("description", "Ensures an active, verified Synesis workspace session.");
         ensureSessionTool.put("inputSchema", ensureSessionSchema);
 
@@ -539,7 +539,7 @@ public final class McpProtocolHandler {
         readSchema.put("required", List.of("path"));
 
         Map<String, Object> readFileTool = new LinkedHashMap<>();
-        readFileTool.put("name", "synesis.read_file");
+        readFileTool.put("name", "read_file");
         readFileTool.put("description", "Reads text file content from the assigned worktree.");
         readFileTool.put("inputSchema", readSchema);
 
@@ -577,7 +577,7 @@ public final class McpProtocolHandler {
         patchSchema.put("required", List.of("path"));
 
         Map<String, Object> applyPatchTool = new LinkedHashMap<>();
-        applyPatchTool.put("name", "synesis.apply_patch");
+        applyPatchTool.put("name", "apply_patch");
         applyPatchTool.put("description",
                 "Applies a structured file creation or modification patch to the assigned worktree.");
         applyPatchTool.put("inputSchema", patchSchema);
@@ -604,14 +604,14 @@ public final class McpProtocolHandler {
         runCmdSchema.put("required", List.of("type"));
 
         Map<String, Object> runCommandTool = new LinkedHashMap<>();
-        runCommandTool.put("name", "synesis.run_command");
+        runCommandTool.put("name", "run_command");
         runCommandTool.put("description",
                 "Executes an approved project build or git command intent inside the assigned worktree.");
         runCommandTool.put("inputSchema", runCmdSchema);
 
         Map<String, Object> nextActionSchema = Map.of("type", "object", "properties", Map.of());
         Map<String, Object> getNextActionTool = new LinkedHashMap<>();
-        getNextActionTool.put("name", "synesis.get_next_action");
+        getNextActionTool.put("name", "get_next_action");
         getNextActionTool.put("description",
                 "Retrieves the single highest-priority actionable coordination item for the active MCP session.");
         getNextActionTool.put("inputSchema", nextActionSchema);
@@ -667,7 +667,7 @@ public final class McpProtocolHandler {
         describeSchema.put("properties", describeProperties);
 
         Map<String, Object> describeTool = new LinkedHashMap<>();
-        describeTool.put("name", "synesis.describe_required_capability");
+        describeTool.put("name", "describe_required_capability");
         describeTool.put("description",
                 "Describes required capability contract or responds to owner revision feedback.");
         describeTool.put("inputSchema", describeSchema);
@@ -688,7 +688,7 @@ public final class McpProtocolHandler {
         respondSchema.put("required", List.of("request", "response"));
 
         Map<String, Object> respondTool = new LinkedHashMap<>();
-        respondTool.put("name", "synesis.respond_to_owner_request");
+        respondTool.put("name", "respond_to_owner_request");
         respondTool.put("description", "Responds to a pending capability request as the authorized capability owner.");
         respondTool.put("inputSchema", respondSchema);
 
@@ -704,7 +704,7 @@ public final class McpProtocolHandler {
         publishSchema.put("required", List.of("request"));
 
         Map<String, Object> publishTool = new LinkedHashMap<>();
-        publishTool.put("name", "synesis.publish_implementation");
+        publishTool.put("name", "publish_implementation");
         publishTool.put("description",
                 "Publishes an immutable implementation snapshot for a capability request as the authorized owner.");
         publishTool.put("inputSchema", publishSchema);
@@ -730,7 +730,7 @@ public final class McpProtocolHandler {
         validateSchema.put("required", List.of("request", "result"));
 
         Map<String, Object> validateTool = new LinkedHashMap<>();
-        validateTool.put("name", "synesis.validate_available_implementation");
+        validateTool.put("name", "validate_available_implementation");
         validateTool.put("description",
                 "Validates the available implementation snapshot for a capability request as the authorized requester.");
         validateTool.put("inputSchema", validateSchema);
@@ -745,7 +745,7 @@ public final class McpProtocolHandler {
         completeSchema.put("properties", completeProperties);
 
         Map<String, Object> completeTaskTool = new LinkedHashMap<>();
-        completeTaskTool.put("name", "synesis.complete_task");
+        completeTaskTool.put("name", "complete_task");
         completeTaskTool.put("description", "Requests task completion and triggers dependency integration.");
         completeTaskTool.put("inputSchema", completeSchema);
 
@@ -760,7 +760,7 @@ public final class McpProtocolHandler {
         cancelSchema.put("required", List.of("reason"));
 
         Map<String, Object> cancelTaskTool = new LinkedHashMap<>();
-        cancelTaskTool.put("name", "synesis.cancel_task");
+        cancelTaskTool.put("name", "cancel_task");
         cancelTaskTool.put("description", "Cancels the active task for the ambient MCP connection.");
         cancelTaskTool.put("inputSchema", cancelSchema);
 
@@ -788,6 +788,11 @@ public final class McpProtocolHandler {
         }
 
         String name = (String) params.get("name");
+        // The wire contract advertises raw names; accept legacy synesis.* calls
+        // for one compatibility period and route both forms identically.
+        if (name != null && !name.startsWith("synesis.")) {
+            name = "synesis." + name;
+        }
         Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
 
         AgentResponse agentResponse;

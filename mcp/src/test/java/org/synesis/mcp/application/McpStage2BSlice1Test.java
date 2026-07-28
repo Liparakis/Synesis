@@ -104,16 +104,16 @@ class McpStage2BSlice1Test {
         List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
         assertEquals(11, tools.size());
-        assertEquals("synesis.ensure_session", tools.get(0).get("name"));
-        assertEquals("synesis.read_file", tools.get(1).get("name"));
-        assertEquals("synesis.apply_patch", tools.get(2).get("name"));
-        assertEquals("synesis.run_command", tools.get(3).get("name"));
-        assertEquals("synesis.get_next_action", tools.get(4).get("name"));
-        assertEquals("synesis.describe_required_capability", tools.get(5).get("name"));
-        assertEquals("synesis.respond_to_owner_request", tools.get(6).get("name"));
-        assertEquals("synesis.publish_implementation", tools.get(7).get("name"));
-        assertEquals("synesis.validate_available_implementation", tools.get(8).get("name"));
-        assertEquals("synesis.complete_task", tools.get(9).get("name"));
+        assertEquals("ensure_session", tools.get(0).get("name"));
+        assertEquals("read_file", tools.get(1).get("name"));
+        assertEquals("apply_patch", tools.get(2).get("name"));
+        assertEquals("run_command", tools.get(3).get("name"));
+        assertEquals("get_next_action", tools.get(4).get("name"));
+        assertEquals("describe_required_capability", tools.get(5).get("name"));
+        assertEquals("respond_to_owner_request", tools.get(6).get("name"));
+        assertEquals("publish_implementation", tools.get(7).get("name"));
+        assertEquals("validate_available_implementation", tools.get(8).get("name"));
+        assertEquals("complete_task", tools.get(9).get("name"));
     }
 
     @Test

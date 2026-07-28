@@ -2,7 +2,7 @@
 
 ## Identity
 
-- Task ID: SYN-023
+- Task ID: SYN-024
 - Status: ACTIVE
 - Priority: P1
 - Started checkpoint: CP-0230
@@ -11,14 +11,13 @@
 
 ## Objective
 
-Implement bounded pre-merge compatibility validation without adding a broker,
-remote service, or control-checkout mutation path.
+Finish unified collaboration CLI/MCP behavior and raw MCP naming without adding
+a broker, remote service, or control-checkout mutation path.
 
 ## Immediate slice
 
-Add prepare/check stages for immutable snapshots, owned changed paths, exact
-contract revisions, ancestry, configured project tests, and direct-write
-detection.
+Expose equivalent readiness and collaboration outcomes through shared adapters;
+keep exactly 11 raw advertised MCP tools and accept legacy names.
 
 ## Verification target
 
@@ -28,8 +27,8 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Wire compatibility results into shared integration-readiness adapters and
-preserve contract/path provenance in immutable task snapshots.
+Add integration-readiness adapters, raw/legacy MCP contract tests, and provider
+configuration migration evidence.
 
 ## Work completed
 

@@ -59,7 +59,7 @@ class McpServerTest {
 
         assertNotNull(responseJson);
         assertTrue(responseJson.contains("\"protocolVersion\":\"2024-11-05\""));
-        assertTrue(responseJson.contains("\"name\":\"synesis-mcp\""));
+        assertTrue(responseJson.contains("\"name\":\"synesis\""));
     }
 
     @Test
@@ -82,11 +82,21 @@ class McpServerTest {
         String responseJson = handler.handleMessage(listReq);
 
         assertNotNull(responseJson);
-        assertTrue(responseJson.contains("\"name\":\"synesis.ensure_session\""));
-        assertTrue(responseJson.contains("\"name\":\"synesis.read_file\""));
-        assertTrue(responseJson.contains("\"name\":\"synesis.apply_patch\""));
-        assertTrue(responseJson.contains("\"name\":\"synesis.run_command\""));
-        assertTrue(responseJson.contains("\"name\":\"synesis.get_next_action\""));
+        assertTrue(responseJson.contains("\"name\":\"ensure_session\""));
+        assertTrue(responseJson.contains("\"name\":\"read_file\""));
+        assertTrue(responseJson.contains("\"name\":\"apply_patch\""));
+        assertTrue(responseJson.contains("\"name\":\"run_command\""));
+        assertTrue(responseJson.contains("\"name\":\"get_next_action\""));
+    }
+
+    @Test
+    void toolsListAdvertisesExactlyElevenRawNamesAndLegacyCallsStillWork() {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-raw");
+        String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}");
+        assertEquals(11, response.split("\\\"name\\\":\\\"").length - 1);
+        assertFalse(response.contains("synesis.ensure_session"));
+        String legacy = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
+        assertTrue(legacy.contains("ready") || legacy.contains("retry_required"));
     }
 
     @Test

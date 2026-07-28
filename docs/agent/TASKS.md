@@ -1138,7 +1138,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-023
 - Priority: P0
 - Title: Contract-aware pre-merge compatibility checks
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Validate immutable task snapshots, owned changed paths, contract
   revisions, project tests, and control-head ancestry before advancement.
 - Dependencies: SYN-022 DONE; isolated worktrees and guarded fast-forward
@@ -1159,3 +1159,23 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   workspace/MCP tests pass.
 - Scope boundary: no general language API inference, broker, or control-checkout
   mutation path.
+
+## SYN-024
+
+- ID: SYN-024
+- Priority: P0
+- Title: Unified collaboration CLI/MCP surface and raw MCP names
+- Status: ACTIVE
+- Purpose: Keep collaboration capabilities in shared services while exposing
+  equivalent CLI/MCP operations and a stable raw 11-tool wire contract.
+- Dependencies: SYN-023 DONE at CP-0269; existing 11-tool MCP server and
+  provider configuration key `synesis`.
+- Acceptance criteria: raw MCP names are advertised exactly once; legacy
+  `synesis.*` calls remain accepted; CLI and MCP expose equivalent intent,
+  status, release, handoff, contract, and readiness outcomes; schemas and
+  error codes are documented and tested.
+- Required tests: raw tools/list, legacy tools/call compatibility, CLI command
+  registration, shared-service outcome equivalence, and provider config smoke.
+- Required documentation: naming ADR, checkpoint, provider documentation,
+  test matrix, and migration limitations.
+- Scope boundary: no provider maturity claim or remote service.

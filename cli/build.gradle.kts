@@ -304,7 +304,7 @@ tasks.register("bundleSmokeTest") {
             val line3 = mcpReader.readLine()
             require(mcpProcess.waitFor() == 0) { "MCP process failed to exit 0" }
             require(line1 != null && line1.contains("protocolVersion")) { "MCP initialize failed: $line1" }
-            require(line2 != null && line2.contains("synesis.ensure_session")) { "MCP tools/list failed: $line2" }
+            require(line2 != null && line2.contains("\"name\":\"ensure_session\"")) { "MCP tools/list failed: $line2" }
             require(line3 != null && line3.contains("ready")) { "MCP ensure_session failed: $line3" }
         } finally {
             delete(smokeRoot)

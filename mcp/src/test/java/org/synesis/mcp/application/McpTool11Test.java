@@ -71,8 +71,8 @@ class McpTool11Test {
         // Must equal exactly 11 tools
         assertEquals(11, tools.size());
 
-        Map<String, Object> cancelTool = tools.stream().filter(t -> "synesis.cancel_task".equals(t.get("name"))).findFirst().orElseThrow();
-        assertEquals("synesis.cancel_task", cancelTool.get("name"));
+        Map<String, Object> cancelTool = tools.stream().filter(t -> "cancel_task".equals(t.get("name"))).findFirst().orElseThrow();
+        assertEquals("cancel_task", cancelTool.get("name"));
         assertNotNull(cancelTool.get("inputSchema"));
 
         // 3. Ensure session first
