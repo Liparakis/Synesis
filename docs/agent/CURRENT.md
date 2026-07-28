@@ -94,4 +94,6 @@ and additive MCP coordination request/response fields use the shared workspace
 service. `WorkIntentServiceTest.conflictingParticipantsCanDiscoverAndResolveNegotiation`
 passes. Signed `PARTICIPANT_HEARTBEAT` events now record verified MCP activity
 and terminal participant projections remain visible after release. Lease-backed
-stale recovery, epoch fencing, and accepted handoff remain the next slice.
+stale recovery now plans and executes `RELEASE_ABANDONED_CLAIMS` through the
+shared event service. Epoch fencing and accepted two-party handoff remain the
+next slice; no unsafe one-sided transfer is claimed.

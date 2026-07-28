@@ -16,6 +16,9 @@ public enum ReconciliationAction {
      */
     RELEASE_ABANDONED_OWNERSHIP,
 
+    /** Releases active collaboration claims held by an abandoned session. */
+    RELEASE_ABANDONED_CLAIMS,
+
     /**
      * Invalidates capability dependencies provided by an abandoned or cancelled task.
      */

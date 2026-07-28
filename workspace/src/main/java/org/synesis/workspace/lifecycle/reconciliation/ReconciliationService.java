@@ -20,6 +20,8 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 
 /**
  * Core application service for discovering, planning, and executing crash reconciliation and durable session abandonment.
@@ -175,6 +177,10 @@ public final class ReconciliationService {
                             true, List.of("session_abandonment_eligible"), "Release semantic ownership for abandoned session"
                     ));
                     entries.add(new ReconciliationPlanEntry(
+                            1, actionId + "-claims", ReconciliationAction.RELEASE_ABANDONED_CLAIMS, lease.sessionId(),
+                            true, List.of("session_abandonment_eligible"), "Release collaboration claims for abandoned session"
+                    ));
+                    entries.add(new ReconciliationPlanEntry(
                             1, actionId + "-deps", ReconciliationAction.INVALIDATE_ABANDONED_DEPENDENCIES, lease.sessionId(),
                             true, List.of("session_abandonment_eligible"), "Invalidate dependencies for abandoned session"
                     ));
@@ -312,6 +318,21 @@ public final class ReconciliationService {
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
                                     "COMPLETED", "ownership_released", now, "Semantic ownership released"
                             );
+                            journal.append(rec);
+                            records.add(rec);
+                        }
+                        case RELEASE_ABANDONED_CLAIMS -> {
+                            String participant = WorkspaceCollaborationService.participantHandle(entry.targetResourceId());
+                            WorkIntentService intentService = new WorkIntentService(store, identity);
+                            for (var intent : intentService.activeIntents()) {
+                                if (participant.equals(intent.participant())) {
+                                    intentService.release(intent.intentId(), participant);
+                                }
+                            }
+                            completedCount++;
+                            ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
+                                    executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
+                                    "COMPLETED", "claims_released", now, "Collaboration claims released");
                             journal.append(rec);
                             records.add(rec);
                         }
