@@ -20,7 +20,9 @@ public final class CollaborationRequestCommand implements Callable<Integer> {
     @Option(names = "--conflict", required = true) private UUID conflict;
     @Option(names = "--kind", defaultValue = "CONTRACT") private CoordinationRequest.Kind kind;
     @Option(names = "--proposal", required = true) private String proposal;
-    /** Creates the command. @param runtime CLI runtime */
+    /** Creates the command.
+     * @param runtime CLI runtime
+     */
     public CollaborationRequestCommand(CliRuntime runtime) { this.runtime = runtime; }
     /** Executes request. @return process exit code */
     @Override public Integer call() {

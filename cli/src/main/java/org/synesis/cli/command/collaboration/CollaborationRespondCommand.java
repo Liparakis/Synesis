@@ -20,7 +20,9 @@ public final class CollaborationRespondCommand implements Callable<Integer> {
     @Option(names = "--request", required = true) private UUID request;
     @Option(names = "--status", required = true) private CoordinationRequest.Status status;
     @Option(names = "--proposal", defaultValue = "") private String proposal;
-    /** Creates the command. @param runtime CLI runtime */
+    /** Creates the command.
+     * @param runtime CLI runtime
+     */
     public CollaborationRespondCommand(CliRuntime runtime) { this.runtime = runtime; }
     /** Executes response. @return process exit code */
     @Override public Integer call() {

@@ -57,7 +57,12 @@ public final class WorkspaceCollaborationService {
         return service.announce(intent);
     }
 
-    /** Releases the exact session intent and all of its claims. */
+    /** Releases the exact session intent and all of its claims.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @throws Exception when resolution or append fails
+     */
     public void release(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
@@ -67,7 +72,16 @@ public final class WorkspaceCollaborationService {
         new WorkIntentService(store, identity).release(intentId, participantHandle(binding.sessionId()));
     }
 
-    /** Opens a request against a conflicting intent owned by another participant. */
+    /** Opens a request against a conflicting intent owned by another participant.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @param conflictingIntentId conflicting intent
+     * @param kind request kind
+     * @param proposal proposal
+     * @return durable request
+     * @throws Exception when resolution or append fails
+     */
     public CoordinationRequest request(Path projectRoot, String provider, String connectionInstanceId,
             UUID conflictingIntentId, CoordinationRequest.Kind kind, String proposal) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
@@ -77,7 +91,15 @@ public final class WorkspaceCollaborationService {
         return new WorkIntentService(store, identity).request(participantHandle(binding.sessionId()), conflictingIntentId, kind, proposal);
     }
 
-    /** Responds to a request addressed to the exact provider session. */
+    /** Responds to a request addressed to the exact provider session.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @param requestId request ID
+     * @param status response status
+     * @param proposal revised proposal
+     * @throws Exception when resolution or append fails
+     */
     public void respond(Path projectRoot, String provider, String connectionInstanceId,
             UUID requestId, CoordinationRequest.Status status, String proposal) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
@@ -87,7 +109,12 @@ public final class WorkspaceCollaborationService {
         new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()), requestId, status, proposal);
     }
 
-    /** Records verified activity for the exact provider session's participant. */
+    /** Records verified activity for the exact provider session's participant.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @throws Exception when resolution or append fails
+     */
     public void heartbeat(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
@@ -96,7 +123,11 @@ public final class WorkspaceCollaborationService {
         new WorkIntentService(store, identity).heartbeat(participantHandle(binding.sessionId()));
     }
 
-    /** Lists active intents and pending/resolved coordination requests. */
+    /** Lists active intents and pending/resolved coordination requests.
+     * @param projectRoot project root
+     * @return collaboration snapshot
+     * @throws Exception when project state cannot be read
+     */
     public CollaborationSnapshot status(Path projectRoot) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
@@ -106,7 +137,11 @@ public final class WorkspaceCollaborationService {
                 store.collaborationProjection().participants());
     }
 
-    /** Shared collaboration discovery result used by CLI and MCP adapters. */
+    /** Shared collaboration discovery result used by CLI and MCP adapters.
+     * @param intents intents
+     * @param requests requests
+     * @param participants participants
+     */
     public record CollaborationSnapshot(List<WorkIntent> intents, List<CoordinationRequest> requests,
             List<Participant> participants) { }
 

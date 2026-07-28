@@ -74,17 +74,23 @@ public final class CollaborationProjection {
         return List.copyOf(intents.values());
     }
 
-    /** Returns active participant projections without connection or worktree details. */
+    /** Returns active participant projections without connection or worktree details.
+     * @return participant projections
+     */
     public synchronized List<Participant> participants() {
         return List.copyOf(participantHistory.values());
     }
 
-    /** Returns whether this project has durable collaboration enforcement enabled. */
+    /** Returns whether this project has durable collaboration enforcement enabled.
+     * @return true after the first intent event
+     */
     public synchronized boolean activated() {
         return activated;
     }
 
-    /** Returns all durable coordination requests. */
+    /** Returns all durable coordination requests.
+     * @return requests
+     */
     public synchronized List<CoordinationRequest> requests() {
         return List.copyOf(requests.values());
     }

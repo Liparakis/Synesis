@@ -131,7 +131,10 @@ public final class CollaborationCodec {
         return id;
     }
 
-    /** Encodes a coordination request. */
+    /** Encodes a coordination request.
+     * @param request request
+     * @return encoded request
+     */
     public static byte[] encodeRequest(CoordinationRequest request) {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -145,7 +148,11 @@ public final class CollaborationCodec {
         } catch (IOException impossible) { throw new AssertionError(impossible); }
     }
 
-    /** Decodes a coordination request. */
+    /** Decodes a coordination request.
+     * @param encoded encoded request
+     * @return decoded request
+     * @throws IOException malformed request
+     */
     public static CoordinationRequest decodeRequest(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
@@ -162,7 +169,12 @@ public final class CollaborationCodec {
         } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed request", failure); }
     }
 
-    /** Encodes a request response and optional revised proposal. */
+    /** Encodes a request response and optional revised proposal.
+     * @param requestId request ID
+     * @param status response status
+     * @param proposal revised proposal
+     * @return encoded response
+     */
     public static byte[] encodeResponse(UUID requestId, CoordinationRequest.Status status, String proposal) {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
@@ -171,7 +183,11 @@ public final class CollaborationCodec {
         } catch (IOException impossible) { throw new AssertionError(impossible); }
     }
 
-    /** Decodes a request response. */
+    /** Decodes a request response.
+     * @param encoded encoded response
+     * @return decoded response
+     * @throws IOException malformed response
+     */
     public static Response decodeResponse(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
@@ -183,17 +199,28 @@ public final class CollaborationCodec {
         } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed response", failure); }
     }
 
-    /** Decoded request response. */
+    /** Decoded request response.
+     * @param requestId request ID
+     * @param status status
+     * @param proposal proposal
+     */
     public record Response(UUID requestId, CoordinationRequest.Status status, String proposal) { }
 
-    /** Encodes a participant heartbeat. */
+    /** Encodes a participant heartbeat.
+     * @param participant participant ID
+     * @return encoded heartbeat
+     */
     public static byte[] encodeHeartbeat(String participant) {
         try { ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
             out.writeInt(MAGIC_HEARTBEAT); text(out, participant); out.flush(); return bytes.toByteArray();
         } catch (IOException impossible) { throw new AssertionError(impossible); }
     }
 
-    /** Decodes a participant heartbeat. */
+    /** Decodes a participant heartbeat.
+     * @param encoded encoded heartbeat
+     * @return participant ID
+     * @throws IOException malformed heartbeat
+     */
     public static String decodeHeartbeat(byte[] encoded) throws IOException {
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
         if (in.readInt() != MAGIC_HEARTBEAT) throw new IOException("unsupported heartbeat format");

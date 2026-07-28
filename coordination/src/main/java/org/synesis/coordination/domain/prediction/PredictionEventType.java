@@ -190,7 +190,9 @@ public enum PredictionEventType {
     /** Records verified activity for an authenticated participant. */
     PARTICIPANT_HEARTBEAT;
 
-    /** Returns the stable persisted wire code for this event kind. */
+    /** Returns the stable persisted wire code for this event kind.
+     * @return wire code
+     */
     public int wireCode() {
         return switch (this) {
             case WORK_INTENT_ANNOUNCED -> 43;
@@ -202,7 +204,10 @@ public enum PredictionEventType {
         };
     }
 
-    /** Resolves a stable persisted wire code. */
+    /** Resolves a stable persisted wire code.
+     * @param wireCode wire code
+     * @return event type
+     */
     public static PredictionEventType fromWireCode(int wireCode) {
         for (PredictionEventType type : values()) {
             if (type.wireCode() == wireCode) {

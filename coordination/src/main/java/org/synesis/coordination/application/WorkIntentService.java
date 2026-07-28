@@ -97,7 +97,15 @@ public final class WorkIntentService {
         return freshIntents();
     }
 
-    /** Opens a negotiation request against the owner of a conflicting intent. */
+    /** Opens a negotiation request against the owner of a conflicting intent.
+     * @param requester requester ID
+     * @param conflictingIntentId conflicting intent
+     * @param kind request kind
+     * @param proposal proposal
+     * @return request
+     * @throws IOException persistence or validation failure
+     * @throws GeneralSecurityException signing failure
+     */
     public CoordinationRequest request(String requester, UUID conflictingIntentId,
             CoordinationRequest.Kind kind, String proposal) throws IOException, GeneralSecurityException {
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
@@ -113,7 +121,14 @@ public final class WorkIntentService {
         }
     }
 
-    /** Responds idempotently to a request addressed to the participant. */
+    /** Responds idempotently to a request addressed to the participant.
+     * @param participant target participant
+     * @param requestId request ID
+     * @param status response status
+     * @param proposal revised proposal
+     * @throws IOException persistence or validation failure
+     * @throws GeneralSecurityException signing failure
+     */
     public void respond(String participant, UUID requestId, CoordinationRequest.Status status, String proposal)
             throws IOException, GeneralSecurityException {
         if (status == CoordinationRequest.Status.PENDING) throw new IllegalArgumentException("pending is not a response");
@@ -129,7 +144,9 @@ public final class WorkIntentService {
         }
     }
 
-    /** Returns durable coordination requests for discovery. */
+    /** Returns durable coordination requests for discovery.
+     * @return requests
+     */
     public List<CoordinationRequest> requests() {
         try {
             return freshStore().collaborationProjection().requests();
@@ -138,7 +155,11 @@ public final class WorkIntentService {
         }
     }
 
-    /** Appends a signed verified-activity heartbeat for an active participant. */
+    /** Appends a signed verified-activity heartbeat for an active participant.
+     * @param participant participant ID
+     * @throws IOException persistence or validation failure
+     * @throws GeneralSecurityException signing failure
+     */
     public void heartbeat(String participant) throws IOException, GeneralSecurityException {
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) throw new IOException("event append lock unavailable");

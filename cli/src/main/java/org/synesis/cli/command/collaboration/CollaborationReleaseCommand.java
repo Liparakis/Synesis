@@ -16,7 +16,9 @@ public final class CollaborationReleaseCommand implements Callable<Integer> {
     @Option(names = "--provider", defaultValue = "codex") private String provider;
     @Option(names = "--connection-instance-id", required = true) private String connectionInstanceId;
 
-    /** Creates the command. @param runtime CLI runtime */
+    /** Creates the command.
+     * @param runtime CLI runtime
+     */
     public CollaborationReleaseCommand(CliRuntime runtime) { this.runtime = runtime; }
 
     /** Executes release. @return process exit code */

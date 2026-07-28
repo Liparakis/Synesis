@@ -3,13 +3,22 @@ package org.synesis.coordination.domain.collaboration;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Signed request used by participants to negotiate an overlapping intent. */
+/** Signed request used by participants to negotiate an overlapping intent.
+ * @param requestId request identity
+ * @param projectId project identity
+ * @param requester opaque requester
+ * @param target opaque target
+ * @param conflictingIntentId conflicting intent
+ * @param kind request kind
+ * @param proposal bounded proposal
+ * @param status lifecycle status
+ */
 public record CoordinationRequest(UUID requestId, UUID projectId, String requester,
         String target, UUID conflictingIntentId, Kind kind, String proposal, Status status) {
     /** Request categories supported by the first negotiation slice. */
-    public enum Kind { CONTRACT, HANDOFF, SCOPE_REVISION }
+    public enum Kind { /** Contract negotiation. */ CONTRACT, /** Ownership handoff negotiation. */ HANDOFF, /** Scope revision negotiation. */ SCOPE_REVISION }
     /** Durable request lifecycle. */
-    public enum Status { PENDING, ACCEPTED, REVISED, REJECTED, CANCELLED, COMPLETED }
+    public enum Status { /** Pending. */ PENDING, /** Accepted. */ ACCEPTED, /** Revised. */ REVISED, /** Rejected. */ REJECTED, /** Cancelled. */ CANCELLED, /** Completed. */ COMPLETED }
 
     /** Validates bounded request fields. */
     public CoordinationRequest {

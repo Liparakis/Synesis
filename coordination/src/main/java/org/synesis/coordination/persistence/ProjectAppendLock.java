@@ -19,7 +19,11 @@ public final class ProjectAppendLock implements AutoCloseable {
         this.lock = lock;
     }
 
-    /** Acquires the project append lock with bounded retry. */
+    /** Acquires the project append lock with bounded retry.
+     * @param root project root
+     * @return lock handle
+     * @throws IOException when acquisition fails
+     */
     public static ProjectAppendLock acquire(Path root) throws IOException {
         Objects.requireNonNull(root, "root");
         Files.createDirectories(root);
@@ -52,7 +56,9 @@ public final class ProjectAppendLock implements AutoCloseable {
         }
     }
 
-    /** Returns whether this handle currently owns the project lock. */
+    /** Returns whether this handle currently owns the project lock.
+     * @return true while held
+     */
     public boolean isHeld() {
         return lock.isValid();
     }
