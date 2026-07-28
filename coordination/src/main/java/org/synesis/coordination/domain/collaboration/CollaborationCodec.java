@@ -16,6 +16,7 @@ public final class CollaborationCodec {
     private static final int MAGIC_RELEASE = 0x53524c31;
     private static final int MAGIC_REQUEST = 0x53525131;
     private static final int MAGIC_RESPONSE = 0x53525331;
+    private static final int MAGIC_HEARTBEAT = 0x53484231;
 
     private CollaborationCodec() {
     }
@@ -184,6 +185,22 @@ public final class CollaborationCodec {
 
     /** Decoded request response. */
     public record Response(UUID requestId, CoordinationRequest.Status status, String proposal) { }
+
+    /** Encodes a participant heartbeat. */
+    public static byte[] encodeHeartbeat(String participant) {
+        try { ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_HEARTBEAT); text(out, participant); out.flush(); return bytes.toByteArray();
+        } catch (IOException impossible) { throw new AssertionError(impossible); }
+    }
+
+    /** Decodes a participant heartbeat. */
+    public static String decodeHeartbeat(byte[] encoded) throws IOException {
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+        if (in.readInt() != MAGIC_HEARTBEAT) throw new IOException("unsupported heartbeat format");
+        String participant = readText(in);
+        if (in.available() != 0) throw new IOException("trailing heartbeat bytes");
+        return participant;
+    }
 
     private static void uuid(DataOutputStream out, UUID id) throws IOException {
         out.writeLong(id.getMostSignificantBits());

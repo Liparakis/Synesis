@@ -92,4 +92,6 @@ responses replay through the collaboration projection; opaque participant
 projections expose provider, goal, state, and claims; CLI status/request/respond
 and additive MCP coordination request/response fields use the shared workspace
 service. `WorkIntentServiceTest.conflictingParticipantsCanDiscoverAndResolveNegotiation`
-passes. Lease-backed stale recovery and accepted handoff remain the next slice.
+passes. Signed `PARTICIPANT_HEARTBEAT` events now record verified MCP activity
+and terminal participant projections remain visible after release. Lease-backed
+stale recovery, epoch fencing, and accepted handoff remain the next slice.

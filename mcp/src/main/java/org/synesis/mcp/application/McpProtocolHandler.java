@@ -134,6 +134,7 @@ public final class McpProtocolHandler {
             String nodeId = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
             leaseService.createOrRenewLease(activeProjectRoot, location.projectId().toString(), provider,
                     connectionInstanceId, nodeId, binding.sessionId(), leasePolicy);
+            collaborationService.heartbeat(activeProjectRoot, provider, connectionInstanceId);
         } catch (Exception ignored) {
             // Unbound requests are handled by the session and workspace policy paths.
         }

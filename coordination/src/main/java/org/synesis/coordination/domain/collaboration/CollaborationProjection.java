@@ -15,6 +15,7 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 public final class CollaborationProjection {
     private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
     private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
+    private final Map<String, Participant> participantHistory = new LinkedHashMap<>();
     private boolean activated;
 
     /** Creates an empty collaboration projection. */
@@ -36,6 +37,7 @@ public final class CollaborationProjection {
             case WORK_INTENT_RELEASED -> release(CollaborationCodec.decodeRelease(event.payload()));
             case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
             case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
+            case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
             default -> {
             }
         }
@@ -50,6 +52,7 @@ public final class CollaborationProjection {
         CollaborationProjection candidate = new CollaborationProjection();
         candidate.intents.putAll(intents);
         candidate.requests.putAll(requests);
+        candidate.participantHistory.putAll(participantHistory);
         candidate.activated = activated;
         candidate.apply(event);
     }
@@ -73,8 +76,7 @@ public final class CollaborationProjection {
 
     /** Returns active participant projections without connection or worktree details. */
     public synchronized List<Participant> participants() {
-        return intents.values().stream().map(intent -> new Participant(intent.participant(), intent.provider(),
-                intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors())).toList();
+        return List.copyOf(participantHistory.values());
     }
 
     /** Returns whether this project has durable collaboration enforcement enabled. */
@@ -111,11 +113,20 @@ public final class CollaborationProjection {
             throw new IOException("OVERLAPPING_CLAIM");
         }
         intents.put(intent.intentId(), intent);
+        String opaqueId = intent.participant().startsWith("agt_") ? intent.participant() : "agt_" + intent.participant();
+        participantHistory.put(intent.participant(), new Participant(opaqueId, intent.provider(),
+                intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors()));
     }
 
     private void release(UUID id) throws IOException {
-        if (intents.remove(id) == null) {
+        WorkIntent released = intents.remove(id);
+        if (released == null) {
             throw new IOException("INTENT_NOT_FOUND");
+        }
+        Participant previous = participantHistory.get(released.participant());
+        if (previous != null) {
+            participantHistory.put(released.participant(), new Participant(previous.id(), previous.provider(),
+                    previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of()));
         }
     }
 
@@ -135,5 +146,12 @@ public final class CollaborationProjection {
         requests.put(current.requestId(), new CoordinationRequest(current.requestId(), current.projectId(),
                 current.requester(), current.target(), current.conflictingIntentId(), current.kind(),
                 response.proposal().isBlank() ? current.proposal() : response.proposal(), response.status()));
+    }
+
+    private void heartbeat(String participant, long timestamp) throws IOException {
+        Participant current = participantHistory.get(participant);
+        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
+                Participant.State.ACTIVE, timestamp, current.claims()));
     }
 }

@@ -138,6 +138,21 @@ public final class WorkIntentService {
         }
     }
 
+    /** Appends a signed verified-activity heartbeat for an active participant. */
+    public void heartbeat(String participant) throws IOException, GeneralSecurityException {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            boolean known = current.collaborationProjection().participants().stream()
+                    .anyMatch(candidate -> candidate.id().equals(participant)
+                            && candidate.state() == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE);
+            if (!known) throw new IOException("PARTICIPANT_NOT_FOUND");
+            current.append(UUID.nameUUIDFromBytes(participant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    PredictionEventType.PARTICIPANT_HEARTBEAT, signer.nodeId(),
+                    CollaborationCodec.encodeHeartbeat(participant), signer);
+        }
+    }
+
     private List<WorkIntent> freshIntents() {
         try {
             return freshStore().collaborationProjection().activeIntents();

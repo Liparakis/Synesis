@@ -87,6 +87,15 @@ public final class WorkspaceCollaborationService {
         new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()), requestId, status, proposal);
     }
 
+    /** Records verified activity for the exact provider session's participant. */
+    public void heartbeat(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new WorkIntentService(store, identity).heartbeat(participantHandle(binding.sessionId()));
+    }
+
     /** Lists active intents and pending/resolved coordination requests. */
     public CollaborationSnapshot status(Path projectRoot) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);

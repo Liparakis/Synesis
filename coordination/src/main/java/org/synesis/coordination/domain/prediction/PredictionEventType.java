@@ -186,7 +186,9 @@ public enum PredictionEventType {
     /** Creates a signed coordination request between conflicting participants. */
     COORDINATION_REQUESTED,
     /** Records the target participant's coordination response. */
-    COORDINATION_RESPONDED;
+    COORDINATION_RESPONDED,
+    /** Records verified activity for an authenticated participant. */
+    PARTICIPANT_HEARTBEAT;
 
     /** Returns the stable persisted wire code for this event kind. */
     public int wireCode() {
@@ -195,6 +197,7 @@ public enum PredictionEventType {
             case WORK_INTENT_RELEASED -> 44;
             case COORDINATION_REQUESTED -> 45;
             case COORDINATION_RESPONDED -> 46;
+            case PARTICIPANT_HEARTBEAT -> 47;
             default -> ordinal();
         };
     }
