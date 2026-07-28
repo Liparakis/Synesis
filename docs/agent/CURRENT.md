@@ -52,6 +52,8 @@ JSON-safe maps, the focused MCP regression passes, and the reinstalled
 distribution returns contract revision and content hash successfully.
 The subsequent full Gradle check with strict dependency verification also
 passes (50 actionable tasks).
+Real Claude also inspected the published contract projection successfully,
+including revision, supersession, selector, and content-hash fields.
 
 ## Work completed
 
