@@ -27,14 +27,15 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Installed distribution now includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
+Installed distribution includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
 initialize passes. Codex global MCP entry and the task-tracker Claude project
-entry point to that install. Codex launched a real `ensure_session` call but
-the harness cancelled it before a result; Claude remains unauthenticated and
-Antigravity unavailable. Two independent installed MCP processes nevertheless
-demonstrated Codex claim → Claude overlap denial → clean-EOF release → Claude
-reacquisition on `src/task_tracker.py`. Historical task-tracker events now
-replay successfully after stable legacy dependency wire-code decoding.
+entry point to that install. A real Codex CLI run completed `ensure_session`
+with an exact `src/task_tracker.py` claim and isolated worktree; no source file
+was edited. Claude remains unauthenticated and Antigravity unavailable. Two
+independent installed MCP processes demonstrated Codex claim → Claude overlap
+denial → clean-EOF release → Claude reacquisition. Historical task-tracker
+events now replay successfully after stable legacy dependency wire-code
+decoding.
 
 ## Work completed
 
