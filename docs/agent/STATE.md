@@ -21,6 +21,9 @@ Matrix outputs are short-retention internal artifacts; the final job retains
 one 30-day `synesis-release-candidate` artifact and removes internal artifacts
 on ordinary writable-token runs. No GitHub Release was created.
 
+SYN-020 is DONE at CP-0260. SYN-021 is the sole ACTIVE task and covers
+authenticated claim lifecycle, presence, stale recovery, and epoch fencing.
+
 ## SYN-012 implementation state
 
 The coordination vertical slice is verified at CP-0144 and its public CLI

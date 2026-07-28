@@ -526,7 +526,7 @@ Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 - [x] **SYN-014D** — Post-MVP Hardening Slice 4: Doctor diagnostics and safe administrative repair `[DONE]`
 - [x] **SYN-015** — Reorganize Synesis package structure `[DONE]`
 - [x] **SYN-016** — Organize coordination domain packages `[DONE]`
-- [/] **SYN-017** — Organize workspace application packages `[ACTIVE]`
+- [x] **SYN-017** — Organize workspace application packages `[DONE]`
 - [x] **STRUCT-1A** — Foundational packages `[DONE]`
 - [x] **STRUCT-1B** — Workspace packages `[DONE]`
 - [x] **STRUCT-1C** — MCP packages `[DONE]`
@@ -1035,7 +1035,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-019
 - Priority: P1
 - Title: Close workspace application package architecture rule
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Reconcile the workspace application root-package architecture test
   with the completed package refactor without changing runtime behavior.
 - Dependencies: SYN-018 hygiene complete; `SYN-014E` remains paused.
@@ -1051,4 +1051,59 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   by the user: one narrow Go bootstrap portability fix for versioned activation
   ordering, with no broader installer behavior change, plus the narrow Linux
   MCP absolute-file-URI parsing regression reported by CI.
-- Evidence: the root production directory contains only `ProjectApplicationService.java`; the stale test allowlist was corrected in commit `a87d3d8`.
+- Evidence: PASS — the root production directory contains only `ProjectApplicationService.java`; the stale test allowlist was corrected in commit `a87d3d8`.
+
+## SYN-020
+
+- ID: SYN-020
+- Priority: P0
+- Title: Active work intent and exact-path claim arbitration
+- Status: DONE
+- Purpose: Let authenticated sessions announce intended work, discover active
+  participants, and acquire atomic exact-path/subtree claims before MCP
+  mutation.
+- Dependencies: SYN-019 DONE; existing signed coordination event store,
+  provider session binding, and isolated worktree mutation broker.
+- Acceptance criteria: bounded participant, intent, selector, and claim
+  records; deterministic overlap evaluation; atomic all-or-nothing acquisition;
+  signed event replay; MCP mutation denial for missing/overlapping claims; and
+  CLI/MCP adapter parity without changing the 11-tool count.
+- Required tests: exact/exact conflict, exact/subtree conflict, unrelated
+  claims, concurrent acquisition, multi-selector rollback, release/finalize,
+  replay compatibility, and unchanged-file mutation denial.
+- Required documentation: ADR for claim arbitration, durable state/checkpoint,
+  and acceptance evidence using the task-tracker fixture.
+- Scope boundary: no symbol/area selectors, dependency invalidation,
+  out-of-band filesystem prevention, deadlock detection, Antigravity maturity
+  claims, or MCP naming migration.
+- Evidence: PASS — coordination/workspace/MCP/CLI tests and strict root check
+  pass; bootstrap Go test/vet and deferred validation pass; claim arbitration
+  is covered by `WorkIntentServiceTest` and
+  `WorkspacePatchServiceTest.conflictingSessionCannotMutateClaimedPath`; the
+  two-handler MCP task-tracker acceptance passes with pre-mutation blocking;
+  CP-0260 records stable event-code compatibility, append locking, exact
+  binding authorization, lease activity, clean EOF release, and explicit
+  release evidence.
+
+## SYN-021
+
+- ID: SYN-021
+- Priority: P0
+- Title: Authenticated claim lifecycle, presence, and stale fencing
+- Status: ACTIVE
+- Purpose: Project active participants, lease-backed presence, explicit and
+  owner-independent claim recovery, and epoch fencing through shared CLI/MCP
+  collaboration services.
+- Dependencies: SYN-020 DONE at CP-0260; existing session lease and
+  reconciliation services.
+- Acceptance criteria: exact-session participant projection; one active intent
+  per verified session; heartbeat renewal and clean EOF; suspected-stale versus
+  abandoned classification; explicit release on refresh/completion/cancellation;
+  verified-abandonment recovery; old-epoch mutation fencing; CLI/MCP parity.
+- Required tests: lifecycle projection, heartbeat coalescing, stale/grace
+  boundaries, deleted-process recovery, exact-caller release, old-epoch
+  rejection, concurrent unrelated claims, and adapter equivalence.
+- Required documentation: lifecycle ADR, replay evidence, checkpoint, test
+  matrix updates, and provider evidence boundaries.
+- Scope boundary: no handoff negotiation, contract revision, out-of-band
+  integration enforcement, deadlock detection, or MCP naming migration.

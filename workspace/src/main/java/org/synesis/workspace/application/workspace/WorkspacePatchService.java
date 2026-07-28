@@ -1,5 +1,6 @@
 package org.synesis.workspace.application.workspace;
 import org.synesis.workspace.application.workspace.TranslatedOutcome;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -34,6 +35,7 @@ public final class WorkspacePatchService {
     private final WorkspaceReadinessService readinessService;
     private final WorkspaceMutationBroker mutationBroker;
     private final AgentOutcomeTranslator translator;
+    private final WorkspaceCollaborationService collaborationService;
 
     /**
      * Single text edit instruction for modification mode.
@@ -100,6 +102,7 @@ public final class WorkspacePatchService {
         this.readinessService = new WorkspaceReadinessService();
         this.mutationBroker = new WorkspaceMutationBroker();
         this.translator = new AgentOutcomeTranslator();
+        this.collaborationService = new WorkspaceCollaborationService();
     }
 
     /**
@@ -152,6 +155,14 @@ public final class WorkspacePatchService {
                 || normTarget.equals(".synesis") || normTarget.equals(".codex")
                 || normTarget.equals(".agents") || normTarget.equals(".git")) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROTECTED_CONFIGURATION, null, null);
+        }
+
+        String collaborationReason = collaborationService.mutationReason(root, request.provider(),
+                request.connectionInstanceId(), resolvedRelative);
+        if (!"allowed".equals(collaborationReason)) {
+            return new AgentResponse(AgentStatus.BLOCKED,
+                    AgentReason.fromValue(collaborationReason),
+                    AgentNextAction.ENSURE_SESSION, null);
         }
 
         Path targetFile = assignedWorktree.resolve(resolvedRelative).toAbsolutePath().normalize();

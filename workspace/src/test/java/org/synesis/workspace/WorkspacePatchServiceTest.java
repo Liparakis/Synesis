@@ -21,6 +21,8 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 class WorkspacePatchServiceTest {
 
@@ -336,5 +338,26 @@ class WorkspacePatchServiceTest {
         try (var files = Files.list(evidenceDir)) {
             assertTrue(files.count() > 0, "Internal evidence record should be retained");
         }
+    }
+
+    @Test
+    void conflictingSessionCannotMutateClaimedPath() throws Exception {
+        AgentSessionService sessions = new AgentSessionService();
+        AgentSessionService.SessionResolutionRequest ownerRequest = new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "conn-claim-owner", null, false);
+        AgentSessionService.SessionResolutionRequest contenderRequest = new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "conn-claim-contender", null, false);
+        sessions.ensureSession(ownerRequest);
+        sessions.ensureSession(contenderRequest);
+
+        assertTrue(new WorkspaceCollaborationService().announce(
+                controlRoot, "codex", "conn-claim-owner", "Implement tracker", "45 tests pass",
+                List.of(ResourceSelector.pathExact("src/Product.java"))).acquired());
+
+        AgentResponse response = new WorkspacePatchService().applyPatch(new WorkspacePatchService.PatchRequest(
+                controlRoot, "codex", "conn-claim-contender", "src/Product.java", true,
+                "competing", null, List.of()));
+        assertEquals(AgentStatus.BLOCKED, response.status());
+        assertTrue(response.toJson().contains("overlapping_claim"));
     }
 }

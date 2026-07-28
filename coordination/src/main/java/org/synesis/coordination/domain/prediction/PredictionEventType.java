@@ -178,5 +178,28 @@ public enum PredictionEventType {
     /**
      * Capability dependency invalidated due to cancellation or abandonment of supplier task.
      */
-    DEPENDENCY_INVALIDATED
+    DEPENDENCY_INVALIDATED,
+    /** Announces an authenticated worker intent and atomically requested claims. */
+    WORK_INTENT_ANNOUNCED,
+    /** Releases all claims associated with an authenticated worker intent. */
+    WORK_INTENT_RELEASED;
+
+    /** Returns the stable persisted wire code for this event kind. */
+    public int wireCode() {
+        return switch (this) {
+            case WORK_INTENT_ANNOUNCED -> 43;
+            case WORK_INTENT_RELEASED -> 44;
+            default -> ordinal();
+        };
+    }
+
+    /** Resolves a stable persisted wire code. */
+    public static PredictionEventType fromWireCode(int wireCode) {
+        for (PredictionEventType type : values()) {
+            if (type.wireCode() == wireCode) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException("unknown event wire code: " + wireCode);
+    }
 }

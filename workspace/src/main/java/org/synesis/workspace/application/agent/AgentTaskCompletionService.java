@@ -1,6 +1,8 @@
 package org.synesis.workspace.application.agent;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -45,6 +47,8 @@ public final class AgentTaskCompletionService {
     private final ProviderSessionBindingService bindingService;
     private final TaskSnapshotService snapshotService;
     private final IntegrationOrchestrationService integrationOrchestrationService;
+    private final SessionAuthorityResolver authorityResolver;
+    private final WorkspaceCollaborationService collaborationService;
 
     /**
      * Creates an agent task completion service.
@@ -54,6 +58,8 @@ public final class AgentTaskCompletionService {
         this.bindingService = new ProviderSessionBindingService();
         this.snapshotService = new TaskSnapshotService();
         this.integrationOrchestrationService = new IntegrationOrchestrationService();
+        this.authorityResolver = new SessionAuthorityResolver(bindingService);
+        this.collaborationService = new WorkspaceCollaborationService();
     }
 
     /**
@@ -99,12 +105,8 @@ public final class AgentTaskCompletionService {
         NodeIdentity identity;
         try {
             location = projectService.locate(root);
-            var bindings = bindingService.list(location, request.provider());
-            if (bindings.isEmpty()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            binding = bindings.getLast();
-            if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
+            binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
+            if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
             identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
@@ -185,10 +187,22 @@ public final class AgentTaskCompletionService {
             }
 
             // 5. Trigger integration orchestration
-            return integrationOrchestrationService.orchestrateIntegration(location.root(), store, identity);
+            AgentResponse result = integrationOrchestrationService.orchestrateIntegration(location.root(), store, identity);
+            if (result.status() == AgentStatus.COMPLETED) {
+                releaseClaims(request, collaborationService);
+            }
+            return result;
 
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+        }
+    }
+
+    private static void releaseClaims(CompleteTaskRequest request, WorkspaceCollaborationService service) {
+        try {
+            service.release(request.projectRoot(), request.provider(), request.connectionInstanceId());
+        } catch (Exception ignored) {
+            // The task result remains authoritative; reconciliation can retry release.
         }
     }
 

@@ -170,7 +170,13 @@ public enum AgentReason {
     /**
      * Control branch moved during integration attempt; retry required.
      */
-    INTEGRATION_STALE("integration_stale");
+    INTEGRATION_STALE("integration_stale"),
+
+    /** Mutation requires an announced intent and owned resource claim. */
+    COORDINATION_INTENT_REQUIRED("coordination_intent_required"),
+
+    /** Mutation overlaps another participant's active resource claim. */
+    OVERLAPPING_CLAIM("overlapping_claim");
 
     private final String value;
 

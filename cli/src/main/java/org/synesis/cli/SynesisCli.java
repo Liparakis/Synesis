@@ -5,6 +5,10 @@ import org.synesis.cli.command.workspace.CheckActionCommand;
 import org.synesis.cli.command.lifecycle.CleanupCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
+import org.synesis.cli.command.collaboration.CollaborationAnnounceCommand;
+import org.synesis.cli.command.collaboration.CollaborationCommand;
+import org.synesis.cli.command.collaboration.CollaborationStatusCommand;
+import org.synesis.cli.command.collaboration.CollaborationReleaseCommand;
 import org.synesis.cli.command.coordination.CoordinationDemoCommand;
 import org.synesis.cli.command.coordination.CoordinationOperatorCommand;
 import org.synesis.cli.command.coordination.CoordinationServeCommand;
@@ -127,6 +131,11 @@ public final class SynesisCli {
         command.getSubcommands()
                 .get("constraint")
                 .addSubcommand("create", new ConstraintCreateCommand(runtime));
+        CommandLine collaboration = new CommandLine(new CollaborationCommand())
+                .addSubcommand("announce", new CollaborationAnnounceCommand(runtime))
+                .addSubcommand("status", new CollaborationStatusCommand(runtime))
+                .addSubcommand("release", new CollaborationReleaseCommand(runtime));
+        command.addSubcommand("collaboration", collaboration);
         command.addSubcommand("sync", new SyncCommand());
         command.getSubcommands()
                 .get("sync")

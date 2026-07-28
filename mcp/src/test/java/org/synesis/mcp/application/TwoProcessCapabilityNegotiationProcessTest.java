@@ -182,6 +182,21 @@ class TwoProcessCapabilityNegotiationProcessTest {
         assertFalse(reqNextResp.contains(projectRoot.toString().replace('\\', '/')));
     }
 
+    @Test
+    void secondMcpSessionDiscoversClaimBeforeCompetingMutation() {
+        String ownerEnsure = "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{\"task\":{\"goal\":\"Implement tracker\",\"acceptance\":\"45 tests pass\",\"claims\":[{\"path\":\"src/task_tracker.py\",\"kind\":\"path_exact\"}]}}}}";
+        String first = requesterHandler.handleMessage(ownerEnsure);
+        assertTrue(first.contains("ready"), "first claim should be acquired: " + first);
+
+        String second = ownerHandler.handleMessage(ownerEnsure.replace("\"id\":20", "\"id\":21"));
+        assertTrue(second.contains("overlapping_claim"), "second claim must be blocked: " + second);
+
+        String mutation = "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.apply_patch\",\"arguments\":{\"path\":\"src/task_tracker.py\",\"create\":true,\"content\":\"competing\"}}}";
+        String mutationResponse = ownerHandler.handleMessage(mutation);
+        assertTrue(mutationResponse.contains("overlapping_claim"),
+                "competing mutation must be blocked: " + mutationResponse);
+    }
+
     @SuppressWarnings("unchecked")
     private String extractHandleFromMcpResponse(String mcpResponseJson) {
         Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(mcpResponseJson);

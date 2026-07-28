@@ -7,11 +7,21 @@ import java.util.Map;
 import java.util.Objects;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.agent.AgentTaskCompletionService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.link.identity.IdentityBootstrap;
+import org.synesis.coordination.domain.collaboration.ClaimResult;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
@@ -48,6 +58,10 @@ public final class McpProtocolHandler {
     private final ImplementationValidationService validationService;
     private final AgentTaskCompletionService taskCompletionService;
     private final org.synesis.workspace.application.agent.AgentTaskCancellationService taskCancellationService;
+    private final WorkspaceCollaborationService collaborationService;
+    private final SessionAuthorityResolver authorityResolver;
+    private final SessionLeaseService leaseService;
+    private final SessionLeasePolicy leasePolicy;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -78,6 +92,10 @@ public final class McpProtocolHandler {
         this.validationService = new ImplementationValidationService();
         this.taskCompletionService = new AgentTaskCompletionService();
         this.taskCancellationService = new org.synesis.workspace.application.agent.AgentTaskCancellationService();
+        this.collaborationService = new WorkspaceCollaborationService();
+        this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
+        this.leaseService = new SessionLeaseService();
+        this.leasePolicy = new SessionLeasePolicy();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -105,6 +123,29 @@ public final class McpProtocolHandler {
      */
     public Path activeProjectRoot() {
         return activeProjectRoot;
+    }
+
+    /** Renews the exact session lease after verified MCP activity. */
+    private void renewLease() {
+        try {
+            ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
+            var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
+            String nodeId = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
+            leaseService.createOrRenewLease(activeProjectRoot, location.projectId().toString(), provider,
+                    connectionInstanceId, nodeId, binding.sessionId(), leasePolicy);
+        } catch (Exception ignored) {
+            // Unbound requests are handled by the session and workspace policy paths.
+        }
+    }
+
+    /** Marks a clean stdio shutdown and releases this connection's claims. */
+    public void close() {
+        try {
+            leaseService.markClosedCleanly(activeProjectRoot, connectionInstanceId);
+            collaborationService.release(activeProjectRoot, provider, connectionInstanceId);
+        } catch (Exception ignored) {
+            // Recovery reconciles unclean or partially completed shutdowns.
+        }
     }
 
     /**
@@ -457,6 +498,10 @@ public final class McpProtocolHandler {
         taskProperties.put("acceptance", Map.of("type", "string"));
         taskProperties.put("likelyScopes", Map.of("type", "array", "items", Map.of("type", "string")));
         taskProperties.put("knownDependencies", Map.of("type", "array", "items", Map.of("type", "string")));
+        taskProperties.put("claims", Map.of("type", "array", "items", Map.of(
+                "type", "object", "required", List.of("path"), "properties", Map.of(
+                        "path", Map.of("type", "string"),
+                        "kind", Map.of("type", "string", "enum", List.of("path_exact", "path_subtree"))))));
 
         Map<String, Object> taskSchema = new LinkedHashMap<>();
         taskSchema.put("type", "object");
@@ -735,6 +780,7 @@ public final class McpProtocolHandler {
         Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
 
         AgentResponse agentResponse;
+        renewLease();
 
         switch (name) {
             case "synesis.ensure_session" -> {
@@ -747,6 +793,41 @@ public final class McpProtocolHandler {
                 agentResponse = sessionService.ensureSession(resolutionRequest);
                 if (agentResponse.status() == AgentStatus.READY) {
                     isSessionBound = true;
+                    List<ResourceSelector> selectors = parseClaimSelectors(arguments);
+                    boolean claimsSpecified = claimsFieldSpecified(arguments);
+                    if (refresh && claimsSpecified && selectors.isEmpty()) {
+                        try {
+                            collaborationService.release(activeProjectRoot, provider, connectionInstanceId);
+                        } catch (java.io.IOException missing) {
+                            if (!"INTENT_NOT_FOUND".equals(missing.getMessage())) {
+                                agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                                        AgentNextAction.REQUEST_HUMAN_HELP, null);
+                            }
+                        } catch (Exception failure) {
+                            agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                                    AgentNextAction.REQUEST_HUMAN_HELP, null);
+                        }
+                    } else if (!selectors.isEmpty()) {
+                        try {
+                            AgentSessionService.AgentTaskIntent intent = taskIntent;
+                            ClaimResult claimResult = collaborationService.announce(activeProjectRoot, provider,
+                                    connectionInstanceId, intent == null ? null : intent.goal(),
+                                    intent == null ? null : intent.acceptance(), selectors);
+                            if (!claimResult.acquired()) {
+                                Map<String, Object> details = new LinkedHashMap<>();
+                                details.put("conflicts", claimResult.conflicts().stream().map(conflict -> Map.of(
+                                        "participant", conflict.participant(),
+                                        "intent", conflict.intentId(),
+                                        "kind", conflict.selector().kind().name(),
+                                        "path", conflict.selector().value())).toList());
+                                agentResponse = new AgentResponse(AgentStatus.BLOCKED,
+                                        AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_HUMAN_HELP, details);
+                            }
+                        } catch (Exception failure) {
+                            agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                                    AgentNextAction.REQUEST_HUMAN_HELP, null);
+                        }
+                    }
                 }
             }
             case "synesis.read_file" -> {
@@ -964,6 +1045,31 @@ public final class McpProtocolHandler {
         List<String> likelyScopes = (List<String>) map.get("likelyScopes");
         List<String> knownDependencies = (List<String>) map.get("knownDependencies");
         return new AgentSessionService.AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ResourceSelector> parseClaimSelectors(Map<String, Object> arguments) {
+        if (arguments == null || !(arguments.get("task") instanceof Map<?, ?> taskMap)
+                || !(taskMap.get("claims") instanceof List<?> claims)) {
+            return List.of();
+        }
+        List<ResourceSelector> selectors = new java.util.ArrayList<>();
+        for (Object item : claims) {
+            if (item instanceof Map<?, ?> claim) {
+                Object path = claim.get("path");
+                String kind = claim.get("kind") instanceof String value ? value : "path_exact";
+                if (path instanceof String value) {
+                    selectors.add("path_subtree".equals(kind)
+                            ? ResourceSelector.pathSubtree(value) : ResourceSelector.pathExact(value));
+                }
+            }
+        }
+        return List.copyOf(selectors);
+    }
+
+    private boolean claimsFieldSpecified(Map<String, Object> arguments) {
+        return arguments != null && arguments.get("task") instanceof Map<?, ?> taskMap
+                && taskMap.containsKey("claims");
     }
 
     private String createResultResponse(Object id, Map<String, Object> result) {

@@ -1,5 +1,7 @@
 package org.synesis.workspace.application.agent;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -30,6 +32,8 @@ public final class AgentTaskCancellationService {
 
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
+    private final SessionAuthorityResolver authorityResolver;
+    private final WorkspaceCollaborationService collaborationService;
 
     /**
      * Creates an agent task cancellation service.
@@ -37,6 +41,8 @@ public final class AgentTaskCancellationService {
     public AgentTaskCancellationService() {
         this.projectService = new ProjectApplicationService();
         this.bindingService = new ProviderSessionBindingService();
+        this.authorityResolver = new SessionAuthorityResolver(bindingService);
+        this.collaborationService = new WorkspaceCollaborationService();
     }
 
     /**
@@ -87,15 +93,8 @@ public final class AgentTaskCancellationService {
         NodeIdentity identity;
         try {
             location = projectService.locate(root);
-            var bindings = bindingService.list(location, request.provider());
-            if (bindings.isEmpty()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            binding = bindings.getLast();
-            if ("REVOKED".equalsIgnoreCase(binding.status())
-                    || "COMPLETED".equalsIgnoreCase(binding.status())
-                    || "ABANDONED".equalsIgnoreCase(binding.status())
-                    || binding.worktreePath() == null) {
+            binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
+            if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
             identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
@@ -161,6 +160,12 @@ public final class AgentTaskCancellationService {
             // 6. Finalize provider session with cancellation outcome
             store.append(taskId, PredictionEventType.SESSION_FINALIZED, callerNodeId,
                     ("session_cancelled:" + binding.sessionId()).getBytes(StandardCharsets.UTF_8), identity);
+
+            try {
+                collaborationService.release(request.projectRoot(), request.provider(), request.connectionInstanceId());
+            } catch (Exception ignored) {
+                // Reconciliation may retry a release if the event append was interrupted.
+            }
 
             Map<String, Object> result = Map.of("task", "cancelled");
             return new AgentResponse(AgentStatus.COMPLETED, null, null, result);

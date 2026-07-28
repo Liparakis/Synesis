@@ -2,7 +2,7 @@
 
 ## Identity
 
-- Task ID: SYN-019
+- Task ID: SYN-021
 - Status: ACTIVE
 - Priority: P1
 - Started checkpoint: CP-0230
@@ -11,28 +11,28 @@
 
 ## Objective
 
-Close the workspace application package architecture test without changing runtime behavior or public surfaces.
+Implement authenticated claim lifecycle, presence, and stale fencing without adding a broker, remote service, or control-checkout mutation path.
 
 ## Immediate slice
 
-Inspection found one root production type, `ProjectApplicationService`, and the
-architecture test had a stale five-type allowlist after the completed package
-refactor. The allowlist was narrowed to the one deliberate stable facade.
+Add participant presence projection, lease-backed lifecycle, explicit release,
+verified-abandonment recovery, and claim-epoch fencing on top of the completed
+SYN-020 claim service.
 
 ## Verification target
 
-Only deliberate stable application facades remain at the root; internal
-responsibilities remain in subpackages; no runtime, module, CLI, MCP, provider,
-schema, or event-format changes occurred.
+Two concurrent intents cannot acquire overlapping claims; unrelated claims can
+coexist; all selectors are acquired atomically; and existing event/session
+records replay without migration loss.
 
 ## Immediate next action
 
-Record and commit the deferred coordination-feature register update. Leave
-unrelated edits untouched; no capability implementation is authorized.
+Add deterministic lifecycle events and tests for lease renewal, stale/grace
+classification, owner-independent abandonment recovery, and old-epoch fencing.
 
 ## Work completed
 
-`SYN-018` hygiene is complete. `SYN-019` is corrected in `a87d3d8`; no
+`SYN-018` hygiene is complete. `SYN-019` is DONE at `a87d3d8`; no
 production type moved and the stale allowlist was narrowed to
 `ProjectApplicationService.java`. The user explicitly authorized one narrow
 bootstrap portability correction for the GitHub Actions failure; `SYN-014E`
@@ -40,6 +40,17 @@ remains paused. The correction moves a validated versioned payload before
 applying immutable permissions and restores/removes a partially hardened
 payload if hardening fails. The Unix stable launcher is explicitly restored to
 0755 after atomic replacement, and uninstall makes immutable trees removable.
+
+SYN-020 now includes signed `WORK_INTENT_ANNOUNCED` and
+`WORK_INTENT_RELEASED` events, stable event wire codes preserving historical
+dependency events, replayable collaboration projections, exact-file and
+subtree selector overlap evaluation, refresh-on-race claim arbitration, shared
+workspace claim authorization, project append locking, durable post-activation
+claim fencing, exact connection binding resolution for task completion and
+cancellation, MCP `ensure_session` claim input and refresh-empty release,
+lease renewal on verified MCP activity, clean stdio shutdown release, and CLI
+`collaboration announce/status/release` adapters. The existing 11-tool MCP
+count is unchanged.
 
 ## Current failures
 
@@ -62,6 +73,17 @@ claiming implementation.
 
 ## Current verification
 
-The deferred validator, Gradle check with strict dependency verification,
-bootstrap Go tests, and bootstrap Go vet all pass for this documentation-only
-slice. No production, CLI, or MCP files changed.
+`./gradlew.bat check --no-daemon --dependency-verification=strict` PASS (50
+actionable tasks); coordination, workspace, MCP, and CLI tests pass; strict
+Javadocs and repository hygiene pass; bootstrap `go test -count=1 ./...` and
+`go vet ./...` pass; deferred validation and `git diff --check` pass. The
+Python task-tracker fixture remains 45/45 passing. The two-handler MCP
+acceptance passes: the first exact claim is acquired, the second receives
+`overlapping_claim`, and its competing mutation is blocked. Real Claude/Codex
+provider sessions and Antigravity remain separate evidence tasks. The earlier
+combined test run hit the known CLI in-progress result-file race; the final
+sequential root check passed.
+
+The remaining SYN-020 closure evidence is historical-log replay fixtures and
+durable-state reconciliation; SYN-021 presence/recovery and SYN-022 negotiation
+must not be promoted until that evidence is recorded.

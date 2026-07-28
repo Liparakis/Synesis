@@ -14,6 +14,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
+import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -27,12 +28,14 @@ import org.synesis.coordination.domain.task.TaskCompletionProjection;
 public final class PredictionEventStore {
 
     private final Path eventsDirectory;
+    private final Path rootDirectory;
     private final UUID projectId;
     private final Clock clock;
     private final PredictionProjection projection = new PredictionProjection();
     private final CoordinationProjection coordinationProjection = new CoordinationProjection();
     private final CapabilityRequestProjection capabilityRequestProjection = new CapabilityRequestProjection();
     private final TaskCompletionProjection taskCompletionProjection = new TaskCompletionProjection();
+    private final CollaborationProjection collaborationProjection = new CollaborationProjection();
     private final List<PredictionEvent> events = new ArrayList<>();
 
     /**
@@ -57,6 +60,7 @@ public final class PredictionEventStore {
      * @throws GeneralSecurityException when an existing event signature is invalid
      */
     public PredictionEventStore(Path root, UUID projectId, Clock clock) throws IOException, GeneralSecurityException {
+        this.rootDirectory = Objects.requireNonNull(root, "root");
         this.eventsDirectory = Objects.requireNonNull(root, "root")
                 .resolve("events");
         this.projectId = Objects.requireNonNull(projectId, "project ID");
@@ -92,6 +96,7 @@ public final class PredictionEventStore {
         coordinationProjection.validate(event);
         capabilityRequestProjection.validate(event);
         taskCompletionProjection.validate(event);
+        collaborationProjection.validate(event);
         Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
         Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
         try {
@@ -108,6 +113,7 @@ public final class PredictionEventStore {
         coordinationProjection.apply(event);
         capabilityRequestProjection.apply(event);
         taskCompletionProjection.apply(event);
+        collaborationProjection.apply(event);
         events.add(event);
         return event;
     }
@@ -137,6 +143,13 @@ public final class PredictionEventStore {
      */
     public UUID projectId() {
         return projectId;
+    }
+
+    /** Returns the project-local store root for coordinated refreshes.
+     * @return store root
+     */
+    public Path rootDirectory() {
+        return rootDirectory;
     }
 
     /**
@@ -175,6 +188,13 @@ public final class PredictionEventStore {
         return taskCompletionProjection;
     }
 
+    /** Returns the collaboration projection reconstructed from signed events.
+     * @return live collaboration projection
+     */
+    public CollaborationProjection collaborationProjection() {
+        return collaborationProjection;
+    }
+
     private void load() throws IOException, GeneralSecurityException {
         List<Path> files;
         try (var stream = Files.list(eventsDirectory)) {
@@ -198,6 +218,7 @@ public final class PredictionEventStore {
             coordinationProjection.apply(event);
             capabilityRequestProjection.apply(event);
             taskCompletionProjection.apply(event);
+            collaborationProjection.apply(event);
             events.add(event);
             previous = event.digest();
             expected++;

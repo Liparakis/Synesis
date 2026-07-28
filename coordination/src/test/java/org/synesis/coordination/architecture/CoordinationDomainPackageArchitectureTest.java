@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 final class CoordinationDomainPackageArchitectureTest {
 
     private static final Set<String> RESPONSIBILITIES = Set.of(
-            "capability", "command", "integration", "ownership", "prediction", "speculation", "task");
+            "capability", "collaboration", "command", "integration", "ownership", "prediction", "speculation", "task");
 
     @Test
     void domainHasNoFlatProductionTypes() throws Exception {
