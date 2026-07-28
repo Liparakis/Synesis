@@ -54,6 +54,7 @@ The subsequent full Gradle check with strict dependency verification also
 passes (50 actionable tasks).
 Real Claude also inspected the published contract projection successfully,
 including revision, supersession, selector, and content-hash fields.
+Deterministic MCP tests now cover both publish and status JSON projections.
 
 ## Work completed
 
