@@ -9,7 +9,7 @@ MCP session completed.
 | Provider | Configuration discovered | Real MCP connection | MCP mutation | Native hook |
 |---|---|---|---|---|
 | Codex 0.140.0 | `codex mcp list` found `synesis`; entry points to the current local install | Real `codex exec --ephemeral --json --dangerously-bypass-approvals-and-sandbox` initialized Synesis and completed `ensure_session` | Confirmed: exact `src/task_tracker.py` claim returned `status=ready`; a separate claimed probe file was created with `apply_patch` and verified by `read_file` with matching revision hash | Not claimed |
-| Claude Code 2.1.59 | Project `.mcp.json` now points at the current local install | Not completed: `claude auth status` reports `loggedIn: false` | Not claimed | Not claimed |
+| Claude Code 2.1.59 | Project `.mcp.json` points at the current local install; `claude auth status` is authenticated | Real `claude -p` sessions initialized Synesis and returned structured claim outcomes | Confirmed: `claude_acceptance_probe.txt` was created with `apply_patch` and reread with matching hash `138ed040582d07c2a4aa4beaffd6d5e84252d561413f148535b0db2ac9fc6fd2` | Not claimed |
 | Antigravity | `agy.exe` 0.x is installed; both `~/.gemini/antigravity/mcp_config.json` and `~/.gemini/config/mcp_config.json` now point to the current local install | Blocked before MCP startup by the provider CLI: `Individual quota reached. ... Resets in 5h6m50s` | Not claimed | Not claimed |
 
 The local Synesis MCP server itself passes the two-process, 11-tool, revision,
@@ -41,9 +41,11 @@ automatic ownership transfer. The fixture's existing claims remain untouched.
 
 ## Exact commands
 
-- `claude auth status` → `loggedIn: false`
+- `claude auth status` → authenticated via `claude.ai`
 - `claude mcp add --scope project ...` → task-tracker `.mcp.json` updated to the current local install
-- `claude auth status` → `loggedIn: false`; no authenticated provider run
+- authenticated Claude conflict run → exact `src/task_tracker.py` claim returned `status=blocked`, `reason=overlapping_claim`, with the Codex intent and participant exposed; no files or shell commands used
+- authenticated Claude mutation run → isolated `apply_patch`/`read_file` probe returned matching revision/content hash `138ed040582d07c2a4aa4beaffd6d5e84252d561413f148535b0db2ac9fc6fd2`
+- authenticated Claude lifecycle run → `ensure_session(refresh=true, task.claims=[])` returned `status=ready`; a subsequent exact claim reacquired `claude_release_probe.txt` successfully
 - `codex mcp remove synesis` followed by `codex mcp add synesis -- ...\synesis.bat mcp --provider codex` → current local install
 - `codex exec --ephemeral --json ...` → first attempt was cancelled by the harness before a result
 - `codex exec --ephemeral --json --dangerously-bypass-approvals-and-sandbox ...` → real `ensure_session` completed with `status=ready` and an isolated worktree; no source file was edited

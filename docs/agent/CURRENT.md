@@ -32,9 +32,12 @@ initialize passes. Codex global MCP entry and the task-tracker Claude project
 entry point to that install. A real Codex CLI run completed `ensure_session`
 with an exact `src/task_tracker.py` claim and isolated worktree; no source file
 was edited. A separate real Codex probe created and reread an isolated file
-with a matching revision hash through MCP. Claude remains unauthenticated.
-Antigravity is installed and authenticated locally but its CLI reports
-individual quota exhausted, so no MCP call was made. Two
+with a matching revision hash through MCP. Claude is now authenticated and a
+real run blocked on Codex's `src/task_tracker.py` claim before mutation; a
+separate real Claude run created and reread an isolated file with a matching
+revision hash and exercised explicit release/reacquisition. Antigravity is
+installed and authenticated locally but its CLI reports individual quota
+exhausted, so no MCP call was made. Two
 independent installed MCP processes demonstrated Codex claim → Claude overlap
 denial → clean-EOF release → Claude reacquisition. Historical task-tracker
 events now replay successfully after stable legacy dependency wire-code
