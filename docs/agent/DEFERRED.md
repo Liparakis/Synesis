@@ -107,7 +107,7 @@ dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/D
 
 ## SL-D-038 — Out-of-band mutation detection and integration enforcement
 
-**Status:** DEFERRED
+**Status:** READY_FOR_PLANNING
 **Priority:** Later
 **Area:** Coordination correctness and workspace safety
 **Current verified capability:** MCP-managed writes are revision-checked and isolated worktrees are preserved; shell, IDE-native editing, scripts, provider-native tools, other MCP servers, and direct filesystem access are outside portable pre-write enforcement.

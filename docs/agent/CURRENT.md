@@ -2,7 +2,7 @@
 
 ## Identity
 
-- Task ID: SYN-022
+- Task ID: SYN-023
 - Status: ACTIVE
 - Priority: P1
 - Started checkpoint: CP-0230
@@ -11,12 +11,14 @@
 
 ## Objective
 
-Implement stable contract revisions and explicit dependency invalidation without adding a broker, remote service, or control-checkout mutation path.
+Implement bounded pre-merge compatibility validation without adding a broker,
+remote service, or control-checkout mutation path.
 
 ## Immediate slice
 
-Add contract identity, revision, content hash, consumer bindings, supersession,
-and deterministic REPLAN_REQUIRED invalidation on top of the collaboration log.
+Add prepare/check stages for immutable snapshots, owned changed paths, exact
+contract revisions, ancestry, configured project tests, and direct-write
+detection.
 
 ## Verification target
 
@@ -26,8 +28,8 @@ records replay without migration loss.
 
 ## Immediate next action
 
-Run repository-wide verification, checkpoint SYN-022 contract invalidation,
-then promote the pre-merge compatibility slice.
+Define the shared integration-check result and add deterministic compatible,
+stale, uncovered-path, overlap, and Python-project tests.
 
 ## Work completed
 

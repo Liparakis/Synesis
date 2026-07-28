@@ -1115,7 +1115,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-022
 - Priority: P0
 - Title: Contract revisions and dependency invalidation
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Publish stable shared contracts, track explicit consumers, and
   invalidate stale dependent work before implementation or integration.
 - Dependencies: SYN-021 DONE at CP-0266; SL-D-037 activated; signed event log
@@ -1128,5 +1128,31 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   explicit dependency invalidation, replay, and compatible independent work.
 - Required documentation: contract ADR, deferred-register activation note,
   checkpoint, test matrix, and task-tracker API/schema evidence.
+- Evidence: CP-0267; `ContractServiceTest`, focused workspace/MCP/CLI tests,
+  strict Javadocs, and full Gradle verification pass.
 - Scope boundary: no general semantic API inference, out-of-band mutation
   enforcement, deadlock detection, or provider maturity claims.
+
+## SYN-023
+
+- ID: SYN-023
+- Priority: P0
+- Title: Contract-aware pre-merge compatibility checks
+- Status: ACTIVE
+- Purpose: Validate immutable task snapshots, owned changed paths, contract
+  revisions, project tests, and control-head ancestry before advancement.
+- Dependencies: SYN-022 DONE; isolated worktrees and guarded fast-forward
+  service; SL-D-038 promoted for this bounded integration slice.
+- Acceptance criteria: prepare/check/advance stages preserve the control
+  checkout until all checks pass; stale bases, uncovered paths, superseded
+  contracts, unresolved coordination, direct-write violations, failed tests,
+  and overlapping snapshots are blocked with actionable diagnostics; a
+  configured Python project runs `python -m pytest -q`.
+- Required tests: compatible snapshots pass; changed-path claim coverage,
+  contract revision, ancestry, overlap, direct-write, and Python test failures
+  block deterministically; successful checks can advance only by guarded
+  compare-and-fast-forward.
+- Required documentation: integration ADR, deferred-register activation note,
+  checkpoint, test matrix, and task-tracker integration evidence.
+- Scope boundary: no general language API inference, broker, or control-checkout
+  mutation path.

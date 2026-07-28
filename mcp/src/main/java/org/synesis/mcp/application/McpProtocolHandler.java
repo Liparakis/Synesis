@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentNextAction;
@@ -652,6 +653,14 @@ public final class McpProtocolHandler {
                         "string",
                         "description",
                         "Requester response type to owner revision: accept, counter, cancel"));
+        describeProperties.put("collaborationOperation",
+                Map.of("type", "string", "enum", List.of("status", "publish", "bind"),
+                        "description", "Shared contract operation through the collaboration service"));
+        describeProperties.put("collaborationContractId", Map.of("type", "string", "description", "UUID of shared contract"));
+        describeProperties.put("collaborationIntentId", Map.of("type", "string", "description", "UUID of consuming intent"));
+        describeProperties.put("collaborationRevision", Map.of("type", "integer", "description", "Exact contract revision"));
+        describeProperties.put("collaborationBody", Map.of("type", "string", "description", "Bounded shared contract body"));
+        describeProperties.put("collaborationSelectors", Map.of("type", "array", "items", Map.of("type", "string")));
 
         Map<String, Object> describeSchema = new LinkedHashMap<>();
         describeSchema.put("type", "object");
@@ -908,6 +917,40 @@ public final class McpProtocolHandler {
                 agentResponse = nextActionService.getNextAction(nextReq);
             }
             case "synesis.describe_required_capability" -> {
+                String collaborationOperation = arguments != null ? (String) arguments.get("collaborationOperation") : null;
+                if (collaborationOperation != null) {
+                    try {
+                        var result = switch (collaborationOperation) {
+                            case "status" -> {
+                                var snapshot = collaborationService.contractStatus(activeProjectRoot);
+                                yield Map.of("contracts", snapshot.contracts(), "dependencies", snapshot.dependencies());
+                            }
+                            case "publish" -> {
+                                UUID contractId = UUID.fromString(String.valueOf(arguments.get("collaborationContractId")));
+                                String body = String.valueOf(arguments.getOrDefault("collaborationBody", ""));
+                                List<String> selectors = arguments.get("collaborationSelectors") instanceof List<?> values
+                                        ? values.stream().filter(String.class::isInstance).map(String.class::cast).toList() : List.of();
+                                var contract = collaborationService.publishContract(activeProjectRoot, provider, connectionInstanceId,
+                                        contractId, body, selectors);
+                                yield Map.of("contract", contract);
+                            }
+                            case "bind" -> {
+                                UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
+                                UUID contractId = UUID.fromString(String.valueOf(arguments.get("collaborationContractId")));
+                                long revision = ((Number) arguments.get("collaborationRevision")).longValue();
+                                collaborationService.bindContract(activeProjectRoot, provider, connectionInstanceId, intentId, contractId, revision);
+                                yield Map.of("intent", intentId.toString(), "contract", contractId.toString(), "revision", revision);
+                            }
+                            default -> throw new IllegalArgumentException("unknown collaboration operation");
+                        };
+                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null, result);
+                        break;
+                    } catch (Exception failure) {
+                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                                AgentNextAction.RETRY, Map.of("error", failure.getMessage()));
+                        break;
+                    }
+                }
                 if (arguments != null && arguments.get("coordinationRequest") instanceof String requestValue) {
                     try {
                         var snapshot = collaborationService.status(activeProjectRoot);

@@ -12,6 +12,7 @@ import org.synesis.cli.command.collaboration.CollaborationReleaseCommand;
 import org.synesis.cli.command.collaboration.CollaborationRequestCommand;
 import org.synesis.cli.command.collaboration.CollaborationRespondCommand;
 import org.synesis.cli.command.collaboration.CollaborationHandoffCommand;
+import org.synesis.cli.command.collaboration.CollaborationContractCommand;
 import org.synesis.cli.command.coordination.CoordinationDemoCommand;
 import org.synesis.cli.command.coordination.CoordinationOperatorCommand;
 import org.synesis.cli.command.coordination.CoordinationServeCommand;
@@ -140,7 +141,8 @@ public final class SynesisCli {
                 .addSubcommand("release", new CollaborationReleaseCommand(runtime))
                 .addSubcommand("request", new CollaborationRequestCommand(runtime))
                 .addSubcommand("respond", new CollaborationRespondCommand(runtime))
-                .addSubcommand("handoff", new CollaborationHandoffCommand(runtime));
+                .addSubcommand("handoff", new CollaborationHandoffCommand(runtime))
+                .addSubcommand("contract", new CollaborationContractCommand(runtime));
         command.addSubcommand("collaboration", collaboration);
         command.addSubcommand("sync", new SyncCommand());
         command.getSubcommands()

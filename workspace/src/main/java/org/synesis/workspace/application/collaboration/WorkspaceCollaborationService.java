@@ -16,6 +16,9 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.application.ContractService;
+import org.synesis.coordination.domain.contract.ContractDependency;
+import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -155,6 +158,62 @@ public final class WorkspaceCollaborationService {
         return new CollaborationSnapshot(service.activeIntents(), service.requests(),
                 store.collaborationProjection().participants());
     }
+
+    /** Publishes a signed shared contract revision for this project.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @param contractId contract identifier
+     * @param body contract body
+     * @param selectors declared selector references
+     * @return published contract
+     * @throws Exception when session or persistence resolution fails
+     */
+    public ContractRecord publishContract(Path projectRoot, String provider, String connectionInstanceId,
+            UUID contractId, String body, List<String> selectors) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        return new ContractService(store, identity).publish(contractId, participantHandle(binding.sessionId()), body, selectors);
+    }
+
+    /** Binds an intent to an exact active contract revision.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @param intentId intent identifier
+     * @param contractId contract identifier
+     * @param revision exact revision
+     * @throws Exception when session or persistence resolution fails
+     */
+    public void bindContract(Path projectRoot, String provider, String connectionInstanceId,
+            UUID intentId, UUID contractId, long revision) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new ContractService(store, identity).bind(intentId, participantHandle(binding.sessionId()), contractId, revision);
+    }
+
+    /** Lists replayed contracts and exact consumer dependencies.
+     * @param projectRoot project root
+     * @return contract snapshot
+     * @throws Exception when project state cannot be read
+     */
+    public ContractSnapshot contractStatus(Path projectRoot) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        ContractService service = new ContractService(store,
+                new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
+        return new ContractSnapshot(service.contracts(), service.dependencies());
+    }
+
+    /** Shared contract discovery result used by CLI and MCP adapters.
+     * @param contracts contract revisions
+     * @param dependencies consumer bindings
+     */
+    public record ContractSnapshot(List<ContractRecord> contracts, List<ContractDependency> dependencies) { }
 
     /** Shared collaboration discovery result used by CLI and MCP adapters.
      * @param intents intents
