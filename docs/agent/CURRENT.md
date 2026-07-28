@@ -37,7 +37,9 @@ Antigravity unavailable. Two
 independent installed MCP processes demonstrated Codex claim → Claude overlap
 denial → clean-EOF release → Claude reacquisition. Historical task-tracker
 events now replay successfully after stable legacy dependency wire-code
-decoding.
+decoding. A read-only reconciliation inspection classified one provider
+session as `suspectedStale` without transferring ownership; the dirty fixture
+was not altered.
 
 ## Work completed
 

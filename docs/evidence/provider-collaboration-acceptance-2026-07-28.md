@@ -33,6 +33,12 @@ codes were decoded as collaboration events. Stable decoding now distinguishes
 legacy dependency-invalidated payloads, and `synesis collaboration status`
 replays the existing dirty fixture successfully without deleting events.
 
+The provider mutation probe's process ended without a clean collaboration
+release event in the fixture; a read-only reconciliation inspection classified
+one session as `suspectedStale` and not yet abandonment-eligible. This is
+retained as evidence that stale fencing is observable, not treated as proof of
+automatic ownership transfer. The fixture's existing claims remain untouched.
+
 ## Exact commands
 
 - `claude auth status` → `loggedIn: false`
@@ -43,5 +49,6 @@ replays the existing dirty fixture successfully without deleting events.
 - `codex exec --ephemeral --json --dangerously-bypass-approvals-and-sandbox ...` → real `ensure_session` completed with `status=ready` and an isolated worktree; no source file was edited
 - real Codex MCP mutation probe → `apply_patch` created `provider_acceptance_probe.txt` in the isolated worktree with revision `1fb78c34cf37b61394f119294c12ccc71333f571bcc8d2a4e9ed58916433be72`; `read_file` returned the same content hash
 - `claude -p ... --output-format json --permission-mode bypassPermissions` → `Not logged in · Please run /login`
+- `synesis reconcile --dry-run --verbose --json --project "C:\\Users\\Liparakis\\Desktop\\Test case"` → one `suspectedStale`, zero executable abandonment actions
 - direct installed launcher probe → valid MCP `initialize` response with server name `synesis`
 - `./gradlew.bat check --no-daemon --dependency-verification=strict` → PASS
