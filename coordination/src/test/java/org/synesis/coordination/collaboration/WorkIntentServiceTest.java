@@ -84,6 +84,23 @@ final class WorkIntentServiceTest {
         assertTrue(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
     }
 
+    @Test
+    void handoffRetainsOwnerUntilAcceptedThenFencesSourceEpoch(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        WorkIntent target = intent(project, "agt-target", ResourceSelector.pathExact("tests/test_task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+        assertTrue(service.announce(target).acquired());
+        CoordinationRequest offer = service.offerHandoff("agt-owner", owner.intentId(), "agt-target", "snapshot clean");
+        assertTrue(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
+        service.respond("agt-target", offer.requestId(), CoordinationRequest.Status.ACCEPTED, "accepted");
+        assertFalse(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertTrue(service.owns("agt-target", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertEquals(2, service.activeIntents().stream().filter(i -> i.intentId().equals(owner.intentId())).findFirst().orElseThrow().version());
+    }
+
     private static WorkIntent intent(UUID project, String participant, ResourceSelector selector) {
         return new WorkIntent(UUID.randomUUID(), project, participant, "codex", UUID.randomUUID(),
                 "Implement task tracker", "45 tests pass", "base-commit", List.of(selector), 1,

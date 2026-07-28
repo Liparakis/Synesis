@@ -121,6 +121,37 @@ public final class WorkIntentService {
         }
     }
 
+    /** Offers an atomic handoff to another active participant.
+     * @param owner current owner
+     * @param intentId intent ID
+     * @param target target participant
+     * @param proposal handoff proposal
+     * @return pending request
+     * @throws IOException persistence or validation failure
+     * @throws GeneralSecurityException signing failure
+     */
+    public CoordinationRequest offerHandoff(String owner, UUID intentId, String target, String proposal)
+            throws IOException, GeneralSecurityException {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            WorkIntent intent = current.collaborationProjection().intent(intentId)
+                    .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+            if (!intent.participant().equals(owner)) throw new IOException("INTENT_OWNER_MISMATCH");
+            boolean activeTarget = current.collaborationProjection().participants().stream()
+                    .anyMatch(participant -> participant.id().equals(target)
+                            && participant.state() == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE)
+                    || current.collaborationProjection().activeIntents().stream()
+                            .anyMatch(candidate -> candidate.participant().equals(target));
+            if (!activeTarget) throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
+            CoordinationRequest request = new CoordinationRequest(UUID.randomUUID(), current.projectId(), owner, target,
+                    intentId, CoordinationRequest.Kind.HANDOFF, proposal, CoordinationRequest.Status.PENDING);
+            current.append(request.requestId(), PredictionEventType.COORDINATION_REQUESTED, signer.nodeId(),
+                    CollaborationCodec.encodeRequest(request), signer);
+            return request;
+        }
+    }
+
     /** Responds idempotently to a request addressed to the participant.
      * @param participant target participant
      * @param requestId request ID
@@ -141,6 +172,11 @@ public final class WorkIntentService {
             if (!request.target().equals(participant)) throw new IOException("REQUEST_TARGET_MISMATCH");
             current.append(requestId, PredictionEventType.COORDINATION_RESPONDED, signer.nodeId(),
                     CollaborationCodec.encodeResponse(requestId, status, proposal), signer);
+            if (status == CoordinationRequest.Status.ACCEPTED && request.kind() == CoordinationRequest.Kind.HANDOFF) {
+                current.append(request.conflictingIntentId(), PredictionEventType.CLAIM_HANDOFF_ACCEPTED,
+                        signer.nodeId(), CollaborationCodec.encodeHandoff(request.conflictingIntentId(), request.target(),
+                                current.collaborationProjection().intent(request.conflictingIntentId()).orElseThrow().version()), signer);
+            }
         }
     }
 

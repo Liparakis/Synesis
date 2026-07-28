@@ -188,7 +188,9 @@ public enum PredictionEventType {
     /** Records the target participant's coordination response. */
     COORDINATION_RESPONDED,
     /** Records verified activity for an authenticated participant. */
-    PARTICIPANT_HEARTBEAT;
+    PARTICIPANT_HEARTBEAT,
+    /** Atomically transfers an intent after an accepted handoff request. */
+    CLAIM_HANDOFF_ACCEPTED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -200,6 +202,7 @@ public enum PredictionEventType {
             case COORDINATION_REQUESTED -> 45;
             case COORDINATION_RESPONDED -> 46;
             case PARTICIPANT_HEARTBEAT -> 47;
+            case CLAIM_HANDOFF_ACCEPTED -> 48;
             default -> ordinal();
         };
     }

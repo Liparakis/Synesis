@@ -95,5 +95,7 @@ service. `WorkIntentServiceTest.conflictingParticipantsCanDiscoverAndResolveNego
 passes. Signed `PARTICIPANT_HEARTBEAT` events now record verified MCP activity
 and terminal participant projections remain visible after release. Lease-backed
 stale recovery now plans and executes `RELEASE_ABANDONED_CLAIMS` through the
-shared event service. Epoch fencing and accepted two-party handoff remain the
-next slice; no unsafe one-sided transfer is claimed.
+shared event service. Atomic two-party handoff is implemented with pending
+ownership retention, target-only acceptance, append-lock serialization, and
+intent-version fencing. Lease boundary tests and dirty-artifact handoff
+validation remain next.

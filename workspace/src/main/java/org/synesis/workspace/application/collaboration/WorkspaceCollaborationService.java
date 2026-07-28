@@ -109,6 +109,25 @@ public final class WorkspaceCollaborationService {
         new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()), requestId, status, proposal);
     }
 
+    /** Offers a claim handoff to an active target participant.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @param intentId intent ID
+     * @param target target participant
+     * @param proposal handoff proposal
+     * @return pending request
+     * @throws Exception when resolution or append fails
+     */
+    public CoordinationRequest handoff(Path projectRoot, String provider, String connectionInstanceId,
+            UUID intentId, String target, String proposal) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        return new WorkIntentService(store, identity).offerHandoff(participantHandle(binding.sessionId()), intentId, target, proposal);
+    }
+
     /** Records verified activity for the exact provider session's participant.
      * @param projectRoot project root
      * @param provider provider ID

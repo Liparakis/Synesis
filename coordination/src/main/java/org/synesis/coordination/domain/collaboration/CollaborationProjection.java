@@ -38,6 +38,7 @@ public final class CollaborationProjection {
             case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
             case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
             case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
+            case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
             default -> {
             }
         }
@@ -159,5 +160,24 @@ public final class CollaborationProjection {
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
                 Participant.State.ACTIVE, timestamp, current.claims()));
+    }
+
+    private void handoff(CollaborationCodec.Handoff handoff) throws IOException {
+        WorkIntent current = intents.get(handoff.intentId());
+        if (current == null) throw new IOException("INTENT_NOT_FOUND");
+        if (current.version() != handoff.expectedVersion()) throw new IOException("CLAIM_EPOCH_STALE");
+        Participant target = participantHistory.get(handoff.target());
+        if (target == null || target.state() != Participant.State.ACTIVE) throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
+        WorkIntent transferred = new WorkIntent(current.intentId(), current.projectId(), handoff.target(), current.provider(),
+                current.taskId(), current.goal(), current.acceptance(), current.baseCommit(), current.selectors(),
+                current.version() + 1, current.status());
+        intents.put(current.intentId(), transferred);
+        Participant previous = participantHistory.get(current.participant());
+        if (previous != null) {
+            participantHistory.put(current.participant(), new Participant(previous.id(), previous.provider(),
+                    previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of()));
+        }
+        participantHistory.put(handoff.target(), new Participant(target.id(), target.provider(), target.goal(),
+                Participant.State.ACTIVE, target.lastVerifiedActivity(), transferred.selectors()));
     }
 }

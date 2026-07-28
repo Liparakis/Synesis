@@ -17,6 +17,7 @@ public final class CollaborationCodec {
     private static final int MAGIC_REQUEST = 0x53525131;
     private static final int MAGIC_RESPONSE = 0x53525331;
     private static final int MAGIC_HEARTBEAT = 0x53484231;
+    private static final int MAGIC_HANDOFF = 0x53484631;
 
     private CollaborationCodec() {
     }
@@ -205,6 +206,39 @@ public final class CollaborationCodec {
      * @param proposal proposal
      */
     public record Response(UUID requestId, CoordinationRequest.Status status, String proposal) { }
+
+    /** Handoff acceptance payload.
+     * @param intentId intent ID
+     * @param target target participant
+     * @param expectedVersion expected claim epoch
+     */
+    public record Handoff(UUID intentId, String target, long expectedVersion) { }
+
+    /** Encodes an accepted handoff.
+     * @param intentId intent ID
+     * @param target target participant
+     * @param expectedVersion expected claim epoch
+     * @return encoded handoff
+     */
+    public static byte[] encodeHandoff(UUID intentId, String target, long expectedVersion) {
+        try { ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_HANDOFF); uuid(out, intentId); text(out, target); out.writeLong(expectedVersion); out.flush(); return bytes.toByteArray();
+        } catch (IOException impossible) { throw new AssertionError(impossible); }
+    }
+
+    /** Decodes an accepted handoff.
+     * @param encoded payload
+     * @return handoff
+     * @throws IOException malformed payload
+     */
+    public static Handoff decodeHandoff(byte[] encoded) throws IOException {
+        try { DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_HANDOFF) throw new IOException("unsupported handoff format");
+            UUID id = readUuid(in); String target = readText(in); long version = in.readLong();
+            if (in.available() != 0) throw new IOException("trailing handoff bytes");
+            return new Handoff(id, target, version);
+        } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed handoff", failure); }
+    }
 
     /** Encodes a participant heartbeat.
      * @param participant participant ID

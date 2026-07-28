@@ -42,6 +42,7 @@ public final class PredictionProjection {
                     || type == PredictionEventType.TASK_CANCELLATION_REQUESTED || type == PredictionEventType.TASK_CANCELLED
                     || type == PredictionEventType.WORK_INTENT_ANNOUNCED || type == PredictionEventType.WORK_INTENT_RELEASED
                     || type == PredictionEventType.COORDINATION_REQUESTED || type == PredictionEventType.COORDINATION_RESPONDED
+                    || type == PredictionEventType.PARTICIPANT_HEARTBEAT || type == PredictionEventType.CLAIM_HANDOFF_ACCEPTED
                     || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
                 return null;
             }
@@ -73,7 +74,8 @@ public final class PredictionProjection {
                  INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
                  SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED,
                  WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
-                 COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, DEPENDENCY_INVALIDATED -> current;
+                 COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
+                 DEPENDENCY_INVALIDATED -> current;
         };
     }
 
