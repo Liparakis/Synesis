@@ -2,7 +2,7 @@
 
 - Active task: SYN-025 ACTIVE under Provider collaboration acceptance and evidence
 - Repository branch: master
-- Last checkpoint: CP-0290; direct provider MCP collaboration, recovery, and fencing evidence pass; additive MCP request/handoff parity and exact-session `get_next_action` discovery are verified, while model-driven Antigravity prompting and native hooks remain separately unverified.
+- Last checkpoint: CP-0291; direct provider MCP collaboration, recovery, and fencing evidence pass; additive MCP request/handoff parity and exact-session `get_next_action` discovery are verified, while model-driven Antigravity prompting and native hooks remain separately unverified.
 - Last passing command: `./gradlew.bat check --no-daemon --dependency-verification=strict`; bootstrap `go test -count=1 ./...`; bootstrap `go vet ./...`; deferred validator.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Exact next code action: preserve SYN-025 as ACTIVE for the remaining model-driven/native-hook Antigravity limitation; do not claim universal provider enforcement without new evidence.
