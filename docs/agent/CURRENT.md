@@ -157,3 +157,6 @@ the participant became `ABANDONED` with claims removed, and the old connection
 epoch was blocked with `workspace_generation_changed`. This required fixing
 first-ensure lease creation and refreshing the reconciliation event-store head
 after owner-independent claim release.
+An additional direct Codex/Antigravity MCP process probe completed an accepted
+handoff and revision-checked mutation. Antigravity model-prompt behavior and
+native hooks remain separately unclaimed.
