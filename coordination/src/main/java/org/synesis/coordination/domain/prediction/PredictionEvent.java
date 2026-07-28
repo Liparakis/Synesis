@@ -34,6 +34,7 @@ public final class PredictionEvent {
     private final UUID predictionId;
     private final long sequence;
     private final PredictionEventType type;
+    private final int encodedWireCode;
     private final String actorNodeId;
     private final long createdAtEpochMillis;
     private final byte[] payload;
@@ -43,13 +44,14 @@ public final class PredictionEvent {
     private final byte[] signature;
 
     private PredictionEvent(UUID eventId, UUID projectId, UUID predictionId, long sequence,
-            PredictionEventType type, String actorNodeId, long createdAtEpochMillis, byte[] payload,
+            PredictionEventType type, int encodedWireCode, String actorNodeId, long createdAtEpochMillis, byte[] payload,
             byte[] previousDigest, byte[] digest, byte[] signerPublicKey, byte[] signature) {
         this.eventId = Objects.requireNonNull(eventId, "event ID");
         this.projectId = Objects.requireNonNull(projectId, "project ID");
         this.predictionId = Objects.requireNonNull(predictionId, "prediction ID");
         this.sequence = sequence;
         this.type = Objects.requireNonNull(type, "event type");
+        this.encodedWireCode = encodedWireCode;
         this.actorNodeId = Objects.requireNonNull(actorNodeId, "actor node ID");
         this.createdAtEpochMillis = createdAtEpochMillis;
         this.payload = Objects.requireNonNull(payload, "payload")
@@ -97,7 +99,7 @@ public final class PredictionEvent {
                 type, actorNodeId, createdAtEpochMillis, payload, previousDigest);
         byte[] digest = sha256(canonical);
         return new PredictionEvent(eventIdFor(sequence, projectId, predictionId), projectId, predictionId, sequence,
-                type, actorNodeId, createdAtEpochMillis, payload, previousDigest, digest, publicKey,
+                type, type.wireCode(), actorNodeId, createdAtEpochMillis, payload, previousDigest, digest, publicKey,
                 signer.sign(canonical));
     }
 
@@ -132,7 +134,7 @@ public final class PredictionEvent {
             }
             PredictionEventType type = decodeWireType(wireCode, payload);
             return new PredictionEvent(eventId, projectId, predictionId, sequence,
-                    type, actor, created, payload, previous, digest, key, signature);
+                    type, wireCode, actor, created, payload, previous, digest, key, signature);
         } catch (RuntimeException | java.io.EOFException failure) {
             throw new IOException("malformed coordination event", failure);
         }
@@ -142,8 +144,16 @@ public final class PredictionEvent {
         if (wireCode == 42 && hasMagic(payload, 0x53494e31)) {
             return PredictionEventType.WORK_INTENT_ANNOUNCED;
         }
-        if (wireCode == 43 && hasMagic(payload, 0x53524c31)) {
-            return PredictionEventType.WORK_INTENT_RELEASED;
+        if (wireCode == 42 || wireCode == 43 || wireCode == 44) {
+            if (hasMagic(payload, 0x53494e31)) {
+                return PredictionEventType.WORK_INTENT_ANNOUNCED;
+            }
+            if (hasMagic(payload, 0x53524c31)) {
+                return PredictionEventType.WORK_INTENT_RELEASED;
+            }
+            // Before stable collaboration codes, this slot represented the
+            // dependency invalidation event. Preserve that historical log.
+            return PredictionEventType.DEPENDENCY_INVALIDATED;
         }
         try {
             return PredictionEventType.fromWireCode(wireCode);
@@ -345,12 +355,16 @@ public final class PredictionEvent {
      * @throws GeneralSecurityException when the public key or signature cannot be checked
      */
     public boolean verify() throws GeneralSecurityException {
-        byte[] canonical = canonical(eventId, projectId, predictionId, sequence, type, actorNodeId,
+        byte[] canonical = canonical(eventId, projectId, predictionId, sequence, encodedWireCode, actorNodeId,
                 createdAtEpochMillis, payload, previousDigest);
         if (!Arrays.equals(digest, sha256(canonical))) {
-            canonical = canonicalWithWireCode(type.ordinal());
+            canonical = canonical(eventId, projectId, predictionId, sequence, type.wireCode(), actorNodeId,
+                    createdAtEpochMillis, payload, previousDigest);
             if (!Arrays.equals(digest, sha256(canonical))) {
-                return false;
+                canonical = canonicalWithWireCode(type.ordinal());
+                if (!Arrays.equals(digest, sha256(canonical))) {
+                    return false;
+                }
             }
         }
         PublicKey key = KeyFactory.getInstance("Ed25519")
@@ -385,7 +399,7 @@ public final class PredictionEvent {
             writeUuid(out, projectId);
             writeUuid(out, predictionId);
             out.writeLong(sequence);
-            out.writeInt(type.wireCode());
+            out.writeInt(encodedWireCode);
             writeText(out, actorNodeId);
             out.writeLong(createdAtEpochMillis);
             writeBytes(out, payload);

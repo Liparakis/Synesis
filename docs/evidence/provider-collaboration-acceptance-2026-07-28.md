@@ -17,6 +17,22 @@ claim, handoff, release, and recovery test suites. Those are Synesis evidence,
 not universal provider enforcement evidence. The task-tracker fixture remains
 dirty by design and was not reset or modified by this validation.
 
+## Process-level MCP acceptance
+
+Two independent installed Synesis MCP processes were launched against the
+task-tracker fixture with provider identities `codex` and `claude`. The Codex
+process acquired `src/task_tracker.py`; the Claude process received a
+structured `overlapping_claim` response before mutation. After the Codex
+process closed, a new Claude MCP process reacquired the same path successfully,
+demonstrating clean-EOF release and reacquisition. This proves process-level
+MCP collaboration, not that the Claude/Codex model CLIs themselves completed
+an authenticated run.
+
+The fixture initially contained historical event records whose shifted wire
+codes were decoded as collaboration events. Stable decoding now distinguishes
+legacy dependency-invalidated payloads, and `synesis collaboration status`
+replays the existing dirty fixture successfully without deleting events.
+
 ## Exact commands
 
 - `claude auth status` → `loggedIn: false`

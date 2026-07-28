@@ -2,7 +2,7 @@
 
 - Active task: SYN-025 ACTIVE under Provider collaboration acceptance and evidence
 - Repository branch: master
-- Last checkpoint: CP-0272; installed MCP packaging and provider configuration evidence are recorded.
+- Last checkpoint: CP-0273; historical collaboration event replay compatibility and provider process-level evidence are recorded.
 - Last passing command: `./gradlew.bat check --no-daemon --dependency-verification=strict`; bootstrap `go test -count=1 ./...`; bootstrap `go vet ./...`; deferred validator.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Exact next code action: retry authenticated Claude and uncancelled Codex collaboration scenarios when provider harness access permits; do not alter native-hook maturity from MCP evidence.

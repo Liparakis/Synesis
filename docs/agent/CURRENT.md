@@ -31,7 +31,10 @@ Installed distribution now includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
 initialize passes. Codex global MCP entry and the task-tracker Claude project
 entry point to that install. Codex launched a real `ensure_session` call but
 the harness cancelled it before a result; Claude remains unauthenticated and
-Antigravity unavailable.
+Antigravity unavailable. Two independent installed MCP processes nevertheless
+demonstrated Codex claim → Claude overlap denial → clean-EOF release → Claude
+reacquisition on `src/task_tracker.py`. Historical task-tracker events now
+replay successfully after stable legacy dependency wire-code decoding.
 
 ## Work completed
 

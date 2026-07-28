@@ -1201,8 +1201,9 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   bounded Antigravity attempt when available.
 - Required documentation: provider evidence report, checkpoint, test matrix,
   configuration paths, and limitations.
-- Evidence: CP-0272; installed MCP jar and direct initialize probe pass;
-  Codex real call started but was cancelled before result; Claude project
-  configuration is updated but unauthenticated; Antigravity is unavailable.
+- Evidence: CP-0273; installed MCP jar and direct initialize probe pass;
+  two independent MCP processes demonstrate Codex claim, Claude overlap
+  denial, EOF release, and reacquisition; authenticated CLI mutation remains
+  unclaimed, Claude is unauthenticated, and Antigravity is unavailable.
 - Scope boundary: no remote publication, provider credential changes, or
   universal native-hook enforcement claim.
