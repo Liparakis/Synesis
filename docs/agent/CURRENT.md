@@ -150,3 +150,10 @@ JSON-safe collaboration discovery projection. An accepted handoff transferred
 an intent from Codex to Claude with version fencing, and Claude mutated the
 transferred path successfully. Timed deleted-chat recovery remains an
 additional evidence case; deterministic stale/abandonment tests already pass.
+The real deleted-chat v3 probe now passes end to end: a lease existed before
+forced JVM termination, stale and abandonment thresholds were observed,
+owner-independent reconciliation completed without control-checkout changes,
+the participant became `ABANDONED` with claims removed, and the old connection
+epoch was blocked with `workspace_generation_changed`. This required fixing
+first-ensure lease creation and refreshing the reconciliation event-store head
+after owner-independent claim release.

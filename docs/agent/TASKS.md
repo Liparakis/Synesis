@@ -1217,8 +1217,10 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   strict Gradle check passes; real Claude contract status inspection returns
   JSON-safe revision and supersession data; deterministic MCP publish/status
   projection regressions pass.
-  read-only reconciliation classified one ended provider session as
-  suspected-stale without transferring its claims. The task-tracker fixture's
+  real Claude deleted-chat v3 process now proves lease creation before forced
+  termination, suspected-stale then abandonment-eligible classification,
+  owner-independent reconciliation, claim release, ABANDONED projection, and
+  old-epoch `workspace_generation_changed` fencing. The task-tracker fixture's
   current `python -m pytest -q` run passes all 45 tests.
   The repository-wide Gradle check passes with strict dependency verification.
 - Scope boundary: no remote publication, provider credential changes, or

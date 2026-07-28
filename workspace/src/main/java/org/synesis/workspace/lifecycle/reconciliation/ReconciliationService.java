@@ -330,6 +330,10 @@ public final class ReconciliationService {
                                     intentService.release(intent.intentId(), participant);
                                 }
                             }
+                            // WorkIntentService appends through a fresh event-store instance.
+                            // Refresh this loop's store before the following lifecycle events
+                            // so its cached sequence head cannot overwrite the claim event.
+                            store = new PredictionEventStore(coordDir, location.projectId());
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),

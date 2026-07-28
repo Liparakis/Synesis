@@ -50,10 +50,16 @@ public final class WorkspaceCollaborationService {
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
         NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        String participant = participantHandle(binding.sessionId());
+        var existing = store.collaborationProjection().participants().stream()
+                .filter(candidate -> candidate.id().equals(participant)).findFirst();
+        if (existing.isPresent() && existing.get().state() != Participant.State.ACTIVE) {
+            throw new IOException("SESSION_EPOCH_FENCED");
+        }
         WorkIntentService service = new WorkIntentService(store, identity);
         UUID taskId = UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
         WorkIntent intent = new WorkIntent(UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId())
-                .getBytes(StandardCharsets.UTF_8)), location.projectId(), participantHandle(binding.sessionId()),
+                .getBytes(StandardCharsets.UTF_8)), location.projectId(), participant,
                 provider, taskId, goal == null ? "Unspecified work" : goal,
                 acceptance == null ? "Unspecified acceptance" : acceptance,
                 binding.baseCommit(), selectors, 1, WorkIntent.Status.ANNOUNCED);

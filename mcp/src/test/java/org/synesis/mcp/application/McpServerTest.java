@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
 class McpServerTest {
 
@@ -155,6 +156,31 @@ class McpServerTest {
         assertTrue(response.contains("intents"));
         assertTrue(response.contains("tests/discovery.json"));
         assertTrue(response.contains("discoverable goal"));
+    }
+
+    @Test
+    void firstVerifiedEnsureSessionCreatesLeaseBeforeClaims() throws Exception {
+        String connection = "conn-first-lease";
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", connection);
+        String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"lease first\",\"acceptance\":\"recoverable\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/lease-first.txt\"}]}}}}";
+        assertTrue(handler.handleMessage(ensure).contains("ready"));
+        Path lease = SessionLeaseStore.resolveLeasesDirectory(tempRoot).resolve(connection + ".json");
+        assertTrue(Files.exists(lease), "verified ensure_session must establish a lease");
+        assertTrue(Files.readString(lease).contains("ACTIVE"));
+    }
+
+    @Test
+    void releasedSessionEpochCannotReacquireClaimsOnSameBinding() {
+        String connection = "conn-fenced-epoch";
+        McpProtocolHandler first = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", connection);
+        String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"fence epoch\",\"acceptance\":\"release\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/fenced-epoch.txt\"}]}}}}";
+        assertTrue(first.handleMessage(ensure).contains("ready"));
+        first.close();
+
+        McpProtocolHandler returning = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", connection);
+        String response = returning.handleMessage(ensure.replace("\"id\":1", "\"id\":2"));
+        assertTrue(response.contains("workspace_generation_changed"), response);
+        assertTrue(response.contains("blocked"));
     }
 
     @Test

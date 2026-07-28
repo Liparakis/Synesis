@@ -816,6 +816,10 @@ public final class McpProtocolHandler {
                 agentResponse = sessionService.ensureSession(resolutionRequest);
                 if (agentResponse.status() == AgentStatus.READY) {
                     isSessionBound = true;
+                    // The first verified ensure_session is activity too. Establish the lease
+                    // before any claim is announced so an abruptly deleted chat remains
+                    // recoverable even when it sends no follow-up MCP request.
+                    renewLease();
                     List<ResourceSelector> selectors = parseClaimSelectors(arguments);
                     boolean claimsSpecified = claimsFieldSpecified(arguments);
                     if (refresh && claimsSpecified && selectors.isEmpty()) {
@@ -847,8 +851,13 @@ public final class McpProtocolHandler {
                                         AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_HUMAN_HELP, details);
                             }
                         } catch (Exception failure) {
-                            agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
-                                    AgentNextAction.REQUEST_HUMAN_HELP, null);
+                            if ("SESSION_EPOCH_FENCED".equals(failure.getMessage())) {
+                                agentResponse = new AgentResponse(AgentStatus.BLOCKED,
+                                        AgentReason.WORKSPACE_GENERATION_CHANGED, AgentNextAction.RETRY, null);
+                            } else {
+                                agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                                        AgentNextAction.REQUEST_HUMAN_HELP, null);
+                            }
                         }
                     }
                 }
