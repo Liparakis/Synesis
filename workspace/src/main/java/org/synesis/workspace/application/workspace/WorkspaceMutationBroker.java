@@ -1,5 +1,6 @@
 package org.synesis.workspace.application.workspace;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -160,30 +161,22 @@ public final class WorkspaceMutationBroker {
 
         // 1. Session binding check
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
+        SessionAuthorityResolver authorityResolver = new SessionAuthorityResolver(bindingService);
         ProviderSessionBindingService.Binding binding = null;
         try {
-            var bindings = request.connectionInstanceId() == null
-                    ? bindingService.list(request.location(), request.provider())
-                    : bindingService.find(request.location(), request.provider(), request.connectionInstanceId())
-                            .map(java.util.List::of)
-                            .orElseGet(java.util.List::of);
-            if (request.connectionInstanceId() != null && bindings.isEmpty()) {
-                bindings = bindingService.list(request.location(), request.provider()).stream()
-                        .filter(candidate -> request.connectionInstanceId().equals(candidate.sessionId()))
+            if (request.connectionInstanceId() == null || request.connectionInstanceId().isBlank()) {
+                var candidates = bindingService.list(request.location(), request.provider()).stream()
+                        .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()))
                         .toList();
+                if (candidates.size() != 1) {
+                    return evaluateAndRecord(false, Decision.SESSION_UNBOUND, "EXACT_SESSION_REQUIRED",
+                            "An exact provider connection is required when multiple sessions are present",
+                            decisionId, interceptionEvidence, request, null, null);
+                }
+                binding = candidates.getFirst();
+            } else {
+                binding = authorityResolver.resolve(request.location(), request.provider(), request.connectionInstanceId());
             }
-            if (bindings.isEmpty()) {
-                return evaluateAndRecord(false,
-                        Decision.SESSION_UNBOUND,
-                        "NO_BOUND_SESSION",
-                        "No bound session for provider: " + request.provider(),
-                        decisionId,
-                        interceptionEvidence,
-                        request,
-                        null,
-                        null);
-            }
-            binding = bindings.getLast();
             if (!"BOUND".equals(binding.status())) {
                 return evaluateAndRecord(false,
                         Decision.SESSION_UNBOUND,

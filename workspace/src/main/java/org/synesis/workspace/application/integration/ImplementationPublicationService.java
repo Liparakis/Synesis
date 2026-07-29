@@ -1,5 +1,6 @@
 package org.synesis.workspace.application.integration;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -47,6 +48,7 @@ public final class ImplementationPublicationService {
 
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
+    private final SessionAuthorityResolver authorityResolver;
 
     /**
      * Creates an implementation publication service.
@@ -54,6 +56,7 @@ public final class ImplementationPublicationService {
     public ImplementationPublicationService() {
         this.projectService = new ProjectApplicationService();
         this.bindingService = new ProviderSessionBindingService();
+        this.authorityResolver = new SessionAuthorityResolver(bindingService);
     }
 
     /**
@@ -102,12 +105,8 @@ public final class ImplementationPublicationService {
         NodeIdentity identity;
         try {
             location = projectService.locate(root);
-            var bindings = bindingService.list(location, request.provider());
-            if (bindings.isEmpty()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            binding = bindings.getLast();
-            if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
+            binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
+            if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
             identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();

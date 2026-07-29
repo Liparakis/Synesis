@@ -1,5 +1,6 @@
 package org.synesis.workspace.application.capability;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -37,6 +38,7 @@ public final class CapabilityResponseService {
 
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
+    private final SessionAuthorityResolver authorityResolver;
 
     /**
      * Creates a capability response service.
@@ -44,6 +46,7 @@ public final class CapabilityResponseService {
     public CapabilityResponseService() {
         this.projectService = new ProjectApplicationService();
         this.bindingService = new ProviderSessionBindingService();
+        this.authorityResolver = new SessionAuthorityResolver(bindingService);
     }
 
     /**
@@ -97,12 +100,8 @@ public final class CapabilityResponseService {
         NodeIdentity identity;
         try {
             location = projectService.locate(root);
-            var bindings = bindingService.list(location, request.provider());
-            if (bindings.isEmpty()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            binding = bindings.getLast();
-            if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
+            binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
+            if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
             identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();

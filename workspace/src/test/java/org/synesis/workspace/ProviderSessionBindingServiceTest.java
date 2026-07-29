@@ -13,6 +13,7 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.hook.HookApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 
 /**
  * Verifies project-scoped provider session identity and trust bootstrap.
@@ -79,6 +80,22 @@ final class ProviderSessionBindingServiceTest {
         try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
             assertEquals(3, paths.count());
         }
+    }
+
+    @Test
+    void authorityResolverRejectsAProviderSiblingAndUnknownConnection() throws Exception {
+        Path root = Files.createTempDirectory("synesis-exact-authority-");
+        var location = new ProjectApplicationService().init(root).location();
+        var service = new ProviderSessionBindingService();
+        service.ensure(location, "codex", "chat-a");
+        service.ensure(location, "codex", "chat-b");
+
+        var resolver = new SessionAuthorityResolver(service);
+        var first = resolver.resolve(location, "codex", "chat-a");
+        assertEquals("codex", first.provider());
+        assertEquals("BOUND", first.status());
+        assertThrows(IllegalStateException.class,
+                () -> resolver.resolve(location, "codex", "chat-c"));
     }
 
     @Test

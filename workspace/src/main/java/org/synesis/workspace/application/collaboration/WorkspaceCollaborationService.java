@@ -23,11 +23,13 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 
 /** Resolves authenticated workspace sessions into collaboration intents and claims. */
 public final class WorkspaceCollaborationService {
     private final ProjectApplicationService projectService = new ProjectApplicationService();
     private final ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
+    private final SessionAuthorityResolver authorityResolver = new SessionAuthorityResolver(bindingService);
 
     /** Creates a workspace collaboration adapter. */
     public WorkspaceCollaborationService() {
@@ -281,11 +283,6 @@ public final class WorkspaceCollaborationService {
 
     private ProviderSessionBindingService.Binding binding(ProjectApplicationService.ProjectLocation location,
                                                            String provider, String connectionId) throws Exception {
-        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                .digest(connectionId.getBytes(StandardCharsets.UTF_8)));
-        return bindingService.list(location, provider).stream()
-                .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()))
-                .findFirst()
-                .orElseThrow(() -> new IOException("SESSION_NOT_FOUND"));
+        return authorityResolver.resolve(location, provider, connectionId);
     }
 }
