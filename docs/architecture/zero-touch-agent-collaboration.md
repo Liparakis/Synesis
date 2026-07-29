@@ -74,12 +74,17 @@ identity mismatch blocker without claiming real provider enforcement.
 ## Topology and ownership
 
 ```mermaid
-flowchart LR
-  C[Codex or Antigravity session] --> A[Provider adapter]
+flowchart TD
+  C[Chats or independently authenticated subagents] --> A[Provider adapters]
   A --> S[Autonomous Session Manager]
-  S --> R[Hidden loopback runtime]
-  R --> E[Signed project event log]
-  S --> W[Per-session Git worktree]
+  S --> G[Durable WorkGroup]
+  G --> L1[WorkIntent / Lane A]
+  G --> L2[WorkIntent / Lane B]
+  L1 --> W1[Isolated worktree A]
+  L2 --> W2[Isolated worktree B]
+  G --> E[Signed project event log]
+  W1 --> I[Dedicated integration worktree]
+  W2 --> I
   S --> H[Provider safe-boundary inbox]
 ```
 
@@ -131,6 +136,24 @@ out-of-band mutations. Integration occurs only through a dedicated integration
 worktree; it must not mutate the control checkout before all checks pass.
 
 These requirements describe planned behavior, not current implementation.
+
+## First parallel-collaboration milestone
+
+The roadmap's first real parallel-collaboration milestone is isolated lanes
+under one logical `WorkGroup`, not several chats sharing one physical
+workspace. Acceptance requires that:
+
+- two chats join one logical work group;
+- each receives disjoint claims and an isolated worktree;
+- both work concurrently and publish immutable snapshots;
+- Synesis integrates the snapshots successfully;
+- an overlapping claim grants mutation authority to exactly one lane;
+- closing one lane does not close the work group or sibling lanes; and
+- same-provider chats cannot act through one another's bindings.
+
+Independent work groups remain the supported boundary for unrelated or
+competing experiments. One-writer handoff remains the supported coordination
+mode when work overlaps.
 
 ## Product boundary
 
