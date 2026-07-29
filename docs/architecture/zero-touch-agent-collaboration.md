@@ -88,6 +88,62 @@ projection, and lifecycle transitions. The session manager owns local process
 state and worktree registration. The owner supervisor owns its implementation;
 the requester owns its speculative consumer. Git remains durable source history.
 
+## Planned work-group concepts
+
+The existing `WorkIntent` record remains the single-participant mutation lane.
+The planned `WorkGroup` parent may be referenced by an optional versioned
+`workGroupId` on each intent. Existing intents must replay as singleton work
+groups, preserving historical event compatibility.
+
+The planned protocol also includes:
+
+- `LaneGrant` for targeted joining by an already authenticated participant;
+- single-use continuation grants for deliberately bouncing work between chats;
+- delegated subagent lanes, each with its own binding and isolated worktree;
+- lane-specific close and revocation, without closing the logical group;
+- claim-epoch fencing for release, handoff, revocation, and recovery;
+- a logical-group lifecycle that is independent from individual lane lifecycles.
+
+The currently supported enforced selectors remain exact repository paths and
+repository path subtrees. Symbol claims are deferred until Synesis has an
+enforceable language-aware selector model; they are not part of this plan's
+implemented capability.
+
+## Authority and mergeability prerequisites
+
+Multi-chat collaboration is not safe until every authority-sensitive operation
+resolves the exact calling connection rather than a provider's latest binding.
+This prerequisite covers implementation publication, implementation
+validation, capability requests and responses, collaboration operations, and
+task completion or cancellation where applicable. Same-provider chats must
+never act through one another's bindings.
+
+Publication must include uncommitted lane changes in an immutable Synesis-owned
+snapshot reference. The complete lane diff must be validated against the
+lane's current claims before publication. Snapshot provenance must retain the
+work-group ID, lane ID, base commit, claim epoch, changed paths, exact
+contract revisions, and handoff lineage.
+
+Integration must serialize across processes and evaluate both claims and
+contracts. It must fail closed for stale epochs, stale contracts, uncovered or
+unclaimed changes, incompatible bases, unresolved provenance, and detected
+out-of-band mutations. Integration occurs only through a dedicated integration
+worktree; it must not mutate the control checkout before all checks pass.
+
+These requirements describe planned behavior, not current implementation.
+
+## Product boundary
+
+Synesis coordinates and authenticates mutation lanes. It does not share or
+manage private chat context, decide how agents reason, or determine whether
+two implementations are semantically correct beyond declared contracts,
+claims, provenance, and configured validation.
+
+Synesis cannot portably prevent every shell, IDE, script, provider-native, or
+external-tool write. Publication and integration must therefore fail closed
+when unclaimed mutations are detected, while preserving the affected isolated
+worktree for review or recovery.
+
 ## Security and failure invariants
 
 Node identity, project ID, session ID, provider instance, task, worktree, and
