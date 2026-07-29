@@ -98,6 +98,8 @@ row was run. A bounded Claude probe using an ephemeral valid MCP config did
 successfully acquire and release an exact claim without file mutation. The
 Antigravity probe repeatedly returned `workspace_not_ready` because no active
 workspace was available. These are provider-boundary evidence only.
+The post-probe strict Gradle check still passes all 50 actionable tasks and the
+deferred validator passes.
 
 ## Work completed
 
