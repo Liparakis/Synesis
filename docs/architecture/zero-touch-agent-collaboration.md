@@ -17,6 +17,40 @@ coordinator state, an allocated isolated worktree, and provider proof of the
 active workspace and mutation interception all pass. Otherwise the harness is
 read-only and the provider is not zero-touch-ready.
 
+## Multi-chat logical workspaces
+
+Synesis should support multiple chats working concurrently under one logical
+work group, but they must not concurrently mutate one physical Git worktree.
+The selected model is one durable `WorkGroup` with one isolated mutation lane
+per chat or independently authenticated subagent. Each lane retains one
+participant, provider binding, lease, claim epoch, branch, and physical
+worktree. Claims are scoped to repository resources and must be non-overlapping
+before mutation authority is granted.
+
+`WorkIntent` remains a single-participant mutation lane. `WorkGroup` is the
+logical parent that connects related intents, their shared goal and acceptance
+criteria, declared contracts, immutable snapshots, and integration lineage.
+The planned hierarchy is:
+
+```text
+Project
+└── WorkGroup
+    ├── WorkIntent / Lane A
+    │   └── isolated worktree A
+    ├── WorkIntent / Lane B
+    │   └── isolated worktree B
+    └── dedicated integration worktree
+```
+
+Chats do not share private LLM context. They share only durable coordination
+state through the work group. Sibling lanes do not immediately see one
+another's uncommitted filesystem changes; shared work becomes visible through
+published immutable snapshots or a newly materialized lane generation.
+
+Concurrent writers in one physical worktree are explicitly rejected. One-
+writer handoff remains available for overlapping work, while separate work
+groups remain available for unrelated or competing experiments.
+
 ## Evidence ledger
 
 | Capability | Classification | Evidence / gap |
