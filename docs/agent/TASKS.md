@@ -1289,7 +1289,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   integration serialization, deterministic disjoint/overlap/close acceptance,
   and existing event/session replay.
 - Required documentation: ADR-0039, updated collaboration architecture,
-  checkpoint evidence, provider limitations, and final acceptance report.
+  checkpoint evidence, provider limitations, and provider acceptance checklist.
 - Scope boundary: no symbol claims, remote multi-user authority, shared
   physical worktree, broker/database/service, or MCP tool-count change.
 - Progress evidence: exact-caller authority is implemented in capability
@@ -1309,3 +1309,5 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   immutable snapshots, adds release CLI parity, expands MCP collaboration
   schemas, and integrates two independent lane snapshots in a dedicated
   worktree; `7f78c29` runs the integrated candidate's pytest acceptance.
+  `docs/validation/multi-chat-provider-acceptance.md` records the real-provider
+  matrix and its explicit native-hook evidence boundary.
