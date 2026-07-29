@@ -280,7 +280,11 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.CONTRACT_PUBLISHED
                 || command.type() == PredictionEventType.CONTRACT_DEPENDENCY_BOUND
                 || command.type() == PredictionEventType.CONTRACT_SUPERSEDED
-                || command.type() == PredictionEventType.DEPENDENCY_INVALIDATED) {
+                || command.type() == PredictionEventType.DEPENDENCY_INVALIDATED
+                || command.type() == PredictionEventType.WORK_GROUP_CREATED
+                || command.type() == PredictionEventType.LANE_GRANT_ISSUED
+                || command.type() == PredictionEventType.LANE_GRANT_CONSUMED
+                || command.type() == PredictionEventType.LANE_REVOKED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
         }
@@ -310,7 +314,8 @@ public final class CoordinationService {
                  COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
                  PARTICIPANT_ABANDONED,
                  CONTRACT_PUBLISHED, CONTRACT_DEPENDENCY_BOUND, CONTRACT_SUPERSEDED,
-                 DEPENDENCY_INVALIDATED -> true;
+                 DEPENDENCY_INVALIDATED, WORK_GROUP_CREATED, LANE_GRANT_ISSUED,
+                 LANE_GRANT_CONSUMED, LANE_REVOKED -> true;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");

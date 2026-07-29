@@ -141,11 +141,11 @@ public final class PredictionEvent {
     }
 
     private static PredictionEventType decodeWireType(int wireCode, byte[] payload) throws IOException {
-        if (wireCode == 42 && hasMagic(payload, 0x53494e31)) {
+        if (wireCode == 42 && (hasMagic(payload, 0x53494e31) || hasMagic(payload, 0x53494e32))) {
             return PredictionEventType.WORK_INTENT_ANNOUNCED;
         }
         if (wireCode == 42 || wireCode == 43 || wireCode == 44) {
-            if (hasMagic(payload, 0x53494e31)) {
+            if (hasMagic(payload, 0x53494e31) || hasMagic(payload, 0x53494e32)) {
                 return PredictionEventType.WORK_INTENT_ANNOUNCED;
             }
             if (hasMagic(payload, 0x53524c31)) {

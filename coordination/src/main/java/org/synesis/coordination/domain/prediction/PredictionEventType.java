@@ -198,7 +198,15 @@ public enum PredictionEventType {
     /** Binds an intent to an exact contract revision. */
     CONTRACT_DEPENDENCY_BOUND,
     /** Supersedes the current contract revision. */
-    CONTRACT_SUPERSEDED;
+    CONTRACT_SUPERSEDED,
+    /** Creates a durable logical work group. */
+    WORK_GROUP_CREATED,
+    /** Issues a targeted lane join or continuation grant. */
+    LANE_GRANT_ISSUED,
+    /** Consumes a single-use lane grant. */
+    LANE_GRANT_CONSUMED,
+    /** Revokes a lane grant or lane authority epoch. */
+    LANE_REVOKED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -215,6 +223,10 @@ public enum PredictionEventType {
             case CONTRACT_PUBLISHED -> 50;
             case CONTRACT_DEPENDENCY_BOUND -> 51;
             case CONTRACT_SUPERSEDED -> 52;
+            case WORK_GROUP_CREATED -> 53;
+            case LANE_GRANT_ISSUED -> 54;
+            case LANE_GRANT_CONSUMED -> 55;
+            case LANE_REVOKED -> 56;
             default -> ordinal();
         };
     }

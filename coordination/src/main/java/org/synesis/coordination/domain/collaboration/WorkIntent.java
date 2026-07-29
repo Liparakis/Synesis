@@ -17,13 +17,24 @@ import java.util.UUID;
  * @param baseCommit base commit
  * @param selectors requested resource selectors
  * @param version intent version
+ * @param workGroupId logical work-group parent
  * @param status lifecycle status
  */
 public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          String provider, UUID taskId, String goal,
                          String acceptance, String baseCommit,
                          List<ResourceSelector> selectors, long version,
+                         UUID workGroupId,
                          Status status) {
+
+    /** Backward-compatible singleton-group intent constructor. */
+    public WorkIntent(UUID intentId, UUID projectId, String participant,
+                      String provider, UUID taskId, String goal,
+                      String acceptance, String baseCommit,
+                      List<ResourceSelector> selectors, long version, Status status) {
+        this(intentId, projectId, participant, provider, taskId, goal, acceptance,
+                baseCommit, selectors, version, intentId, status);
+    }
 
     /** Intent lifecycle states. */
     public enum Status {
@@ -37,6 +48,7 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
     public WorkIntent {
         Objects.requireNonNull(intentId, "intentId");
         Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(workGroupId, "workGroupId");
         require(participant, "participant");
         require(provider, "provider");
         Objects.requireNonNull(taskId, "taskId");
