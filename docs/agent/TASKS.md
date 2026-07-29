@@ -1308,4 +1308,4 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   `1d6bc71` records explicit lane provenance, excludes provider metadata from
   immutable snapshots, adds release CLI parity, expands MCP collaboration
   schemas, and integrates two independent lane snapshots in a dedicated
-  worktree.
+  worktree; `7f78c29` runs the integrated candidate's pytest acceptance.

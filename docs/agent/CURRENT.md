@@ -72,7 +72,8 @@ provenance; provider metadata is excluded from source snapshots and both
 snapshots integrate into a dedicated worktree successfully. The CLI exposes
 the shared exact-lane release operation and MCP collaboration schemas describe
 work-group and lane-grant lifecycle operations without changing the 11-tool
-surface.
+surface. The same fixture now runs the integrated candidate's pytest test and
+requires it to pass.
 
 ## Work completed
 
