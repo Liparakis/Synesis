@@ -89,6 +89,12 @@ tests/vet, the deferred validator, and the 45-test task-tracker fixture pass.
 The final lifecycle additions also pass the full strict Gradle check, including
 clean EOF release, cancellation release, and continuation-grant revocation
 regressions.
+The installed-provider audit recorded Codex CLI `0.140.0` authenticated with
+direct Synesis stdio initialization working, but its bounded real CLI probe
+cancelled both `ensure_session` calls before a claim was established. Claude
+Code `2.1.220` remains blocked by a malformed global MCP file using `servers`
+instead of `mcpServers`; Antigravity `1.1.8` was present but no new multi-chat
+row was run. These are provider-boundary evidence only.
 
 ## Work completed
 

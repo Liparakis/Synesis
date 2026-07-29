@@ -49,3 +49,17 @@ write outside Synesis. Record native-hook outcomes separately. If a provider
 quota, authentication state, or harness UI prevents a row, record the exact
 blocker and leave the deterministic local acceptance as the authoritative
 implementation evidence.
+
+## Current provider audit
+
+- Codex CLI `0.140.0` is installed and authenticated. Its configured Synesis
+  server is enabled, and direct stdio `initialize` succeeds from the task-
+  tracker project. The bounded real Codex CLI probe nevertheless cancelled
+  both `ensure_session` calls before a response, so no participant or claim is
+  recorded. This is provider-runtime evidence, not a Synesis claim failure.
+- Claude Code `2.1.220` is installed, but its global MCP file currently uses
+  `servers` instead of the required `mcpServers` key. Claude reports that MCP
+  configuration as unparsable; no real collaboration row is claimed.
+- Antigravity CLI `1.1.8` is installed, but no bounded multi-chat row was run
+  in this execution. Existing direct MCP evidence remains separate from
+  native-hook maturity.
