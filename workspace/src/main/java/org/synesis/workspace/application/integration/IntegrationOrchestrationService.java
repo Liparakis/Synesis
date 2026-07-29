@@ -22,6 +22,7 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -321,6 +322,18 @@ public final class IntegrationOrchestrationService {
                 String normalized = path.replace('\\', '/');
                 if (!changed.add(normalized)) {
                     failures.add("OVERLAPPING_SNAPSHOT:" + normalized);
+                }
+                if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
+                    boolean covered = snapshot.provenance().claimSelectors().stream().anyMatch(raw -> {
+                        int split = raw.indexOf(':');
+                        if (split < 1) return false;
+                        try {
+                            ResourceSelector selector = new ResourceSelector(
+                                    ResourceSelector.Kind.valueOf(raw.substring(0, split)), raw.substring(split + 1));
+                            return selector.overlaps(ResourceSelector.pathExact(normalized));
+                        } catch (RuntimeException invalid) { return false; }
+                    });
+                    if (!covered) failures.add("UNCOVERED_PATH:" + normalized);
                 }
             }
             if (snapshot.provenance() == null) {

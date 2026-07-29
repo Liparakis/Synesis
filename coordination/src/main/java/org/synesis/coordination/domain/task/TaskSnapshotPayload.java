@@ -88,7 +88,7 @@ public record TaskSnapshotPayload(
         this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
                 commitSha, changedPaths, capabilityDependencies, summary,
                 new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
-                        capabilityDependencies, List.of(), commitSha, commitSha));
+                        capabilityDependencies, List.of(), List.of(), commitSha, commitSha));
     }
 
     /**
@@ -127,6 +127,7 @@ public record TaskSnapshotPayload(
             out.writeLong(provenance.claimEpoch());
             writeList(out, provenance.contractRevisions());
             writeList(out, provenance.handoffLineage());
+            writeList(out, provenance.claimSelectors());
             writeText(out, provenance.snapshotRef());
             writeText(out, provenance.integrityEvidence());
             out.flush();
@@ -177,14 +178,14 @@ public record TaskSnapshotPayload(
             SnapshotProvenance provenance;
             if (version == 1) {
                 provenance = new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
-                        deps, List.of(), commitSha, commitSha);
+                        deps, List.of(), List.of(), commitSha, commitSha);
             } else {
                 UUID group = readUuid(in), lane = readUuid(in);
                 String participant = readText(in), binding = readText(in);
                 long epoch = in.readLong();
-                List<String> contracts = readList(in), lineage = readList(in);
+                List<String> contracts = readList(in), lineage = readList(in), claims = readList(in);
                 provenance = new SnapshotProvenance(group, lane, participant, binding, epoch,
-                        contracts, lineage, readText(in), readText(in));
+                        contracts, lineage, claims, readText(in), readText(in));
             }
             return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,
                     providerSessionId, baseCommit, commitSha, changedPaths, deps, summary, provenance);

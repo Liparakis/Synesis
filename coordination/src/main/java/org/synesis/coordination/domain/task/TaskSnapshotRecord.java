@@ -93,6 +93,6 @@ public record TaskSnapshotRecord(
         this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
                 commitSha, changedPaths, capabilityDependencies, summary, createdAtMillis,
                 new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
-                        capabilityDependencies, List.of(), commitSha, commitSha));
+                        capabilityDependencies, List.of(), List.of(), commitSha, commitSha));
     }
 }

@@ -16,6 +16,7 @@ import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 /**
  * Service for creating and verifying immutable task snapshots from worker worktrees.
@@ -61,6 +62,21 @@ public final class TaskSnapshotService {
             Optional<TaskSnapshotRecord> existingOpt,
             List<CapabilityRequestRecord> activeCapabilities
     ) throws IOException {
+        return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId,
+                workerWorktreePath, controlRoot, summary, existingOpt, activeCapabilities, List.of());
+    }
+
+    /** Creates a snapshot while recording the lane's current resource claims.
+     * @param taskId task ID @param nodeId node ID @param supervisorId supervisor ID @param workerId worker ID
+     * @param providerSessionId binding ID @param workerWorktreePath lane worktree @param controlRoot project root
+     * @param summary summary @param existingOpt existing snapshot @param activeCapabilities capability dependencies
+     * @param claims current exact-path/subtree claims @return immutable snapshot @throws IOException Git failure */
+    public TaskSnapshotRecord createSnapshot(
+            UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
+            Path workerWorktreePath, Path controlRoot, String summary,
+            Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
+            List<ResourceSelector> claims
+    ) throws IOException {
         Objects.requireNonNull(taskId, "taskId");
         Objects.requireNonNull(nodeId, "nodeId");
         Objects.requireNonNull(supervisorId, "supervisorId");
@@ -70,6 +86,7 @@ public final class TaskSnapshotService {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(summary, "summary");
         Objects.requireNonNull(activeCapabilities, "activeCapabilities");
+        Objects.requireNonNull(claims, "claims");
 
         // Inspect the lane without requiring the harness to create a commit.
         boolean dirty = !runGitOutput(workerWorktreePath, "status", "--porcelain").isBlank();
@@ -97,6 +114,7 @@ public final class TaskSnapshotService {
 
         SnapshotProvenance provenance = new SnapshotProvenance(taskId, taskId, nodeId,
                 providerSessionId, 1, capabilityDependencies, List.of(),
+                claims.stream().map(selector -> selector.kind().name() + ":" + selector.value()).toList(),
                 "refs/synesis/snapshots/" + snapshotId, integrity(commitSha, changedPaths));
         return new TaskSnapshotRecord(
                 taskId, snapshotId, nodeId, supervisorId, workerId,

@@ -24,6 +24,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.agent.AgentNextAction;
@@ -162,6 +163,10 @@ public final class AgentTaskCompletionService {
                     ? request.summary().trim() : "Completed task implementation";
 
             List<CapabilityRequestRecord> workerCapabilities = store.capabilityRequestProjection().findAllForRequester(callerNodeId);
+            String participantHandle = WorkspaceCollaborationService.participantHandle(request.connectionInstanceId());
+            List<ResourceSelector> currentClaims = store.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.participant().equals(participantHandle))
+                    .flatMap(intent -> intent.selectors().stream()).toList();
             Optional<TaskSnapshotRecord> existingOpt = store.taskCompletionProjection().findSnapshotForTask(taskId);
 
             TaskSnapshotRecord snapshot;
@@ -169,7 +174,7 @@ public final class AgentTaskCompletionService {
                 snapshot = snapshotService.createSnapshot(
                         taskId, callerNodeId, callerSupervisorId, callerWorkerId,
                         binding.sessionId(), workerWorktreePath, location.root(),
-                        summaryText, existingOpt, workerCapabilities);
+                        summaryText, existingOpt, workerCapabilities, currentClaims);
             } catch (IllegalStateException immutabilityError) {
                 // Task snapshot is immutable and content changed after completion
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);
