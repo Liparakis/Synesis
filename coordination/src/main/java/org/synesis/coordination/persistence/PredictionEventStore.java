@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
+import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
 import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -37,6 +38,7 @@ public final class PredictionEventStore {
     private final CapabilityRequestProjection capabilityRequestProjection = new CapabilityRequestProjection();
     private final TaskCompletionProjection taskCompletionProjection = new TaskCompletionProjection();
     private final CollaborationProjection collaborationProjection = new CollaborationProjection();
+    private final WorkGroupProjection workGroupProjection = new WorkGroupProjection();
     private final ContractProjection contractProjection = new ContractProjection();
     private final List<PredictionEvent> events = new ArrayList<>();
 
@@ -99,6 +101,7 @@ public final class PredictionEventStore {
         capabilityRequestProjection.validate(event);
         taskCompletionProjection.validate(event);
         collaborationProjection.validate(event);
+        workGroupProjection.validate(event);
         contractProjection.validate(event);
         Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
         Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
@@ -117,6 +120,7 @@ public final class PredictionEventStore {
         capabilityRequestProjection.apply(event);
         taskCompletionProjection.apply(event);
         collaborationProjection.apply(event);
+        workGroupProjection.apply(event);
         contractProjection.apply(event);
         events.add(event);
         return event;
@@ -199,6 +203,11 @@ public final class PredictionEventStore {
         return collaborationProjection;
     }
 
+    /** Returns logical work-group and lane-grant state reconstructed from events.
+     * @return work-group projection
+     */
+    public WorkGroupProjection workGroupProjection() { return workGroupProjection; }
+
     /** Returns the replayed contract projection.
      * @return contract projection
      */
@@ -230,6 +239,7 @@ public final class PredictionEventStore {
             capabilityRequestProjection.apply(event);
             taskCompletionProjection.apply(event);
             collaborationProjection.apply(event);
+            workGroupProjection.apply(event);
             contractProjection.apply(event);
             events.add(event);
             previous = event.digest();

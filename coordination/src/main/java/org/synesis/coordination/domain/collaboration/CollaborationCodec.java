@@ -19,6 +19,8 @@ public final class CollaborationCodec {
     private static final int MAGIC_RESPONSE = 0x53525331;
     private static final int MAGIC_HEARTBEAT = 0x53484231;
     private static final int MAGIC_HANDOFF = 0x53484631;
+    private static final int MAGIC_GROUP = 0x53474731;
+    private static final int MAGIC_GRANT = 0x53475231;
 
     private CollaborationCodec() {
     }
@@ -265,6 +267,46 @@ public final class CollaborationCodec {
         String participant = readText(in);
         if (in.available() != 0) throw new IOException("trailing heartbeat bytes");
         return participant;
+    }
+
+    /** Encodes a logical work group. @param group group @return canonical bytes */
+    public static byte[] encodeWorkGroup(WorkGroup group) {
+        try { ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_GROUP); uuid(out, group.workGroupId()); uuid(out, group.projectId());
+            text(out, group.goal()); text(out, group.acceptance()); out.writeLong(group.version());
+            out.writeByte(group.status().ordinal()); out.flush(); return bytes.toByteArray();
+        } catch (IOException impossible) { throw new AssertionError(impossible); }
+    }
+
+    /** Decodes a logical work group. @param encoded bytes @return group @throws IOException malformed payload */
+    public static WorkGroup decodeWorkGroup(byte[] encoded) throws IOException {
+        try { DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_GROUP) throw new IOException("unsupported group format");
+            UUID id = readUuid(in), project = readUuid(in); String goal = readText(in), acceptance = readText(in);
+            long version = in.readLong(); int status = in.readUnsignedByte();
+            if (status >= WorkGroup.Status.values().length || in.available() != 0) throw new IOException("malformed group");
+            return new WorkGroup(id, project, goal, acceptance, version, WorkGroup.Status.values()[status]);
+        } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed group", failure); }
+    }
+
+    /** Encodes a targeted lane grant. @param grant grant @return canonical bytes */
+    public static byte[] encodeLaneGrant(LaneGrant grant) {
+        try { ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_GRANT); uuid(out, grant.grantId()); uuid(out, grant.workGroupId()); uuid(out, grant.targetIntentId());
+            text(out, grant.targetParticipant()); out.writeLong(grant.claimEpoch()); out.writeBoolean(grant.singleUse());
+            out.flush(); return bytes.toByteArray();
+        } catch (IOException impossible) { throw new AssertionError(impossible); }
+    }
+
+    /** Decodes a targeted lane grant. @param encoded bytes @return grant @throws IOException malformed payload */
+    public static LaneGrant decodeLaneGrant(byte[] encoded) throws IOException {
+        try { DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_GRANT) throw new IOException("unsupported grant format");
+            UUID id = readUuid(in), group = readUuid(in), intent = readUuid(in); String target = readText(in);
+            long epoch = in.readLong(); boolean single = in.readBoolean();
+            if (in.available() != 0) throw new IOException("malformed grant");
+            return new LaneGrant(id, group, intent, target, epoch, single);
+        } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed grant", failure); }
     }
 
     private static void uuid(DataOutputStream out, UUID id) throws IOException {

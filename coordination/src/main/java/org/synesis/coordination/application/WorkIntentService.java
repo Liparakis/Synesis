@@ -11,6 +11,7 @@ import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
@@ -49,6 +50,12 @@ public final class WorkIntentService {
             List<ClaimConflict> conflicts = current.collaborationProjection().conflicts(intent.selectors());
             if (!conflicts.isEmpty()) {
                 return new ClaimResult(false, intent, conflicts);
+            }
+            if (current.workGroupProjection().group(intent.workGroupId()).isEmpty()) {
+                WorkGroup group = new WorkGroup(intent.workGroupId(), intent.projectId(), intent.goal(),
+                        intent.acceptance(), 1, WorkGroup.Status.ACTIVE);
+                current.append(group.workGroupId(), PredictionEventType.WORK_GROUP_CREATED,
+                        signer.nodeId(), CollaborationCodec.encodeWorkGroup(group), signer);
             }
             current.append(intent.intentId(), PredictionEventType.WORK_INTENT_ANNOUNCED,
                     signer.nodeId(), CollaborationCodec.encodeIntent(intent), signer);
