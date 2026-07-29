@@ -73,7 +73,10 @@ snapshots integrate into a dedicated worktree successfully. The CLI exposes
 the shared exact-lane release operation and MCP collaboration schemas describe
 work-group and lane-grant lifecycle operations without changing the 11-tool
 surface. The same fixture now runs the integrated candidate's pytest test and
-requires it to pass.
+requires it to pass. The final post-change Gradle check passes all 50
+actionable tasks with strict dependency verification; bootstrap Go tests/vet
+and the deferred validator pass; the task-tracker fixture remains 45/45
+passing.
 
 ## Work completed
 
