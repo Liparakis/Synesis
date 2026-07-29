@@ -40,6 +40,14 @@ public final class CollaborationStatusCommand implements Callable<Integer> {
                 runtime.terminal().stdout("REQUEST=" + request.requestId() + " FROM=" + request.requester()
                         + " TO=" + request.target() + " STATUS=" + request.status() + " KIND=" + request.kind());
             }
+            for (var group : snapshot.groups()) {
+                runtime.terminal().stdout("WORK_GROUP=" + group.workGroupId() + " STATUS=" + group.status()
+                        + " VERSION=" + group.version() + " GOAL=" + group.goal());
+            }
+            for (var grant : snapshot.grants()) {
+                runtime.terminal().stdout("LANE_GRANT=" + grant.grantId() + " GROUP=" + grant.workGroupId()
+                        + " TARGET=" + grant.targetParticipant() + " EPOCH=" + grant.claimEpoch());
+            }
             return ExitCodes.OK;
         } catch (Exception failure) {
             runtime.terminal().stderr("COLLABORATION_ERROR=" + failure.getMessage());

@@ -28,6 +28,8 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
@@ -507,6 +509,7 @@ public final class McpProtocolHandler {
         taskProperties.put("acceptance", Map.of("type", "string"));
         taskProperties.put("likelyScopes", Map.of("type", "array", "items", Map.of("type", "string")));
         taskProperties.put("knownDependencies", Map.of("type", "array", "items", Map.of("type", "string")));
+        taskProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
         taskProperties.put("claims", Map.of("type", "array", "items", Map.of(
                 "type", "object", "required", List.of("path"), "properties", Map.of(
                         "path", Map.of("type", "string"),
@@ -845,7 +848,8 @@ public final class McpProtocolHandler {
                             AgentSessionService.AgentTaskIntent intent = taskIntent;
                             ClaimResult claimResult = collaborationService.announce(activeProjectRoot, provider,
                                     connectionInstanceId, intent == null ? null : intent.goal(),
-                                    intent == null ? null : intent.acceptance(), selectors);
+                                    intent == null ? null : intent.acceptance(), selectors,
+                                    intent == null ? null : intent.workGroupId());
                             if (!claimResult.acquired()) {
                                 Map<String, Object> details = new LinkedHashMap<>();
                                 details.put("conflicts", claimResult.conflicts().stream().map(conflict -> Map.of(
@@ -1005,6 +1009,39 @@ public final class McpProtocolHandler {
                                 var request = collaborationService.handoff(activeProjectRoot, provider, connectionInstanceId,
                                         intentId, target, proposal);
                                 yield Map.of("request", requestMap(request));
+                            }
+                            case "work_group_create" -> {
+                                UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
+                                collaborationService.createWorkGroup(activeProjectRoot,
+                                        new WorkGroup(groupId, UUID.fromString(String.valueOf(arguments.get("projectId"))),
+                                                String.valueOf(arguments.getOrDefault("collaborationGoal", "")),
+                                                String.valueOf(arguments.getOrDefault("collaborationAcceptance", "")), 1,
+                                                WorkGroup.Status.ACTIVE));
+                                yield Map.of("workGroupId", groupId.toString(), "status", "ACTIVE");
+                            }
+                            case "lane_grant_issue" -> {
+                                UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
+                                UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
+                                UUID intentId = UUID.fromString(String.valueOf(arguments.get("intentId")));
+                                LaneGrant grant = new LaneGrant(grantId, groupId, intentId,
+                                        String.valueOf(arguments.get("targetParticipant")),
+                                        ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue(),
+                                        !Boolean.FALSE.equals(arguments.get("singleUse")));
+                                collaborationService.issueLaneGrant(activeProjectRoot, grant);
+                                yield Map.of("grantId", grantId.toString(), "status", "ISSUED");
+                            }
+                            case "lane_grant_consume" -> {
+                                UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
+                                collaborationService.consumeLaneGrant(activeProjectRoot, grantId,
+                                        String.valueOf(arguments.get("targetParticipant")),
+                                        UUID.fromString(String.valueOf(arguments.get("intentId"))),
+                                        ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue());
+                                yield Map.of("grantId", grantId.toString(), "status", "CONSUMED");
+                            }
+                            case "lane_grant_revoke" -> {
+                                UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
+                                collaborationService.revokeLaneGrant(activeProjectRoot, grantId);
+                                yield Map.of("grantId", grantId.toString(), "status", "REVOKED");
                             }
                             default -> throw new IllegalArgumentException("unknown collaboration operation");
                         };
@@ -1261,7 +1298,11 @@ public final class McpProtocolHandler {
         String acceptance = (String) map.get("acceptance");
         List<String> likelyScopes = (List<String>) map.get("likelyScopes");
         List<String> knownDependencies = (List<String>) map.get("knownDependencies");
-        return new AgentSessionService.AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies);
+        UUID workGroupId = null;
+        if (map.get("workGroupId") instanceof String value && !value.isBlank()) {
+            try { workGroupId = UUID.fromString(value); } catch (IllegalArgumentException ignored) { }
+        }
+        return new AgentSessionService.AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies, workGroupId);
     }
 
     @SuppressWarnings("unchecked")

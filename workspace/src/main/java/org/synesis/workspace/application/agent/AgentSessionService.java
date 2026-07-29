@@ -3,6 +3,7 @@ package org.synesis.workspace.application.agent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import java.util.Objects;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -54,12 +55,14 @@ public final class AgentSessionService {
      * @param acceptance        concise acceptance criteria
      * @param likelyScopes      likely file or package scopes
      * @param knownDependencies known dependent capabilities or task IDs
+     * @param workGroupId optional logical work-group identifier
      */
     public record AgentTaskIntent(
             String goal,
             String acceptance,
             List<String> likelyScopes,
-            List<String> knownDependencies
+            List<String> knownDependencies,
+            UUID workGroupId
     ) {
         /**
          * Validates bounds on task intent strings and lists.
@@ -77,6 +80,12 @@ public final class AgentSessionService {
             if (knownDependencies != null && knownDependencies.size() > 50) {
                 throw new IllegalArgumentException("knownDependencies exceeds 50 items");
             }
+        }
+
+        /** Backward-compatible intent constructor without a group. */
+        public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes,
+                List<String> knownDependencies) {
+            this(goal, acceptance, likelyScopes, knownDependencies, null);
         }
     }
 

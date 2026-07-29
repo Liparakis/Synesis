@@ -2,6 +2,7 @@ package org.synesis.cli.command.collaboration;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
@@ -29,6 +30,8 @@ public final class CollaborationAnnounceCommand implements Callable<Integer> {
     private List<String> claims;
     @Option(names = "--subtree")
     private boolean subtree;
+    @Option(names = "--work-group", description = "Logical work-group UUID")
+    private UUID workGroupId;
 
     /**
      * Creates the command.
@@ -45,7 +48,7 @@ public final class CollaborationAnnounceCommand implements Callable<Integer> {
             List<ResourceSelector> selectors = claims.stream().map(path -> subtree
                     ? ResourceSelector.pathSubtree(path) : ResourceSelector.pathExact(path)).toList();
             ClaimResult result = new WorkspaceCollaborationService().announce(project.toAbsolutePath().normalize(),
-                    provider, connectionInstanceId, goal, acceptance, selectors);
+                    provider, connectionInstanceId, goal, acceptance, selectors, workGroupId);
             if (!result.acquired()) {
                 runtime.terminal().stderr("OVERLAPPING_CLAIM=" + result.conflicts());
                 return ExitCodes.LOCAL_CONFIGURATION;

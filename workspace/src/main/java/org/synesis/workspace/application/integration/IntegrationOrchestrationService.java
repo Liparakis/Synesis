@@ -323,7 +323,8 @@ public final class IntegrationOrchestrationService {
                 if (!changed.add(normalized)) {
                     failures.add("OVERLAPPING_SNAPSHOT:" + normalized);
                 }
-                if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
+                if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")
+                        && !snapshot.provenance().claimSelectors().isEmpty()) {
                     boolean covered = snapshot.provenance().claimSelectors().stream().anyMatch(raw -> {
                         int split = raw.indexOf(':');
                         if (split < 1) return false;

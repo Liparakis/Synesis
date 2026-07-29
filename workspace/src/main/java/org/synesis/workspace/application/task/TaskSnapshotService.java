@@ -95,6 +95,9 @@ public final class TaskSnapshotService {
         String snapshotId = "snap_" + snapshotToken;
         String baseCommit = dirty ? headCommit : deriveBaseCommit(workerWorktreePath);
         String commitSha = dirty ? materializeSnapshot(workerWorktreePath, headCommit, snapshotId) : headCommit;
+        if (!dirty) {
+            runGitOutput(workerWorktreePath, "update-ref", "refs/synesis/snapshots/" + snapshotId, commitSha);
+        }
 
         // Idempotency: if an existing snapshot has identical commitSha, return it
         if (existingOpt.isPresent() && existingOpt.get().commitSha().equals(commitSha)) {

@@ -19,6 +19,9 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.application.ContractService;
 import org.synesis.coordination.domain.contract.ContractDependency;
 import org.synesis.coordination.domain.contract.ContractRecord;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -48,6 +51,16 @@ public final class WorkspaceCollaborationService {
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
                                 String goal, String acceptance, List<ResourceSelector> selectors)
             throws Exception {
+        return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, null);
+    }
+
+    /** Announces an intent in an optional logical work group.
+     * @param projectRoot project root @param provider provider @param connectionInstanceId connection ID
+     * @param goal goal @param acceptance acceptance @param selectors claims @param workGroupId group ID
+     * @return claim result @throws Exception resolution or append failure */
+    public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
+                                String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId)
+            throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
         NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
@@ -60,11 +73,13 @@ public final class WorkspaceCollaborationService {
         }
         WorkIntentService service = new WorkIntentService(store, identity);
         UUID taskId = UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
+        UUID group = workGroupId == null ? UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId())
+                .getBytes(StandardCharsets.UTF_8)) : workGroupId;
         WorkIntent intent = new WorkIntent(UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId())
                 .getBytes(StandardCharsets.UTF_8)), location.projectId(), participant,
                 provider, taskId, goal == null ? "Unspecified work" : goal,
                 acceptance == null ? "Unspecified acceptance" : acceptance,
-                binding.baseCommit(), selectors, 1, WorkIntent.Status.ANNOUNCED);
+                binding.baseCommit(), selectors, 1, group, WorkIntent.Status.ANNOUNCED);
         return service.announce(intent);
     }
 
@@ -164,7 +179,39 @@ public final class WorkspaceCollaborationService {
         WorkIntentService service = new WorkIntentService(store,
                 new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
         return new CollaborationSnapshot(service.activeIntents(), service.requests(),
-                store.collaborationProjection().participants());
+                store.collaborationProjection().participants(), store.workGroupProjection().groups(),
+                store.workGroupProjection().grants());
+    }
+
+    /** Creates a logical work group through the shared coordination service.
+     * @param projectRoot project root @param group group @throws Exception persistence failure */
+    public void createWorkGroup(Path projectRoot, WorkGroup group) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).create(group);
+    }
+
+    /** Issues a targeted lane grant. @param projectRoot project root @param grant grant @throws Exception persistence failure */
+    public void issueLaneGrant(Path projectRoot, LaneGrant grant) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).issue(grant);
+    }
+
+    /** Consumes a targeted grant. @param projectRoot root @param grantId grant @param participant participant
+     * @param intentId intent @param epoch epoch @throws Exception persistence failure */
+    public void consumeLaneGrant(Path projectRoot, UUID grantId, String participant, UUID intentId, long epoch) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity())
+                .consume(grantId, participant, intentId, epoch);
+    }
+
+    /** Revokes a targeted grant. @param projectRoot root @param grantId grant @throws Exception persistence failure */
+    public void revokeLaneGrant(Path projectRoot, UUID grantId) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).revoke(grantId);
     }
 
     /** Publishes a signed shared contract revision for this project.
@@ -229,7 +276,7 @@ public final class WorkspaceCollaborationService {
      * @param participants participants
      */
     public record CollaborationSnapshot(List<WorkIntent> intents, List<CoordinationRequest> requests,
-            List<Participant> participants) { }
+            List<Participant> participants, List<WorkGroup> groups, List<LaneGrant> grants) { }
 
     /** Returns whether the session owns the target or no collaboration protocol is active.
      * @param projectRoot project root
