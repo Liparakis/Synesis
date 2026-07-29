@@ -1313,4 +1313,6 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   matrix and its explicit native-hook evidence boundary; `83d3b99` makes
   activated-lane publication reject uncovered managed paths before persistence;
   `8cc4432` proves unresolved coordination blocks before an integration
-  attempt is appended.
+  attempt is appended; the focused grant lifecycle regression now also proves
+  revoked continuation grants cannot be consumed; cancellation now proves the
+  exact lane claim is released while the worktree remains intact.

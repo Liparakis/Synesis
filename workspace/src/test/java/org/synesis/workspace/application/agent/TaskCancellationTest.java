@@ -11,6 +11,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.agent.AgentResponse;
 
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -57,6 +60,9 @@ class TaskCancellationTest {
         );
         AgentResponse sessionResp = sessionService.ensureSession(resReq);
         assertEquals(AgentStatus.READY, sessionResp.status());
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        assertTrue(collaboration.announce(projectRoot, "codex", "conn-cancel", "cancel lane", "release",
+                List.of(ResourceSelector.pathExact("src/cancelled.py"))).acquired());
 
         AgentTaskCancellationService cancelService = new AgentTaskCancellationService();
         AgentTaskCancellationService.CancelTaskRequest cancelReq = new AgentTaskCancellationService.CancelTaskRequest(
@@ -66,6 +72,9 @@ class TaskCancellationTest {
         AgentResponse cancelResp = cancelService.cancelTask(cancelReq);
         assertEquals(AgentStatus.COMPLETED, cancelResp.status());
         assertNotNull(cancelResp.result());
+        assertTrue(collaboration.status(projectRoot).intents().stream()
+                .noneMatch(intent -> intent.participant().equals(
+                        WorkspaceCollaborationService.participantHandle("conn-cancel"))));
 
         // Repeated cancellation must be idempotent
         AgentResponse repeatResp = cancelService.cancelTask(cancelReq);

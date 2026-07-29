@@ -32,4 +32,18 @@ final class WorkGroupServiceTest {
         assertTrue(new PredictionEventStore(temp, project).workGroupProjection().group(groupId)
                 .orElseThrow().status() == WorkGroup.Status.COMPLETED);
     }
+
+    @Test
+    void revokedGrantCannotBeConsumed(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID intentId = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project), identity);
+        service.create(new WorkGroup(groupId, project, "delegation", "revoke", 1, WorkGroup.Status.ACTIVE));
+        UUID grantId = UUID.randomUUID();
+        service.issue(new LaneGrant(grantId, groupId, intentId, "agt-target", 4, true));
+        service.revoke(grantId);
+        assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 4));
+    }
 }

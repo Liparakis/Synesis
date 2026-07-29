@@ -27,9 +27,8 @@ stale, cross-binding, unclaimed, and incompatible integration paths fail closed.
 
 ## Immediate next action
 
-Verify exact-lane close/revocation release paths against completion,
-cancellation, and reconciliation, then run the real-provider checklist when
-the installed harnesses and quotas are available.
+Run the real-provider checklist when the installed harnesses and quotas are
+available; otherwise preserve the recorded external blocker.
 
 ## Completion state
 
@@ -81,6 +80,10 @@ persistence when a managed changed path is outside the caller's current exact
 path/subtree claims; the focused regression passes.
 The integration orchestration regression also proves an unresolved
 coordination request blocks before any integration-attempt event is appended.
+The grant lifecycle regression proves owner-independent revocation fences a
+continuation grant before consumption.
+Cancellation lifecycle coverage now confirms the exact caller's collaboration
+claim is released without deleting its isolated worktree.
 The post-regression Gradle check passes all 50 actionable tasks; bootstrap Go
 tests/vet, the deferred validator, and the 45-test task-tracker fixture pass.
 
