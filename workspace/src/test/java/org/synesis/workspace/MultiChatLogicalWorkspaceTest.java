@@ -27,6 +27,9 @@ final class MultiChatLogicalWorkspaceTest {
         git(root, "init");
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
         Files.writeString(root.resolve("README.md"), "base\n");
+        Files.createDirectories(root.resolve("tests"));
+        Files.writeString(root.resolve("tests/test_lanes.py"),
+                "def test_lane_outputs():\n    assert open('src/a.py').read().strip() == 'lane-a'\n    assert open('src/b.py').read().strip() == 'lane-b'\n");
         git(root, "add", "."); git(root, "commit", "-m", "base");
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         var laneA = bindings.ensure(location, "codex", "chat-a").binding();
@@ -69,6 +72,10 @@ final class MultiChatLogicalWorkspaceTest {
             assertTrue(integrated.success(), integrated.failureReason());
             assertEquals("lane-a\n", Files.readString(integrated.worktreePath().resolve("src/a.py")).replace("\r\n", "\n"));
             assertEquals("lane-b\n", Files.readString(integrated.worktreePath().resolve("src/b.py")).replace("\r\n", "\n"));
+            Process pytest = new ProcessBuilder("python", "-m", "pytest", "-q")
+                    .directory(integrated.worktreePath().toFile()).redirectErrorStream(true).start();
+            String pytestOutput = new String(pytest.getInputStream().readAllBytes());
+            assertTrue(pytest.waitFor() == 0, pytestOutput);
         } finally {
             integration.removeIntegrationWorktree(integrated.worktreePath());
         }
