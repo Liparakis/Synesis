@@ -1043,6 +1043,14 @@ public final class McpProtocolHandler {
                                 collaborationService.revokeLaneGrant(activeProjectRoot, grantId);
                                 yield Map.of("grantId", grantId.toString(), "status", "REVOKED");
                             }
+                            case "work_group_close" -> {
+                                UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
+                                WorkGroup.Status status = WorkGroup.Status.valueOf(String.valueOf(
+                                        arguments.getOrDefault("groupStatus", "COMPLETED")).toUpperCase(java.util.Locale.ROOT));
+                                long version = ((Number) arguments.getOrDefault("groupVersion", 1)).longValue();
+                                collaborationService.closeWorkGroup(activeProjectRoot, groupId, status, version);
+                                yield Map.of("workGroupId", groupId.toString(), "status", status.name());
+                            }
                             default -> throw new IllegalArgumentException("unknown collaboration operation");
                         };
                         agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null, result);

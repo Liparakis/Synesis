@@ -28,5 +28,8 @@ final class WorkGroupServiceTest {
         assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 3));
         assertThrows(Exception.class, () -> service.consume(UUID.randomUUID(), "agt-target", intentId, 3));
         assertTrue(new PredictionEventStore(temp, project).workGroupProjection().groups().size() == 1);
+        service.close(groupId, WorkGroup.Status.COMPLETED, 1);
+        assertTrue(new PredictionEventStore(temp, project).workGroupProjection().group(groupId)
+                .orElseThrow().status() == WorkGroup.Status.COMPLETED);
     }
 }

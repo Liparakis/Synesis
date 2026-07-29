@@ -206,7 +206,9 @@ public enum PredictionEventType {
     /** Consumes a single-use lane grant. */
     LANE_GRANT_CONSUMED,
     /** Revokes a lane grant or lane authority epoch. */
-    LANE_REVOKED;
+    LANE_REVOKED,
+    /** Changes logical work-group lifecycle without closing sibling lanes. */
+    WORK_GROUP_STATUS_CHANGED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -227,6 +229,7 @@ public enum PredictionEventType {
             case LANE_GRANT_ISSUED -> 54;
             case LANE_GRANT_CONSUMED -> 55;
             case LANE_REVOKED -> 56;
+            case WORK_GROUP_STATUS_CHANGED -> 57;
             default -> ordinal();
         };
     }

@@ -74,6 +74,22 @@ public final class WorkGroupService {
         });
     }
 
+    /** Closes or cancels the logical group without releasing sibling lane claims.
+     * @param groupId group ID @param status terminal status @param expectedVersion current version
+     * @throws IOException invalid transition @throws GeneralSecurityException signing failure */
+    public void close(UUID groupId, WorkGroup.Status status, long expectedVersion)
+            throws IOException, GeneralSecurityException {
+        PredictionEventStore fresh = new PredictionEventStore(store.rootDirectory(), store.projectId());
+        WorkGroup current = fresh.workGroupProjection().group(groupId)
+                .orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));
+        if (current.version() != expectedVersion) throw new IOException("WORK_GROUP_VERSION_STALE");
+        if (status == WorkGroup.Status.ACTIVE) throw new IOException("GROUP_STATUS_INVALID");
+        WorkGroup update = new WorkGroup(groupId, current.projectId(), current.goal(), current.acceptance(),
+                current.version() + 1, status);
+        withLock(reloaded -> reloaded.append(groupId, PredictionEventType.WORK_GROUP_STATUS_CHANGED,
+                signer.nodeId(), CollaborationCodec.encodeWorkGroup(update), signer));
+    }
+
     @FunctionalInterface
     private interface AppendAction { void append(PredictionEventStore current) throws IOException, GeneralSecurityException; }
     private void withLock(AppendAction action) throws IOException, GeneralSecurityException {

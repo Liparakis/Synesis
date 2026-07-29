@@ -27,6 +27,7 @@ public final class WorkGroupProjection {
             case LANE_GRANT_ISSUED -> issue(CollaborationCodec.decodeLaneGrant(event.payload()));
             case LANE_GRANT_CONSUMED -> consume(CollaborationCodec.decodeLaneGrant(event.payload()).grantId());
             case LANE_REVOKED -> revoke(CollaborationCodec.decodeLaneGrant(event.payload()).grantId());
+            case WORK_GROUP_STATUS_CHANGED -> status(CollaborationCodec.decodeWorkGroup(event.payload()));
             case WORK_INTENT_ANNOUNCED -> {
                 WorkIntent intent = CollaborationCodec.decodeIntent(event.payload());
                 groups.putIfAbsent(intent.workGroupId(), new WorkGroup(intent.workGroupId(), intent.projectId(),
@@ -75,5 +76,11 @@ public final class WorkGroupProjection {
     private void revoke(UUID id) throws IOException {
         if (!grants.containsKey(id)) throw new IOException("LANE_GRANT_NOT_FOUND");
         revokedGrants.add(id);
+    }
+    private void status(WorkGroup update) throws IOException {
+        WorkGroup current = groups.get(update.workGroupId());
+        if (current == null) throw new IOException("WORK_GROUP_NOT_FOUND");
+        if (update.version() != current.version() + 1) throw new IOException("WORK_GROUP_VERSION_STALE");
+        groups.put(update.workGroupId(), update);
     }
 }

@@ -214,6 +214,16 @@ public final class WorkspaceCollaborationService {
         new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).revoke(grantId);
     }
 
+    /** Closes a logical work group without releasing sibling lane claims.
+     * @param projectRoot project root @param groupId group ID @param status terminal status
+     * @param expectedVersion current group version @throws Exception persistence failure */
+    public void closeWorkGroup(Path projectRoot, UUID groupId, WorkGroup.Status status, long expectedVersion) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity())
+                .close(groupId, status, expectedVersion);
+    }
+
     /** Publishes a signed shared contract revision for this project.
      * @param projectRoot project root
      * @param provider provider ID
