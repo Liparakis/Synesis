@@ -113,7 +113,7 @@ public final class IntegrationOrchestrationService {
 
             // Fail before creating any integration worktree when immutable snapshot
             // metadata already proves a stale base or overlapping change set.
-            List<String> metadataFailures = validateSnapshotMetadata(controlRoot, ordered, expectedControlHead);
+            List<String> metadataFailures = validateSnapshotMetadata(controlRoot, ordered, expectedControlHead, store);
             if (!metadataFailures.isEmpty()) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
                         AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failures", metadataFailures));
@@ -311,9 +311,14 @@ public final class IntegrationOrchestrationService {
         return false;
     }
 
-    private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots, String controlHead) {
+    private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots,
+            String controlHead, PredictionEventStore store) {
         Set<String> changed = new java.util.HashSet<>();
         List<String> failures = new ArrayList<>();
+        if (store.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING)) {
+            failures.add("UNRESOLVED_COORDINATION_REQUEST");
+        }
         for (TaskSnapshotRecord snapshot : snapshots) {
             if (!isAncestor(controlRoot, snapshot.baseCommit(), controlHead)) {
                 failures.add("STALE_BASE:" + snapshot.snapshotId());
@@ -345,6 +350,21 @@ public final class IntegrationOrchestrationService {
                     if (!referenced.equals(snapshot.commitSha())) failures.add("INVALID_PROVENANCE:" + snapshot.snapshotId());
                 } catch (Exception missing) {
                     failures.add("MISSING_SNAPSHOT_REF:" + snapshot.snapshotId());
+                }
+                for (String reference : snapshot.provenance().contractRevisions()) {
+                    int split = reference.lastIndexOf(':');
+                    if (split > 0 && reference.substring(0, split).matches("[0-9a-fA-F-]{36}")
+                            && reference.substring(split + 1).matches("[0-9]+")) {
+                        try {
+                            UUID contractId = UUID.fromString(reference.substring(0, split));
+                            long revision = Long.parseLong(reference.substring(split + 1));
+                            var contract = store.contractProjection().contract(contractId);
+                            if (contract == null || contract.revision() != revision
+                                    || contract.status() != org.synesis.coordination.domain.contract.ContractRecord.Status.ACTIVE) {
+                                failures.add("STALE_CONTRACT:" + snapshot.snapshotId());
+                            }
+                        } catch (RuntimeException invalid) { failures.add("INVALID_CONTRACT_PROVENANCE:" + snapshot.snapshotId()); }
+                    }
                 }
             }
         }
