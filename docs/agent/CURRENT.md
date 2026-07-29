@@ -80,6 +80,10 @@ passing.
 Activated collaboration publication now fails closed before snapshot
 persistence when a managed changed path is outside the caller's current exact
 path/subtree claims; the focused regression passes.
+The integration orchestration regression also proves an unresolved
+coordination request blocks before any integration-attempt event is appended.
+The post-regression Gradle check passes all 50 actionable tasks; bootstrap Go
+tests/vet, the deferred validator, and the 45-test task-tracker fixture pass.
 
 ## Work completed
 

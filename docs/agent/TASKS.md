@@ -1311,4 +1311,6 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   worktree; `7f78c29` runs the integrated candidate's pytest acceptance.
   `docs/validation/multi-chat-provider-acceptance.md` records the real-provider
   matrix and its explicit native-hook evidence boundary; `83d3b99` makes
-  activated-lane publication reject uncovered managed paths before persistence.
+  activated-lane publication reject uncovered managed paths before persistence;
+  `8cc4432` proves unresolved coordination blocks before an integration
+  attempt is appended.
