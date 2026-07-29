@@ -2,38 +2,38 @@
 
 ## Identity
 
-- Task ID: SYN-025
-- Status: DONE
-- Priority: P1
-- Started checkpoint: CP-0230
+- Task ID: SYN-027
+- Status: ACTIVE
+- Priority: P0
+- Started checkpoint: CP-0298
 - Responsible agent: primary architecture-closure engineer
-- Related decisions: ADR-0001, ADR-0008; no architecture change
+- Related decisions: ADR-0001, ADR-0008, ADR-0038, ADR-0039
 
 ## Objective
 
-Run bounded real-provider collaboration acceptance and record evidence without
-claiming unavailable auth, quota, or native-hook enforcement.
+Implement multi-chat logical workgroups with isolated mutation lanes, exact
+caller authority, immutable snapshots, and guarded integration.
 
 ## Immediate slice
 
-Validate provider sessions against the task-tracker acceptance and preserve
-clear MCP/native-hook evidence tiers.
+Phase 0 authorized SYN-027 and recorded ADR-0039. The next slice hardens exact
+calling-connection authority before introducing WorkGroup lane records.
 
 ## Verification target
 
-Two concurrent intents cannot acquire overlapping claims; unrelated claims can
-coexist; all selectors are acquired atomically; and existing event/session
-records replay without migration loss.
+Authority-sensitive operations resolve only the verified calling binding;
+stale, cross-binding, unclaimed, and incompatible integration paths fail closed.
 
 ## Immediate next action
 
-No collaboration roadmap task remains active; run
-`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
-any separately authorized future task.
+Implement Phase 1 exact-caller authority hardening, then record focused tests
+and checkpoint evidence before adding WorkGroup protocol records.
 
 ## Completion state
 
-The collaboration roadmap is complete at CP-0292. The installed distribution
+The collaboration roadmap is complete at CP-0292. SYN-026 is complete at the
+current checkpoint after fixing synthetic-check configuration leakage. The
+installed distribution
 includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
 initialize passes. Codex global MCP entry and the task-tracker Claude project
 entry point to that install. A real Codex CLI run completed `ensure_session`

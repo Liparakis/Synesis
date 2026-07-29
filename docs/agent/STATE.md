@@ -2,7 +2,7 @@
 
 ## Repository state
 
-Contract revision 1 is ACTIVE. SL-005 through SL-008 are complete;
+Contract revision 1 is ACTIVE. SYN-027 is ACTIVE under ADR-0039; SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
   DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and

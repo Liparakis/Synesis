@@ -1233,3 +1233,62 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   limitation is external and does not block completion.
 - Scope boundary: no remote publication, provider credential changes, or
   universal native-hook enforcement claim.
+
+## SYN-026
+
+- ID: SYN-026
+- Priority: P1
+- Title: Canonical provider MCP scope and legacy configuration migration
+- Status: DONE
+- Purpose: Ensure each provider installs one canonical Synesis MCP entry,
+  removes stale Synesis entries from legacy scopes, and preserves unrelated
+  provider configuration.
+- Dependencies: SYN-025 DONE; local distribution and provider lifecycle
+  services.
+- Acceptance criteria: Codex uses one global TOML Synesis entry while
+  preserving `other-server` and `node_repl`; Claude uses one project `.mcp.json`
+  entry; Antigravity uses one canonical provider-specific MCP config with an
+  explicit project root; reinstall is idempotent; legacy Synesis entries are
+  migrated without deleting unrelated settings; diagnostics identify the
+  effective scope and duplicates.
+- Required tests: Codex legacy JSON cleanup, TOML preservation, Claude
+  project-scope idempotence, Antigravity single-scope installation, duplicate
+  migration, and provider status/configuration parity.
+- Required documentation: provider-scope ADR, migration notes, checkpoint,
+  and updated provider configuration documentation.
+- Scope boundary: no MCP tool-surface change, no provider credential changes,
+  and no claim of native-hook enforcement.
+- Completion evidence: `:workspace:check` and focused provider tests pass;
+  `:cli:platformZip --rerun-tasks` rebuilt the local bundle; the stable launcher
+  now keeps Antigravity's explicit target project root after synthetic checks,
+  removes the obsolete global mirror, and preserves unrelated Codex entries.
+
+## SYN-027
+
+- ID: SYN-027
+- Priority: P0
+- Title: Multi-chat logical workgroups and isolated mutation lanes
+- Status: ACTIVE
+- Purpose: Support concurrent chats and independently authenticated subagents
+  under one durable logical work group while preserving one participant,
+  binding, lease, claim epoch, branch, and isolated worktree per mutation lane.
+- Dependencies: SYN-026 DONE; ADR-0039; existing exact-path/subtree claim,
+  session-binding, snapshot, contract, and guarded integration services.
+- Acceptance criteria: exact-caller authority is used by every
+  authority-sensitive operation; WorkGroup and LaneGrant records support
+  targeted joining, continuation, delegation, lane close/revocation, and
+  epoch fencing; legacy intents replay as singleton groups; uncommitted lane
+  changes publish as immutable provenance-bearing snapshots; cross-process
+  integration is claim-aware and contract-aware; two disjoint lanes mutate in
+  isolated worktrees and integrate; overlapping claims grant authority to one
+  lane; same-provider bindings cannot be crossed; no physical worktree is
+  concurrently mutated.
+- Required tests: exact-caller regressions, WorkGroup replay and grant
+  lifecycle, continuation replay rejection, delegated lanes, claim epochs,
+  uncommitted snapshot capture, out-of-claim rejection, cross-process
+  integration serialization, deterministic disjoint/overlap/close acceptance,
+  and existing event/session replay.
+- Required documentation: ADR-0039, updated collaboration architecture,
+  checkpoint evidence, provider limitations, and final acceptance report.
+- Scope boundary: no symbol claims, remote multi-user authority, shared
+  physical worktree, broker/database/service, or MCP tool-count change.
