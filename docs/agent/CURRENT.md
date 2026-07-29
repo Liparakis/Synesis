@@ -26,8 +26,8 @@ stale, cross-binding, unclaimed, and incompatible integration paths fail closed.
 
 ## Immediate next action
 
-Implement Phase 1 exact-caller authority hardening, then record focused tests
-and checkpoint evidence before adding WorkGroup protocol records.
+Implement the durable WorkGroup projection and targeted LaneGrant lifecycle;
+then add immutable lane snapshot provenance and integration acceptance.
 
 ## Completion state
 

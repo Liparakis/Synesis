@@ -1292,3 +1292,12 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   checkpoint evidence, provider limitations, and final acceptance report.
 - Scope boundary: no symbol claims, remote multi-user authority, shared
   physical worktree, broker/database/service, or MCP tool-count change.
+- Progress evidence: exact-caller authority is implemented in capability
+  request/response, publication, validation, collaboration, and mutation
+  paths at `4fe76ca`; WorkGroup/LaneGrant records and versioned intent replay
+  are implemented at `f50c45c`; cross-process integration serialization is
+  implemented at `ea5285b`; focused coordination and workspace suites pass.
+- Remaining implementation: durable WorkGroup projection and targeted grant
+  operations, immutable uncommitted lane snapshot materialization with full
+  provenance, claim/contract-aware orchestration wiring, and deterministic
+  two-lane integration acceptance.
