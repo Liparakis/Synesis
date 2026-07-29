@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.task.TaskSnapshotService;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -61,6 +62,22 @@ class TaskIntegrationServiceTest {
         assertEquals(List.of("README.md", "new.txt"), record.changedPaths());
         assertEquals("refs/synesis/snapshots/" + record.snapshotId(),
                 record.provenance().snapshotRef());
+    }
+
+    @Test
+    void claimedPublicationRejectsUncoveredManagedChanges(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.email", "test@example.invalid");
+        git(root, "config", "user.name", "Test");
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "base");
+        Files.writeString(root.resolve("README.md"), "unclaimed\n");
+        TaskSnapshotService service = new TaskSnapshotService();
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> service.createSnapshot(
+                UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "snapshot",
+                java.util.Optional.empty(), List.of(), List.of(ResourceSelector.pathExact("src/claimed.py")),
+                UUID.randomUUID(), UUID.randomUUID(), "agt_test", "lane", 1, List.of()));
     }
 
     private static void git(Path root, String... args) throws Exception {

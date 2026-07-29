@@ -166,6 +166,10 @@ public final class AgentTaskCompletionService {
             String participantHandle = WorkspaceCollaborationService.participantHandle(request.connectionInstanceId());
             var laneIntent = store.collaborationProjection().activeIntents().stream()
                     .filter(intent -> intent.participant().equals(participantHandle)).findFirst();
+            if (store.collaborationProjection().activated() && laneIntent.isEmpty()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED,
+                        AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
+            }
             List<ResourceSelector> currentClaims = laneIntent.map(intent -> intent.selectors()).orElse(List.of());
             Optional<TaskSnapshotRecord> existingOpt = store.taskCompletionProjection().findSnapshotForTask(taskId);
 

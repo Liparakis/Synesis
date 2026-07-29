@@ -153,6 +153,10 @@ public final class TaskSnapshotService {
         }
 
         List<String> changedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
+        if (!claims.isEmpty() && changedPaths.stream().anyMatch(path -> claims.stream()
+                .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
+            throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH");
+        }
         List<String> capabilityDependencies = new ArrayList<>();
         for (CapabilityRequestRecord cap : activeCapabilities) {
             capabilityDependencies.add(cap.handle().value());
