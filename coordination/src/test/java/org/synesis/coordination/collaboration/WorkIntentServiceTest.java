@@ -39,6 +39,25 @@ final class WorkIntentServiceTest {
     }
 
     @Test
+    void groupedIntentRoundTripsItsLogicalParentWhileLegacyIntentIsSingleton(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntent grouped = new WorkIntent(UUID.randomUUID(), project, "agt-grouped", "codex", UUID.randomUUID(),
+                "parallel work", "contract accepted", "base", List.of(ResourceSelector.pathExact("src/a.py")),
+                1, group, WorkIntent.Status.ANNOUNCED);
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        assertTrue(service.announce(grouped).acquired());
+        WorkIntent replayed = new PredictionEventStore(temp, project).collaborationProjection()
+                .activeIntents().getFirst();
+        assertEquals(group, replayed.workGroupId());
+        UUID legacyId = UUID.randomUUID();
+        assertEquals(legacyId, new WorkIntent(legacyId, project, "agt-legacy", "codex", UUID.randomUUID(),
+                "g", "a", "base", List.of(ResourceSelector.pathExact("src/b.py")), 1,
+                WorkIntent.Status.ANNOUNCED).workGroupId());
+    }
+
+    @Test
     void releaseRemovesClaimAndReplayPreservesActiveIntent(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         NodeIdentity identity = NodeIdentity.generate();
