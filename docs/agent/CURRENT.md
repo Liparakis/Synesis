@@ -77,6 +77,9 @@ requires it to pass. The final post-change Gradle check passes all 50
 actionable tasks with strict dependency verification; bootstrap Go tests/vet
 and the deferred validator pass; the task-tracker fixture remains 45/45
 passing.
+Activated collaboration publication now fails closed before snapshot
+persistence when a managed changed path is outside the caller's current exact
+path/subtree claims; the focused regression passes.
 
 ## Work completed
 
