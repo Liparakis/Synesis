@@ -8,25 +8,33 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-/** Explicitly releases the exact connection's active claims. */
-@Command(name = "release", description = "Release this session's claims.", mixinStandardHelpOptions = true)
+/** Releases the exact caller's collaboration lane and claims. */
+@Command(name = "release", description = "Release this connection's claims.", mixinStandardHelpOptions = true)
 public final class CollaborationReleaseCommand implements Callable<Integer> {
     private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".") private Path project;
-    @Option(names = "--provider", defaultValue = "codex") private String provider;
-    @Option(names = "--connection-instance-id", required = true) private String connectionInstanceId;
+    @Option(names = "--project", defaultValue = ".")
+    private Path project;
+    @Option(names = "--provider", defaultValue = "codex")
+    private String provider;
+    @Option(names = "--connection-instance-id", required = true)
+    private String connectionInstanceId;
 
     /** Creates the command.
-     * @param runtime CLI runtime
+     * @param runtime composed CLI runtime
      */
-    public CollaborationReleaseCommand(CliRuntime runtime) { this.runtime = runtime; }
+    public CollaborationReleaseCommand(CliRuntime runtime) {
+        this.runtime = runtime;
+    }
 
-    /** Executes release. @return process exit code */
-    @Override public Integer call() {
+    /** Executes the release.
+     * @return process exit code
+     */
+    @Override
+    public Integer call() {
         try {
             new WorkspaceCollaborationService().release(project.toAbsolutePath().normalize(), provider,
                     connectionInstanceId);
-            runtime.terminal().stdout("CLAIMS_RELEASED");
+            runtime.terminal().stdout("CLAIMS_RELEASED=true");
             return ExitCodes.OK;
         } catch (Exception failure) {
             runtime.terminal().stderr("COLLABORATION_ERROR=" + failure.getMessage());

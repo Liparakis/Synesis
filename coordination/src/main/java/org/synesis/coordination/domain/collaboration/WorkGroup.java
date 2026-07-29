@@ -4,11 +4,23 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Durable logical parent for related single-participant mutation lanes. */
+/** Durable logical parent for related single-participant mutation lanes.
+ *
+ * @param workGroupId group ID
+ * @param projectId project ID
+ * @param goal shared goal
+ * @param acceptance shared acceptance criteria
+ * @param version group version
+ * @param status lifecycle status
+ */
 public record WorkGroup(UUID workGroupId, UUID projectId, String goal, String acceptance,
                         long version, Status status) {
     /** Logical work-group lifecycle. */
-    public enum Status { ACTIVE, COMPLETED, CANCELLED }
+    public enum Status {
+        /** Group accepts new lane activity. */ ACTIVE,
+        /** Group completed. */ COMPLETED,
+        /** Group cancelled. */ CANCELLED
+    }
 
     /** Validates the bounded group identity and lifecycle. */
     public WorkGroup {

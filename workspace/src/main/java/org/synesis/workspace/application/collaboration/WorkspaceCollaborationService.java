@@ -55,9 +55,16 @@ public final class WorkspaceCollaborationService {
     }
 
     /** Announces an intent in an optional logical work group.
-     * @param projectRoot project root @param provider provider @param connectionInstanceId connection ID
-     * @param goal goal @param acceptance acceptance @param selectors claims @param workGroupId group ID
-     * @return claim result @throws Exception resolution or append failure */
+     * @param projectRoot project root
+     * @param provider provider
+     * @param connectionInstanceId connection ID
+     * @param goal goal
+     * @param acceptance acceptance
+     * @param selectors claims
+     * @param workGroupId group ID
+     * @return claim result
+     * @throws Exception resolution or append failure
+     */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
                                 String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId)
             throws Exception {
@@ -184,22 +191,48 @@ public final class WorkspaceCollaborationService {
     }
 
     /** Creates a logical work group through the shared coordination service.
-     * @param projectRoot project root @param group group @throws Exception persistence failure */
+     * @param projectRoot project root
+     * @param group group
+     * @throws Exception persistence failure
+     */
     public void createWorkGroup(Path projectRoot, WorkGroup group) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).create(group);
     }
 
-    /** Issues a targeted lane grant. @param projectRoot project root @param grant grant @throws Exception persistence failure */
+    /** Creates a logical work group using the project's authenticated identity.
+     * @param projectRoot project root
+     * @param groupId group ID
+     * @param goal shared goal
+     * @param acceptance shared acceptance criteria
+     * @throws Exception persistence failure
+     */
+    public void createWorkGroup(Path projectRoot, UUID groupId, String goal, String acceptance) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        createWorkGroup(projectRoot, new WorkGroup(groupId, location.projectId(), goal, acceptance, 1,
+                WorkGroup.Status.ACTIVE));
+    }
+
+    /** Issues a targeted lane grant.
+     * @param projectRoot project root
+     * @param grant grant
+     * @throws Exception persistence failure
+     */
     public void issueLaneGrant(Path projectRoot, LaneGrant grant) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).issue(grant);
     }
 
-    /** Consumes a targeted grant. @param projectRoot root @param grantId grant @param participant participant
-     * @param intentId intent @param epoch epoch @throws Exception persistence failure */
+    /** Consumes a targeted grant.
+     * @param projectRoot root
+     * @param grantId grant
+     * @param participant participant
+     * @param intentId intent
+     * @param epoch epoch
+     * @throws Exception persistence failure
+     */
     public void consumeLaneGrant(Path projectRoot, UUID grantId, String participant, UUID intentId, long epoch) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
@@ -207,7 +240,11 @@ public final class WorkspaceCollaborationService {
                 .consume(grantId, participant, intentId, epoch);
     }
 
-    /** Revokes a targeted grant. @param projectRoot root @param grantId grant @throws Exception persistence failure */
+    /** Revokes a targeted grant.
+     * @param projectRoot root
+     * @param grantId grant
+     * @throws Exception persistence failure
+     */
     public void revokeLaneGrant(Path projectRoot, UUID grantId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
@@ -215,8 +252,12 @@ public final class WorkspaceCollaborationService {
     }
 
     /** Closes a logical work group without releasing sibling lane claims.
-     * @param projectRoot project root @param groupId group ID @param status terminal status
-     * @param expectedVersion current group version @throws Exception persistence failure */
+     * @param projectRoot project root
+     * @param groupId group ID
+     * @param status terminal status
+     * @param expectedVersion current group version
+     * @throws Exception persistence failure
+     */
     public void closeWorkGroup(Path projectRoot, UUID groupId, WorkGroup.Status status, long expectedVersion) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
@@ -284,6 +325,8 @@ public final class WorkspaceCollaborationService {
      * @param intents intents
      * @param requests requests
      * @param participants participants
+     * @param groups logical work groups
+     * @param grants continuation grants
      */
     public record CollaborationSnapshot(List<WorkIntent> intents, List<CoordinationRequest> requests,
             List<Participant> participants, List<WorkGroup> groups, List<LaneGrant> grants) { }

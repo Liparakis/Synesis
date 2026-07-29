@@ -164,9 +164,9 @@ public final class AgentTaskCompletionService {
 
             List<CapabilityRequestRecord> workerCapabilities = store.capabilityRequestProjection().findAllForRequester(callerNodeId);
             String participantHandle = WorkspaceCollaborationService.participantHandle(request.connectionInstanceId());
-            List<ResourceSelector> currentClaims = store.collaborationProjection().activeIntents().stream()
-                    .filter(intent -> intent.participant().equals(participantHandle))
-                    .flatMap(intent -> intent.selectors().stream()).toList();
+            var laneIntent = store.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.participant().equals(participantHandle)).findFirst();
+            List<ResourceSelector> currentClaims = laneIntent.map(intent -> intent.selectors()).orElse(List.of());
             Optional<TaskSnapshotRecord> existingOpt = store.taskCompletionProjection().findSnapshotForTask(taskId);
 
             TaskSnapshotRecord snapshot;
@@ -174,7 +174,10 @@ public final class AgentTaskCompletionService {
                 snapshot = snapshotService.createSnapshot(
                         taskId, callerNodeId, callerSupervisorId, callerWorkerId,
                         binding.sessionId(), workerWorktreePath, location.root(),
-                        summaryText, existingOpt, workerCapabilities, currentClaims);
+                        summaryText, existingOpt, workerCapabilities, currentClaims,
+                        laneIntent.map(intent -> intent.workGroupId()).orElse(taskId),
+                        laneIntent.map(intent -> intent.intentId()).orElse(taskId), participantHandle,
+                        binding.sessionId(), laneIntent.map(intent -> intent.version()).orElse(1L), List.of());
             } catch (IllegalStateException immutabilityError) {
                 // Task snapshot is immutable and content changed after completion
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);

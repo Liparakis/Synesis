@@ -82,7 +82,12 @@ public final class AgentSessionService {
             }
         }
 
-        /** Backward-compatible intent constructor without a group. */
+        /** Backward-compatible intent constructor without a group.
+         * @param goal concise goal
+         * @param acceptance acceptance criteria
+         * @param likelyScopes likely scopes
+         * @param knownDependencies known dependencies
+         */
         public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes,
                 List<String> knownDependencies) {
             this(goal, acceptance, likelyScopes, knownDependencies, null);

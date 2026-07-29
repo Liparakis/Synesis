@@ -81,7 +81,19 @@ public record TaskSnapshotPayload(
         Objects.requireNonNull(provenance, "provenance");
     }
 
-    /** Backward-compatible payload constructor for legacy snapshot events. */
+    /** Backward-compatible payload constructor for legacy snapshot events.
+     * @param taskId task ID
+     * @param snapshotId snapshot ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId session ID
+     * @param baseCommit base commit
+     * @param commitSha commit SHA
+     * @param changedPaths changed paths
+     * @param capabilityDependencies dependencies
+     * @param summary summary
+     */
     public TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId, String supervisorId,
             String workerId, String providerSessionId, String baseCommit, String commitSha,
             List<String> changedPaths, List<String> capabilityDependencies, String summary) {

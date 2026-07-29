@@ -664,7 +664,8 @@ public final class McpProtocolHandler {
                         "description",
                         "Requester response type to owner revision: accept, counter, cancel"));
         describeProperties.put("collaborationOperation",
-                Map.of("type", "string", "enum", List.of("status", "publish", "bind", "request", "request_coordination", "handoff"),
+                Map.of("type", "string", "enum", List.of("status", "publish", "bind", "request", "request_coordination", "handoff",
+                        "work_group_create", "lane_grant_issue", "lane_grant_consume", "lane_grant_revoke", "work_group_close"),
                         "description", "Shared contract or coordination operation through the collaboration service"));
         describeProperties.put("collaborationContractId", Map.of("type", "string", "description", "UUID of shared contract"));
         describeProperties.put("collaborationIntentId", Map.of("type", "string", "description", "UUID of consuming intent"));
@@ -674,6 +675,16 @@ public final class McpProtocolHandler {
         describeProperties.put("collaborationRequestKind", Map.of("type", "string", "enum", List.of("CONTRACT", "HANDOFF", "SCOPE_REVISION")));
         describeProperties.put("collaborationProposal", Map.of("type", "string", "description", "Bounded coordination or handoff proposal"));
         describeProperties.put("collaborationTarget", Map.of("type", "string", "description", "Opaque participant target for handoff"));
+        describeProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+        describeProperties.put("grantId", Map.of("type", "string", "format", "uuid"));
+        describeProperties.put("intentId", Map.of("type", "string", "format", "uuid"));
+        describeProperties.put("targetParticipant", Map.of("type", "string"));
+        describeProperties.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
+        describeProperties.put("singleUse", Map.of("type", "boolean"));
+        describeProperties.put("collaborationGoal", Map.of("type", "string"));
+        describeProperties.put("collaborationAcceptance", Map.of("type", "string"));
+        describeProperties.put("groupStatus", Map.of("type", "string", "enum", List.of("COMPLETED", "CANCELLED")));
+        describeProperties.put("groupVersion", Map.of("type", "integer", "minimum", 1));
 
         Map<String, Object> describeSchema = new LinkedHashMap<>();
         describeSchema.put("type", "object");
@@ -1012,11 +1023,9 @@ public final class McpProtocolHandler {
                             }
                             case "work_group_create" -> {
                                 UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
-                                collaborationService.createWorkGroup(activeProjectRoot,
-                                        new WorkGroup(groupId, UUID.fromString(String.valueOf(arguments.get("projectId"))),
-                                                String.valueOf(arguments.getOrDefault("collaborationGoal", "")),
-                                                String.valueOf(arguments.getOrDefault("collaborationAcceptance", "")), 1,
-                                                WorkGroup.Status.ACTIVE));
+                                collaborationService.createWorkGroup(activeProjectRoot, groupId,
+                                        String.valueOf(arguments.getOrDefault("collaborationGoal", "")),
+                                        String.valueOf(arguments.getOrDefault("collaborationAcceptance", "")));
                                 yield Map.of("workGroupId", groupId.toString(), "status", "ACTIVE");
                             }
                             case "lane_grant_issue" -> {

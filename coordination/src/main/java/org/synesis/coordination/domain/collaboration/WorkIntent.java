@@ -27,7 +27,19 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          UUID workGroupId,
                          Status status) {
 
-    /** Backward-compatible singleton-group intent constructor. */
+    /** Backward-compatible singleton-group intent constructor.
+     * @param intentId intent ID
+     * @param projectId project ID
+     * @param participant participant
+     * @param provider provider
+     * @param taskId task ID
+     * @param goal goal
+     * @param acceptance acceptance
+     * @param baseCommit base commit
+     * @param selectors selectors
+     * @param version version
+     * @param status status
+     */
     public WorkIntent(UUID intentId, UUID projectId, String participant,
                       String provider, UUID taskId, String goal,
                       String acceptance, String baseCommit,

@@ -85,7 +85,20 @@ public record TaskSnapshotRecord(
         }
     }
 
-    /** Backward-compatible record constructor for legacy snapshot events. */
+    /** Backward-compatible record constructor for legacy snapshot events.
+     * @param taskId task ID
+     * @param snapshotId snapshot ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId session ID
+     * @param baseCommit base commit
+     * @param commitSha commit SHA
+     * @param changedPaths changed paths
+     * @param capabilityDependencies dependencies
+     * @param summary summary
+     * @param createdAtMillis creation timestamp
+     */
     public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
             String workerId, String providerSessionId, String baseCommit, String commitSha,
             List<String> changedPaths, List<String> capabilityDependencies, String summary,

@@ -269,7 +269,10 @@ public final class CollaborationCodec {
         return participant;
     }
 
-    /** Encodes a logical work group. @param group group @return canonical bytes */
+    /** Encodes a logical work group.
+     * @param group group to encode
+     * @return canonical bytes
+     */
     public static byte[] encodeWorkGroup(WorkGroup group) {
         try { ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
             out.writeInt(MAGIC_GROUP); uuid(out, group.workGroupId()); uuid(out, group.projectId());
@@ -278,7 +281,11 @@ public final class CollaborationCodec {
         } catch (IOException impossible) { throw new AssertionError(impossible); }
     }
 
-    /** Decodes a logical work group. @param encoded bytes @return group @throws IOException malformed payload */
+    /** Decodes a logical work group.
+     * @param encoded bytes to decode
+     * @return decoded group
+     * @throws IOException if the payload is malformed
+     */
     public static WorkGroup decodeWorkGroup(byte[] encoded) throws IOException {
         try { DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != MAGIC_GROUP) throw new IOException("unsupported group format");
@@ -289,7 +296,10 @@ public final class CollaborationCodec {
         } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed group", failure); }
     }
 
-    /** Encodes a targeted lane grant. @param grant grant @return canonical bytes */
+    /** Encodes a targeted lane grant.
+     * @param grant grant to encode
+     * @return canonical bytes
+     */
     public static byte[] encodeLaneGrant(LaneGrant grant) {
         try { ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
             out.writeInt(MAGIC_GRANT); uuid(out, grant.grantId()); uuid(out, grant.workGroupId()); uuid(out, grant.targetIntentId());
@@ -298,7 +308,11 @@ public final class CollaborationCodec {
         } catch (IOException impossible) { throw new AssertionError(impossible); }
     }
 
-    /** Decodes a targeted lane grant. @param encoded bytes @return grant @throws IOException malformed payload */
+    /** Decodes a targeted lane grant.
+     * @param encoded bytes to decode
+     * @return decoded grant
+     * @throws IOException if the payload is malformed
+     */
     public static LaneGrant decodeLaneGrant(byte[] encoded) throws IOException {
         try { DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != MAGIC_GRANT) throw new IOException("unsupported grant format");

@@ -19,7 +19,13 @@ public final class WorkGroupProjection {
     private final Set<UUID> consumedGrants = new HashSet<>();
     private final Set<UUID> revokedGrants = new HashSet<>();
 
-    /** Applies one group or grant event. @param event signed event @throws IOException malformed transition */
+    /** Creates an empty projection. */
+    public WorkGroupProjection() { }
+
+    /** Applies one group or grant event.
+     * @param event signed event
+     * @throws IOException malformed transition
+     */
     public synchronized void apply(PredictionEvent event) throws IOException {
         Objects.requireNonNull(event, "event");
         switch (event.type()) {
@@ -37,7 +43,10 @@ public final class WorkGroupProjection {
         }
     }
 
-    /** Validates one event without mutating this projection. @param event event @throws IOException invalid transition */
+    /** Validates one event without mutating this projection.
+     * @param event event
+     * @throws IOException invalid transition
+     */
     public synchronized void validate(PredictionEvent event) throws IOException {
         WorkGroupProjection copy = new WorkGroupProjection();
         copy.groups.putAll(groups); copy.grants.putAll(grants);
@@ -45,13 +54,21 @@ public final class WorkGroupProjection {
         copy.apply(event);
     }
 
-    /** Returns all logical groups. @return groups */
+    /** Returns all logical groups.
+     * @return groups */
     public synchronized List<WorkGroup> groups() { return List.copyOf(groups.values()); }
-    /** Returns one group. @param id group ID @return group when present */
+    /** Returns one group.
+     * @param id group ID
+     * @return group when present
+     */
     public synchronized Optional<WorkGroup> group(UUID id) { return Optional.ofNullable(groups.get(id)); }
-    /** Returns all issued grants. @return grants */
+    /** Returns all issued grants.
+     * @return grants */
     public synchronized List<LaneGrant> grants() { return List.copyOf(grants.values()); }
-    /** Returns whether a grant remains consumable. @param id grant ID @return true when active */
+    /** Returns whether a grant remains consumable.
+     * @param id grant ID
+     * @return true when active
+     */
     public synchronized boolean grantAvailable(UUID id) {
         return grants.containsKey(id) && !consumedGrants.contains(id) && !revokedGrants.contains(id);
     }

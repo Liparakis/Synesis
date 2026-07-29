@@ -17,14 +17,20 @@ public final class WorkGroupService {
     private final PredictionEventStore store;
     private final NodeIdentity signer;
 
-    /** Creates a service for one signed project log. @param store event store @param signer signer */
+    /** Creates a service for one signed project log.
+     * @param store event store
+     * @param signer signer
+     */
     public WorkGroupService(PredictionEventStore store, NodeIdentity signer) {
         this.store = Objects.requireNonNull(store, "store");
         this.signer = Objects.requireNonNull(signer, "signer");
     }
 
-    /** Creates one logical group. @param group group @throws IOException persistence failure
-     * @throws GeneralSecurityException signing failure */
+    /** Creates one logical group.
+     * @param group group
+     * @throws IOException persistence failure
+     * @throws GeneralSecurityException signing failure
+     */
     public void create(WorkGroup group) throws IOException, GeneralSecurityException {
         Objects.requireNonNull(group, "group");
         if (!store.projectId().equals(group.projectId())) throw new IllegalArgumentException("group project mismatch");
@@ -33,7 +39,10 @@ public final class WorkGroupService {
     }
 
     /** Issues a targeted, optionally single-use lane continuation grant.
-     * @param grant grant @throws IOException persistence failure @throws GeneralSecurityException signing failure */
+     * @param grant grant
+     * @throws IOException persistence failure
+     * @throws GeneralSecurityException signing failure
+     */
     public void issue(LaneGrant grant) throws IOException, GeneralSecurityException {
         Objects.requireNonNull(grant, "grant");
         withLock(current -> current.append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED,
@@ -41,9 +50,13 @@ public final class WorkGroupService {
     }
 
     /** Consumes a grant for the exact target participant and expected epoch.
-     * @param grantId grant ID @param participant target participant @param intentId target intent
-     * @param expectedEpoch expected claim epoch @throws IOException invalid grant
-     * @throws GeneralSecurityException signing failure */
+     * @param grantId grant ID
+     * @param participant target participant
+     * @param intentId target intent
+     * @param expectedEpoch expected claim epoch
+     * @throws IOException invalid grant
+     * @throws GeneralSecurityException signing failure
+     */
     public void consume(UUID grantId, String participant, UUID intentId, long expectedEpoch)
             throws IOException, GeneralSecurityException {
         Objects.requireNonNull(grantId, "grantId");
@@ -61,8 +74,11 @@ public final class WorkGroupService {
         });
     }
 
-    /** Revokes a grant owner-independently. @param grantId grant ID @throws IOException invalid grant
-     * @throws GeneralSecurityException signing failure */
+    /** Revokes a grant owner-independently.
+     * @param grantId grant ID
+     * @throws IOException invalid grant
+     * @throws GeneralSecurityException signing failure
+     */
     public void revoke(UUID grantId) throws IOException, GeneralSecurityException {
         Objects.requireNonNull(grantId, "grantId");
         withLock(current -> {
@@ -75,8 +91,12 @@ public final class WorkGroupService {
     }
 
     /** Closes or cancels the logical group without releasing sibling lane claims.
-     * @param groupId group ID @param status terminal status @param expectedVersion current version
-     * @throws IOException invalid transition @throws GeneralSecurityException signing failure */
+     * @param groupId group ID
+     * @param status terminal status
+     * @param expectedVersion current version
+     * @throws IOException invalid transition
+     * @throws GeneralSecurityException signing failure
+     */
     public void close(UUID groupId, WorkGroup.Status status, long expectedVersion)
             throws IOException, GeneralSecurityException {
         PredictionEventStore fresh = new PredictionEventStore(store.rootDirectory(), store.projectId());

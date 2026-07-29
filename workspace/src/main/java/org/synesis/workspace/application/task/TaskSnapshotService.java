@@ -67,15 +67,58 @@ public final class TaskSnapshotService {
     }
 
     /** Creates a snapshot while recording the lane's current resource claims.
-     * @param taskId task ID @param nodeId node ID @param supervisorId supervisor ID @param workerId worker ID
-     * @param providerSessionId binding ID @param workerWorktreePath lane worktree @param controlRoot project root
-     * @param summary summary @param existingOpt existing snapshot @param activeCapabilities capability dependencies
-     * @param claims current exact-path/subtree claims @return immutable snapshot @throws IOException Git failure */
+     * @param taskId task ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId binding ID
+     * @param workerWorktreePath lane worktree
+     * @param controlRoot project root
+     * @param summary summary
+     * @param existingOpt existing snapshot
+     * @param activeCapabilities capability dependencies
+     * @param claims current exact-path/subtree claims
+     * @return immutable snapshot
+     * @throws IOException Git failure
+     */
     public TaskSnapshotRecord createSnapshot(
             UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
             Path workerWorktreePath, Path controlRoot, String summary,
             Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
             List<ResourceSelector> claims
+    ) throws IOException {
+        return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId,
+                workerWorktreePath, controlRoot, summary, existingOpt, activeCapabilities, claims,
+                taskId, taskId, nodeId, providerSessionId, 1, List.of());
+    }
+
+    /** Creates a snapshot while recording explicit logical-lane provenance.
+     * @param taskId task ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId binding ID
+     * @param workerWorktreePath lane worktree
+     * @param controlRoot project root
+     * @param summary summary
+     * @param existingOpt existing snapshot
+     * @param activeCapabilities capability dependencies
+     * @param claims current exact-path/subtree claims
+     * @param workGroupId logical work-group ID
+     * @param laneId mutation-lane intent ID
+     * @param participant opaque participant handle
+     * @param bindingIdentity exact binding identity
+     * @param claimEpoch current claim epoch
+     * @param handoffLineage handoff references
+     * @return immutable snapshot
+     * @throws IOException Git failure
+     */
+    public TaskSnapshotRecord createSnapshot(
+            UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
+            Path workerWorktreePath, Path controlRoot, String summary,
+            Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
+            List<ResourceSelector> claims, UUID workGroupId, UUID laneId, String participant,
+            String bindingIdentity, long claimEpoch, List<String> handoffLineage
     ) throws IOException {
         Objects.requireNonNull(taskId, "taskId");
         Objects.requireNonNull(nodeId, "nodeId");
@@ -115,8 +158,8 @@ public final class TaskSnapshotService {
             capabilityDependencies.add(cap.handle().value());
         }
 
-        SnapshotProvenance provenance = new SnapshotProvenance(taskId, taskId, nodeId,
-                providerSessionId, 1, capabilityDependencies, List.of(),
+        SnapshotProvenance provenance = new SnapshotProvenance(workGroupId, laneId, participant,
+                bindingIdentity, claimEpoch, capabilityDependencies, handoffLineage,
                 claims.stream().map(selector -> selector.kind().name() + ":" + selector.value()).toList(),
                 "refs/synesis/snapshots/" + snapshotId, integrity(commitSha, changedPaths));
         return new TaskSnapshotRecord(
@@ -154,6 +197,9 @@ public final class TaskSnapshotService {
             for (String line : output.split("\\r?\\n")) {
                 String trimmed = line.trim();
                 if (!trimmed.isBlank()) {
+                    if (!isSnapshotManagedPath(trimmed)) {
+                        continue;
+                    }
                     if (!paths.contains(trimmed)) paths.add(trimmed);
                     if (paths.size() >= TaskSnapshotRecord.MAX_CHANGED_PATHS) {
                         break;
@@ -171,7 +217,10 @@ public final class TaskSnapshotService {
         Files.deleteIfExists(index);
         try {
             runGitWithIndex(workdir, index, "read-tree", parent);
-            runGitWithIndex(workdir, index, "add", "-A");
+            // Provider/session metadata belongs to the lane runtime, never to a
+            // published source snapshot.  Keep it at the parent tree value.
+            runGitWithIndex(workdir, index, "add", "-A", "--", ".",
+                    ":(exclude).synesis/**", ":(exclude).codex/**");
             String tree = runGitWithIndexOutput(workdir, index, "write-tree");
             String commit = runGitWithIndexOutput(workdir, index, "commit-tree", tree, "-p", parent, "-m", "Synesis immutable lane snapshot");
             runGitOutput(workdir, "update-ref", "refs/synesis/snapshots/" + snapshotId, commit);
@@ -179,6 +228,11 @@ public final class TaskSnapshotService {
         } finally {
             Files.deleteIfExists(index);
         }
+    }
+
+    private static boolean isSnapshotManagedPath(String path) {
+        return !(path.equals(".synesis") || path.startsWith(".synesis/")
+                || path.equals(".codex") || path.startsWith(".codex/"));
     }
 
     private static String integrity(String commit, List<String> paths) {
