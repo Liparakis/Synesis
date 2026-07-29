@@ -183,7 +183,7 @@ public final class TaskCompletionProjection {
                 payload.taskId(), payload.snapshotId(), payload.nodeId(), payload.supervisorId(),
                 payload.workerId(), payload.providerSessionId(), payload.baseCommit(), payload.commitSha(),
                 payload.changedPaths(), payload.capabilityDependencies(), payload.summary(),
-                event.createdAtEpochMillis());
+                event.createdAtEpochMillis(), payload.provenance());
 
         snapshotsByTask.put(payload.taskId(), rec);
         snapshotsById.put(payload.snapshotId(), rec);

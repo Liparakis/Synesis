@@ -323,6 +323,16 @@ public final class IntegrationOrchestrationService {
                     failures.add("OVERLAPPING_SNAPSHOT:" + normalized);
                 }
             }
+            if (snapshot.provenance() == null) {
+                failures.add("MISSING_PROVENANCE:" + snapshot.snapshotId());
+            } else if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
+                try {
+                    String referenced = runGitOutput(controlRoot, "rev-parse", snapshot.provenance().snapshotRef());
+                    if (!referenced.equals(snapshot.commitSha())) failures.add("INVALID_PROVENANCE:" + snapshot.snapshotId());
+                } catch (Exception missing) {
+                    failures.add("MISSING_SNAPSHOT_REF:" + snapshot.snapshotId());
+                }
+            }
         }
         return List.copyOf(failures);
     }

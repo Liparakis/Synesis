@@ -180,7 +180,7 @@ public final class AgentTaskCompletionService {
                 TaskSnapshotPayload snapPayload = new TaskSnapshotPayload(
                         snapshot.taskId(), snapshot.snapshotId(), snapshot.nodeId(), snapshot.supervisorId(),
                         snapshot.workerId(), snapshot.providerSessionId(), snapshot.baseCommit(), snapshot.commitSha(),
-                        snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary());
+                        snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary(), snapshot.provenance());
 
                 store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED,
                         callerNodeId, snapPayload.encode(), identity);

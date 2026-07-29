@@ -22,6 +22,7 @@ import java.util.UUID;
  * @param capabilityDependencies list of validated capability request handles this task depends on
  * @param summary                human-readable task completion summary
  * @param createdAtMillis        creation timestamp
+ * @param provenance             immutable lane provenance
  * @since 1.0
  */
 public record TaskSnapshotRecord(
@@ -36,7 +37,8 @@ public record TaskSnapshotRecord(
         List<String> changedPaths,
         List<String> capabilityDependencies,
         String summary,
-        long createdAtMillis
+        long createdAtMillis,
+        SnapshotProvenance provenance
 ) {
 
     /** Maximum number of changed paths per snapshot. */
@@ -60,6 +62,7 @@ public record TaskSnapshotRecord(
      * @param capabilityDependencies list of capability dependencies
      * @param summary                human-readable summary
      * @param createdAtMillis        creation timestamp
+     * @param provenance             immutable lane provenance
      */
     public TaskSnapshotRecord {
         Objects.requireNonNull(taskId, "taskId");
@@ -73,11 +76,23 @@ public record TaskSnapshotRecord(
         changedPaths = List.copyOf(Objects.requireNonNull(changedPaths, "changedPaths"));
         capabilityDependencies = List.copyOf(Objects.requireNonNull(capabilityDependencies, "capabilityDependencies"));
         Objects.requireNonNull(summary, "summary");
+        Objects.requireNonNull(provenance, "provenance");
         if (changedPaths.size() > MAX_CHANGED_PATHS) {
             throw new IllegalArgumentException("too many changed paths (max " + MAX_CHANGED_PATHS + ")");
         }
         if (summary.isBlank() || summary.length() > MAX_SUMMARY_LENGTH) {
             throw new IllegalArgumentException("summary must be 1-" + MAX_SUMMARY_LENGTH + " characters");
         }
+    }
+
+    /** Backward-compatible record constructor for legacy snapshot events. */
+    public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
+            String workerId, String providerSessionId, String baseCommit, String commitSha,
+            List<String> changedPaths, List<String> capabilityDependencies, String summary,
+            long createdAtMillis) {
+        this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
+                commitSha, changedPaths, capabilityDependencies, summary, createdAtMillis,
+                new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
+                        capabilityDependencies, List.of(), commitSha, commitSha));
     }
 }

@@ -28,6 +28,7 @@ import java.util.UUID;
  * @param changedPaths           list of changed paths
  * @param capabilityDependencies list of capability request handles
  * @param summary                task completion summary
+ * @param provenance             immutable lane provenance
  * @since 1.0
  */
 public record TaskSnapshotPayload(
@@ -41,11 +42,12 @@ public record TaskSnapshotPayload(
         String commitSha,
         List<String> changedPaths,
         List<String> capabilityDependencies,
-        String summary
+        String summary,
+        SnapshotProvenance provenance
 ) {
 
     private static final int MAGIC = 0x534E4150; // "SNAP"
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final int MAX_TEXT = 64 * 1024;
 
     /**
@@ -62,6 +64,7 @@ public record TaskSnapshotPayload(
      * @param changedPaths           list of changed paths
      * @param capabilityDependencies list of capability dependencies
      * @param summary                task completion summary
+     * @param provenance             immutable lane provenance
      */
     public TaskSnapshotPayload {
         Objects.requireNonNull(taskId, "taskId");
@@ -75,6 +78,17 @@ public record TaskSnapshotPayload(
         changedPaths = List.copyOf(Objects.requireNonNull(changedPaths, "changedPaths"));
         capabilityDependencies = List.copyOf(Objects.requireNonNull(capabilityDependencies, "capabilityDependencies"));
         Objects.requireNonNull(summary, "summary");
+        Objects.requireNonNull(provenance, "provenance");
+    }
+
+    /** Backward-compatible payload constructor for legacy snapshot events. */
+    public TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId, String supervisorId,
+            String workerId, String providerSessionId, String baseCommit, String commitSha,
+            List<String> changedPaths, List<String> capabilityDependencies, String summary) {
+        this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
+                commitSha, changedPaths, capabilityDependencies, summary,
+                new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
+                        capabilityDependencies, List.of(), commitSha, commitSha));
     }
 
     /**
@@ -106,6 +120,15 @@ public record TaskSnapshotPayload(
                 writeText(out, dep);
             }
             writeText(out, summary);
+            writeUuid(out, provenance.workGroupId());
+            writeUuid(out, provenance.laneId());
+            writeText(out, provenance.participant());
+            writeText(out, provenance.bindingIdentity());
+            out.writeLong(provenance.claimEpoch());
+            writeList(out, provenance.contractRevisions());
+            writeList(out, provenance.handoffLineage());
+            writeText(out, provenance.snapshotRef());
+            writeText(out, provenance.integrityEvidence());
             out.flush();
             return bytes.toByteArray();
         } catch (IOException impossible) {
@@ -124,9 +147,11 @@ public record TaskSnapshotPayload(
         Objects.requireNonNull(encoded, "encoded payload");
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-            if (in.readInt() != MAGIC || in.readInt() != VERSION) {
+            if (in.readInt() != MAGIC) {
                 throw new IOException("Unsupported task snapshot payload format");
             }
+            int version = in.readInt();
+            if (version < 1 || version > VERSION) throw new IOException("Unsupported task snapshot payload version");
             UUID taskId = readUuid(in);
             String snapshotId = readText(in);
             String nodeId = readText(in);
@@ -149,8 +174,20 @@ public record TaskSnapshotPayload(
             }
 
             String summary = readText(in);
+            SnapshotProvenance provenance;
+            if (version == 1) {
+                provenance = new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
+                        deps, List.of(), commitSha, commitSha);
+            } else {
+                UUID group = readUuid(in), lane = readUuid(in);
+                String participant = readText(in), binding = readText(in);
+                long epoch = in.readLong();
+                List<String> contracts = readList(in), lineage = readList(in);
+                provenance = new SnapshotProvenance(group, lane, participant, binding, epoch,
+                        contracts, lineage, readText(in), readText(in));
+            }
             return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,
-                    providerSessionId, baseCommit, commitSha, changedPaths, deps, summary);
+                    providerSessionId, baseCommit, commitSha, changedPaths, deps, summary, provenance);
         } catch (RuntimeException failure) {
             throw new IOException("Malformed task snapshot payload", failure);
         }
@@ -184,5 +221,18 @@ public record TaskSnapshotPayload(
             throw new IOException("Truncated payload");
         }
         return new String(b, StandardCharsets.UTF_8);
+    }
+
+    private static void writeList(DataOutputStream out, List<String> values) throws IOException {
+        out.writeInt(values.size());
+        for (String value : values) writeText(out, value);
+    }
+
+    private static List<String> readList(DataInputStream in) throws IOException {
+        int count = in.readInt();
+        if (count < 0 || count > 128) throw new IOException("list bound");
+        List<String> values = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) values.add(readText(in));
+        return values;
     }
 }

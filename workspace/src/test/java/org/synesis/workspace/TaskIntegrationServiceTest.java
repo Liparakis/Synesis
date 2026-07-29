@@ -2,6 +2,9 @@ package org.synesis.workspace;
 
 import java.util.List;
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.task.TaskSnapshotService;
@@ -36,5 +39,45 @@ class TaskIntegrationServiceTest {
     void taskSnapshotServiceInstantiates() {
         TaskSnapshotService service = new TaskSnapshotService();
         assertNotNull(service);
+    }
+
+    @Test
+    void dirtyLaneProducesImmutableSnapshotIncludingUntrackedChanges(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.email", "test@example.invalid");
+        git(root, "config", "user.name", "Test");
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "base");
+        String head = gitOutput(root, "rev-parse", "HEAD");
+        Files.writeString(root.resolve("README.md"), "changed\n");
+        Files.writeString(root.resolve("new.txt"), "new\n");
+
+        TaskSnapshotRecord record = new TaskSnapshotService().createSnapshot(
+                UUID.randomUUID(), "node", "supervisor", "worker", "lane",
+                root, root, "snapshot", java.util.Optional.empty(), List.of());
+        assertNotNull(record.commitSha());
+        org.junit.jupiter.api.Assertions.assertNotEquals(head, record.commitSha());
+        assertEquals(List.of("README.md", "new.txt"), record.changedPaths());
+        assertEquals("refs/synesis/snapshots/" + record.snapshotId(),
+                record.provenance().snapshotRef());
+    }
+
+    private static void git(Path root, String... args) throws Exception {
+        Process process = new ProcessBuilder(withGit(args)).directory(root.toFile()).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        if (process.waitFor() != 0) throw new IllegalStateException(output);
+    }
+
+    private static String gitOutput(Path root, String... args) throws Exception {
+        Process process = new ProcessBuilder(withGit(args)).directory(root.toFile()).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes()).trim();
+        if (process.waitFor() != 0) throw new IllegalStateException(output);
+        return output;
+    }
+
+    private static String[] withGit(String[] args) {
+        String[] command = new String[args.length + 1]; command[0] = "git";
+        System.arraycopy(args, 0, command, 1, args.length); return command;
     }
 }
