@@ -18,6 +18,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
@@ -69,6 +70,20 @@ public final class IntegrationOrchestrationService {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(store, "store");
         Objects.requireNonNull(identity, "identity");
+
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
+                        AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
+            }
+            return orchestrateIntegrationLocked(controlRoot, store, identity);
+        } catch (IOException failure) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
+                    AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
+        }
+    }
+
+    private AgentResponse orchestrateIntegrationLocked(Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
 
         synchronized (INTEGRATION_LOCK) {
             List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().allSnapshots();
