@@ -140,9 +140,12 @@ out-of-band mutations. Integration occurs only through a dedicated integration
 worktree; it must not mutate the control checkout before all checks pass.
 
 Exact-caller authority, dirty-lane snapshot materialization, immutable snapshot
-refs, provenance encoding, claim-selector recording, and cross-process
-integration serialization are implemented. Full contract-revision invalidation
-and unresolved-request integration checks remain follow-up work.
+refs, provenance encoding, claim-selector recording, provider-metadata
+exclusion, and cross-process integration serialization are implemented. The
+deterministic acceptance publishes two disjoint dirty lane snapshots and
+integrates them in a dedicated worktree. Contract-revision and unresolved-
+request rejection rules exist in the integration gate; broader regression
+coverage and provider-lifecycle close/revocation wiring remain follow-up work.
 
 ## First parallel-collaboration milestone
 

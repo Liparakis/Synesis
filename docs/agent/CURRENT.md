@@ -16,8 +16,10 @@ caller authority, immutable snapshots, and guarded integration.
 
 ## Immediate slice
 
-Phase 0 authorized SYN-027 and recorded ADR-0039. The next slice hardens exact
-calling-connection authority before introducing WorkGroup lane records.
+Phase 0 through deterministic two-lane snapshot integration are implemented.
+The next slice broadens integration rejection coverage for stale contracts and
+unresolved coordination requests, then verifies provider-lifecycle close and
+revocation paths.
 
 ## Verification target
 
@@ -26,8 +28,9 @@ stale, cross-binding, unclaimed, and incompatible integration paths fail closed.
 
 ## Immediate next action
 
-Complete provider-lifecycle lane close/revocation wiring and contract-aware
-integration checks, then run the two-snapshot integration acceptance.
+Add focused integration tests for stale contract revisions and unresolved
+coordination requests, then verify exact-lane close/revocation release and
+re-run the full validation matrix.
 
 ## Completion state
 
@@ -63,6 +66,13 @@ passes (50 actionable tasks).
 Real Claude also inspected the published contract projection successfully,
 including revision, supersession, selector, and content-hash fields.
 Deterministic MCP tests now cover both publish and status JSON projections.
+The isolated two-chat acceptance now publishes two dirty lane snapshots with
+explicit work-group, lane, participant, binding, epoch, claim, and snapshot
+provenance; provider metadata is excluded from source snapshots and both
+snapshots integrate into a dedicated worktree successfully. The CLI exposes
+the shared exact-lane release operation and MCP collaboration schemas describe
+work-group and lane-grant lifecycle operations without changing the 11-tool
+surface.
 
 ## Work completed
 

@@ -1298,10 +1298,14 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   are implemented at `f50c45c`; cross-process integration serialization is
   implemented at `ea5285b`; focused coordination and workspace suites pass.
 - Remaining implementation: complete provider-lifecycle lane close/revocation
-  wiring, contract-revision and unresolved-request integration checks, and a
-  deterministic two-snapshot integration acceptance covering final tests.
+  wiring and broaden deterministic integration-gate coverage for contract
+  invalidation and unresolved coordination requests.
 - Additional evidence: `acd909c` adds replayed WorkGroup/LaneGrant lifecycle;
   `56a3ca5` and `8db7f52` materialize dirty lane snapshots, record claims and
   provenance, and validate snapshot refs at integration; `394c76e` exposes
   work-group joining and grant operations through shared CLI/MCP adapters;
-  `58b0f05` passes the isolated two-chat same-provider acceptance fixture.
+  `58b0f05` passes the isolated two-chat same-provider acceptance fixture;
+  `1d6bc71` records explicit lane provenance, excludes provider metadata from
+  immutable snapshots, adds release CLI parity, expands MCP collaboration
+  schemas, and integrates two independent lane snapshots in a dedicated
+  worktree.
