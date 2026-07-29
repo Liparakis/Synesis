@@ -65,5 +65,7 @@ implementation evidence.
   dccea2c43ad6`, then released it with empty claims. No file was modified.
 - Antigravity CLI `1.1.8` is installed, but its bounded probe repeatedly
   returned `workspace_not_ready` because the harness reported no active
-  workspace. Existing direct MCP evidence remains separate from native-hook
-  maturity.
+  workspace. A bounded `--new-project` retry entered Antigravity's project
+  onboarding prompt instead of exposing the existing project's MCP session;
+  no claim was established. Existing direct MCP evidence remains separate from
+  native-hook maturity.
