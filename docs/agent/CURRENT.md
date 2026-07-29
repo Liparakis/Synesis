@@ -17,9 +17,8 @@ caller authority, immutable snapshots, and guarded integration.
 ## Immediate slice
 
 Phase 0 through deterministic two-lane snapshot integration are implemented.
-The next slice broadens integration rejection coverage for stale contracts and
-unresolved coordination requests, then verifies provider-lifecycle close and
-revocation paths.
+The next slice verifies provider-lifecycle close and revocation paths and
+audits the remaining real-provider acceptance boundary.
 
 ## Verification target
 
@@ -28,9 +27,9 @@ stale, cross-binding, unclaimed, and incompatible integration paths fail closed.
 
 ## Immediate next action
 
-Add focused integration tests for stale contract revisions and unresolved
-coordination requests, then verify exact-lane close/revocation release and
-re-run the full validation matrix.
+Verify exact-lane close/revocation release paths against completion,
+cancellation, and reconciliation, then run the real-provider checklist when
+the installed harnesses and quotas are available.
 
 ## Completion state
 

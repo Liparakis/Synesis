@@ -1297,9 +1297,9 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   paths at `4fe76ca`; WorkGroup/LaneGrant records and versioned intent replay
   are implemented at `f50c45c`; cross-process integration serialization is
   implemented at `ea5285b`; focused coordination and workspace suites pass.
-- Remaining implementation: complete provider-lifecycle lane close/revocation
-  wiring and broaden deterministic integration-gate coverage for contract
-  invalidation and unresolved coordination requests.
+- Remaining implementation: verify provider-lifecycle lane close/revocation
+  wiring and execute the real-provider acceptance matrix when external harness
+  credentials and quotas permit.
 - Additional evidence: `acd909c` adds replayed WorkGroup/LaneGrant lifecycle;
   `56a3ca5` and `8db7f52` materialize dirty lane snapshots, record claims and
   provenance, and validate snapshot refs at integration; `394c76e` exposes
