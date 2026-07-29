@@ -94,7 +94,10 @@ direct Synesis stdio initialization working, but its bounded real CLI probe
 cancelled both `ensure_session` calls before a claim was established. Claude
 Code `2.1.220` remains blocked by a malformed global MCP file using `servers`
 instead of `mcpServers`; Antigravity `1.1.8` was present but no new multi-chat
-row was run. These are provider-boundary evidence only.
+row was run. A bounded Claude probe using an ephemeral valid MCP config did
+successfully acquire and release an exact claim without file mutation. The
+Antigravity probe repeatedly returned `workspace_not_ready` because no active
+workspace was available. These are provider-boundary evidence only.
 
 ## Work completed
 

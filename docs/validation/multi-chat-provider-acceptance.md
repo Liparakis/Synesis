@@ -60,6 +60,10 @@ implementation evidence.
 - Claude Code `2.1.220` is installed, but its global MCP file currently uses
   `servers` instead of the required `mcpServers` key. Claude reports that MCP
   configuration as unparsable; no real collaboration row is claimed.
-- Antigravity CLI `1.1.8` is installed, but no bounded multi-chat row was run
-  in this execution. Existing direct MCP evidence remains separate from
-  native-hook maturity.
+- Claude's bounded probe succeeded when given an ephemeral valid MCP config:
+  it acquired the exact claim as participant `agt_c015f69d-27cc-35ef-b5bb-
+  dccea2c43ad6`, then released it with empty claims. No file was modified.
+- Antigravity CLI `1.1.8` is installed, but its bounded probe repeatedly
+  returned `workspace_not_ready` because the harness reported no active
+  workspace. Existing direct MCP evidence remains separate from native-hook
+  maturity.
