@@ -100,7 +100,7 @@ The planned `WorkGroup` parent may be referenced by an optional versioned
 `workGroupId` on each intent. Existing intents must replay as singleton work
 groups, preserving historical event compatibility.
 
-The planned protocol also includes:
+The implemented protocol foundation includes:
 
 - `LaneGrant` for targeted joining by an already authenticated participant;
 - single-use continuation grants for deliberately bouncing work between chats;
@@ -108,6 +108,10 @@ The planned protocol also includes:
 - lane-specific close and revocation, without closing the logical group;
 - claim-epoch fencing for release, handoff, revocation, and recovery;
 - a logical-group lifecycle that is independent from individual lane lifecycles.
+
+`WorkGroupProjection` and `WorkGroupService` persist group and grant events;
+single-use grants are target- and claim-epoch-checked. Full lane close/revoke
+integration with every provider lifecycle remains a follow-up slice.
 
 The currently supported enforced selectors remain exact repository paths and
 repository path subtrees. Symbol claims are deferred until Synesis has an
@@ -135,7 +139,10 @@ unclaimed changes, incompatible bases, unresolved provenance, and detected
 out-of-band mutations. Integration occurs only through a dedicated integration
 worktree; it must not mutate the control checkout before all checks pass.
 
-These requirements describe planned behavior, not current implementation.
+Exact-caller authority, dirty-lane snapshot materialization, immutable snapshot
+refs, provenance encoding, claim-selector recording, and cross-process
+integration serialization are implemented. Full contract-revision invalidation
+and unresolved-request integration checks remain follow-up work.
 
 ## First parallel-collaboration milestone
 

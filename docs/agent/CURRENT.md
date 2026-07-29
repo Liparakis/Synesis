@@ -26,8 +26,8 @@ stale, cross-binding, unclaimed, and incompatible integration paths fail closed.
 
 ## Immediate next action
 
-Implement the durable WorkGroup projection and targeted LaneGrant lifecycle;
-then add immutable lane snapshot provenance and integration acceptance.
+Complete provider-lifecycle lane close/revocation wiring and contract-aware
+integration checks, then run the two-snapshot integration acceptance.
 
 ## Completion state
 
