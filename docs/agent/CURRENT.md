@@ -86,6 +86,9 @@ Cancellation lifecycle coverage now confirms the exact caller's collaboration
 claim is released without deleting its isolated worktree.
 The post-regression Gradle check passes all 50 actionable tasks; bootstrap Go
 tests/vet, the deferred validator, and the 45-test task-tracker fixture pass.
+The final lifecycle additions also pass the full strict Gradle check, including
+clean EOF release, cancellation release, and continuation-grant revocation
+regressions.
 
 ## Work completed
 
