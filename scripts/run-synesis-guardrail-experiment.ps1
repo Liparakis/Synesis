@@ -140,7 +140,7 @@ try
     $Sw = [System.Diagnostics.Stopwatch]::StartNew()
     $prevPreference = $ErrorActionPreference
     $ErrorActionPreference = "SilentlyContinue"
-    $HookOut = $HookInput | cmd.exe /c "`"$Launcher`" --profile `"$ProfileB`" hook claude-code 2>NUL"
+    $HookOut = $HookInput | cmd.exe /c "`"$Launcher`" --profile `"$ProfileB`" hook claude 2>NUL"
     $ExitCode = $LASTEXITCODE
     $ErrorActionPreference = $prevPreference
     $Sw.Stop()
@@ -163,7 +163,7 @@ try
 }
 "@
     $ErrorActionPreference = "SilentlyContinue"
-    $UnconOut = $UnconstrainedInput | cmd.exe /c "`"$Launcher`" --profile `"$ProfileB`" hook claude-code 2>NUL"
+    $UnconOut = $UnconstrainedInput | cmd.exe /c "`"$Launcher`" --profile `"$ProfileB`" hook claude 2>NUL"
     $ErrorActionPreference = $prevPreference
     $FalsePositive = ($UnconOut -like "*`"permissionDecision`": `"deny`"*")
 
