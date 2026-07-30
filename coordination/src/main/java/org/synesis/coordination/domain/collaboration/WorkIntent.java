@@ -27,7 +27,7 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          UUID workGroupId,
                          Status status) {
 
-    /** Backward-compatible singleton-group intent constructor.
+    /** Constructs a singleton work-group intent when no parent group is supplied.
      * @param intentId intent ID
      * @param projectId project ID
      * @param participant participant

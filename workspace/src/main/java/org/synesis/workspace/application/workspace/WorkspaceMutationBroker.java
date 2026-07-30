@@ -564,7 +564,7 @@ public final class WorkspaceMutationBroker {
             Objects.requireNonNull(toolName, "toolName");
         }
 
-        /** Backward-compatible constructor for internal callers without a connection identity.
+        /** Constructs a request without a connection identity for controlled internal checks.
          * @param location initialized project location
          * @param provider provider identifier
          * @param relativePath target repository-relative path
@@ -581,7 +581,7 @@ public final class WorkspaceMutationBroker {
         }
 
         /**
-         * Backward-compatible connection-aware constructor using default UTF-8 persistence.
+         * Constructs a connection-aware request using default UTF-8 persistence.
          *
          * @param location initialized project location
          * @param provider provider identifier
@@ -625,7 +625,7 @@ public final class WorkspaceMutationBroker {
             String updatedRevision
     ) {
 
-        /** Backward-compatible constructor for callers without a returned revision.
+        /** Constructs a result without a returned revision.
          * @param success whether mutation succeeded
          * @param decision broker decision
          * @param reasonCode bounded reason code

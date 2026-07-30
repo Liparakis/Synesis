@@ -82,7 +82,7 @@ public final class AgentSessionService {
             }
         }
 
-        /** Backward-compatible intent constructor without a group.
+        /** Constructs an intent without an explicit parent work group.
          * @param goal concise goal
          * @param acceptance acceptance criteria
          * @param likelyScopes likely scopes

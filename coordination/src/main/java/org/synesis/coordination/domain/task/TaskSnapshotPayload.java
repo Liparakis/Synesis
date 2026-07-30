@@ -81,7 +81,7 @@ public record TaskSnapshotPayload(
         Objects.requireNonNull(provenance, "provenance");
     }
 
-    /** Backward-compatible payload constructor for legacy snapshot events.
+    /** Constructs a payload with default provenance for a minimal snapshot record.
      * @param taskId task ID
      * @param snapshotId snapshot ID
      * @param nodeId node ID

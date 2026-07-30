@@ -70,7 +70,7 @@ public record CapabilityRequestRecord(
     }
 
     /**
-     * Backward-compatible constructor without worker/supervisor fields.
+     * Constructs a request without optional worker or supervisor identities.
      *
      * @param handle               public request handle locator
      * @param capability           target capability identifier

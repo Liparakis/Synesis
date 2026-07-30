@@ -85,7 +85,7 @@ public record TaskSnapshotRecord(
         }
     }
 
-    /** Backward-compatible record constructor for legacy snapshot events.
+    /** Constructs a record with default provenance for a minimal snapshot payload.
      * @param taskId task ID
      * @param snapshotId snapshot ID
      * @param nodeId node ID
