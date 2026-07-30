@@ -14,8 +14,7 @@ untrusted; repository state and verification evidence are authoritative.
 - The stdio MCP server exposes exactly 11 tools. One persistent MCP connection
   owns one provider binding and one isolated worker context.
 - Supported provider IDs are `antigravity`, `claude`, and `codex`.
-  `claude-code` is a compatibility input alias for `claude`; the hook adapter
-  command remains `synesis hook claude-code`.
+  Provider installation and hooks use those canonical IDs only.
 - MCP reads are revision-bearing and patches must provide the matching revision.
   Do not edit another worker's worktree or the control checkout directly.
 - Provider hooks, synthetic checks, and local/two-process evidence do not prove

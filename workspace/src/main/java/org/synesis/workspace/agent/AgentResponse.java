@@ -39,16 +39,6 @@ public record AgentResponse(
         Objects.requireNonNull(status, "status");
     }
 
-    /**
-     * Creates a success response with a mutation result payload.
-     *
-     * @param relativePath repository-relative file path
-     * @return completed agent response
-     */
-    public static AgentResponse completed(String relativePath) {
-        return new AgentResponse(AgentStatus.COMPLETED, null, null, new AgentMutationResult(relativePath));
-    }
-
     /** Creates a mutation success response carrying the updated file revision.
      * @param relativePath repository-relative target path
      * @param revision updated opaque file revision

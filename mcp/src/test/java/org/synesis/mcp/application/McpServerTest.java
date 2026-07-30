@@ -95,14 +95,14 @@ class McpServerTest {
     }
 
     @Test
-    void toolsListAdvertisesExactlyElevenRawNamesAndLegacyCallsStillWork() {
+    void toolsListAdvertisesExactlyElevenRawNamesAndRejectsDecoratedCalls() {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-raw");
         String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}");
         assertEquals(11, response.split("\\\"name\\\":\\\"").length - 1);
         assertTrue(response.contains("\"name\":\"ensure_session\""));
         assertFalse(response.contains("synesis.ensure_session"));
-        String legacy = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
-        assertTrue(legacy.contains("legacy or missing MCP tool name"));
+        String decorated = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
+        assertTrue(decorated.contains("raw MCP tool name required"));
     }
 
     @Test

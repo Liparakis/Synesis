@@ -28,7 +28,7 @@ Each provider has one canonical MCP scope: Codex uses the user
 without a project-bound argument; Antigravity selects the active project from
 MCP initialize roots (or its bounded process-working-directory fallback).
 Installation migrates stale Synesis
-entries from legacy scopes without removing unrelated servers.
+entries from obsolete scopes without removing unrelated servers.
 
 Installation performs isolated synthetic block/allow checks. It does not run a
 real provider agent. Antigravity remains `BETA` until a real agent denial and
@@ -61,7 +61,5 @@ Malformed configuration is never repaired or overwritten. Review it manually,
 then rerun installation. Uninstall removes only the stable Synesis-managed
 entry and its local metadata.
 
-`claude-code` is retained as a compatibility alias for the canonical `claude`
-provider ID. It is not a second provider. Claude Code's hook command remains
-`synesis hook claude-code` because that is the provider's hook event adapter
-name.
+Claude Code uses the canonical `claude` provider ID for installation, status,
+uninstall, and hook execution.

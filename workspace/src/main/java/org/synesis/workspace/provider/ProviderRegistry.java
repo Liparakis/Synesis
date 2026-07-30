@@ -38,9 +38,6 @@ public final class ProviderRegistry {
             return null;
         }
         String normalized = id.toLowerCase(Locale.ROOT);
-        if ("claude-code".equals(normalized)) {
-            normalized = "claude";
-        }
         String providerId = normalized;
         return PROVIDERS.stream()
                 .filter(provider -> provider.id()

@@ -14,13 +14,6 @@ import java.util.Objects;
  */
 public record AgentMutationResult(String path, String revision, int changedFiles) {
 
-    /** Creates a one-file result without a revision for legacy callers.
-     * @param path repository-relative file path
-     */
-    public AgentMutationResult(String path) {
-        this(path, null, 1);
-    }
-
     /**
      * Validates and normalizes relative path.
      */

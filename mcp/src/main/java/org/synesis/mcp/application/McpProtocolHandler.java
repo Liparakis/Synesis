@@ -270,7 +270,7 @@ public final class McpProtocolHandler {
      * Negotiates the MCP protocol version for an initialize request.
      *
      * <p>The client-selected version is echoed only when this implementation supports it;
-     * otherwise the oldest supported baseline is returned for compatibility with legacy clients.
+     * otherwise the current baseline is returned.
      *
      * @param params initialize request parameters, or {@code null}
      * @return negotiated protocol version
@@ -849,10 +849,9 @@ public final class McpProtocolHandler {
         }
 
         String name = (String) params.get("name");
-        // The wire contract advertises raw names. Provider-decorated legacy names
-        // are intentionally rejected after the prerelease migration.
+        // The wire contract advertises raw names only.
         if (name == null || name.startsWith("synesis.")) {
-            return createErrorResponse(id, -32602, "legacy or missing MCP tool name");
+            return createErrorResponse(id, -32602, "raw MCP tool name required");
         }
         name = "synesis." + name;
         Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");

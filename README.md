@@ -36,7 +36,7 @@ Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded p
       |---|---|---|
   | Antigravity | `antigravity` | `beta` |
   | Codex | `codex` | `experimental`, trust-review limited |
-  | Claude Code | `claude` (canonical) / `claude-code` (alias) | `experimental` |
+  | Claude Code | `claude` | `experimental` |
 
 - 🏗️ **Builds** — Java 25 Gradle builds and a Go bootstrapper for distribution artifacts.
 

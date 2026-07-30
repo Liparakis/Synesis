@@ -12,7 +12,7 @@ synesis
   sync host|join
   constraint create
   workspace check-action|verify|mutate
-  hook antigravity|claude-code|codex
+  hook antigravity|claude|codex
   doctor | cleanup | reconcile | repair | migrate
   mcp --provider <codex|antigravity|claude>
 ```
@@ -24,7 +24,5 @@ experiments. Hook JSON stays on stdout; diagnostics stay on stderr and hook
 exit code remains 0 for provider contract responses.
 
 Provider installation commands are project-local. `synesis version` is safe to
-run without a project and reports embedded build metadata. `claude` is the
-canonical provider ID; `claude-code` is accepted only as a compatibility input
-alias for provider installation/status/uninstall. The hook subcommand remains
-`hook claude-code`.
+run without a project and reports embedded build metadata. Provider commands
+use canonical IDs only.

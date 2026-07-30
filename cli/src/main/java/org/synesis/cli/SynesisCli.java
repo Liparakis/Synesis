@@ -234,7 +234,7 @@ public final class SynesisCli {
                 .addSubcommand("antigravity", new HookAntigravityCommand(runtime));
         command.getSubcommands()
                 .get("hook")
-                .addSubcommand("claude-code", new HookClaudeCodeCommand(runtime));
+                .addSubcommand("claude", new HookClaudeCodeCommand(runtime));
         command.getSubcommands()
                 .get("hook")
                 .addSubcommand("codex", new HookCodexCommand(runtime));

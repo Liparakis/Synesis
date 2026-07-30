@@ -36,8 +36,8 @@ class McpSyn028ContractTest {
             assertTrue(list.contains("respond_coordination"));
             assertTrue(list.contains("publish_snapshot"));
             assertTrue(list.contains("validate_snapshot"));
-            String legacy = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
-            assertTrue(legacy.contains("legacy or missing MCP tool name"));
+            String decorated = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
+            assertTrue(decorated.contains("raw MCP tool name required"));
         } finally {
             if (previous == null) System.clearProperty("user.home");
             else System.setProperty("user.home", previous);

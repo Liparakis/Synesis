@@ -8,9 +8,6 @@ Synesis currently recognizes three provider IDs:
 | `codex` | experimental / trust review required | user Codex TOML plus project-local hooks where applicable |
 | `claude` | experimental | project-local `.claude/settings.json` and `.mcp.json` |
 
-`claude-code` is a compatibility input alias for `claude`; it is not a second
-provider. The hook adapter command is still `synesis hook claude-code`.
-
 - [Codex](codex.md)
 - [Antigravity](antigravity.md)
 - [Claude Code](claude-code.md)

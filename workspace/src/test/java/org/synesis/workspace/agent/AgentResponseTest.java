@@ -14,7 +14,7 @@ class AgentResponseTest {
 
     @Test
     void testCompletedResponseSerializationOmitsNullFields() {
-        AgentResponse response = AgentResponse.completed("src/example.txt");
+        AgentResponse response = AgentResponse.completed("src/example.txt", null);
         assertEquals(AgentStatus.COMPLETED, response.status());
 
         String json = response.toJson();
@@ -78,7 +78,7 @@ class AgentResponseTest {
 
     @Test
     void testToMapOmitsNullKeys() {
-        AgentResponse response = AgentResponse.completed("src/Product.java");
+        AgentResponse response = AgentResponse.completed("src/Product.java", null);
         Map<String, Object> map = response.toMap();
         assertEquals("completed", map.get("status"));
         assertFalse(map.containsKey("reason"));
@@ -97,7 +97,7 @@ class AgentResponseTest {
 
     @Test
     void testRejectsAbsolutePathsInMutationResult() {
-        assertThrows(IllegalArgumentException.class, () -> new AgentMutationResult("C:\\abs\\path.txt"));
-        assertThrows(IllegalArgumentException.class, () -> new AgentMutationResult("/abs/path.txt"));
+        assertThrows(IllegalArgumentException.class, () -> new AgentMutationResult("C:\\abs\\path.txt", null, 1));
+        assertThrows(IllegalArgumentException.class, () -> new AgentMutationResult("/abs/path.txt", null, 1));
     }
 }

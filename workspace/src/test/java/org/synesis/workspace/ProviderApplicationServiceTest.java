@@ -61,9 +61,7 @@ final class ProviderApplicationServiceTest {
                         .stream()
                         .map(provider -> provider.id())
                         .toList());
-        assertEquals("claude",
-                ProviderRegistry.find("claude-code")
-                        .id());
+        assertEquals(null, ProviderRegistry.find("claude-code"));
         assertEquals(org.synesis.workspace.provider.ProviderSupportLevel.EXPERIMENTAL,
                 ProviderRegistry.find("codex")
                         .supportLevel());
@@ -295,7 +293,7 @@ final class ProviderApplicationServiceTest {
                     root.toAbsolutePath().normalize().toString()), synesis.get("args"));
 
             var reinstalled = service.install(location, "claude-code");
-            assertEquals("ALREADY_INSTALLED",
+            assertEquals("UNKNOWN_PROVIDER",
                     reinstalled.values()
                             .get("PROVIDER_INSTALL_RESULT"));
 
@@ -317,15 +315,15 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void claudeCodeHookUsesCompatibilityCommandName() throws Exception {
+    void claudeCodeHookUsesCanonicalCommandName() throws Exception {
         Path launcher = Path.of("C:/tools/synesis.cmd");
         Path profile = Path.of("C:/project/.synesis/local/profile");
 
         String command = ProviderRegistry.find("claude")
                 .hookCommand(launcher, profile);
 
-        assertTrue(command.contains(" hook claude-code --profile "));
-        assertTrue(!command.contains(" hook claude --profile "));
+        assertTrue(command.contains(" hook claude --profile "));
+        assertTrue(!command.contains(" hook claude-code --profile "));
     }
 
     @Test

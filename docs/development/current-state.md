@@ -8,8 +8,7 @@ workspace architecture assertion and a parallel Gradle test-result race; those
 are not fixed by this documentation-only workstream.
 
 The stdio MCP server exposes exactly 11 tools. `claude` is the canonical
-provider ID; `claude-code` is only a compatibility input alias, while
-`hook claude-code` remains the Claude Code adapter command. One persistent MCP
+provider ID; Claude Code uses the canonical `claude` ID and `hook claude` command. One persistent MCP
 connection owns one provider binding, reads are revision-bearing, and worker
 contexts are isolated.
 
@@ -72,5 +71,5 @@ version-directory layout is migration-only and is not retained after success.
 - **Real-Agent Run**: Antigravity evidence is recorded; Codex CLI `0.140.0` is
   authenticated, but project hook trust was not established in the attempted
   noninteractive run, so Codex real-agent enforcement is `NOT_COMPLETED`.
-- **Harness Integration Scope**: Synesis enforces constraints at integration points that invoke its guardrail (`check-action` or `hook claude-code`).
+- **Harness Integration Scope**: Synesis enforces constraints at integration points that invoke its guardrail (`check-action` or `hook claude`).
 - **Claude Code Adapter Scope**: Enforces supported structured file-edit tools (`Edit`, `Write`, `str_replace_editor`, `write_file`, `file_edit`, `file_write`, `NotebookEdit`). It emits `UNSUPPORTED` diagnostics on stderr for raw un-parsed shell commands (`Bash`).

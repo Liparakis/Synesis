@@ -111,9 +111,8 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     }
 
     /**
-     * Returns the Claude Code hook adapter command. The provider lifecycle ID
-     * is {@code claude}, while the CLI hook command retains the explicit
-     * compatibility name {@code claude-code}.
+     * Returns the Claude Code hook adapter command using the canonical
+     * {@code claude} provider identifier.
      *
      * @param launcher generated Synesis launcher
      * @param profile  local profile
@@ -124,7 +123,7 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
         return "\"" + launcher.toAbsolutePath()
                 .normalize()
                 .toString()
-                .replace("\"", "\\\"") + "\" hook claude-code --profile \""
+                .replace("\"", "\\\"") + "\" hook claude --profile \""
                 + profile.toAbsolutePath()
                         .normalize()
                         .toString()

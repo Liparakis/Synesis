@@ -79,9 +79,6 @@ public final class ValidationWorkspaceService {
         Objects.requireNonNull(requesterWorktreePath, "requesterWorktreePath");
         Objects.requireNonNull(impl, "impl");
 
-        // Safely migrate obsolete in-tree validation worktrees if present
-        migrateLegacyInTreeValidation(projectRoot);
-
         String token = extractToken(handle);
         String worktreeName = token + "-r" + revisionNumber;
         Path validationRoot = resolveValidationRoot(projectRoot);
@@ -181,25 +178,6 @@ public final class ValidationWorkspaceService {
         } catch (IOException ignored) {
         }
         return List.copyOf(result);
-    }
-
-    private static void migrateLegacyInTreeValidation(Path projectRoot) {
-        Path legacyDir = projectRoot.resolve(".synesis/validation");
-        if (Files.isDirectory(legacyDir)) {
-            try (var stream = Files.list(legacyDir)) {
-                stream.filter(Files::isDirectory).forEach(dir -> {
-                    try {
-                        runGit(projectRoot, "worktree", "remove", "--force", dir.toAbsolutePath().toString());
-                    } catch (Exception ignored) {
-                    }
-                });
-                try {
-                    Files.deleteIfExists(legacyDir);
-                } catch (Exception ignored) {
-                }
-            } catch (Exception ignored) {
-            }
-        }
     }
 
     private static String resolveProjectId(Path projectRoot) {

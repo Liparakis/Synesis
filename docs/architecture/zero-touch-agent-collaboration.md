@@ -98,7 +98,7 @@ the requester owns its speculative consumer. Git remains durable source history.
 The existing `WorkIntent` record remains the single-participant mutation lane.
 The planned `WorkGroup` parent may be referenced by an optional versioned
 `workGroupId` on each intent. Existing intents must replay as singleton work
-groups, preserving historical event compatibility.
+groups, preserving the signed event history.
 
 The implemented protocol foundation includes:
 
@@ -214,14 +214,14 @@ operator-authorized recovery or revocation.
 Prerelease migration is exclusive. It acquires a project migration lock,
 refuses incompatible active writers, records durable phase markers, and resumes
 or rolls back idempotently after interruption. Obsolete provider aliases,
-legacy MCP names, and compatibility-only readers are removed after conversion;
+obsolete MCP names and conversion-only readers are removed after conversion;
 unrelated provider configuration is preserved and unsafe conversion fails
 closed.
 
 The MCP contract remains exactly 11 raw tools, using
 `request_coordination`, `respond_coordination`, `publish_snapshot`, and
 `validate_snapshot` for the current coordination and snapshot surface.
-Decorated legacy names are not accepted after the prerelease migration.
+Decorated MCP names are not accepted; only raw advertised names are valid.
 
 ## Security and failure invariants
 
