@@ -2,7 +2,7 @@
 
 ## Repository state
 
-Contract revision 1 is ACTIVE. SYN-027 is ACTIVE under ADR-0039; SL-005 through SL-008 are complete;
+Contract revision 1 is ACTIVE. SYN-028 is DONE at CP-0331 under ADR-0040; SYN-027 is DONE under ADR-0039; SL-005 through SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
   DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
@@ -333,3 +333,79 @@ category.
 - Pre-mutation backup and exact atomic rollback service (`RepairBackupService`) under `admin/repair-backups/<execution-id>/`.
 - MCP tools count remains exactly 11 tools; zero MCP surface breaking changes.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0190.
+
+## SYN-029 current verification
+
+- Added `bootstrap/cmd/synesis-mcp` as a native stdio launcher. The Gradle
+  distribution task cross-builds Windows x64/ARM64, Linux x64/ARM64, and macOS
+  x64/ARM64 artifacts; the installed Windows launcher is copied to
+  `bin/synesis-mcp.exe`.
+- Provider MCP registrations now point directly at the native launcher. Normal
+  CLI and hook launchers remain separate. Codex, Claude, and Antigravity were
+  reinstalled against the fresh local distribution without adding duplicate
+  provider entries.
+- Installer health probe passed MCP `initialize` and `tools/list` with exactly
+  11 tools. Provider install remains `DEGRADED` where real provider validation
+  is incomplete; this is not transport failure evidence.
+- Focused workspace provider/configuration tests pass. Sequential
+  `./gradlew.bat check --no-daemon --max-workers=1
+  --dependency-verification=strict` passes all 51 actionable tasks. Bootstrap
+  `go test -count=1 ./...`, `go vet ./...`, and native launcher tests pass.
+- The first full check attempt timed out after a stale decorated MCP tool name
+  in bundle smoke; the smoke request now uses the raw prerelease tool name and
+  the subsequent full check passes. Real Codex/Antigravity model-driven
+  autonomy remains unclaimed pending provider-process acceptance.
+- Follow-up provider evidence: Codex CLI with approvals bypassed established a
+  real session and called `get_next_action`; the normal read-only invocation
+  was cancelled by the provider harness before the MCP call. Antigravity
+  `agy --print` returned a generic response without invoking MCP. These are
+  provider-boundary results, not evidence against the native launcher.
+- Began SYN-030 without changing its task status: `get_next_action` responses
+  now carry a stable opaque `actionId`, `delivery=AT_LEAST_ONCE`, and explicit
+  acknowledgement metadata. Repeated retrieval is covered by an MCP regression
+  and does not consume the underlying durable inbox item. CLI parity now
+  includes `synesis collaboration acknowledge --item ...` backed by the same
+  exact-caller service.
+- The shared workspace reducer now derives workflow types (`IMPLEMENT`,
+  `REVIEW_CONTRACT`, `REVISE_SCOPE`, `WAIT`, `PUBLISH`, `INTEGRATION_REPAIR`,
+  and `RECOVER`) with strict payload, blockers, permitted operations, and
+  retry-safety metadata. Claim overlap now creates idempotent durable inbox
+  requests for both owner and contender. Default collaboration announcements
+  join one project-level active work group; explicit group IDs still isolate
+  independent experiments. Focused reducer, coordination, MCP, and multi-chat
+  tests pass.
+- The reducer now emits `CLOSE` for terminal lane states and `RECOVER` for
+  suspended or recovery-held lanes. Incremental integration consumes only
+  projection `readySnapshots()`; integrated snapshots remain audit-visible but
+  are not replayed into later candidates. Focused suites and the sequential
+  repository check pass with 51 actionable tasks.
+- SYN-033 groundwork adds `ProviderProcessSupervisor`, which launches only
+  tokenized commands directly in an isolated worktree, observes process loss,
+  supports bounded interrupt/close, and starts a continuation only in a
+  distinct lane. It deliberately does not transfer claims; signed recovery
+  grants and immutable snapshots remain the authority boundary. Focused tests
+  and strict workspace Javadocs pass; provider-specific process wiring remains
+  unverified. Codex and Claude integrations now expose their documented
+  noninteractive argv forms; Antigravity remains explicitly unsupported for
+  autonomous launch pending real MCP invocation evidence. The full sequential
+  Gradle check passes 51 actionable tasks, and bootstrap Go tests/vet pass. A
+  one-shot supervisor exit callback now reports verified process exit without
+  changing claims or inferring abandonment; callers must route it through the
+  signed lease/recovery policy. `ProviderSupervisionService` now bridges
+  supervised launches to the exact session lease, recording child process
+  identity and marking only explicit supervisor close as clean shutdown.
+  `startWithAutomaticRecovery` now schedules the existing reconciliation plan
+  after the configured grace period; no direct claim release or abandonment
+  inference is performed by the scheduler.
+  Starts are serialized per lane, callbacks carry monotonic process
+  generations from the exact exited process, delayed recovery is cancelled and
+  generation-checked on reuse or clean close, and lease closure compares the
+  expected process ID. The continuation launch bridge validates distinct
+  source and target lanes while grant consumption and snapshot restoration
+  remain owned by collaboration services.
+Recent hardening: durable event appends derive their head from on-disk signed
+events, preventing stale provider store instances from overwriting concurrent
+coordination events. Integration refreshes pending coordination requests before
+attempt allocation, and completed provider bindings are terminalized for the
+exact caller while preserving their worktree. Snapshot publication excludes
+provider/admin metadata (`AGENTS.md`, `.synesis`, `.codex`, `.claude`, `.agents`).

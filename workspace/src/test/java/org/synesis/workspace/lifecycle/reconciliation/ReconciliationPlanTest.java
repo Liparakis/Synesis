@@ -26,8 +26,8 @@ class ReconciliationPlanTest {
         ReconciliationPlan plan = store.createAndSave(
                 controlRoot, "proj-rec", 1,
                 List.of(new ReconciliationPlanEntry(
-                        1, "rec-1", ReconciliationAction.MARK_SESSION_ABANDONED, "sess-1",
-                        true, List.of("session_abandonment_eligible"), "Process death verified"
+                        1, "rec-1", ReconciliationAction.MARK_SESSION_SUSPENDED, "sess-1",
+                        true, List.of("session_recovery_eligible"), "Process death verified"
                 ))
         );
 
@@ -54,8 +54,8 @@ class ReconciliationPlanTest {
         ReconciliationPlan plan = store.createAndSave(
                 controlRoot, "proj-rec", 1,
                 List.of(new ReconciliationPlanEntry(
-                        1, "rec-1", ReconciliationAction.MARK_SESSION_ABANDONED, "sess-1",
-                        true, List.of("session_abandonment_eligible"), "Process death verified"
+                        1, "rec-1", ReconciliationAction.MARK_SESSION_SUSPENDED, "sess-1",
+                        true, List.of("session_recovery_eligible"), "Process death verified"
                 ))
         );
 

@@ -116,8 +116,13 @@ public final class AntigravityProviderIntegration implements ProviderIntegration
         java.util.Map<String, Object> server = new java.util.LinkedHashMap<>();
         String cmd = launcher != null && java.nio.file.Files.isRegularFile(launcher)
                 ? launcher.toAbsolutePath().normalize().toString()
-                : (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win") ? "synesis.cmd" : "synesis");
+                : (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
+                        ? "synesis-mcp.exe" : "synesis-mcp");
         server.put("command", cmd);
+        // Antigravity's registration is provider-global. Never embed the
+        // project that happened to be installed most recently; the MCP
+        // initialize roots (with cwd as a bounded fallback) select the active
+        // project for each connection.
         server.put("args", java.util.List.of("mcp", "--provider", id()));
         server.put("version", 1);
         return server;

@@ -20,11 +20,13 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
 import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 
 /**
- * Core application service for discovering, planning, and executing crash reconciliation and durable session abandonment.
+ * Core application service for discovering, planning, and executing crash reconciliation and fenced lane recovery.
  *
  * @since 1.0
  */
@@ -43,7 +45,7 @@ public final class ReconciliationService {
      * @param totalSessionsInspected  total inspected session leases
      * @param activeCount             active sessions count
      * @param suspectedStaleCount     suspected stale count
-     * @param abandonmentEligibleCount abandonment eligible count
+     * @param recoveryEligibleCount recovery eligible count
      * @param ambiguousCount          ambiguous count
      * @param recoverableIntegrations recoverable interrupted integrations count
      * @param executableActionsCount  executable actions count
@@ -55,7 +57,7 @@ public final class ReconciliationService {
             int totalSessionsInspected,
             int activeCount,
             int suspectedStaleCount,
-            int abandonmentEligibleCount,
+            int recoveryEligibleCount,
             int ambiguousCount,
             int recoverableIntegrations,
             int executableActionsCount,
@@ -150,10 +152,17 @@ public final class ReconciliationService {
 
         SessionLeasePolicy policy = new SessionLeasePolicy();
         List<SessionLeaseRecord> leases = leaseStore.listAll(root);
+        Set<String> knownParticipants;
+        try {
+            knownParticipants = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId())
+                    .collaborationProjection().participants().stream().map(org.synesis.coordination.domain.collaboration.Participant::id).collect(java.util.stream.Collectors.toSet());
+        } catch (Exception ignored) {
+            knownParticipants = Set.of();
+        }
 
         int activeCount = 0;
         int staleCount = 0;
-        int abandonEligibleCount = 0;
+        int recoveryEligibleCount = 0;
         int ambiguousCount = 0;
         int recoverableIntegrations = 0;
 
@@ -165,28 +174,20 @@ public final class ReconciliationService {
                 case ACTIVE -> activeCount++;
                 case SUSPECTED_STALE -> staleCount++;
                 case AMBIGUOUS -> ambiguousCount++;
-                case ABANDONMENT_ELIGIBLE -> {
-                    abandonEligibleCount++;
+                case RECOVERY_ELIGIBLE -> {
+                    recoveryEligibleCount++;
                     String actionId = "rec-" + lease.connectionInstanceId();
+                    String participant = WorkspaceCollaborationService.participantHandle(lease.sessionId());
+                    if (!knownParticipants.contains(participant)) {
+                        continue;
+                    }
                     entries.add(new ReconciliationPlanEntry(
-                            1, actionId, ReconciliationAction.MARK_SESSION_ABANDONED, lease.sessionId(),
-                            true, List.of("session_abandonment_eligible"), "Process death verified beyond grace period"
+                            1, actionId, ReconciliationAction.MARK_SESSION_SUSPENDED, lease.sessionId(),
+                            true, List.of("session_recovery_eligible"), "Fence old authority without releasing claims"
                     ));
                     entries.add(new ReconciliationPlanEntry(
-                            1, actionId + "-ownership", ReconciliationAction.RELEASE_ABANDONED_OWNERSHIP, lease.sessionId(),
-                            true, List.of("session_abandonment_eligible"), "Release semantic ownership for abandoned session"
-                    ));
-                    entries.add(new ReconciliationPlanEntry(
-                            1, actionId + "-claims", ReconciliationAction.RELEASE_ABANDONED_CLAIMS, lease.sessionId(),
-                            true, List.of("session_abandonment_eligible"), "Release collaboration claims for abandoned session"
-                    ));
-                    entries.add(new ReconciliationPlanEntry(
-                            1, actionId + "-deps", ReconciliationAction.INVALIDATE_ABANDONED_DEPENDENCIES, lease.sessionId(),
-                            true, List.of("session_abandonment_eligible"), "Invalidate dependencies for abandoned session"
-                    ));
-                    entries.add(new ReconciliationPlanEntry(
-                            1, actionId + "-finalize", ReconciliationAction.FINALIZE_ABANDONED_SESSION, lease.sessionId(),
-                            true, List.of("session_abandonment_eligible"), "Finalize abandoned provider session"
+                            1, actionId + "-recovery", ReconciliationAction.HOLD_SUSPENDED_RECOVERY, lease.sessionId(),
+                            true, List.of("session_suspended"), "Materialize and reserve immutable recovery evidence"
                     ));
                 }
                 case CLOSED_CLEANLY -> {
@@ -198,7 +199,7 @@ public final class ReconciliationService {
 
         return new ReconciliationDiscoverySummary(
                 location.projectId().toString(), System.currentTimeMillis(), leases.size(),
-                activeCount, staleCount, abandonEligibleCount, ambiguousCount,
+                activeCount, staleCount, recoveryEligibleCount, ambiguousCount,
                 recoverableIntegrations, executableCount, Collections.unmodifiableList(entries)
         );
     }
@@ -290,18 +291,24 @@ public final class ReconciliationService {
 
                 try {
                     switch (entry.action()) {
-                        case MARK_SESSION_ABANDONED -> {
-                            store.append(UUID.randomUUID(), PredictionEventType.SESSION_ABANDONED, identity.nodeId(),
-                                    ("session_abandoned:" + entry.targetResourceId()).getBytes(StandardCharsets.UTF_8), identity);
+                        case MARK_SESSION_SUSPENDED -> {
+                            String participant = WorkspaceCollaborationService.participantHandle(entry.targetResourceId());
+                            boolean knownParticipant = store.collaborationProjection().participants().stream()
+                                    .anyMatch(candidate -> candidate.id().equals(participant));
+                            if (knownParticipant) {
+                                store.append(UUID.nameUUIDFromBytes(participant.getBytes(StandardCharsets.UTF_8)),
+                                        PredictionEventType.PARTICIPANT_SUSPENDED, identity.nodeId(),
+                                        CollaborationCodec.encodeHeartbeat(participant), identity);
+                            }
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
-                                    "COMPLETED", "session_abandoned", now, "Durable session marked abandoned"
+                                    "COMPLETED", "session_suspended", now, "Old authority fenced; claims retained"
                             );
                             journal.append(rec);
                             records.add(rec);
                         }
-                        case RELEASE_ABANDONED_OWNERSHIP -> {
+                        case RELEASE_SUSPENDED_OWNERSHIP -> {
                             var coordProj = store.coordinationProjection();
                             for (var entryOwnership : coordProj.ownerships().entrySet()) {
                                 var claim = entryOwnership.getValue();
@@ -321,27 +328,21 @@ public final class ReconciliationService {
                             journal.append(rec);
                             records.add(rec);
                         }
-                        case RELEASE_ABANDONED_CLAIMS -> {
+                        case HOLD_SUSPENDED_RECOVERY -> {
                             String participant = WorkspaceCollaborationService.participantHandle(entry.targetResourceId());
                             WorkIntentService intentService = new WorkIntentService(store, identity);
-                            intentService.abandon(participant);
-                            for (var intent : intentService.activeIntents()) {
-                                if (participant.equals(intent.participant())) {
-                                    intentService.release(intent.intentId(), participant);
-                                }
-                            }
-                            // WorkIntentService appends through a fresh event-store instance.
-                            // Refresh this loop's store before the following lifecycle events
-                            // so its cached sequence head cannot overwrite the claim event.
+                            RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location,
+                                    entry.targetResourceId());
+                            intentService.holdRecovery(participant, snapshot.root().toString() + "#" + snapshot.contentHash());
                             store = new PredictionEventStore(coordDir, location.projectId());
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
-                                    "COMPLETED", "claims_released", now, "Collaboration claims released");
+                                    "COMPLETED", "recovery_held", now, "Recovery evidence reserved for authorized continuation");
                             journal.append(rec);
                             records.add(rec);
                         }
-                        case INVALIDATE_ABANDONED_DEPENDENCIES -> {
+                        case INVALIDATE_SUSPENDED_DEPENDENCIES -> {
                             store.append(UUID.randomUUID(), PredictionEventType.DEPENDENCY_INVALIDATED, identity.nodeId(),
                                     ("dependency_invalidated:" + entry.targetResourceId()).getBytes(StandardCharsets.UTF_8), identity);
                             completedCount++;
@@ -352,18 +353,18 @@ public final class ReconciliationService {
                             journal.append(rec);
                             records.add(rec);
                         }
-                        case FINALIZE_ABANDONED_SESSION -> {
+                        case FINALIZE_SUSPENDED_SESSION -> {
                             store.append(UUID.randomUUID(), PredictionEventType.SESSION_FINALIZED, identity.nodeId(),
                                     ("session_finalized:" + entry.targetResourceId()).getBytes(StandardCharsets.UTF_8), identity);
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
-                                    "COMPLETED", "session_finalized", now, "Abandoned session finalized"
+                                    "COMPLETED", "session_finalized", now, "Suspended session finalized"
                             );
                             journal.append(rec);
                             records.add(rec);
                         }
-                        case RESUME_VERIFIED_INTEGRATION_ADVANCEMENT, FINALIZE_ALREADY_ADVANCED_INTEGRATION, CLOSE_ABANDONED_VALIDATION_CONTEXT -> {
+                        case RESUME_VERIFIED_INTEGRATION_ADVANCEMENT, FINALIZE_ALREADY_ADVANCED_INTEGRATION, CLOSE_SUSPENDED_VALIDATION_CONTEXT -> {
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),

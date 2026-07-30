@@ -17,9 +17,10 @@ public enum SessionLeaseState {
     SUSPECTED_STALE,
 
     /**
-     * Session process death is conclusively verified beyond abandonment grace period.
+     * Session process absence is verified beyond the recovery grace period;
+     * this only permits fencing and recovery preparation.
      */
-    ABANDONMENT_ELIGIBLE,
+    RECOVERY_ELIGIBLE,
 
     /**
      * Process liveness or identity evidence is ambiguous or unverified.

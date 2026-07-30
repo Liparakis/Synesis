@@ -57,6 +57,7 @@ class McpStage2BSlice1Test {
         git(projectRoot, "commit", "-m", "Initial commit");
 
         new ProjectApplicationService().init(projectRoot);
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
 
         AgentSessionService sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "antigravity", "inst-mcp-1", null, false));
@@ -109,10 +110,10 @@ class McpStage2BSlice1Test {
         assertEquals("apply_patch", tools.get(2).get("name"));
         assertEquals("run_command", tools.get(3).get("name"));
         assertEquals("get_next_action", tools.get(4).get("name"));
-        assertEquals("describe_required_capability", tools.get(5).get("name"));
-        assertEquals("respond_to_owner_request", tools.get(6).get("name"));
-        assertEquals("publish_implementation", tools.get(7).get("name"));
-        assertEquals("validate_available_implementation", tools.get(8).get("name"));
+        assertEquals("request_coordination", tools.get(5).get("name"));
+        assertEquals("respond_coordination", tools.get(6).get("name"));
+        assertEquals("publish_snapshot", tools.get(7).get("name"));
+        assertEquals("validate_snapshot", tools.get(8).get("name"));
         assertEquals("complete_task", tools.get(9).get("name"));
     }
 
@@ -123,7 +124,7 @@ class McpStage2BSlice1Test {
                 "  \"id\": 2,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.describe_required_capability\",\n" +
+                "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +

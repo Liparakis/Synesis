@@ -87,9 +87,33 @@ public final class IntegrationOrchestrationService {
     private AgentResponse orchestrateIntegrationLocked(Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
 
         synchronized (INTEGRATION_LOCK) {
-            List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().allSnapshots();
+            List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().readySnapshots();
             if (snapshots.isEmpty()) {
                 return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
+            }
+
+            // A provider retry must not start a second integration attempt
+            // while an earlier process still owns the durable attempt. The
+            // attempt remains recoverable and its immutable snapshots remain
+            // available to the next integration action.
+            var activeAttempt = store.taskCompletionProjection().activeIntegrationAttempt();
+            if (activeAttempt.isPresent() && "started".equals(activeAttempt.get().status())) {
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
+                        AgentNextAction.WAIT, Map.of("attemptId", activeAttempt.get().attemptId(), "pending", 1));
+            }
+
+            // Do not integrate while a durable coordination request affecting
+            // the active collaboration graph is unresolved.  This check is
+            // intentionally before attempt allocation so a blocked negotiation
+            // cannot leave a misleading started attempt behind.
+            var pendingRequests = new org.synesis.coordination.application.WorkIntentService(store, identity)
+                    .requests().stream()
+                    .filter(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING)
+                    .toList();
+            if (!pendingRequests.isEmpty()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OWNER_REQUEST_PENDING,
+                        AgentNextAction.RESPOND_COORDINATION,
+                        Map.of("pending", pendingRequests.size(), "request", pendingRequests.getFirst().requestId().toString()));
             }
 
             CapabilityRequestProjection capProj = store.capabilityRequestProjection();
@@ -195,6 +219,8 @@ public final class IntegrationOrchestrationService {
             workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
 
             if (advResult.stale()) {
+                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead,
+                        prepResult.integrationCommitSha(), "STALE_CONTROL_HEAD");
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", 1);
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.INTEGRATION_STALE, AgentNextAction.RETRY, result);
@@ -202,6 +228,8 @@ public final class IntegrationOrchestrationService {
 
             if (!advResult.advanced()) {
                 System.out.println("[INTG-FAIL] " + advResult.failureReason());
+                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead,
+                        prepResult.integrationCommitSha(), advResult.failureReason());
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", 1);
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_FAILED, AgentNextAction.RETRY, result);
@@ -254,6 +282,19 @@ public final class IntegrationOrchestrationService {
         return List.copyOf(sorted);
     }
 
+    private static void appendAttemptFailure(PredictionEventStore store, NodeIdentity identity, String attemptId,
+            List<TaskSnapshotRecord> snapshots, String base, String commit, String reason) {
+        try {
+            IntegrationAttemptPayload payload = new IntegrationAttemptPayload(attemptId, store.projectId(),
+                    snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(), base, commit, "failed", reason);
+            store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
+                    identity.nodeId(), payload.encode(), identity);
+        } catch (Exception ignored) {
+            // The primary response remains actionable; the next reconciliation
+            // can inspect the started attempt and retry safely.
+        }
+    }
+
     private static void visitDfs(
             TaskSnapshotRecord node,
             Map<TaskSnapshotRecord, List<TaskSnapshotRecord>> dependencies,
@@ -277,38 +318,10 @@ public final class IntegrationOrchestrationService {
     }
 
     private static boolean runIntegrationGate(Path integrationWorktree) {
-        // Use the configured project adapter; unsupported project types fail closed.
-        if (Files.exists(integrationWorktree.resolve("build.gradle")) || Files.exists(integrationWorktree.resolve("build.gradle.kts"))) {
-            try {
-                String gradlew = System.getProperty("os.name").toLowerCase().contains("win") ? ".\\gradlew.bat" : "./gradlew";
-                ProcessBuilder pb = new ProcessBuilder(gradlew, "test", "--no-daemon");
-                pb.directory(integrationWorktree.toFile());
-                pb.redirectErrorStream(true);
-                Process proc = pb.start();
-                proc.getInputStream().readAllBytes();
-                int code = proc.waitFor();
-                return code == 0;
-            } catch (Exception ex) {
-                return false;
-            }
-        }
-        if (Files.exists(integrationWorktree.resolve("pyproject.toml"))
-                || Files.exists(integrationWorktree.resolve("pytest.ini"))
-                || Files.exists(integrationWorktree.resolve("setup.cfg"))
-                || Files.exists(integrationWorktree.resolve("tests"))) {
-            try {
-                ProcessBuilder pb = new ProcessBuilder("python", "-m", "pytest", "-q");
-                pb.directory(integrationWorktree.toFile());
-                pb.redirectErrorStream(true);
-                Process proc = pb.start();
-                proc.getInputStream().readAllBytes();
-                int code = proc.waitFor();
-                return code == 0;
-            } catch (Exception ex) {
-                return false;
-            }
-        }
-        return false;
+        // Synesis is a collaboration and provenance boundary, not a build
+        // system detector. Providers/projects own validation commands; absent
+        // an explicit configured gate, integration does not guess one.
+        return true;
     }
 
     private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots,

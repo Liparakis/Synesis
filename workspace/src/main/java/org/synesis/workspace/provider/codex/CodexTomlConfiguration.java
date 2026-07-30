@@ -134,7 +134,10 @@ public final class CodexTomlConfiguration {
     }
 
     private static String desired(Path launcher) {
-        String command = launcher != null && Files.isRegularFile(launcher) ? launcher.toAbsolutePath().normalize().toString() : "synesis.cmd";
+        String command = launcher != null && Files.isRegularFile(launcher)
+                ? launcher.toAbsolutePath().normalize().toString()
+                : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
+                        ? "synesis-mcp.exe" : "synesis-mcp");
         return "[mcp_servers.synesis]\n"
                 + "command = '" + escapeLiteral(command) + "'\n"
                 + "args = [\"mcp\", \"--provider\", \"codex\"]";
@@ -143,6 +146,7 @@ public final class CodexTomlConfiguration {
     private static String escapeLiteral(String value) {
         return value.replace("'", "''");
     }
+
 
     private static Parsed parse(String text) {
         List<Section> sections = new ArrayList<>();

@@ -41,6 +41,7 @@ class McpTool11Test {
         git(projectRoot, "add", ".");
         git(projectRoot, "commit", "-m", "Initial commit");
         new ProjectApplicationService().init(projectRoot);
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
@@ -76,11 +77,11 @@ class McpTool11Test {
         assertNotNull(cancelTool.get("inputSchema"));
 
         // 3. Ensure session first
-        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         handler.handleMessage(ensureReq);
 
-        // 4. Call synesis.cancel_task
-        String cancelCallReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.cancel_task\",\"arguments\":{\"reason\":\"Task no longer needed.\"}}}";
+        // 4. Call cancel_task
+        String cancelCallReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"cancel_task\",\"arguments\":{\"reason\":\"Task no longer needed.\"}}}";
         String cancelCallResp = handler.handleMessage(cancelCallReq);
         assertNotNull(cancelCallResp);
         assertTrue(cancelCallResp.contains("cancelled") || cancelCallResp.contains("COMPLETED"));

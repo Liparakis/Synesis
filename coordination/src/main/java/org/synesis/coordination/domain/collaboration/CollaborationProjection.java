@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.UUID;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -16,6 +18,7 @@ public final class CollaborationProjection {
     private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
     private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
     private final Map<String, Participant> participantHistory = new LinkedHashMap<>();
+    private final Set<UUID> acknowledgedInboxItems = new HashSet<>();
     private boolean activated;
 
     /** Creates an empty collaboration projection. */
@@ -39,7 +42,13 @@ public final class CollaborationProjection {
             case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
             case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
             case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
-            case PARTICIPANT_ABANDONED -> abandoned(CollaborationCodec.decodeHeartbeat(event.payload()));
+            case PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED -> suspended(CollaborationCodec.decodeHeartbeat(event.payload()));
+            case RECOVERY_SNAPSHOT_HELD -> recoveryHeld(CollaborationCodec.decodeRecovery(event.payload()));
+            case PARTICIPANT_REVOKED -> revoked(CollaborationCodec.decodeHeartbeat(event.payload()));
+            case INBOX_ITEM_ACKNOWLEDGED -> acknowledge(CollaborationCodec.decodeUuidText(event.payload()));
+            case PARTICIPANT_CANCELLED -> cancelled(CollaborationCodec.decodeHeartbeat(event.payload()));
+            case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(event.payload()));
+            case PARTICIPANT_DETACHED -> detached(CollaborationCodec.decodeHeartbeat(event.payload()));
             default -> {
             }
         }
@@ -55,6 +64,7 @@ public final class CollaborationProjection {
         candidate.intents.putAll(intents);
         candidate.requests.putAll(requests);
         candidate.participantHistory.putAll(participantHistory);
+        candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
         candidate.activated = activated;
         candidate.apply(event);
     }
@@ -97,6 +107,43 @@ public final class CollaborationProjection {
         return List.copyOf(requests.values());
     }
 
+    /** Returns whether an inbox item has been acknowledged.
+     * @param itemId server-issued item identifier
+     * @return true when acknowledged
+     */
+    public synchronized boolean inboxAcknowledged(UUID itemId) {
+        return acknowledgedInboxItems.contains(Objects.requireNonNull(itemId, "item ID"));
+    }
+
+    /** Resolves the internal projection key for an opaque participant handle.
+     * @param handle participant handle
+     * @return internal key, when present
+     */
+    public synchronized Optional<String> participantKey(String handle) {
+        return participantHistory.entrySet().stream()
+                .filter(entry -> entry.getKey().equals(handle) || entry.getValue().id().equals(handle))
+                .map(Map.Entry::getKey)
+                .findFirst();
+    }
+
+    /** Returns the internal recovery reference for a participant.
+     * @param handle participant handle
+     * @return opaque snapshot reference when held
+     */
+    public synchronized Optional<String> recoverySnapshotReference(String handle) {
+        return participantKey(handle).map(participantHistory::get)
+                .map(Participant::recoverySnapshotReference)
+                .filter(Objects::nonNull);
+    }
+
+    /** Returns a participant lifecycle state by opaque handle or projection key.
+     * @param handle participant handle
+     * @return lifecycle state when present
+     */
+    public synchronized Optional<Participant.State> participantState(String handle) {
+        return participantKey(handle).map(participantHistory::get).map(Participant::state);
+    }
+
     /**
      * Finds claims overlapping any requested selector.
      * @param selectors selectors
@@ -123,7 +170,7 @@ public final class CollaborationProjection {
         intents.put(intent.intentId(), intent);
         String opaqueId = intent.participant().startsWith("agt_") ? intent.participant() : "agt_" + intent.participant();
         participantHistory.put(intent.participant(), new Participant(opaqueId, intent.provider(),
-                intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors()));
+                intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors(), null));
     }
 
     private void release(UUID id) throws IOException {
@@ -134,7 +181,8 @@ public final class CollaborationProjection {
         Participant previous = participantHistory.get(released.participant());
         if (previous != null) {
             participantHistory.put(released.participant(), new Participant(previous.id(), previous.provider(),
-                    previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of()));
+                    previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of(),
+                    previous.recoverySnapshotReference()));
         }
     }
 
@@ -179,14 +227,83 @@ public final class CollaborationProjection {
                     previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of()));
         }
         participantHistory.put(handoff.target(), new Participant(target.id(), target.provider(), target.goal(),
-                Participant.State.ACTIVE, target.lastVerifiedActivity(), transferred.selectors()));
+                Participant.State.ACTIVE, target.lastVerifiedActivity(), transferred.selectors(), null));
     }
 
-    private void abandoned(String participant) throws IOException {
+    private void suspended(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
-                Participant.State.ABANDONED, current.lastVerifiedActivity(), List.of()));
+                Participant.State.SUSPENDED, current.lastVerifiedActivity(), current.claims(),
+                current.recoverySnapshotReference()));
+    }
+
+    private void recoveryHeld(CollaborationCodec.Recovery recovery) throws IOException {
+        String participant = recovery.participant();
+        Participant current = participantHistory.get(participant);
+        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        if (current.state() != Participant.State.SUSPENDED && current.state() != Participant.State.RECOVERY_HELD) {
+            throw new IOException("RECOVERY_NOT_SUSPENDED");
+        }
+        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
+                Participant.State.RECOVERY_HELD, current.lastVerifiedActivity(), current.claims(),
+                recovery.snapshotReference()));
+    }
+
+    private void continued(CollaborationCodec.Continuation continuation) throws IOException {
+        WorkIntent source = intents.get(continuation.sourceIntentId());
+        if (source == null || !source.participant().equals(continuation.sourceParticipant())) {
+            throw new IOException("CONTINUATION_SOURCE_NOT_FOUND");
+        }
+        if (source.version() != continuation.expectedEpoch()) throw new IOException("CLAIM_EPOCH_STALE");
+        Participant sourceParticipant = participantHistory.get(continuation.sourceParticipant());
+        if (sourceParticipant == null || sourceParticipant.state() != Participant.State.RECOVERY_HELD) {
+            throw new IOException("RECOVERY_NOT_HELD");
+        }
+        WorkIntent target = continuation.targetIntent();
+        if (!target.participant().equals(continuation.targetParticipant())
+                || !target.workGroupId().equals(source.workGroupId())
+                || !target.selectors().equals(source.selectors())) {
+            throw new IOException("CONTINUATION_TARGET_INVALID");
+        }
+        if (intents.containsKey(target.intentId())) throw new IOException("CONTINUATION_TARGET_EXISTS");
+        intents.remove(source.intentId());
+        intents.put(target.intentId(), target);
+        participantHistory.put(continuation.sourceParticipant(), new Participant(sourceParticipant.id(),
+                sourceParticipant.provider(), sourceParticipant.goal(), Participant.State.DETACHED,
+                sourceParticipant.lastVerifiedActivity(), List.of(), sourceParticipant.recoverySnapshotReference()));
+        String targetId = continuation.targetParticipant().startsWith("agt_")
+                ? continuation.targetParticipant() : "agt_" + continuation.targetParticipant();
+        participantHistory.put(continuation.targetParticipant(), new Participant(targetId, target.provider(),
+                target.goal(), Participant.State.ACTIVE, System.currentTimeMillis(), target.selectors(), null));
+    }
+
+    private void revoked(String participant) throws IOException {
+        Participant current = participantHistory.get(participant);
+        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
+                Participant.State.REVOKED, current.lastVerifiedActivity(), List.of(), current.recoverySnapshotReference()));
+        intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
+    }
+
+    private void acknowledge(UUID itemId) {
+        acknowledgedInboxItems.add(itemId);
+    }
+
+    private void cancelled(String participant) throws IOException {
+        Participant current = participantHistory.get(participant);
+        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
+                Participant.State.CANCELLED, current.lastVerifiedActivity(), List.of(), current.recoverySnapshotReference()));
+        intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
+    }
+
+    private void detached(String participant) throws IOException {
+        Participant current = participantHistory.get(participant);
+        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
+                Participant.State.DETACHED, current.lastVerifiedActivity(), List.of(),
+                current.recoverySnapshotReference()));
         intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
     }
 }

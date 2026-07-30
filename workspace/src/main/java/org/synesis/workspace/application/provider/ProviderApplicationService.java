@@ -5,6 +5,10 @@ import org.synesis.workspace.application.constraint.ConstraintApplicationService
 import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +23,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
@@ -35,6 +42,7 @@ import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 public final class ProviderApplicationService {
 
     private static final int METADATA_SCHEMA = 1;
+    private final ProviderManualService manualService = new ProviderManualService();
 
     /**
      * Creates the default provider service.
@@ -233,6 +241,30 @@ public final class ProviderApplicationService {
      */
     public Path launcherPath() {
         return launcher();
+    }
+
+    /**
+     * Resolves the native stdio MCP launcher when the local distribution
+     * provides it, falling back to the CLI launcher for development installs.
+     *
+     * @return native MCP launcher or development fallback
+     */
+    public Path mcpLauncherPath() {
+        String executable = isWindows() ? "synesis-mcp.exe" : "synesis-mcp";
+        String configured = System.getProperty("synesis.mcp.launcher", System.getenv("SYNESIS_MCP_LAUNCHER"));
+        if (configured != null && Files.isRegularFile(Path.of(configured))) {
+            return Path.of(configured).toAbsolutePath().normalize();
+        }
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (isWindows() && localAppData != null && !localAppData.isBlank()) {
+            Path installed = Path.of(localAppData, "Synesis", "bin", executable);
+            if (Files.isRegularFile(installed)) {
+                return installed.toAbsolutePath().normalize();
+            }
+        }
+        Path cli = launcher();
+        Path candidate = cli.getParent() == null ? Path.of(executable) : cli.getParent().resolve(executable);
+        return Files.isRegularFile(candidate) ? candidate.toAbsolutePath().normalize() : cli;
     }
 
     private static Path launcher() {
@@ -463,6 +495,11 @@ public final class ProviderApplicationService {
             if (!Files.isRegularFile(launcher)) {
                 return failure(id, "LAUNCHER_MISSING", "PROVIDER_INSTALL_RESULT", 10);
             }
+            ProviderManualService.Attestation manual = manualService.install(provider.id());
+            if (!manual.valid()) {
+                return withValue(failure(id, "MANUAL_INSTALL_FAILED", "PROVIDER_INSTALL_RESULT", 10),
+                        "MANUAL_REASON", manual.reason());
+            }
             Path config = provider.configurationPath(location.root());
             Path metadataPath = metadata(location, provider);
             if (Files.exists(metadataPath)) {
@@ -501,7 +538,9 @@ public final class ProviderApplicationService {
                 group.put("SessionStart", sessionHooks);
             }
             atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
-            String mcpStatus = ensureMcpConfig(location, provider, launcher);
+            Path mcpLauncher = mcpLauncherPath();
+            String mcpStatus = ensureMcpConfig(location, provider, mcpLauncher);
+            McpHealth health = probeMcp(mcpLauncher, provider.id(), location.root());
             ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(location, provider);
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("schemaVersion", METADATA_SCHEMA);
@@ -520,16 +559,25 @@ public final class ProviderApplicationService {
                     launcher.toAbsolutePath()
                             .normalize()
                             .toString());
+            metadata.put("mcpLauncherPath",
+                    mcpLauncher.toAbsolutePath()
+                            .normalize()
+                            .toString());
             metadata.put("profilePath",
                     profile.toAbsolutePath()
                             .normalize()
                             .toString());
             metadata.put("managedEntryId", provider.managedHookId());
             metadata.put("mcpConfigStatus", mcpStatus);
+            metadata.put("mcpHealth", health.status());
+            metadata.put("manualVersion", manual.version());
+            metadata.put("manualContentHash", manual.contentHash());
+            metadata.put("manualPath", manualService.skillDirectory(provider.id()).resolve("SKILL.md").toString());
             metadata.put("lastSyntheticCheck",
                     synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED");
             atomicWrite(metadata(location, provider), ProviderJson.write(metadata) + System.lineSeparator());
             String result = synthetic.blocked() && synthetic.allowed() && synthetic.validJson()
+                    && health.passed()
                     && !provider.requiresRealValidation()
                     ? (already ? "ALREADY_INSTALLED" : "SUCCESS") : "DEGRADED";
             ProviderResult installedResult = result(provider,
@@ -541,6 +589,8 @@ public final class ProviderApplicationService {
                     launcher,
                     mcpStatus,
                     0);
+            installedResult = withValue(installedResult, "SYNESIS_MANUAL", "ATTESTED");
+            installedResult = withValue(installedResult, "MCP_HEALTH", health.status());
             try {
                 ProviderSessionBindingService.BindingResult ensured = new ProviderSessionBindingService().ensure(
                         location, provider.id(), null);
@@ -558,6 +608,12 @@ public final class ProviderApplicationService {
         } catch (Exception failure) {
             return failure(id, "INSTALL_FAILED", "PROVIDER_INSTALL_RESULT", 10);
         }
+    }
+
+    private static ProviderResult withValue(ProviderResult result, String key, String value) {
+        Map<String, String> values = new LinkedHashMap<>(result.values());
+        values.put(key, value);
+        return new ProviderResult(result.exitCode(), values);
     }
 
     /**
@@ -597,6 +653,7 @@ public final class ProviderApplicationService {
         }
         Path config = provider.configurationPath(location.root());
         Path metadataPath = metadata(location, provider);
+        ProviderManualService.Attestation manual = manualService.attest(provider.id());
         boolean metadataPresent = Files.isRegularFile(metadataPath);
         boolean configPresent = Files.isRegularFile(config);
         if (!metadataPresent && !configPresent) {
@@ -647,8 +704,9 @@ public final class ProviderApplicationService {
             var synthetic = syntheticCheck(location, provider);
             String state = synthetic.blocked() && synthetic.allowed() && synthetic.validJson()
                     ? (provider.requiresRealValidation() ? "DEGRADED" : "HEALTHY") : "BROKEN";
-            return status(provider, state, config, true, count, launcherPresent, profilePresent,
+            ProviderResult result = status(provider, state, config, true, count, launcherPresent, profilePresent,
                     synthetic.blocked() && synthetic.allowed(), state.equals("HEALTHY") ? 0 : 1);
+            return withValue(result, "SYNESIS_MANUAL", manual.valid() ? "ATTESTED" : manual.reason());
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_STATUS", 3);
         } catch (Exception failure) {
@@ -741,6 +799,72 @@ public final class ProviderApplicationService {
         return mcpConfiguration.ensure(location, provider, launcher);
     }
 
+    /**
+     * Performs a bounded read-only MCP transport probe against the installed launcher.
+     *
+     * @param launcher native MCP launcher
+     * @param provider provider identifier
+     * @param project project root supplied to the server
+     * @return probe outcome
+     */
+    private McpHealth probeMcp(Path launcher, String provider, Path project) {
+        Process process = null;
+        try {
+            List<String> command = List.of(launcher.toAbsolutePath().normalize().toString(), "mcp",
+                    "--provider", provider, "--project", project.toAbsolutePath().normalize().toString());
+            process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),
+                    StandardCharsets.UTF_8)); BufferedReader reader = new BufferedReader(new InputStreamReader(
+                            process.getInputStream(), StandardCharsets.UTF_8))) {
+                writer.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{"
+                        + "\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
+                        + "\"clientInfo\":{\"name\":\"synesis-installer\",\"version\":\"1\"}}}\n");
+                writer.write("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n");
+                writer.flush();
+                String initialize = readWithTimeout(reader);
+                String tools = readWithTimeout(reader);
+                Map<?, ?> initializeMap = object(ProviderJson.parse(initialize));
+                Map<?, ?> toolsMap = object(ProviderJson.parse(tools));
+                Map<?, ?> initializeResult = object(initializeMap.get("result"));
+                Map<?, ?> toolsResult = object(toolsMap.get("result"));
+                Object advertised = toolsResult.get("tools");
+                if (initializeResult.isEmpty() || !(advertised instanceof List<?> list) || list.size() != 11) {
+                    return new McpHealth(false, "FAILED:unexpected_tools_or_initialize");
+                }
+                return new McpHealth(true, "PASSED");
+            }
+        } catch (TimeoutException failure) {
+            return new McpHealth(false, "FAILED:timeout");
+        } catch (Exception failure) {
+            return new McpHealth(false, "FAILED:" + failure.getClass().getSimpleName());
+        } finally {
+            if (process != null) {
+                process.destroy();
+                try {
+                    if (!process.waitFor(1, TimeUnit.SECONDS)) {
+                        process.destroyForcibly();
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    process.destroyForcibly();
+                }
+            }
+        }
+    }
+
+    private static String readWithTimeout(BufferedReader reader) throws Exception {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return reader.readLine();
+            } catch (IOException failure) {
+                throw new RuntimeException(failure);
+            }
+        }).get(10, TimeUnit.SECONDS);
+    }
+
+    private record McpHealth(boolean passed, String status) {
+    }
+
     private void removeMcpConfig(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) {
         mcpConfiguration.remove(location, provider);
     }
@@ -791,7 +915,7 @@ public final class ProviderApplicationService {
         try {
             Files.createDirectories(root);
             ProjectApplicationService projectService = new ProjectApplicationService();
-            var fixture = projectService.init(root)
+            var fixture = projectService.init(root, false)
                     .location();
             UUID projectId = fixture.projectId();
             new ProjectConfig(projectId, java.util.Set.of("sl1-" + "0".repeat(64))).save(fixture.profile()

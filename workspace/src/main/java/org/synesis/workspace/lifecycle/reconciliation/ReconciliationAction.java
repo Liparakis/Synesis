@@ -6,28 +6,26 @@ package org.synesis.workspace.lifecycle.reconciliation;
  * @since 1.0
  */
 public enum ReconciliationAction {
-    /**
-     * Appends a durable SESSION_ABANDONED event for a dead session beyond grace period.
-     */
-    MARK_SESSION_ABANDONED,
+    /** Fences a dead session without inferring abandonment or releasing claims. */
+    MARK_SESSION_SUSPENDED,
 
     /**
      * Releases active semantic ownership held by an abandoned or cancelled task.
      */
-    RELEASE_ABANDONED_OWNERSHIP,
+    RELEASE_SUSPENDED_OWNERSHIP,
 
-    /** Releases active collaboration claims held by an abandoned session. */
-    RELEASE_ABANDONED_CLAIMS,
+    /** Prepares an immutable recovery snapshot while retaining suspended claims. */
+    HOLD_SUSPENDED_RECOVERY,
 
     /**
      * Invalidates capability dependencies provided by an abandoned or cancelled task.
      */
-    INVALIDATE_ABANDONED_DEPENDENCIES,
+    INVALIDATE_SUSPENDED_DEPENDENCIES,
 
     /**
      * Finalizes an abandoned provider session with abandonment outcome.
      */
-    FINALIZE_ABANDONED_SESSION,
+    FINALIZE_SUSPENDED_SESSION,
 
     /**
      * Resumes protected fast-forward control-branch advancement for an interrupted successful integration commit.
@@ -42,5 +40,5 @@ public enum ReconciliationAction {
     /**
      * Closes an active validation context associated with an abandoned or cancelled requester session.
      */
-    CLOSE_ABANDONED_VALIDATION_CONTEXT
+    CLOSE_SUSPENDED_VALIDATION_CONTEXT
 }

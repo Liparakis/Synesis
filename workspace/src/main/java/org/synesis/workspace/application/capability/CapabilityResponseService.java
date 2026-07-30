@@ -30,7 +30,7 @@ import org.synesis.workspace.agent.AgentStatus;
 /**
  * Application service for capability owners to respond to capability requests.
  *
- * <p>Handles tool calls for {@code synesis.respond_to_owner_request}.
+ * <p>Handles coordination responses and capability-owner responses.
  *
  * @since 1.0
  */

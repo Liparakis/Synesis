@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class StaleAndGraceTest {
 
     @Test
-    void evaluatesSuspectedStaleAndAbandonmentEligibleStates() {
+    void evaluatesSuspectedStaleAndRecoveryEligibleStates() {
         long start = System.currentTimeMillis();
         SessionProcessIdentity identity = new SessionProcessIdentity(99999L, "java", "java -jar synesis.jar", start, "nonce123");
         SessionLeaseRecord record = new SessionLeaseRecord(
@@ -31,11 +31,11 @@ class StaleAndGraceTest {
         SessionLeaseState state1 = service.evaluateLiveness(record, policyStale);
         assertEquals(SessionLeaseState.SUSPECTED_STALE, state1);
 
-        // Process missing, heartbeat beyond grace period (6 min) -> ABANDONMENT_ELIGIBLE
+        // Process missing, heartbeat beyond grace period (6 min) -> RECOVERY_ELIGIBLE
         Clock clockGrace = Clock.fixed(Instant.ofEpochMilli(start + 360000L), ZoneId.of("UTC")); // 6 min later
         SessionLeasePolicy policyGrace = new SessionLeasePolicy(clockGrace, Duration.ofSeconds(30), Duration.ofMinutes(2), Duration.ofMinutes(5));
 
         SessionLeaseState state2 = service.evaluateLiveness(record, policyGrace);
-        assertEquals(SessionLeaseState.ABANDONMENT_ELIGIBLE, state2);
+        assertEquals(SessionLeaseState.RECOVERY_ELIGIBLE, state2);
     }
 }

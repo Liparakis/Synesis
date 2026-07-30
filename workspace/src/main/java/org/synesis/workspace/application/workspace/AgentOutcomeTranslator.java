@@ -73,7 +73,7 @@ public final class AgentOutcomeTranslator {
                 AgentResponse response = new AgentResponse(
                         AgentStatus.NEEDS_CAPABILITY,
                         AgentReason.OWNER_REQUIRED,
-                        AgentNextAction.DESCRIBE_REQUIRED_CAPABILITY,
+                        AgentNextAction.REQUEST_COORDINATION,
                         new AgentCapabilityResult(capability, requiredFields)
                 );
                 yield new TranslatedOutcome(

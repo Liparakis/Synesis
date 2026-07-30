@@ -1,12 +1,16 @@
 package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
@@ -18,14 +22,33 @@ import org.synesis.workspace.provider.ProviderRegistry;
  */
 final class ProviderApplicationServiceTest {
 
+    private String previousUserHome;
+
+    @BeforeEach
+    void isolateProviderHome() throws Exception {
+        previousUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", Files.createTempDirectory("provider-test-home-").toString());
+    }
+
+    @AfterEach
+    void restoreProviderHome() {
+        if (previousUserHome == null) {
+            System.clearProperty("user.home");
+        } else {
+            System.setProperty("user.home", previousUserHome);
+        }
+    }
+
     private static void git(Path root, String... arguments) throws Exception {
         String[] command = new String[arguments.length + 3];
         command[0] = "git";
         command[1] = "-C";
         command[2] = root.toString();
         System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
+        Process process = new ProcessBuilder(command).redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream()
+                .readAllBytes());
         if (process.waitFor() != 0) {
             throw new IllegalStateException(output);
         }
@@ -38,7 +61,9 @@ final class ProviderApplicationServiceTest {
                         .stream()
                         .map(provider -> provider.id())
                         .toList());
-        assertEquals("claude", ProviderRegistry.find("claude-code").id());
+        assertEquals("claude",
+                ProviderRegistry.find("claude-code")
+                        .id());
         assertEquals(org.synesis.workspace.provider.ProviderSupportLevel.EXPERIMENTAL,
                 ProviderRegistry.find("codex")
                         .supportLevel());
@@ -192,31 +217,50 @@ final class ProviderApplicationServiceTest {
     void mcpConfigurationInstalledAndPreservesUnrelatedEntries() throws Exception {
         Path root = Files.createTempDirectory("mcp-config-test-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        Path mcpLauncher = Files.createTempFile("synesis-mcp-", ".exe");
         String previous = System.getProperty("synesis.launcher");
+        String previousMcp = System.getProperty("synesis.mcp.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
+        System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
         try {
-            var location = new ProjectApplicationService().init(root).location();
+            var location = new ProjectApplicationService().init(root)
+                    .location();
             var provider = org.synesis.workspace.provider.ProviderRegistry.find("codex");
             Path userMcp = provider.mcpConfigurationPath(root);
             if (userMcp != null) {
                 Files.createDirectories(userMcp.getParent());
-                Files.writeString(userMcp, "notify = [\"keep\"]\n\n[mcp_servers.other-server]\ncommand = \"other.cmd\"\n");
+                Files.writeString(userMcp,
+                        "notify = [\"keep\"]\n\n[mcp_servers.other-server]\ncommand = \"other.cmd\"\n");
             }
+            Path legacyProjectMcp = root.resolve(".codex/mcp.json");
+            Files.createDirectories(legacyProjectMcp.getParent());
+            Files.writeString(legacyProjectMcp,
+                    "{\"mcpServers\":{\"synesis\":{\"command\":\"old.cmd\"},\"other\":{\"command\":\"other.cmd\"}}}\n");
 
             ProviderApplicationService service = new ProviderApplicationService();
             service.install(location, "codex");
 
+            Assertions.assertNotNull(userMcp);
             assertTrue(Files.exists(userMcp));
             String parsed = Files.readString(userMcp);
             assertTrue(parsed.contains("notify = [\"keep\"]"));
             assertTrue(parsed.contains("[mcp_servers.other-server]"));
             assertTrue(parsed.contains("[mcp_servers.synesis]"));
-            assertTrue(parsed.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
+            assertTrue(parsed.contains("command = '" + mcpLauncher.toAbsolutePath().normalize() + "'"));
+            assertTrue(parsed.contains("\"mcp\", \"--provider\", \"codex\""));
+            Map<?, ?> legacy = (Map<?, ?>) ProviderJson.parse(Files.readString(legacyProjectMcp));
+            assertTrue(((Map<?, ?>) legacy.get("mcpServers")).containsKey("other"));
+            assertFalse(((Map<?, ?>) legacy.get("mcpServers")).containsKey("synesis"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");
             } else {
                 System.setProperty("synesis.launcher", previous);
+            }
+            if (previousMcp == null) {
+                System.clearProperty("synesis.mcp.launcher");
+            } else {
+                System.setProperty("synesis.mcp.launcher", previousMcp);
             }
         }
     }
@@ -228,26 +272,37 @@ final class ProviderApplicationServiceTest {
         String previous = System.getProperty("synesis.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
         try {
-            var location = new ProjectApplicationService().init(root).location();
+            var location = new ProjectApplicationService().init(root)
+                    .location();
             Path mcp = root.resolve(".mcp.json");
             Files.writeString(mcp, "{\"mcpServers\":{\"other\":{\"command\":\"other.cmd\"}},\"custom\":true}\n");
             ProviderApplicationService service = new ProviderApplicationService();
 
             var installed = service.install(location, "claude");
-            assertEquals("INSTALLED", installed.values().get("MCP_CONFIG_STATUS"));
+            assertEquals("INSTALLED",
+                    installed.values()
+                            .get("MCP_CONFIG_STATUS"));
             Map<?, ?> parsed = (Map<?, ?>) ProviderJson.parse(Files.readString(mcp));
             assertEquals(Boolean.TRUE, parsed.get("custom"));
             Map<?, ?> servers = (Map<?, ?>) parsed.get("mcpServers");
             assertTrue(servers.containsKey("other"));
             Map<?, ?> synesis = (Map<?, ?>) servers.get("synesis");
-            assertEquals(service.launcherPath().toAbsolutePath().normalize().toString(), synesis.get("command"));
-            assertEquals(java.util.List.of("mcp", "--provider", "claude"), synesis.get("args"));
+            assertEquals(service.mcpLauncherPath()
+                    .toAbsolutePath()
+                    .normalize()
+                    .toString(), synesis.get("command"));
+            assertEquals(java.util.List.of("mcp", "--provider", "claude", "--project",
+                    root.toAbsolutePath().normalize().toString()), synesis.get("args"));
 
             var reinstalled = service.install(location, "claude-code");
-            assertEquals("ALREADY_INSTALLED", reinstalled.values().get("PROVIDER_INSTALL_RESULT"));
+            assertEquals("ALREADY_INSTALLED",
+                    reinstalled.values()
+                            .get("PROVIDER_INSTALL_RESULT"));
 
             var uninstalled = service.uninstall(location, "claude");
-            assertEquals("SUCCESS", uninstalled.values().get("PROVIDER_UNINSTALL_RESULT"));
+            assertEquals("SUCCESS",
+                    uninstalled.values()
+                            .get("PROVIDER_UNINSTALL_RESULT"));
             Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(mcp));
             assertEquals(Boolean.TRUE, after.get("custom"));
             assertTrue(((Map<?, ?>) after.get("mcpServers")).containsKey("other"));
@@ -286,11 +341,14 @@ final class ProviderApplicationServiceTest {
         String previous = System.getProperty("synesis.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
         try {
-            var location = new ProjectApplicationService().init(root).location();
+            var location = new ProjectApplicationService().init(root)
+                    .location();
             var result = new ProviderApplicationService().install(location, "codex");
-            Path worktree = Path.of(result.values().get("ASSIGNED_WORKTREE"));
+            Path worktree = Path.of(result.values()
+                    .get("ASSIGNED_WORKTREE"));
             assertTrue(Files.isRegularFile(worktree.resolve(".codex/hooks.json")));
-            assertTrue(Files.readString(worktree.resolve(".codex/hooks.json")).contains("hook codex"));
+            assertTrue(Files.readString(worktree.resolve(".codex/hooks.json"))
+                    .contains("hook codex"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");
@@ -301,7 +359,7 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void antigravityMcpConfigurationTargetsUserLevelAndMigratesObsoleteProjectFiles() throws Exception {
+    void antigravityMcpConfigurationTargetsProviderLevelAndMigratesObsoleteScopes() throws Exception {
         Path root = Files.createTempDirectory("antigravity-mcp-test-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
         String previous = System.getProperty("synesis.launcher");
@@ -314,13 +372,17 @@ final class ProviderApplicationServiceTest {
 
             Path geminiMcp = root.resolve(".gemini/mcp.json");
             Files.createDirectories(geminiMcp.getParent());
-            Files.writeString(geminiMcp, "{\"mcpServers\":{\"synesis\":{\"command\":\"old.cmd\"},\"unrelated\":{\"command\":\"other.cmd\"}}}\n");
+            Files.writeString(geminiMcp,
+                    "{\"mcpServers\":{\"synesis\":{\"command\":\"old.cmd\"},\"unrelated\":{\"command\":\"other.cmd\"}}}\n");
 
-            var location = new ProjectApplicationService().init(root).location();
+            var location = new ProjectApplicationService().init(root)
+                    .location();
             ProviderApplicationService service = new ProviderApplicationService();
             service.install(location, "antigravity");
 
-            // Verify user-level config contains synesis entry with no hardcoded project arg
+            // Verify provider-global config does not bind to the most recently
+            // installed project; MCP initialize roots choose the project per
+            // connection.
             var provider = org.synesis.workspace.provider.ProviderRegistry.find("antigravity");
             Path userMcp = provider.mcpConfigurationPath(root);
             assertTrue(Files.exists(userMcp));
@@ -328,8 +390,21 @@ final class ProviderApplicationServiceTest {
             Map<?, ?> userServers = (Map<?, ?>) parsedUser.get("mcpServers");
             assertTrue(userServers.containsKey("synesis"));
             Map<?, ?> synesisEntry = (Map<?, ?>) userServers.get("synesis");
-            assertEquals(java.util.List.of("mcp", "--provider", "antigravity"), synesisEntry.get("args"));
+            assertTrue(synesisEntry.get("args") instanceof java.util.List<?> args
+                    && args.size() == 3
+                    && "mcp".equals(args.get(0))
+                    && "--provider".equals(args.get(1))
+                    && "antigravity".equals(args.get(2)));
             assertTrue(!synesisEntry.containsKey("connectionInstanceId"));
+
+            Path obsoleteProviderMcp = userMcp.getParent()
+                    .getParent()
+                    .resolve("antigravity/mcp_config.json");
+            if (Files.exists(obsoleteProviderMcp)) {
+                Map<?, ?> parsedMirror = (Map<?, ?>) ProviderJson.parse(Files.readString(obsoleteProviderMcp));
+                Object mirrorServers = parsedMirror.get("mcpServers");
+                assertTrue(!(mirrorServers instanceof Map<?, ?> servers) || !servers.containsKey("synesis"));
+            }
 
             // Verify obsolete project-local pure synesis file was deleted
             assertTrue(!Files.exists(agentsMcp));
@@ -342,7 +417,10 @@ final class ProviderApplicationServiceTest {
             assertTrue(geminiServers.containsKey("unrelated"));
 
             // Verify provider trust remains UNVALIDATED (does not promote real maturity)
-            assertEquals("UNVALIDATED", service.status(location, "antigravity").values().get("TRUST_STATUS"));
+            assertEquals("UNVALIDATED",
+                    service.status(location, "antigravity")
+                            .values()
+                            .get("TRUST_STATUS"));
             assertTrue(provider.requiresRealValidation());
         } finally {
             if (previous == null) {

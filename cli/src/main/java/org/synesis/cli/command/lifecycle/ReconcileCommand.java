@@ -108,7 +108,7 @@ public final class ReconcileCommand implements Callable<Integer> {
                 map.put("sessionsInspected", summary.totalSessionsInspected());
                 map.put("active", summary.activeCount());
                 map.put("suspectedStale", summary.suspectedStaleCount());
-                map.put("abandonmentEligible", summary.abandonmentEligibleCount());
+                map.put("recoveryEligible", summary.recoveryEligibleCount());
                 map.put("ambiguous", summary.ambiguousCount());
                 map.put("recoverableIntegrations", summary.recoverableIntegrations());
                 map.put("executableActions", summary.executableActionsCount());
@@ -121,7 +121,7 @@ public final class ReconcileCommand implements Callable<Integer> {
             runtime.terminal().stdout("SESSIONS_INSPECTED=" + summary.totalSessionsInspected());
             runtime.terminal().stdout("ACTIVE=" + summary.activeCount());
             runtime.terminal().stdout("SUSPECTED_STALE=" + summary.suspectedStaleCount());
-            runtime.terminal().stdout("ABANDONMENT_ELIGIBLE=" + summary.abandonmentEligibleCount());
+            runtime.terminal().stdout("RECOVERY_ELIGIBLE=" + summary.recoveryEligibleCount());
             runtime.terminal().stdout("AMBIGUOUS=" + summary.ambiguousCount());
             runtime.terminal().stdout("RECOVERABLE_INTEGRATIONS=" + summary.recoverableIntegrations());
             runtime.terminal().stdout("EXECUTABLE_ACTIONS=" + summary.executableActionsCount());

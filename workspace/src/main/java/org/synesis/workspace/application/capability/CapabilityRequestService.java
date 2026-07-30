@@ -33,7 +33,7 @@ import org.synesis.workspace.agent.AgentStatus;
 /**
  * Application service for requesting capabilities and handling requester contract negotiation.
  *
- * <p>Handles tool calls for {@code synesis.describe_required_capability}.
+ * <p>Handles coordination requests and capability contract descriptions.
  *
  * @since 1.0
  */
@@ -139,14 +139,14 @@ public final class CapabilityRequestService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, AgentNextAction.RETRY, null);
             }
             if (request.contract() == null) {
-                return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.DESCRIBE_REQUIRED_CAPABILITY, null);
+                return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, null);
             }
 
             // Resolve semantic owner for capability
             String ownerNodeId = resolveOwnerNodeId(location.root(), store, capability);
             if (ownerNodeId == null || ownerNodeId.isBlank()) {
                 Map<String, Object> result = Map.of("capability", capability);
-                return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.DESCRIBE_REQUIRED_CAPABILITY, result);
+                return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
             }
 
             // Check existing active request for (requester, capability)
@@ -243,7 +243,7 @@ public final class CapabilityRequestService {
             }
             case "counter" -> {
                 if (request.contract() == null) {
-                    yield new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.DESCRIBE_REQUIRED_CAPABILITY, null);
+                    yield new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, null);
                 }
                 CapabilityRequestPayload payload = new CapabilityRequestPayload(
                         record.handle(), record.capability(), requesterNodeId, record.ownerNodeId(), request.contract(), CapabilityLifecycleState.AWAITING_OWNER, null);

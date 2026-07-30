@@ -208,7 +208,21 @@ public enum PredictionEventType {
     /** Revokes a lane grant or lane authority epoch. */
     LANE_REVOKED,
     /** Changes logical work-group lifecycle without closing sibling lanes. */
-    WORK_GROUP_STATUS_CHANGED;
+    WORK_GROUP_STATUS_CHANGED,
+    /** Fences a participant after verified process loss without releasing its claims. */
+    PARTICIPANT_SUSPENDED,
+    /** Records that an immutable recovery snapshot exists for a suspended participant. */
+    RECOVERY_SNAPSHOT_HELD,
+    /** Explicitly revokes a participant lane and releases its claims. */
+    PARTICIPANT_REVOKED,
+    /** Idempotently acknowledges a durable inbox item. */
+    INBOX_ITEM_ACKNOWLEDGED,
+    /** Explicitly cancels a participant lane and fences its epoch. */
+    PARTICIPANT_CANCELLED,
+    /** Atomically transfers a held recovery lane into a new participant lane. */
+    LANE_CONTINUATION_ACCEPTED,
+    /** Records a clean connection shutdown without treating the lane as completed. */
+    PARTICIPANT_DETACHED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -230,6 +244,13 @@ public enum PredictionEventType {
             case LANE_GRANT_CONSUMED -> 55;
             case LANE_REVOKED -> 56;
             case WORK_GROUP_STATUS_CHANGED -> 57;
+            case PARTICIPANT_SUSPENDED -> 58;
+            case RECOVERY_SNAPSHOT_HELD -> 59;
+            case PARTICIPANT_REVOKED -> 60;
+            case INBOX_ITEM_ACKNOWLEDGED -> 61;
+            case PARTICIPANT_CANCELLED -> 62;
+            case LANE_CONTINUATION_ACCEPTED -> 63;
+            case PARTICIPANT_DETACHED -> 64;
             default -> ordinal();
         };
     }

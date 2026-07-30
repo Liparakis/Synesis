@@ -35,6 +35,7 @@ public final class AgentNextActionService {
 
     private final ProjectApplicationService projectService;
     private final WorkspaceReadinessService readinessService;
+    private final AgentWorkflowReducer workflowReducer;
 
     /**
      * Creates a next-action retrieval application service.
@@ -42,6 +43,7 @@ public final class AgentNextActionService {
     public AgentNextActionService() {
         this.projectService = new ProjectApplicationService();
         this.readinessService = new WorkspaceReadinessService();
+        this.workflowReducer = new AgentWorkflowReducer();
     }
 
     /**
@@ -91,6 +93,11 @@ public final class AgentNextActionService {
      * @return concise agent response
      */
     public AgentResponse getNextAction(NextActionRequest request) {
+        AgentResponse response = resolveNextAction(request);
+        return workflowReducer.decorate(request, response);
+    }
+
+    private AgentResponse resolveNextAction(NextActionRequest request) {
         Objects.requireNonNull(request, "request");
 
         Path root = request.projectRoot().toAbsolutePath().normalize();
@@ -102,6 +109,16 @@ public final class AgentNextActionService {
         WorkspaceReadinessService.ReadinessResult readiness;
         try {
             location = projectService.locate(root);
+            // A completed lane is a durable terminal state.  Do not send its
+            // caller back through workspace freshness checks after integration
+            // has advanced the control head; the immutable snapshot remains
+            // available for audit and recovery, but this authority is closed.
+            var exactBinding = new ProviderSessionBindingService().find(
+                    location, request.provider(), request.connectionInstanceId());
+            if (exactBinding.isPresent() && "COMPLETED".equals(exactBinding.get().status())) {
+                return new AgentResponse(AgentStatus.COMPLETED, null, null,
+                        Map.of("state", "COMPLETED", "lane", exactBinding.get().sessionId()));
+            }
             readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
@@ -125,7 +142,7 @@ public final class AgentNextActionService {
                 List<Map<String, Object>> pendingCoordination = (List<Map<String, Object>>) collaboration.get("pendingCoordination");
                 if (!pendingCoordination.isEmpty()) {
                     return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
-                            AgentNextAction.RESPOND_TO_OWNER_REQUEST, collaboration);
+                            AgentNextAction.RESPOND_COORDINATION, collaboration);
                 }
 
                 List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerPending = capProj.findPendingForOwner(callerNodeId);
@@ -166,7 +183,7 @@ public final class AgentNextActionService {
                     result.put("capability", topReq.capability());
                     result.put("contract", contractMap);
                     result.put("pending", ownerPending.size());
-                    return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_TO_OWNER_REQUEST, result);
+                    return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_COORDINATION, result);
                 }
 
                 // Slice 2: owner must respond to a validation revision
@@ -306,7 +323,7 @@ public final class AgentNextActionService {
                 res.put("capability", topItem.capability());
                 res.put("requiredFields", reqFields);
                 res.put("pending", pendingCount);
-                yield new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.DESCRIBE_REQUIRED_CAPABILITY, res);
+                yield new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, res);
             }
             case "VALIDATION_REQUIRED" -> {
                 Map<String, Object> res = new LinkedHashMap<>();
@@ -353,10 +370,16 @@ public final class AgentNextActionService {
                 ? "" : WorkspaceCollaborationService.participantHandle(sessionId);
         List<Map<String, Object>> intents = store.collaborationProjection().activeIntents().stream()
                 .map(AgentNextActionService::intentMap).toList();
+        Map<String, Object> currentIntent = store.collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.participant().equals(participantId))
+                .map(AgentNextActionService::intentMap)
+                .findFirst()
+                .orElse(null);
         List<Map<String, Object>> participants = store.collaborationProjection().participants().stream()
                 .map(AgentNextActionService::participantMap).toList();
         List<Map<String, Object>> pending = store.collaborationProjection().requests().stream()
                 .filter(request -> request.status() == CoordinationRequest.Status.PENDING)
+                .filter(request -> !store.collaborationProjection().inboxAcknowledged(request.requestId()))
                 .filter(request -> participantId.isBlank() || request.target().equals(participantId))
                 .map(AgentNextActionService::requestMap).toList();
         Map<String, Object> result = new LinkedHashMap<>();
@@ -364,6 +387,8 @@ public final class AgentNextActionService {
         result.put("pending", pending.size());
         result.put("participants", participants);
         result.put("intents", intents);
+        result.put("currentParticipant", participantId);
+        result.put("currentIntent", currentIntent);
         result.put("pendingCoordination", pending);
         result.put("claimConflicts", List.of());
         return result;
@@ -378,6 +403,7 @@ public final class AgentNextActionService {
         map.put("acceptance", intent.acceptance());
         map.put("selectors", intent.selectors().stream().map(AgentNextActionService::selectorMap).toList());
         map.put("version", intent.version());
+        map.put("workGroupId", intent.workGroupId().toString());
         map.put("status", intent.status().name());
         return map;
     }
@@ -396,6 +422,7 @@ public final class AgentNextActionService {
     private static Map<String, Object> requestMap(CoordinationRequest request) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("requestId", request.requestId().toString());
+        map.put("inboxItemId", request.requestId().toString());
         map.put("requester", request.requester());
         map.put("target", request.target());
         map.put("conflictingIntentId", request.conflictingIntentId().toString());

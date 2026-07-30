@@ -62,6 +62,7 @@ class SyntheticTwoProcessCollaborationTest {
         git(projectRoot, "commit", "-m", "Initial commit");
 
         new ProjectApplicationService().init(projectRoot);
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
@@ -136,7 +137,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 2,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.describe_required_capability\",\n" +
+                "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
@@ -159,7 +160,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 3,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.respond_to_owner_request\",\n" +
+                "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"response\": \"accept\"\n" +
@@ -180,7 +181,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 4,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.publish_implementation\",\n" +
+                "    \"name\": \"publish_snapshot\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"summary\": \"Implemented product query\"\n" +
@@ -196,7 +197,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 5,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.validate_available_implementation\",\n" +
+                "    \"name\": \"validate_snapshot\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"result\": \"accepted\"\n" +
@@ -212,7 +213,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 6,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.complete_task\",\n" +
+                "    \"name\": \"complete_task\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Product query service complete\"\n" +
                 "    }\n" +
@@ -233,7 +234,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 7,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.complete_task\",\n" +
+                "    \"name\": \"complete_task\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Product CLI integration complete\"\n" +
                 "    }\n" +

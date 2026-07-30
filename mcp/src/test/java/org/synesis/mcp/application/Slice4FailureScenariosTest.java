@@ -61,6 +61,7 @@ class Slice4FailureScenariosTest {
         git(projectRoot, "commit", "-m", "Initial commit");
 
         new ProjectApplicationService().init(projectRoot);
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
@@ -132,7 +133,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 2,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.describe_required_capability\",\n" +
+                "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
@@ -153,7 +154,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 3,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.complete_task\",\n" +
+                "    \"name\": \"complete_task\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Premature completion attempt\"\n" +
                 "    }\n" +
@@ -173,7 +174,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 2,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.describe_required_capability\",\n" +
+                "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
@@ -194,7 +195,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 3,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.respond_to_owner_request\",\n" +
+                "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"response\": \"revise\",\n" +
@@ -217,7 +218,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 35,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.describe_required_capability\",\n" +
+                "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
@@ -238,7 +239,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 4,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.respond_to_owner_request\",\n" +
+                "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"response\": \"accept\"\n" +
@@ -258,7 +259,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 5,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.publish_implementation\",\n" +
+                "    \"name\": \"publish_snapshot\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"summary\": \"Revision 1\"\n" +
@@ -273,7 +274,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 6,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.validate_available_implementation\",\n" +
+                "    \"name\": \"validate_snapshot\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"result\": \"revision_required\",\n" +
@@ -295,7 +296,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 7,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.publish_implementation\",\n" +
+                "    \"name\": \"publish_snapshot\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"summary\": \"Revision 2\"\n" +
@@ -311,7 +312,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 8,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.validate_available_implementation\",\n" +
+                "    \"name\": \"validate_snapshot\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + reqHandle + "\",\n" +
                 "      \"result\": \"accepted\"\n" +
@@ -340,7 +341,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 2,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.complete_task\",\n" +
+                "    \"name\": \"complete_task\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Complete while control checkout is dirty\"\n" +
                 "    }\n" +

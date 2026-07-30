@@ -14,6 +14,9 @@ import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -36,6 +39,23 @@ final class WorkIntentServiceTest {
         WorkIntent unrelated = intent(project, "agt-third", ResourceSelector.pathExact("tests/test_task_tracker.py"));
         assertTrue(service.announce(unrelated).acquired());
         assertTrue(service.owns("agt-first", ResourceSelector.pathExact("src/task_tracker.py")));
+    }
+
+    @Test
+    void conflictCreatesIdempotentInboxItemsForOwnerAndContender(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        WorkIntent contender = intent(project, "agt-contender", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+        assertFalse(service.announce(contender).acquired());
+        int firstCount = service.requests().size();
+        assertEquals(2, firstCount);
+        assertTrue(service.requests().stream().anyMatch(request -> request.target().equals("agt-owner")));
+        assertTrue(service.requests().stream().anyMatch(request -> request.target().equals("agt-contender")));
+        assertFalse(service.announce(contender).acquired());
+        assertEquals(firstCount, service.requests().size());
     }
 
     @Test
@@ -118,6 +138,67 @@ final class WorkIntentServiceTest {
         assertFalse(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
         assertTrue(service.owns("agt-target", ResourceSelector.pathExact("src/task_tracker.py")));
         assertEquals(2, service.activeIntents().stream().filter(i -> i.intentId().equals(owner.intentId())).findFirst().orElseThrow().version());
+    }
+
+    @Test
+    void inboxAcknowledgementIsExactCallerAuthorizedAndIdempotent(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        WorkIntent contender = intent(project, "agt-contender", ResourceSelector.pathExact("tests/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+        assertTrue(service.announce(contender).acquired());
+        CoordinationRequest request = service.request("agt-contender", owner.intentId(),
+                CoordinationRequest.Kind.CONTRACT, "agree API");
+        assertFalse(new PredictionEventStore(temp, project).collaborationProjection().inboxAcknowledged(request.requestId()));
+        assertThrows(java.io.IOException.class, () -> service.acknowledgeInbox("agt-contender", request.requestId()));
+        service.acknowledgeInbox("agt-owner", request.requestId());
+        service.acknowledgeInbox("agt-owner", request.requestId());
+        assertTrue(new PredictionEventStore(temp, project).collaborationProjection().inboxAcknowledged(request.requestId()));
+    }
+
+    @Test
+    void cancellationReleasesClaimsAndPermanentlyFencesLane(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+        service.cancel("agt-owner");
+        var projection = new PredictionEventStore(temp, project).collaborationProjection();
+        assertFalse(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertEquals(org.synesis.coordination.domain.collaboration.Participant.State.CANCELLED,
+                projection.participants().getFirst().state());
+    }
+
+    @Test
+    void continuationTransfersHeldClaimsAtomicallyAndConsumesSingleUseGrant(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+        service.suspend("agt-owner");
+        String reference = temp.resolve("recovery").toAbsolutePath() + "#hash";
+        service.holdRecovery("agt-owner", reference);
+        UUID targetIntentId = UUID.randomUUID();
+        UUID grantId = UUID.randomUUID();
+        new WorkGroupService(new PredictionEventStore(temp, project), identity).issue(new LaneGrant(
+                grantId, owner.workGroupId(), targetIntentId, "agt-target", owner.version(), true));
+        WorkIntent target = new WorkIntent(targetIntentId, project, "agt-target", "codex", UUID.randomUUID(),
+                owner.goal(), owner.acceptance(), owner.baseCommit(), owner.selectors(), owner.version() + 1,
+                owner.workGroupId(), WorkIntent.Status.ANNOUNCED);
+        service.continueFromRecovery(new CollaborationCodec.Continuation(grantId, owner.intentId(), target,
+                "agt-owner", "agt-target", owner.version(), reference));
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertFalse(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertTrue(service.owns("agt-target", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertFalse(replayed.workGroupProjection().grantAvailable(grantId));
+        assertEquals(org.synesis.coordination.domain.collaboration.Participant.State.DETACHED,
+                replayed.collaborationProjection().participantState("agt-owner").orElseThrow());
     }
 
     private static WorkIntent intent(UUID project, String participant, ResourceSelector selector) {

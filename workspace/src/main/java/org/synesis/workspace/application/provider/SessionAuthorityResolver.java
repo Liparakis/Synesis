@@ -32,7 +32,8 @@ public final class SessionAuthorityResolver {
         String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
         return bindingService.list(location, provider).stream()
-                .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()))
+                .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
+                        || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));

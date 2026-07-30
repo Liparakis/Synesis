@@ -224,7 +224,9 @@ public final class TaskSnapshotService {
             // Provider/session metadata belongs to the lane runtime, never to a
             // published source snapshot.  Keep it at the parent tree value.
             runGitWithIndex(workdir, index, "add", "-A", "--", ".",
-                    ":(exclude).synesis/**", ":(exclude).codex/**");
+                    ":(exclude).synesis/**", ":(exclude).codex/**",
+                    ":(exclude).claude/**", ":(exclude).agents/**",
+                    ":(exclude)AGENTS.md", ":(exclude).mcp.json");
             String tree = runGitWithIndexOutput(workdir, index, "write-tree");
             String commit = runGitWithIndexOutput(workdir, index, "commit-tree", tree, "-p", parent, "-m", "Synesis immutable lane snapshot");
             runGitOutput(workdir, "update-ref", "refs/synesis/snapshots/" + snapshotId, commit);
@@ -236,7 +238,10 @@ public final class TaskSnapshotService {
 
     private static boolean isSnapshotManagedPath(String path) {
         return !(path.equals(".synesis") || path.startsWith(".synesis/")
-                || path.equals(".codex") || path.startsWith(".codex/"));
+                || path.equals(".codex") || path.startsWith(".codex/")
+                || path.equals(".claude") || path.startsWith(".claude/")
+                || path.equals(".agents") || path.startsWith(".agents/")
+                || path.equals("AGENTS.md") || path.equals(".mcp.json"));
     }
 
     private static String integrity(String commit, List<String> paths) {

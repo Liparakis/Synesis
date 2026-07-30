@@ -58,6 +58,7 @@ class TwoProcessCapabilityNegotiationProcessTest {
         git(projectRoot, "commit", "-m", "Initial commit");
 
         new ProjectApplicationService().init(projectRoot);
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
@@ -105,13 +106,13 @@ class TwoProcessCapabilityNegotiationProcessTest {
 
     @Test
     void twoIndependentProcessesNegotiateCapability() {
-        // 1. Requester calls synesis.ensure_session
-        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{\"task\":{\"goal\":\"Test goal\",\"acceptance\":\"Test acceptance\"}}}}";
+        // 1. Requester calls ensure_session
+        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"Test goal\",\"acceptance\":\"Test acceptance\"}}}}";
         String ensureResp = requesterHandler.handleMessage(ensureReq);
         assertNotNull(ensureResp);
         assertTrue(ensureResp.contains("ready"), "Expected ready but got: " + ensureResp);
 
-        // 2. Owner calls synesis.ensure_session
+        // 2. Owner calls ensure_session
         String ensureOwnerResp = ownerHandler.handleMessage(ensureReq);
         assertNotNull(ensureOwnerResp);
         assertTrue(ensureOwnerResp.contains("ready"), "Expected ready but got: " + ensureOwnerResp);
@@ -122,7 +123,7 @@ class TwoProcessCapabilityNegotiationProcessTest {
                 "  \"id\": 3,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.describe_required_capability\",\n" +
+                "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
@@ -144,11 +145,11 @@ class TwoProcessCapabilityNegotiationProcessTest {
         String handle = extractHandleFromMcpResponse(descRespStr);
         assertNotNull(handle);
 
-        // 4. Owner calls get_next_action -> receives respond_to_owner_request
-        String ownerNextReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.get_next_action\",\"arguments\":{}}}";
+        // 4. Owner calls get_next_action -> receives respond_coordination
+        String ownerNextReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
         String ownerNextResp = ownerHandler.handleMessage(ownerNextReq);
         assertNotNull(ownerNextResp);
-        assertTrue(ownerNextResp.contains("respond_to_owner_request"), "Expected respond_to_owner_request but got: " + ownerNextResp);
+        assertTrue(ownerNextResp.contains("respond_coordination"), "Expected respond_coordination but got: " + ownerNextResp);
         assertTrue(ownerNextResp.contains(handle));
 
         // 5. Owner accepts the request
@@ -157,7 +158,7 @@ class TwoProcessCapabilityNegotiationProcessTest {
                 "  \"id\": 5,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"synesis.respond_to_owner_request\",\n" +
+                "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"request\": \"" + handle + "\",\n" +
                 "      \"response\": \"accept\"\n" +
@@ -170,7 +171,7 @@ class TwoProcessCapabilityNegotiationProcessTest {
         assertTrue(acceptRespStr.contains("ready"), "Expected ready but got: " + acceptRespStr);
 
         // 6. Requester calls get_next_action -> receives implementation_unavailable
-        String reqNextReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.get_next_action\",\"arguments\":{}}}";
+        String reqNextReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
         String reqNextResp = requesterHandler.handleMessage(reqNextReq);
         assertNotNull(reqNextResp);
         assertTrue(reqNextResp.contains("implementation_unavailable"), "Expected implementation_unavailable but got: " + reqNextResp);
@@ -184,14 +185,14 @@ class TwoProcessCapabilityNegotiationProcessTest {
 
     @Test
     void secondMcpSessionDiscoversClaimBeforeCompetingMutation() {
-        String ownerEnsure = "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{\"task\":{\"goal\":\"Implement tracker\",\"acceptance\":\"45 tests pass\",\"claims\":[{\"path\":\"src/task_tracker.py\",\"kind\":\"path_exact\"}]}}}}";
+        String ownerEnsure = "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"Implement tracker\",\"acceptance\":\"45 tests pass\",\"claims\":[{\"path\":\"src/task_tracker.py\",\"kind\":\"path_exact\"}]}}}}";
         String first = requesterHandler.handleMessage(ownerEnsure);
         assertTrue(first.contains("ready"), "first claim should be acquired: " + first);
 
         String second = ownerHandler.handleMessage(ownerEnsure.replace("\"id\":20", "\"id\":21"));
         assertTrue(second.contains("overlapping_claim"), "second claim must be blocked: " + second);
 
-        String mutation = "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.apply_patch\",\"arguments\":{\"path\":\"src/task_tracker.py\",\"create\":true,\"content\":\"competing\"}}}";
+        String mutation = "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"src/task_tracker.py\",\"create\":true,\"content\":\"competing\"}}}";
         String mutationResponse = ownerHandler.handleMessage(mutation);
         assertTrue(mutationResponse.contains("overlapping_claim"),
                 "competing mutation must be blocked: " + mutationResponse);

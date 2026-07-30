@@ -141,7 +141,7 @@ class CapabilityNegotiationTest {
         AgentResponse ownerNextResp = nextActionService.getNextAction(ownerNextReq);
 
         assertEquals(AgentStatus.READY, ownerNextResp.status());
-        assertEquals(AgentNextAction.RESPOND_TO_OWNER_REQUEST, ownerNextResp.nextAction());
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNextResp.nextAction());
 
         // 3. Owner accepts request
         CapabilityResponseService.OwnerResponseRequest ownerResp = new CapabilityResponseService.OwnerResponseRequest(

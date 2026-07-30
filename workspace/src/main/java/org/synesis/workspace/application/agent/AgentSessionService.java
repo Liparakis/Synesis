@@ -208,7 +208,7 @@ public final class AgentSessionService {
 
         if ("REVOKED".equalsIgnoreCase(binding.status())
                 || "COMPLETED".equalsIgnoreCase(binding.status())
-                || "ABANDONED".equalsIgnoreCase(binding.status())) {
+                || "CANCELLED".equalsIgnoreCase(binding.status())) {
             throw new IllegalStateException("Session is in inactive status: " + binding.status());
         }
 

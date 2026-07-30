@@ -48,14 +48,14 @@ class AgentResponseTest {
         AgentResponse response = new AgentResponse(
                 AgentStatus.NEEDS_CAPABILITY,
                 AgentReason.OWNER_REQUIRED,
-                AgentNextAction.DESCRIBE_REQUIRED_CAPABILITY,
+                AgentNextAction.REQUEST_COORDINATION,
                 new AgentCapabilityResult("catalog.product-query", List.of("inputs", "output", "behavior", "acceptanceTest"))
         );
 
         String json = response.toJson();
         assertTrue(json.contains("\"status\":\"needs_capability\""));
         assertTrue(json.contains("\"reason\":\"owner_required\""));
-        assertTrue(json.contains("\"nextAction\":\"describe_required_capability\""));
+        assertTrue(json.contains("\"nextAction\":\"request_coordination\""));
         assertTrue(json.contains("\"capability\":\"catalog.product-query\""));
         assertTrue(json.contains("\"requiredFields\":[\"inputs\",\"output\",\"behavior\",\"acceptanceTest\"]"));
     }

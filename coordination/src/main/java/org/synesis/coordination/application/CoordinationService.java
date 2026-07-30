@@ -285,6 +285,13 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.LANE_GRANT_ISSUED
                 || command.type() == PredictionEventType.LANE_GRANT_CONSUMED
                 || command.type() == PredictionEventType.LANE_REVOKED
+                || command.type() == PredictionEventType.PARTICIPANT_SUSPENDED
+                || command.type() == PredictionEventType.RECOVERY_SNAPSHOT_HELD
+                || command.type() == PredictionEventType.PARTICIPANT_REVOKED
+                || command.type() == PredictionEventType.INBOX_ITEM_ACKNOWLEDGED
+                || command.type() == PredictionEventType.PARTICIPANT_CANCELLED
+                || command.type() == PredictionEventType.LANE_CONTINUATION_ACCEPTED
+                || command.type() == PredictionEventType.PARTICIPANT_DETACHED
                 || command.type() == PredictionEventType.WORK_GROUP_STATUS_CHANGED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
@@ -316,7 +323,10 @@ public final class CoordinationService {
                  PARTICIPANT_ABANDONED,
                  CONTRACT_PUBLISHED, CONTRACT_DEPENDENCY_BOUND, CONTRACT_SUPERSEDED,
                  DEPENDENCY_INVALIDATED, WORK_GROUP_CREATED, LANE_GRANT_ISSUED,
-                 LANE_GRANT_CONSUMED, LANE_REVOKED, WORK_GROUP_STATUS_CHANGED -> true;
+                 LANE_GRANT_CONSUMED, LANE_REVOKED, WORK_GROUP_STATUS_CHANGED,
+                 PARTICIPANT_SUSPENDED, RECOVERY_SNAPSHOT_HELD, PARTICIPANT_REVOKED,
+                 INBOX_ITEM_ACKNOWLEDGED, PARTICIPANT_CANCELLED, LANE_CONTINUATION_ACCEPTED,
+                 PARTICIPANT_DETACHED -> true;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");

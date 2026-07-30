@@ -14,10 +14,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
 class McpServerTest {
@@ -48,6 +51,7 @@ class McpServerTest {
         git(tempRoot, "commit", "-m", "Initial commit");
 
         new org.synesis.workspace.application.ProjectApplicationService().init(tempRoot);
+        new ProviderManualService().install("codex");
     }
 
     @Test
@@ -95,9 +99,10 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-raw");
         String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}");
         assertEquals(11, response.split("\\\"name\\\":\\\"").length - 1);
+        assertTrue(response.contains("\"name\":\"ensure_session\""));
         assertFalse(response.contains("synesis.ensure_session"));
         String legacy = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
-        assertTrue(legacy.contains("ready") || legacy.contains("retry_required"));
+        assertTrue(legacy.contains("legacy or missing MCP tool name"));
     }
 
     @Test
@@ -105,7 +110,7 @@ class McpServerTest {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");
 
-        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String responseJson = handler.handleMessage(callReq);
 
         assertNotNull(responseJson);
@@ -123,7 +128,7 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-json");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/task_tracker_contract.md\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"publish\",\"collaborationContractId\":\"2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31\",\"collaborationBody\":\"Task tracker API v1\",\"collaborationSelectors\":[\"src/task_tracker.py\"]}}}";
+        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"publish\",\"collaborationContractId\":\"2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31\",\"collaborationBody\":\"Task tracker API v1\",\"collaborationSelectors\":[\"src/task_tracker.py\"]}}}";
         String response = handler.handleMessage(publish);
         assertFalse(response.contains("-32603"));
         assertTrue(response.contains("contentHash"));
@@ -135,9 +140,9 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-status");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract status json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/status_contract.md\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"publish\",\"collaborationContractId\":\"9b3fef3a-6f6e-4b4b-bd14-ae4f36ea4f18\",\"collaborationBody\":\"Status contract v1\",\"collaborationSelectors\":[\"src/task_tracker.py\"]}}}";
+        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"publish\",\"collaborationContractId\":\"9b3fef3a-6f6e-4b4b-bd14-ae4f36ea4f18\",\"collaborationBody\":\"Status contract v1\",\"collaborationSelectors\":[\"src/task_tracker.py\"]}}}";
         assertTrue(handler.handleMessage(publish).contains("contentHash"));
-        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"status\"}}}";
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"status\"}}}";
         String response = handler.handleMessage(status);
         assertFalse(response.contains("-32603"));
         assertTrue(response.contains("contracts"));
@@ -149,7 +154,7 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-discovery-json");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"discoverable goal\",\"acceptance\":\"status is readable\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/discovery.json\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String status = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
         String response = handler.handleMessage(status);
         assertFalse(response.contains("-32603"));
         assertTrue(response.contains("participants"));
@@ -172,7 +177,7 @@ class McpServerTest {
                 .replace("owner", "requester").replace("mcp-request-owner", "mcp-requester");
         assertTrue(owner.handleMessage(ownerEnsure).contains("ready"));
         assertTrue(requester.handleMessage(requesterEnsure).contains("ready"));
-        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
         String statusResponse = owner.handleMessage(status);
         String marker = "\\\"intentId\\\":\\\"";
         int markerStart = statusResponse.indexOf(marker);
@@ -180,7 +185,7 @@ class McpServerTest {
                 ? statusResponse.substring(markerStart + marker.length(), markerStart + marker.length() + 36)
                 : "";
         assertFalse(intentId.isBlank(), statusResponse);
-        String request = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"request\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationRequestKind\":\"CONTRACT\",\"collaborationProposal\":\"agree on API v1\"}}}";
+        String request = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"request\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationRequestKind\":\"CONTRACT\",\"collaborationProposal\":\"agree on API v1\"}}}";
         String requestResponse = requester.handleMessage(request);
         assertFalse(requestResponse.contains("-32603"));
         assertTrue(requestResponse.contains("CONTRACT"));
@@ -192,7 +197,7 @@ class McpServerTest {
                 ? "agt_" + statusResponse.substring(secondParticipant + participantMarker.length(),
                         secondParticipant + participantMarker.length() + 36)
                 : "";
-        String handoff = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"describe_required_capability\",\"arguments\":{\"collaborationOperation\":\"handoff\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationTarget\":\"" + targetParticipant + "\",\"collaborationProposal\":\"clean-worktree-claim-only\"}}}";
+        String handoff = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"handoff\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationTarget\":\"" + targetParticipant + "\",\"collaborationProposal\":\"clean-worktree-claim-only\"}}}";
         String handoffResponse = owner.handleMessage(handoff);
         assertFalse(handoffResponse.contains("-32603"));
         assertTrue(handoffResponse.contains("HANDOFF"));
@@ -211,7 +216,7 @@ class McpServerTest {
     }
 
     @Test
-    void releasedSessionEpochCannotReacquireClaimsOnSameBinding() {
+    void cleanlyClosedSessionCanEstablishANewLaneGeneration() {
         String connection = "conn-fenced-epoch";
         McpProtocolHandler first = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", connection);
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"fence epoch\",\"acceptance\":\"release\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/fenced-epoch.txt\"}]}}}}";
@@ -220,8 +225,7 @@ class McpServerTest {
 
         McpProtocolHandler returning = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", connection);
         String response = returning.handleMessage(ensure.replace("\"id\":1", "\"id\":2"));
-        assertTrue(response.contains("workspace_generation_changed"), response);
-        assertTrue(response.contains("blocked"));
+        assertTrue(response.contains("ready"), response);
     }
 
     @Test
@@ -242,7 +246,7 @@ class McpServerTest {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");
 
-        String req = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.unknown_tool\"}}";
+        String req = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"unknown_tool\"}}";
         String responseJson = handler.handleMessage(req);
 
         assertNotNull(responseJson);
@@ -273,7 +277,7 @@ class McpServerTest {
         assertNotNull(responseJson);
         assertEquals(tempRoot, handler.activeProjectRoot());
 
-        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String callResponse = handler.handleMessage(callReq);
         assertTrue(callResponse.contains("ready"));
     }
@@ -320,7 +324,7 @@ class McpServerTest {
                 + tempRoot.toUri() + "\"},{\"uri\":\"" + secondProject.toUri() + "\"}]}}";
         handler.handleMessage(initReq);
 
-        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String callResponse = handler.handleMessage(callReq);
 
         assertTrue(callResponse.contains("retry_required"));
@@ -332,7 +336,7 @@ class McpServerTest {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");
         handler.setAntigravityProjectsDir(Files.createTempDirectory("synesis-test-empty-projects-"));
-        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         handler.handleMessage(callReq);
 
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(tempRoot, "codex", "conn-1", null, false);
@@ -354,7 +358,7 @@ class McpServerTest {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, uninit, "antigravity", "conn-uninit");
 
-        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String callResponse = handler.handleMessage(callReq);
 
         assertTrue(callResponse.contains("retry_required"));
@@ -392,7 +396,7 @@ class McpServerTest {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-bound-1");
 
-        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String response = handler.handleMessage(callReq);
         assertTrue(response.contains("ready"));
 
@@ -449,7 +453,7 @@ class McpServerTest {
 
         String input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n"
                 + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n"
-                + "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\"}}\n";
+                + "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\"}}\n";
 
         ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -475,18 +479,18 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-mcp-tools");
 
         // 1. Ensure Session
-        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}";
+        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String ensureResp = handler.handleMessage(ensureReq);
         assertTrue(ensureResp.contains("ready"));
 
         // 2. Apply Patch Create Mode
-        String createReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"create\":true,\"content\":\"Hello MCP World\\n\"}}}";
+        String createReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"create\":true,\"content\":\"Hello MCP World\\n\"}}}";
         String createResp = handler.handleMessage(createReq);
         assertTrue(createResp.contains("completed"));
         assertTrue(createResp.contains("src/McpFile.txt"));
 
         // 3. Read File
-        String readReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.read_file\",\"arguments\":{\"path\":\"src/McpFile.txt\"}}}";
+        String readReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"read_file\",\"arguments\":{\"path\":\"src/McpFile.txt\"}}}";
         String readResp = handler.handleMessage(readReq);
         assertTrue(readResp.contains("completed"));
         assertTrue(readResp.contains("Hello MCP World"));
@@ -500,7 +504,7 @@ class McpServerTest {
             throw new RuntimeException(e);
         }
 
-        String modifyReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"expectedHash\":\"" + hash + "\",\"edits\":[{\"find\":\"World\",\"replace\":\"Antigravity\",\"expectedOccurrences\":1}]}}}";
+        String modifyReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"expectedHash\":\"" + hash + "\",\"edits\":[{\"find\":\"World\",\"replace\":\"Antigravity\",\"expectedOccurrences\":1}]}}}";
         String modifyResp = handler.handleMessage(modifyReq);
         assertTrue(modifyResp.contains("completed"));
 
@@ -509,15 +513,21 @@ class McpServerTest {
         assertTrue(readModResp.contains("Hello MCP Antigravity"));
 
         // 6. Run Command (git_status)
-        String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.run_command\",\"arguments\":{\"type\":\"git_status\"}}}";
+        String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"run_command\",\"arguments\":{\"type\":\"git_status\"}}}";
         String runCmdResp = handler.handleMessage(runCmdReq);
         assertTrue(runCmdResp.contains("completed"));
         assertTrue(runCmdResp.contains("git_status"));
 
         // 7. Get Next Action
-        String nextActionReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.get_next_action\",\"arguments\":{}}}";
+        String nextActionReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
         String nextActionResp = handler.handleMessage(nextActionReq);
         assertTrue(nextActionResp.contains("ready"));
         assertTrue(nextActionResp.contains("pending"));
+        assertTrue(nextActionResp.contains("actionId"));
+        assertTrue(nextActionResp.contains("AT_LEAST_ONCE"));
+        String nextActionAgain = handler.handleMessage(nextActionReq);
+        Matcher matcher = Pattern.compile("actionId[^0-9a-f]*([0-9a-f]{8}-[0-9a-f-]{27})").matcher(nextActionResp);
+        assertTrue(matcher.find());
+        assertTrue(nextActionAgain.contains(matcher.group(1)));
     }
 }

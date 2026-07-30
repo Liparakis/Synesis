@@ -152,6 +152,21 @@ public final class TaskCompletionProjection {
     }
 
     /**
+     * Returns only snapshots that still require integration.
+     *
+     * <p>Integrated snapshots remain available through {@link #allSnapshots()}
+     * for audit and provenance, but must not be replayed into a later
+     * incremental integration candidate.
+     *
+     * @return immutable list of snapshots not yet integrated
+     */
+    public synchronized List<TaskSnapshotRecord> readySnapshots() {
+        return snapshotsByTask.values().stream()
+                .filter(snapshot -> taskState(snapshot.taskId()) != TaskCompletionState.INTEGRATED)
+                .toList();
+    }
+
+    /**
      * Returns the active integration attempt record, if one is currently in progress.
      *
      * @return active integration attempt record when present

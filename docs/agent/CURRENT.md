@@ -2,33 +2,39 @@
 
 ## Identity
 
-- Task ID: SYN-027
-- Status: ACTIVE
+- Task ID: SYN-033
+- Status: DONE
 - Priority: P0
 - Started checkpoint: CP-0298
 - Responsible agent: primary architecture-closure engineer
-- Related decisions: ADR-0001, ADR-0008, ADR-0038, ADR-0039
+- Related decisions: ADR-0001, ADR-0008, ADR-0038, ADR-0039, ADR-0040
 
 ## Objective
 
-Implement multi-chat logical workgroups with isolated mutation lanes, exact
-caller authority, immutable snapshots, and guarded integration.
+Complete provider supervision and authorized continuation after verified
+provider loss or quota exhaustion without inferring abandonment or blocking
+sibling lanes.
 
 ## Immediate slice
 
-Phase 0 through deterministic two-lane snapshot integration are implemented.
-The next slice verifies provider-lifecycle close and revocation paths and
-audits the remaining real-provider acceptance boundary.
+Run the provider supervisor loss/continuation acceptance, verify recovery
+snapshot transfer and old-epoch fencing, and record unsupported-provider
+boundaries honestly.
 
 ## Verification target
 
 Authority-sensitive operations resolve only the verified calling binding;
-stale, cross-binding, unclaimed, and incompatible integration paths fail closed.
+stale, cross-binding, unclaimed, invalidly attested, and incompatible paths
+fail closed while safe authority reduction remains available.
 
 ## Immediate next action
 
-Run the real-provider checklist when the installed harnesses and quotas are
-available; otherwise preserve the recorded external blocker.
+SYN-029 through SYN-033 are DONE. Codex and Claude real provider flows pass
+through integration; real Codex process-loss recovery passes through
+RECOVERY_HELD and a new isolated continuation lane; Antigravity native
+transport is verified, while model-driven noninteractive MCP invocation
+remains explicitly unsupported/unverified. No autonomous support claim is made
+for that provider.
 
 ## Completion state
 
@@ -86,9 +92,25 @@ Cancellation lifecycle coverage now confirms the exact caller's collaboration
 claim is released without deleting its isolated worktree.
 The post-regression Gradle check passes all 50 actionable tasks; bootstrap Go
 tests/vet, the deferred validator, and the 45-test task-tracker fixture pass.
-The final lifecycle additions also pass the full strict Gradle check, including
-clean EOF release, cancellation release, and continuation-grant revocation
-regressions.
+The final lifecycle additions pass the focused strict Gradle suites, including
+clean EOF detachment, cancellation release, and continuation-grant revocation
+regressions. The sequential repository-wide check passes all 50 actionable
+tasks with strict dependency verification; bootstrap Go tests/vet, strict
+Javadocs, and the deferred validator also pass. The parallel CLI result-file
+race remains a known test-runner limitation and is not a product regression.
+The authority audit removed the mutation broker's sole-bound-session fallback:
+mutation authority now requires an exact connection or session binding. A
+recovery continuation restores the verified immutable snapshot into a new
+lane, atomically consumes its single-use grant, transfers claims, and fences
+the suspended source. Clean MCP EOF now records `DETACHED` instead of
+`COMPLETED`; task completion and cancellation retain their terminal states.
+The real Codex stdio recovery acceptance now passes against a disposable
+project: abrupt process loss remained `SUSPECTED_STALE`, transitioned to
+`RECOVERY_ELIGIBLE` only after the five-minute grace period, reconciled to
+`RECOVERY_HELD`, and continued through a second isolated lane. The final
+status showed source `DETACHED`, target `ACTIVE`, transferred claim, and no
+control-checkout mutation. Old-process reacquisition was blocked by
+`overlapping_claim`.
 The installed-provider audit recorded Codex CLI `0.140.0` authenticated with
 direct Synesis stdio initialization working, but its bounded real CLI probe
 cancelled both `ensure_session` calls before a claim was established. Claude
@@ -126,6 +148,15 @@ lease renewal on verified MCP activity, clean stdio shutdown release, and CLI
 `collaboration announce/status/release` adapters. The existing 11-tool MCP
 count is unchanged.
 
+SYN-028 now adds explicit SUSPENDED, RECOVERY_HELD, REVOKED, and CANCELLED
+participant transitions; stable event codes for suspension, recovery,
+revocation, cancellation, and inbox acknowledgement; exact-caller idempotent
+inbox acknowledgement; immutable recovery worktree snapshots;
+provider-managed Synesis Manual installation and tamper attestation; safe
+authority-reduction handling for invalid manuals; exclusive project migration
+locking and durable preparation markers; and raw MCP names request_coordination,
+respond_coordination, publish_snapshot, and validate_snapshot.
+
 ## Current failures
 
 The original GitHub Actions failure is not reproducible on this Windows host.
@@ -138,6 +169,9 @@ failure identified incorrect stripping of leading slashes from absolute
 `file:` URIs in MCP root binding; that fix is now authorized for this slice.
 `McpServerTest` and `./gradlew.bat clean check --no-daemon
 --dependency-verification=strict` now pass locally.
+The MCP suite is now aligned with the prerelease raw-name contract and managed
+manual attestation. Decorated names are intentionally rejected; no legacy
+compatibility reader remains.
 The deferred-register cleanup leaves nine active capabilities, archives all
 historical `SL-D-001` through `SL-D-030` IDs, and moves network cases to the
 validation matrix. The three coordination-correctness entries
@@ -145,10 +179,43 @@ validation matrix. The three coordination-correctness entries
 out-of-band mutation enforcement, and wait-for cycle detection without
 claiming implementation.
 
+The SYN-030 first vertical slice now has a shared workspace workflow reducer
+with stable action IDs, strict action types and payloads, explicit blockers and
+permitted operations, retry-safety, and at-least-once acknowledgement metadata.
+Claim overlap appends idempotent durable inbox requests for both owner and
+contender, and default collaboration announcements join one active project
+work group while explicit group IDs remain isolated. CLI acknowledgement,
+reducer, conflict-inbox, MCP, coordination, and multi-chat regressions pass.
+Terminal and recovery-held lane states now map to `CLOSE` and `RECOVER` workflow
+actions. Incremental integration excludes already integrated snapshots through
+the projection-level `readySnapshots()` query while retaining them for audit.
+SYN-033 groundwork adds a shell-free `ProviderProcessSupervisor` for direct
+argv launch, observation, bounded interrupt/close, and distinct-lane
+continuation. It does not transfer claims; recovery grants and snapshots remain
+the authority boundary. Codex and Claude now expose documented noninteractive
+argv forms; Antigravity remains unsupported for autonomous launch pending real
+MCP invocation evidence. The supervisor also exposes a one-shot verified-exit
+callback that leaves lease/recovery decisions to signed protocol services. The
+`ProviderSupervisionService` now records supervised child process identity in
+the exact session lease and marks clean shutdown only on explicit close. The
+`startWithAutomaticRecovery` schedules the existing signed reconciliation plan
+after the configured grace period without direct claim release or abandonment
+inference. The full sequential check passes 51 actionable tasks.
+Provider supervision now serializes starts per lane, assigns monotonic process
+generations, captures exit observations from the exact exited process, bounds
+forced shutdown, and suppresses clean-close callbacks by generation rather than
+lane name alone. Recovery tasks are cancelled and generation-checked when a
+lane is reused or explicitly closed. Lease closure compares the expected
+process ID so a late callback cannot close a replacement lease. A continuation
+launch bridge validates distinct source and target lanes before starting the
+target provider; signed grant consumption, snapshot restoration, and authority
+transfer remain owned by the collaboration service.
+
 ## Current verification
 
-`./gradlew.bat check --no-daemon --dependency-verification=strict` PASS (50
-actionable tasks); coordination, workspace, MCP, and CLI tests pass; strict
+`./gradlew.bat check --no-daemon --max-workers=1
+--dependency-verification=strict` PASS (51 actionable tasks); coordination,
+workspace, MCP, and CLI tests pass; strict
 Javadocs and repository hygiene pass; bootstrap `go test -count=1 ./...` and
 `go vet ./...` pass; deferred validation and `git diff --check` pass. The
 Python task-tracker fixture remains 45/45 passing. The two-handler MCP
@@ -215,3 +282,32 @@ through `get_next_action`; CLI and MCP parity tests pass. SYN-025 is DONE:
 direct MCP acceptance is verified for Codex, Claude, and Antigravity, while
 Antigravity model-driven prompting and native-hook maturity remain explicitly
 unclaimed.
+
+SYN-029 implementation hardening: provider process supervision now uses
+generation-correlated exit observations, per-lane launch serialization, and
+PID-checked clean lease closure. Successful task integration now completes the
+exact caller binding while retaining its worktree, and subsequent inbox reads
+return a terminal completed state instead of re-entering stale-workspace
+readiness. Immutable task snapshots exclude provider/admin files such as
+`AGENTS.md`, preventing untracked harness metadata from blocking control-branch
+advancement. The full sequential Gradle check now passes (51 actionable tasks),
+including Doctor, strict Javadocs, MCP, workspace, CLI, and repository hygiene.
+
+The event-count failure exposed a real stale-store race: one connection could
+append through a fresh store and a long-lived store would reuse its old head.
+`PredictionEventStore.append` now derives the sequence and previous digest from
+the durable event directory, preserving the append-only chain across concurrent
+store instances. Integration also refreshes collaboration requests through a
+fresh projection before allocating an attempt, so unresolved coordination
+blocks without starting integration. The focused unresolved-coordination test
+now passes.
+
+Fresh disposable-provider acceptance now passes for Claude Code 2.1.220 as
+well as Codex: both completed ordinary claimed-file work through immutable
+snapshot and control integration without manual coordination. A fresh
+Antigravity 1.1.8 `agy --print` probe returned a generic response without
+invoking MCP, so its model-driven path remains unverified despite passing
+native transport health.
+
+Provider lifecycle tests isolate `user.home`, and Doctor scopes provider
+migration findings to projects with durable provider installation records.

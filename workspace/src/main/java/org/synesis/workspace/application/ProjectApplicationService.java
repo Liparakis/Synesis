@@ -341,6 +341,21 @@ public final class ProjectApplicationService {
      * @throws ProjectApplicationException if the target is invalid or conflicts with existing state
      */
     public InitResult init(Path projectRoot) throws ProjectApplicationException {
+        return init(projectRoot, true);
+    }
+
+    /**
+     * Initializes a project, optionally installing provider MCP configuration.
+     *
+     * <p>Internal fixture creation may disable provider configuration to avoid
+     * mutating a user's provider profiles while running synthetic checks.</p>
+     *
+     * @param projectRoot target directory
+     * @param configureProviderMcp whether provider MCP configuration should be ensured
+     * @return structured initialization result
+     * @throws ProjectApplicationException if the path or metadata is invalid
+     */
+    public InitResult init(Path projectRoot, boolean configureProviderMcp) throws ProjectApplicationException {
         Path root = directory(projectRoot, "project directory");
         Path synesis = root.resolve(SYNESIS_DIRECTORY);
         Path metadata = synesis.resolve(PROJECT_FILE);
@@ -349,10 +364,12 @@ public final class ProjectApplicationService {
                 ProjectLocation existing = readLocation(root, synesis, metadata);
                 try {
                     ensureAgentsFile(root);
-                    ProviderApplicationService providerService = new ProviderApplicationService();
-                    Path launcher = providerService.launcherPath();
-                    providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
-                    providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
+                    if (configureProviderMcp) {
+                        ProviderApplicationService providerService = new ProviderApplicationService();
+                        Path launcher = providerService.launcherPath();
+                        providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
+                        providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
+                    }
                     return new InitResult(InitStatus.ALREADY_INITIALIZED,
                             existing,
                             identity(existing.profile()),
@@ -377,10 +394,12 @@ public final class ProjectApplicationService {
             ensureAgentsFile(root);
             ProjectLocation location = readLocation(root, synesis, metadata);
             try {
-                ProviderApplicationService providerService = new ProviderApplicationService();
-                Path launcher = providerService.launcherPath();
-                providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
-                providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
+                if (configureProviderMcp) {
+                    ProviderApplicationService providerService = new ProviderApplicationService();
+                    Path launcher = providerService.launcherPath();
+                    providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
+                    providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
+                }
             } catch (Exception ignored) {
             }
             return new InitResult(InitStatus.SUCCESS, location, identity, true, ensureGitHead(root));

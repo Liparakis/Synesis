@@ -228,6 +228,11 @@ public final class ProjectMigrationService {
     private Result executeInternal(Plan plan, MigrationStep step,
                                    ProjectMigrationRestorationService.RestoreFailureInjector injector) throws IOException {
         Objects.requireNonNull(plan, "plan");
+        ProjectMigrationLock migrationLock = ProjectMigrationLock.acquire(adminRoot, plan.projectRoot());
+        if (migrationLock == null) {
+            return new Result(Outcome.REQUIRES_HUMAN_REVIEW, "migration_lock_held", true, true);
+        }
+        try {
         Entry current = inspect(plan.projectRoot());
         if (!current.sourceHash().equals(plan.entry().sourceHash())) return new Result(Outcome.STALE, "project_migration_plan_stale", true, true);
         if (current.outcome() == Outcome.UNSUPPORTED_SCHEMA) return new Result(Outcome.UNSUPPORTED_SCHEMA, "project_schema_unsupported", true, true);
@@ -244,7 +249,8 @@ public final class ProjectMigrationService {
             for (var lease : new SessionLeaseStore().listAll(location.root())) {
                 if (lease.projectId().equals(location.projectId().toString())) {
                     SessionLeaseState state = leases.evaluateLiveness(lease, policy);
-                    if (state == SessionLeaseState.ACTIVE || state == SessionLeaseState.AMBIGUOUS) {
+                    if (state == SessionLeaseState.ACTIVE || state == SessionLeaseState.AMBIGUOUS
+                            || state == SessionLeaseState.SUSPECTED_STALE) {
                         return new Result(Outcome.REQUIRES_HUMAN_REVIEW, "active_session_blocks_project_migration", true, true);
                     }
                 }
@@ -271,6 +277,9 @@ public final class ProjectMigrationService {
         Files.writeString(journal, "outcome=UP_TO_DATE projectId=" + current.projectId() + System.lineSeparator(), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         return new Result(Outcome.UP_TO_DATE, "project_migration_not_required", true, true);
+        } finally {
+            migrationLock.close();
+        }
     }
 
     private Result executeInjected(Plan plan, Entry current, MigrationStep step,
@@ -294,6 +303,7 @@ public final class ProjectMigrationService {
         try {
             manifest = restoration.prepare(adminRoot, plan.planId(), hash(planJson(plan).getBytes(StandardCharsets.UTF_8)), location, plan.entry().sourceSchema(),
                     plan.entry().targetSchema(), "SAFE", plan.mutableFiles(), before);
+            appendJournal(plan.planId(), "MIGRATION_PREPARED");
             appendJournal(plan.planId(), "BACKUPS_VERIFIED");
         } catch (Exception failure) {
             return new Result(Outcome.REQUIRES_HUMAN_REVIEW, "project_restore_backup_invalid", true, true);
@@ -365,6 +375,30 @@ public final class ProjectMigrationService {
     }
 
     private static String hash(String text) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))); } catch (Exception failure) { throw new IllegalStateException(failure); } }
+    private static final class ProjectMigrationLock implements AutoCloseable {
+        private final Path path;
+
+        private ProjectMigrationLock(Path path) { this.path = path; }
+
+        static ProjectMigrationLock acquire(Path adminRoot, Path projectRoot) throws IOException {
+            Path directory = adminRoot.resolve("migration-locks");
+            Files.createDirectories(directory);
+            Path lock = directory.resolve(hash(projectRoot.toAbsolutePath().normalize().toString()) + ".lock");
+            try {
+                Files.writeString(lock, "project=" + projectRoot.toAbsolutePath().normalize() + "\nphase=LOCKED\n",
+                        StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                return new ProjectMigrationLock(lock);
+            } catch (java.nio.file.FileAlreadyExistsException held) {
+                return null;
+            }
+        }
+
+        @Override
+        public void close() {
+            try { Files.deleteIfExists(path); } catch (IOException ignored) { }
+        }
+    }
+
     private static String planJson(Plan plan) { Entry e = plan.entry(); return ProviderJson.write(Map.of("planId", plan.planId(), "createdAt", plan.createdAt().toString(), "projectRoot", plan.projectRoot().toString(), "mutableFiles", plan.mutableFiles().stream().map(Path::toString).toList(), "entry", Map.of("metadata", e.metadata().toString(), "sourceSchema", e.sourceSchema(), "targetSchema", e.targetSchema(), "sourceHash", e.sourceHash(), "outcome", e.outcome().name(), "projectId", e.projectId()))); }
     private static Path defaultAdminRoot() { String base = System.getenv("LOCALAPPDATA"); if (base == null || base.isBlank()) base = Path.of(System.getProperty("user.home"), "AppData", "Local").toString(); return Path.of(base, "Synesis", "admin"); }
 }

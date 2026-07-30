@@ -20,7 +20,7 @@ public enum AgentNextAction {
     /**
      * Provide input/output/behavior contract specifications for requested capability.
      */
-    DESCRIBE_REQUIRED_CAPABILITY("describe_required_capability"),
+    REQUEST_COORDINATION("request_coordination"),
 
     /**
      * Wait for background owner response or pending event.
@@ -40,7 +40,7 @@ public enum AgentNextAction {
     /**
      * Respond to pending capability request from another worker as the capability owner.
      */
-    RESPOND_TO_OWNER_REQUEST("respond_to_owner_request"),
+    RESPOND_COORDINATION("respond_coordination"),
 
     /**
      * Revise capability request contract in response to owner feedback.

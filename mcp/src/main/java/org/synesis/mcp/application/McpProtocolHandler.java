@@ -19,6 +19,7 @@ import org.synesis.workspace.application.agent.AgentTaskCompletionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
@@ -72,6 +73,7 @@ public final class McpProtocolHandler {
     private final SessionAuthorityResolver authorityResolver;
     private final SessionLeaseService leaseService;
     private final SessionLeasePolicy leasePolicy;
+    private final ProviderManualService manualService;
     private final Path initialProjectRoot;
     private Path activeProjectRoot;
     private boolean isSessionBound;
@@ -106,6 +108,7 @@ public final class McpProtocolHandler {
         this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
         this.leaseService = new SessionLeaseService();
         this.leasePolicy = new SessionLeasePolicy();
+        this.manualService = new ProviderManualService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
@@ -149,11 +152,11 @@ public final class McpProtocolHandler {
         }
     }
 
-    /** Marks a clean stdio shutdown and releases this connection's claims. */
+    /** Marks a clean stdio shutdown and detaches this connection's lane. */
     public void close() {
         try {
             leaseService.markClosedCleanly(activeProjectRoot, connectionInstanceId);
-            collaborationService.release(activeProjectRoot, provider, connectionInstanceId);
+            collaborationService.detach(activeProjectRoot, provider, connectionInstanceId);
         } catch (Exception ignored) {
             // Recovery reconciles unclean or partially completed shutdowns.
         }
@@ -626,7 +629,7 @@ public final class McpProtocolHandler {
                 "Retrieves the single highest-priority actionable coordination item for the active MCP session.");
         getNextActionTool.put("inputSchema", nextActionSchema);
 
-        // Tool 6: synesis.describe_required_capability
+        // Tool 6: synesis.request_coordination
         Map<String, Object> contractProperties = new LinkedHashMap<>();
         contractProperties.put("inputs", Map.of("type", "string", "description", "Input parameter specification"));
         contractProperties.put("output", Map.of("type", "string", "description", "Output return type and semantics"));
@@ -665,7 +668,7 @@ public final class McpProtocolHandler {
                         "Requester response type to owner revision: accept, counter, cancel"));
         describeProperties.put("collaborationOperation",
                 Map.of("type", "string", "enum", List.of("status", "publish", "bind", "request", "request_coordination", "handoff",
-                        "work_group_create", "lane_grant_issue", "lane_grant_consume", "lane_grant_revoke", "work_group_close"),
+                        "continuation", "work_group_create", "lane_grant_issue", "lane_grant_consume", "lane_grant_revoke", "work_group_close"),
                         "description", "Shared contract or coordination operation through the collaboration service"));
         describeProperties.put("collaborationContractId", Map.of("type", "string", "description", "UUID of shared contract"));
         describeProperties.put("collaborationIntentId", Map.of("type", "string", "description", "UUID of consuming intent"));
@@ -688,15 +691,37 @@ public final class McpProtocolHandler {
 
         Map<String, Object> describeSchema = new LinkedHashMap<>();
         describeSchema.put("type", "object");
-        describeSchema.put("properties", describeProperties);
+        Map<String, Object> strictPayload = new LinkedHashMap<>();
+        strictPayload.put("type", "object");
+        strictPayload.put("additionalProperties", false);
+        Map<String, Object> strictPayloadProperties = new LinkedHashMap<>();
+        strictPayloadProperties.put("conflictingIntentId", Map.of("type", "string", "format", "uuid"));
+        strictPayloadProperties.put("intentId", Map.of("type", "string", "format", "uuid"));
+        strictPayloadProperties.put("contractId", Map.of("type", "string", "format", "uuid"));
+        strictPayloadProperties.put("body", Map.of("type", "string"));
+        strictPayloadProperties.put("selectors", Map.of("type", "array", "items", Map.of("type", "string")));
+        strictPayloadProperties.put("revision", Map.of("type", "integer", "minimum", 1));
+        strictPayloadProperties.put("targetParticipant", Map.of("type", "string"));
+        strictPayloadProperties.put("proposal", Map.of("type", "string"));
+        strictPayloadProperties.put("artifact", Map.of("type", "string"));
+        strictPayloadProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+        strictPayloadProperties.put("grantId", Map.of("type", "string", "format", "uuid"));
+        strictPayloadProperties.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
+        strictPayload.put("properties", strictPayloadProperties);
+        describeSchema.put("properties", Map.of(
+                "kind", Map.of("type", "string", "enum", List.of("contract_proposal", "contract_request",
+                        "scope_revision", "handoff", "work_group_join", "continuation")),
+                "payload", strictPayload));
+        describeSchema.put("required", List.of("kind", "payload"));
+        describeSchema.put("additionalProperties", false);
 
         Map<String, Object> describeTool = new LinkedHashMap<>();
-        describeTool.put("name", "describe_required_capability");
+        describeTool.put("name", "request_coordination");
         describeTool.put("description",
                 "Describes required capability contract or responds to owner revision feedback.");
         describeTool.put("inputSchema", describeSchema);
 
-        // Tool 7: synesis.respond_to_owner_request
+        // Tool 7: synesis.respond_coordination
         Map<String, Object> respondProperties = new LinkedHashMap<>();
         respondProperties.put("request",
                 Map.of("type", "string", "description", "Public capability request handle locator"));
@@ -708,18 +733,27 @@ public final class McpProtocolHandler {
         respondProperties.put("coordinationRequest", Map.of("type", "string", "description", "UUID of coordination or handoff request"));
         respondProperties.put("coordinationStatus", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
         respondProperties.put("proposal", Map.of("type", "string", "description", "Coordination response proposal"));
+        respondProperties.put("inboxItemId", Map.of("type", "string", "format", "uuid"));
+        respondProperties.put("acknowledgement", Map.of("type", "string", "enum", List.of("acknowledge", "resolve")));
+        respondProperties.put("resolution", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
 
         Map<String, Object> respondSchema = new LinkedHashMap<>();
         respondSchema.put("type", "object");
         respondSchema.put("properties", respondProperties);
-        respondSchema.put("required", List.of("request", "response"));
+        respondSchema.put("additionalProperties", false);
+        respondSchema.put("oneOf", List.of(
+                Map.of("required", List.of("request", "response")),
+                Map.of("required", List.of("inboxItemId", "acknowledgement"),
+                        "properties", Map.of("acknowledgement", Map.of("const", "acknowledge"))),
+                Map.of("required", List.of("inboxItemId", "acknowledgement", "resolution"),
+                        "properties", Map.of("acknowledgement", Map.of("const", "resolve")))));
 
         Map<String, Object> respondTool = new LinkedHashMap<>();
-        respondTool.put("name", "respond_to_owner_request");
+        respondTool.put("name", "respond_coordination");
         respondTool.put("description", "Responds to a pending capability request as the authorized capability owner.");
         respondTool.put("inputSchema", respondSchema);
 
-        // Tool 8: synesis.publish_implementation
+        // Tool 8: synesis.publish_snapshot
         Map<String, Object> publishProperties = new LinkedHashMap<>();
         publishProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
         publishProperties.put("summary",
@@ -731,12 +765,12 @@ public final class McpProtocolHandler {
         publishSchema.put("required", List.of("request"));
 
         Map<String, Object> publishTool = new LinkedHashMap<>();
-        publishTool.put("name", "publish_implementation");
+        publishTool.put("name", "publish_snapshot");
         publishTool.put("description",
                 "Publishes an immutable implementation snapshot for a capability request as the authorized owner.");
         publishTool.put("inputSchema", publishSchema);
 
-        // Tool 9: synesis.validate_available_implementation
+        // Tool 9: synesis.validate_snapshot
         Map<String, Object> validateProperties = new LinkedHashMap<>();
         validateProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
         validateProperties.put("result",
@@ -757,7 +791,7 @@ public final class McpProtocolHandler {
         validateSchema.put("required", List.of("request", "result"));
 
         Map<String, Object> validateTool = new LinkedHashMap<>();
-        validateTool.put("name", "validate_available_implementation");
+        validateTool.put("name", "validate_snapshot");
         validateTool.put("description",
                 "Validates the available implementation snapshot for a capability request as the authorized requester.");
         validateTool.put("inputSchema", validateSchema);
@@ -815,20 +849,36 @@ public final class McpProtocolHandler {
         }
 
         String name = (String) params.get("name");
-        // The wire contract advertises raw names; accept legacy synesis.* calls
-        // for one compatibility period and route both forms identically.
-        if (name != null && !name.startsWith("synesis.")) {
-            name = "synesis." + name;
+        // The wire contract advertises raw names. Provider-decorated legacy names
+        // are intentionally rejected after the prerelease migration.
+        if (name == null || name.startsWith("synesis.")) {
+            return createErrorResponse(id, -32602, "legacy or missing MCP tool name");
         }
+        name = "synesis." + name;
         Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
 
         AgentResponse agentResponse;
         renewLease();
 
+        if (requiresManualAttestation(name, arguments) && !manualService.attest(provider).valid()) {
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("manual", manualService.attest(provider).reason());
+            details.put("authorityReductionAllowed", true);
+            return createResultResponse(id, Map.of("content", List.of(Map.of("type", "text",
+                    "text", "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"details\":"
+                            + ProviderJson.write(details) + "}"))));
+        }
+
         switch (name) {
             case "synesis.ensure_session" -> {
                 AgentSessionService.AgentTaskIntent taskIntent = parseTaskIntent(arguments);
                 boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
+
+                if (!parseClaimSelectors(arguments).isEmpty()
+                        && !manualService.attest(provider).valid()) {
+                    return createResultResponse(id, Map.of("content", List.of(Map.of("type", "text",
+                            "text", "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"claims\":\"REJECTED\"}"))));
+                }
 
                 AgentSessionService.SessionResolutionRequest resolutionRequest = new AgentSessionService.SessionResolutionRequest(
                         activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
@@ -964,10 +1014,11 @@ public final class McpProtocolHandler {
                                 claims.stream().map(ResourceSelector::pathExact).toList(), List.of(), List.of());
                         var result = new WorkspaceIntegrationReadinessService().check(new IntegrationCompatibilityService.CheckRequest(
                                 head, List.of(snapshot), List.of(), Boolean.TRUE.equals(check.get("testsPassed"))));
+                        List<String> failureCodes = result.failures().stream().map(Enum::name).toList();
                         agentResponse = new AgentResponse(result.accepted() ? AgentStatus.COMPLETED : AgentStatus.BLOCKED,
                                 result.accepted() ? null : AgentReason.INTEGRATION_CONFLICT,
                                 result.accepted() ? null : AgentNextAction.REQUEST_HUMAN_HELP,
-                                Map.of("accepted", result.accepted(), "failures", result.failures(), "actions", result.actions()));
+                                Map.of("accepted", result.accepted(), "failures", failureCodes, "actions", result.actions()));
                     } catch (Exception failure) {
                         agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
                                 AgentNextAction.RETRY, Map.of("error", failure.getMessage()));
@@ -978,7 +1029,16 @@ public final class McpProtocolHandler {
                     agentResponse = nextActionService.getNextAction(nextReq);
                 }
             }
-            case "synesis.describe_required_capability" -> {
+            case "synesis.request_coordination" -> {
+                if (arguments != null && arguments.containsKey("kind")) {
+                    try {
+                        arguments = normalizeStrictCoordination(arguments);
+                    } catch (IllegalArgumentException failure) {
+                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                                AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
+                        break;
+                    }
+                }
                 String collaborationOperation = arguments != null ? (String) arguments.get("collaborationOperation") : null;
                 if (collaborationOperation != null) {
                     try {
@@ -1041,8 +1101,11 @@ public final class McpProtocolHandler {
                             }
                             case "lane_grant_consume" -> {
                                 UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
+                                var callerBinding = authorityResolver.resolve(
+                                        new ProjectApplicationService().locate(activeProjectRoot), provider, connectionInstanceId);
+                                String callerParticipant = WorkspaceCollaborationService.participantHandle(callerBinding.sessionId());
                                 collaborationService.consumeLaneGrant(activeProjectRoot, grantId,
-                                        String.valueOf(arguments.get("targetParticipant")),
+                                        callerParticipant,
                                         UUID.fromString(String.valueOf(arguments.get("intentId"))),
                                         ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue());
                                 yield Map.of("grantId", grantId.toString(), "status", "CONSUMED");
@@ -1051,6 +1114,14 @@ public final class McpProtocolHandler {
                                 UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
                                 collaborationService.revokeLaneGrant(activeProjectRoot, grantId);
                                 yield Map.of("grantId", grantId.toString(), "status", "REVOKED");
+                            }
+                            case "continuation" -> {
+                                UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
+                                UUID sourceIntentId = UUID.fromString(String.valueOf(arguments.get("collaborationSourceIntentId")));
+                                long epoch = ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue();
+                                collaborationService.continueLane(activeProjectRoot, provider, connectionInstanceId,
+                                        grantId, sourceIntentId, epoch);
+                                yield Map.of("grantId", grantId.toString(), "status", "CONTINUED");
                             }
                             case "work_group_close" -> {
                                 UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
@@ -1091,7 +1162,28 @@ public final class McpProtocolHandler {
                         activeProjectRoot, provider, connectionInstanceId, capability, contract, reqHandle, revResp);
                 agentResponse = capabilityRequestService.describeRequiredCapability(descReq);
             }
-            case "synesis.respond_to_owner_request" -> {
+            case "synesis.respond_coordination" -> {
+                if (arguments != null && arguments.get("inboxItemId") instanceof String item) {
+                    try {
+                        UUID itemId = UUID.fromString(item);
+                        if ("resolve".equals(arguments.get("acknowledgement"))) {
+                            CoordinationRequest.Status resolution = CoordinationRequest.Status.valueOf(
+                                    String.valueOf(arguments.get("resolution")));
+                            collaborationService.resolveInbox(activeProjectRoot, provider, connectionInstanceId,
+                                    itemId, resolution, String.valueOf(arguments.getOrDefault("proposal", "")));
+                        } else {
+                            collaborationService.acknowledgeInbox(activeProjectRoot, provider, connectionInstanceId, itemId);
+                        }
+                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
+                                Map.of("inboxItemId", item, "acknowledged", true,
+                                        "resolved", "resolve".equals(arguments.get("acknowledgement"))));
+                        break;
+                    } catch (Exception failure) {
+                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                                AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
+                        break;
+                    }
+                }
                 if (arguments != null && arguments.get("coordinationRequest") instanceof String requestValue) {
                     try {
                         CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(
@@ -1121,7 +1213,7 @@ public final class McpProtocolHandler {
                     agentResponse = capabilityResponseService.respondToOwnerRequest(respReq);
                 }
             }
-            case "synesis.publish_implementation" -> {
+            case "synesis.publish_snapshot" -> {
                 String reqHandle = arguments != null ? (String) arguments.get("request") : null;
                 String summary = arguments != null ? (String) arguments.get("summary") : null;
 
@@ -1133,7 +1225,7 @@ public final class McpProtocolHandler {
                     agentResponse = publicationService.publishImplementation(pubReq);
                 }
             }
-            case "synesis.validate_available_implementation" -> {
+            case "synesis.validate_snapshot" -> {
                 String reqHandle = arguments != null ? (String) arguments.get("request") : null;
                 String valResult = arguments != null ? (String) arguments.get("result") : null;
                 String valReason = arguments != null ? (String) arguments.get("reason") : null;
@@ -1242,6 +1334,7 @@ public final class McpProtocolHandler {
         result.put("state", participant.state().name());
         result.put("lastVerifiedActivity", participant.lastVerifiedActivity());
         result.put("claims", participant.claims().stream().map(McpProtocolHandler::selectorMap).toList());
+        result.put("recoveryHeld", participant.state() == Participant.State.RECOVERY_HELD);
         return result;
     }
 
@@ -1345,6 +1438,78 @@ public final class McpProtocolHandler {
     private boolean claimsFieldSpecified(Map<String, Object> arguments) {
         return arguments != null && arguments.get("task") instanceof Map<?, ?> taskMap
                 && taskMap.containsKey("claims");
+    }
+
+    private static boolean requiresManualAttestation(String name, Map<String, Object> arguments) {
+        return switch (name) {
+            case "synesis.apply_patch", "synesis.run_command",
+                 "synesis.publish_snapshot", "synesis.validate_snapshot", "synesis.complete_task" -> true;
+            case "synesis.request_coordination" -> {
+                // Status/discovery is a safe read.  Contract, scope, handoff,
+                // continuation, and join operations increase authority.
+                String operation = arguments == null ? null : String.valueOf(arguments.get("collaborationOperation"));
+                String kind = arguments == null ? null : String.valueOf(arguments.get("kind"));
+                yield !("status".equals(operation) || "status".equals(arguments == null ? null : arguments.get("coordinationRequest")))
+                        && (kind == null || !kind.isBlank() || operation == null || !operation.isBlank());
+            }
+            case "synesis.respond_coordination" -> arguments == null || !(arguments.get("inboxItemId") instanceof String);
+            default -> false;
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> normalizeStrictCoordination(Map<String, Object> arguments) {
+        Object kindValue = arguments.get("kind");
+        Object payloadValue = arguments.get("payload");
+        if (!(kindValue instanceof String kind) || !(payloadValue instanceof Map<?, ?> rawPayload)) {
+            throw new IllegalArgumentException("COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD");
+        }
+        Map<String, Object> payload = (Map<String, Object>) rawPayload;
+        List<String> allowed = switch (kind) {
+            case "contract_proposal" -> List.of("contractId", "body", "selectors", "revision");
+            case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
+            case "scope_revision" -> List.of("intentId", "selectors", "proposal");
+            case "handoff" -> List.of("intentId", "targetParticipant", "proposal", "artifact");
+            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch");
+            case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
+            default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_KIND");
+        };
+        for (String key : payload.keySet()) {
+            if (!allowed.contains(key)) throw new IllegalArgumentException("COORDINATION_FIELD_NOT_ALLOWED:" + key);
+        }
+        Map<String, Object> normalized = new LinkedHashMap<>(payload);
+        normalized.remove("kind");
+        normalized.put("collaborationOperation", switch (kind) {
+            case "contract_proposal" -> "publish";
+            case "contract_request", "scope_revision" -> "request_coordination";
+            case "handoff" -> "handoff";
+            case "work_group_join" -> "lane_grant_consume";
+            default -> kind;
+        });
+        if ("contract_proposal".equals(kind)) {
+            normalized.put("collaborationContractId", payload.get("contractId"));
+            normalized.put("collaborationBody", payload.get("body"));
+            normalized.put("collaborationSelectors", payload.getOrDefault("selectors", List.of()));
+        }
+        if ("work_group_join".equals(kind)) {
+            normalized.put("targetParticipant", payload.get("targetParticipant"));
+        }
+        if ("contract_request".equals(kind) || "scope_revision".equals(kind)) {
+            normalized.putIfAbsent("collaborationIntentId", payload.get("conflictingIntentId"));
+            normalized.putIfAbsent("collaborationRequestKind", "CONTRACT");
+            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
+        }
+        if ("handoff".equals(kind)) {
+            normalized.putIfAbsent("collaborationIntentId", payload.get("intentId"));
+            normalized.putIfAbsent("collaborationTarget", payload.get("targetParticipant"));
+            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
+        }
+        if ("continuation".equals(kind)) {
+            normalized.putIfAbsent("grantId", payload.get("grantId"));
+            normalized.putIfAbsent("collaborationSourceIntentId", payload.get("intentId"));
+            normalized.putIfAbsent("claimEpoch", payload.get("claimEpoch"));
+        }
+        return normalized;
     }
 
     private static List<String> strings(Object value) {

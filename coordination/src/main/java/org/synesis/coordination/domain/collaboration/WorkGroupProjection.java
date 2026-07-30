@@ -34,6 +34,7 @@ public final class WorkGroupProjection {
             case LANE_GRANT_CONSUMED -> consume(CollaborationCodec.decodeLaneGrant(event.payload()).grantId());
             case LANE_REVOKED -> revoke(CollaborationCodec.decodeLaneGrant(event.payload()).grantId());
             case WORK_GROUP_STATUS_CHANGED -> status(CollaborationCodec.decodeWorkGroup(event.payload()));
+            case LANE_CONTINUATION_ACCEPTED -> consume(CollaborationCodec.decodeContinuation(event.payload()).grantId());
             case WORK_INTENT_ANNOUNCED -> {
                 WorkIntent intent = CollaborationCodec.decodeIntent(event.payload());
                 groups.putIfAbsent(intent.workGroupId(), new WorkGroup(intent.workGroupId(), intent.projectId(),

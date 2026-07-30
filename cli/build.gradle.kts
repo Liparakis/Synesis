@@ -25,6 +25,7 @@ val buildInfoDirectory = layout.buildDirectory.dir("generated-resources/build-in
 val platformBundleDirectory =
     layout.buildDirectory.dir("platform-bundle/synesis-${bundleVersion.get()}-${bundlePlatform.get()}")
 val runtimeImageDirectory = layout.buildDirectory.dir("platform-runtime")
+val nativeMcpDirectory = layout.buildDirectory.dir("native-mcp")
 
 val buildInfo = tasks.register("buildInfo") {
     description = ""
@@ -106,6 +107,50 @@ tasks.register("launcherSmoke") {
     }
 }
 
+val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
+    group = "distribution"
+    description = "Builds native stdio MCP launchers for Windows and Linux."
+    inputs.dir(rootProject.file("bootstrap/cmd/synesis-mcp"))
+    outputs.dir(nativeMcpDirectory)
+    doLast {
+        val outputRoot = nativeMcpDirectory.get().asFile
+        delete(outputRoot)
+        val source = rootProject.file("bootstrap")
+        val platforms = listOf(
+            "windows-x64" to ("windows" to "amd64"),
+            "windows-arm64" to ("windows" to "arm64"),
+            "linux-x64" to ("linux" to "amd64"),
+            "linux-arm64" to ("linux" to "arm64"),
+            "macos-x64" to ("darwin" to "amd64"),
+            "macos-arm64" to ("darwin" to "arm64")
+        )
+        for ((name, target) in platforms) {
+            val outputDirectory = outputRoot.resolve(name)
+            outputDirectory.mkdirs()
+            val output = outputDirectory.resolve(if (target.first == "windows") "synesis-mcp.exe" else "synesis-mcp")
+            val environment = mutableMapOf<String, String>()
+            environment["GOOS"] = target.first
+            environment["GOARCH"] = target.second
+            environment["CGO_ENABLED"] = "0"
+            val process = ProcessBuilder(
+                "go", "build", "-trimpath", "-o", output.absolutePath, "./cmd/synesis-mcp"
+            ).directory(source).redirectErrorStream(true).apply {
+                environment().putAll(environment)
+            }.start()
+            val outputText = process.inputStream.bufferedReader().readText()
+            require(process.waitFor() == 0) { "native MCP launcher build failed for $name: $outputText" }
+            require(output.isFile) { "native MCP launcher missing for $name: $output" }
+            if (target.first != "windows") output.setExecutable(true)
+        }
+        val hostArtifact = outputRoot.resolve(hostPlatform).resolve(if (isWindows) "synesis-mcp.exe" else "synesis-mcp")
+        val installedBin = layout.buildDirectory.dir("install/synesis/bin").get().asFile
+        installedBin.mkdirs()
+        copy { from(hostArtifact); into(installedBin) }
+    }
+}
+
+tasks.named("installDist") { finalizedBy(nativeMcpLauncher) }
+
 fun filesUnder(dir: File, extensions: Set<String>): List<File> =
     if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
     else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
@@ -165,7 +210,7 @@ val runtimeImage = tasks.register("runtimeImage") {
 val platformBundle = tasks.register("platformBundle") {
     group = "distribution"
     description = "Assembles a self-contained Synesis application bundle."
-    dependsOn(runtimeImage, tasks.installDist, ":mcp:jar")
+    dependsOn(runtimeImage, tasks.installDist, nativeMcpLauncher, ":mcp:jar")
     outputs.dir(platformBundleDirectory)
     doLast {
         val root = platformBundleDirectory.get().asFile
@@ -190,6 +235,11 @@ val platformBundle = tasks.register("platformBundle") {
         copy { from(runtimeImageDirectory); into(root.resolve("runtime")) }
         val bin = root.resolve("bin")
         bin.mkdirs()
+        val nativeLauncher = nativeMcpDirectory.get().asFile.resolve(bundlePlatform.get())
+            .resolve(if (bundlePlatform.get().startsWith("windows")) "synesis-mcp.exe" else "synesis-mcp")
+        require(nativeLauncher.isFile) { "Native MCP launcher missing for ${bundlePlatform.get()}: $nativeLauncher" }
+        copy { from(nativeLauncher); into(bin) }
+        if (!bundlePlatform.get().startsWith("windows")) bin.resolve("synesis-mcp").setExecutable(true)
         bin.resolve("synesis.cmd").writeText(
             "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
         )
@@ -298,7 +348,7 @@ tasks.register("bundleSmokeTest") {
             val mcpReader = mcpProcess.inputStream.bufferedReader(Charsets.UTF_8)
             mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n")
             mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n")
-            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\"}}\n")
+            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}\n")
             mcpWriter.flush()
             mcpWriter.close()
 

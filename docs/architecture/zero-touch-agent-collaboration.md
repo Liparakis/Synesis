@@ -177,6 +177,52 @@ external-tool write. Publication and integration must therefore fail closed
 when unclaimed mutations are detected, while preserving the affected isolated
 worktree for review or recovery.
 
+## SYN-028 automated lifecycle and prerelease transition
+
+SYN-028 makes lane lifecycle transitions durable and owner-independent while
+preserving the multi-chat topology above. Verified process loss or quota
+exhaustion fences the old binding and enters `SUSPENDED`; it never infers human
+abandonment. `RECOVERY_HELD` is entered only after a complete immutable recovery
+snapshot has been prepared and verified. The old scope remains reserved until
+continuation, cancellation, revocation, or operator-authorized recovery.
+
+Completion is an idempotent recoverable protocol transaction:
+
+```text
+prepare snapshot → verify claim-covered diff → durably commit completion
+→ close lane and release claims
+```
+
+Failures retain the active lane and claims. A cancelled lane is permanently
+fenced; its work is preserved as non-authoritative evidence and can re-enter
+development only through explicit import or recovery into a new lane.
+
+`get_next_action` is a non-destructive, at-least-once durable inbox. Retrieval
+does not consume an item. Explicit acknowledgement or resolution references
+the server-issued item ID, is exact-caller authorized, idempotent, and retains
+stable ordering across provider or MCP crashes. Bounded inbox querying is
+permitted when native wake-up is unavailable; blind mutation retries and busy
+polling are not.
+
+The managed Synesis Manual is installed globally by `synesis provider install`
+in each provider's native skill directory. Session establishment attests its
+ownership manifest, version, and content hash. Failed attestation blocks
+authority-increasing operations, but still permits inspection, inbox reads,
+own-lane closure or cancellation, claim relinquishment, diagnostics, and
+operator-authorized recovery or revocation.
+
+Prerelease migration is exclusive. It acquires a project migration lock,
+refuses incompatible active writers, records durable phase markers, and resumes
+or rolls back idempotently after interruption. Obsolete provider aliases,
+legacy MCP names, and compatibility-only readers are removed after conversion;
+unrelated provider configuration is preserved and unsafe conversion fails
+closed.
+
+The MCP contract remains exactly 11 raw tools, using
+`request_coordination`, `respond_coordination`, `publish_snapshot`, and
+`validate_snapshot` for the current coordination and snapshot surface.
+Decorated legacy names are not accepted after the prerelease migration.
+
 ## Security and failure invariants
 
 Node identity, project ID, session ID, provider instance, task, worktree, and

@@ -2,6 +2,7 @@ package org.synesis.workspace.application.agent;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 
@@ -50,6 +51,7 @@ public final class AgentTaskCompletionService {
     private final IntegrationOrchestrationService integrationOrchestrationService;
     private final SessionAuthorityResolver authorityResolver;
     private final WorkspaceCollaborationService collaborationService;
+    private final ProviderManualService manualService;
 
     /**
      * Creates an agent task completion service.
@@ -61,6 +63,7 @@ public final class AgentTaskCompletionService {
         this.integrationOrchestrationService = new IntegrationOrchestrationService();
         this.authorityResolver = new SessionAuthorityResolver(bindingService);
         this.collaborationService = new WorkspaceCollaborationService();
+        this.manualService = new ProviderManualService();
     }
 
     /**
@@ -97,6 +100,12 @@ public final class AgentTaskCompletionService {
         Objects.requireNonNull(request, "request");
 
         Path root = request.projectRoot().toAbsolutePath().normalize();
+        try {
+            manualService.requireAttested(request.provider());
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY,
+                    Map.of("reason", "MANUAL_ATTESTATION_REQUIRED"));
+        }
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
@@ -163,7 +172,11 @@ public final class AgentTaskCompletionService {
                     ? request.summary().trim() : "Completed task implementation";
 
             List<CapabilityRequestRecord> workerCapabilities = store.capabilityRequestProjection().findAllForRequester(callerNodeId);
-            String participantHandle = WorkspaceCollaborationService.participantHandle(request.connectionInstanceId());
+            // Collaboration participants are derived from the verified durable
+            // session binding, never from the transient MCP connection ID.
+            // Using the connection here made an otherwise valid claimed lane
+            // appear unowned at completion time.
+            String participantHandle = WorkspaceCollaborationService.participantHandle(binding.sessionId());
             var laneIntent = store.collaborationProjection().activeIntents().stream()
                     .filter(intent -> intent.participant().equals(participantHandle)).findFirst();
             if (store.collaborationProjection().activated() && laneIntent.isEmpty()) {
@@ -202,6 +215,10 @@ public final class AgentTaskCompletionService {
             AgentResponse result = integrationOrchestrationService.orchestrateIntegration(location.root(), store, identity);
             if (result.status() == AgentStatus.COMPLETED) {
                 releaseClaims(request, collaborationService);
+                // Complete only the exact calling connection.  Keeping the
+                // binding terminal (and retaining its worktree) prevents the
+                // next inbox read from attempting to reuse a stale lane.
+                bindingService.complete(location, request.provider(), request.connectionInstanceId());
             }
             return result;
 

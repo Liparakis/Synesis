@@ -49,6 +49,13 @@ public final class PredictionProjection {
                     || type == PredictionEventType.WORK_GROUP_CREATED || type == PredictionEventType.LANE_GRANT_ISSUED
                     || type == PredictionEventType.LANE_GRANT_CONSUMED || type == PredictionEventType.LANE_REVOKED
                     || type == PredictionEventType.WORK_GROUP_STATUS_CHANGED
+                    || type == PredictionEventType.PARTICIPANT_SUSPENDED
+                    || type == PredictionEventType.RECOVERY_SNAPSHOT_HELD
+                    || type == PredictionEventType.PARTICIPANT_REVOKED
+                    || type == PredictionEventType.INBOX_ITEM_ACKNOWLEDGED
+                    || type == PredictionEventType.PARTICIPANT_CANCELLED
+                    || type == PredictionEventType.LANE_CONTINUATION_ACCEPTED
+                    || type == PredictionEventType.PARTICIPANT_DETACHED
                     || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
                 return null;
             }
@@ -84,7 +91,10 @@ public final class PredictionProjection {
                  PARTICIPANT_ABANDONED,
                  CONTRACT_PUBLISHED, CONTRACT_DEPENDENCY_BOUND, CONTRACT_SUPERSEDED,
                  DEPENDENCY_INVALIDATED, WORK_GROUP_CREATED, LANE_GRANT_ISSUED,
-                 LANE_GRANT_CONSUMED, LANE_REVOKED, WORK_GROUP_STATUS_CHANGED -> current;
+                 LANE_GRANT_CONSUMED, LANE_REVOKED, WORK_GROUP_STATUS_CHANGED,
+                 PARTICIPANT_SUSPENDED, RECOVERY_SNAPSHOT_HELD, PARTICIPANT_REVOKED,
+                 INBOX_ITEM_ACKNOWLEDGED, PARTICIPANT_CANCELLED, LANE_CONTINUATION_ACCEPTED,
+                 PARTICIPANT_DETACHED -> current;
         };
     }
 

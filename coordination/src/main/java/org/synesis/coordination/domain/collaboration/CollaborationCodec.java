@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /** Canonical bounded encoding for signed collaboration event payloads. */
@@ -21,6 +22,7 @@ public final class CollaborationCodec {
     private static final int MAGIC_HANDOFF = 0x53484631;
     private static final int MAGIC_GROUP = 0x53474731;
     private static final int MAGIC_GRANT = 0x53475231;
+    private static final int MAGIC_CONTINUATION = 0x53434e31;
 
     private CollaborationCodec() {
     }
@@ -246,6 +248,72 @@ public final class CollaborationCodec {
         } catch (RuntimeException | java.io.EOFException failure) { throw new IOException("malformed handoff", failure); }
     }
 
+    /** Continuation acceptance payload.
+     * @param grantId consumed continuation grant
+     * @param sourceIntentId suspended source intent
+     * @param targetIntent target lane intent
+     * @param sourceParticipant suspended participant
+     * @param targetParticipant new participant
+     * @param expectedEpoch source claim epoch
+     * @param snapshotReference immutable recovery snapshot reference
+     */
+    public record Continuation(UUID grantId, UUID sourceIntentId, WorkIntent targetIntent,
+            String sourceParticipant, String targetParticipant, long expectedEpoch,
+            String snapshotReference) { }
+
+    /** Encodes an atomic continuation acceptance.
+     * @param continuation continuation payload
+     * @return encoded payload
+     */
+    public static byte[] encodeContinuation(Continuation continuation) {
+        Objects.requireNonNull(continuation, "continuation");
+        byte[] intent = encodeIntent(continuation.targetIntent());
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_CONTINUATION);
+            uuid(out, continuation.grantId());
+            uuid(out, continuation.sourceIntentId());
+            out.writeInt(intent.length);
+            out.write(intent);
+            text(out, continuation.sourceParticipant());
+            text(out, continuation.targetParticipant());
+            out.writeLong(continuation.expectedEpoch());
+            text(out, continuation.snapshotReference());
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    /** Decodes an atomic continuation acceptance.
+     * @param encoded encoded payload
+     * @return continuation payload
+     * @throws IOException malformed payload
+     */
+    public static Continuation decodeContinuation(byte[] encoded) throws IOException {
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_CONTINUATION) throw new IOException("unsupported continuation format");
+            UUID grant = readUuid(in);
+            UUID sourceIntent = readUuid(in);
+            int length = in.readInt();
+            if (length < 1 || length > 1_000_000) throw new IOException("continuation intent too large");
+            byte[] intentBytes = in.readNBytes(length);
+            if (intentBytes.length != length) throw new IOException("truncated continuation intent");
+            WorkIntent targetIntent = decodeIntent(intentBytes);
+            String source = readText(in);
+            String target = readText(in);
+            long epoch = in.readLong();
+            String snapshot = readText(in);
+            if (in.available() != 0) throw new IOException("trailing continuation bytes");
+            return new Continuation(grant, sourceIntent, targetIntent, source, target, epoch, snapshot);
+        } catch (RuntimeException | java.io.EOFException failure) {
+            throw new IOException("malformed continuation", failure);
+        }
+    }
+
     /** Encodes a participant heartbeat.
      * @param participant participant ID
      * @return encoded heartbeat
@@ -268,6 +336,70 @@ public final class CollaborationCodec {
         if (in.available() != 0) throw new IOException("trailing heartbeat bytes");
         return participant;
     }
+
+    /** Encodes a server-issued inbox item identifier.
+     * @param id item identifier
+     * @return encoded identifier
+     */
+    public static byte[] encodeUuidText(UUID id) {
+        return encodeHeartbeat(Objects.requireNonNull(id, "item ID").toString());
+    }
+
+    /** Decodes a server-issued inbox item identifier.
+     * @param encoded encoded identifier
+     * @return decoded identifier
+     * @throws IOException malformed identifier
+     */
+    public static UUID decodeUuidText(byte[] encoded) throws IOException {
+        try {
+            return UUID.fromString(decodeHeartbeat(encoded));
+        } catch (IllegalArgumentException failure) {
+            throw new IOException("malformed inbox item ID", failure);
+        }
+    }
+
+    /** Encodes a participant and immutable recovery snapshot reference.
+     * @param participant participant handle
+     * @param snapshotReference immutable snapshot reference
+     * @return encoded recovery payload
+     */
+    public static byte[] encodeRecovery(String participant, String snapshotReference) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_HEARTBEAT);
+            text(out, participant);
+            text(out, snapshotReference);
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    /** Decodes a participant and immutable recovery snapshot reference.
+     * @param encoded encoded recovery payload
+     * @return decoded recovery
+     * @throws IOException malformed payload
+     */
+    public static Recovery decodeRecovery(byte[] encoded) throws IOException {
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_HEARTBEAT) throw new IOException("unsupported recovery format");
+            String participant = readText(in);
+            String snapshot = readText(in);
+            if (in.available() != 0) throw new IOException("trailing recovery bytes");
+            return new Recovery(participant, snapshot);
+        } catch (RuntimeException | java.io.EOFException failure) {
+            throw new IOException("malformed recovery", failure);
+        }
+    }
+
+    /** Recovery event payload.
+     * @param participant participant handle
+     * @param snapshotReference immutable snapshot reference
+     */
+    public record Recovery(String participant, String snapshotReference) { }
 
     /** Encodes a logical work group.
      * @param group group to encode

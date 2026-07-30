@@ -31,6 +31,7 @@ final class ProviderMcpConfigurationService {
                     return "MALFORMED_CONFIG";
                 }
                 CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher);
+                cleanObsoleteProjectFile(location.root().resolve(".codex/mcp.json"));
                 return before.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE
                         && after.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE ? "UNCHANGED" : "INSTALLED";
             }
@@ -47,7 +48,7 @@ final class ProviderMcpConfigurationService {
             }
 
             if ("antigravity".equals(provider.id())) {
-                updateAntigravityUserConfig(managedEntry);
+                cleanObsoleteAntigravityProviderConfig();
             }
             cleanObsoleteProjectFile(location.root().resolve(".agents/mcp.json"));
             cleanObsoleteProjectFile(location.root().resolve(".gemini/mcp.json"));
@@ -64,6 +65,7 @@ final class ProviderMcpConfigurationService {
             try {
                 if ("codex".equals(provider.id())) {
                     CodexTomlConfiguration.remove(configPath);
+                    cleanObsoleteProjectFile(location.root().resolve(".codex/mcp.json"));
                 } else {
                     removeEntry(configPath);
                 }
@@ -73,12 +75,9 @@ final class ProviderMcpConfigurationService {
         if ("antigravity".equals(provider.id())) {
             String userHome = System.getProperty("user.home");
             if (userHome != null && !userHome.isBlank()) {
-                Path secondary = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
-                if (Files.exists(secondary)) {
-                    try {
-                        removeEntry(secondary);
-                    } catch (Exception ignored) {
-                    }
+                try {
+                    cleanObsoleteAntigravityProviderConfig();
+                } catch (IOException ignored) {
                 }
             }
             cleanObsoleteProjectFile(location.root().resolve(".agents/mcp.json"));
@@ -86,21 +85,14 @@ final class ProviderMcpConfigurationService {
         }
     }
 
-    private void updateAntigravityUserConfig(Map<String, Object> managedEntry) throws IOException {
+    private void cleanObsoleteAntigravityProviderConfig() throws IOException {
         String userHome = System.getProperty("user.home");
         if (userHome == null || userHome.isBlank()) {
             return;
         }
-        Path secondary = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
-        if (!Files.exists(secondary) && !Files.isDirectory(secondary.getParent())) {
-            return;
-        }
-        Map<String, Object> root = Files.exists(secondary) ? readObject(secondary) : new LinkedHashMap<>();
-        Map<String, Object> servers = mapValue(root.get("mcpServers"));
-        if (!managedEntry.equals(servers.get("synesis"))) {
-            servers.put("synesis", managedEntry);
-            root.put("mcpServers", servers);
-            atomicWrite(secondary, ProviderJson.write(root) + System.lineSeparator());
+        Path mirror = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
+        if (Files.exists(mirror)) {
+            removeEntry(mirror);
         }
     }
 

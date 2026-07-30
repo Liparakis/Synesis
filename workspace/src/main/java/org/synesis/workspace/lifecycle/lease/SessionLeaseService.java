@@ -89,6 +89,60 @@ public final class SessionLeaseService {
             createdAt = now;
         }
 
+        return saveLease(controlRoot, projectId, provider, connectionInstanceId, workerNodeId, sessionId,
+                processIdentity, createdAt, now, policy);
+    }
+
+    /**
+     * Registers a lease against an explicitly supervised provider process.
+     *
+     * <p>This is used only when Synesis itself launches the provider. The
+     * process identity is evidence for liveness; it does not grant mutation
+     * authority or imply intentional abandonment when the process exits.
+     *
+     * @param controlRoot control project root
+     * @param projectId project identifier
+     * @param provider provider identifier
+     * @param connectionInstanceId exact connection identifier
+     * @param workerNodeId worker node identifier
+     * @param sessionId session identifier
+     * @param processIdentity supervised provider process evidence
+     * @param policy lease policy
+     * @return persisted lease record
+     * @throws IOException when persistence fails
+     */
+    public SessionLeaseRecord createOrRenewSupervisedLease(
+            Path controlRoot,
+            String projectId,
+            String provider,
+            String connectionInstanceId,
+            String workerNodeId,
+            String sessionId,
+            SessionProcessIdentity processIdentity,
+            SessionLeasePolicy policy
+    ) throws IOException {
+        Objects.requireNonNull(processIdentity, "processIdentity");
+        Objects.requireNonNull(policy, "policy");
+        long now = policy.nowMillis();
+        Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
+        long createdAt = existing.map(SessionLeaseRecord::createdAtEpochMillis).orElse(now);
+        return saveLease(controlRoot, projectId, provider, connectionInstanceId, workerNodeId, sessionId,
+                processIdentity, createdAt, now, policy);
+    }
+
+    private SessionLeaseRecord saveLease(
+            Path controlRoot,
+            String projectId,
+            String provider,
+            String connectionInstanceId,
+            String workerNodeId,
+            String sessionId,
+            SessionProcessIdentity processIdentity,
+            long createdAt,
+            long now,
+            SessionLeasePolicy policy
+    ) throws IOException {
+
         SessionLeaseRecord updated = new SessionLeaseRecord(
                 1, projectId, provider, connectionInstanceId, workerNodeId, sessionId,
                 processIdentity, "0.1.0-SNAPSHOT", createdAt, now, SessionLeaseState.ACTIVE
@@ -120,6 +174,37 @@ public final class SessionLeaseService {
                 store.save(controlRoot, closed);
             } catch (IOException ignored) {
             }
+        }
+    }
+
+    /**
+     * Marks a lease cleanly closed only when it still refers to the expected
+     * supervised process. A late callback from an older process therefore
+     * cannot close a replacement lease on the same connection.
+     *
+     * @param controlRoot control project root path
+     * @param connectionInstanceId connection instance ID
+     * @param expectedPid process ID observed at close time
+     * @return {@code true} when the exact process lease was closed
+     */
+    public boolean markClosedCleanly(Path controlRoot, String connectionInstanceId, long expectedPid) {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
+        if (existing.isEmpty() || existing.get().processIdentity().pid() != expectedPid) {
+            return false;
+        }
+        SessionLeaseRecord prev = existing.get();
+        SessionLeaseRecord closed = new SessionLeaseRecord(
+                prev.schemaVersion(), prev.projectId(), prev.provider(), prev.connectionInstanceId(),
+                prev.workerNodeId(), prev.sessionId(), prev.processIdentity(), prev.synesisVersion(),
+                prev.createdAtEpochMillis(), System.currentTimeMillis(), SessionLeaseState.CLOSED_CLEANLY
+        );
+        try {
+            store.save(controlRoot, closed);
+            return true;
+        } catch (IOException ignored) {
+            return false;
         }
     }
 
@@ -161,7 +246,7 @@ public final class SessionLeaseService {
 
         if (processEvidence == ProcessEvidenceState.NOT_OBSERVED) {
             if (elapsedSinceHeartbeat.compareTo(policy.abandonmentGracePeriod()) >= 0) {
-                return SessionLeaseState.ABANDONMENT_ELIGIBLE;
+                return SessionLeaseState.RECOVERY_ELIGIBLE;
             } else {
                 return SessionLeaseState.SUSPECTED_STALE;
             }

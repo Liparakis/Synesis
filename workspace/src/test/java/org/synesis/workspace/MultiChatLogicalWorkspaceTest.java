@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
@@ -32,18 +33,22 @@ final class MultiChatLogicalWorkspaceTest {
                 "def test_lane_outputs():\n    assert open('src/a.py').read().strip() == 'lane-a'\n    assert open('src/b.py').read().strip() == 'lane-b'\n");
         git(root, "add", "."); git(root, "commit", "-m", "base");
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        new ProviderManualService().install("codex");
         var laneA = bindings.ensure(location, "codex", "chat-a").binding();
         var laneB = bindings.ensure(location, "codex", "chat-b").binding();
         assertNotEquals(laneA.worktreePath(), laneB.worktreePath());
 
-        UUID group = UUID.randomUUID();
+        UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         assertTrue(collaboration.announce(root, "codex", "chat-a", "group", "tests",
-                List.of(ResourceSelector.pathExact("src/a.py")), group).acquired());
+                List.of(ResourceSelector.pathExact("src/a.py"))).acquired());
         assertTrue(collaboration.announce(root, "codex", "chat-b", "group", "tests",
-                List.of(ResourceSelector.pathExact("src/b.py")), group).acquired());
+                List.of(ResourceSelector.pathExact("src/b.py"))).acquired());
         assertFalse(collaboration.announce(root, "codex", "chat-b", "overlap", "blocked",
-                List.of(ResourceSelector.pathExact("src/a.py")), group).acquired());
+                List.of(ResourceSelector.pathExact("src/a.py"))).acquired());
+        assertEquals(1, collaboration.status(root).groups().stream()
+                .filter(candidate -> candidate.workGroupId().equals(group)).count());
 
         WorkspacePatchService patches = new WorkspacePatchService();
         assertTrue(patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-a",

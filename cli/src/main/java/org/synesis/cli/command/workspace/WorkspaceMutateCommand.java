@@ -193,7 +193,8 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
 
             // Apply mutation via WorkspaceMutationBroker
             WorkspaceMutationBroker broker = new WorkspaceMutationBroker();
-            MutationRequest req = new MutationRequest(location, provider, target, kind, fileContent, true, false);
+            MutationRequest req = new MutationRequest(location, provider, binding.sessionId(), target, kind,
+                    fileContent, true, false);
             MutationResult res = broker.applyMutation(req);
 
             String resultingHash = null;

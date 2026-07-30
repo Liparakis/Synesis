@@ -27,7 +27,8 @@ final class ProviderConfigMigrationServiceTest {
             String root = Files.readString(config);
             assertTrue(root.contains("notify = [\"keep\"]"));
             assertTrue(root.contains("[mcp_servers.other]"));
-            assertTrue(root.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
+            assertTrue(root.contains("command = '" + launcher.toAbsolutePath().normalize() + "'"));
+            assertTrue(root.contains("\"mcp\", \"--provider\", \"codex\""));
             assertEquals(ProviderConfigMigrationService.Outcome.UP_TO_DATE, service.inspect("codex").outcome());
         } finally {
             if (oldHome == null) System.clearProperty("user.home"); else System.setProperty("user.home", oldHome);

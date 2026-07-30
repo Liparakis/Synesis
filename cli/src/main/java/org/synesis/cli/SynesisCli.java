@@ -6,6 +6,7 @@ import org.synesis.cli.command.lifecycle.CleanupCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
 import org.synesis.cli.command.collaboration.CollaborationAnnounceCommand;
+import org.synesis.cli.command.collaboration.CollaborationAcknowledgeCommand;
 import org.synesis.cli.command.collaboration.CollaborationCommand;
 import org.synesis.cli.command.collaboration.CollaborationStatusCommand;
 import org.synesis.cli.command.collaboration.CollaborationReleaseCommand;
@@ -138,6 +139,7 @@ public final class SynesisCli {
                 .addSubcommand("create", new ConstraintCreateCommand(runtime));
         CommandLine collaboration = new CommandLine(new CollaborationCommand())
                 .addSubcommand("announce", new CollaborationAnnounceCommand(runtime))
+                .addSubcommand("acknowledge", new CollaborationAcknowledgeCommand(runtime))
                 .addSubcommand("status", new CollaborationStatusCommand(runtime))
                 .addSubcommand("release", new CollaborationReleaseCommand(runtime))
                 .addSubcommand("request", new CollaborationRequestCommand(runtime))

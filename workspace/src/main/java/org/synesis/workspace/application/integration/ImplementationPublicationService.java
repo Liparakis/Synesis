@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.integration;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.ProviderManualService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -31,7 +32,7 @@ import org.synesis.workspace.agent.AgentStatus;
 /**
  * Application service for owners to publish an immutable implementation snapshot.
  *
- * <p>When the owner calls {@code synesis.publish_implementation}, this service:
+ * <p>When the owner calls {@code synesis.publish_snapshot}, this service:
  * <ol>
  *   <li>Authorizes the ambient worker as the accepted owner of the request.</li>
  *   <li>Verifies the owner session and assigned worktree are active and trusted.</li>
@@ -49,6 +50,7 @@ public final class ImplementationPublicationService {
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
     private final SessionAuthorityResolver authorityResolver;
+    private final ProviderManualService manualService;
 
     /**
      * Creates an implementation publication service.
@@ -57,6 +59,7 @@ public final class ImplementationPublicationService {
         this.projectService = new ProjectApplicationService();
         this.bindingService = new ProviderSessionBindingService();
         this.authorityResolver = new SessionAuthorityResolver(bindingService);
+        this.manualService = new ProviderManualService();
     }
 
     /**
@@ -96,6 +99,12 @@ public final class ImplementationPublicationService {
         Objects.requireNonNull(request, "request");
 
         Path root = request.projectRoot().toAbsolutePath().normalize();
+        try {
+            manualService.requireAttested(request.provider());
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY,
+                    Map.of("reason", "MANUAL_ATTESTATION_REQUIRED"));
+        }
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }

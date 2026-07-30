@@ -88,9 +88,15 @@ public final class PredictionEventStore {
     public synchronized PredictionEvent append(UUID predictionId, PredictionEventType type,
             String actorNodeId, byte[] payload, NodeIdentity signer) throws IOException, GeneralSecurityException {
         Objects.requireNonNull(predictionId, "prediction ID");
-        long sequence = events.size() + 1L;
-        byte[] previous = events.isEmpty() ? new byte[32] : events.get(events.size() - 1)
-                                                            .digest();
+        // A caller may hold a long-lived store while another connection
+        // appends through a fresh instance.  Derive the append head from the
+        // durable directory so the stale instance cannot overwrite the other
+        // event or fork the hash chain.  Its in-memory projections remain a
+        // caller concern; authority-sensitive services use fresh projections
+        // at their boundaries.
+        Head durableHead = durableHead();
+        long sequence = durableHead.sequence() + 1L;
+        byte[] previous = durableHead.digest();
         PredictionEvent event = PredictionEvent.create(projectId, predictionId, sequence, type, actorNodeId,
                 Objects.requireNonNull(payload, "payload"), previous, signer, clock.millis());
         if (!event.verify()) {
@@ -125,6 +131,26 @@ public final class PredictionEventStore {
         events.add(event);
         return event;
     }
+
+    private synchronized Head durableHead() throws IOException, GeneralSecurityException {
+        long sequence = 0L;
+        byte[] digest = new byte[32];
+        try (var files = Files.list(eventsDirectory)) {
+            for (Path file : files.filter(path -> path.getFileName().toString().endsWith(".sce"))
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString())).toList()) {
+                PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
+                if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L
+                        || !java.util.Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
+                    throw new IOException("invalid coordination event log");
+                }
+                sequence = event.sequence();
+                digest = event.digest();
+            }
+        }
+        return new Head(sequence, digest);
+    }
+
+    private record Head(long sequence, byte[] digest) { }
 
     /**
      * Returns all verified events in sequence order.

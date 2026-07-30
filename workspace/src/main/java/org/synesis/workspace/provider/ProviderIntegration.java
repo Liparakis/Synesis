@@ -69,11 +69,27 @@ public interface ProviderIntegration {
         Map<String, Object> server = new LinkedHashMap<>();
         String cmd = launcher != null && java.nio.file.Files.isRegularFile(launcher)
                 ? launcher.toAbsolutePath().normalize().toString()
-                : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? "synesis.cmd" : "synesis");
+                : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
+                        ? "synesis-mcp.exe" : "synesis-mcp");
         server.put("command", cmd);
         server.put("args", List.of("mcp", "--provider", id()));
         server.put("version", 1);
         return server;
+    }
+
+    /**
+     * Returns an optional direct argv command for noninteractive supervision.
+     *
+     * <p>An empty result is intentional: a provider may expose MCP transport
+     * without exposing a verified noninteractive driver. Callers must keep
+     * such providers pull-safe and must not infer autonomous support.
+     *
+     * @param worktree isolated lane worktree
+     * @param prompt initial provider task prompt
+     * @return direct executable argv, or empty when unsupported/unverified
+     */
+    default java.util.Optional<List<String>> autonomousCommand(Path worktree, String prompt) {
+        return java.util.Optional.empty();
     }
 
     /**

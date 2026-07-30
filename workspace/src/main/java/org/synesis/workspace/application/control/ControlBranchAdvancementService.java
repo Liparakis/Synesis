@@ -92,7 +92,7 @@ public final class ControlBranchAdvancementService {
         try {
             // 1. Verify control checkout is clean
             String status = runGitOutput(controlRoot, "status", "--porcelain");
-            if (!status.isBlank()) {
+            if (hasBlockingControlChanges(status)) {
                 return new AdvancementResult(false, false, true, "Control checkout working tree is dirty: " + status);
             }
 
@@ -174,5 +174,30 @@ public final class ControlBranchAdvancementService {
 
     private static void runGit(Path workdir, String... args) throws IOException {
         runGitOutput(workdir, args);
+    }
+
+    /**
+     * Ignores only untracked Synesis/provider administration material that is
+     * intentionally created beside the source checkout. Tracked changes and
+     * every unrelated path remain integration blockers.
+     *
+     * @param status porcelain status output
+     * @return whether source or unrelated user changes block advancement
+     */
+    private static boolean hasBlockingControlChanges(String status) {
+        if (status == null || status.isBlank()) {
+            return false;
+        }
+        return status.lines().map(String::trim).filter(line -> !line.isBlank()).anyMatch(line -> {
+            if (!line.startsWith("?? ")) {
+                return true;
+            }
+            String path = line.substring(3).replace('\\', '/');
+            return !(path.equals("AGENTS.md") || path.equals(".synesis") || path.startsWith(".synesis/")
+                    || path.equals(".mcp.json")
+                    || path.equals(".codex") || path.startsWith(".codex/")
+                    || path.equals(".claude") || path.startsWith(".claude/")
+                    || path.equals(".agents") || path.startsWith(".agents/"));
+        });
     }
 }

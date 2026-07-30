@@ -123,7 +123,7 @@ class AgentOutcomeTranslatorTest {
 
         assertEquals(AgentStatus.NEEDS_CAPABILITY, outcome.publicResponse().status());
         assertEquals(AgentReason.OWNER_REQUIRED, outcome.publicResponse().reason());
-        assertEquals(AgentNextAction.DESCRIBE_REQUIRED_CAPABILITY, outcome.publicResponse().nextAction());
+        assertEquals(AgentNextAction.REQUEST_COORDINATION, outcome.publicResponse().nextAction());
         assertTrue(outcome.waitRequired());
 
         String json = outcome.publicResponse().toJson();

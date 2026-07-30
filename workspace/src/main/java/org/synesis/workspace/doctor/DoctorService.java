@@ -116,7 +116,7 @@ public final class DoctorService {
         checkMigrationTransactions(findings);
 
         // 7. Provider Configuration Checks
-        checkProviderConfiguration(findings);
+        checkProviderConfiguration(root, findings);
 
         if (findings.isEmpty()) {
             findings.add(new DoctorFinding(
@@ -237,7 +237,7 @@ public final class DoctorService {
 
         for (SessionLeaseRecord lease : leases) {
             SessionLeaseState state = leaseService.evaluateLiveness(lease, policy);
-            if (state == SessionLeaseState.ABANDONMENT_ELIGIBLE || state == SessionLeaseState.SUSPECTED_STALE) {
+            if (state == SessionLeaseState.RECOVERY_ELIGIBLE || state == SessionLeaseState.SUSPECTED_STALE) {
                 findings.add(new DoctorFinding(
                         DoctorFindingCode.STALE_SESSION_LEASE, DoctorSeverity.WARNING, DoctorConfidence.HIGH_CONFIDENCE,
                         "Stale session lease detected", "Provider session lease has missed heartbeats beyond policy threshold.",
@@ -347,7 +347,23 @@ public final class DoctorService {
         }
     }
 
-    private void checkProviderConfiguration(List<DoctorFinding> findings) {
+    private void checkProviderConfiguration(Path projectRoot, List<DoctorFinding> findings) {
+        // Global provider configuration is not a defect in an unrelated or
+        // freshly initialized project. Scope migration diagnostics to projects
+        // that actually have a durable Synesis provider installation record.
+        Path providerState = projectRoot.resolve(".synesis/local/providers");
+        try {
+            if (!Files.isDirectory(providerState)) {
+                return;
+            }
+            try (var files = Files.list(providerState)) {
+                if (files.noneMatch(path -> path.getFileName().toString().endsWith(".json"))) {
+                    return;
+                }
+            }
+        } catch (IOException ignored) {
+            return;
+        }
         for (ProviderConfigMigrationService.Entry entry : new ProviderConfigMigrationService().inspect()) {
             if (entry.outcome() == ProviderConfigMigrationService.Outcome.MIGRATION_REQUIRED) {
                 findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_MIGRATION_REQUIRED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,

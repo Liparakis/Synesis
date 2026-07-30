@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.integration;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.ProviderManualService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 
@@ -30,7 +31,7 @@ import org.synesis.workspace.agent.AgentStatus;
 /**
  * Application service for requesters to validate an available implementation snapshot.
  *
- * <p>When the requester calls {@code synesis.validate_available_implementation}:
+ * <p>When the requester calls {@code synesis.validate_snapshot}:
  * <ol>
  *   <li>Authorizes the ambient worker as the original requester.</li>
  *   <li>Verifies the capability is in {@code IMPLEMENTATION_AVAILABLE} or {@code VALIDATING} state.</li>
@@ -48,6 +49,7 @@ public final class ImplementationValidationService {
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
     private final SessionAuthorityResolver authorityResolver;
+    private final ProviderManualService manualService;
     private final ValidationWorkspaceService validationWorkspaceService;
 
     /**
@@ -57,6 +59,7 @@ public final class ImplementationValidationService {
         this.projectService = new ProjectApplicationService();
         this.bindingService = new ProviderSessionBindingService();
         this.authorityResolver = new SessionAuthorityResolver(bindingService);
+        this.manualService = new ProviderManualService();
         this.validationWorkspaceService = new ValidationWorkspaceService();
     }
 
@@ -103,6 +106,12 @@ public final class ImplementationValidationService {
         Objects.requireNonNull(request, "request");
 
         Path root = request.projectRoot().toAbsolutePath().normalize();
+        try {
+            manualService.requireAttested(request.provider());
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY,
+                    Map.of("reason", "MANUAL_ATTESTATION_REQUIRED"));
+        }
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }

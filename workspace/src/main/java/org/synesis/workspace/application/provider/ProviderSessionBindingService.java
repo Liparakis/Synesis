@@ -490,7 +490,7 @@ public final class ProviderSessionBindingService {
                         .equals("REVOKED") && !binding.status()
                         .equals("COMPLETED")
                         && !binding.status()
-                        .equals("ABANDONED")) {
+                        .equals("SUSPENDED") && !binding.status().equals("CANCELLED")) {
                     if (binding.worktreePath() != null && !workspaceGenerationFresh(location, binding)) {
                         if (!isWorktreeClean(binding)) {
                             throw new BindingException("WORKSPACE_STALE_DIRTY",
@@ -678,6 +678,47 @@ public final class ProviderSessionBindingService {
     }
 
     /**
+     * Marks one exact provider connection binding complete while preserving its
+     * worktree and audit record.  Resolution is by the caller's connection
+     * evidence; no provider-wide or latest-binding fallback is permitted.
+     *
+     * @param location initialized control project
+     * @param provider stable provider identifier
+     * @param instanceEvidence exact provider connection identity
+     * @return {@code true} when the binding was transitioned or was already complete
+     * @throws BindingException when the exact binding cannot be read or persisted
+     */
+    public synchronized boolean complete(ProjectApplicationService.ProjectLocation location,
+            String provider, String instanceEvidence) throws BindingException {
+        Objects.requireNonNull(location, "location");
+        requireText(provider, "provider");
+        try {
+            String evidence = instanceEvidence == null || instanceEvidence.isBlank()
+                    ? fallbackEvidence(location, provider) : instanceEvidence.trim();
+            String fingerprint = fingerprint(evidence);
+            Path bindingPath = location.synesisDirectory().resolve("local")
+                    .resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + fingerprint + ".json");
+            if (!Files.isRegularFile(bindingPath)) {
+                return false;
+            }
+            Binding binding = read(bindingPath);
+            if ("COMPLETED".equals(binding.status())) {
+                return true;
+            }
+            if (!"BOUND".equals(binding.status()) && !"SUSPENDED".equals(binding.status())) {
+                return false;
+            }
+            write(bindingPath, binding.complete());
+            return true;
+        } catch (BindingException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BindingException("SESSION_COMPLETE_FAILED",
+                    "Could not complete provider connection binding", failure);
+        }
+    }
+
+    /**
      * Revokes all sessions for a provider while preserving their audit records.
      *
      * @param location initialized project location
@@ -796,7 +837,7 @@ public final class ProviderSessionBindingService {
      *
      * @param location  initialized project location
      * @param provider  provider identifier
-     * @param sessionId session identifier, or {@code null} to resolve latest bound session
+     * @param sessionId exact session identifier; {@code null} is rejected to prevent cross-chat authority
      * @param cwd       provider's declared active working directory
      * @return structured workspace verification result
      */
@@ -812,15 +853,13 @@ public final class ProviderSessionBindingService {
             if (bindings.isEmpty()) {
                 return new WorkspaceVerificationResult(false, "SESSION_UNBOUND", null, null);
             }
-            Binding binding = null;
-            if (sessionId != null && !sessionId.isBlank()) {
-                binding = bindings.stream()
-                        .filter(b -> sessionId.equals(b.sessionId()))
-                        .findFirst()
-                        .orElse(null);
-            } else {
-                binding = bindings.getLast();
+            if (sessionId == null || sessionId.isBlank()) {
+                return new WorkspaceVerificationResult(false, "SESSION_ID_REQUIRED", null, null);
             }
+            Binding binding = bindings.stream()
+                    .filter(b -> sessionId.equals(b.sessionId()))
+                    .findFirst()
+                    .orElse(null);
             if (binding == null || !"BOUND".equals(binding.status())) {
                 return new WorkspaceVerificationResult(false, "SESSION_UNBOUND", null, null);
             }
@@ -1084,6 +1123,21 @@ public final class ProviderSessionBindingService {
                     "REVOKED",
                     bindingVersion,
                     Long.toString(System.currentTimeMillis()));
+        }
+
+        /**
+         * Returns a terminal completed binding while preserving its worktree.
+         *
+         * @return completed binding
+         */
+        public Binding complete() {
+            long completed = System.currentTimeMillis();
+            return new Binding(schemaVersion, sessionId, projectId, nodeId, provider,
+                    providerInstanceFingerprint, supervisorId, workerId, worktreeId,
+                    worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir,
+                    creationState, verificationState, "COMPLETED", "COMPLETED",
+                    createdAtEpochMillis, completed, lastVerifiedProjectSequence,
+                    providerTrustState, bindingVersion, Long.toString(completed));
         }
     }
 

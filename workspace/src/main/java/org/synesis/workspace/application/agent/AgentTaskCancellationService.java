@@ -162,7 +162,7 @@ public final class AgentTaskCancellationService {
                     ("session_cancelled:" + binding.sessionId()).getBytes(StandardCharsets.UTF_8), identity);
 
             try {
-                collaborationService.release(request.projectRoot(), request.provider(), request.connectionInstanceId());
+                collaborationService.cancel(request.projectRoot(), request.provider(), request.connectionInstanceId());
             } catch (Exception ignored) {
                 // Reconciliation may retry a release if the event append was interrupted.
             }

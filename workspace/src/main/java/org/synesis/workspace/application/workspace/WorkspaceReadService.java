@@ -129,6 +129,21 @@ public final class WorkspaceReadService {
             return workspaceMismatch(root, assignedWorktree);
         }
 
+        // A valid repository-relative target may be intentionally absent in a
+        // fresh isolated lane. Report that state as createable rather than
+        // misclassifying it as an invalid path; mutation authorization remains
+        // enforced by WorkspacePatchService and the active claim epoch.
+        if (!Files.exists(targetFile)) {
+            Map<String, Object> missing = new LinkedHashMap<>();
+            missing.put("path", resolvedRelative);
+            missing.put("exists", false);
+            missing.put("content", "");
+            missing.put("contentHash", "");
+            missing.put("truncated", false);
+            missing.put("createAllowed", true);
+            return new AgentResponse(AgentStatus.COMPLETED, null, null, missing);
+        }
+
         // Symlink Escape Check
         try {
             Path canonicalAssigned = assignedWorktree.toRealPath();

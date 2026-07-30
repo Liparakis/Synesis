@@ -1098,8 +1098,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   reconciliation services.
 - Acceptance criteria: exact-session participant projection; one active intent
   per verified session; heartbeat renewal and clean EOF; suspected-stale versus
-  abandoned classification; explicit release on refresh/completion/cancellation;
-  verified-abandonment recovery; old-epoch mutation fencing; CLI/MCP parity.
+  suspended/recovery-held classification; explicit release on refresh/completion/cancellation;
+  owner-independent recovery without inferred abandonment; old-epoch mutation fencing; CLI/MCP parity.
 - Required tests: lifecycle projection, heartbeat coalescing, stale/grace
   boundaries, deleted-process recovery, exact-caller release, old-epoch
   rejection, concurrent unrelated claims, and adapter equivalence.
@@ -1170,11 +1170,11 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   equivalent CLI/MCP operations and a stable raw 11-tool wire contract.
 - Dependencies: SYN-023 DONE at CP-0269; existing 11-tool MCP server and
   provider configuration key `synesis`.
-- Acceptance criteria: raw MCP names are advertised exactly once; legacy
-  `synesis.*` calls remain accepted; CLI and MCP expose equivalent intent,
+- Acceptance criteria: raw MCP names are advertised exactly once; decorated
+  `synesis.*` calls are rejected after prerelease migration; CLI and MCP expose equivalent intent,
   status, release, handoff, contract, and readiness outcomes; schemas and
   error codes are documented and tested.
-- Required tests: raw tools/list, legacy tools/call compatibility, CLI command
+- Required tests: raw tools/list, decorated-name rejection, CLI command
   registration, shared-service outcome equivalence, and provider config smoke.
 - Required documentation: naming ADR, checkpoint, provider documentation,
   test matrix, and migration limitations.
@@ -1218,8 +1218,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   JSON-safe revision and supersession data; deterministic MCP publish/status
   projection regressions pass.
   real Claude deleted-chat v3 process now proves lease creation before forced
-  termination, suspected-stale then abandonment-eligible classification,
-  owner-independent reconciliation, claim release, ABANDONED projection, and
+  termination, suspected-stale then recovery-eligible classification,
+  owner-independent reconciliation, fenced suspended projection, and
   old-epoch `workspace_generation_changed` fencing. The task-tracker fixture's
   current `python -m pytest -q` run passes all 45 tests.
   Additive MCP request/handoff operations and exact-session `get_next_action`
@@ -1268,7 +1268,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-027
 - Priority: P0
 - Title: Multi-chat logical workgroups and isolated mutation lanes
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Support concurrent chats and independently authenticated subagents
   under one durable logical work group while preserving one participant,
   binding, lease, claim epoch, branch, and isolated worktree per mutation lane.
@@ -1316,3 +1316,179 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   attempt is appended; the focused grant lifecycle regression now also proves
   revoked continuation grants cannot be consumed; cancellation now proves the
   exact lane claim is released while the worktree remains intact.
+- Evidence: CP-0324; focused coordination/workspace compilation and tests pass;
+  multi-lane acceptance remains isolated and no shared physical worktree is
+  permitted.
+
+## SYN-028
+
+- ID: SYN-028
+- Priority: P0
+- Title: Automated lane coordination, recovery, and prerelease transition
+- Status: DONE
+- Purpose: Replace manual multi-chat choreography with one lane-native,
+  crash-recoverable coordination protocol, durable inbox, continuation flow,
+  strict manual attestation, and automatic prerelease migration.
+- Dependencies: SYN-027 DONE; ADR-0039; ADR-0040; existing lane, claim,
+  snapshot, integration, provider, and migration services.
+- Acceptance criteria: process loss never implies abandonment; completion is
+  idempotent and crash-recoverable; suspended work reaches RECOVERY_HELD only
+  after an immutable recovery snapshot; continuation uses new authority and a
+  new worktree; cancelled lanes are permanently fenced; inbox delivery is
+  non-destructive and at-least-once; manual attestation gates authority
+  increase but permits safe reduction; migration is exclusive and resumable;
+  provider install deploys the managed Synesis Manual globally; exactly 11 raw
+  MCP tools remain exposed.
+- Required tests: lifecycle crash boundaries, recovery snapshot transfer,
+  cancelled-lane fencing, inbox acknowledgement/replay, manual attestation
+  reduction paths, migration lock/phase recovery, global provider skill
+  installation, strict coordination variants, and existing multi-lane
+  integration.
+- Required documentation: ADR-0040, updated collaboration architecture,
+  Synesis Manual, migration/provider notes, checkpoint evidence, and provider
+  acceptance updates.
+- Scope boundary: no shared physical worktree, remote user accounts, broker,
+  database, hosted service, symbol claims, or provider chat resurrection.
+- Evidence: CP-0331; sequential `./gradlew.bat check --no-daemon
+  --max-workers=1 --dependency-verification=strict`; bootstrap Go tests/vet;
+  deferred validator; strict Javadocs; deterministic lifecycle/recovery,
+  inbox, migration, manual-attestation, exact-caller, continuation, and
+  multi-lane tests; and real Codex stdio recovery evidence recorded in
+  `docs/validation/multi-chat-provider-acceptance.md`.
+
+## SYN-029
+
+- ID: SYN-029
+- Priority: P0
+- Title: Provider MCP launch reliability and creation-aware autonomous flow
+- Status: DONE
+- Purpose: Make generated Windows MCP registrations launch reliably from real
+  provider CLIs and let an authorized lane create a valid missing target
+  instead of stopping with `invalid_path`.
+- Dependencies: SYN-028 DONE; provider installation and workspace mutation
+  services.
+- Acceptance criteria: Codex, Claude, and Antigravity registrations launch
+  the installed MCP server through a provider-compatible Windows command;
+  real provider processes establish sessions without manual retries; a valid
+  claimed missing file is reported as createable and can be created through
+  Synesis; protected and traversal paths remain fail-closed.
+- Required tests: generated provider command/config contract, real Codex
+  stdio bootstrap, missing-file read/create regression, and existing full
+  provider/workspace checks.
+- Required documentation: checkpoint and provider acceptance evidence.
+- Completion evidence: native launcher cross-builds and installed MCP
+  `initialize`/`tools/list` health probe pass; provider registrations point at
+  `synesis-mcp.exe`; focused provider tests, the sequential 51-task Gradle
+  check, and bootstrap Go tests/vet pass. A
+  real Codex CLI ordinary-feature run established a session, acquired a claim,
+  mutated/read back a revision-verified file, published an immutable snapshot,
+  and integrated it into the control branch. Claude Code 2.1.220 now also
+  passes the clean project-scoped disposable probe through snapshot, control
+  integration, and lane closure. Antigravity native MCP transport and
+  registration health are verified, while its model-driven noninteractive MCP
+  invocation remains unsupported/unverified and is explicitly not claimed as
+  autonomous provider behavior. Valid missing-file reads report
+  `createAllowed`; protected and traversal paths remain fail-closed. Evidence:
+  PASS — CP-0373 and the sequential verification gate.
+
+## SYN-030
+
+- ID: SYN-030
+- Priority: P0
+- Title: Durable autonomous lane workflow
+- Status: DONE
+- Purpose: Replace provider-specific next-step choreography with a shared,
+  stable, at-least-once lane action workflow and durable inbox.
+- Dependencies: SYN-029 DONE; exact-caller authority and current 11-tool MCP
+  contract.
+- Acceptance criteria: one server-issued action is derived per lane; retrieval
+  is non-destructive; acknowledgement is explicit, idempotent, and exact-caller
+  authorized; routine failures return actionable protocol state; bounded inbox
+  polling is safe and blind mutation retries are rejected.
+- Required tests: stable action identity/order, crash-before-ack replay,
+  idempotent acknowledgement, stale-caller rejection, and CLI/MCP parity.
+- Required documentation: workflow ADR, checkpoint, and validation evidence.
+- Progress: shared reducer now emits stable action IDs, strict workflow type,
+  payload, blockers, permitted operations, retry safety, and explicit
+  at-least-once acknowledgement metadata. Claim conflicts create idempotent
+  owner/contender inbox requests, and default announcements join one active
+  project work group. Terminal and recovery lane states now map to autonomous
+  `CLOSE`/`RECOVER` actions, and incremental integration excludes already
+  integrated snapshots through `readySnapshots()`. Evidence: PASS — focused
+  reducer, coordination, MCP, CLI parity, and full sequential verification
+  suites at CP-0374.
+
+## SYN-031
+
+- ID: SYN-031
+- Priority: P0
+- Title: Automatic work-group joining, scoped claims, and negotiation
+- Status: DONE
+- Purpose: Let independently authenticated chats join one logical work group,
+  receive isolated lanes, and resolve claim conflicts without user relay.
+- Dependencies: SYN-030 DONE; WorkGroup and lane lifecycle foundations.
+- Acceptance criteria: disjoint claims succeed concurrently; overlaps fail
+  before mutation authority and create durable owner/contender inbox items;
+  strict coordination variants expose contracts and safe alternatives.
+- Required tests: multi-chat joining, overlap arbitration, contract negotiation,
+  same-provider binding isolation, and independent-group isolation.
+- Required documentation: collaboration ADR and provider acceptance evidence.
+- Evidence: PASS — WorkGroup/LaneGrant replay, exact/subtree arbitration,
+  idempotent owner/contender inbox creation, contract negotiation, same-
+  provider isolated lanes, independent-group isolation, and full sequential
+  verification at CP-0374.
+
+## SYN-032
+
+- ID: SYN-032
+- Priority: P0
+- Title: Autonomous completion and incremental integration
+- Status: DONE
+- Purpose: Publish immutable lane snapshots and integrate compatible work
+  incrementally through the dedicated integration worktree.
+- Dependencies: SYN-031 DONE; snapshot and integration services.
+- Acceptance criteria: completion is idempotent and crash-recoverable; complete
+  diffs, epochs, contracts, ancestry, provenance, and out-of-band changes are
+  checked before integration; conflicts create isolated repair lanes.
+- Required tests: dirty snapshots, concurrent integration serialization,
+  stale/incompatible candidates, repair lanes, and final source-tree results.
+- Required documentation: integration ADR and validation evidence.
+- Evidence: PASS — immutable dirty-lane snapshots, claim/epoch/contract/base
+  compatibility checks, cross-process integration serialization, incremental
+  integration, repair-path preservation, Python acceptance, and full
+  sequential verification at CP-0374.
+
+## SYN-033
+
+- ID: SYN-033
+- Priority: P0
+- Title: Provider supervision and authorized continuation
+- Status: DONE
+- Purpose: Fence lost provider authority, preserve unfinished work, and permit
+  authorized continuation without stopping sibling lanes.
+- Dependencies: SYN-032 DONE; recovery snapshots and provider lifecycle APIs.
+- Acceptance criteria: process loss never implies abandonment; SUSPENDED and
+  RECOVERY_HELD are distinct; continuation uses a new lane/worktree; cancelled
+  lanes never resume; same local project authority or explicit operator
+  authorization is required.
+- Required tests: quota/process loss, recovery snapshot transfer, cancellation
+  fencing, sibling progress, and old-binding rejection.
+- Required documentation: recovery ADR and real-provider evidence.
+- Progress: existing signed recovery snapshot, suspension, continuation-grant,
+  and old-epoch fencing flows are covered. A direct shell-free
+  `ProviderProcessSupervisor` now provides bounded start, observation,
+  interrupt, close, and distinct-lane continuation primitives. Provider
+  integrations now expose documented Codex and Claude noninteractive argv;
+  Antigravity intentionally exposes none until real MCP invocation is proven.
+  A one-shot verified-exit callback reports process loss without mutating claims
+  or inferring abandonment. Supervised launches can now persist the child PID,
+  executable, command line, and start time in the exact session lease; explicit
+  close marks that lease cleanly closed. `startWithAutomaticRecovery` schedules
+  the existing signed reconciliation plan after the configured grace period;
+  it never infers abandonment or directly releases claims. Evidence: PASS —
+  real Codex deleted-process recovery established SUSPECTED_STALE,
+  RECOVERY_ELIGIBLE, RECOVERY_HELD, isolated continuation, sibling progress,
+  transferred claims, and old-process epoch fencing; cancellation and revoked
+  grant regressions pass; full sequential verification is green at CP-0375.
+  Antigravity exposes no autonomous process driver because real model-driven
+  MCP invocation remains unverified.

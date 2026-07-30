@@ -97,6 +97,23 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         return server;
     }
 
+    /**
+     * Builds Codex's documented noninteractive argv without bypassing its
+     * approval or sandbox policy.
+     *
+     * @param worktree isolated lane worktree
+     * @param prompt initial task prompt
+     * @return direct Codex argv
+     */
+    @Override
+    public java.util.Optional<List<String>> autonomousCommand(Path worktree, String prompt) {
+        if (worktree == null || prompt == null || prompt.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(List.of("codex", "exec", "--cd",
+                worktree.toAbsolutePath().normalize().toString(), "--json", prompt));
+    }
+
     @Override
     public String hookGroup() {
         return "hooks";

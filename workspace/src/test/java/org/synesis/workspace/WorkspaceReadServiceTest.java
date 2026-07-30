@@ -83,6 +83,22 @@ class WorkspaceReadServiceTest {
     }
 
     @Test
+    void reportsValidMissingClaimedFileAsCreateable() {
+        AgentSessionService sessionService = new AgentSessionService();
+        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "conn-read-missing", null, false);
+        sessionService.ensureSession(req);
+
+        AgentResponse response = new WorkspaceReadService().readFile(new WorkspaceReadService.ReadRequest(
+                controlRoot, "codex", "conn-read-missing", "src/NewTracker.py", 1, 10, 65536));
+
+        assertEquals(AgentStatus.COMPLETED, response.status());
+        assertTrue(response.toJson().contains("\"exists\":false"));
+        assertTrue(response.toJson().contains("\"createAllowed\":true"));
+        assertTrue(response.toJson().contains("\"contentHash\":\"\""));
+    }
+
+    @Test
     void testRejectsAbsolutePathsAndPathTraversal() throws Exception {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(

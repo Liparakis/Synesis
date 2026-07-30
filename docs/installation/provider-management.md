@@ -22,6 +22,14 @@ hook to `<project>/.agents/hooks.json`; Claude Code writes to
 Codex writes its managed hook to `<project>/.codex/hooks.json` and includes a
 Windows-specific launcher command.
 
+Each provider has one canonical MCP scope: Codex uses the user
+`%USERPROFILE%\\.codex\\config.toml`, Claude Code uses the project
+`.mcp.json`, and Antigravity uses `%USERPROFILE%\\.gemini\\config\\mcp_config.json`
+without a project-bound argument; Antigravity selects the active project from
+MCP initialize roots (or its bounded process-working-directory fallback).
+Installation migrates stale Synesis
+entries from legacy scopes without removing unrelated servers.
+
 Installation performs isolated synthetic block/allow checks. It does not run a
 real provider agent. Antigravity remains `BETA` until a real agent denial and
 successful re-plan are recorded; Claude Code and Codex remain `EXPERIMENTAL`.

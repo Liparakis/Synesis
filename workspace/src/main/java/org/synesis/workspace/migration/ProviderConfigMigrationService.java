@@ -291,11 +291,21 @@ public final class ProviderConfigMigrationService {
             if (synesis > 1) return new Entry(provider.id(), config.toString(), hash(raw), Outcome.DUPLICATE_SYNSESIS_ENTRY, launcher.toString());
             Object existing = servers.get("synesis");
             Map<String, Object> desired = provider.managedMcpServer(launcher, config.getParent());
-            boolean same = equivalent(desired, existing);
+            boolean same = "antigravity".equals(provider.id())
+                    ? antigravityEntryCurrent(existing, launcher)
+                    : equivalent(desired, existing);
             return new Entry(provider.id(), config.toString(), hash(raw), same ? Outcome.UP_TO_DATE : Outcome.MIGRATION_REQUIRED, launcher.toString());
         } catch (Exception failure) {
             return new Entry(provider.id(), config.toString(), safeHash(config), Outcome.MALFORMED, launcher.toString());
         }
+    }
+
+    private static boolean antigravityEntryCurrent(Object existing, Path launcher) {
+        if (!(existing instanceof Map<?, ?> entry)) return false;
+        if (!Objects.equals(String.valueOf(entry.get("command")), launcher.toString())) return false;
+        if (!(entry.get("args") instanceof List<?> args) || args.size() != 3) return false;
+        return "mcp".equals(args.get(0)) && "--provider".equals(args.get(1))
+                && "antigravity".equals(args.get(2));
     }
 
     private static ProviderIntegration provider(String id) {
@@ -343,7 +353,10 @@ public final class ProviderConfigMigrationService {
         boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
         String base = windows ? System.getenv("LOCALAPPDATA") : System.getenv("XDG_DATA_HOME");
         if (base == null || base.isBlank()) base = windows ? Path.of(System.getProperty("user.home"), "AppData", "Local").toString() : Path.of(System.getProperty("user.home"), ".local", "share").toString();
-        return Path.of(base, "Synesis", "bin", windows ? "synesis.cmd" : "synesis").toAbsolutePath().normalize();
+        Path bin = Path.of(base, "Synesis", "bin");
+        Path nativeMcp = bin.resolve(windows ? "synesis-mcp.exe" : "synesis-mcp");
+        return (Files.isRegularFile(nativeMcp) ? nativeMcp : bin.resolve(windows ? "synesis.cmd" : "synesis"))
+                .toAbsolutePath().normalize();
     }
     private static boolean isReparsePoint(Path path) {
         try { return Boolean.TRUE.equals(Files.getAttribute(path, "dos:reparsePoint")); }

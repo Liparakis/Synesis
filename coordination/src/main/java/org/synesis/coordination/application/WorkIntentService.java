@@ -2,6 +2,7 @@ package org.synesis.coordination.application;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -12,6 +13,7 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
@@ -49,6 +51,7 @@ public final class WorkIntentService {
             PredictionEventStore current = freshStore();
             List<ClaimConflict> conflicts = current.collaborationProjection().conflicts(intent.selectors());
             if (!conflicts.isEmpty()) {
+                appendAutomaticConflictInbox(current, intent, conflicts);
                 return new ClaimResult(false, intent, conflicts);
             }
             if (current.workGroupProjection().group(intent.workGroupId()).isEmpty()) {
@@ -61,6 +64,38 @@ public final class WorkIntentService {
                     signer.nodeId(), CollaborationCodec.encodeIntent(intent), signer);
             return new ClaimResult(true, intent, List.of());
         }
+    }
+
+    private void appendAutomaticConflictInbox(PredictionEventStore current, WorkIntent contender,
+            List<ClaimConflict> conflicts) throws IOException, GeneralSecurityException {
+        for (ClaimConflict conflict : conflicts) {
+            if (contender.participant().equals(conflict.participant())) {
+                continue;
+            }
+            UUID conflictingIntentId = UUID.fromString(conflict.intentId());
+            String proposal = "Claim overlap detected for " + conflict.selector().kind().name() + " "
+                    + conflict.selector().value() + "; negotiate contract or scope before mutation.";
+            appendConflictRequest(current, contender.participant(), conflict.participant(), conflictingIntentId,
+                    proposal, contender.intentId() + "->" + conflictingIntentId);
+            appendConflictRequest(current, conflict.participant(), contender.participant(), conflictingIntentId,
+                    proposal, conflictingIntentId + "->" + contender.intentId());
+        }
+    }
+
+    private void appendConflictRequest(PredictionEventStore current, String requester, String target,
+            UUID conflictingIntentId, String proposal, String direction)
+            throws IOException, GeneralSecurityException {
+        UUID requestId = UUID.nameUUIDFromBytes(("claim-conflict|" + direction)
+                .getBytes(StandardCharsets.UTF_8));
+        boolean exists = current.collaborationProjection().requests().stream()
+                .anyMatch(existing -> existing.requestId().equals(requestId));
+        if (exists) {
+            return;
+        }
+        CoordinationRequest request = new CoordinationRequest(requestId, current.projectId(), requester, target,
+                conflictingIntentId, CoordinationRequest.Kind.CONTRACT, proposal, CoordinationRequest.Status.PENDING);
+        current.append(request.requestId(), PredictionEventType.COORDINATION_REQUESTED, signer.nodeId(),
+                CollaborationCodec.encodeRequest(request), signer);
     }
 
     /** Releases an intent owned by the signing participant.
@@ -187,6 +222,60 @@ public final class WorkIntentService {
         }
     }
 
+    /** Acknowledges a server-issued inbox item for the exact participant, idempotently.
+     * @param participant exact participant handle
+     * @param itemId server-issued request/inbox item ID
+     * @throws IOException persistence or authorization failure
+     * @throws GeneralSecurityException signing failure
+     */
+    public void acknowledgeInbox(String participant, UUID itemId) throws IOException, GeneralSecurityException {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            CoordinationRequest request = current.collaborationProjection().requests().stream()
+                    .filter(candidate -> candidate.requestId().equals(itemId)).findFirst()
+                    .orElseThrow(() -> new IOException("INBOX_ITEM_NOT_FOUND"));
+            if (!request.target().equals(participant)) throw new IOException("INBOX_ITEM_CALLER_MISMATCH");
+            if (!current.collaborationProjection().inboxAcknowledged(itemId)) {
+                current.append(itemId, PredictionEventType.INBOX_ITEM_ACKNOWLEDGED, signer.nodeId(),
+                        CollaborationCodec.encodeUuidText(itemId), signer);
+            }
+        }
+    }
+
+    /** Resolves and acknowledges a coordination inbox item atomically.
+     * @param participant exact participant handle
+     * @param itemId server-issued inbox item ID
+     * @param status terminal response status
+     * @param proposal response or resolution proposal
+     * @throws IOException authorization or transition failure
+     * @throws GeneralSecurityException signing failure
+     */
+    public void resolveInbox(String participant, UUID itemId, CoordinationRequest.Status status, String proposal)
+            throws IOException, GeneralSecurityException {
+        if (status == null || status == CoordinationRequest.Status.PENDING) {
+            throw new IllegalArgumentException("inbox resolution requires terminal status");
+        }
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            CoordinationRequest request = current.collaborationProjection().requests().stream()
+                    .filter(candidate -> candidate.requestId().equals(itemId)).findFirst()
+                    .orElseThrow(() -> new IOException("INBOX_ITEM_NOT_FOUND"));
+            if (!request.target().equals(participant)) throw new IOException("INBOX_ITEM_CALLER_MISMATCH");
+            if (request.status() == CoordinationRequest.Status.PENDING) {
+                current.append(itemId, PredictionEventType.COORDINATION_RESPONDED, signer.nodeId(),
+                        CollaborationCodec.encodeResponse(itemId, status, proposal), signer);
+            } else if (request.status() != status) {
+                throw new IOException("REQUEST_ALREADY_RESOLVED");
+            }
+            if (!current.collaborationProjection().inboxAcknowledged(itemId)) {
+                current.append(itemId, PredictionEventType.INBOX_ITEM_ACKNOWLEDGED, signer.nodeId(),
+                        CollaborationCodec.encodeUuidText(itemId), signer);
+            }
+        }
+    }
+
     /** Returns durable coordination requests for discovery.
      * @return requests
      */
@@ -207,31 +296,136 @@ public final class WorkIntentService {
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) throw new IOException("event append lock unavailable");
             PredictionEventStore current = freshStore();
-            boolean known = current.collaborationProjection().participants().stream()
-                    .anyMatch(candidate -> candidate.id().equals(participant)
-                            && candidate.state() == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE);
+            boolean known = current.collaborationProjection().participantKey(participant).isPresent();
             if (!known) throw new IOException("PARTICIPANT_NOT_FOUND");
-            current.append(UUID.nameUUIDFromBytes(participant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+            String durableParticipant = current.collaborationProjection().participantKey(participant).orElseThrow();
+            current.append(UUID.nameUUIDFromBytes(durableParticipant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                     PredictionEventType.PARTICIPANT_HEARTBEAT, signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(participant), signer);
         }
     }
 
-    /** Records verified owner-independent abandonment and releases the participant's claims.
+    /** Fences a participant after verified process loss without releasing its claims.
      * @param participant participant handle
      * @throws IOException if persistence or validation fails
      * @throws GeneralSecurityException if signing fails
      */
-    public void abandon(String participant) throws IOException, GeneralSecurityException {
+    public void suspend(String participant) throws IOException, GeneralSecurityException {
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) throw new IOException("event append lock unavailable");
             PredictionEventStore current = freshStore();
-            boolean known = current.collaborationProjection().participants().stream()
-                    .anyMatch(candidate -> candidate.id().equals(participant));
+            boolean known = current.collaborationProjection().participantKey(participant).isPresent();
             if (!known) return;
-            current.append(UUID.nameUUIDFromBytes(participant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                    PredictionEventType.PARTICIPANT_ABANDONED, signer.nodeId(),
+            String durableParticipant = current.collaborationProjection().participantKey(participant).orElseThrow();
+            current.append(UUID.nameUUIDFromBytes(durableParticipant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    PredictionEventType.PARTICIPANT_SUSPENDED, signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(participant), signer);
+        }
+    }
+
+    /** Records verified recovery evidence with an immutable snapshot reference.
+     * @param participant participant handle
+     * @param snapshotReference immutable snapshot reference
+     * @throws IOException if persistence or validation fails
+     * @throws GeneralSecurityException if signing fails
+     */
+    public void holdRecovery(String participant, String snapshotReference)
+            throws IOException, GeneralSecurityException {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            String durableParticipant = current.collaborationProjection().participantKey(participant)
+                    .orElseThrow(() -> new IOException("PARTICIPANT_NOT_FOUND"));
+            if (snapshotReference == null || snapshotReference.isBlank()) throw new IOException("RECOVERY_SNAPSHOT_REQUIRED");
+            current.append(UUID.nameUUIDFromBytes(durableParticipant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    PredictionEventType.RECOVERY_SNAPSHOT_HELD, signer.nodeId(),
+                    CollaborationCodec.encodeRecovery(durableParticipant, snapshotReference), signer);
+        }
+    }
+
+    /** Explicitly revokes a participant lane and releases its claims.
+     * @param participant participant handle
+     * @throws IOException if persistence or validation fails
+     * @throws GeneralSecurityException if signing fails
+     */
+    public void revoke(String participant) throws IOException, GeneralSecurityException {
+        appendParticipantEvent(participant, PredictionEventType.PARTICIPANT_REVOKED);
+    }
+
+    /** Explicitly cancels a participant lane and releases its claims.
+     * @param participant participant handle
+     * @throws IOException if persistence or validation fails
+     * @throws GeneralSecurityException if signing fails
+     */
+    public void cancel(String participant) throws IOException, GeneralSecurityException {
+        appendParticipantEvent(participant, PredictionEventType.PARTICIPANT_CANCELLED);
+    }
+
+    /** Records a clean connection shutdown and releases the lane without completing its task.
+     * @param participant participant handle
+     * @throws IOException if persistence or validation fails
+     * @throws GeneralSecurityException if signing fails
+     */
+    public void detach(String participant) throws IOException, GeneralSecurityException {
+        appendParticipantEvent(participant, PredictionEventType.PARTICIPANT_DETACHED);
+    }
+
+    /** Atomically transfers a held recovery lane to a newly authenticated participant.
+     * @param continuation continuation payload
+     * @throws IOException stale grant, epoch, participant, or projection state
+     * @throws GeneralSecurityException signing failure
+     */
+    public void continueFromRecovery(CollaborationCodec.Continuation continuation)
+            throws IOException, GeneralSecurityException {
+        Objects.requireNonNull(continuation, "continuation");
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            if (!current.workGroupProjection().grantAvailable(continuation.grantId())) {
+                throw new IOException("LANE_GRANT_REPLAYED");
+            }
+            WorkIntent source = current.collaborationProjection().intent(continuation.sourceIntentId())
+                    .orElseThrow(() -> new IOException("CONTINUATION_SOURCE_NOT_FOUND"));
+            if (!source.participant().equals(continuation.sourceParticipant())) {
+                throw new IOException("CONTINUATION_SOURCE_MISMATCH");
+            }
+            if (source.version() != continuation.expectedEpoch()) throw new IOException("CLAIM_EPOCH_STALE");
+            ParticipantState.requireHeld(current, continuation.sourceParticipant());
+            if (!current.collaborationProjection().recoverySnapshotReference(continuation.sourceParticipant())
+                    .filter(continuation.snapshotReference()::equals).isPresent()) {
+                throw new IOException("RECOVERY_SNAPSHOT_MISMATCH");
+            }
+            LaneGrant grant = current.workGroupProjection().grants().stream()
+                    .filter(candidate -> candidate.grantId().equals(continuation.grantId())).findFirst()
+                    .orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
+            if (!grant.targetParticipant().equals(continuation.targetParticipant())
+                    || !grant.targetIntentId().equals(continuation.targetIntent().intentId())
+                    || !grant.workGroupId().equals(source.workGroupId())) {
+                throw new IOException("LANE_GRANT_TARGET_MISMATCH");
+            }
+            current.append(continuation.targetIntent().intentId(), PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+                    signer.nodeId(), CollaborationCodec.encodeContinuation(continuation), signer);
+        }
+    }
+
+    private static final class ParticipantState {
+        private static void requireHeld(PredictionEventStore store, String participant) throws IOException {
+            boolean held = store.collaborationProjection().participantState(participant)
+                    .filter(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.RECOVERY_HELD)
+                    .isPresent();
+            if (!held) throw new IOException("RECOVERY_NOT_HELD");
+        }
+    }
+
+    private void appendParticipantEvent(String participant, PredictionEventType type)
+            throws IOException, GeneralSecurityException {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            String durableParticipant = current.collaborationProjection().participantKey(participant)
+                    .orElseThrow(() -> new IOException("PARTICIPANT_NOT_FOUND"));
+            current.append(UUID.nameUUIDFromBytes(durableParticipant.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    type, signer.nodeId(), CollaborationCodec.encodeHeartbeat(durableParticipant), signer);
         }
     }
 
