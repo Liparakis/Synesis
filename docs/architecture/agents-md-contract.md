@@ -11,7 +11,7 @@
 - Do not modify the control checkout or another worker's files directly.
 - If Synesis reports identity, ownership, freshness, or workspace failure, stop
   mutation and inspect only read-only state.
-- The current MCP surface contains exactly 11 tools.
+- The current MCP surface contains exactly 10 tools.
 <!-- SYNESIS-END -->
 ```
 

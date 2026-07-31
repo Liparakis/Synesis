@@ -10,7 +10,8 @@ import java.util.Objects;
  * Public task completion lifecycle states for Stage 2B Slice 3.
  *
  * <p>State machine for task completion &amp; integration:
- * {@code ACTIVE} &rarr; {@code COMPLETION_REQUESTED} &rarr; {@code SNAPSHOT_READY} &rarr;
+ * {@code ACTIVE} &rarr; {@code COMPLETION_REQUESTED} &rarr; {@code COMPLETION_PREPARED} &rarr;
+ * {@code SNAPSHOT_READY} &rarr;
  * {@code WAITING_FOR_DEPENDENCIES} &rarr; {@code READY_FOR_INTEGRATION} &rarr; {@code INTEGRATING} &rarr; {@code INTEGRATED}.
  * Failure/terminal states: {@code INTEGRATION_FAILED}, {@code CANCELLED}, {@code ABANDONED}.
  *
@@ -27,6 +28,9 @@ public enum TaskCompletionState {
      * Worker has requested task completion.
      */
     COMPLETION_REQUESTED("completion_requested"),
+
+    /** Completion preparation is durable and the lane is mutation-fenced. */
+    COMPLETION_PREPARED("completion_prepared"),
 
     /**
      * Immutable task snapshot has been created from worker worktree commit.
@@ -47,6 +51,15 @@ public enum TaskCompletionState {
      * Dedicated integration attempt is actively running in external worktree.
      */
     INTEGRATING("integrating"),
+
+    /** Published snapshot is eligible for integration. */
+    INTEGRATION_PENDING("integration_pending"),
+
+    /** Immutable candidate is structurally invalid and awaits explicit recovery. */
+    INTEGRATION_BLOCKED("integration_blocked"),
+
+    /** Valid immutable candidate has been materialized into a repair lane. */
+    REPAIR_REQUIRED("repair_required"),
 
     /**
      * Task is fully integrated into the control branch and verified.

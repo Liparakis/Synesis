@@ -59,6 +59,8 @@ class TwoProcessCapabilityNegotiationProcessTest {
 
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
@@ -125,12 +127,15 @@ class TwoProcessCapabilityNegotiationProcessTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
+                "      \"kind\": \"capability_request\",\n" +
+                "      \"payload\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
                 "        \"inputs\": \"UUID productId\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return exact matching product\", \"Return empty when missing\", \"Reject null input\"],\n" +
                 "        \"acceptanceTests\": [\"existing product returned\", \"missing product returns empty\", \"null input rejected\"]\n" +
+                "      }\n" +
                 "      }\n" +
                 "    }\n" +
                 "  }\n" +
@@ -160,8 +165,8 @@ class TwoProcessCapabilityNegotiationProcessTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + handle + "\",\n" +
-                "      \"response\": \"accept\"\n" +
+                "      \"kind\": \"capability_response\",\n" +
+                "      \"payload\": {\"capabilityRequestHandle\": \"" + handle + "\", \"response\": \"accept\"}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -206,6 +211,6 @@ class TwoProcessCapabilityNegotiationProcessTest {
         String text = (String) content.get(0).get("text");
         Map<String, Object> agentResp = (Map<String, Object>) ProviderJson.parse(text);
         Map<String, Object> innerRes = (Map<String, Object>) agentResp.get("result");
-        return (String) innerRes.get("request");
+        return (String) innerRes.get("capabilityRequestHandle");
     }
 }

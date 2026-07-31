@@ -292,6 +292,11 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.PARTICIPANT_CANCELLED
                 || command.type() == PredictionEventType.LANE_CONTINUATION_ACCEPTED
                 || command.type() == PredictionEventType.PARTICIPANT_DETACHED
+                || command.type() == PredictionEventType.COMPLETION_PREPARED
+                || command.type() == PredictionEventType.INTEGRATION_BLOCKED
+                || command.type() == PredictionEventType.REPAIR_REQUIRED
+                || command.type() == PredictionEventType.REPAIR_LANE_CREATED
+                || command.type() == PredictionEventType.COMPLETION_UNWOUND
                 || command.type() == PredictionEventType.WORK_GROUP_STATUS_CHANGED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
@@ -318,6 +323,8 @@ public final class CoordinationService {
                  INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
                  INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
                  SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED,
+                 COMPLETION_PREPARED, INTEGRATION_BLOCKED, REPAIR_REQUIRED, REPAIR_LANE_CREATED,
+                 COMPLETION_UNWOUND,
                  WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
                  COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
                  PARTICIPANT_ABANDONED,

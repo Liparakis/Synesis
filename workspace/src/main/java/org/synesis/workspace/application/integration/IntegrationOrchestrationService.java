@@ -23,6 +23,8 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -87,7 +89,7 @@ public final class IntegrationOrchestrationService {
     private AgentResponse orchestrateIntegrationLocked(Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
 
         synchronized (INTEGRATION_LOCK) {
-            List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().readySnapshots();
+            List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().eligibleSnapshots();
             if (snapshots.isEmpty()) {
                 return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
             }
@@ -98,8 +100,31 @@ public final class IntegrationOrchestrationService {
             // available to the next integration action.
             var activeAttempt = store.taskCompletionProjection().activeIntegrationAttempt();
             if (activeAttempt.isPresent() && "started".equals(activeAttempt.get().status())) {
+                var attempt = activeAttempt.get();
+                if (!attempt.integrationCommitSha().isBlank()) {
+                    try {
+                        String head = runGitOutput(controlRoot, "rev-parse", "HEAD");
+                        if (head.equals(attempt.integrationCommitSha())) {
+                            List<TaskSnapshotRecord> recovered = attempt.taskSnapshotIds().stream()
+                                    .map(id -> store.taskCompletionProjection().findSnapshotById(id).orElse(null))
+                                    .filter(Objects::nonNull).toList();
+                            if (recovered.size() == attempt.taskSnapshotIds().size()) {
+                                var recoveredResult = advancementService.recoverAdvancedControlBranch(
+                                        controlRoot, attempt.attemptId(), attempt.expectedControlHead(),
+                                        attempt.integrationCommitSha(), recovered, store, identity);
+                                if (recoveredResult.advanced()) {
+                                    return new AgentResponse(AgentStatus.COMPLETED, null, null,
+                                            Map.of("recovered", true, "attemptId", attempt.attemptId()));
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        // Keep the attempt pending; the next reconciliation can
+                        // retry without changing the control branch.
+                    }
+                }
                 return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
-                        AgentNextAction.WAIT, Map.of("attemptId", activeAttempt.get().attemptId(), "pending", 1));
+                        AgentNextAction.WAIT, Map.of("attemptId", attempt.attemptId(), "pending", 1));
             }
 
             // Do not integrate while a durable coordination request affecting
@@ -118,7 +143,11 @@ public final class IntegrationOrchestrationService {
 
             CapabilityRequestProjection capProj = store.capabilityRequestProjection();
 
-            // 1. Build topological order and check for cycles
+            // 1. Select the oldest eligible candidate.  A permanently invalid
+            // candidate must not prevent unrelated later candidates from
+            // progressing.
+            snapshots = List.of(snapshots.getFirst());
+            // 2. Build topological order and check for cycles
             List<TaskSnapshotRecord> ordered;
             try {
                 ordered = sortSnapshotsTopologically(snapshots, capProj);
@@ -127,7 +156,7 @@ public final class IntegrationOrchestrationService {
                         Map.of("error", "Dependency cycle detected"));
             }
 
-            // 2. Resolve expected control HEAD
+            // 3. Resolve expected control HEAD
             String expectedControlHead;
             try {
                 expectedControlHead = runGitOutput(controlRoot, "rev-parse", "HEAD");
@@ -139,15 +168,26 @@ public final class IntegrationOrchestrationService {
             // metadata already proves a stale base or overlapping change set.
             List<String> metadataFailures = validateSnapshotMetadata(controlRoot, ordered, expectedControlHead, store);
             if (!metadataFailures.isEmpty()) {
+                try {
+                    String blockedId = "blocked_" + ordered.getFirst().snapshotId();
+                    IntegrationAttemptPayload blocked = new IntegrationAttemptPayload(
+                            blockedId, store.projectId(), ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
+                            expectedControlHead, "", "blocked", String.join(";", metadataFailures));
+                    store.append(UUID.nameUUIDFromBytes(blockedId.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                            PredictionEventType.INTEGRATION_BLOCKED, identity.nodeId(), blocked.encode(), identity);
+                } catch (Exception ignored) {
+                    // The response remains fail-closed; reconciliation can
+                    // retry the durable classification.
+                }
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
                         AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failures", metadataFailures));
             }
 
-            // 3. Allocate integration attempt ID
+            // 4. Allocate integration attempt ID
             String attemptToken = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
             String attemptId = "att_" + attemptToken;
 
-            // 4. Append INTEGRATION_ATTEMPT_STARTED
+            // 5. Append INTEGRATION_ATTEMPT_STARTED
             try {
                 IntegrationAttemptPayload startPayload = new IntegrationAttemptPayload(
                         attemptId, store.projectId(),
@@ -159,7 +199,7 @@ public final class IntegrationOrchestrationService {
                 return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
             }
 
-            // 5. Prepare integration worktree and apply snapshots
+            // 6. Prepare integration worktree and apply snapshots
             var prepResult = workspaceService.prepareIntegrationWorktree(
                     controlRoot, attemptId, expectedControlHead, ordered);
 
@@ -170,13 +210,15 @@ public final class IntegrationOrchestrationService {
                             attemptId, store.projectId(),
                             ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
                             expectedControlHead, "", "conflict", prepResult.failureReason());
-                    store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_CONFLICTED,
+                    store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED,
                             identity.nodeId(), conflictPayload.encode(), identity);
+                    createRepairLane(store, identity, ordered.getFirst(), expectedControlHead);
                 } catch (Exception ignored) {
                 }
 
                 Map<String, Object> result = new LinkedHashMap<>();
-                result.put("pending", 1);
+                result.put("state", "repair_required");
+                result.put("repairWorktree", prepResult.worktreePath().toString());
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, result);
             }
 
@@ -187,7 +229,7 @@ public final class IntegrationOrchestrationService {
                     IntegrationAttemptPayload failPayload = new IntegrationAttemptPayload(
                             attemptId, store.projectId(),
                             ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                            expectedControlHead, prepResult.integrationCommitSha(), "failed", "Integration gate tests failed");
+                            expectedControlHead, prepResult.integrationCommitSha(), "pending", "Integration gate unavailable or failed");
                     store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
                             identity.nodeId(), failPayload.encode(), identity);
                 } catch (Exception ignored) {
@@ -196,7 +238,7 @@ public final class IntegrationOrchestrationService {
                 workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", 1);
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_FAILED, AgentNextAction.RETRY, result);
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, result);
             }
 
             // Record INTEGRATION_COMMIT_CREATED
@@ -227,12 +269,11 @@ public final class IntegrationOrchestrationService {
             }
 
             if (!advResult.advanced()) {
-                System.out.println("[INTG-FAIL] " + advResult.failureReason());
                 appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead,
                         prepResult.integrationCommitSha(), advResult.failureReason());
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", 1);
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_FAILED, AgentNextAction.RETRY, result);
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, result);
             }
 
             // Success! Fully integrated
@@ -280,6 +321,31 @@ public final class IntegrationOrchestrationService {
         }
 
         return List.copyOf(sorted);
+    }
+
+    private static void createRepairLane(PredictionEventStore store, NodeIdentity identity,
+            TaskSnapshotRecord snapshot, String currentHead) {
+        try {
+            List<ResourceSelector> selectors = snapshot.provenance().claimSelectors().stream()
+                    .map(raw -> {
+                        int split = raw.indexOf(':');
+                        if (split < 1) throw new IllegalArgumentException("invalid claim selector");
+                        return new ResourceSelector(ResourceSelector.Kind.valueOf(raw.substring(0, split)), raw.substring(split + 1));
+                    }).toList();
+            if (selectors.isEmpty()) return;
+            UUID source = snapshot.provenance().laneId();
+            UUID repairId = UUID.nameUUIDFromBytes(("repair:" + snapshot.snapshotId())
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            WorkIntent target = new WorkIntent(repairId, store.projectId(), snapshot.provenance().participant(),
+                    "repair", snapshot.taskId(), "Repair integration conflict for " + snapshot.snapshotId(),
+                    "Resolve the materialized immutable snapshot conflict", currentHead, selectors,
+                    snapshot.provenance().claimEpoch() + 1, snapshot.provenance().workGroupId(), WorkIntent.Status.ANNOUNCED);
+            new WorkIntentService(store, identity).createRepairLane(source, target);
+        } catch (Exception ignored) {
+            // Older capability-only snapshots may have no active collaboration
+            // intent.  Preserve the conflict worktree and require explicit
+            // authorized recovery rather than releasing its scope.
+        }
     }
 
     private static void appendAttemptFailure(PredictionEventStore store, NodeIdentity identity, String attemptId,
@@ -358,6 +424,21 @@ public final class IntegrationOrchestrationService {
             if (snapshot.provenance() == null) {
                 failures.add("MISSING_PROVENANCE:" + snapshot.snapshotId());
             } else if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
+                var prepared = store.taskCompletionProjection().findPrepared(snapshot.taskId());
+                if (prepared.isEmpty()) {
+                    failures.add("MISSING_PREPARED_OBJECT:" + snapshot.snapshotId());
+                } else {
+                    try {
+                        String preparedCommit = runGitOutput(controlRoot, "rev-parse", prepared.get().preparedRef());
+                        String preparedTree = runGitOutput(controlRoot, "rev-parse", preparedCommit + "^{tree}");
+                        if (!prepared.get().treeHash().equals(preparedTree)
+                                || !preparedCommit.equals(snapshot.commitSha())) {
+                            failures.add("PREPARED_TREE_MISMATCH:" + snapshot.snapshotId());
+                        }
+                    } catch (Exception missingPrepared) {
+                        failures.add("MISSING_PREPARED_OBJECT:" + snapshot.snapshotId());
+                    }
+                }
                 try {
                     String referenced = runGitOutput(controlRoot, "rev-parse", snapshot.provenance().snapshotRef());
                     if (!referenced.equals(snapshot.commitSha())) failures.add("INVALID_PROVENANCE:" + snapshot.snapshotId());

@@ -47,7 +47,7 @@ public final class ProjectApplicationService {
             - Reads carry revisions; provide the matching revision when applying a patch.
             - Do not modify the control checkout or another worker's files directly.
             - When Synesis reports an identity, ownership, freshness, or workspace failure, stop mutation and inspect read-only state.
-            - The MCP surface currently contains exactly 11 tools; use the managed Synesis tools for work.
+            - The MCP surface currently contains exactly 10 tools; follow get_next_action's recommended tool and typed arguments.
             """;
 
     /**

@@ -7,7 +7,7 @@
 workspace architecture assertion and a parallel Gradle test-result race; those
 are not fixed by this documentation-only workstream.
 
-The stdio MCP server exposes exactly 11 tools. `claude` is the canonical
+The stdio MCP server exposes exactly 10 tools. `claude` is the canonical
 provider ID; Claude Code uses the canonical `claude` ID and `hook claude` command. One persistent MCP
 connection owns one provider binding, reads are revision-bearing, and worker
 contexts are isolated.

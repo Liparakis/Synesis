@@ -38,4 +38,30 @@ public final class SessionAuthorityResolver {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
     }
+
+    /**
+     * Resolves an exact terminal completed binding for an idempotent completion
+     * retry. This never grants mutation authority; it only permits the caller
+     * that owns the recorded connection to retrieve its durable result.
+     *
+     * @param location project location
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @return completed binding
+     * @throws Exception when no exact completed binding exists
+     */
+    public ProviderSessionBindingService.Binding resolveCompleted(ProjectApplicationService.ProjectLocation location,
+            String provider, String connectionInstanceId) throws Exception {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(provider, "provider");
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        return bindingService.list(location, provider).stream()
+                .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
+                        || connectionInstanceId.equals(candidate.sessionId()))
+                .filter(candidate -> "COMPLETED".equalsIgnoreCase(candidate.status()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
+    }
 }

@@ -11,7 +11,7 @@ untrusted; repository state and verification evidence are authoritative.
 
 - The unified `synesis` CLI owns initialization, provider lifecycle, workspace,
   coordination, lifecycle diagnostics, and the local development distribution.
-- The stdio MCP server exposes exactly 11 tools. One persistent MCP connection
+- The stdio MCP server exposes exactly 10 tools. One persistent MCP connection
   owns one provider binding and one isolated worker context.
 - Supported provider IDs are `antigravity`, `claude`, and `codex`.
   Provider installation and hooks use those canonical IDs only.

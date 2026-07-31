@@ -132,30 +132,29 @@ public final class TaskSnapshotService {
         Objects.requireNonNull(claims, "claims");
 
         // Inspect the lane without requiring the harness to create a commit.
-        boolean dirty = !runGitOutput(workerWorktreePath, "status", "--porcelain").isBlank();
-        String headCommit = gitRevParse(workerWorktreePath, "HEAD");
-        String snapshotToken = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-        String snapshotId = "snap_" + snapshotToken;
-        String baseCommit = dirty ? headCommit : deriveBaseCommit(workerWorktreePath);
-        String commitSha = dirty ? materializeSnapshot(workerWorktreePath, headCommit, snapshotId) : headCommit;
-        if (!dirty) {
-            runGitOutput(workerWorktreePath, "update-ref", "refs/synesis/snapshots/" + snapshotId, commitSha);
-        }
-
-        // Idempotency: if an existing snapshot has identical commitSha, return it
-        if (existingOpt.isPresent() && existingOpt.get().commitSha().equals(commitSha)) {
+        if (existingOpt.isPresent()) {
+            // A previously published snapshot is authoritative.  Do not inspect
+            // or resnapshot a mutable lane during an idempotent retry.
             return existingOpt.get();
         }
-
-        // If existing snapshot exists but commitSha changed after completion, reject mutation
-        if (existingOpt.isPresent()) {
-            throw new IllegalStateException("Task snapshot is immutable and cannot be mutated after creation");
-        }
-
+        boolean dirty = !runGitOutput(workerWorktreePath, "status", "--porcelain").isBlank();
+        String headCommit = gitRevParse(workerWorktreePath, "HEAD");
+        String baseCommit = dirty ? headCommit : deriveBaseCommit(workerWorktreePath);
         List<String> changedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
         if (!claims.isEmpty() && changedPaths.stream().anyMatch(path -> claims.stream()
                 .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
-            throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH");
+            throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH:" + changedPaths.stream()
+                    .filter(path -> claims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))
+                    .findFirst().orElse("unknown"));
+        }
+        String treeHash = preparedTreeHash(workerWorktreePath, headCommit);
+        String snapshotId = "snap_" + stableId(projectIdentity(controlRoot), laneId, claimEpoch, baseCommit, treeHash);
+        String commitSha;
+        if (dirty) {
+            commitSha = materializeSnapshot(workerWorktreePath, headCommit, snapshotId);
+        } else {
+            commitSha = headCommit;
+            runGitOutput(workerWorktreePath, "update-ref", "refs/synesis/snapshots/" + snapshotId, commitSha);
         }
         List<String> capabilityDependencies = new ArrayList<>();
         for (CapabilityRequestRecord cap : activeCapabilities) {
@@ -170,6 +169,88 @@ public final class TaskSnapshotService {
                 taskId, snapshotId, nodeId, supervisorId, workerId,
                 providerSessionId, baseCommit, commitSha, changedPaths,
                 List.copyOf(capabilityDependencies), summary, System.currentTimeMillis(), provenance);
+    }
+
+    /** Pins an already materialized snapshot commit under a transaction-owned
+     * prepared ref and verifies that the ref resolves to the expected commit.
+     * @param worktreePath lane worktree
+     * @param snapshot snapshot record
+     * @param completionId durable completion transaction ID
+     * @return prepared ref name
+     * @throws IOException if the ref cannot be created or verified
+     */
+    public String pinPreparedRef(Path worktreePath, TaskSnapshotRecord snapshot, String completionId)
+            throws IOException {
+        Objects.requireNonNull(worktreePath, "worktreePath");
+        Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(completionId, "completionId");
+        String ref = "refs/synesis/prepared/" + completionId;
+        runGitOutput(worktreePath, "update-ref", ref, snapshot.commitSha());
+        String resolved = runGitOutput(worktreePath, "rev-parse", ref);
+        if (!resolved.equals(snapshot.commitSha())) {
+            throw new IOException("PREPARED_OBJECT_MISMATCH");
+        }
+        return ref;
+    }
+
+    /** Removes a provisional final snapshot ref before durable preparation.
+     * @param worktreePath lane worktree
+     * @param snapshot snapshot record
+     * @throws IOException if Git cannot remove the ref
+     */
+    public void removeSnapshotRef(Path worktreePath, TaskSnapshotRecord snapshot) throws IOException {
+        runGitOutput(worktreePath, "update-ref", "-d", snapshot.provenance().snapshotRef());
+    }
+
+    /** Removes a transaction-owned prepared reference during an authorized
+     * completion unwind.
+     * @param worktreePath lane worktree
+     * @param preparedRef prepared reference
+     * @throws IOException if Git cannot remove the reference
+     */
+    public void removePreparedRef(Path worktreePath, String preparedRef) throws IOException {
+        Objects.requireNonNull(worktreePath, "worktreePath");
+        Objects.requireNonNull(preparedRef, "preparedRef");
+        if (!preparedRef.startsWith("refs/synesis/prepared/")) {
+            throw new IOException("INVALID_PREPARED_REF");
+        }
+        runGitOutput(worktreePath, "update-ref", "-d", preparedRef);
+    }
+
+    /** Promotes a verified prepared ref to the immutable public snapshot ref.
+     * @param worktreePath lane worktree
+     * @param preparedRef prepared ref
+     * @param finalRef final immutable ref
+     * @param expectedCommit expected commit
+     * @throws IOException if the object cannot be verified or promoted
+     */
+    public void promotePreparedRef(Path worktreePath, String preparedRef, String finalRef,
+            String expectedCommit) throws IOException {
+        verifyPreparedRef(worktreePath, preparedRef, expectedCommit);
+        runGitOutput(worktreePath, "update-ref", finalRef, expectedCommit);
+        verifyPreparedRef(worktreePath, finalRef, expectedCommit);
+    }
+
+    /** Verifies a prepared ref still resolves to the expected immutable commit.
+     * @param worktreePath repository worktree
+     * @param preparedRef prepared ref
+     * @param expectedCommit expected commit
+     * @throws IOException if verification fails
+     */
+    public void verifyPreparedRef(Path worktreePath, String preparedRef, String expectedCommit)
+            throws IOException {
+        String resolved = runGitOutput(worktreePath, "rev-parse", preparedRef);
+        if (!resolved.equals(expectedCommit)) throw new IOException("PREPARED_OBJECT_MISMATCH");
+    }
+
+    /** Returns the immutable tree object reached by a commit.
+     * @param worktreePath repository worktree
+     * @param commit commit object
+     * @return tree SHA
+     * @throws IOException if Git cannot resolve the tree
+     */
+    public String treeHash(Path worktreePath, String commit) throws IOException {
+        return runGitOutput(worktreePath, "rev-parse", commit + "^{tree}");
     }
 
     private static String gitRevParse(Path workdir, String ref) throws IOException {
@@ -212,8 +293,50 @@ public final class TaskSnapshotService {
             }
             return List.copyOf(paths);
         } catch (Exception ex) {
-            return List.of();
+            throw new IllegalStateException("SNAPSHOT_DIFF_INSPECTION_FAILED", ex);
         }
+    }
+
+    private static String preparedTreeHash(Path workdir, String parent) throws IOException {
+        Path index = null;
+        try {
+            index = Files.createTempFile("synesis-tree-", ".index");
+            Files.deleteIfExists(index);
+            runGitWithIndex(workdir, index, "read-tree", parent);
+            stageSourceIndex(workdir, index);
+            return runGitWithIndexOutput(workdir, index, "write-tree");
+        } finally {
+            if (index != null) Files.deleteIfExists(index);
+        }
+    }
+
+    private static String stableId(String project, UUID laneId, long epoch, String base, String tree) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(
+                    (project + "\n" + laneId + "\n" + epoch + "\n" + base + "\n" + tree)
+                            .getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest).substring(0, 32);
+        } catch (Exception failure) {
+            throw new IllegalStateException("SNAPSHOT_ID_DERIVATION_FAILED", failure);
+        }
+    }
+
+    private static String projectIdentity(Path controlRoot) {
+        Path metadata = controlRoot.resolve(".synesis/project.json");
+        try {
+            String content = Files.readString(metadata);
+            int marker = content.indexOf("\"projectId\"");
+            if (marker >= 0) {
+                int colon = content.indexOf(':', marker);
+                int first = content.indexOf('"', colon + 1);
+                int second = content.indexOf('"', first + 1);
+                if (first >= 0 && second > first) return content.substring(first + 1, second);
+            }
+        } catch (IOException ignored) {
+            // The canonical fallback remains deterministic for uninitialized
+            // unit fixtures; production callers require project metadata.
+        }
+        return controlRoot.toAbsolutePath().normalize().toString().replace('\\', '/');
     }
 
     private static String materializeSnapshot(Path workdir, String parent, String snapshotId) throws IOException {
@@ -223,10 +346,7 @@ public final class TaskSnapshotService {
             runGitWithIndex(workdir, index, "read-tree", parent);
             // Provider/session metadata belongs to the lane runtime, never to a
             // published source snapshot.  Keep it at the parent tree value.
-            runGitWithIndex(workdir, index, "add", "-A", "--", ".",
-                    ":(exclude).synesis/**", ":(exclude).codex/**",
-                    ":(exclude).claude/**", ":(exclude).agents/**",
-                    ":(exclude)AGENTS.md", ":(exclude).mcp.json");
+            stageSourceIndex(workdir, index);
             String tree = runGitWithIndexOutput(workdir, index, "write-tree");
             String commit = runGitWithIndexOutput(workdir, index, "commit-tree", tree, "-p", parent, "-m", "Synesis immutable lane snapshot");
             runGitOutput(workdir, "update-ref", "refs/synesis/snapshots/" + snapshotId, commit);
@@ -242,6 +362,20 @@ public final class TaskSnapshotService {
                 || path.equals(".claude") || path.startsWith(".claude/")
                 || path.equals(".agents") || path.startsWith(".agents/")
                 || path.equals("AGENTS.md") || path.equals(".mcp.json"));
+    }
+
+    private static void stageSourceIndex(Path workdir, Path index) throws IOException {
+        // Let Git's ignore rules omit provider/admin material first.  Reset
+        // explicitly managed paths from the temporary index as well, covering
+        // projects that accidentally track one of those files.
+        runGitWithIndex(workdir, index, "add", "-A", "--", ".");
+        for (String managed : List.of(".synesis", ".codex", ".claude", ".agents", "AGENTS.md", ".mcp.json")) {
+            try {
+                runGitWithIndex(workdir, index, "reset", "--", managed);
+            } catch (IOException ignored) {
+                // The managed path may not exist or be tracked in this lane.
+            }
+        }
     }
 
     private static String integrity(String commit, List<String> paths) {

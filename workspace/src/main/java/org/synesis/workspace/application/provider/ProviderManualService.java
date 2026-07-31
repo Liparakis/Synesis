@@ -24,7 +24,7 @@ public final class ProviderManualService {
     private static final String MANUAL_DIRECTORY = "synesis-manual";
     private static final String MANUAL_FILE = "SKILL.md";
     private static final String MANIFEST_FILE = "manifest.json";
-    private static final String CONTENT = "---\nname: synesis-manual\ndescription: Follow Synesis lane coordination, claim, inbox, mutation, recovery, and safe-stopping rules.\n---\n\n# Synesis Manual\n\nUse the durable Synesis coordination state as authoritative. Establish the exact session before mutation, announce intent, acquire only non-overlapping repository-relative claims, and keep every mutation inside the assigned isolated lane.\n\nTreat `get_next_action` as a durable at-least-once inbox. Read it at session start and after blocked or completed actions. Do not busy-poll or blindly retry failed mutations.\n\nPublish immutable snapshots before completion. If the lane is suspended, cancelled, revoked, or stale, preserve its work and wait for an authorized recovery or handoff. Never edit another lane or the control checkout.\n\nClose or cancel your own lane when finished, and report actionable failures without bypassing Synesis.\n";
+    private static final String CONTENT = "---\nname: synesis-manual\ndescription: Follow Synesis lane coordination, claim, inbox, mutation, recovery, and safe-stopping rules.\n---\n\n# Synesis Manual\n\nUse the durable Synesis coordination state as authoritative. Establish the exact session before mutation, announce intent, acquire only non-overlapping repository-relative claims, and keep every mutation inside the assigned isolated lane.\n\nTreat `get_next_action` as a durable at-least-once inbox. Read it at session start and after blocked or completed actions. Follow its recommended tool and typed arguments; do not guess identifiers, busy-poll, or blindly retry failed mutations.\n\nPublish capability implementations only when the inbox supplies the exact capability request handle. Ordinary lane completion uses `finish_lane`, which validates, publishes, integrates, and closes the lane. Do not invent legacy tool names or call capability publication as a substitute for lane completion.\n\nIf the lane is suspended, cancelled, revoked, or stale, preserve its work and wait for an authorized recovery or handoff. Never edit another lane or the control checkout.\n\nClose or cancel your own lane when finished, and report actionable failures without bypassing Synesis.\n";
     private static final Object INSTALL_LOCK = new Object();
 
     /** Result of a manual ownership and content attestation.
@@ -117,9 +117,10 @@ public final class ProviderManualService {
             int version = raw.get("version") instanceof Number n ? n.intValue() : 0;
             String expected = String.valueOf(raw.get("contentHash"));
             String actual = hash(Files.readAllBytes(manual));
+            String canonical = hash(CONTENT.getBytes(StandardCharsets.UTF_8));
             boolean valid = provider.equals(String.valueOf(raw.get("provider")))
                     && "synesis-manual".equals(String.valueOf(raw.get("name")))
-                    && version == VERSION && expected.equals(actual);
+                    && version == VERSION && expected.equals(canonical) && actual.equals(canonical);
             return new Attestation(valid, version, actual, valid ? "ATTESTED" : "MANUAL_MODIFIED_OR_OUTDATED");
         } catch (Exception failure) {
             return new Attestation(false, 0, "", "MANUAL_UNVERIFIABLE");

@@ -42,6 +42,8 @@ public final class CollaborationProjection {
             case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
             case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
             case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
+            case REPAIR_LANE_CREATED -> repair(RepairLanePayload.decode(event.payload()));
+            case COMPLETION_UNWOUND -> unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload.decode(event.payload()));
             case PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED -> suspended(CollaborationCodec.decodeHeartbeat(event.payload()));
             case RECOVERY_SNAPSHOT_HELD -> recoveryHeld(CollaborationCodec.decodeRecovery(event.payload()));
             case PARTICIPANT_REVOKED -> revoked(CollaborationCodec.decodeHeartbeat(event.payload()));
@@ -183,6 +185,31 @@ public final class CollaborationProjection {
             participantHistory.put(released.participant(), new Participant(previous.id(), previous.provider(),
                     previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of(),
                     previous.recoverySnapshotReference()));
+        }
+    }
+
+    private void repair(RepairLanePayload payload) throws IOException {
+        release(payload.sourceIntentId());
+        announce(payload.targetIntent());
+    }
+
+    private void unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload payload) throws IOException {
+        WorkIntent replacement = payload.replacementIntent();
+        WorkIntent current = intents.get(replacement.intentId());
+        if (current == null || current.status() != WorkIntent.Status.ANNOUNCED) {
+            throw new IOException("UNWIND_SOURCE_NOT_ACTIVE");
+        }
+        if (!current.participant().equals(replacement.participant())
+                || replacement.version() <= current.version()
+                || !current.selectors().equals(replacement.selectors())) {
+            throw new IOException("UNWIND_EPOCH_OR_SCOPE_MISMATCH");
+        }
+        intents.put(replacement.intentId(), replacement);
+        Participant previous = participantHistory.get(replacement.participant());
+        if (previous != null) {
+            participantHistory.put(replacement.participant(), new Participant(previous.id(), previous.provider(),
+                    replacement.goal(), Participant.State.ACTIVE, previous.lastVerifiedActivity(),
+                    replacement.selectors(), previous.recoverySnapshotReference()));
         }
     }
 

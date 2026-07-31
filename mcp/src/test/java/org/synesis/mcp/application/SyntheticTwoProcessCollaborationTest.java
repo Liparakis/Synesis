@@ -63,6 +63,8 @@ class SyntheticTwoProcessCollaborationTest {
 
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
@@ -139,19 +141,20 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"capability\": \"catalog.product-query\",\n" +
+                "      \"kind\": \"capability_request\",\n" +
+                "      \"payload\": {\"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
                 "        \"inputs\": \"UUID id\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return product when found\"],\n" +
                 "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" +
-                "      }\n" +
+                "      }}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
         String descRes = requesterHandler.handleMessage(descJson);
         assertNotNull(descRes);
-        String reqHandle = extractResultField(descRes, "request");
+        String reqHandle = extractResultField(descRes, "capabilityRequestHandle");
         assertNotNull(reqHandle);
 
         // 2. Owner accepts capability request
@@ -162,8 +165,8 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
-                "      \"response\": \"accept\"\n" +
+                "      \"kind\": \"capability_response\",\n" +
+                "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"accept\"}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -181,9 +184,9 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 4,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"publish_snapshot\",\n" +
+                "    \"name\": \"publish_capability_implementation\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
+                "      \"capabilityRequestHandle\": \"" + reqHandle + "\",\n" +
                 "      \"summary\": \"Implemented product query\"\n" +
                 "    }\n" +
                 "  }\n" +
@@ -197,10 +200,10 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 5,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"validate_snapshot\",\n" +
+                "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
-                "      \"result\": \"accepted\"\n" +
+                "      \"kind\": \"implementation_validation\",\n" +
+                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000003\", \"capabilityRequestHandle\": \"" + reqHandle + "\", \"implementationRevision\": 1, \"result\": \"accepted\"}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -213,7 +216,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 6,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"complete_task\",\n" +
+                "    \"name\": \"finish_lane\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Product query service complete\"\n" +
                 "    }\n" +
@@ -234,7 +237,7 @@ class SyntheticTwoProcessCollaborationTest {
                 "  \"id\": 7,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"complete_task\",\n" +
+                "    \"name\": \"finish_lane\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Product CLI integration complete\"\n" +
                 "    }\n" +

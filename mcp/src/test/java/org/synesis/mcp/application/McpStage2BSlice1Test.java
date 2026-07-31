@@ -58,6 +58,8 @@ class McpStage2BSlice1Test {
 
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         AgentSessionService sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "antigravity", "inst-mcp-1", null, false));
@@ -104,7 +106,7 @@ class McpStage2BSlice1Test {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
-        assertEquals(11, tools.size());
+        assertEquals(10, tools.size());
         assertEquals("ensure_session", tools.get(0).get("name"));
         assertEquals("read_file", tools.get(1).get("name"));
         assertEquals("apply_patch", tools.get(2).get("name"));
@@ -112,9 +114,9 @@ class McpStage2BSlice1Test {
         assertEquals("get_next_action", tools.get(4).get("name"));
         assertEquals("request_coordination", tools.get(5).get("name"));
         assertEquals("respond_coordination", tools.get(6).get("name"));
-        assertEquals("publish_snapshot", tools.get(7).get("name"));
-        assertEquals("validate_snapshot", tools.get(8).get("name"));
-        assertEquals("complete_task", tools.get(9).get("name"));
+        assertEquals("publish_capability_implementation", tools.get(7).get("name"));
+        assertEquals("finish_lane", tools.get(8).get("name"));
+        assertEquals("cancel_lane", tools.get(9).get("name"));
     }
 
     @Test
@@ -126,12 +128,15 @@ class McpStage2BSlice1Test {
                 "  \"params\": {\n" +
                 "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
+                "      \"kind\": \"capability_request\",\n" +
+                "      \"payload\": {\n" +
                 "      \"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
                 "        \"inputs\": \"UUID productId\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return exact matching product\"],\n" +
                 "        \"acceptanceTests\": [\"existing product returned\"]\n" +
+                "      }\n" +
                 "      }\n" +
                 "    }\n" +
                 "  }\n" +
@@ -142,5 +147,13 @@ class McpStage2BSlice1Test {
         assertTrue(res.contains("req_"));
         assertFalse(res.contains(projectRoot.toString().replace('\\', '/')));
         assertFalse(res.contains("eventId"));
+    }
+
+    @Test
+    void lifecycleRejectsLegacyNamesAndNonDiscriminatedCoordinationPayloads() {
+        String legacy = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"complete_task\",\"arguments\":{}}}");
+        assertTrue(legacy.contains("Unknown tool"));
+        String nonDiscriminated = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"capability\":\"x\"}}}");
+        assertTrue(nonDiscriminated.contains("COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
     }
 }

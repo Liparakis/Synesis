@@ -828,7 +828,7 @@ public final class ProviderApplicationService {
                 Map<?, ?> initializeResult = object(initializeMap.get("result"));
                 Map<?, ?> toolsResult = object(toolsMap.get("result"));
                 Object advertised = toolsResult.get("tools");
-                if (initializeResult.isEmpty() || !(advertised instanceof List<?> list) || list.size() != 11) {
+                if (initializeResult.isEmpty() || !(advertised instanceof List<?> list) || list.size() != 10) {
                     return new McpHealth(false, "FAILED:unexpected_tools_or_initialize");
                 }
                 return new McpHealth(true, "PASSED");

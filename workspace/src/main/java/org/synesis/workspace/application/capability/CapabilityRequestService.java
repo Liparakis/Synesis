@@ -157,7 +157,7 @@ public final class CapabilityRequestService {
                 if (activeRec.contract().isEquivalent(request.contract())) {
                     // Equivalent request exists: return idempotent waiting response
                     Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("request", activeRec.handle().value());
+                    result.put("capabilityRequestHandle", activeRec.handle().value());
                     result.put("pending", 1);
                     return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
                 }
@@ -170,7 +170,7 @@ public final class CapabilityRequestService {
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, requesterNodeId, payload.encode(), identity);
 
                     Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("request", activeRec.handle().value());
+                    result.put("capabilityRequestHandle", activeRec.handle().value());
                     result.put("pending", 1);
                     return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
                 } else if (activeRec.state() == CapabilityLifecycleState.REVISION_REQUESTED) {
@@ -181,7 +181,7 @@ public final class CapabilityRequestService {
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, requesterNodeId, payload.encode(), identity);
 
                     Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("request", activeRec.handle().value());
+                    result.put("capabilityRequestHandle", activeRec.handle().value());
                     result.put("pending", 1);
                     return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
                 }
@@ -195,7 +195,7 @@ public final class CapabilityRequestService {
             store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requesterNodeId, payload.encode(), identity);
 
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("request", handle.value());
+            result.put("capabilityRequestHandle", handle.value());
             result.put("pending", 1);
             return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
 

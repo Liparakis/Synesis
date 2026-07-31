@@ -131,7 +131,7 @@ class CapabilityNegotiationTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) descResp.result();
-        String handle = (String) result.get("request");
+        String handle = (String) result.get("capabilityRequestHandle");
         assertNotNull(handle);
         assertTrue(handle.startsWith("req_"));
 
@@ -174,7 +174,7 @@ class CapabilityNegotiationTest {
         AgentResponse descResp = requestService.describeRequiredCapability(descReq);
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) descResp.result();
-        String handle = (String) result.get("request");
+        String handle = (String) result.get("capabilityRequestHandle");
 
         // Owner requests revision
         CapabilityContract revisedContract = new CapabilityContract(

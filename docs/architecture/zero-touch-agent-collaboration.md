@@ -218,9 +218,9 @@ obsolete MCP names and conversion-only readers are removed after conversion;
 unrelated provider configuration is preserved and unsafe conversion fails
 closed.
 
-The MCP contract remains exactly 11 raw tools, using
-`request_coordination`, `respond_coordination`, `publish_snapshot`, and
-`validate_snapshot` for the current coordination and snapshot surface.
+The MCP contract remains exactly 10 raw tools, using
+`request_coordination`, `respond_coordination`, `publish_capability_implementation`,
+`finish_lane`, and `cancel_lane` for the current coordination and lane surface.
 Decorated MCP names are not accepted; only raw advertised names are valid.
 
 ## Security and failure invariants

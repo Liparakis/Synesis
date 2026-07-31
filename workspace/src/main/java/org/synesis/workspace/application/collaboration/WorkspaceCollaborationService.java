@@ -30,6 +30,8 @@ import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 
 /** Resolves authenticated workspace sessions into collaboration intents and claims. */
 public final class WorkspaceCollaborationService {
@@ -100,6 +102,47 @@ public final class WorkspaceCollaborationService {
                 acceptance == null ? "Unspecified acceptance" : acceptance,
                 binding.baseCommit(), selectors, 1, group, WorkIntent.Status.ANNOUNCED);
         return service.announce(intent);
+    }
+
+    /**
+     * Joins an immutable conflict repair lane from a newly authenticated
+     * isolated binding. The local project identity is the recovery authority;
+     * the old lane and snapshot remain immutable while the new binding receives
+     * a fresh intent ID and claim epoch.
+     *
+     * @param projectRoot control project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact new connection
+     * @param repairIntentId currently reserved repair intent
+     * @param snapshotId immutable conflicting snapshot
+     * @return acquired claim result
+     * @throws Exception resolution, materialization, or append failure
+     */
+    public ClaimResult joinRepair(Path projectRoot, String provider, String connectionInstanceId,
+                                  UUID repairIntentId, String snapshotId) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        manualService.requireAttested(provider);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        if (binding.worktreePath() == null) throw new IOException("REPAIR_BINDING_NOT_READY");
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        WorkIntent source = store.collaborationProjection().intent(repairIntentId)
+                .orElseThrow(() -> new IOException("REPAIR_INTENT_NOT_FOUND"));
+        TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId)
+                .orElseThrow(() -> new IOException("REPAIR_SNAPSHOT_NOT_FOUND"));
+        if (!snapshot.provenance().workGroupId().equals(source.workGroupId())
+                || !snapshot.provenance().claimSelectors().equals(source.selectors().stream()
+                        .map(selector -> selector.kind().name() + ":" + selector.value()).toList())) {
+            throw new IOException("REPAIR_LINEAGE_OR_SCOPE_MISMATCH");
+        }
+        UUID targetId = UUID.nameUUIDFromBytes(("repair-join|" + repairIntentId + "|" + binding.sessionId())
+                .getBytes(StandardCharsets.UTF_8));
+        WorkIntent target = new WorkIntent(targetId, location.projectId(), participantHandle(binding.sessionId()),
+                provider, snapshot.taskId(), source.goal(), source.acceptance(), binding.baseCommit(),
+                source.selectors(), source.version() + 1, source.workGroupId(), WorkIntent.Status.ANNOUNCED);
+        new IntegrationWorkspaceService().materializeRepairRepresentation(Path.of(binding.worktreePath()), snapshot.commitSha());
+        new WorkIntentService(store, identity).createRepairLane(repairIntentId, target);
+        return new ClaimResult(true, target, List.of());
     }
 
     /** Releases the exact session intent and all of its claims.
@@ -473,7 +516,26 @@ public final class WorkspaceCollaborationService {
             }
             ResourceSelector selector = ResourceSelector.pathExact(relativePath);
             ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-            if (service.owns(participantHandle(binding.sessionId()), selector)) {
+            // A completion transaction fences its exact lane before the
+            // prepared tree is durable.  Do not permit a caller to mutate a
+            // worktree after preparation or publication, even if the claim
+            // projection still contains the reserved selector.
+            String participant = participantHandle(binding.sessionId());
+            boolean fenced = store.taskCompletionProjection().allSnapshots().stream()
+                    .filter(snapshot -> snapshot.provenance().bindingIdentity().equals(binding.sessionId())
+                            || snapshot.provenance().participant().equals(participant))
+                    .map(snapshot -> store.taskCompletionProjection().taskState(snapshot.taskId()))
+                    .anyMatch(state -> state == org.synesis.coordination.domain.task.TaskCompletionState.COMPLETION_PREPARED
+                            || state == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_PENDING
+                            || state == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATING
+                            || state == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_BLOCKED
+                            || state == org.synesis.coordination.domain.task.TaskCompletionState.REPAIR_REQUIRED);
+            fenced = fenced || store.taskCompletionProjection().allPrepared().stream()
+                    .anyMatch(prepared -> service.activeIntents().stream()
+                            .anyMatch(intent -> intent.intentId().equals(prepared.laneId())
+                                    && intent.participant().equals(participant)));
+            if (fenced) return "coordination_intent_required";
+            if (service.owns(participant, selector)) {
                 return "allowed";
             }
             return service.activeIntents().stream().anyMatch(intent -> intent.selectors().stream()

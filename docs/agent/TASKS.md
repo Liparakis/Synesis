@@ -1453,10 +1453,28 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - Required tests: dirty snapshots, concurrent integration serialization,
   stale/incompatible candidates, repair lanes, and final source-tree results.
 - Required documentation: integration ADR and validation evidence.
-- Evidence: PASS — immutable dirty-lane snapshots, claim/epoch/contract/base
-  compatibility checks, cross-process integration serialization, incremental
-  integration, repair-path preservation, Python acceptance, and full
-  sequential verification at CP-0374.
+- Evidence: REOPENED — the recorded PASS was contradicted by the real
+  TestProject acceptance: Codex's source snapshot reached the control branch,
+  but Antigravity's completed test changes remained untracked in its isolated
+  lane. Prepared-tree fencing, stable project/lane snapshot identity,
+  candidate-invalid versus transient integration outcomes, startup recovery,
+  and verified repair-scope transfer are now implemented. A fresh real
+  Codex + Antigravity acceptance integrated both source and test snapshots;
+  the final fixture runs 41/41 pytest tests with empty active claims. Completion
+  now rejects clean lanes (`NO_CHANGES_TO_PUBLISH`), stable snapshot-ID
+  collisions fail closed, and exact-caller prepared completion can be
+  explicitly unwound through the existing session schema at a new claim epoch.
+  Repair joining now materializes the immutable conflicting snapshot into a
+  newly authenticated isolated provider lane and transfers the exact scope in
+  one signed event; the focused multi-chat repair-join test passes.
+  Sequential `./gradlew check --no-daemon --max-workers=1 --no-parallel` passes
+  all 51 actionable tasks; strict Javadocs, Go tests/vet, deferred validation,
+  and the fresh TestProject acceptance remain green (`41 passed`, empty active
+  claims, both source/test snapshots integrated). Historical detached provider
+  lanes are retained as audit history only.
+  Provider process autonomy remains bounded by intermittent Antigravity
+  detached-session behavior and is recorded as evidence, not universal
+  enforcement.
 
 ## SYN-033
 
@@ -1466,7 +1484,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - Status: DONE
 - Purpose: Fence lost provider authority, preserve unfinished work, and permit
   authorized continuation without stopping sibling lanes.
-- Dependencies: SYN-032 DONE; recovery snapshots and provider lifecycle APIs.
+- Dependencies: SYN-032 initial snapshot/recovery foundation; provider lifecycle APIs.
 - Acceptance criteria: process loss never implies abandonment; SUSPENDED and
   RECOVERY_HELD are distinct; continuation uses a new lane/worktree; cancelled
   lanes never resume; same local project authority or explicit operator
@@ -1479,6 +1497,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   `ProviderProcessSupervisor` now provides bounded start, observation,
   interrupt, close, and distinct-lane continuation primitives. Provider
   integrations now expose documented Codex and Claude noninteractive argv;
+
   Antigravity intentionally exposes none until real MCP invocation is proven.
   A one-shot verified-exit callback reports process loss without mutating claims
   or inferring abandonment. Supervised launches can now persist the child PID,
@@ -1492,3 +1511,56 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   grant regressions pass; full sequential verification is green at CP-0375.
   Antigravity exposes no autonomous process driver because real model-driven
   MCP invocation remains unverified.
+
+## SYN-034
+
+- ID: SYN-034
+- Priority: P1
+- Title: Post-SYN-032 closure and next-task promotion review
+- Status: DONE
+- Purpose: Preserve the verified SYN-032 handoff and select the next explicitly
+  authorized implementation task without changing production behavior.
+- Dependencies: SYN-032 DONE at CP-0389.
+- Acceptance criteria: final SYN-032 evidence remains reconciled across durable
+  state; exactly one subsequent task is promoted only after an explicit scope
+  decision; no production work begins under this review task.
+- Required tests: resume, deferred-register, and checkpoint validators.
+- Required documentation: CURRENT.md and NEXT_SESSION.md continuation state.
+- Evidence: SYN-032 handoff reconciled at CP-0391; SYN-035 promoted as the
+  sole active implementation task with no production work performed under
+  this review task.
+
+## SYN-035
+
+- ID: SYN-035
+- Priority: P0
+- Title: Clear MCP lifecycle surface and autonomous action guidance
+- Status: ACTIVE
+- Purpose: Replace the self-imposed 11-tool prerelease MCP surface with ten
+  semantically clear tools, remove legacy aliases, and make durable next
+  actions executable without identifier guessing.
+- Dependencies: SYN-032 DONE at CP-0389; SYN-034 handoff review complete.
+- Acceptance criteria: tools/list advertises exactly the ten approved raw
+  names; capability publication is distinct from lane completion; ordinary
+  completion uses finish_lane and publishes/integrates the immutable lane
+  snapshot; strict coordination variants reject cross-variant fields and
+  caller-created identifiers; managed Synesis Manual guidance and attestation
+  match the surface; real Codex CLI ordinary completion is attempted and
+  provider blockers are recorded honestly.
+- Required tests: focused MCP/schema/dispatch tests, completion and integration
+  regressions, strict Javadocs, full sequential Gradle check, deferred
+  validator, bootstrap Go tests/vet, and bounded real-provider acceptance.
+- Required documentation: ADR superseding the active MCP tool-count and
+  compatibility decision, provider MCP documentation, Synesis Manual content,
+  CURRENT.md, GOAL.md, STATE.md, TEST_MATRIX.md, SESSION_LOG.md, and
+  NEXT_SESSION.md.
+- Evidence: CP-0395. CP-0392 and Codex acceptance snapshot `snap_79678eeae2012100f8047ec17ec895d0`; `:mcp:test`, `:workspace:test`, `:coordination:test`,
+  sequential `check`, strict Javadocs, repository hygiene, deferred validator,
+  and bootstrap Go tests/vet pass. The ten raw tools, strict schemas,
+  capability-handle publication, `finish_lane`/`cancel_lane`, managed Manual,
+  ADR-0041, and maintained documentation are complete. Real provider
+  acceptance now proves ordinary `finish_lane` completion, integration, and
+  closure. Claude remains unrun because `claude auth status` reports
+  `loggedIn: false`; this is an external authentication blocker, not a Synesis
+  failure. No compatibility aliases or migration period are retained before
+  first release.

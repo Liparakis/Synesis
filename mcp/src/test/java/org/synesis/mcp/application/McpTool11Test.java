@@ -31,7 +31,7 @@ class McpTool11Test {
 
     @Test
     @SuppressWarnings("unchecked")
-    void verifiesElevenMcpToolsRegisteredAndCancelTaskSchema(@TempDir Path tempDir) throws Exception {
+    void verifiesTenMcpToolsRegisteredAndCancelLaneSchema(@TempDir Path tempDir) throws Exception {
         Path projectRoot = tempDir.resolve("mcp-project");
         Files.createDirectories(projectRoot);
         git(projectRoot, "init");
@@ -42,6 +42,8 @@ class McpTool11Test {
         git(projectRoot, "commit", "-m", "Initial commit");
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
@@ -69,19 +71,19 @@ class McpTool11Test {
         Map<String, Object> result = (Map<String, Object>) respMap.get("result");
         List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
-        // Must equal exactly 11 tools
-        assertEquals(11, tools.size());
+        // Must equal exactly 10 tools
+        assertEquals(10, tools.size());
 
-        Map<String, Object> cancelTool = tools.stream().filter(t -> "cancel_task".equals(t.get("name"))).findFirst().orElseThrow();
-        assertEquals("cancel_task", cancelTool.get("name"));
+        Map<String, Object> cancelTool = tools.stream().filter(t -> "cancel_lane".equals(t.get("name"))).findFirst().orElseThrow();
+        assertEquals("cancel_lane", cancelTool.get("name"));
         assertNotNull(cancelTool.get("inputSchema"));
 
         // 3. Ensure session first
         String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         handler.handleMessage(ensureReq);
 
-        // 4. Call cancel_task
-        String cancelCallReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"cancel_task\",\"arguments\":{\"reason\":\"Task no longer needed.\"}}}";
+        // 4. Call cancel_lane
+        String cancelCallReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"cancel_lane\",\"arguments\":{\"reason\":\"Task no longer needed.\"}}}";
         String cancelCallResp = handler.handleMessage(cancelCallReq);
         assertNotNull(cancelCallResp);
         assertTrue(cancelCallResp.contains("cancelled") || cancelCallResp.contains("COMPLETED"));

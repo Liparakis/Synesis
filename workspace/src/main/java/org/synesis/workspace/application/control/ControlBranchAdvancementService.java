@@ -2,6 +2,7 @@ package org.synesis.workspace.application.control;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -128,7 +129,7 @@ public final class ControlBranchAdvancementService {
                 var ownerships = store.coordinationProjection().ownerships();
                 for (var entry : ownerships.entrySet()) {
                     OwnershipClaim claim = entry.getValue();
-                    if (claim.ownerNodeId().equals(snap.nodeId())) {
+                    if (claim.taskId().equals(snap.taskId()) && claim.ownerNodeId().equals(snap.nodeId())) {
                         CoordinationCommand relCmd = CoordinationCommand.create(
                                 UUID.randomUUID(), store.projectId(), claim.taskId(),
                                 PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(),
@@ -146,6 +147,86 @@ public final class ControlBranchAdvancementService {
 
         } catch (Exception ex) {
             return new AdvancementResult(false, false, false, "Control branch advancement failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Completes durable integration bookkeeping after a crash that occurred
+     * after the control branch advanced but before the event log was finalized.
+     * The method never changes Git state; it only records the already observed
+     * exact advancement and idempotently finalizes the included lanes.
+     *
+     * @param controlRoot control project root
+     * @param attemptId integration attempt identifier
+     * @param expectedControlHead head recorded before integration
+     * @param integrationCommitSha commit already observed at control HEAD
+     * @param integratedSnapshots snapshots included in the attempt
+     * @param store prediction event store
+     * @param identity signing identity
+     * @return advancement result
+     */
+    public AdvancementResult recoverAdvancedControlBranch(
+            Path controlRoot,
+            String attemptId,
+            String expectedControlHead,
+            String integrationCommitSha,
+            List<TaskSnapshotRecord> integratedSnapshots,
+            PredictionEventStore store,
+            NodeIdentity identity) {
+        try {
+            String currentHead = runGitOutput(controlRoot, "rev-parse", "HEAD");
+            if (!currentHead.equals(integrationCommitSha)) {
+                return new AdvancementResult(false, false, false,
+                        "CONTROL_HEAD_DOES_NOT_MATCH_INTEGRATION_COMMIT");
+            }
+            finalizeIntegrationEvents(attemptId, expectedControlHead, integrationCommitSha,
+                    integratedSnapshots, store, identity);
+            return new AdvancementResult(true, false, false, "");
+        } catch (Exception failure) {
+            return new AdvancementResult(false, false, false,
+                    "RECOVERY_FINALIZATION_FAILED: " + failure.getMessage());
+        }
+    }
+
+    private void finalizeIntegrationEvents(String attemptId, String expectedControlHead,
+            String integrationCommitSha, List<TaskSnapshotRecord> snapshots,
+            PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
+        var projection = store.taskCompletionProjection();
+        boolean branchRecorded = projection.lastControlHeadAdvanced() != null
+                && projection.lastControlHeadAdvanced().equals(integrationCommitSha);
+        if (!branchRecorded) {
+            IntegrationAttemptPayload payload = new IntegrationAttemptPayload(
+                    attemptId, store.projectId(), snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(),
+                    expectedControlHead, integrationCommitSha, "advanced", "");
+            store.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED,
+                    identity.nodeId(), payload.encode(), identity);
+        }
+        for (TaskSnapshotRecord snap : snapshots) {
+            if (projection.taskState(snap.taskId()) != org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED) {
+                TaskSnapshotPayload payload = new TaskSnapshotPayload(
+                        snap.taskId(), snap.snapshotId(), snap.nodeId(), snap.supervisorId(), snap.workerId(),
+                        snap.providerSessionId(), snap.baseCommit(), snap.commitSha(), snap.changedPaths(),
+                        snap.capabilityDependencies(), snap.summary());
+                store.append(UUID.randomUUID(), PredictionEventType.TASK_INTEGRATED,
+                        identity.nodeId(), payload.encode(), identity);
+                releaseExactOwnership(snap, store, identity);
+                store.append(UUID.randomUUID(), PredictionEventType.SESSION_FINALIZED,
+                        identity.nodeId(), payload.encode(), identity);
+            }
+        }
+    }
+
+    private void releaseExactOwnership(TaskSnapshotRecord snap, PredictionEventStore store,
+            NodeIdentity identity) throws IOException, GeneralSecurityException {
+        for (var entry : store.coordinationProjection().ownerships().entrySet()) {
+            OwnershipClaim claim = entry.getValue();
+            if (claim.taskId().equals(snap.taskId()) && claim.ownerNodeId().equals(snap.nodeId())) {
+                CoordinationCommand relCmd = CoordinationCommand.create(
+                        UUID.randomUUID(), store.projectId(), claim.taskId(),
+                        PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(), claim.encoded(), identity);
+                store.append(claim.taskId(), PredictionEventType.OWNERSHIP_RELEASED,
+                        identity.nodeId(), relCmd.encoded(), identity);
+            }
         }
     }
 

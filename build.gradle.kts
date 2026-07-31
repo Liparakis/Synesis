@@ -78,7 +78,7 @@ tasks.register("repositoryHygieneCheck") {
             }
             if (staleProviderPattern.containsMatchIn(text)) failures += "$relative: canonical provider command uses claude-code"
             countPattern.findAll(text).forEach { match ->
-                if (match.groupValues[1] != "11") failures += "$relative: MCP tool count is ${match.groupValues[1]}, expected 11"
+                if (match.groupValues[1] != "10") failures += "$relative: MCP tool count is ${match.groupValues[1]}, expected 10"
             }
         }
         val scripts = rootProject.layout.projectDirectory.dir("scripts").asFile.listFiles()
@@ -89,6 +89,6 @@ tasks.register("repositoryHygieneCheck") {
             .filterNot { it == "install" }
         if (duplicateNames.isNotEmpty()) failures += "duplicate active script entrypoints: ${duplicateNames.joinToString()}"
         require(failures.isEmpty()) { "Repository hygiene failures:\n${failures.joinToString("\n")}" }
-        logger.lifecycle("Repository hygiene: ${files.size} maintained Markdown files checked; script references and 11-tool claims are valid.")
+        logger.lifecycle("Repository hygiene: ${files.size} maintained Markdown files checked; script references and 10-tool claims are valid.")
     }
 }

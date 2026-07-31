@@ -201,6 +201,30 @@ final class WorkIntentServiceTest {
                 replayed.collaborationProjection().participantState("agt-owner").orElseThrow());
     }
 
+    @Test
+    void repairLaneTransfersExactScopeAtomically(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent source = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(source).acquired());
+        WorkIntent target = new WorkIntent(UUID.randomUUID(), project, "agt-repair", "repair",
+                source.taskId(), "Repair task tracker conflict", "Resolve and validate the conflict",
+                "new-head", source.selectors(), source.version() + 1, source.workGroupId(),
+                WorkIntent.Status.ANNOUNCED);
+
+        service.createRepairLane(source.intentId(), target);
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertFalse(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertTrue(service.owns("agt-repair", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertEquals(org.synesis.coordination.domain.collaboration.Participant.State.COMPLETED,
+                replayed.collaborationProjection().participantState("agt-owner").orElseThrow());
+        assertEquals(org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE,
+                replayed.collaborationProjection().participantState("agt-repair").orElseThrow());
+    }
+
     private static WorkIntent intent(UUID project, String participant, ResourceSelector selector) {
         return new WorkIntent(UUID.randomUUID(), project, participant, "codex", UUID.randomUUID(),
                 "Implement task tracker", "45 tests pass", "base-commit", List.of(selector), 1,

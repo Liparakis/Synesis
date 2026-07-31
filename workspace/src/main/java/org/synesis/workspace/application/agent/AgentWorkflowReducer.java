@@ -61,6 +61,11 @@ public final class AgentWorkflowReducer {
         workflow.put("retrySafe", action.retrySafe());
         workflow.put("delivery", "AT_LEAST_ONCE");
         workflow.put("acknowledgementRequired", true);
+        Map<String, Object> executable = executableAction(response, result, actionId);
+        if (executable != null) {
+            workflow.put("recommendedTool", executable.get("tool"));
+            workflow.put("arguments", executable.get("arguments"));
+        }
         result.put("workflow", workflow);
         result.put("actionId", actionId);
         result.put("delivery", "AT_LEAST_ONCE");
@@ -87,7 +92,7 @@ public final class AgentWorkflowReducer {
                 .append('|').append(response.reason() == null ? "" : response.reason().value())
                 .append('|').append(request.provider())
                 .append('|').append(request.connectionInstanceId());
-        for (String key : List.of("inboxItemId", "request", "capability", "pending", "workGroupId", "laneId")) {
+        for (String key : List.of("inboxItemId", "capabilityRequestHandle", "capability", "pending", "workGroupId", "laneId")) {
             if (result.containsKey(key)) {
                 seed.append('|').append(key).append('=').append(ProviderJson.write(result.get(key)));
             }
@@ -119,12 +124,53 @@ public final class AgentWorkflowReducer {
                             List.of(reasonCode(reason)), List.of("request_coordination", "respond_coordination"), true);
             case VALIDATE_IMPLEMENTATION, RESPOND_TO_VALIDATION_REVISION ->
                     new LaneAction("PUBLISH", List.of(reasonCode(reason)),
-                            List.of("validate_available_implementation", "publish_implementation"), true);
+                            List.of("respond_coordination", "publish_capability_implementation"), true);
             case WAIT -> new LaneAction("WAIT", List.of(reasonCode(reason)), List.of("get_next_action"), true);
             case RETRY -> new LaneAction("RECOVER", List.of(reasonCode(reason)), List.of("ensure_session", "get_next_action"), true);
             case REQUEST_HUMAN_HELP -> new LaneAction("INTEGRATION_REPAIR", List.of(reasonCode(reason)),
                     List.of("get_next_action", "request_coordination"), false);
         };
+    }
+
+    private static Map<String, Object> executableAction(AgentResponse response, Map<String, Object> result,
+            String actionId) {
+        AgentNextAction next = response.nextAction();
+        if (next == null) {
+            return null;
+        }
+        switch (next) {
+            case VALIDATE_IMPLEMENTATION -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                Object serverItem = result.get("inboxItemId");
+                if (serverItem == null && result.get("capabilityRequestHandle") instanceof String handle) {
+                    serverItem = UUID.nameUUIDFromBytes(("capability:" + handle)
+                            .getBytes(StandardCharsets.UTF_8)).toString();
+                }
+                if (serverItem == null) {
+                    return null;
+                }
+                payload.put("inboxItemId", serverItem);
+                payload.put("capabilityRequestHandle", result.get("capabilityRequestHandle"));
+                payload.put("implementationRevision", result.get("revision"));
+                return Map.of("tool", "respond_coordination", "arguments", Map.of(
+                        "kind", "implementation_validation", "payload", payload));
+            }
+            case RESPOND_COORDINATION -> {
+                return Map.of("tool", "respond_coordination", "arguments", Map.of());
+            }
+            case REQUEST_COORDINATION -> {
+                return Map.of("tool", "request_coordination", "arguments", Map.of());
+            }
+            case ENSURE_SESSION -> {
+                return Map.of("tool", "ensure_session", "arguments", Map.of());
+            }
+            case RETRY, WAIT -> {
+                return Map.of("tool", "get_next_action", "arguments", Map.of());
+            }
+            default -> {
+                return null;
+            }
+        }
     }
 
     private static String laneState(Map<String, Object> result) {

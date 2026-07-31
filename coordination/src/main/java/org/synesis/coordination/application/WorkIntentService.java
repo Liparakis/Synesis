@@ -121,6 +121,29 @@ public final class WorkIntentService {
         }
     }
 
+    /** Atomically transfers reserved selectors into a new repair lane.
+     * @param sourceIntentId published source lane
+     * @param targetIntent new repair lane intent
+     * @throws IOException invalid source or overlapping target
+     * @throws GeneralSecurityException signing failure
+     */
+    public synchronized void createRepairLane(UUID sourceIntentId, WorkIntent targetIntent)
+            throws IOException, GeneralSecurityException {
+        Objects.requireNonNull(sourceIntentId, "source intent");
+        Objects.requireNonNull(targetIntent, "target intent");
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+            PredictionEventStore current = freshStore();
+            WorkIntent source = current.collaborationProjection().intent(sourceIntentId)
+                    .orElseThrow(() -> new IOException("REPAIR_SOURCE_NOT_FOUND"));
+            if (source.status() != WorkIntent.Status.ANNOUNCED) throw new IOException("REPAIR_SOURCE_NOT_ACTIVE");
+            if (!source.selectors().equals(targetIntent.selectors())) throw new IOException("REPAIR_SCOPE_MISMATCH");
+            current.append(targetIntent.intentId(), PredictionEventType.REPAIR_LANE_CREATED,
+                    signer.nodeId(), new org.synesis.coordination.domain.collaboration.RepairLanePayload(
+                            sourceIntentId, targetIntent).encode(), signer);
+        }
+    }
+
     /** Returns whether a participant owns a compatible selector.
      * @param participant participant handle
      * @param selector target selector

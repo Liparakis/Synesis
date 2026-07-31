@@ -24,7 +24,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 
 /**
- * Application service handling ambient task cancellation requests for workers (MCP tool #11 {@code synesis.cancel_task}).
+ * Application service handling ambient lane cancellation requests for workers ({@code synesis.cancel_lane}).
  *
  * @since 1.0
  */

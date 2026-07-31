@@ -136,6 +136,13 @@ public final class AgentNextActionService {
             Path coordDir = location.root().resolve(".synesis/coordination");
             if (Files.exists(coordDir.resolve("events"))) {
                 org.synesis.coordination.persistence.PredictionEventStore store = new org.synesis.coordination.persistence.PredictionEventStore(coordDir, location.projectId());
+                // Startup reconciliation is deliberately pull-safe: each
+                // durable inbox read gives the shared integration pump an
+                // opportunity to recover an interrupted attempt or advance
+                // the oldest eligible immutable snapshot. The pump owns its
+                // project lock and never mutates a worker worktree.
+                new org.synesis.workspace.application.integration.IntegrationOrchestrationService()
+                        .orchestrateIntegration(root, store, callerIdentity);
                 org.synesis.coordination.domain.capability.CapabilityRequestProjection capProj = store.capabilityRequestProjection();
                 Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
                 @SuppressWarnings("unchecked")
@@ -179,7 +186,7 @@ public final class AgentNextActionService {
                     contractMap.put("acceptanceTests", topReq.contract().acceptanceTests());
 
                     Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("request", topReq.handle().value());
+                    result.put("capabilityRequestHandle", topReq.handle().value());
                     result.put("capability", topReq.capability());
                     result.put("contract", contractMap);
                     result.put("pending", ownerPending.size());
@@ -191,7 +198,7 @@ public final class AgentNextActionService {
                 if (!validationRevList.isEmpty()) {
                     org.synesis.coordination.domain.capability.CapabilityRequestRecord topReq = validationRevList.getFirst();
                     Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("request", topReq.handle().value());
+                    result.put("capabilityRequestHandle", topReq.handle().value());
                     result.put("reason", topReq.reason() != null ? topReq.reason() : "Revision required by requester");
                     result.put("pending", validationRevList.size());
                     return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_FAILED, AgentNextAction.RESPOND_TO_VALIDATION_REVISION, result);
@@ -225,7 +232,7 @@ public final class AgentNextActionService {
                             contractMap.put("acceptanceTests", topReq.contract().acceptanceTests());
 
                             Map<String, Object> result = new LinkedHashMap<>();
-                            result.put("request", topReq.handle().value());
+                            result.put("capabilityRequestHandle", topReq.handle().value());
                             result.put("contract", contractMap);
                             result.put("pending", reqPending.size());
                             return new AgentResponse(AgentStatus.READY, AgentReason.REVISION_REQUIRED, AgentNextAction.REVISE_CAPABILITY_REQUEST, result);
@@ -234,25 +241,25 @@ public final class AgentNextActionService {
                             org.synesis.coordination.domain.integration.ImplementationRevisionRecord implRec = capProj.findLatestImplementation(topReq.handle().value()).orElse(null);
                             int revision = implRec != null ? implRec.revisionNumber() : 1;
                             Map<String, Object> result = new LinkedHashMap<>();
-                            result.put("request", topReq.handle().value());
+                            result.put("capabilityRequestHandle", topReq.handle().value());
                             result.put("capability", topReq.capability());
                             result.put("revision", revision);
                             result.put("pending", reqPending.size());
                             return new AgentResponse(AgentStatus.READY, null, AgentNextAction.VALIDATE_IMPLEMENTATION, result);
                         } else if (topReq.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.REJECTED) {
                             Map<String, Object> result = new LinkedHashMap<>();
-                            result.put("request", topReq.handle().value());
+                            result.put("capabilityRequestHandle", topReq.handle().value());
                             result.put("reason", topReq.reason() != null ? topReq.reason() : "Capability request rejected by owner");
                             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_REJECTED, AgentNextAction.RETRY, result);
                         } else if (topReq.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.AWAITING_OWNER) {
                             Map<String, Object> result = new LinkedHashMap<>();
-                            result.put("request", topReq.handle().value());
+                            result.put("capabilityRequestHandle", topReq.handle().value());
                             result.put("pending", reqPending.size());
                             return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
                         } else if (topReq.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.ACCEPTED
                                 || topReq.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTING) {
                             Map<String, Object> result = new LinkedHashMap<>();
-                            result.put("request", topReq.handle().value());
+                            result.put("capabilityRequestHandle", topReq.handle().value());
                             result.put("pending", reqPending.size());
                             return new AgentResponse(AgentStatus.WAITING, AgentReason.IMPLEMENTATION_UNAVAILABLE, AgentNextAction.WAIT, result);
                         }

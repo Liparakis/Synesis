@@ -95,8 +95,18 @@ public final class IntegrationWorkspaceService {
             Files.createDirectories(integrationRoot);
 
             if (Files.exists(worktreePath)) {
-                // If worktree already exists, re-use commit SHA if complete
+                // Reuse only a verified attempt workspace. A conflicted or
+                // mismatched workspace must remain visible for repair rather
+                // than being mistaken for a successful integration.
                 String currentHead = gitRevParse(worktreePath, "HEAD");
+                if (Files.exists(worktreePath.resolve(".git/CHERRY_PICK_HEAD"))) {
+                    return new IntegrationWorktreeResult(worktreePath, false, "",
+                            "Integration worktree has an unresolved cherry-pick conflict");
+                }
+                if (!expectedControlHead.equals(currentHead)) {
+                    return new IntegrationWorktreeResult(worktreePath, false, "",
+                            "Integration worktree head does not match expected control head");
+                }
                 return new IntegrationWorktreeResult(worktreePath, true, currentHead, "");
             }
 
@@ -119,33 +129,11 @@ public final class IntegrationWorkspaceService {
                     // Try cherry-pick first
                     runGit(worktreePath, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snap.commitSha());
                 } catch (IOException cherryPickFailure) {
-                    // If cherry-pick fails, completely reset worktree to clear cherry-pick state
-                    try {
-                        runGit(worktreePath, "reset", "--hard");
-                    } catch (IOException ignored) {
-                    }
-                    try {
-                        runGit(worktreePath, "cherry-pick", "--abort");
-                    } catch (IOException ignored) {
-                    }
-
-                    // Fallback: try git diff + apply --3way
-                    String patch = gitDiff(projectRoot, snap.baseCommit(), snap.commitSha());
-                    if (!patch.isBlank()) {
-                        Path tempPatch = Files.createTempFile("synesis-intg-", ".patch");
-                        try {
-                            Files.writeString(tempPatch, patch);
-                            applyPatch(worktreePath, tempPatch);
-                            runGit(worktreePath, "add", ".");
-                            runGit(worktreePath, "commit", "-m", snap.summary());
-                        } catch (IOException applyFailure) {
-                            System.out.println("[APPLY-ERR] " + applyFailure.getMessage());
-                            return new IntegrationWorktreeResult(worktreePath, false, "",
-                                    "Merge conflict applying task snapshot " + snap.snapshotId() + ": " + applyFailure.getMessage());
-                        } finally {
-                            Files.deleteIfExists(tempPatch);
-                        }
-                    }
+                    // Preserve the conflicted index and worktree.  The repair
+                    // lane consumes this exact representation; resetting or
+                    // aborting here would discard the conflicting work.
+                    return new IntegrationWorktreeResult(worktreePath, false, "",
+                            "Merge conflict applying task snapshot " + snap.snapshotId() + ": " + cherryPickFailure.getMessage());
                 }
             }
 
@@ -171,6 +159,33 @@ public final class IntegrationWorkspaceService {
             Path topLevel = resolveGitTopLevel(worktreePath);
             runGit(topLevel, "worktree", "remove", "--force", worktreePath.toString());
         } catch (IOException ignored) {
+        }
+    }
+
+    /**
+     * Materializes an immutable conflicting snapshot into an already assigned
+     * repair worktree. A cherry-pick conflict is an expected bounded repair
+     * representation and is deliberately left unresolved for the repair
+     * participant; unrelated Git failures remain fatal.
+     *
+     * @param repairWorktree assigned repair lane worktree
+     * @param snapshotCommit immutable snapshot commit
+     * @throws IOException when the worktree is invalid or materialization fails
+     */
+    public void materializeRepairRepresentation(Path repairWorktree, String snapshotCommit) throws IOException {
+        Objects.requireNonNull(repairWorktree, "repairWorktree");
+        Objects.requireNonNull(snapshotCommit, "snapshotCommit");
+        if (!Files.isDirectory(repairWorktree) || !Files.exists(repairWorktree.resolve(".git"))) {
+            throw new IOException("REPAIR_WORKTREE_INVALID");
+        }
+        try {
+            runGit(repairWorktree, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snapshotCommit);
+        } catch (IOException conflict) {
+            if (!Files.exists(repairWorktree.resolve(".git/CHERRY_PICK_HEAD"))) {
+                throw new IOException("REPAIR_SNAPSHOT_MATERIALIZATION_FAILED", conflict);
+            }
+            // Preserve conflict markers and the unresolved index as the
+            // explicit repair representation.
         }
     }
 

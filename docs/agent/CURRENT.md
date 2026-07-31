@@ -2,43 +2,41 @@
 
 ## Identity
 
-- Task ID: SYN-033
-- Status: DONE
+- Task ID: SYN-035
+- Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0298
+- Started checkpoint: CP-0391
 - Responsible agent: primary architecture-closure engineer
-- Related decisions: ADR-0001, ADR-0008, ADR-0038, ADR-0039, ADR-0040
+- Related decisions: ADR-0001, ADR-0008, ADR-0038, ADR-0039, ADR-0040, ADR-0041
 
 ## Objective
 
-Complete provider supervision and authorized continuation after verified
-provider loss or quota exhaustion without inferring abandonment or blocking
-sibling lanes.
+Replace the self-imposed eleven-tool prerelease MCP surface with ten clear
+tools, distinguish capability publication from ordinary lane completion, and
+make durable next actions executable without identifier guessing.
 
 ## Immediate slice
 
-Run the provider supervisor loss/continuation acceptance, verify recovery
-snapshot transfer and old-epoch fencing, and record unsupported-provider
-boundaries honestly.
+Centralize the MCP tool catalog, rename lifecycle tools, fold implementation
+validation into strict coordination responses, update the managed Synesis
+Manual, and preserve SYN-032 completion/integration semantics.
 
 ## Verification target
 
-Authority-sensitive operations resolve only the verified calling binding;
-stale, cross-binding, unclaimed, invalidly attested, and incompatible paths
-fail closed while safe authority reduction remains available.
+The ten raw tools, schemas, dispatch, attestation, documentation, CLI parity,
+and real Codex ordinary completion all agree; wrong identifiers and removed
+tool names fail closed without mutation.
 
 ## Immediate next action
 
-SYN-029 through SYN-033 are DONE. Codex and Claude real provider flows pass
-through integration; real Codex process-loss recovery passes through
-RECOVERY_HELD and a new isolated continuation lane; Antigravity native
-transport is verified, while model-driven noninteractive MCP invocation
-remains explicitly unsupported/unverified. No autonomous support claim is made
-for that provider.
+Run the real Claude ordinary acceptance only if `claude auth status` reports
+authenticated; otherwise preserve the explicit OAuth blocker and make no
+implementation changes.
 
 ## Completion state
 
-The collaboration roadmap is complete at CP-0292. SYN-026 is complete at the
+The collaboration roadmap remains open for SYN-032 hardening after the
+prepared-snapshot and integration implementation slice. SYN-026 is complete at the
 current checkpoint after fixing synthetic-check configuration leakage. The
 installed distribution
 includes `mcp-0.1.0-SNAPSHOT.jar`; direct launcher
@@ -61,6 +59,14 @@ session as `suspectedStale` without transferring ownership; the dirty fixture
 was not altered. Its current Python acceptance suite passes all 45 tests.
 The repository-wide Gradle check also passes with strict dependency
 verification (50 actionable tasks).
+
+SYN-035 real-provider evidence is now current: after rebuilding the local
+distribution and repairing the managed manual, a bounded Codex CLI process
+using the current ten-tool MCP surface selected `finish_lane` for an ordinary
+claimed feature, published logical snapshot `snap_79678eeae2012100f8047ec17ec895d0`,
+integrated it, and closed lane `a8e162d7-1231-3e07-a088-451bb3ec4612` at claim
+epoch 1. It did not call capability publication. Claude authentication status
+is currently `loggedIn: false`; no Claude provider run is claimed.
 The real Claude contract publication probe initially exposed an MCP
 serialization defect; contract/dependency records are now projected to
 JSON-safe maps, the focused MCP regression passes, and the reinstalled
@@ -126,7 +132,32 @@ claim.
 The post-probe strict Gradle check still passes all 50 actionable tasks and the
 deferred validator passes.
 
+The SYN-032 fresh TestProject acceptance subsequently ran two real provider
+processes. Codex claimed and integrated `src/task_tracker.py`; Antigravity
+claimed `tests/task_tracker_test.py`, created an immutable test snapshot, and
+after detached-session recovery the snapshot integrated through a newly
+authorized lane. The final control checkout contains both files, explicit
+`python -m pytest -q` passes 41/41, active claims are empty, and the only
+control-branch commits are Synesis snapshot integrations. The native MCP
+launcher now preserves provider cwd and was reinstalled; direct MCP
+initialize/tools-list resolves the active project correctly. This is real
+local Codex/Antigravity MCP evidence, not a universal autonomy claim.
+
 ## Work completed
+
+SYN-035 is implemented. The MCP catalog now advertises exactly ten raw tools:
+`ensure_session`, `read_file`, `apply_patch`, `run_command`, `get_next_action`,
+`request_coordination`, `respond_coordination`,
+`publish_capability_implementation`, `finish_lane`, and `cancel_lane`.
+Implementation validation is a strict `respond_coordination` variant;
+capability publication requires a server-issued capability handle, while
+`finish_lane` is ordinary lane completion. Strict discriminated request and
+response schemas reject unknown fields and legacy lifecycle shapes. The
+managed Synesis Manual and executable next-action envelope now describe the
+same lifecycle. ADR-0041 and maintained provider/architecture documentation
+record the first-release ten-tool contract. `:mcp:test`, `:workspace:test`,
+`:coordination:test`, the sequential Gradle `check`, and bootstrap Go tests/vet
+all pass.
 
 `SYN-018` hygiene is complete. `SYN-019` is DONE at `a87d3d8`; no
 production type moved and the stale allowlist was narrowed to
@@ -155,7 +186,7 @@ inbox acknowledgement; immutable recovery worktree snapshots;
 provider-managed Synesis Manual installation and tamper attestation; safe
 authority-reduction handling for invalid manuals; exclusive project migration
 locking and durable preparation markers; and raw MCP names request_coordination,
-respond_coordination, publish_snapshot, and validate_snapshot.
+respond_coordination, publish_capability_implementation, finish_lane, and cancel_lane.
 
 ## Current failures
 

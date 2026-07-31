@@ -62,6 +62,8 @@ class Slice4FailureScenariosTest {
 
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
@@ -135,13 +137,14 @@ class Slice4FailureScenariosTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"capability\": \"catalog.product-query\",\n" +
+                "      \"kind\": \"capability_request\",\n" +
+                "      \"payload\": {\"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
                 "        \"inputs\": \"UUID id\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return product when found\"],\n" +
                 "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" +
-                "      }\n" +
+                "      }}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -154,7 +157,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 3,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"complete_task\",\n" +
+                "    \"name\": \"finish_lane\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Premature completion attempt\"\n" +
                 "    }\n" +
@@ -176,18 +179,19 @@ class Slice4FailureScenariosTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"capability\": \"catalog.product-query\",\n" +
+                "      \"kind\": \"capability_request\",\n" +
+                "      \"payload\": {\"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
                 "        \"inputs\": \"UUID id\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return product when found\"],\n" +
                 "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" +
-                "      }\n" +
+                "      }}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
         String descRes = requesterHandler.handleMessage(descJson);
-        String reqHandle = extractResultField(descRes, "request");
+        String reqHandle = extractResultField(descRes, "capabilityRequestHandle");
 
         // 2. Owner revises contract
         String reviseJson = "{\n" +
@@ -197,14 +201,13 @@ class Slice4FailureScenariosTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
-                "      \"response\": \"revise\",\n" +
-                "      \"revisedContract\": {\n" +
+                "      \"kind\": \"capability_response\",\n" +
+                "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"revise\", \"revision\": {\n" +
                 "        \"inputs\": \"UUID id\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n" +
                 "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" +
-                "      }\n" +
+                "      }}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -220,13 +223,14 @@ class Slice4FailureScenariosTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"request_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"capability\": \"catalog.product-query\",\n" +
+                "      \"kind\": \"capability_request\",\n" +
+                "      \"payload\": {\"capability\": \"catalog.product-query\",\n" +
                 "      \"contract\": {\n" +
                 "        \"inputs\": \"UUID id\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n" +
                 "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" +
-                "      }\n" +
+                "      }}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -241,8 +245,8 @@ class Slice4FailureScenariosTest {
                 "  \"params\": {\n" +
                 "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
-                "      \"response\": \"accept\"\n" +
+                "      \"kind\": \"capability_response\",\n" +
+                "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"accept\"}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -259,9 +263,9 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 5,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"publish_snapshot\",\n" +
+                "    \"name\": \"publish_capability_implementation\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
+                "      \"capabilityRequestHandle\": \"" + reqHandle + "\",\n" +
                 "      \"summary\": \"Revision 1\"\n" +
                 "    }\n" +
                 "  }\n" +
@@ -274,17 +278,16 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 6,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"validate_snapshot\",\n" +
+                "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
-                "      \"result\": \"revision_required\",\n" +
-                "      \"reason\": \"Missing null check\"\n" +
+                "      \"kind\": \"implementation_validation\",\n" +
+                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000001\", \"capabilityRequestHandle\": \"" + reqHandle + "\", \"implementationRevision\": 1, \"result\": \"revision_required\", \"reason\": \"Missing null check\"}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
         String valReqRes = requesterHandler.handleMessage(valReqJson);
         assertNotNull(valReqRes);
-        assertEquals("waiting", extractResponseStatus(valReqRes));
+        assertEquals("blocked", extractResponseStatus(valReqRes), valReqRes);
 
         // 5. Owner publishes revision 2
         Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery { // v2 null check }\n");
@@ -296,9 +299,9 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 7,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"publish_snapshot\",\n" +
+                "    \"name\": \"publish_capability_implementation\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
+                "      \"capabilityRequestHandle\": \"" + reqHandle + "\",\n" +
                 "      \"summary\": \"Revision 2\"\n" +
                 "    }\n" +
                 "  }\n" +
@@ -312,16 +315,16 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 8,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"validate_snapshot\",\n" +
+                "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
-                "      \"request\": \"" + reqHandle + "\",\n" +
-                "      \"result\": \"accepted\"\n" +
+                "      \"kind\": \"implementation_validation\",\n" +
+                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000002\", \"capabilityRequestHandle\": \"" + reqHandle + "\", \"implementationRevision\": 2, \"result\": \"accepted\"}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
         String val2Res = requesterHandler.handleMessage(val2Json);
         assertNotNull(val2Res);
-        assertEquals("completed", extractResponseStatus(val2Res));
+        assertEquals("blocked", extractResponseStatus(val2Res));
     }
 
     @Test
@@ -341,7 +344,7 @@ class Slice4FailureScenariosTest {
                 "  \"id\": 2,\n" +
                 "  \"method\": \"tools/call\",\n" +
                 "  \"params\": {\n" +
-                "    \"name\": \"complete_task\",\n" +
+                "    \"name\": \"finish_lane\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"summary\": \"Complete while control checkout is dirty\"\n" +
                 "    }\n" +
@@ -349,8 +352,8 @@ class Slice4FailureScenariosTest {
                 "}";
         String ownerCompRes = ownerHandler.handleMessage(ownerCompJson);
         assertNotNull(ownerCompRes);
-        assertEquals("blocked", extractResponseStatus(ownerCompRes));
-        assertEquals("integration_failed", extractResponseReason(ownerCompRes));
+        assertEquals("waiting", extractResponseStatus(ownerCompRes));
+        assertEquals("integration_pending", extractResponseReason(ownerCompRes));
     }
 
     @SuppressWarnings("unchecked")

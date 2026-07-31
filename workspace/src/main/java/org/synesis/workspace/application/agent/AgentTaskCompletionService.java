@@ -25,7 +25,12 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.domain.task.CompletionPreparedPayload;
+import org.synesis.coordination.domain.task.CompletionUnwoundPayload;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.agent.AgentNextAction;
@@ -36,7 +41,7 @@ import org.synesis.workspace.agent.AgentStatus;
 /**
  * Application service for workers to request task completion.
  *
- * <p>Handles tool calls for {@code synesis.complete_task}.
+ * <p>Handles tool calls for {@code synesis.finish_lane}.
  *
  * <p>Executes completion checks, creates immutable task snapshots, and triggers
  * dependency integration.
@@ -112,10 +117,16 @@ public final class AgentTaskCompletionService {
 
         ProjectApplicationService.ProjectLocation location;
         ProviderSessionBindingService.Binding binding;
+        boolean terminalRetry = false;
         NodeIdentity identity;
         try {
             location = projectService.locate(root);
-            binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
+            try {
+                binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
+            } catch (Exception activeResolutionFailure) {
+                binding = authorityResolver.resolveCompleted(location, request.provider(), request.connectionInstanceId());
+                terminalRetry = true;
+            }
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
@@ -133,6 +144,20 @@ public final class AgentTaskCompletionService {
             Path coordDir = location.root().resolve(".synesis/coordination");
             PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
 
+            if (terminalRetry) {
+                UUID completedTaskId = deriveTaskId(binding);
+                Optional<TaskSnapshotRecord> completedSnapshot = store.taskCompletionProjection()
+                        .findSnapshotForTask(completedTaskId);
+                if (completedSnapshot.isPresent()) {
+                    return completionResult(store, completedSnapshot.get(),
+                            WorkspaceCollaborationService.participantHandle(binding.sessionId()),
+                            new AgentResponse(AgentStatus.COMPLETED, null, null,
+                                    Map.of("task", "already_integrated")));
+                }
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY,
+                        AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "COMPLETED_BINDING_WITHOUT_SNAPSHOT"));
+            }
+
             // 1. Completion Readiness Check: Unresolved capability requests
             List<CapabilityRequestRecord> reqPending = store.capabilityRequestProjection().findAllForRequester(callerNodeId);
             List<CapabilityRequestRecord> callerPending = new ArrayList<>();
@@ -149,8 +174,6 @@ public final class AgentTaskCompletionService {
             }
 
             if (!callerPending.isEmpty()) {
-                System.out.println("[REQ-PENDING] callerWorker=" + callerWorkerId + " count=" + callerPending.size()
-                        + " items=" + callerPending.stream().map(r -> r.handle().value() + ":" + r.state() + " reqW=" + r.requesterWorkerId()).toList());
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", callerPending.size());
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.UNRESOLVED_DEPENDENCY, AgentNextAction.WAIT, result);
@@ -200,7 +223,56 @@ public final class AgentTaskCompletionService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);
             }
 
-            // 4. Persist TASK_SNAPSHOT_CREATED if new
+            // A completion transaction must publish a complete lane diff.  A
+            // clean lane is not a valid implementation snapshot: accepting it
+            // would create an apparently successful, empty integration and
+            // release the caller's authority without preserving any work.
+            if (snapshot.changedPaths().isEmpty()) {
+                if (existingOpt.isEmpty()) {
+                    snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
+                }
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY,
+                        AgentNextAction.RETRY, Map.of("reason", "NO_CHANGES_TO_PUBLISH"));
+            }
+
+            // Stable identity collisions are not a second publication.  They
+            // indicate that two lanes produced the same canonical snapshot
+            // identity, so fail closed rather than advertising another task
+            // record over the immutable snapshot ID.
+            var sameIdentity = store.taskCompletionProjection().findSnapshotById(snapshot.snapshotId());
+            if (sameIdentity.isPresent() && !sameIdentity.get().taskId().equals(snapshot.taskId())) {
+                if (existingOpt.isEmpty()) {
+                    snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
+                }
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY,
+                        AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "SNAPSHOT_ID_COLLISION",
+                                "snapshotId", snapshot.snapshotId()));
+            }
+
+            // 4. Pin the exact prepared tree and fence this lane before the
+            // snapshot becomes visible to the integration queue.
+            String completionId = "cmp_" + java.util.UUID.nameUUIDFromBytes((
+                    snapshot.provenance().laneId() + "\n" + snapshot.provenance().claimEpoch()
+                            + "\n" + snapshot.commitSha()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            if (existingOpt.isEmpty()) {
+                // The legacy helper creates the public ref for direct callers;
+                // completion moves that ref behind a durable prepared phase.
+                snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
+            }
+            String preparedRef = snapshotService.pinPreparedRef(workerWorktreePath, snapshot, completionId);
+            String preparedTreeHash = snapshotService.treeHash(workerWorktreePath, snapshot.commitSha());
+            if (store.taskCompletionProjection().findPrepared(taskId).isEmpty()) {
+                CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId, completionId,
+                        snapshot.provenance().laneId(), snapshot.provenance().claimEpoch(), snapshot.baseCommit(),
+                        preparedRef, preparedTreeHash, snapshot.changedPaths());
+                store.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED,
+                        callerNodeId, prepared.encode(), identity);
+            }
+
+            snapshotService.promotePreparedRef(workerWorktreePath, preparedRef,
+                    snapshot.provenance().snapshotRef(), snapshot.commitSha());
+
+            // 5. Persist TASK_SNAPSHOT_CREATED if new
             if (existingOpt.isEmpty()) {
                 TaskSnapshotPayload snapPayload = new TaskSnapshotPayload(
                         snapshot.taskId(), snapshot.snapshotId(), snapshot.nodeId(), snapshot.supervisorId(),
@@ -211,8 +283,9 @@ public final class AgentTaskCompletionService {
                         callerNodeId, snapPayload.encode(), identity);
             }
 
-            // 5. Trigger integration orchestration
+            // 6. Trigger integration orchestration
             AgentResponse result = integrationOrchestrationService.orchestrateIntegration(location.root(), store, identity);
+            result = completionResult(store, snapshot, participantHandle, result);
             if (result.status() == AgentStatus.COMPLETED) {
                 releaseClaims(request, collaborationService);
                 // Complete only the exact calling connection.  Keeping the
@@ -223,7 +296,107 @@ public final class AgentTaskCompletionService {
             return result;
 
         } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            Map<String, Object> failure = new LinkedHashMap<>();
+            failure.put("error", ex.getClass().getSimpleName());
+            failure.put("message", ex.getMessage() == null ? "unknown completion failure" : ex.getMessage());
+            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                    AgentNextAction.REQUEST_HUMAN_HELP, failure);
+        }
+    }
+
+    private static AgentResponse completionResult(PredictionEventStore store, TaskSnapshotRecord snapshot,
+            String participantHandle, AgentResponse integrationResult) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (integrationResult.result() instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> result.put(String.valueOf(key), value));
+        }
+        result.put("participant", participantHandle);
+        result.put("laneId", snapshot.provenance().laneId().toString());
+        result.put("claimEpoch", snapshot.provenance().claimEpoch());
+        result.put("snapshotId", snapshot.snapshotId());
+        result.put("snapshotState", "PUBLISHED");
+        result.put("integrationState", store.taskCompletionProjection().taskState(snapshot.taskId()).value());
+        if (integrationResult.nextAction() != null) {
+            result.put("nextAction", integrationResult.nextAction().value());
+        }
+        return new AgentResponse(integrationResult.status(), integrationResult.reason(),
+                integrationResult.nextAction(), result);
+    }
+
+    /**
+     * Unwinds an exact caller's prepared but unpublished completion. The
+     * operation is intentionally separate from cancellation: it removes the
+     * prepared reference, records one replayable unwind event, and advances
+     * the lane epoch before mutation authority is restored.
+     *
+     * @param request exact caller completion request
+     * @return completion response describing the new epoch
+     */
+    public AgentResponse unwindPrepared(CompleteTaskRequest request) {
+        Objects.requireNonNull(request, "request");
+        try {
+            manualService.requireAttested(request.provider());
+            Path root = request.projectRoot().toAbsolutePath().normalize();
+            ProjectApplicationService.ProjectLocation location = projectService.locate(root);
+            ProviderSessionBindingService.Binding binding = authorityResolver.resolve(location,
+                    request.provider(), request.connectionInstanceId());
+            if (binding.worktreePath() == null) {
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY,
+                        AgentNextAction.ENSURE_SESSION, null);
+            }
+            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            PredictionEventStore store = new PredictionEventStore(
+                    location.root().resolve(".synesis/coordination"), location.projectId());
+            UUID taskId = deriveTaskId(binding);
+            var preparedOpt = store.taskCompletionProjection().findPrepared(taskId);
+            if (preparedOpt.isEmpty()) {
+                if (store.taskCompletionProjection().findSnapshotForTask(taskId).isPresent()) {
+                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY,
+                            AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "PUBLISHED_LANE_NOT_UNWINDABLE"));
+                }
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY,
+                        AgentNextAction.RETRY, Map.of("reason", "NO_PREPARED_COMPLETION"));
+            }
+            CompletionPreparedPayload prepared = preparedOpt.get();
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            WorkIntent currentIntent = store.collaborationProjection().intent(prepared.laneId())
+                    .orElseThrow(() -> new java.io.IOException("UNWIND_INTENT_NOT_FOUND"));
+            if (!currentIntent.participant().equals(participant)
+                    || currentIntent.version() != prepared.claimEpoch()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                        AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "UNWIND_CALLER_MISMATCH"));
+            }
+            WorkIntent replacement = new WorkIntent(currentIntent.intentId(), currentIntent.projectId(),
+                    currentIntent.participant(), currentIntent.provider(), currentIntent.taskId(),
+                    currentIntent.goal(), currentIntent.acceptance(), currentIntent.baseCommit(),
+                    currentIntent.selectors(), currentIntent.version() + 1, currentIntent.workGroupId(),
+                    WorkIntent.Status.ANNOUNCED);
+            CompletionUnwoundPayload payload = new CompletionUnwoundPayload(prepared, replacement);
+            try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.root().resolve(".synesis/coordination"))) {
+                if (!lock.isHeld()) throw new java.io.IOException("event append lock unavailable");
+                PredictionEventStore currentStore = new PredictionEventStore(
+                        location.root().resolve(".synesis/coordination"), location.projectId());
+                if (currentStore.taskCompletionProjection().findPrepared(taskId).isEmpty()) {
+                    return new AgentResponse(AgentStatus.COMPLETED, null, null,
+                            Map.of("task", "already_unwound", "claimEpoch", replacement.version()));
+                }
+                currentStore.append(taskId, PredictionEventType.COMPLETION_UNWOUND,
+                        identity.nodeId(), payload.encode(), identity);
+            }
+            try {
+                snapshotService.removePreparedRef(Path.of(binding.worktreePath()), prepared.preparedRef());
+            } catch (Exception cleanupFailure) {
+                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                        AgentNextAction.REQUEST_HUMAN_HELP,
+                        Map.of("error", "PREPARED_REF_CLEANUP_FAILED", "message", cleanupFailure.getMessage()));
+            }
+            return new AgentResponse(AgentStatus.COMPLETED, null, null,
+                    Map.of("task", "completion_unwound", "claimEpoch", replacement.version()));
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                    AgentNextAction.REQUEST_HUMAN_HELP,
+                    Map.of("error", failure.getClass().getSimpleName(),
+                            "message", failure.getMessage() == null ? "unwind failed" : failure.getMessage()));
         }
     }
 

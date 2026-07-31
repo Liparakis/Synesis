@@ -35,6 +35,7 @@ public final class TaskCompletionProjection {
     private final Map<UUID, TaskSnapshotRecord> snapshotsByTask = new LinkedHashMap<>();
     private final Map<String, TaskSnapshotRecord> snapshotsById = new LinkedHashMap<>();
     private final Map<String, IntegrationAttemptRecord> attempts = new LinkedHashMap<>();
+    private final Map<UUID, CompletionPreparedPayload> prepared = new LinkedHashMap<>();
     private String activeAttemptId = null;
     private String lastControlHeadAdvanced = null;
 
@@ -54,6 +55,7 @@ public final class TaskCompletionProjection {
         snapshotsByTask.putAll(source.snapshotsByTask);
         snapshotsById.putAll(source.snapshotsById);
         attempts.putAll(source.attempts);
+        prepared.putAll(source.prepared);
         activeAttemptId = source.activeAttemptId;
         lastControlHeadAdvanced = source.lastControlHeadAdvanced;
     }
@@ -68,11 +70,15 @@ public final class TaskCompletionProjection {
         Objects.requireNonNull(event, "event");
         switch (event.type()) {
             case TASK_COMPLETION_REQUESTED -> processCompletionRequested(event);
+            case COMPLETION_PREPARED -> processCompletionPrepared(event);
+            case COMPLETION_UNWOUND -> processCompletionUnwound(event);
             case TASK_SNAPSHOT_CREATED -> processSnapshotCreated(event);
             case TASK_WAITING_FOR_DEPENDENCIES -> processWaitingForDependencies(event);
             case INTEGRATION_ATTEMPT_STARTED -> processAttemptStarted(event);
             case INTEGRATION_ATTEMPT_FAILED -> processAttemptFailed(event);
             case INTEGRATION_CONFLICTED -> processAttemptConflicted(event);
+            case INTEGRATION_BLOCKED -> processIntegrationBlocked(event);
+            case REPAIR_REQUIRED -> processRepairRequired(event);
             case INTEGRATION_COMMIT_CREATED -> processCommitCreated(event);
             case CONTROL_BRANCH_ADVANCED -> processBranchAdvanced(event);
             case TASK_INTEGRATED -> processTaskIntegrated(event);
@@ -151,6 +157,21 @@ public final class TaskCompletionProjection {
         return List.copyOf(snapshotsByTask.values());
     }
 
+    /** Returns the durable prepared completion record for a task, when present.
+     * @param taskId task identifier
+     * @return prepared record, if any
+     */
+    public synchronized Optional<CompletionPreparedPayload> findPrepared(UUID taskId) {
+        return Optional.ofNullable(prepared.get(taskId));
+    }
+
+    /** Returns all durable prepared completion records.
+     * @return immutable prepared records
+     */
+    public synchronized List<CompletionPreparedPayload> allPrepared() {
+        return List.copyOf(prepared.values());
+    }
+
     /**
      * Returns only snapshots that still require integration.
      *
@@ -162,8 +183,17 @@ public final class TaskCompletionProjection {
      */
     public synchronized List<TaskSnapshotRecord> readySnapshots() {
         return snapshotsByTask.values().stream()
-                .filter(snapshot -> taskState(snapshot.taskId()) != TaskCompletionState.INTEGRATED)
+                .filter(snapshot -> taskState(snapshot.taskId()) == TaskCompletionState.INTEGRATION_PENDING
+                        || taskState(snapshot.taskId()) == TaskCompletionState.SNAPSHOT_READY
+                        || taskState(snapshot.taskId()) == TaskCompletionState.READY_FOR_INTEGRATION)
                 .toList();
+    }
+
+    /** Returns only snapshots eligible for the integration pump.
+     * @return eligible snapshots
+     */
+    public synchronized List<TaskSnapshotRecord> eligibleSnapshots() {
+        return readySnapshots();
     }
 
     /**
@@ -192,6 +222,25 @@ public final class TaskCompletionProjection {
         taskStates.put(payload.taskId(), TaskCompletionState.COMPLETION_REQUESTED);
     }
 
+    private void processCompletionPrepared(PredictionEvent event) throws IOException {
+        CompletionPreparedPayload payload = CompletionPreparedPayload.decode(event.payload());
+        prepared.put(payload.taskId(), payload);
+        taskStates.put(payload.taskId(), TaskCompletionState.COMPLETION_PREPARED);
+    }
+
+    private void processCompletionUnwound(PredictionEvent event) throws IOException {
+        CompletionUnwoundPayload payload = CompletionUnwoundPayload.decode(event.payload());
+        CompletionPreparedPayload current = prepared.get(payload.prepared().taskId());
+        if (current == null || !current.equals(payload.prepared())) {
+            throw new IOException("COMPLETION_PREPARATION_MISMATCH");
+        }
+        if (snapshotsByTask.containsKey(payload.prepared().taskId())) {
+            throw new IOException("PUBLISHED_COMPLETION_CANNOT_UNWIND");
+        }
+        prepared.remove(payload.prepared().taskId());
+        taskStates.put(payload.prepared().taskId(), TaskCompletionState.ACTIVE);
+    }
+
     private void processSnapshotCreated(PredictionEvent event) throws IOException {
         TaskSnapshotPayload payload = TaskSnapshotPayload.decode(event.payload());
         TaskSnapshotRecord rec = new TaskSnapshotRecord(
@@ -202,7 +251,7 @@ public final class TaskCompletionProjection {
 
         snapshotsByTask.put(payload.taskId(), rec);
         snapshotsById.put(payload.snapshotId(), rec);
-        taskStates.put(payload.taskId(), TaskCompletionState.SNAPSHOT_READY);
+        taskStates.put(payload.taskId(), TaskCompletionState.INTEGRATION_PENDING);
     }
 
     private void processWaitingForDependencies(PredictionEvent event) throws IOException {
@@ -235,7 +284,8 @@ public final class TaskCompletionProjection {
             attempts.put(payload.attemptId(), new IntegrationAttemptRecord(
                     current.attemptId(), current.projectId(), current.taskSnapshotIds(),
                     current.expectedControlHead(), current.integrationCommitSha(),
-                    "failed", payload.failureReason(), current.startedAtMillis(), event.createdAtEpochMillis()));
+                    "pending".equalsIgnoreCase(payload.status()) ? "pending" : "failed",
+                    payload.failureReason(), current.startedAtMillis(), event.createdAtEpochMillis()));
         }
         if (payload.attemptId().equals(activeAttemptId)) {
             activeAttemptId = null;
@@ -243,7 +293,8 @@ public final class TaskCompletionProjection {
         for (String snapId : payload.taskSnapshotIds()) {
             TaskSnapshotRecord snap = snapshotsById.get(snapId);
             if (snap != null) {
-                taskStates.put(snap.taskId(), TaskCompletionState.INTEGRATION_FAILED);
+                    taskStates.put(snap.taskId(), "pending".equalsIgnoreCase(payload.status())
+                            ? TaskCompletionState.INTEGRATION_PENDING : TaskCompletionState.INTEGRATION_FAILED);
             }
         }
     }
@@ -263,8 +314,24 @@ public final class TaskCompletionProjection {
         for (String snapId : payload.taskSnapshotIds()) {
             TaskSnapshotRecord snap = snapshotsById.get(snapId);
             if (snap != null) {
-                taskStates.put(snap.taskId(), TaskCompletionState.INTEGRATION_FAILED);
+                taskStates.put(snap.taskId(), TaskCompletionState.REPAIR_REQUIRED);
             }
+        }
+    }
+
+    private void processIntegrationBlocked(PredictionEvent event) throws IOException {
+        IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
+        for (String snapId : payload.taskSnapshotIds()) {
+            TaskSnapshotRecord snap = snapshotsById.get(snapId);
+            if (snap != null) taskStates.put(snap.taskId(), TaskCompletionState.INTEGRATION_BLOCKED);
+        }
+    }
+
+    private void processRepairRequired(PredictionEvent event) throws IOException {
+        IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
+        for (String snapId : payload.taskSnapshotIds()) {
+            TaskSnapshotRecord snap = snapshotsById.get(snapId);
+            if (snap != null) taskStates.put(snap.taskId(), TaskCompletionState.REPAIR_REQUIRED);
         }
     }
 

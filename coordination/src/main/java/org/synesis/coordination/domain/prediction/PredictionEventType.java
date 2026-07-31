@@ -222,7 +222,17 @@ public enum PredictionEventType {
     /** Atomically transfers a held recovery lane into a new participant lane. */
     LANE_CONTINUATION_ACCEPTED,
     /** Records a clean connection shutdown without treating the lane as completed. */
-    PARTICIPANT_DETACHED;
+    PARTICIPANT_DETACHED,
+    /** Pins a verified prepared lane tree before mutation authority is fenced. */
+    COMPLETION_PREPARED,
+    /** Records a structurally invalid immutable integration candidate. */
+    INTEGRATION_BLOCKED,
+    /** Records a valid immutable candidate materialized into a repair lane. */
+    REPAIR_REQUIRED,
+    /** Atomically transfers reserved selectors into a new repair lane. */
+    REPAIR_LANE_CREATED,
+    /** Unfences a prepared but unpublished completion at a new claim epoch. */
+    COMPLETION_UNWOUND;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -251,6 +261,11 @@ public enum PredictionEventType {
             case PARTICIPANT_CANCELLED -> 62;
             case LANE_CONTINUATION_ACCEPTED -> 63;
             case PARTICIPANT_DETACHED -> 64;
+            case COMPLETION_PREPARED -> 65;
+            case INTEGRATION_BLOCKED -> 66;
+            case REPAIR_REQUIRED -> 67;
+            case REPAIR_LANE_CREATED -> 68;
+            case COMPLETION_UNWOUND -> 69;
             default -> ordinal();
         };
     }

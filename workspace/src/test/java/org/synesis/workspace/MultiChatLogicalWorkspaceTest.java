@@ -17,6 +17,10 @@ import org.synesis.workspace.application.workspace.WorkspacePatchService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.workspace.agent.AgentStatus;
 
@@ -87,6 +91,50 @@ final class MultiChatLogicalWorkspaceTest {
         collaboration.release(root, "codex", "chat-a");
         assertTrue(collaboration.status(root).intents().stream().anyMatch(i ->
                 i.selectors().contains(ResourceSelector.pathExact("src/b.py"))));
+    }
+
+    @Test
+    void repairJoinMaterializesImmutableConflictIntoNewProviderLane() throws Exception {
+        Path root = Files.createTempDirectory("synesis-repair-join-");
+        git(root, "init");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", "."); git(root, "commit", "-m", "base");
+        new ProviderManualService().install("codex");
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var sourceBinding = bindings.ensure(location, "codex", "repair-source").binding();
+        var targetBinding = bindings.ensure(location, "codex", "repair-target").binding();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        List<ResourceSelector> selectors = List.of(ResourceSelector.pathExact("src/conflict.py"));
+        assertTrue(collaboration.announce(root, "codex", "repair-source", "source", "repair",
+                selectors).acquired());
+        UUID sourceIntentId = UUID.nameUUIDFromBytes(("codex:" + sourceBinding.sessionId())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Files.createDirectories(Path.of(sourceBinding.worktreePath()).resolve("src"));
+        Files.writeString(Path.of(sourceBinding.worktreePath()).resolve("src/conflict.py"), "original\n");
+        TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(UUID.randomUUID(), "node", "sup",
+                "worker", sourceBinding.sessionId(), Path.of(sourceBinding.worktreePath()), root, "conflict",
+                java.util.Optional.empty(), List.of(), selectors, group, sourceIntentId,
+                WorkspaceCollaborationService.participantHandle(sourceBinding.sessionId()), sourceBinding.sessionId(), 1,
+                List.of());
+        IdentityBootstrap bootstrap = new IdentityBootstrap(location.profile().resolve("link"));
+        var identity = bootstrap.loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(), snapshot.snapshotId(), snapshot.nodeId(),
+                snapshot.supervisorId(), snapshot.workerId(), snapshot.providerSessionId(), snapshot.baseCommit(),
+                snapshot.commitSha(), snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary(),
+                snapshot.provenance());
+        store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
+
+        var joined = collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId, snapshot.snapshotId());
+        assertTrue(joined.acquired());
+        assertEquals("original\n", Files.readString(Path.of(targetBinding.worktreePath()).resolve("src/conflict.py"))
+                .replace("\r\n", "\n"));
+        assertTrue(collaboration.status(root).intents().stream().anyMatch(intent ->
+                intent.intentId().equals(joined.intent().intentId())
+                        && intent.participant().equals(WorkspaceCollaborationService.participantHandle(targetBinding.sessionId()))));
     }
 
     private static String gitOutput(Path root, String... args) throws Exception {

@@ -32,7 +32,7 @@ import org.synesis.workspace.agent.AgentStatus;
 /**
  * Application service for owners to publish an immutable implementation snapshot.
  *
- * <p>When the owner calls {@code synesis.publish_snapshot}, this service:
+ * <p>When the owner calls {@code publish_capability_implementation}, this service:
  * <ol>
  *   <li>Authorizes the ambient worker as the accepted owner of the request.</li>
  *   <li>Verifies the owner session and assigned worktree are active and trusted.</li>

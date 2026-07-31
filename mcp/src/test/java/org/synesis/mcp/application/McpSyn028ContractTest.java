@@ -29,13 +29,15 @@ class McpSyn028ContractTest {
             git(project, "commit", "-m", "base");
             new ProjectApplicationService().init(project);
             new ProviderManualService().install("codex");
+            new ProviderManualService().install("claude");
+            new ProviderManualService().install("antigravity");
             McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), project, "codex", "syn028");
             String list = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}");
-            assertEquals(11, list.split("\\\"name\\\":\\\"").length - 1);
+            assertEquals(10, list.split("\\\"name\\\":\\\"").length - 1);
             assertTrue(list.contains("request_coordination"));
             assertTrue(list.contains("respond_coordination"));
-            assertTrue(list.contains("publish_snapshot"));
-            assertTrue(list.contains("validate_snapshot"));
+            assertTrue(list.contains("publish_capability_implementation"));
+            assertTrue(list.contains("finish_lane"));
             String decorated = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
             assertTrue(decorated.contains("raw MCP tool name required"));
         } finally {

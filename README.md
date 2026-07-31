@@ -28,7 +28,7 @@ Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded p
   behavior, graceful close, and a bounded application stream.
 - 🗂️ **Project-local state** — initialization, identity bootstrap, signed onboarding invitations, typed constraints,
   provider hooks, workspace verification, lifecycle inspection/cleanup, repair, and reconciliation diagnostics.
-- 🛠️ **Unified tooling** — a single `synesis` CLI and stdio MCP server with exactly 11 tools. One persistent MCP
+- 🛠️ **Unified tooling** — a single `synesis` CLI and stdio MCP server with exactly 10 tools. One persistent MCP
   connection owns one provider binding; worker sessions and worktrees remain isolated.
 - 🔌 **Provider integrations**
 
@@ -83,7 +83,7 @@ generated files, transcripts, and machine-specific paths out of commits.
 
 - [x] Local project initialization and isolated provider workspace state
 - [x] Authenticated local/two-process Link and application-stream evidence
-- [x] Bounded provider hooks and an 11-tool MCP surface
+- [x] Bounded provider hooks and a 10-tool MCP surface
 - [x] Read-only doctor plus cleanup, repair, and reconciliation flows
 - [ ] Trusted real-agent validation for every provider
 - [ ] Physical cross-network validation beyond the recorded limited evidence

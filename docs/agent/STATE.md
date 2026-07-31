@@ -1,5 +1,15 @@
 # State
 
+## SYN-035 closure evidence
+
+The prerelease MCP lifecycle surface now has ten raw tools. Capability
+publication uses a server-issued capability handle; ordinary completion uses
+`finish_lane`; cancellation uses `cancel_lane`; implementation validation is a
+strict `respond_coordination` variant. Legacy lifecycle names and
+non-discriminated coordination payloads are rejected. CP-0393 records the
+implementation and verification checkpoint; provider acceptance remains the
+next action.
+
 ## Repository state
 
 Contract revision 1 is ACTIVE. SYN-028 is DONE at CP-0331 under ADR-0040; SYN-027 is DONE under ADR-0039; SL-005 through SL-008 are complete;
@@ -21,11 +31,34 @@ Matrix outputs are short-retention internal artifacts; the final job retains
 one 30-day `synesis-release-candidate` artifact and removes internal artifacts
 on ordinary writable-token runs. No GitHub Release was created.
 
-SYN-020 through SYN-025 are DONE (collaboration roadmap complete at CP-0292).
+SYN-020 through SYN-025 and SYN-032 are DONE; SYN-034 handoff is complete and
+SYN-035 is the active implementation task. SYN-032 was reopened after its
+recorded acceptance was contradicted by the real TestProject lane evidence and
+closed again only after the corrected acceptance and repair-lane verification.
 SYN-025 covers authenticated real-provider collaboration acceptance and
 evidence. Direct Antigravity MCP transport has isolated claim,
 mutation/readback, handoff, and clean-EOF evidence; model-driven Antigravity
 mutation remains a harness limitation and is not a native-hook maturity claim.
+
+SYN-032 hardening is implemented and closed at CP-0389. Completion now
+fails closed for clean lanes (`NO_CHANGES_TO_PUBLISH`) and rejects stable
+snapshot-ID collisions instead of creating another advertised record. The fresh
+real-provider acceptance integrated Codex source and Antigravity tests through
+separate immutable snapshots and a recovered test lane; `python -m pytest -q`
+passes 41/41 and active claims are empty. The native launcher preserves caller
+cwd after the provider-install correction. Exact-caller prepared-completion
+unwind is now available through the existing ensure-session schema, advances
+the claim epoch, and replays atomically through a dedicated event. Repair
+joining now provisions the authenticated lane's isolated binding, materializes
+the immutable conflicting snapshot there, and transfers the exact scope in one
+signed repair event. No universal Antigravity autonomy claim is made.
+
+The final sequential repository check passes all 51 actionable tasks after the
+repair-join slice. Bootstrap `go test -count=1 ./...` and `go vet ./...` pass;
+the fresh TestProject acceptance still has both immutable source/test snapshots
+on the control branch, 41 passing pytest tests, and no active claims. Historical
+detached provider sessions remain durable audit records and are not active
+authority.
 
 ## SYN-012 implementation state
 
@@ -137,7 +170,7 @@ responsibility-specific infrastructure packages. The required checks passed:
 
 Global structural-phase constraints: no type moves across Gradle modules, no
 new Gradle dependencies, no Go bootstrap edits, no CLI/MCP surface changes, no
-provider/schema/reason-code/event-format changes, exactly 11 MCP tools
+provider/schema/reason-code/event-format changes, exactly 10 MCP tools
 preserved, and no deduplication/warning/god-class cleanup.
 
 Pre-STRUCT-1A baseline: clean working tree at
@@ -318,7 +351,7 @@ category.
 - Suspected-stale and abandonment grace period evaluation with configurable policy (30s heartbeat, 2m suspected stale, 5m abandonment grace period).
 - Persisted reconciliation plan/lock/journal (`ReconciliationPlan`, `ReconciliationPlanEntry`, `ReconciliationPlanStore`, `ReconciliationExecutionLock`, `ReconciliationExecutionJournal`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\`.
 - CLI command `synesis reconcile` supporting `--dry-run`, `--prepare`, `--show-plan`, `--execute`.
-- Ambient `synesis.cancel_task` MCP tool (tool #11, bounded reason 1-1000 characters).
+- Ambient `synesis.cancel_lane` MCP tool (bounded reason 1-1000 characters).
 - Event-store transitions for `SESSION_ABANDONED`, `TASK_CANCELLATION_REQUESTED`, `TASK_CANCELLED`, `DEPENDENCY_INVALIDATED`, `OWNERSHIP_RELEASED`, and `SESSION_FINALIZED`.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0189.
 
@@ -331,7 +364,7 @@ category.
 - Persisted immutable repair plans (`RepairPlan`, `RepairPlanEntry`, `RepairPlanStore`) stored outside control checkout under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-plans\<plan-id>.json`.
 - Repair execution lock (`RepairExecutionLock`) at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-execution.lock` and append-only execution journal (`RepairExecutionJournal`) at `admin/repair-executions/<execution-id>.jsonl`.
 - Pre-mutation backup and exact atomic rollback service (`RepairBackupService`) under `admin/repair-backups/<execution-id>/`.
-- MCP tools count remains exactly 11 tools; zero MCP surface breaking changes.
+- MCP tools count remains exactly 10 tools; lifecycle names are explicit and strict.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0190.
 
 ## SYN-029 current verification
@@ -345,7 +378,7 @@ category.
   reinstalled against the fresh local distribution without adding duplicate
   provider entries.
 - Installer health probe passed MCP `initialize` and `tools/list` with exactly
-  11 tools. Provider install remains `DEGRADED` where real provider validation
+  10 tools. Provider install remains `DEGRADED` where real provider validation
   is incomplete; this is not transport failure evidence.
 - Focused workspace provider/configuration tests pass. Sequential
   `./gradlew.bat check --no-daemon --max-workers=1

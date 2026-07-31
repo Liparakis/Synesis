@@ -80,6 +80,33 @@ class TaskIntegrationServiceTest {
                 UUID.randomUUID(), UUID.randomUUID(), "agt_test", "lane", 1, List.of()));
     }
 
+    @Test
+    void preparedPublicationIsIdempotentAndUsesThePinnedCommit(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.email", "test@example.invalid");
+        git(root, "config", "user.name", "Test");
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "base");
+        Files.writeString(root.resolve("README.md"), "changed\n");
+        TaskSnapshotService service = new TaskSnapshotService();
+        UUID taskId = UUID.randomUUID();
+        UUID laneId = UUID.randomUUID();
+        TaskSnapshotRecord first = service.createSnapshot(taskId, "node", "supervisor", "worker", "lane",
+                root, root, "snapshot", java.util.Optional.empty(), List.of(), List.of(),
+                UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of());
+        String prepared = service.pinPreparedRef(root, first, "cmp_test");
+        service.verifyPreparedRef(root, prepared, first.commitSha());
+        service.promotePreparedRef(root, prepared, first.provenance().snapshotRef(), first.commitSha());
+
+        TaskSnapshotRecord retry = service.createSnapshot(taskId, "node", "supervisor", "worker", "lane",
+                root, root, "snapshot", java.util.Optional.of(first), List.of(), List.of(),
+                UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of());
+        assertEquals(first.snapshotId(), retry.snapshotId());
+        assertEquals(first.commitSha(), gitOutput(root, "rev-parse", first.provenance().snapshotRef()));
+        assertEquals(first.commitSha(), gitOutput(root, "rev-parse", prepared));
+    }
+
     private static void git(Path root, String... args) throws Exception {
         Process process = new ProcessBuilder(withGit(args)).directory(root.toFile()).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes());

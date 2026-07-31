@@ -56,6 +56,11 @@ public final class PredictionProjection {
                     || type == PredictionEventType.PARTICIPANT_CANCELLED
                     || type == PredictionEventType.LANE_CONTINUATION_ACCEPTED
                     || type == PredictionEventType.PARTICIPANT_DETACHED
+                    || type == PredictionEventType.COMPLETION_PREPARED
+                    || type == PredictionEventType.INTEGRATION_BLOCKED
+                    || type == PredictionEventType.REPAIR_REQUIRED
+                    || type == PredictionEventType.REPAIR_LANE_CREATED
+                    || type == PredictionEventType.COMPLETION_UNWOUND
                     || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
                 return null;
             }
@@ -94,7 +99,8 @@ public final class PredictionProjection {
                  LANE_GRANT_CONSUMED, LANE_REVOKED, WORK_GROUP_STATUS_CHANGED,
                  PARTICIPANT_SUSPENDED, RECOVERY_SNAPSHOT_HELD, PARTICIPANT_REVOKED,
                  INBOX_ITEM_ACKNOWLEDGED, PARTICIPANT_CANCELLED, LANE_CONTINUATION_ACCEPTED,
-                 PARTICIPANT_DETACHED -> current;
+                 PARTICIPANT_DETACHED, COMPLETION_PREPARED, INTEGRATION_BLOCKED,
+                 REPAIR_REQUIRED, REPAIR_LANE_CREATED, COMPLETION_UNWOUND -> current;
         };
     }
 
@@ -128,7 +134,9 @@ public final class PredictionProjection {
                  CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
                  TASK_COMPLETION_REQUESTED, TASK_SNAPSHOT_CREATED, TASK_WAITING_FOR_DEPENDENCIES,
                  INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
-                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED -> false;
+                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
+                 COMPLETION_PREPARED, INTEGRATION_BLOCKED, REPAIR_REQUIRED, REPAIR_LANE_CREATED,
+                 COMPLETION_UNWOUND -> false;
             default -> true;
         };
     }

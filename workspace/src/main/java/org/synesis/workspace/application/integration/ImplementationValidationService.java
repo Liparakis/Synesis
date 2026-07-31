@@ -31,7 +31,7 @@ import org.synesis.workspace.agent.AgentStatus;
 /**
  * Application service for requesters to validate an available implementation snapshot.
  *
- * <p>When the requester calls {@code synesis.validate_snapshot}:
+ * <p>When the requester calls the {@code respond_coordination} implementation-validation variant:
  * <ol>
  *   <li>Authorizes the ambient worker as the original requester.</li>
  *   <li>Verifies the capability is in {@code IMPLEMENTATION_AVAILABLE} or {@code VALIDATING} state.</li>
@@ -72,6 +72,7 @@ public final class ImplementationValidationService {
      * @param requestHandle         public capability request handle
      * @param result                validation result: {@code "accepted"} or {@code "revision_required"}
      * @param reason                free-text failure reason (required when {@code result=revision_required})
+     * @param implementationRevision exact server-published implementation revision (zero permits internal recovery callers)
      * @param failedAcceptanceTests list of failed acceptance test names (for revision_required)
      */
     public record ValidateRequest(
@@ -81,6 +82,7 @@ public final class ImplementationValidationService {
             String requestHandle,
             String result,
             String reason,
+            int implementationRevision,
             List<String> failedAcceptanceTests
     ) {
         /**
@@ -92,7 +94,28 @@ public final class ImplementationValidationService {
             Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
             Objects.requireNonNull(requestHandle, "requestHandle");
             Objects.requireNonNull(result, "result");
+            if (implementationRevision < 0) {
+                throw new IllegalArgumentException("implementationRevision must not be negative");
+            }
             failedAcceptanceTests = failedAcceptanceTests != null ? List.copyOf(failedAcceptanceTests) : List.of();
+        }
+
+        /**
+         * Creates an internal validation request without an externally supplied
+         * revision. MCP callers must use the revision-bearing constructor.
+         *
+         * @param projectRoot project root
+         * @param provider provider identifier
+         * @param connectionInstanceId exact connection instance
+         * @param requestHandle capability request handle
+         * @param result validation result
+         * @param reason revision explanation
+         * @param failedAcceptanceTests failed acceptance tests
+         */
+        public ValidateRequest(Path projectRoot, String provider, String connectionInstanceId,
+                String requestHandle, String result, String reason, List<String> failedAcceptanceTests) {
+            this(projectRoot, provider, connectionInstanceId, requestHandle, result, reason, 0,
+                    failedAcceptanceTests);
         }
     }
 
@@ -163,6 +186,13 @@ public final class ImplementationValidationService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.IMPLEMENTATION_UNAVAILABLE, AgentNextAction.WAIT, null);
             }
             ImplementationRevisionRecord impl = implOpt.get();
+
+            if (request.implementationRevision() > 0
+                    && request.implementationRevision() != impl.revisionNumber()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY,
+                        Map.of("expectedRevision", impl.revisionNumber(),
+                                "providedRevision", request.implementationRevision()));
+            }
 
             String normalizedResult = request.result().trim().toLowerCase(java.util.Locale.ROOT);
             if (!normalizedResult.equals("accepted") && !normalizedResult.equals("revision_required")) {

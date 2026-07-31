@@ -513,6 +513,10 @@ public final class McpProtocolHandler {
         taskProperties.put("likelyScopes", Map.of("type", "array", "items", Map.of("type", "string")));
         taskProperties.put("knownDependencies", Map.of("type", "array", "items", Map.of("type", "string")));
         taskProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+        taskProperties.put("unwindCompletion", Map.of("type", "boolean",
+                "description", "Authorized unwind of this caller's prepared but unpublished completion"));
+        taskProperties.put("repairIntentId", Map.of("type", "string", "format", "uuid"));
+        taskProperties.put("repairSnapshotId", Map.of("type", "string"));
         taskProperties.put("claims", Map.of("type", "array", "items", Map.of(
                 "type", "object", "required", List.of("path"), "properties", Map.of(
                         "path", Map.of("type", "string"),
@@ -531,7 +535,7 @@ public final class McpProtocolHandler {
         ensureSessionSchema.put("properties", ensureSessionProperties);
 
         Map<String, Object> ensureSessionTool = new LinkedHashMap<>();
-        ensureSessionTool.put("name", "ensure_session");
+        ensureSessionTool.put("name", McpToolCatalog.ENSURE_SESSION);
         ensureSessionTool.put("description", "Ensures an active, verified Synesis workspace session.");
         ensureSessionTool.put("inputSchema", ensureSessionSchema);
 
@@ -551,7 +555,7 @@ public final class McpProtocolHandler {
         readSchema.put("required", List.of("path"));
 
         Map<String, Object> readFileTool = new LinkedHashMap<>();
-        readFileTool.put("name", "read_file");
+        readFileTool.put("name", McpToolCatalog.READ_FILE);
         readFileTool.put("description", "Reads text file content from the assigned worktree.");
         readFileTool.put("inputSchema", readSchema);
 
@@ -589,7 +593,7 @@ public final class McpProtocolHandler {
         patchSchema.put("required", List.of("path"));
 
         Map<String, Object> applyPatchTool = new LinkedHashMap<>();
-        applyPatchTool.put("name", "apply_patch");
+        applyPatchTool.put("name", McpToolCatalog.APPLY_PATCH);
         applyPatchTool.put("description",
                 "Applies a structured file creation or modification patch to the assigned worktree.");
         applyPatchTool.put("inputSchema", patchSchema);
@@ -616,7 +620,7 @@ public final class McpProtocolHandler {
         runCmdSchema.put("required", List.of("type"));
 
         Map<String, Object> runCommandTool = new LinkedHashMap<>();
-        runCommandTool.put("name", "run_command");
+        runCommandTool.put("name", McpToolCatalog.RUN_COMMAND);
         runCommandTool.put("description",
                 "Executes an approved project build or git command intent inside the assigned worktree.");
         runCommandTool.put("inputSchema", runCmdSchema);
@@ -624,7 +628,7 @@ public final class McpProtocolHandler {
         Map<String, Object> nextActionSchema = Map.of("type", "object", "properties", Map.of(
                 "integrationCheck", Map.of("type", "object", "description", "Explicit pre-merge candidate facts")));
         Map<String, Object> getNextActionTool = new LinkedHashMap<>();
-        getNextActionTool.put("name", "get_next_action");
+        getNextActionTool.put("name", McpToolCatalog.GET_NEXT_ACTION);
         getNextActionTool.put("description",
                 "Retrieves the single highest-priority actionable coordination item for the active MCP session.");
         getNextActionTool.put("inputSchema", nextActionSchema);
@@ -652,43 +656,6 @@ public final class McpProtocolHandler {
         contractSchema.put("type", "object");
         contractSchema.put("properties", contractProperties);
 
-        Map<String, Object> describeProperties = new LinkedHashMap<>();
-        describeProperties.put("capability",
-                Map.of("type", "string", "description", "Target capability name (e.g. catalog.product-query)"));
-        describeProperties.put("contract", contractSchema);
-        describeProperties.put("request",
-                Map.of("type",
-                        "string",
-                        "description",
-                        "Public capability request handle locator (for requester revision response)"));
-        describeProperties.put("revisionResponse",
-                Map.of("type",
-                        "string",
-                        "description",
-                        "Requester response type to owner revision: accept, counter, cancel"));
-        describeProperties.put("collaborationOperation",
-                Map.of("type", "string", "enum", List.of("status", "publish", "bind", "request", "request_coordination", "handoff",
-                        "continuation", "work_group_create", "lane_grant_issue", "lane_grant_consume", "lane_grant_revoke", "work_group_close"),
-                        "description", "Shared contract or coordination operation through the collaboration service"));
-        describeProperties.put("collaborationContractId", Map.of("type", "string", "description", "UUID of shared contract"));
-        describeProperties.put("collaborationIntentId", Map.of("type", "string", "description", "UUID of consuming intent"));
-        describeProperties.put("collaborationRevision", Map.of("type", "integer", "description", "Exact contract revision"));
-        describeProperties.put("collaborationBody", Map.of("type", "string", "description", "Bounded shared contract body"));
-        describeProperties.put("collaborationSelectors", Map.of("type", "array", "items", Map.of("type", "string")));
-        describeProperties.put("collaborationRequestKind", Map.of("type", "string", "enum", List.of("CONTRACT", "HANDOFF", "SCOPE_REVISION")));
-        describeProperties.put("collaborationProposal", Map.of("type", "string", "description", "Bounded coordination or handoff proposal"));
-        describeProperties.put("collaborationTarget", Map.of("type", "string", "description", "Opaque participant target for handoff"));
-        describeProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
-        describeProperties.put("grantId", Map.of("type", "string", "format", "uuid"));
-        describeProperties.put("intentId", Map.of("type", "string", "format", "uuid"));
-        describeProperties.put("targetParticipant", Map.of("type", "string"));
-        describeProperties.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
-        describeProperties.put("singleUse", Map.of("type", "boolean"));
-        describeProperties.put("collaborationGoal", Map.of("type", "string"));
-        describeProperties.put("collaborationAcceptance", Map.of("type", "string"));
-        describeProperties.put("groupStatus", Map.of("type", "string", "enum", List.of("COMPLETED", "CANCELLED")));
-        describeProperties.put("groupVersion", Map.of("type", "integer", "minimum", 1));
-
         Map<String, Object> describeSchema = new LinkedHashMap<>();
         describeSchema.put("type", "object");
         Map<String, Object> strictPayload = new LinkedHashMap<>();
@@ -704,99 +671,76 @@ public final class McpProtocolHandler {
         strictPayloadProperties.put("targetParticipant", Map.of("type", "string"));
         strictPayloadProperties.put("proposal", Map.of("type", "string"));
         strictPayloadProperties.put("artifact", Map.of("type", "string"));
+        strictPayloadProperties.put("capability", Map.of("type", "string"));
+        strictPayloadProperties.put("contract", contractSchema);
+        strictPayloadProperties.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$"));
+        strictPayloadProperties.put("revisionResponse", Map.of("type", "string", "enum", List.of("accept", "counter", "cancel")));
         strictPayloadProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
         strictPayloadProperties.put("grantId", Map.of("type", "string", "format", "uuid"));
         strictPayloadProperties.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
         strictPayload.put("properties", strictPayloadProperties);
         describeSchema.put("properties", Map.of(
-                "kind", Map.of("type", "string", "enum", List.of("contract_proposal", "contract_request",
+                "kind", Map.of("type", "string", "enum", List.of("capability_request", "collaboration_status", "contract_proposal", "contract_request",
                         "scope_revision", "handoff", "work_group_join", "continuation")),
                 "payload", strictPayload));
         describeSchema.put("required", List.of("kind", "payload"));
         describeSchema.put("additionalProperties", false);
 
         Map<String, Object> describeTool = new LinkedHashMap<>();
-        describeTool.put("name", "request_coordination");
+        describeTool.put("name", McpToolCatalog.REQUEST_COORDINATION);
         describeTool.put("description",
-                "Describes required capability contract or responds to owner revision feedback.");
+                "Submits one strict capability or collaboration request; discovery is returned by get_next_action.");
         describeTool.put("inputSchema", describeSchema);
 
         // Tool 7: synesis.respond_coordination
-        Map<String, Object> respondProperties = new LinkedHashMap<>();
-        respondProperties.put("request",
-                Map.of("type", "string", "description", "Public capability request handle locator"));
-        respondProperties.put("response",
-                Map.of("type", "string", "description", "Owner response type: accept, revise, reject"));
-        respondProperties.put("revision", contractSchema);
-        respondProperties.put("reason",
-                Map.of("type", "string", "description", "Explanation for revision or rejection"));
-        respondProperties.put("coordinationRequest", Map.of("type", "string", "description", "UUID of coordination or handoff request"));
-        respondProperties.put("coordinationStatus", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
-        respondProperties.put("proposal", Map.of("type", "string", "description", "Coordination response proposal"));
-        respondProperties.put("inboxItemId", Map.of("type", "string", "format", "uuid"));
-        respondProperties.put("acknowledgement", Map.of("type", "string", "enum", List.of("acknowledge", "resolve")));
-        respondProperties.put("resolution", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
+        Map<String, Object> responsePayload = new LinkedHashMap<>();
+        responsePayload.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$"));
+        responsePayload.put("response", Map.of("type", "string", "enum", List.of("accept", "revise", "reject")));
+        responsePayload.put("revision", contractSchema);
+        responsePayload.put("reason", Map.of("type", "string"));
+        responsePayload.put("coordinationRequest", Map.of("type", "string", "format", "uuid"));
+        responsePayload.put("coordinationStatus", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
+        responsePayload.put("proposal", Map.of("type", "string"));
+        responsePayload.put("inboxItemId", Map.of("type", "string", "format", "uuid"));
+        responsePayload.put("resolution", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
+        responsePayload.put("result", Map.of("type", "string", "enum", List.of("accepted", "revision_required")));
+        responsePayload.put("implementationRevision", Map.of("type", "integer", "minimum", 1));
+        responsePayload.put("failedAcceptanceTests", Map.of("type", "array", "items", Map.of("type", "string")));
 
         Map<String, Object> respondSchema = new LinkedHashMap<>();
         respondSchema.put("type", "object");
-        respondSchema.put("properties", respondProperties);
+        respondSchema.put("properties", Map.of(
+                "kind", Map.of("type", "string", "enum", List.of("capability_response", "coordination_response",
+                        "inbox_acknowledge", "inbox_resolve", "implementation_validation")),
+                "payload", Map.of("type", "object", "properties", responsePayload,
+                        "additionalProperties", false)));
+        respondSchema.put("required", List.of("kind", "payload"));
         respondSchema.put("additionalProperties", false);
-        respondSchema.put("oneOf", List.of(
-                Map.of("required", List.of("request", "response")),
-                Map.of("required", List.of("inboxItemId", "acknowledgement"),
-                        "properties", Map.of("acknowledgement", Map.of("const", "acknowledge"))),
-                Map.of("required", List.of("inboxItemId", "acknowledgement", "resolution"),
-                        "properties", Map.of("acknowledgement", Map.of("const", "resolve")))));
 
         Map<String, Object> respondTool = new LinkedHashMap<>();
-        respondTool.put("name", "respond_coordination");
+        respondTool.put("name", McpToolCatalog.RESPOND_COORDINATION);
         respondTool.put("description", "Responds to a pending capability request as the authorized capability owner.");
         respondTool.put("inputSchema", respondSchema);
 
-        // Tool 8: synesis.publish_snapshot
+        // Tool 8: synesis.publish_capability_implementation
         Map<String, Object> publishProperties = new LinkedHashMap<>();
-        publishProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
+        publishProperties.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$",
+                "description", "Server-issued capability request handle"));
         publishProperties.put("summary",
                 Map.of("type", "string", "description", "Human-readable summary of this implementation"));
 
         Map<String, Object> publishSchema = new LinkedHashMap<>();
         publishSchema.put("type", "object");
         publishSchema.put("properties", publishProperties);
-        publishSchema.put("required", List.of("request"));
+        publishSchema.put("required", List.of("capabilityRequestHandle"));
 
         Map<String, Object> publishTool = new LinkedHashMap<>();
-        publishTool.put("name", "publish_snapshot");
+        publishTool.put("name", McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION);
         publishTool.put("description",
-                "Publishes an immutable implementation snapshot for a capability request as the authorized owner.");
+                "Publishes an immutable implementation revision only for an accepted capability request owned by this caller.");
         publishTool.put("inputSchema", publishSchema);
 
-        // Tool 9: synesis.validate_snapshot
-        Map<String, Object> validateProperties = new LinkedHashMap<>();
-        validateProperties.put("request", Map.of("type", "string", "description", "Public capability request handle"));
-        validateProperties.put("result",
-                Map.of("type", "string", "description", "Validation result: accepted or revision_required"));
-        validateProperties.put("reason",
-                Map.of("type", "string", "description", "Failure reason when result is revision_required"));
-        validateProperties.put("failedAcceptanceTests",
-                Map.of("type",
-                        "array",
-                        "items",
-                        Map.of("type", "string"),
-                        "description",
-                        "Failed acceptance test names"));
-
-        Map<String, Object> validateSchema = new LinkedHashMap<>();
-        validateSchema.put("type", "object");
-        validateSchema.put("properties", validateProperties);
-        validateSchema.put("required", List.of("request", "result"));
-
-        Map<String, Object> validateTool = new LinkedHashMap<>();
-        validateTool.put("name", "validate_snapshot");
-        validateTool.put("description",
-                "Validates the available implementation snapshot for a capability request as the authorized requester.");
-        validateTool.put("inputSchema", validateSchema);
-
-        // Tool 10: synesis.complete_task
+        // Tool 9: synesis.finish_lane
         Map<String, Object> completeProperties = new LinkedHashMap<>();
         completeProperties.put("summary",
                 Map.of("type", "string", "description", "Human-readable summary of completed task work"));
@@ -806,11 +750,11 @@ public final class McpProtocolHandler {
         completeSchema.put("properties", completeProperties);
 
         Map<String, Object> completeTaskTool = new LinkedHashMap<>();
-        completeTaskTool.put("name", "complete_task");
-        completeTaskTool.put("description", "Requests task completion and triggers dependency integration.");
+        completeTaskTool.put("name", McpToolCatalog.FINISH_LANE);
+        completeTaskTool.put("description", "Validates, publishes, integrates, and closes this isolated mutation lane.");
         completeTaskTool.put("inputSchema", completeSchema);
 
-        // Tool 11: synesis.cancel_task
+        // Tool 10: synesis.cancel_lane
         Map<String, Object> cancelProperties = new LinkedHashMap<>();
         cancelProperties.put("reason",
                 Map.of("type", "string", "description", "Cancellation reason string (1-1000 characters)"));
@@ -821,8 +765,8 @@ public final class McpProtocolHandler {
         cancelSchema.put("required", List.of("reason"));
 
         Map<String, Object> cancelTaskTool = new LinkedHashMap<>();
-        cancelTaskTool.put("name", "cancel_task");
-        cancelTaskTool.put("description", "Cancels the active task for the ambient MCP connection.");
+        cancelTaskTool.put("name", McpToolCatalog.CANCEL_LANE);
+        cancelTaskTool.put("description", "Permanently fences and cancels this isolated mutation lane.");
         cancelTaskTool.put("inputSchema", cancelSchema);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -835,7 +779,6 @@ public final class McpProtocolHandler {
                         describeTool,
                         respondTool,
                         publishTool,
-                        validateTool,
                         completeTaskTool,
                         cancelTaskTool));
 
@@ -869,7 +812,7 @@ public final class McpProtocolHandler {
         }
 
         switch (name) {
-            case "synesis.ensure_session" -> {
+            case "synesis." + McpToolCatalog.ENSURE_SESSION -> {
                 AgentSessionService.AgentTaskIntent taskIntent = parseTaskIntent(arguments);
                 boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
 
@@ -889,6 +832,38 @@ public final class McpProtocolHandler {
                     // before any claim is announced so an abruptly deleted chat remains
                     // recoverable even when it sends no follow-up MCP request.
                     renewLease();
+                    if (arguments != null && Boolean.TRUE.equals(arguments.get("unwindCompletion"))) {
+                        agentResponse = taskCompletionService.unwindPrepared(
+                                new AgentTaskCompletionService.CompleteTaskRequest(
+                                activeProjectRoot, provider, connectionInstanceId, null));
+                    }
+                    String repairIntentText = taskField(arguments, "repairIntentId");
+                    String repairSnapshotId = taskField(arguments, "repairSnapshotId");
+                    if (repairIntentText != null || repairSnapshotId != null) {
+                        try {
+                            if (repairIntentText == null || repairSnapshotId == null) {
+                                throw new IllegalArgumentException("repair intent and snapshot are both required");
+                            }
+                            UUID repairIntentId = UUID.fromString(repairIntentText);
+                            var joined = collaborationService.joinRepair(activeProjectRoot, provider,
+                                    connectionInstanceId, repairIntentId, repairSnapshotId);
+                            if (!joined.acquired()) {
+                                agentResponse = new AgentResponse(AgentStatus.BLOCKED,
+                                        AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_HUMAN_HELP,
+                                        Map.of("conflicts", joined.conflicts()));
+                            } else {
+                                agentResponse = new AgentResponse(AgentStatus.READY, null,
+                                        AgentNextAction.RETRY, Map.of("repairJoined", true,
+                                                "intentId", joined.intent().intentId().toString(),
+                                                "claimEpoch", joined.intent().version()));
+                            }
+                        } catch (Exception repairFailure) {
+                            agentResponse = new AgentResponse(AgentStatus.BLOCKED,
+                                    AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
+                                    Map.of("reason", repairFailure.getMessage() == null
+                                            ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage()));
+                        }
+                    }
                     List<ResourceSelector> selectors = parseClaimSelectors(arguments);
                     boolean claimsSpecified = claimsFieldSpecified(arguments);
                     if (refresh && claimsSpecified && selectors.isEmpty()) {
@@ -932,7 +907,7 @@ public final class McpProtocolHandler {
                     }
                 }
             }
-            case "synesis.read_file" -> {
+            case "synesis." + McpToolCatalog.READ_FILE -> {
                 String path = arguments != null ? (String) arguments.get("path") : null;
                 Integer startLine =
                         (arguments != null && arguments.get("startLine") instanceof Number n) ? n.intValue() : null;
@@ -945,7 +920,7 @@ public final class McpProtocolHandler {
                         activeProjectRoot, provider, connectionInstanceId, path, startLine, endLine, maxBytes);
                 agentResponse = readService.readFile(readReq);
             }
-            case "synesis.apply_patch" -> {
+            case "synesis." + McpToolCatalog.APPLY_PATCH -> {
                 String path = arguments != null ? (String) arguments.get("path") : null;
                 boolean create = arguments != null && Boolean.TRUE.equals(arguments.get("create"));
                 String content = arguments != null ? (String) arguments.get("content") : null;
@@ -977,7 +952,7 @@ public final class McpProtocolHandler {
                         patchEdits);
                 agentResponse = patchService.applyPatch(patchReq);
             }
-            case "synesis.run_command" -> {
+            case "synesis." + McpToolCatalog.RUN_COMMAND -> {
                 String type = arguments != null ? (String) arguments.get("type") : null;
                 String target = arguments != null ? (String) arguments.get("target") : null;
                 List<String> commandArgs = new java.util.ArrayList<>();
@@ -1002,7 +977,7 @@ public final class McpProtocolHandler {
                     }
                 }
             }
-            case "synesis.get_next_action" -> {
+            case "synesis." + McpToolCatalog.GET_NEXT_ACTION -> {
                 if (arguments != null && arguments.get("integrationCheck") instanceof Map<?, ?> check) {
                     try {
                         String head = String.valueOf(check.get("controlHead"));
@@ -1028,24 +1003,40 @@ public final class McpProtocolHandler {
                     agentResponse = nextActionService.getNextAction(nextReq);
                 }
             }
-            case "synesis.request_coordination" -> {
-                if (arguments != null && arguments.containsKey("kind")) {
-                    try {
-                        arguments = normalizeStrictCoordination(arguments);
-                    } catch (IllegalArgumentException failure) {
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
-                                AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
-                        break;
-                    }
+            case "synesis." + McpToolCatalog.REQUEST_COORDINATION -> {
+                if (arguments == null || !arguments.containsKey("kind")) {
+                    agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
+                    break;
+                }
+                try {
+                    arguments = normalizeStrictCoordination(arguments);
+                } catch (IllegalArgumentException failure) {
+                    agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
+                    break;
                 }
                 String collaborationOperation = arguments != null ? (String) arguments.get("collaborationOperation") : null;
                 if (collaborationOperation != null) {
                     try {
+                        if ("capability_request".equals(collaborationOperation)) {
+                            CapabilityContract contract = parseContract(arguments.get("contract"));
+                            agentResponse = capabilityRequestService.describeRequiredCapability(
+                                    new CapabilityRequestService.DescribeCapabilityRequest(
+                                            activeProjectRoot, provider, connectionInstanceId,
+                                            String.valueOf(arguments.get("capability")), contract,
+                                            arguments.get("capabilityRequestHandle") instanceof String value ? value : null,
+                                            arguments.get("revisionResponse") instanceof String value ? value : null));
+                            break;
+                        }
                         var result = switch (collaborationOperation) {
                             case "status" -> {
                                 var snapshot = collaborationService.contractStatus(activeProjectRoot);
-                                yield Map.of("contracts", snapshot.contracts().stream().map(McpProtocolHandler::contractMap).toList(),
-                                        "dependencies", snapshot.dependencies().stream().map(McpProtocolHandler::dependencyMap).toList());
+                                Map<String, Object> status = new LinkedHashMap<>(collaborationStatusMap(
+                                        collaborationService.status(activeProjectRoot)));
+                                status.put("contracts", snapshot.contracts().stream().map(McpProtocolHandler::contractMap).toList());
+                                status.put("dependencies", snapshot.dependencies().stream().map(McpProtocolHandler::dependencyMap).toList());
+                                yield status;
                             }
                             case "publish" -> {
                                 UUID contractId = UUID.fromString(String.valueOf(arguments.get("collaborationContractId")));
@@ -1140,42 +1131,63 @@ public final class McpProtocolHandler {
                         break;
                     }
                 }
-                if (arguments != null && arguments.get("coordinationRequest") instanceof String requestValue) {
-                    try {
-                        var snapshot = collaborationService.status(activeProjectRoot);
-                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
-                                collaborationStatusMap(snapshot));
-                        break;
-                    } catch (Exception failure) {
-                        agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
-                                AgentNextAction.REQUEST_HUMAN_HELP, null);
-                        break;
-                    }
-                }
-                String capability = arguments != null ? (String) arguments.get("capability") : null;
-                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
-                String revResp = arguments != null ? (String) arguments.get("revisionResponse") : null;
-                CapabilityContract contract = parseContract(arguments != null ? arguments.get("contract") : null);
-
-                CapabilityRequestService.DescribeCapabilityRequest descReq = new CapabilityRequestService.DescribeCapabilityRequest(
-                        activeProjectRoot, provider, connectionInstanceId, capability, contract, reqHandle, revResp);
-                agentResponse = capabilityRequestService.describeRequiredCapability(descReq);
+                throw new IllegalStateException("strict coordination request did not produce an operation");
             }
-            case "synesis.respond_coordination" -> {
-                if (arguments != null && arguments.get("inboxItemId") instanceof String item) {
+            case "synesis." + McpToolCatalog.RESPOND_COORDINATION -> {
+                if (arguments != null && arguments.get("kind") instanceof String) {
                     try {
-                        UUID itemId = UUID.fromString(item);
-                        if ("resolve".equals(arguments.get("acknowledgement"))) {
-                            CoordinationRequest.Status resolution = CoordinationRequest.Status.valueOf(
-                                    String.valueOf(arguments.get("resolution")));
-                            collaborationService.resolveInbox(activeProjectRoot, provider, connectionInstanceId,
-                                    itemId, resolution, String.valueOf(arguments.getOrDefault("proposal", "")));
-                        } else {
-                            collaborationService.acknowledgeInbox(activeProjectRoot, provider, connectionInstanceId, itemId);
+                        Map<String, Object> strict = normalizeStrictResponse(arguments);
+                        String kind = String.valueOf(strict.get("kind"));
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> payload = (Map<String, Object>) strict.get("payload");
+                        switch (kind) {
+                            case "implementation_validation" -> {
+                                List<String> failedTests = payload.get("failedAcceptanceTests") instanceof List<?> list
+                                        ? list.stream().filter(String.class::isInstance).map(String.class::cast).toList()
+                                        : List.of();
+                                agentResponse = validationService.validateImplementation(
+                                        new ImplementationValidationService.ValidateRequest(
+                                                activeProjectRoot, provider, connectionInstanceId,
+                                                String.valueOf(payload.get("capabilityRequestHandle")),
+                                                String.valueOf(payload.get("result")),
+                                                payload.get("reason") == null ? null : String.valueOf(payload.get("reason")),
+                                                ((Number) payload.get("implementationRevision")).intValue(),
+                                                failedTests));
+                            }
+                            case "capability_response" -> {
+                                agentResponse = capabilityResponseService.respondToOwnerRequest(
+                                        new CapabilityResponseService.OwnerResponseRequest(
+                                                activeProjectRoot, provider, connectionInstanceId,
+                                                String.valueOf(payload.get("capabilityRequestHandle")),
+                                                String.valueOf(payload.get("response")),
+                                                parseContract(payload.get("revision")),
+                                                payload.get("reason") == null ? null : String.valueOf(payload.get("reason"))));
+                            }
+                            case "coordination_response" -> {
+                                CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(
+                                        String.valueOf(payload.get("coordinationStatus")));
+                                collaborationService.respond(activeProjectRoot, provider, connectionInstanceId,
+                                        UUID.fromString(String.valueOf(payload.get("coordinationRequest"))), status,
+                                        String.valueOf(payload.getOrDefault("proposal", "")));
+                                agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
+                                        Map.of("coordinationRequest", payload.get("coordinationRequest"), "status", status.name()));
+                            }
+                            case "inbox_acknowledge", "inbox_resolve" -> {
+                                UUID itemId = UUID.fromString(String.valueOf(payload.get("inboxItemId")));
+                                boolean resolve = "inbox_resolve".equals(kind);
+                                if (resolve) {
+                                    CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(
+                                            String.valueOf(payload.get("resolution")));
+                                    collaborationService.resolveInbox(activeProjectRoot, provider, connectionInstanceId,
+                                            itemId, status, String.valueOf(payload.getOrDefault("proposal", "")));
+                                } else {
+                                    collaborationService.acknowledgeInbox(activeProjectRoot, provider, connectionInstanceId, itemId);
+                                }
+                                agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
+                                        Map.of("inboxItemId", itemId.toString(), "acknowledged", true, "resolved", resolve));
+                            }
+                            default -> throw new IllegalArgumentException("unknown coordination response kind");
                         }
-                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
-                                Map.of("inboxItemId", item, "acknowledged", true,
-                                        "resolved", "resolve".equals(arguments.get("acknowledgement"))));
                         break;
                     } catch (Exception failure) {
                         agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
@@ -1183,37 +1195,11 @@ public final class McpProtocolHandler {
                         break;
                     }
                 }
-                if (arguments != null && arguments.get("coordinationRequest") instanceof String requestValue) {
-                    try {
-                        CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(
-                                String.valueOf(arguments.getOrDefault("coordinationStatus", "REJECTED")));
-                        collaborationService.respond(activeProjectRoot, provider, connectionInstanceId,
-                                java.util.UUID.fromString(requestValue), status,
-                                String.valueOf(arguments.getOrDefault("proposal", "")));
-                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null,
-                                Map.of("coordinationRequest", requestValue, "status", status.name()));
-                        break;
-                    } catch (Exception failure) {
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
-                                AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
-                        break;
-                    }
-                }
-                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
-                String response = arguments != null ? (String) arguments.get("response") : null;
-                String reason = arguments != null ? (String) arguments.get("reason") : null;
-                CapabilityContract revision = parseContract(arguments != null ? arguments.get("revision") : null);
-
-                if (reqHandle == null || response == null) {
-                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-                } else {
-                    CapabilityResponseService.OwnerResponseRequest respReq = new CapabilityResponseService.OwnerResponseRequest(
-                            activeProjectRoot, provider, connectionInstanceId, reqHandle, response, revision, reason);
-                    agentResponse = capabilityResponseService.respondToOwnerRequest(respReq);
-                }
+                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                        AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
             }
-            case "synesis.publish_snapshot" -> {
-                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
+            case "synesis." + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION -> {
+                String reqHandle = arguments != null ? (String) arguments.get("capabilityRequestHandle") : null;
                 String summary = arguments != null ? (String) arguments.get("summary") : null;
 
                 if (reqHandle == null || reqHandle.isBlank()) {
@@ -1224,41 +1210,13 @@ public final class McpProtocolHandler {
                     agentResponse = publicationService.publishImplementation(pubReq);
                 }
             }
-            case "synesis.validate_snapshot" -> {
-                String reqHandle = arguments != null ? (String) arguments.get("request") : null;
-                String valResult = arguments != null ? (String) arguments.get("result") : null;
-                String valReason = arguments != null ? (String) arguments.get("reason") : null;
-
-                List<String> failedTests = new java.util.ArrayList<>();
-                if (arguments != null && arguments.get("failedAcceptanceTests") instanceof List<?> list) {
-                    for (Object item : list) {
-                        if (item instanceof String s) {
-                            failedTests.add(s);
-                        }
-                    }
-                }
-
-                if (reqHandle == null || valResult == null) {
-                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-                } else {
-                    ImplementationValidationService.ValidateRequest valReq = new ImplementationValidationService.ValidateRequest(
-                            activeProjectRoot,
-                            provider,
-                            connectionInstanceId,
-                            reqHandle,
-                            valResult,
-                            valReason,
-                            failedTests);
-                    agentResponse = validationService.validateImplementation(valReq);
-                }
-            }
-            case "synesis.complete_task" -> {
+            case "synesis." + McpToolCatalog.FINISH_LANE -> {
                 String summary = arguments != null ? (String) arguments.get("summary") : null;
                 AgentTaskCompletionService.CompleteTaskRequest completeReq = new AgentTaskCompletionService.CompleteTaskRequest(
                         activeProjectRoot, provider, connectionInstanceId, summary);
                 agentResponse = taskCompletionService.completeTask(completeReq);
             }
-            case "synesis.cancel_task" -> {
+            case "synesis." + McpToolCatalog.CANCEL_LANE -> {
                 String reason = arguments != null ? (String) arguments.get("reason") : null;
                 org.synesis.workspace.application.agent.AgentTaskCancellationService.CancelTaskRequest cancelReq = new org.synesis.workspace.application.agent.AgentTaskCancellationService.CancelTaskRequest(
                         activeProjectRoot, provider, connectionInstanceId, reason);
@@ -1439,11 +1397,22 @@ public final class McpProtocolHandler {
                 && taskMap.containsKey("claims");
     }
 
+    @SuppressWarnings("unchecked")
+    private static String taskField(Map<String, Object> arguments, String field) {
+        if (arguments == null || !(arguments.get("task") instanceof Map<?, ?> taskMap)) return null;
+        Object value = ((Map<String, Object>) taskMap).get(field);
+        return value instanceof String text && !text.isBlank() ? text : null;
+    }
+
     private static boolean requiresManualAttestation(String name, Map<String, Object> arguments) {
         return switch (name) {
-            case "synesis.apply_patch", "synesis.run_command",
-                 "synesis.publish_snapshot", "synesis.validate_snapshot", "synesis.complete_task" -> true;
-            case "synesis.request_coordination" -> {
+            case "synesis." + McpToolCatalog.APPLY_PATCH, "synesis." + McpToolCatalog.RUN_COMMAND,
+                 "synesis." + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, "synesis." + McpToolCatalog.FINISH_LANE -> true;
+            case "synesis." + McpToolCatalog.ENSURE_SESSION -> arguments != null
+                    && (Boolean.TRUE.equals(arguments.get("unwindCompletion"))
+                    || taskField(arguments, "repairIntentId") != null
+                    || taskField(arguments, "repairSnapshotId") != null);
+            case "synesis." + McpToolCatalog.REQUEST_COORDINATION -> {
                 // Status/discovery is a safe read.  Contract, scope, handoff,
                 // continuation, and join operations increase authority.
                 String operation = arguments == null ? null : String.valueOf(arguments.get("collaborationOperation"));
@@ -1451,7 +1420,7 @@ public final class McpProtocolHandler {
                 yield !("status".equals(operation) || "status".equals(arguments == null ? null : arguments.get("coordinationRequest")))
                         && (kind == null || !kind.isBlank() || operation == null || !operation.isBlank());
             }
-            case "synesis.respond_coordination" -> arguments == null || !(arguments.get("inboxItemId") instanceof String);
+            case "synesis." + McpToolCatalog.RESPOND_COORDINATION -> arguments == null || arguments.get("kind") != null;
             default -> false;
         };
     }
@@ -1465,20 +1434,40 @@ public final class McpProtocolHandler {
         }
         Map<String, Object> payload = (Map<String, Object>) rawPayload;
         List<String> allowed = switch (kind) {
+            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse");
+            case "collaboration_status" -> List.of();
             case "contract_proposal" -> List.of("contractId", "body", "selectors", "revision");
             case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
             case "scope_revision" -> List.of("intentId", "selectors", "proposal");
             case "handoff" -> List.of("intentId", "targetParticipant", "proposal", "artifact");
-            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch");
+            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant");
             case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
             default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_KIND");
         };
         for (String key : payload.keySet()) {
             if (!allowed.contains(key)) throw new IllegalArgumentException("COORDINATION_FIELD_NOT_ALLOWED:" + key);
         }
+        List<String> required = switch (kind) {
+            case "capability_request" -> List.of("capability", "contract");
+            case "collaboration_status" -> List.of();
+            case "contract_proposal" -> List.of("contractId", "body");
+            case "contract_request" -> List.of("conflictingIntentId", "proposal");
+            case "scope_revision" -> List.of("intentId", "selectors", "proposal");
+            case "handoff" -> List.of("intentId", "targetParticipant", "proposal");
+            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant");
+            case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
+            default -> List.of();
+        };
+        for (String key : required) {
+            if (!payload.containsKey(key) || payload.get(key) == null) {
+                throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:" + key);
+            }
+        }
         Map<String, Object> normalized = new LinkedHashMap<>(payload);
         normalized.remove("kind");
         normalized.put("collaborationOperation", switch (kind) {
+            case "capability_request" -> "capability_request";
+            case "collaboration_status" -> "status";
             case "contract_proposal" -> "publish";
             case "contract_request", "scope_revision" -> "request_coordination";
             case "handoff" -> "handoff";
@@ -1489,6 +1478,12 @@ public final class McpProtocolHandler {
             normalized.put("collaborationContractId", payload.get("contractId"));
             normalized.put("collaborationBody", payload.get("body"));
             normalized.put("collaborationSelectors", payload.getOrDefault("selectors", List.of()));
+        }
+        if ("capability_request".equals(kind)) {
+            if (!(payload.get("capability") instanceof String capability) || capability.isBlank()) {
+                throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:capability");
+            }
+            normalized.put("capability", capability);
         }
         if ("work_group_join".equals(kind)) {
             normalized.put("targetParticipant", payload.get("targetParticipant"));
@@ -1508,6 +1503,69 @@ public final class McpProtocolHandler {
             normalized.putIfAbsent("collaborationSourceIntentId", payload.get("intentId"));
             normalized.putIfAbsent("claimEpoch", payload.get("claimEpoch"));
         }
+        return normalized;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> normalizeStrictResponse(Map<String, Object> arguments) {
+        Object kindValue = arguments.get("kind");
+        Object payloadValue = arguments.get("payload");
+        if (!(kindValue instanceof String kind) || !(payloadValue instanceof Map<?, ?> rawPayload)) {
+            throw new IllegalArgumentException("COORDINATION_RESPONSE_REQUIRES_KIND_AND_PAYLOAD");
+        }
+        Map<String, Object> payload = (Map<String, Object>) rawPayload;
+        List<String> allowed = switch (kind) {
+            case "capability_response" -> List.of("capabilityRequestHandle", "response", "revision", "reason");
+            case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus", "proposal");
+            case "inbox_acknowledge" -> List.of("inboxItemId");
+            case "inbox_resolve" -> List.of("inboxItemId", "resolution", "proposal");
+                            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason",
+                    "failedAcceptanceTests");
+            default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_RESPONSE_KIND");
+        };
+        for (String key : payload.keySet()) {
+            if (!allowed.contains(key)) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_FIELD_NOT_ALLOWED:" + key);
+            }
+        }
+        List<String> required = switch (kind) {
+            case "capability_response" -> List.of("capabilityRequestHandle", "response");
+            case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus");
+            case "inbox_acknowledge" -> List.of("inboxItemId");
+            case "inbox_resolve" -> List.of("inboxItemId", "resolution");
+            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result");
+            default -> List.of();
+        };
+        for (String key : required) {
+            if (!payload.containsKey(key)) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_FIELD_REQUIRED:" + key);
+            }
+        }
+        if ("capability_response".equals(kind)) {
+            Object response = payload.get("response");
+            if (!(response instanceof String value)
+                    || !("accept".equals(value) || "revise".equals(value) || "reject".equals(value))) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESPONSE");
+            }
+            if ("revise".equals(response) && !(payload.get("revision") instanceof Map<?, ?>)) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_REVISION_REQUIRED");
+            }
+        }
+        if ("implementation_validation".equals(kind)) {
+            Object result = payload.get("result");
+            if (!(result instanceof String value) || !("accepted".equals(value) || "revision_required".equals(value))) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESULT");
+            }
+            if ("revision_required".equals(result)) {
+                Object reason = payload.get("reason");
+                if (!(reason instanceof String reasonText) || reasonText.isBlank()) {
+                    throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
+                }
+            }
+        }
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        normalized.put("kind", kind);
+        normalized.put("payload", payload);
         return normalized;
     }
 

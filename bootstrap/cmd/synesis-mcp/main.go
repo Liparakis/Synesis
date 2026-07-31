@@ -41,7 +41,15 @@ func run(args []string) error {
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
-	command.Dir = layout.workingDirectory
+	// Preserve the provider's project working directory. The launcher layout
+	// supplies the runtime/classpath, but must never change the caller's cwd:
+	// Synesis uses that cwd (or MCP roots) to resolve the active local project.
+	// This is essential when one installed launcher serves multiple projects.
+	if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+		command.Dir = cwd
+	} else {
+		command.Dir = layout.workingDirectory
+	}
 
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start Java runtime: %w", err)

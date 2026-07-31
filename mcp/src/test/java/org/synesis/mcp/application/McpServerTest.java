@@ -52,6 +52,8 @@ class McpServerTest {
 
         new org.synesis.workspace.application.ProjectApplicationService().init(tempRoot);
         new ProviderManualService().install("codex");
+        new ProviderManualService().install("claude");
+        new ProviderManualService().install("antigravity");
     }
 
     @Test
@@ -98,7 +100,7 @@ class McpServerTest {
     void toolsListAdvertisesExactlyElevenRawNamesAndRejectsDecoratedCalls() {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-raw");
         String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}");
-        assertEquals(11, response.split("\\\"name\\\":\\\"").length - 1);
+        assertEquals(10, response.split("\\\"name\\\":\\\"").length - 1);
         assertTrue(response.contains("\"name\":\"ensure_session\""));
         assertFalse(response.contains("synesis.ensure_session"));
         String decorated = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");
@@ -128,7 +130,7 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-json");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/task_tracker_contract.md\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"publish\",\"collaborationContractId\":\"2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31\",\"collaborationBody\":\"Task tracker API v1\",\"collaborationSelectors\":[\"src/task_tracker.py\"]}}}";
+        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_proposal\",\"payload\":{\"contractId\":\"2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31\",\"body\":\"Task tracker API v1\",\"selectors\":[\"src/task_tracker.py\"]}}}}";
         String response = handler.handleMessage(publish);
         assertFalse(response.contains("-32603"));
         assertTrue(response.contains("contentHash"));
@@ -140,9 +142,9 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-status");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract status json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/status_contract.md\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"publish\",\"collaborationContractId\":\"9b3fef3a-6f6e-4b4b-bd14-ae4f36ea4f18\",\"collaborationBody\":\"Status contract v1\",\"collaborationSelectors\":[\"src/task_tracker.py\"]}}}";
+        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_proposal\",\"payload\":{\"contractId\":\"9b3fef3a-6f6e-4b4b-bd14-ae4f36ea4f18\",\"body\":\"Status contract v1\",\"selectors\":[\"src/task_tracker.py\"]}}}}";
         assertTrue(handler.handleMessage(publish).contains("contentHash"));
-        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"status\"}}}";
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"collaboration_status\",\"payload\":{}}}}";
         String response = handler.handleMessage(status);
         assertFalse(response.contains("-32603"));
         assertTrue(response.contains("contracts"));
@@ -154,7 +156,7 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-discovery-json");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"discoverable goal\",\"acceptance\":\"status is readable\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/discovery.json\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String status = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"collaboration_status\",\"payload\":{}}}}";
         String response = handler.handleMessage(status);
         assertFalse(response.contains("-32603"));
         assertTrue(response.contains("participants"));
@@ -177,7 +179,7 @@ class McpServerTest {
                 .replace("owner", "requester").replace("mcp-request-owner", "mcp-requester");
         assertTrue(owner.handleMessage(ownerEnsure).contains("ready"));
         assertTrue(requester.handleMessage(requesterEnsure).contains("ready"));
-        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"coordinationRequest\":\"status\"}}}";
+        String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"collaboration_status\",\"payload\":{}}}}";
         String statusResponse = owner.handleMessage(status);
         String marker = "\\\"intentId\\\":\\\"";
         int markerStart = statusResponse.indexOf(marker);
@@ -185,7 +187,7 @@ class McpServerTest {
                 ? statusResponse.substring(markerStart + marker.length(), markerStart + marker.length() + 36)
                 : "";
         assertFalse(intentId.isBlank(), statusResponse);
-        String request = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"request\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationRequestKind\":\"CONTRACT\",\"collaborationProposal\":\"agree on API v1\"}}}";
+        String request = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_request\",\"payload\":{\"conflictingIntentId\":\"" + intentId + "\",\"proposal\":\"agree on API v1\"}}}}";
         String requestResponse = requester.handleMessage(request);
         assertFalse(requestResponse.contains("-32603"));
         assertTrue(requestResponse.contains("CONTRACT"));
@@ -197,7 +199,7 @@ class McpServerTest {
                 ? "agt_" + statusResponse.substring(secondParticipant + participantMarker.length(),
                         secondParticipant + participantMarker.length() + 36)
                 : "";
-        String handoff = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"collaborationOperation\":\"handoff\",\"collaborationIntentId\":\"" + intentId + "\",\"collaborationTarget\":\"" + targetParticipant + "\",\"collaborationProposal\":\"clean-worktree-claim-only\"}}}";
+        String handoff = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"handoff\",\"payload\":{\"intentId\":\"" + intentId + "\",\"targetParticipant\":\"" + targetParticipant + "\",\"proposal\":\"clean-worktree-claim-only\"}}}}";
         String handoffResponse = owner.handleMessage(handoff);
         assertFalse(handoffResponse.contains("-32603"));
         assertTrue(handoffResponse.contains("HANDOFF"));
