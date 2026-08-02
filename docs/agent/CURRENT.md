@@ -16,12 +16,15 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Tasks 1 through 6 are complete for this checkpoint: managed-path
+Tasks 1 through 7 are complete for this checkpoint: managed-path
 classification, transaction-owned provenance, semantic index fingerprinting,
 durable baseline and reset journals, complete-tree portability and artifact
 policy, stable event wire decoding, and authority-lineage-bound capability
-requests, implementations, and immutable snapshots are present. No MCP tool
-was added.
+requests, implementations, and immutable snapshots are present. The
+integration pump now selects the oldest dependency-ready candidate, preserves
+pending candidates for transient infrastructure failures, and durably removes
+structurally invalid candidates from the eligible queue. No MCP tool was
+added.
 
 ## Verification target
 
@@ -34,10 +37,9 @@ without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Implement the fenced integration queue: durable pending/blocked/repair-required
-candidate states, dependency-ready ordering across all eligible snapshots,
-transient retry classification, and fail-closed structural validation before
-control-branch mutation.
+Implement atomic repair transfer: materialize the immutable conflicting
+snapshot into a newly authenticated repair lane, preserve the current control
+head, and transfer the reserved claim scope and epoch exactly once.
 
 ## Task 1 evidence
 
@@ -66,6 +68,13 @@ control-branch mutation.
   intent events replay as intents; exact active-lane lineage is required for
   capability request, response, publication, and dependency ordering. Focused
   coordination, workspace, and two-process MCP tests plus strict Javadocs pass.
+- Task 7 is verified in the current worktree: `IntegrationOrchestrationService`
+  processes one oldest dependency-ready candidate at a time, wakes dependent
+  candidates after the lineage owner is integrated, classifies structural
+  failures as `INTEGRATION_BLOCKED`, classifies merge conflicts as
+  `REPAIR_REQUIRED`, and keeps environment failures `INTEGRATION_PENDING`.
+  `IntegrationQueueTest`, `TaskCompletionTest`, and the existing integration
+  metadata tests pass.
 
 ## Completion state
 

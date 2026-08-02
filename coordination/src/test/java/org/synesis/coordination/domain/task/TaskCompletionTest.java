@@ -133,6 +133,29 @@ class TaskCompletionTest {
     }
 
     @Test
+    void transientAttemptFailureReturnsToPendingQueue(@TempDir Path tempDir) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(tempDir, projectId);
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(taskId, "snap_pending", identity.nodeId(), "sup",
+                "worker", "session", "base", "commit", List.of("src/a"), List.of(), "pending test");
+        store.append(taskId, PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
+        IntegrationAttemptPayload attempt = new IntegrationAttemptPayload("att_pending", projectId,
+                List.of("snap_pending"), "head", "", "started", "");
+        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED,
+                identity.nodeId(), attempt.encode(), identity);
+        IntegrationAttemptPayload retry = new IntegrationAttemptPayload("att_pending", projectId,
+                List.of("snap_pending"), "head", "", "pending", "temporary integration I/O failure");
+        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
+                identity.nodeId(), retry.encode(), identity);
+
+        assertEquals(TaskCompletionState.INTEGRATION_PENDING, store.taskCompletionProjection().taskState(taskId));
+        assertEquals(List.of("snap_pending"), store.taskCompletionProjection().eligibleSnapshots().stream()
+                .map(TaskSnapshotRecord::snapshotId).toList());
+    }
+
+    @Test
     void preparedCompletionUnwindRestoresNextClaimEpoch(@TempDir Path tempDir) throws Exception {
         UUID projectId = UUID.randomUUID();
         UUID taskId = UUID.randomUUID();

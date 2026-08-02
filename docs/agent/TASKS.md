@@ -1610,4 +1610,5 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   current verified slice. Focused coordination, workspace, MCP, two-process
   claim arbitration, capability-lineage, and strict Javadoc checks pass
   sequentially. Task 7 (fenced integration queue and dependency-aware
-  advancement) is the next implementation slice.
+  advancement) is DONE in the current verified slice; task 8 (atomic repair
+  transfer and conflict materialization) is the next implementation slice.

@@ -22,6 +22,7 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.application.WorkIntentService;
@@ -143,20 +144,10 @@ public final class IntegrationOrchestrationService {
 
             CapabilityRequestProjection capProj = store.capabilityRequestProjection();
 
-            // 1. Select the oldest eligible candidate.  A permanently invalid
-            // candidate must not prevent unrelated later candidates from
-            // progressing.
-            snapshots = List.of(snapshots.getFirst());
-            // 2. Build topological order and check for cycles
-            List<TaskSnapshotRecord> ordered;
-            try {
-                ordered = sortSnapshotsTopologically(snapshots, capProj);
-            } catch (IllegalStateException cycleErr) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
-                        Map.of("error", "Dependency cycle detected"));
-            }
-
-            // 3. Resolve expected control HEAD
+            // Resolve the control head once for this pump.  Candidate
+            // classification is durable and deterministic against that head;
+            // infrastructure failures remain pending and are retried by a
+            // later pump.
             String expectedControlHead;
             try {
                 expectedControlHead = runGitOutput(controlRoot, "rev-parse", "HEAD");
@@ -164,23 +155,78 @@ public final class IntegrationOrchestrationService {
                 return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
             }
 
-            // Fail before creating any integration worktree when immutable snapshot
-            // metadata already proves a stale base or overlapping change set.
-            List<String> metadataFailures = validateSnapshotMetadata(controlRoot, ordered, expectedControlHead, store);
-            if (!metadataFailures.isEmpty()) {
-                try {
-                    String blockedId = "blocked_" + ordered.getFirst().snapshotId();
-                    IntegrationAttemptPayload blocked = new IntegrationAttemptPayload(
-                            blockedId, store.projectId(), ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                            expectedControlHead, "", "blocked", String.join(";", metadataFailures));
-                    store.append(UUID.nameUUIDFromBytes(blockedId.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                            PredictionEventType.INTEGRATION_BLOCKED, identity.nodeId(), blocked.encode(), identity);
-                } catch (Exception ignored) {
-                    // The response remains fail-closed; reconciliation can
-                    // retry the durable classification.
+            // Pick the oldest dependency-ready candidate.  Structurally
+            // invalid candidates are durably blocked and removed from the
+            // eligible queue; unrelated candidates are still considered in
+            // the same pump invocation.
+            List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection().allSnapshots();
+            List<TaskSnapshotRecord> eligible = store.taskCompletionProjection().eligibleSnapshots().stream()
+                    .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis)
+                            .thenComparing(TaskSnapshotRecord::snapshotId))
+                    .toList();
+            TaskSnapshotRecord selected = null;
+            while (selected == null && !eligible.isEmpty()) {
+                boolean sawPendingDependency = false;
+                for (TaskSnapshotRecord candidate : eligible) {
+                    CandidateResolution resolution = resolveCandidate(candidate, allSnapshots, capProj,
+                            store.taskCompletionProjection());
+                    if (!resolution.structuralFailures().isEmpty()) {
+                        if (!appendBlockedCandidate(store, identity, candidate, expectedControlHead,
+                                resolution.structuralFailures())) {
+                            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                                    AgentNextAction.REQUEST_HUMAN_HELP,
+                                    Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
+                        }
+                        continue;
+                    }
+                    if (!resolution.ready()) {
+                        sawPendingDependency = true;
+                        continue;
+                    }
+                    List<String> metadataFailures = validateSnapshotMetadata(controlRoot,
+                            List.of(candidate), expectedControlHead, store);
+                    if (!metadataFailures.isEmpty()) {
+                        if (!appendBlockedCandidate(store, identity, candidate, expectedControlHead, metadataFailures)) {
+                            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                                    AgentNextAction.REQUEST_HUMAN_HELP,
+                                    Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
+                        }
+                        continue;
+                    }
+                    selected = candidate;
+                    break;
                 }
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
-                        AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failures", metadataFailures));
+                if (selected == null) {
+                    eligible = store.taskCompletionProjection().eligibleSnapshots().stream()
+                            .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis)
+                                    .thenComparing(TaskSnapshotRecord::snapshotId))
+                            .toList();
+                    if (eligible.isEmpty()) {
+                        if (sawPendingDependency) {
+                            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
+                                    AgentNextAction.WAIT, Map.of("pendingDependencies", 1));
+                        }
+                        return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
+                    }
+                    // The remaining candidates are all pending dependencies or
+                    // were just durably blocked.  Do not spin in one request.
+                    if (sawPendingDependency) {
+                        return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
+                                AgentNextAction.WAIT, Map.of("pendingDependencies", eligible.size()));
+                    }
+                }
+            }
+            if (selected == null) {
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
+                        AgentNextAction.WAIT, Map.of("pending", 1));
+            }
+            snapshots = List.of(selected);
+            List<TaskSnapshotRecord> ordered;
+            try {
+                ordered = sortSnapshotsTopologically(snapshots, capProj);
+            } catch (IllegalStateException cycleErr) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
+                        Map.of("error", "Dependency cycle detected"));
             }
 
             // 4. Allocate integration attempt ID
@@ -204,22 +250,37 @@ public final class IntegrationOrchestrationService {
                     controlRoot, attemptId, expectedControlHead, ordered);
 
             if (!prepResult.success()) {
-                // Merge conflict encountered
                 try {
-                    IntegrationAttemptPayload conflictPayload = new IntegrationAttemptPayload(
+                    String status = isMergeConflict(prepResult.failureReason()) ? "conflict" : "pending";
+                    IntegrationAttemptPayload failurePayload = new IntegrationAttemptPayload(
                             attemptId, store.projectId(),
                             ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                            expectedControlHead, "", "conflict", prepResult.failureReason());
-                    store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED,
-                            identity.nodeId(), conflictPayload.encode(), identity);
-                    createRepairLane(store, identity, ordered.getFirst(), expectedControlHead);
+                            expectedControlHead, "", status, prepResult.failureReason());
+                    store.append(UUID.randomUUID(), isMergeConflict(prepResult.failureReason())
+                                    ? PredictionEventType.INTEGRATION_CONFLICTED
+                                    : PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
+                            identity.nodeId(), failurePayload.encode(), identity);
+                    if (isMergeConflict(prepResult.failureReason())) {
+                        store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED,
+                                identity.nodeId(), failurePayload.encode(), identity);
+                    } else {
+                        workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
+                    }
                 } catch (Exception ignored) {
+                    // Leave the attempt and immutable candidate recoverable for
+                    // the next reconciliation pass.
                 }
 
                 Map<String, Object> result = new LinkedHashMap<>();
-                result.put("state", "repair_required");
-                result.put("repairWorktree", prepResult.worktreePath().toString());
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, result);
+                result.put("state", isMergeConflict(prepResult.failureReason())
+                        ? "repair_required" : "integration_pending");
+                result.put("reason", prepResult.failureReason());
+                return new AgentResponse(isMergeConflict(prepResult.failureReason())
+                                ? AgentStatus.BLOCKED : AgentStatus.WAITING,
+                        isMergeConflict(prepResult.failureReason())
+                                ? AgentReason.INTEGRATION_CONFLICT : AgentReason.INTEGRATION_PENDING,
+                        isMergeConflict(prepResult.failureReason())
+                                ? AgentNextAction.REQUEST_HUMAN_HELP : AgentNextAction.RETRY, result);
             }
 
             // 6. Execute project integration gate inside the integration worktree
@@ -281,6 +342,96 @@ public final class IntegrationOrchestrationService {
             result.put("task", "integrated");
             return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
         }
+    }
+
+    private record CandidateResolution(boolean ready, List<TaskSnapshotRecord> dependencies,
+            List<String> structuralFailures) {
+        private CandidateResolution {
+            dependencies = List.copyOf(dependencies);
+            structuralFailures = List.copyOf(structuralFailures);
+        }
+    }
+
+    private static CandidateResolution resolveCandidate(TaskSnapshotRecord candidate,
+            List<TaskSnapshotRecord> allSnapshots, CapabilityRequestProjection capProj,
+            org.synesis.coordination.domain.task.TaskCompletionProjection completion) {
+        List<TaskSnapshotRecord> dependencies = new ArrayList<>();
+        List<String> structuralFailures = new ArrayList<>();
+        for (String dependencyHandle : candidate.capabilityDependencies()) {
+            CapabilityRequestRecord capability = capProj.findByHandle(dependencyHandle).orElse(null);
+            if (capability == null) {
+                structuralFailures.add("MISSING_CAPABILITY_DEPENDENCY:" + dependencyHandle);
+                continue;
+            }
+            if (capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.REJECTED
+                    || capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.CANCELLED
+                    || capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.EXPIRED
+                    || capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.SUPERSEDED) {
+                structuralFailures.add("STALE_CAPABILITY_DEPENDENCY:" + dependencyHandle);
+                continue;
+            }
+            var implementation = capProj.findLatestImplementation(dependencyHandle).orElse(null);
+            if (implementation == null) {
+                continue;
+            }
+            if (!capability.authorityLineageId().equals(implementation.authorityLineageId())) {
+                structuralFailures.add("CAPABILITY_LINEAGE_MISMATCH:" + dependencyHandle);
+                continue;
+            }
+            TaskSnapshotRecord ownerSnapshot = allSnapshots.stream()
+                    .filter(snapshot -> snapshot.provenance().authorityLineageId()
+                            .equals(capability.authorityLineageId()))
+                    .filter(snapshot -> snapshot.commitSha().equals(implementation.commitSha()))
+                    .min(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis)
+                            .thenComparing(TaskSnapshotRecord::snapshotId))
+                    .orElse(null);
+            if (ownerSnapshot == null) {
+                // The contract is known but its immutable implementation has
+                // not been published as a task snapshot yet.  This candidate
+                // remains pending and will be reconsidered after publication.
+                continue;
+            }
+            TaskCompletionState ownerState = completion.taskState(ownerSnapshot.taskId());
+            if (ownerState == TaskCompletionState.INTEGRATED) {
+                continue;
+            }
+            if (ownerState == TaskCompletionState.INTEGRATION_BLOCKED
+                    || ownerState == TaskCompletionState.REPAIR_REQUIRED
+                    || ownerState == TaskCompletionState.INTEGRATION_FAILED
+                    || ownerState == TaskCompletionState.CANCELLED
+                    || ownerState == TaskCompletionState.ABANDONED) {
+                // A failed prerequisite is recoverable through its own lane;
+                // do not permanently invalidate the dependent candidate.
+                continue;
+            }
+            dependencies.add(ownerSnapshot);
+        }
+        return new CandidateResolution(structuralFailures.isEmpty() && dependencies.isEmpty(),
+                dependencies, structuralFailures);
+    }
+
+    private static boolean appendBlockedCandidate(PredictionEventStore store, NodeIdentity identity,
+            TaskSnapshotRecord candidate, String expectedControlHead, List<String> failures) {
+        try {
+            String blockedId = "blocked_" + candidate.snapshotId();
+            IntegrationAttemptPayload blocked = new IntegrationAttemptPayload(
+                    blockedId, store.projectId(), List.of(candidate.snapshotId()), expectedControlHead, "",
+                    "blocked", String.join(";", failures));
+            store.append(UUID.nameUUIDFromBytes(blockedId.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    PredictionEventType.INTEGRATION_BLOCKED, identity.nodeId(), blocked.encode(), identity);
+            return true;
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    private static boolean isMergeConflict(String failureReason) {
+        if (failureReason == null) {
+            return false;
+        }
+        String normalized = failureReason.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("merge conflict") || normalized.contains("cherry-pick conflict")
+                || normalized.contains("unresolved cherry-pick");
     }
 
     private static List<TaskSnapshotRecord> sortSnapshotsTopologically(
@@ -406,16 +557,25 @@ public final class IntegrationOrchestrationService {
             failures.add("UNRESOLVED_COORDINATION_REQUEST");
         }
         for (TaskSnapshotRecord snapshot : snapshots) {
+            if (snapshot.provenance() == null) {
+                failures.add("MISSING_PROVENANCE:" + snapshot.snapshotId());
+                continue;
+            }
             if (!isAncestor(controlRoot, snapshot.baseCommit(), controlHead)) {
                 failures.add("STALE_BASE:" + snapshot.snapshotId());
+            }
+            var laneIntent = store.collaborationProjection().intent(snapshot.provenance().laneId());
+            if (laneIntent.isEmpty()
+                    || !laneIntent.get().authorityLineageId().equals(snapshot.provenance().authorityLineageId())
+                    || laneIntent.get().version() != snapshot.provenance().claimEpoch()) {
+                failures.add("STALE_CLAIM_EPOCH:" + snapshot.snapshotId());
             }
             for (String path : snapshot.changedPaths()) {
                 String normalized = path.replace('\\', '/');
                 if (!changed.add(normalized)) {
                     failures.add("OVERLAPPING_SNAPSHOT:" + normalized);
                 }
-                if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")
-                        && !snapshot.provenance().claimSelectors().isEmpty()) {
+                if (!snapshot.provenance().claimSelectors().isEmpty()) {
                     boolean covered = snapshot.provenance().claimSelectors().stream().anyMatch(raw -> {
                         int split = raw.indexOf(':');
                         if (split < 1) return false;
@@ -428,9 +588,7 @@ public final class IntegrationOrchestrationService {
                     if (!covered) failures.add("UNCOVERED_PATH:" + normalized);
                 }
             }
-            if (snapshot.provenance() == null) {
-                failures.add("MISSING_PROVENANCE:" + snapshot.snapshotId());
-            } else if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
+            if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
                 var prepared = store.taskCompletionProjection().findPrepared(snapshot.taskId());
                 if (prepared.isEmpty()) {
                     failures.add("MISSING_PREPARED_OBJECT:" + snapshot.snapshotId());
@@ -467,6 +625,8 @@ public final class IntegrationOrchestrationService {
                         } catch (RuntimeException invalid) { failures.add("INVALID_CONTRACT_PROVENANCE:" + snapshot.snapshotId()); }
                     }
                 }
+            } else {
+                failures.add("INVALID_SNAPSHOT_REF:" + snapshot.snapshotId());
             }
         }
         return List.copyOf(failures);
