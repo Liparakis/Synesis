@@ -7,9 +7,10 @@ Task 1 is complete at commit `71b33c5`; the authoritative objective is the
 Canonical Baselines and Lineage-Aware Integration specification in the active
 goal attachment.
 
-Immediate slice: implement managed baseline classification. Keep exactly ten
-MCP tools, recognize only journaled transaction-owned ignored managed files,
-and preserve fail-closed dirty-control behavior.
+Immediate slice: complete managed baseline classification and semantic index
+transaction recovery. Keep exactly ten MCP tools, recognize only journaled
+transaction-owned ignored managed files, and preserve fail-closed dirty-control
+behavior.
 
 Task 1 evidence: the handler now consumes exact schemas from the shared
 `mcp-contract` catalog; provider health separates wire compatibility,
@@ -17,6 +18,12 @@ catalog-content freshness, and guidance-artifact integrity; and
 `AdministrativeStateLocator` derives external state from the canonical Git
 common directory. Focused `:mcp-contract:check`, `:workspace:check`, and
 `:mcp:check` all pass.
+
+SYN-036 task 2/3 partial evidence: commit `14ff54f` adds managed-path
+classification, transaction ownership checks, semantic Git-index fingerprints,
+and a journaled managed-baseline transaction service. `:workspace:compileJava`
+and focused managed-path/index tests pass. Baseline transaction integration,
+crash-recovery tests, and reset/portability wiring remain unfinished.
 
 ## SYN-035 closure evidence
 

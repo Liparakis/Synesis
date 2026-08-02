@@ -16,22 +16,26 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Task 1 is complete: the ten-tool MCP catalog/rendering identity foundation and
-canonical Git-common-directory administrative-state locator are implemented.
-No MCP tool was added.
+Task 1 is complete. Tasks 2/3 are partially implemented: managed-path
+classification, transaction-owned ignored-path provenance, semantic index
+fingerprinting, and a durable baseline journal are present. No MCP tool was
+added.
 
 ## Verification target
 
 The catalog, provider health/attestation, and managed guidance derive from one
 ten-tool descriptor source; wire, catalog-content, and guidance-artifact
 identities are deterministic and non-circular. Administrative state resolves
-from canonical Git common-directory identity.
+from canonical Git common-directory identity. Managed-baseline preparation must
+classify dirty content fail-closed, persist semantic index state, and recover
+without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Implement task 2: inspect and classify managed baseline paths, including
-transaction-owned ignored managed files, while preserving fail-closed dirty
-control and exact ten-tool behavior.
+Add focused `ManagedBaselineTransactionService` tests for clean preparation,
+dirty-control refusal, transaction journal replay, and semantic-index recovery;
+then wire the service into project initialization before beginning reset
+recovery and complete-tree portability.
 
 ## Task 1 evidence
 
@@ -41,6 +45,10 @@ control and exact ten-tool behavior.
 - Added one authoritative `McpToolCatalog` descriptor source, exact raw tool
   schemas, separate wire/catalog/guidance identities, provider freshness
   diagnostics, and `AdministrativeStateLocator` with focused tests.
+- Commit `14ff54f` adds `ManagedPathPolicy`, `SemanticIndexFingerprint`, and
+  `ManagedBaselineTransactionService`; managed-path/index focused tests and
+  `:workspace:compileJava` pass. Baseline transaction integration and recovery
+  coverage remain outstanding.
 
 ## Completion state
 
