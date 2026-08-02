@@ -7,9 +7,11 @@ Task 1 is complete at commit `71b33c5`; the authoritative objective is the
 Canonical Baselines and Lineage-Aware Integration specification in the active
 goal attachment.
 
-Immediate slice: complete managed baseline classification and semantic index
-transaction recovery. Keep exactly ten MCP tools, recognize only journaled
-transaction-owned ignored managed files, and preserve fail-closed dirty-control
+Tasks 2/3 are now complete at the current checkpoint: managed-path
+classification, transaction-owned provenance, semantic index comparison, and
+the journaled baseline transaction are implemented and wired into fresh Git
+project initialization. Keep exactly ten MCP tools, recognize only journaled
+transaction-owned managed files, and preserve fail-closed dirty-control
 behavior.
 
 Task 1 evidence: the handler now consumes exact schemas from the shared
@@ -19,11 +21,15 @@ catalog-content freshness, and guidance-artifact integrity; and
 common directory. Focused `:mcp-contract:check`, `:workspace:check`, and
 `:mcp:check` all pass.
 
-SYN-036 task 2/3 partial evidence: commit `14ff54f` adds managed-path
-classification, transaction ownership checks, semantic Git-index fingerprints,
-and a journaled managed-baseline transaction service. `:workspace:compileJava`
-and focused managed-path/index tests pass. Baseline transaction integration,
-crash-recovery tests, and reset/portability wiring remain unfinished.
+SYN-036 task 2/3 evidence: commits `14ff54f` and `9e62c9f` add
+managed-path classification, transaction ownership checks, semantic Git-index
+fingerprints, a journaled managed-baseline transaction service, project-init
+wiring, and crash/replay/provenance tests. Strict `:workspace:javadoc` and
+focused workspace tests pass. A repository-wide `:workspace:check` attempt
+timed out in the test runner without a completed report; this is retained as a
+runner limitation, not represented as product evidence. Reset recovery,
+complete-tree portability, lineage dependencies, fenced integration, and
+prerelease cleanup remain unfinished.
 
 ## SYN-035 closure evidence
 

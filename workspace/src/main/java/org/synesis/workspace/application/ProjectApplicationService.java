@@ -8,13 +8,14 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
-import org.synesis.workspace.lifecycle.ManagedPathPolicy;
+import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService;
 
 /**
  * Owns project discovery, initialization, and project-local profile paths.
@@ -50,11 +51,22 @@ public final class ProjectApplicationService {
             - When Synesis reports an identity, ownership, freshness, or workspace failure, stop mutation and inspect read-only state.
             - The MCP surface currently contains exactly 10 tools; follow get_next_action's recommended tool and typed arguments.
             """;
+    private final ManagedBaselineTransactionService baselineService;
 
     /**
      * Creates a project application service.
      */
     public ProjectApplicationService() {
+        this(new ManagedBaselineTransactionService());
+    }
+
+    /**
+     * Creates a project service with an explicit baseline transaction service.
+     *
+     * @param baselineService managed-baseline transaction service
+     */
+    public ProjectApplicationService(ManagedBaselineTransactionService baselineService) {
+        this.baselineService = Objects.requireNonNull(baselineService, "baselineService");
     }
 
     private static ProjectLocation readLocation(Path root, Path synesis, Path metadata)
@@ -76,9 +88,13 @@ public final class ProjectApplicationService {
         }
     }
 
+    private static String metadataJson(UUID projectId, Instant createdAt) {
+        return "{\n" + "  \"schemaVersion\": 1,\n" + "  \"projectId\": \"" + projectId + "\",\n"
+                + "  \"createdAt\": \"" + createdAt + "\"\n" + "}\n";
+    }
+
     private static void writeMetadata(Path metadata, UUID projectId) throws IOException {
-        String json = "{\n" + "  \"schemaVersion\": 1,\n" + "  \"projectId\": \"" + projectId + "\",\n"
-                + "  \"createdAt\": \"" + Instant.now() + "\"\n" + "}\n";
+        String json = metadataJson(projectId, Instant.now());
         Path temporary = metadata.resolveSibling("project.json.tmp-" + UUID.randomUUID());
         Files.writeString(temporary,
                 json,
@@ -103,7 +119,7 @@ public final class ProjectApplicationService {
      * @param root project root
      * @throws IOException if the file cannot be read or written, or its markers are malformed
      */
-    private static void ensureAgentsFile(Path root) throws IOException {
+    private static String managedAgentsContent(Path root) throws IOException {
         Path agents = root.resolve(AGENTS_FILE);
         if (Files.isSymbolicLink(agents)) {
             throw new IOException("AGENTS.md must not be a symbolic link");
@@ -127,6 +143,13 @@ public final class ProjectApplicationService {
             String prefix = existing.endsWith("\n") ? separator : separator + separator;
             content = existing + prefix + section + separator;
         }
+        return content;
+    }
+
+    private static void ensureAgentsFile(Path root) throws IOException {
+        Path agents = root.resolve(AGENTS_FILE);
+        String existing = Files.exists(agents) ? Files.readString(agents, StandardCharsets.UTF_8) : "";
+        String content = managedAgentsContent(root);
         if (!content.equals(existing)) {
             writeTextAtomically(agents, content);
         }
@@ -178,34 +201,9 @@ public final class ProjectApplicationService {
             }
             throw new IOException("invalid Git HEAD");
         } catch (Exception unavailable) {
-            try {
-                String branch = gitAllowFailure(root, "symbolic-ref", "--short", "HEAD");
-                if (branch.isBlank()) {
-                    throw new IOException("not an unborn branch");
-                }
-                runGit(root, "add", "--", ".synesis/project.json", "AGENTS.md");
-                runGit(root,
-                        "-c",
-                        "user.name=Synesis Initializer",
-                        "-c",
-                        "user.email=synesis@localhost",
-                        "commit",
-                        "--no-verify",
-                        "-m",
-                        "Initialize Synesis project",
-                        "--",
-                        ".synesis/project.json",
-                        "AGENTS.md");
-                String head = git(root, "rev-parse", "--verify", "HEAD");
-                if (!head.matches("[0-9a-fA-F]{40}")) {
-                    throw new IOException("invalid Git HEAD after initialization");
-                }
-                return "GIT_INITIAL_COMMIT_CREATED";
-            } catch (Exception commitFailure) {
-                throw new ProjectApplicationException("GIT_HEAD_UNAVAILABLE",
-                        "Git HEAD is unavailable; Synesis did not fabricate a base commit",
-                        commitFailure);
-            }
+            throw new ProjectApplicationException("GIT_HEAD_UNAVAILABLE",
+                    "Git HEAD is unavailable; Synesis will not fabricate a base commit outside a baseline transaction",
+                    unavailable);
         }
     }
 
@@ -218,16 +216,7 @@ public final class ProjectApplicationService {
         return output;
     }
 
-    @SuppressWarnings("SameParameterValue")
-    private static String gitAllowFailure(Path root, String... arguments) throws Exception {
-        return runGit(root, arguments, false).trim();
-    }
-
     private static String runGit(Path root, String... arguments) throws Exception {
-        return runGit(root, arguments, true);
-    }
-
-    private static String runGit(Path root, String[] arguments, boolean requireSuccess) throws Exception {
         String[] command = new String[arguments.length + 3];
         command[0] = "git";
         command[1] = "-C";
@@ -237,7 +226,7 @@ public final class ProjectApplicationService {
                 .start();
         String output = new String(process.getInputStream()
                 .readAllBytes(), StandardCharsets.UTF_8);
-        if (requireSuccess && process.waitFor() != 0) {
+        if (process.waitFor() != 0) {
             throw new IOException("git failed: " + output);
         }
         return output;
@@ -385,25 +374,28 @@ public final class ProjectApplicationService {
 
         UUID projectId = UUID.randomUUID();
         try {
+            Files.createDirectories(synesis);
+            Path profile = synesis.resolve("local/profile");
+            Instant createdAt = Instant.now();
+            String metadataContent = metadataJson(projectId, createdAt);
+            String agentsContent = managedAgentsContent(root);
+            String gitHeadStatus;
             if (Files.exists(root.resolve(".git"))) {
-                ManagedPathPolicy.Report controlState = new ManagedPathPolicy().inspect(root);
-                if (controlState.blocked()) {
-                    throw new ProjectApplicationException("CONTROL_CHECKOUT_DIRTY",
-                            "Git control checkout contains unmanaged or changed content: "
-                                    + controlState.findings().stream()
-                                    .filter(ManagedPathPolicy.Finding::blocksTransaction)
-                                    .map(ManagedPathPolicy.Finding::path)
-                                    .findFirst().orElse("unknown"));
-                }
+                ManagedBaselineTransactionService.Result baseline = baselineService.prepare(root, Map.of(
+                        ".synesis/project.json", metadataContent.getBytes(StandardCharsets.UTF_8),
+                        AGENTS_FILE, agentsContent.getBytes(StandardCharsets.UTF_8)));
+                gitHeadStatus = "UNBORN".equals(baseline.originalHead())
+                        ? "GIT_INITIAL_COMMIT_CREATED" : "GIT_HEAD_VALID";
+            } else {
+                writeMetadata(metadata, projectId);
+                ensureAgentsFile(root);
+                gitHeadStatus = "GIT_HEAD_UNAVAILABLE";
             }
             Files.createDirectories(synesis.resolve("shared/records"));
             Files.createDirectories(synesis.resolve("local/providers"));
             Files.createDirectories(synesis.resolve("local/runtime"));
-            Path profile = synesis.resolve("local/profile");
             Files.createDirectories(profile.resolve("records"));
             NodeIdentity identity = identity(profile);
-            writeMetadata(metadata, projectId);
-            ensureAgentsFile(root);
             ProjectLocation location = readLocation(root, synesis, metadata);
             try {
                 if (configureProviderMcp) {
@@ -414,7 +406,10 @@ public final class ProjectApplicationService {
                 }
             } catch (Exception ignored) {
             }
-            return new InitResult(InitStatus.SUCCESS, location, identity, true, ensureGitHead(root));
+            return new InitResult(InitStatus.SUCCESS, location, identity, true, gitHeadStatus);
+        } catch (ManagedBaselineTransactionService.BaselineFailure failure) {
+            throw new ProjectApplicationException(failure.code(),
+                    "Managed baseline transaction failed: " + failure.getMessage(), failure);
         } catch (Exception failure) {
             throw new ProjectApplicationException("CONFLICT", "Could not initialize project state", failure);
         }

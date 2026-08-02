@@ -16,10 +16,10 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Task 1 is complete. Tasks 2/3 are partially implemented: managed-path
-classification, transaction-owned ignored-path provenance, semantic index
-fingerprinting, and a durable baseline journal are present. No MCP tool was
-added.
+Tasks 1/2/3 are complete for this checkpoint: managed-path classification,
+transaction-owned provenance, semantic index fingerprinting, a durable
+baseline journal, crash/replay recovery, and fresh-project initialization
+wiring are present. No MCP tool was added.
 
 ## Verification target
 
@@ -32,10 +32,10 @@ without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Add focused `ManagedBaselineTransactionService` tests for clean preparation,
-dirty-control refusal, transaction journal replay, and semantic-index recovery;
-then wire the service into project initialization before beginning reset
-recovery and complete-tree portability.
+Implement the reset-recovery journal keyed by canonical Git common-directory
+identity and transaction ID, with exclusive locking, durable phase markers,
+restart discovery, and fail-closed conflict handling; add crash-point tests
+before beginning complete-tree portability.
 
 ## Task 1 evidence
 
@@ -45,10 +45,12 @@ recovery and complete-tree portability.
 - Added one authoritative `McpToolCatalog` descriptor source, exact raw tool
   schemas, separate wire/catalog/guidance identities, provider freshness
   diagnostics, and `AdministrativeStateLocator` with focused tests.
-- Commit `14ff54f` adds `ManagedPathPolicy`, `SemanticIndexFingerprint`, and
-  `ManagedBaselineTransactionService`; managed-path/index focused tests and
-  `:workspace:compileJava` pass. Baseline transaction integration and recovery
-  coverage remain outstanding.
+- Commits `14ff54f` and `9e62c9f` add `ManagedPathPolicy`,
+  `SemanticIndexFingerprint`, and `ManagedBaselineTransactionService`, wire
+  fresh initialization through the transaction, and add crash/replay,
+  provenance, and semantic-index tests. Strict `:workspace:javadoc` and the
+  focused workspace suite pass; the timed-out full workspace check remains a
+  runner limitation requiring later sequential revalidation.
 
 ## Completion state
 

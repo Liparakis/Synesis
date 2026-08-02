@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,6 +49,20 @@ class SemanticIndexFingerprintTest {
         SemanticIndexFingerprint.Fingerprint after = SemanticIndexFingerprint.capture(root);
         assertEquals(SemanticIndexFingerprint.Comparison.INDEX_EXTENSION_UNSUPPORTED,
                 SemanticIndexFingerprint.compare(before, after));
+    }
+
+    @Test
+    void cacheRefreshWithUnchangedStagedSemanticsIsNotAUserMutation(@TempDir Path temp) throws Exception {
+        Path root = init(temp.resolve("repo"));
+        SemanticIndexFingerprint.Fingerprint before = SemanticIndexFingerprint.capture(root);
+        Files.setLastModifiedTime(root.resolve("tracked.txt"), FileTime.fromMillis(System.currentTimeMillis() + 10_000));
+        git(root, "update-index", "--refresh");
+        SemanticIndexFingerprint.Fingerprint after = SemanticIndexFingerprint.capture(root);
+
+        assertTrue(SemanticIndexFingerprint.compare(before, after)
+                == SemanticIndexFingerprint.Comparison.EXACT
+                || SemanticIndexFingerprint.compare(before, after)
+                == SemanticIndexFingerprint.Comparison.NONSEMANTIC_REFRESH);
     }
 
     private static Path init(Path root) throws Exception {

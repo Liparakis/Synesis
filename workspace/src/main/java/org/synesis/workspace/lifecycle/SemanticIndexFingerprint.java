@@ -140,9 +140,22 @@ public final class SemanticIndexFingerprint {
         Result result = runResult(root, "rev-parse", "--git-path", "index");
         if (result.exitCode() != 0) throw new IOException("INDEX_UNAVAILABLE");
         Path index = root.resolve(result.output().trim()).normalize();
+        if (!Files.exists(index)) {
+            // An unborn repository legitimately has no physical index yet;
+            // represent its empty semantic index deterministically.
+            return hash(new byte[0]);
+        }
         if (!Files.isRegularFile(index)) throw new IOException("INDEX_UNAVAILABLE");
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(index)));
+            return hash(Files.readAllBytes(index));
+        } catch (Exception failure) {
+            throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
+        }
+    }
+
+    private static String hash(byte[] bytes) throws IOException {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         } catch (Exception failure) {
             throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
         }
@@ -185,7 +198,21 @@ public final class SemanticIndexFingerprint {
         INDEX_EXTENSION_UNSUPPORTED
     }
 
-    /** Immutable captured index fingerprint. */
+    /** Immutable captured index fingerprint.
+     * @param rawIndexDigest physical index-file digest
+     * @param indexTreeId staged tree identity
+     * @param stagedEntryPaths staged entry paths
+     * @param stagedBlobIds staged blob IDs by path
+     * @param entryModes entry modes by path
+     * @param entryStages index stages by path
+     * @param unmergedEntries unmerged paths
+     * @param intentToAddFlags intent-to-add paths
+     * @param skipWorktreeFlags skip-worktree paths
+     * @param assumeUnchangedFlags assume-unchanged paths
+     * @param sparseIndexMode whether sparse-index mode is active
+     * @param splitIndexMode whether split-index mode is active
+     * @param relevantExtensions relevant index-extension identities
+     */
     public record Fingerprint(String rawIndexDigest, String indexTreeId, List<String> stagedEntryPaths,
                               Map<String, String> stagedBlobIds, Map<String, String> entryModes,
                               Map<String, List<String>> entryStages, List<String> unmergedEntries,

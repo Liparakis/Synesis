@@ -3,6 +3,7 @@ package org.synesis.workspace.lifecycle;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -57,6 +58,10 @@ public final class ManagedPathPolicy {
                 continue;
             }
             String path = statusPath(line);
+            if (ownership.isPresent() && ownership.get().owns(root, path)) {
+                findings.add(new Finding(path, Classification.TRANSACTION_OWNED_IGNORED_MANAGED_PATH, false));
+                continue;
+            }
             if (line.startsWith("? ")) {
                 findings.add(new Finding(path, Classification.UNTRACKED_NON_IGNORED, true));
             } else if (line.startsWith("u ") || line.startsWith("1 ") || line.startsWith("2 ")
@@ -83,14 +88,39 @@ public final class ManagedPathPolicy {
         return DEFAULT_MANAGED_PATHS;
     }
 
-    private static String statusPath(String line) {
-        int tab = line.indexOf('\t');
-        if (tab >= 0 && tab + 1 < line.length()) {
-            String path = line.substring(tab + 1);
-            int separator = path.indexOf('\t');
-            return separator >= 0 ? path.substring(separator + 1) : path;
+    /**
+     * Classifies one managed path at transaction start.
+     *
+     * @param repositoryRoot repository worktree
+     * @param path repository-relative managed path
+     * @return start-state classification
+     * @throws IOException when Git state cannot be inspected
+     */
+    public StartState classify(Path repositoryRoot, String path) throws IOException {
+        Path root = normalize(repositoryRoot);
+        Path target = root.resolve(path).normalize();
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            if (isTracked(root, path)) {
+                return StartState.TRACKED;
+            }
+            return isIgnored(root, path) ? StartState.IGNORED : StartState.UNTRACKED;
         }
-        return line.length() > 2 ? line.substring(2).trim() : line;
+        return isTracked(root, path) ? StartState.TRACKED : StartState.ABSENT;
+    }
+
+    private static String statusPath(String line) {
+        if (line.startsWith("? ") || line.startsWith("! ")) {
+            return line.substring(2).trim();
+        }
+        int fields = line.startsWith("u ") ? 11 : 9;
+        String[] tokens = line.split(" ", fields);
+        if (tokens.length == fields) {
+            String path = tokens[fields - 1];
+            int separator = path.indexOf('\t');
+            return separator >= 0 ? path.substring(0, separator) : path;
+        }
+        int tab = line.indexOf('\t');
+        return tab >= 0 && tab + 1 < line.length() ? line.substring(tab + 1) : line;
     }
 
     private static boolean isTracked(Path root, String path) throws IOException {
@@ -141,7 +171,23 @@ public final class ManagedPathPolicy {
         TRANSACTION_OWNED_IGNORED_MANAGED_PATH
     }
 
-    /** One path classification. */
+    /** State recorded for one managed path before a transaction writes it. */
+    public enum StartState {
+        /** The path was absent from the worktree and index. */
+        ABSENT,
+        /** The path was already tracked and clean. */
+        TRACKED,
+        /** The path existed but was not tracked or ignored. */
+        UNTRACKED,
+        /** The path existed and was ignored by Git. */
+        IGNORED
+    }
+
+    /** One path classification.
+     * @param path repository-relative path
+     * @param classification classification kind
+     * @param blocksTransaction whether the finding blocks the transaction
+     */
     public record Finding(String path, Classification classification, boolean blocksTransaction) {
         /** Validates a finding. */
         public Finding {
@@ -150,14 +196,19 @@ public final class ManagedPathPolicy {
         }
     }
 
-    /** Immutable inspection report. */
+    /** Immutable inspection report.
+     * @param findings path findings
+     */
     public record Report(List<Finding> findings) {
         /** Copies findings and validates them. */
         public Report {
             findings = List.copyOf(Objects.requireNonNull(findings, "findings"));
         }
 
-        /** @return whether any finding blocks the transaction */
+        /**
+         * Returns whether any finding blocks the transaction.
+         * @return true when transaction progress is unsafe
+         */
         public boolean blocked() {
             return findings.stream().anyMatch(Finding::blocksTransaction);
         }
@@ -170,23 +221,41 @@ public final class ManagedPathPolicy {
      * @param transactionId active baseline transaction identity
      * @param absentAtStart paths absent from both HEAD and worktree at start
      * @param expectedDigests expected SHA-256 content by repository-relative path
+     * @param startStates recorded start state by repository-relative path
      */
     public record TransactionOwnership(String repositoryIdentity, String transactionId,
-                                       List<String> absentAtStart, Map<String, String> expectedDigests) {
+                                       List<String> absentAtStart, Map<String, String> expectedDigests,
+                                       Map<String, String> startStates) {
         /** Copies ownership evidence into immutable collections. */
         public TransactionOwnership {
             Objects.requireNonNull(repositoryIdentity, "repositoryIdentity");
             Objects.requireNonNull(transactionId, "transactionId");
             absentAtStart = List.copyOf(Objects.requireNonNull(absentAtStart, "absentAtStart"));
             expectedDigests = Map.copyOf(Objects.requireNonNull(expectedDigests, "expectedDigests"));
+            startStates = Map.copyOf(Objects.requireNonNull(startStates, "startStates"));
+        }
+
+        /** Compatibility constructor for callers that only record absent paths.
+         * @param repositoryIdentity canonical repository identity
+         * @param transactionId transaction identity
+         * @param absentAtStart paths absent at transaction start
+         * @param expectedDigests expected content digests
+         */
+        public TransactionOwnership(String repositoryIdentity, String transactionId,
+                                    List<String> absentAtStart, Map<String, String> expectedDigests) {
+            this(repositoryIdentity, transactionId, absentAtStart, expectedDigests,
+                    absentAtStart.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                            path -> path, path -> StartState.ABSENT.name())));
         }
 
         private boolean owns(Path root, String path) {
-            if (!absentAtStart.contains(path)) {
+            String state = startStates.get(path);
+            if (!StartState.ABSENT.name().equals(state) && !StartState.TRACKED.name().equals(state)) {
                 return false;
             }
             String expected = expectedDigests.get(path);
-            if (expected == null || !Files.isRegularFile(root.resolve(path))) {
+            if (expected == null || Files.isSymbolicLink(root.resolve(path))
+                    || !Files.isRegularFile(root.resolve(path))) {
                 return false;
             }
             try {
