@@ -31,6 +31,8 @@ import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.domain.task.TaskCompletionState;
+import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 
 /** Resolves authenticated workspace sessions into collaboration intents and claims. */
@@ -126,24 +128,55 @@ public final class WorkspaceCollaborationService {
         if (binding.worktreePath() == null) throw new IOException("REPAIR_BINDING_NOT_READY");
         NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        WorkIntent source = store.collaborationProjection().intent(repairIntentId)
-                .orElseThrow(() -> new IOException("REPAIR_INTENT_NOT_FOUND"));
         TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId)
                 .orElseThrow(() -> new IOException("REPAIR_SNAPSHOT_NOT_FOUND"));
-        if (!snapshot.provenance().workGroupId().equals(source.workGroupId())
+        if (!snapshot.provenance().snapshotRef().equals("refs/synesis/snapshots/" + snapshot.snapshotId())) {
+            throw new IOException("REPAIR_SNAPSHOT_REF_MISMATCH");
+        }
+        UUID targetId = UUID.nameUUIDFromBytes(("repair-join|" + repairIntentId + "|" + binding.sessionId())
+                .getBytes(StandardCharsets.UTF_8));
+        WorkIntent existingTarget = store.collaborationProjection().intent(targetId).orElse(null);
+        if (existingTarget != null) {
+            List<String> expectedSelectors = snapshot.provenance().claimSelectors();
+            if (!existingTarget.participant().equals(participantHandle(binding.sessionId()))
+                    || !existingTarget.workGroupId().equals(snapshot.provenance().workGroupId())
+                    || !existingTarget.authorityLineageId().equals(snapshot.provenance().authorityLineageId())
+                    || existingTarget.version() != snapshot.provenance().claimEpoch() + 1L
+                    || !existingTarget.selectors().stream()
+                            .map(selector -> selector.kind().name() + ":" + selector.value())
+                            .toList().equals(expectedSelectors)) {
+                throw new IOException("REPAIR_TARGET_MISMATCH");
+            }
+            return new ClaimResult(true, existingTarget, List.of());
+        }
+        WorkIntent source = store.collaborationProjection().intent(repairIntentId)
+                .orElseThrow(() -> new IOException("REPAIR_INTENT_NOT_FOUND"));
+        if (store.taskCompletionProjection().taskState(snapshot.taskId()) != TaskCompletionState.REPAIR_REQUIRED) {
+            throw new IOException("REPAIR_SNAPSHOT_NOT_CONFLICTED");
+        }
+        if (!snapshot.provenance().laneId().equals(source.intentId())
+                || !snapshot.provenance().workGroupId().equals(source.workGroupId())
+                || !snapshot.provenance().authorityLineageId().equals(source.authorityLineageId())
+                || snapshot.provenance().claimEpoch() != source.version()
+                || !snapshot.provenance().participant().equals(source.participant())
                 || !snapshot.provenance().claimSelectors().equals(source.selectors().stream()
                         .map(selector -> selector.kind().name() + ":" + selector.value()).toList())) {
             throw new IOException("REPAIR_LINEAGE_OR_SCOPE_MISMATCH");
         }
-        UUID targetId = UUID.nameUUIDFromBytes(("repair-join|" + repairIntentId + "|" + binding.sessionId())
-                .getBytes(StandardCharsets.UTF_8));
-        WorkIntent target = new WorkIntent(targetId, location.projectId(), participantHandle(binding.sessionId()),
-                provider, snapshot.taskId(), source.goal(), source.acceptance(), binding.baseCommit(),
-                source.selectors(), source.version() + 1, source.workGroupId(), source.authorityLineageId(),
-                WorkIntent.Status.ANNOUNCED);
-        new IntegrationWorkspaceService().materializeRepairRepresentation(Path.of(binding.worktreePath()), snapshot.commitSha());
-        new WorkIntentService(store, identity).createRepairLane(repairIntentId, target);
-        return new ClaimResult(true, target, List.of());
+        IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
+        try (ProjectAppendLock appendLock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!appendLock.isHeld()) throw new IOException("event append lock unavailable");
+            String expectedControlHead = integration.currentHead(location.root());
+            WorkIntent target = new WorkIntent(targetId, location.projectId(),
+                    participantHandle(binding.sessionId()), provider, snapshot.taskId(), source.goal(),
+                    source.acceptance(), binding.baseCommit(), source.selectors(), source.version() + 1,
+                    source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED);
+            integration.materializeRepairRepresentation(location.root(), Path.of(binding.worktreePath()),
+                    expectedControlHead, snapshot);
+            new WorkIntentService(store, identity).createRepairLane(appendLock, repairIntentId,
+                    snapshot.snapshotId(), expectedControlHead, target);
+            return new ClaimResult(true, target, List.of());
+        }
     }
 
     /** Releases the exact session intent and all of its claims.

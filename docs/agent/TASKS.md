@@ -1610,5 +1610,9 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   current verified slice. Focused coordination, workspace, MCP, two-process
   claim arbitration, capability-lineage, and strict Javadoc checks pass
   sequentially. Task 7 (fenced integration queue and dependency-aware
-  advancement) is DONE in the current verified slice; task 8 (atomic repair
-  transfer and conflict materialization) is the next implementation slice.
+  advancement) and task 8 (atomic repair transfer and conflict materialization)
+  are DONE in the current verified slice. Task 8 holds the project append lock
+  across current-head capture, immutable conflict materialization, and the
+  signed source-to-target scope transfer; dirty repair lanes fail closed and
+  repeated joins are idempotent. Task 9 (prerelease migration and legacy
+  cleanup) is the next implementation slice.

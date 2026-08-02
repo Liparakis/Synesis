@@ -189,8 +189,47 @@ public final class CollaborationProjection {
     }
 
     private void repair(RepairLanePayload payload) throws IOException {
+        WorkIntent source = intents.get(payload.sourceIntentId());
+        if (source == null) {
+            throw new IOException("REPAIR_SOURCE_NOT_FOUND");
+        }
+        WorkIntent target = payload.targetIntent();
+        if (target.status() != WorkIntent.Status.ANNOUNCED) {
+            throw new IOException("REPAIR_TARGET_NOT_ANNOUNCED");
+        }
+        if (!source.projectId().equals(target.projectId())
+                || !source.workGroupId().equals(target.workGroupId())) {
+            throw new IOException("REPAIR_WORK_GROUP_MISMATCH");
+        }
+        if (!source.authorityLineageId().equals(target.authorityLineageId())) {
+            throw new IOException("REPAIR_AUTHORITY_LINEAGE_MISMATCH");
+        }
+        if (source.intentId().equals(target.intentId())
+                || source.participant().equals(target.participant())) {
+            throw new IOException("REPAIR_TARGET_MUST_BE_DISTINCT");
+        }
+        if (!source.selectors().equals(target.selectors())) {
+            throw new IOException("REPAIR_SCOPE_MISMATCH");
+        }
+        if (payload.snapshotId() != null && !payload.snapshotId().isBlank()) {
+            if (payload.expectedControlHead().isBlank()
+                    || payload.sourceClaimEpoch() != source.version()
+                    || payload.targetClaimEpoch() != target.version()
+                    || target.version() != source.version() + 1L) {
+                throw new IOException("REPAIR_EPOCH_MISMATCH");
+            }
+        }
+        if (intents.values().stream().anyMatch(intent ->
+                !intent.intentId().equals(source.intentId())
+                        && intent.participant().equals(target.participant()))) {
+            throw new IOException("REPAIR_TARGET_ALREADY_ACTIVE");
+        }
+
+        // The event is validated against this projection before it is written.
+        // Removing the source and announcing the target in this one projection
+        // transition guarantees that no replayed state exposes an unowned gap.
         release(payload.sourceIntentId());
-        announce(payload.targetIntent());
+        announce(target);
     }
 
     private void unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload payload) throws IOException {

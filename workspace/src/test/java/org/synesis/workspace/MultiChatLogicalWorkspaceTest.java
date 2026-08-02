@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -18,6 +20,7 @@ import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -99,11 +102,12 @@ final class MultiChatLogicalWorkspaceTest {
         git(root, "init");
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
         Files.writeString(root.resolve("README.md"), "base\n");
+        Files.createDirectories(root.resolve("src"));
+        Files.writeString(root.resolve("src/conflict.py"), "control-base\n");
         git(root, "add", "."); git(root, "commit", "-m", "base");
         new ProviderManualService().install("codex");
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         var sourceBinding = bindings.ensure(location, "codex", "repair-source").binding();
-        var targetBinding = bindings.ensure(location, "codex", "repair-target").binding();
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         List<ResourceSelector> selectors = List.of(ResourceSelector.pathExact("src/conflict.py"));
         assertTrue(collaboration.announce(root, "codex", "repair-source", "source", "repair",
@@ -128,13 +132,54 @@ final class MultiChatLogicalWorkspaceTest {
                 snapshot.provenance());
         store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
 
+        // Advance the control checkout independently.  The repair lane must
+        // start here, not at the source lane's stale base commit.
+        Files.writeString(root.resolve("src/conflict.py"), "control-change\n");
+        git(root, "add", "src/conflict.py"); git(root, "commit", "-m", "control change");
+        String currentControlHead = gitOutput(root, "rev-parse", "HEAD");
+        var targetBinding = bindings.ensure(location, "codex", "repair-target").binding();
+
+        String attemptId = "repair-attempt-" + UUID.randomUUID();
+        IntegrationAttemptPayload started = new IntegrationAttemptPayload(attemptId, location.projectId(),
+                List.of(snapshot.snapshotId()), currentControlHead, "", "started", "");
+        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED,
+                identity.nodeId(), started.encode(), identity);
+        IntegrationAttemptPayload conflict = new IntegrationAttemptPayload(attemptId, location.projectId(),
+                List.of(snapshot.snapshotId()), currentControlHead, "", "conflict", "merge conflict");
+        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_CONFLICTED,
+                identity.nodeId(), conflict.encode(), identity);
+        store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED,
+                identity.nodeId(), conflict.encode(), identity);
+
+        Files.writeString(Path.of(targetBinding.worktreePath()).resolve("unowned.txt"), "must-not-be-adopted\n");
+        IOException dirtyTarget = assertThrows(IOException.class,
+                () -> collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId,
+                        snapshot.snapshotId()));
+        assertTrue(dirtyTarget.getMessage().startsWith("REPAIR_TARGET_DIRTY"), dirtyTarget.getMessage());
+        assertTrue(collaboration.status(root).intents().stream().anyMatch(intent ->
+                intent.intentId().equals(sourceIntentId)
+                        && intent.selectors().equals(selectors)));
+        Files.delete(Path.of(targetBinding.worktreePath()).resolve("unowned.txt"));
+
         var joined = collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId, snapshot.snapshotId());
         assertTrue(joined.acquired());
-        assertEquals("original\n", Files.readString(Path.of(targetBinding.worktreePath()).resolve("src/conflict.py"))
-                .replace("\r\n", "\n"));
+        assertEquals(currentControlHead, gitOutput(Path.of(targetBinding.worktreePath()), "rev-parse", "HEAD"));
+        assertEquals(snapshot.commitSha(), gitOutput(Path.of(targetBinding.worktreePath()), "rev-parse", "CHERRY_PICK_HEAD"));
+        String conflicted = Files.readString(Path.of(targetBinding.worktreePath()).resolve("src/conflict.py"))
+                .replace("\r\n", "\n");
+        assertTrue(conflicted.contains("<<<<<<<"), conflicted);
+        assertEquals(snapshot.commitSha(), gitOutput(root, "rev-parse", snapshot.provenance().snapshotRef()));
         assertTrue(collaboration.status(root).intents().stream().anyMatch(intent ->
                 intent.intentId().equals(joined.intent().intentId())
                         && intent.participant().equals(WorkspaceCollaborationService.participantHandle(targetBinding.sessionId()))));
+
+        long repairEvents = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId())
+                .events().stream().filter(event -> event.type() == PredictionEventType.REPAIR_LANE_CREATED).count();
+        assertTrue(collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId,
+                snapshot.snapshotId()).acquired());
+        long retriedRepairEvents = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId())
+                .events().stream().filter(event -> event.type() == PredictionEventType.REPAIR_LANE_CREATED).count();
+        assertEquals(repairEvents, retriedRepairEvents);
     }
 
     private static String gitOutput(Path root, String... args) throws Exception {

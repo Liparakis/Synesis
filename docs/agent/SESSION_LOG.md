@@ -1409,3 +1409,27 @@ Append-only operational history.
   passed sequentially; commit `71b33c5`.
 - Next slice: managed baseline classification and transaction-owned ignored
   managed paths.
+
+## 2026-08-03 — SYN-036 task 8 complete
+
+- Active task: SYN-036 — Canonical baselines and lineage-aware integration.
+- Completed work: Repair joining now requires an immutable snapshot with the
+  expected Synesis snapshot ref and `REPAIR_REQUIRED` completion state. The
+  authenticated target lane is materialized from the current control HEAD and
+  the original immutable conflict, while dirty target content fails closed.
+  `ProjectAppendLock` covers current-head capture, Git materialization, and the
+  signed source-release/target-announcement event, so the reserved scope has no
+  unowned interval. Repair payloads carry snapshot, control-head, and source/
+  target epoch metadata; replay validates the same lineage, and repeated joins
+  are idempotent.
+- Verification: focused coordination/workspace repair and integration-queue
+  tests pass; full `:coordination:test` passes; strict
+  `:coordination:javadoc :workspace:javadoc` passes; `git diff --check` passes.
+  A broad `:workspace:test` run previously timed out without a completed
+  failure report and remains recorded as a runner limitation, not product
+  evidence.
+- Remaining work: SYN-036 task 9 prerelease migration and legacy cleanup, then
+  task 10 real Codex plus Antigravity acceptance. Do not claim provider
+  autonomy beyond recorded MCP evidence.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`

@@ -210,11 +210,12 @@ final class WorkIntentServiceTest {
         WorkIntent source = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
         assertTrue(service.announce(source).acquired());
         WorkIntent target = new WorkIntent(UUID.randomUUID(), project, "agt-repair", "repair",
-                source.taskId(), "Repair task tracker conflict", "Resolve and validate the conflict",
-                "new-head", source.selectors(), source.version() + 1, source.workGroupId(),
-                WorkIntent.Status.ANNOUNCED);
+                 source.taskId(), "Repair task tracker conflict", "Resolve and validate the conflict",
+                 "new-head", source.selectors(), source.version() + 1, source.workGroupId(),
+                 source.authorityLineageId(), WorkIntent.Status.ANNOUNCED);
 
-        service.createRepairLane(source.intentId(), target);
+        service.createRepairLane(source.intentId(), "snap_repair", "new-head", target);
+        service.createRepairLane(source.intentId(), "snap_repair", "new-head", target);
 
         PredictionEventStore replayed = new PredictionEventStore(temp, project);
         assertFalse(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
@@ -223,6 +224,9 @@ final class WorkIntentServiceTest {
                 replayed.collaborationProjection().participantState("agt-owner").orElseThrow());
         assertEquals(org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE,
                 replayed.collaborationProjection().participantState("agt-repair").orElseThrow());
+        assertEquals(1, replayed.events().stream()
+                .filter(event -> event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.REPAIR_LANE_CREATED)
+                .count());
     }
 
     private static WorkIntent intent(UUID project, String participant, ResourceSelector selector) {

@@ -16,15 +16,17 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Tasks 1 through 7 are complete for this checkpoint: managed-path
+Tasks 1 through 8 are complete for this checkpoint: managed-path
 classification, transaction-owned provenance, semantic index fingerprinting,
 durable baseline and reset journals, complete-tree portability and artifact
 policy, stable event wire decoding, and authority-lineage-bound capability
 requests, implementations, and immutable snapshots are present. The
 integration pump now selects the oldest dependency-ready candidate, preserves
 pending candidates for transient infrastructure failures, and durably removes
-structurally invalid candidates from the eligible queue. No MCP tool was
-added.
+structurally invalid candidates from the eligible queue. Repair conflicts are
+materialized from immutable snapshots into fresh authenticated lanes while a
+project append lock serializes control-head capture, materialization, and the
+signed scope-transfer event. No MCP tool was added.
 
 ## Verification target
 
@@ -37,9 +39,9 @@ without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Implement atomic repair transfer: materialize the immutable conflicting
-snapshot into a newly authenticated repair lane, preserve the current control
-head, and transfer the reserved claim scope and epoch exactly once.
+Implement and verify SYN-036 task 9: perform the prerelease migration and
+legacy-cleanup pass without racing active state writers, then record the
+remaining migration and compatibility evidence before provider acceptance.
 
 ## Task 1 evidence
 
@@ -75,6 +77,13 @@ head, and transfer the reserved claim scope and epoch exactly once.
   `REPAIR_REQUIRED`, and keeps environment failures `INTEGRATION_PENDING`.
   `IntegrationQueueTest`, `TaskCompletionTest`, and the existing integration
   metadata tests pass.
+- Task 8 is verified in the current worktree: repair-join validates immutable
+  snapshot provenance and `REPAIR_REQUIRED` state, rejects dirty target lanes,
+  materializes the original immutable conflict on top of the current control
+  head, and transfers the exact reserved scope and next claim epoch through one
+  signed event while holding `ProjectAppendLock`. Repeated repair joins are
+  idempotent and do not create a second transfer event. The focused coordination
+  and workspace repair suites plus strict coordination/workspace Javadocs pass.
 
 ## Completion state
 

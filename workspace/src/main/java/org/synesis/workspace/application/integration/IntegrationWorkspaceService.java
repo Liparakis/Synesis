@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 
@@ -69,6 +70,19 @@ public final class IntegrationWorkspaceService {
     }
 
     /**
+     * Reads the verified control checkout HEAD used to seed an integration or
+     * repair lane.
+     *
+     * @param repository control checkout
+     * @return full Git commit SHA
+     * @throws IOException when HEAD cannot be resolved
+     */
+    public String currentHead(Path repository) throws IOException {
+        Objects.requireNonNull(repository, "repository");
+        return gitRevParse(repository.toAbsolutePath().normalize(), "HEAD");
+    }
+
+    /**
      * Creates a dedicated Git integration worktree and applies immutable task snapshots in order.
      *
      * @param projectRoot         control project root path
@@ -99,7 +113,7 @@ public final class IntegrationWorkspaceService {
                 // mismatched workspace must remain visible for repair rather
                 // than being mistaken for a successful integration.
                 String currentHead = gitRevParse(worktreePath, "HEAD");
-                if (Files.exists(worktreePath.resolve(".git/CHERRY_PICK_HEAD"))) {
+                if (Files.exists(gitPath(worktreePath, "CHERRY_PICK_HEAD"))) {
                     return new IntegrationWorktreeResult(worktreePath, false, "",
                             "Integration worktree has an unresolved cherry-pick conflict");
                 }
@@ -163,25 +177,89 @@ public final class IntegrationWorkspaceService {
     }
 
     /**
-     * Materializes an immutable conflicting snapshot into an already assigned
-     * repair worktree. A cherry-pick conflict is an expected bounded repair
-     * representation and is deliberately left unresolved for the repair
-     * participant; unrelated Git failures remain fatal.
+     * Materializes an immutable conflicting snapshot into a newly assigned
+     * repair worktree rooted at the current control HEAD.
      *
+     * <p>The target must already be a clean, isolated worktree at the exact
+     * expected control head.  Synesis never resets a non-pristine target or
+     * silently adopts a stale branch.  A cherry-pick conflict is an expected,
+     * bounded repair representation and is deliberately left unresolved for
+     * the repair participant; unrelated Git failures remain fatal.  The
+     * immutable snapshot ref and commit are verified before any target write.
+     *
+     * @param controlRoot control checkout
      * @param repairWorktree assigned repair lane worktree
-     * @param snapshotCommit immutable snapshot commit
-     * @throws IOException when the worktree is invalid or materialization fails
+     * @param expectedControlHead control HEAD that must seed the repair lane
+     * @param snapshot immutable conflicting snapshot
+     * @throws IOException when the control head, target, immutable ref, or
+     *         materialization cannot be verified
      */
-    public void materializeRepairRepresentation(Path repairWorktree, String snapshotCommit) throws IOException {
+    public void materializeRepairRepresentation(Path controlRoot, Path repairWorktree,
+            String expectedControlHead, TaskSnapshotRecord snapshot) throws IOException {
+        Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(repairWorktree, "repairWorktree");
-        Objects.requireNonNull(snapshotCommit, "snapshotCommit");
+        Objects.requireNonNull(expectedControlHead, "expectedControlHead");
+        Objects.requireNonNull(snapshot, "snapshot");
         if (!Files.isDirectory(repairWorktree) || !Files.exists(repairWorktree.resolve(".git"))) {
             throw new IOException("REPAIR_WORKTREE_INVALID");
         }
+        Path control = controlRoot.toAbsolutePath().normalize();
+        Path target = repairWorktree.toAbsolutePath().normalize();
+        if (control.equals(target)) {
+            throw new IOException("REPAIR_WORKTREE_IS_CONTROL_CHECKOUT");
+        }
+        if (!expectedControlHead.equals(gitRevParse(control, "HEAD"))) {
+            throw new IOException("STALE_CONTROL_HEAD");
+        }
+        if (!expectedControlHead.equals(gitRevParse(target, "HEAD"))) {
+            throw new IOException("REPAIR_TARGET_NOT_AT_CONTROL_HEAD");
+        }
+        String snapshotRef = snapshot.provenance().snapshotRef();
+        if (!snapshotRef.startsWith("refs/synesis/snapshots/")) {
+            throw new IOException("REPAIR_SNAPSHOT_REF_INVALID");
+        }
+        String resolvedSnapshot = gitRevParse(target, snapshotRef + "^{commit}");
+        if (!snapshot.commitSha().equals(resolvedSnapshot)) {
+            throw new IOException("REPAIR_SNAPSHOT_OBJECT_MISMATCH");
+        }
+
+        Path cherryPickHead = gitPath(target, "CHERRY_PICK_HEAD");
+        if (Files.exists(cherryPickHead)) {
+            String inProgress = gitRevParse(target, "CHERRY_PICK_HEAD");
+            if (!snapshot.commitSha().equals(inProgress)) {
+                throw new IOException("REPAIR_DIFFERENT_CHERRY_PICK_IN_PROGRESS");
+            }
+            return;
+        }
+        Path marker = target.resolve(".synesis/local/repair-materialization.txt");
+        String expectedMarker = snapshot.snapshotId() + "\n" + expectedControlHead + "\n"
+                + snapshot.commitSha() + "\n";
+        if (Files.exists(marker)) {
+            String actualMarker = Files.readString(marker);
+            if (!expectedMarker.equals(actualMarker)) {
+                throw new IOException("REPAIR_MATERIALIZATION_MARKER_MISMATCH");
+            }
+            if (!expectedControlHead.equals(gitRevParse(target, "HEAD"))
+                    && materializedCommitHasExpectedParent(target, expectedControlHead)) {
+                return;
+            }
+        }
+        String status = runGitOutput(target, "status", "--porcelain", "--untracked-files=all");
+        List<String> unmanagedChanges = status.lines()
+                .filter(line -> !line.isBlank())
+                .filter(line -> !managedWorkspaceMetadata(line))
+                .toList();
+        if (!unmanagedChanges.isEmpty()) {
+            throw new IOException("REPAIR_TARGET_DIRTY:" + unmanagedChanges.getFirst());
+        }
+        if (!Files.exists(marker)) {
+            writeRepairMarker(marker, expectedMarker);
+        }
         try {
-            runGit(repairWorktree, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snapshotCommit);
+            runGit(target, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snapshot.commitSha());
         } catch (IOException conflict) {
-            if (!Files.exists(repairWorktree.resolve(".git/CHERRY_PICK_HEAD"))) {
+            if (!Files.exists(gitPath(target, "CHERRY_PICK_HEAD"))
+                    || !snapshot.commitSha().equals(gitRevParse(target, "CHERRY_PICK_HEAD"))) {
                 throw new IOException("REPAIR_SNAPSHOT_MATERIALIZATION_FAILED", conflict);
             }
             // Preserve conflict markers and the unresolved index as the
@@ -225,6 +303,74 @@ public final class IntegrationWorkspaceService {
             throw new IOException("git rev-parse interrupted", e);
         }
         return output;
+    }
+
+    private static Path gitPath(Path workdir, String name) throws IOException {
+        String raw = runGitOutput(workdir, "rev-parse", "--git-path", name);
+        Path path = Path.of(raw);
+        return (path.isAbsolute() ? path : workdir.resolve(path)).toAbsolutePath().normalize();
+    }
+
+    private static String runGitOutput(Path workdir, String... args) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(buildGitCommand(args));
+        pb.directory(workdir.toFile());
+        pb.redirectErrorStream(true);
+        Process proc = pb.start();
+        String output = new String(proc.getInputStream().readAllBytes()).trim();
+        try {
+            int code = proc.waitFor();
+            if (code != 0) {
+                throw new IOException("git " + args[0] + " failed: " + output);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("git " + args[0] + " interrupted", e);
+        }
+        return output;
+    }
+
+    private static List<String> buildGitCommand(String... args) {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        java.util.Collections.addAll(command, args);
+        return command;
+    }
+
+    private static boolean managedWorkspaceMetadata(String statusLine) {
+        if (statusLine.length() < 4) return false;
+        String path = statusLine.substring(3).trim().replace('\\', '/');
+        return path.equals(".codex/hooks.json")
+                || path.equals(".agents/hooks.json")
+                || path.equals(".claude/settings.json")
+                || path.equals(".mcp.json")
+                || path.equals(".synesis/local/workspace-binding.json")
+                || path.equals(".synesis/local/repair-materialization.txt")
+                || path.startsWith(".synesis/local/");
+    }
+
+    private static boolean materializedCommitHasExpectedParent(Path worktree, String expectedParent)
+            throws IOException {
+        String[] fields = runGitOutput(worktree, "rev-list", "--parents", "-n", "1", "HEAD").split("\\s+");
+        String subject = runGitOutput(worktree, "show", "-s", "--format=%s", "HEAD");
+        return fields.length >= 2 && expectedParent.equals(fields[1])
+                && "Synesis immutable lane snapshot".equals(subject);
+    }
+
+    private static void writeRepairMarker(Path marker, String content) throws IOException {
+        Files.createDirectories(marker.getParent());
+        Path temporary = marker.resolveSibling(marker.getFileName() + ".tmp-" + UUID.randomUUID());
+        try {
+            Files.writeString(temporary, content, java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE);
+            try {
+                Files.move(temporary, marker, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, marker, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     private static String gitDiff(Path workdir, String from, String to) throws IOException {

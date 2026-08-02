@@ -480,32 +480,6 @@ public final class IntegrationOrchestrationService {
         return List.copyOf(sorted);
     }
 
-    private static void createRepairLane(PredictionEventStore store, NodeIdentity identity,
-            TaskSnapshotRecord snapshot, String currentHead) {
-        try {
-            List<ResourceSelector> selectors = snapshot.provenance().claimSelectors().stream()
-                    .map(raw -> {
-                        int split = raw.indexOf(':');
-                        if (split < 1) throw new IllegalArgumentException("invalid claim selector");
-                        return new ResourceSelector(ResourceSelector.Kind.valueOf(raw.substring(0, split)), raw.substring(split + 1));
-                    }).toList();
-            if (selectors.isEmpty()) return;
-            UUID source = snapshot.provenance().laneId();
-            UUID repairId = UUID.nameUUIDFromBytes(("repair:" + snapshot.snapshotId())
-                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            WorkIntent target = new WorkIntent(repairId, store.projectId(), snapshot.provenance().participant(),
-                    "repair", snapshot.taskId(), "Repair integration conflict for " + snapshot.snapshotId(),
-                    "Resolve the materialized immutable snapshot conflict", currentHead, selectors,
-                    snapshot.provenance().claimEpoch() + 1, snapshot.provenance().workGroupId(),
-                    snapshot.provenance().authorityLineageId(), WorkIntent.Status.ANNOUNCED);
-            new WorkIntentService(store, identity).createRepairLane(source, target);
-        } catch (Exception ignored) {
-            // Older capability-only snapshots may have no active collaboration
-            // intent.  Preserve the conflict worktree and require explicit
-            // authorized recovery rather than releasing its scope.
-        }
-    }
-
     private static void appendAttemptFailure(PredictionEventStore store, NodeIdentity identity, String attemptId,
             List<TaskSnapshotRecord> snapshots, String base, String commit, String reason) {
         try {

@@ -122,26 +122,95 @@ public final class WorkIntentService {
     }
 
     /** Atomically transfers reserved selectors into a new repair lane.
+     *
+     * <p>The event is the sole ownership transition: the source remains the
+     * owner until the signed event is durably appended, and projection replay
+     * removes the source and announces the target as one transition.  Repeating
+     * the same operation after a lost response is idempotent.</p>
+     *
      * @param sourceIntentId published source lane
+     * @param snapshotId immutable conflicting snapshot identifier
+     * @param expectedControlHead control HEAD used for materialization
      * @param targetIntent new repair lane intent
-     * @throws IOException invalid source or overlapping target
+     * @throws IOException invalid source, stale epoch, lineage, scope, or target
      * @throws GeneralSecurityException signing failure
      */
-    public synchronized void createRepairLane(UUID sourceIntentId, WorkIntent targetIntent)
+    public synchronized void createRepairLane(UUID sourceIntentId, String snapshotId,
+            String expectedControlHead, WorkIntent targetIntent)
             throws IOException, GeneralSecurityException {
-        Objects.requireNonNull(sourceIntentId, "source intent");
-        Objects.requireNonNull(targetIntent, "target intent");
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) throw new IOException("event append lock unavailable");
-            PredictionEventStore current = freshStore();
-            WorkIntent source = current.collaborationProjection().intent(sourceIntentId)
-                    .orElseThrow(() -> new IOException("REPAIR_SOURCE_NOT_FOUND"));
-            if (source.status() != WorkIntent.Status.ANNOUNCED) throw new IOException("REPAIR_SOURCE_NOT_ACTIVE");
-            if (!source.selectors().equals(targetIntent.selectors())) throw new IOException("REPAIR_SCOPE_MISMATCH");
-            current.append(targetIntent.intentId(), PredictionEventType.REPAIR_LANE_CREATED,
-                    signer.nodeId(), new org.synesis.coordination.domain.collaboration.RepairLanePayload(
-                            sourceIntentId, targetIntent).encode(), signer);
+            createRepairLaneLocked(lock, sourceIntentId, snapshotId, expectedControlHead, targetIntent);
         }
+    }
+
+    /** Atomically transfers repair scope while the caller holds the project
+     * append lock used to serialize Git integration and event publication.
+     *
+     * @param lock already-held project append lock
+     * @param sourceIntentId published source lane
+     * @param snapshotId immutable conflicting snapshot identifier
+     * @param expectedControlHead control HEAD used for materialization
+     * @param targetIntent new repair lane intent
+     * @throws IOException invalid lock, source, epoch, lineage, scope, or target
+     * @throws GeneralSecurityException signing failure
+     */
+    public synchronized void createRepairLane(ProjectAppendLock lock, UUID sourceIntentId,
+            String snapshotId, String expectedControlHead, WorkIntent targetIntent)
+            throws IOException, GeneralSecurityException {
+        Objects.requireNonNull(lock, "project append lock");
+        if (!lock.isHeld()) throw new IOException("event append lock unavailable");
+        createRepairLaneLocked(lock, sourceIntentId, snapshotId, expectedControlHead, targetIntent);
+    }
+
+    private void createRepairLaneLocked(ProjectAppendLock lock, UUID sourceIntentId,
+            String snapshotId, String expectedControlHead, WorkIntent targetIntent)
+            throws IOException, GeneralSecurityException {
+        Objects.requireNonNull(sourceIntentId, "source intent");
+        Objects.requireNonNull(snapshotId, "snapshot ID");
+        Objects.requireNonNull(expectedControlHead, "expected control HEAD");
+        Objects.requireNonNull(targetIntent, "target intent");
+        if (snapshotId.isBlank() || expectedControlHead.isBlank()) {
+            throw new IOException("REPAIR_METADATA_REQUIRED");
+        }
+        PredictionEventStore current = freshStore();
+        var existingTarget = current.collaborationProjection().intent(targetIntent.intentId());
+        if (existingTarget.isPresent()) {
+            if (!existingTarget.get().equals(targetIntent)) {
+                throw new IOException("REPAIR_TARGET_MISMATCH");
+            }
+            return;
+        }
+        WorkIntent source = current.collaborationProjection().intent(sourceIntentId)
+                .orElseThrow(() -> new IOException("REPAIR_SOURCE_NOT_FOUND"));
+        if (source.status() != WorkIntent.Status.ANNOUNCED) throw new IOException("REPAIR_SOURCE_NOT_ACTIVE");
+        if (!source.projectId().equals(targetIntent.projectId())
+                || !source.workGroupId().equals(targetIntent.workGroupId())) {
+            throw new IOException("REPAIR_WORK_GROUP_MISMATCH");
+        }
+        if (!source.authorityLineageId().equals(targetIntent.authorityLineageId())) {
+            throw new IOException("REPAIR_AUTHORITY_LINEAGE_MISMATCH");
+        }
+        if (source.intentId().equals(targetIntent.intentId())
+                || source.participant().equals(targetIntent.participant())) {
+            throw new IOException("REPAIR_TARGET_MUST_BE_DISTINCT");
+        }
+        if (!source.selectors().equals(targetIntent.selectors())) throw new IOException("REPAIR_SCOPE_MISMATCH");
+        if (targetIntent.version() != source.version() + 1L) {
+            throw new IOException("REPAIR_EPOCH_MISMATCH");
+        }
+        if (current.collaborationProjection().activeIntents().stream()
+                .anyMatch(intent -> intent.participant().equals(targetIntent.participant()))) {
+            throw new IOException("REPAIR_TARGET_ALREADY_ACTIVE");
+        }
+        var payload = new org.synesis.coordination.domain.collaboration.RepairLanePayload(
+                sourceIntentId, targetIntent, snapshotId, expectedControlHead,
+                source.version(), targetIntent.version());
+        UUID eventId = UUID.nameUUIDFromBytes(("repair-lane:" + sourceIntentId + ":"
+                + targetIntent.intentId() + ":" + snapshotId)
+                .getBytes(StandardCharsets.UTF_8));
+        current.append(eventId, PredictionEventType.REPAIR_LANE_CREATED,
+                signer.nodeId(), payload.encode(), signer);
     }
 
     /** Returns whether a participant owns a compatible selector.

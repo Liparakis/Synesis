@@ -7,7 +7,7 @@ Task 1 is complete at commit `71b33c5`; the authoritative objective is the
 Canonical Baselines and Lineage-Aware Integration specification in the active
 goal attachment.
 
-Tasks 2/3/4/5/6/7 are now complete at the current checkpoint: managed-path
+Tasks 2/3/4/5/6/7/8 are now complete at the current checkpoint: managed-path
 classification, transaction-owned provenance, semantic index comparison, and
 the journaled baseline transaction are implemented and wired into fresh Git
 project initialization. Keep exactly ten MCP tools, recognize only journaled
@@ -34,11 +34,15 @@ recovery; its focused crash-point suite passes. Complete-tree portability and
 artifact policy are implemented at `192f839`. Authority lineage now survives
 intent, capability, implementation, and snapshot replay, and capability
 publication is fenced to the exact active lineage. Stable event replay covers
-historical dependency code 42 and current V3 intent payloads. Fenced
-The fenced integration pump now orders eligible snapshots by dependency-ready
+historical dependency code 42 and current V3 intent payloads. The fenced
+integration pump now orders eligible snapshots by dependency-ready
 lineage, keeps transient failures pending, and durably blocks structural
-invalidity without releasing claims. Atomic repair transfer and prerelease
-cleanup remain unfinished.
+invalidity without releasing claims. Atomic repair transfer is complete: an
+authenticated repair join verifies the immutable snapshot ref and lineage,
+materializes the conflict on the current control head, rejects unowned target
+changes, and holds the project append lock across materialization and the
+source-release/target-announcement event. The transfer is epoch-fenced and
+idempotent. Prerelease migration and legacy cleanup remain unfinished.
 
 ## SYN-035 closure evidence
 
