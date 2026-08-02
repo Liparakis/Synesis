@@ -1603,8 +1603,11 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   reset recovery; (5) portability and artifact policy; (6) lineage
   dependencies; (7) fenced integration; (8) repair transfer; (9) prerelease
   migration and legacy cleanup; (10) real-provider acceptance.
-- Progress: promoted from the verified SYN-035 baseline on 2026-08-02. Task 1
-  (catalog/rendering identities and administrative-state foundation) is DONE
-  at commit `71b33c5`; task 2 (managed baseline classification) is the next
-  implementation slice. Focused `:mcp-contract:check`, `:workspace:check`, and
-  `:mcp:check` pass sequentially.
+- Progress: promoted from the verified SYN-035 baseline on 2026-08-02. Tasks
+  1 through 6 are DONE in order: task 1 at `71b33c5`, managed baseline and
+  reset recovery through `b3b260f`/`23dea7c`, complete-tree portability and
+  artifact policy at `192f839`, and authority-lineage dependencies in the
+  current verified slice. Focused coordination, workspace, MCP, two-process
+  claim arbitration, capability-lineage, and strict Javadoc checks pass
+  sequentially. Task 7 (fenced integration queue and dependency-aware
+  advancement) is the next implementation slice.

@@ -18,6 +18,8 @@ import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -128,6 +130,15 @@ public final class CapabilityResponseService {
             if (!record.ownerNodeId().equals(ownerNodeId)) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, null);
             }
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            Optional<WorkIntent> ownerIntent = store.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.participant().equals(participant)).findFirst();
+            if (store.collaborationProjection().activated()
+                    && (ownerIntent.isEmpty()
+                    || !record.authorityLineageId().equals(ownerIntent.get().authorityLineageId()))) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH,
+                        AgentNextAction.ENSURE_SESSION, Map.of("reason", "CAPABILITY_OWNER_LINEAGE_MISMATCH"));
+            }
 
             String respType = request.response().trim().toLowerCase(Locale.ROOT);
 
@@ -157,7 +168,7 @@ public final class CapabilityResponseService {
                     CapabilityRequestPayload payload = new CapabilityRequestPayload(
                             record.handle(), record.capability(), record.requesterNodeId(), record.requesterSupervisorId(), record.requesterWorkerId(),
                             ownerNodeId, binding.supervisorId(), binding.workerId(),
-                            record.contract(), CapabilityLifecycleState.ACCEPTED, null);
+                            record.authorityLineageId(), record.contract(), CapabilityLifecycleState.ACCEPTED, null);
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, ownerNodeId, payload.encode(), identity);
 
                     Map<String, Object> res = new LinkedHashMap<>();
@@ -171,7 +182,7 @@ public final class CapabilityResponseService {
                     CapabilityRequestPayload payload = new CapabilityRequestPayload(
                             record.handle(), record.capability(), record.requesterNodeId(), record.requesterSupervisorId(), record.requesterWorkerId(),
                             ownerNodeId, binding.supervisorId(), binding.workerId(),
-                            revContract, CapabilityLifecycleState.REVISION_REQUESTED, request.reason());
+                            record.authorityLineageId(), revContract, CapabilityLifecycleState.REVISION_REQUESTED, request.reason());
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, ownerNodeId, payload.encode(), identity);
 
                     Map<String, Object> res = new LinkedHashMap<>();
@@ -185,7 +196,7 @@ public final class CapabilityResponseService {
                     CapabilityRequestPayload payload = new CapabilityRequestPayload(
                             record.handle(), record.capability(), record.requesterNodeId(), record.requesterSupervisorId(), record.requesterWorkerId(),
                             ownerNodeId, binding.supervisorId(), binding.workerId(),
-                            record.contract(), CapabilityLifecycleState.REJECTED, reason);
+                            record.authorityLineageId(), record.contract(), CapabilityLifecycleState.REJECTED, reason);
                     store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_REJECTED, ownerNodeId, payload.encode(), identity);
 
                     Map<String, Object> res = new LinkedHashMap<>();

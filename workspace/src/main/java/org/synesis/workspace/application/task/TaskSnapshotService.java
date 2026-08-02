@@ -17,6 +17,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 
 /**
  * Service for creating and verifying immutable task snapshots from worker worktrees.
@@ -141,6 +142,42 @@ public final class TaskSnapshotService {
             List<ResourceSelector> claims, UUID workGroupId, UUID laneId, String participant,
             String bindingIdentity, long claimEpoch, List<String> handoffLineage
     ) throws IOException {
+        return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId,
+                workerWorktreePath, controlRoot, summary, existingOpt, activeCapabilities,
+                claims, workGroupId, laneId, participant, bindingIdentity, claimEpoch,
+                WorkIntent.defaultAuthorityLineage(laneId), handoffLineage);
+    }
+
+    /** Creates a snapshot while recording an explicit authority lineage.
+     * @param taskId task ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId provider session ID
+     * @param workerWorktreePath lane worktree
+     * @param controlRoot control root
+     * @param summary completion summary
+     * @param existingOpt existing immutable snapshot
+     * @param activeCapabilities capability records
+     * @param claims lane claims
+     * @param workGroupId work-group ID
+     * @param laneId lane ID
+     * @param participant participant
+     * @param bindingIdentity binding identity
+     * @param claimEpoch claim epoch
+     * @param authorityLineageId authority lineage
+     * @param handoffLineage handoff lineage
+     * @return immutable snapshot
+     * @throws IOException Git failure
+     */
+    public TaskSnapshotRecord createSnapshot(
+            UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
+            Path workerWorktreePath, Path controlRoot, String summary,
+            Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
+            List<ResourceSelector> claims, UUID workGroupId, UUID laneId, String participant,
+            String bindingIdentity, long claimEpoch, UUID authorityLineageId,
+            List<String> handoffLineage
+    ) throws IOException {
         Objects.requireNonNull(taskId, "taskId");
         Objects.requireNonNull(nodeId, "nodeId");
         Objects.requireNonNull(supervisorId, "supervisorId");
@@ -198,7 +235,7 @@ public final class TaskSnapshotService {
             capabilityDependencies.add(cap.handle().value());
         }
 
-        SnapshotProvenance provenance = new SnapshotProvenance(workGroupId, laneId, participant,
+        SnapshotProvenance provenance = new SnapshotProvenance(workGroupId, laneId, authorityLineageId, participant,
                 bindingIdentity, claimEpoch, capabilityDependencies, handoffLineage,
                 claims.stream().map(selector -> selector.kind().name() + ":" + selector.value()).toList(),
                 "refs/synesis/snapshots/" + snapshotId, integrity(commitSha, changedPaths),

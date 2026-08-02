@@ -8,6 +8,7 @@ import java.util.UUID;
  *
  * @param workGroupId group ID
  * @param laneId lane ID
+ * @param authorityLineageId durable authority lineage for this lane and its authorized successors
  * @param participant participant
  * @param bindingIdentity binding identity
  * @param claimEpoch claim epoch
@@ -18,7 +19,7 @@ import java.util.UUID;
  * @param integrityEvidence integrity digest
  * @param artifactManifestDigest explicit provider/admin artifact manifest digest
  */
-public record SnapshotProvenance(UUID workGroupId, UUID laneId, String participant,
+public record SnapshotProvenance(UUID workGroupId, UUID laneId, UUID authorityLineageId, String participant,
         String bindingIdentity, long claimEpoch, List<String> contractRevisions,
         List<String> handoffLineage, List<String> claimSelectors,
         String snapshotRef, String integrityEvidence, String artifactManifestDigest) {
@@ -26,6 +27,7 @@ public record SnapshotProvenance(UUID workGroupId, UUID laneId, String participa
     public SnapshotProvenance {
         Objects.requireNonNull(workGroupId, "workGroupId");
         Objects.requireNonNull(laneId, "laneId");
+        Objects.requireNonNull(authorityLineageId, "authorityLineageId");
         Objects.requireNonNull(participant, "participant");
         Objects.requireNonNull(bindingIdentity, "bindingIdentity");
         if (claimEpoch < 1) throw new IllegalArgumentException("claim epoch must be positive");
@@ -53,7 +55,12 @@ public record SnapshotProvenance(UUID workGroupId, UUID laneId, String participa
             String bindingIdentity, long claimEpoch, List<String> contractRevisions,
             List<String> handoffLineage, List<String> claimSelectors,
             String snapshotRef, String integrityEvidence) {
-        this(workGroupId, laneId, participant, bindingIdentity, claimEpoch, contractRevisions,
+        this(workGroupId, laneId, defaultAuthorityLineage(laneId), participant, bindingIdentity, claimEpoch, contractRevisions,
                 handoffLineage, claimSelectors, snapshotRef, integrityEvidence, "UNRECORDED");
+    }
+
+    private static UUID defaultAuthorityLineage(UUID laneId) {
+        return UUID.nameUUIDFromBytes(("synesis-authority-lineage:" + laneId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

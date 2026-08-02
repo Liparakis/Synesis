@@ -18,14 +18,28 @@ import java.util.UUID;
  * @param selectors requested resource selectors
  * @param version intent version
  * @param workGroupId logical work-group parent
+ * @param authorityLineageId durable authority lineage shared by authorized successor lanes
  * @param status lifecycle status
  */
 public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          String provider, UUID taskId, String goal,
                          String acceptance, String baseCommit,
                          List<ResourceSelector> selectors, long version,
-                         UUID workGroupId,
+                         UUID workGroupId, UUID authorityLineageId,
                          Status status) {
+
+    /**
+     * Derives a stable singleton lineage for intents replayed without an
+     * explicit lineage field.
+     *
+     * @param intentId intent identifier
+     * @return deterministic lineage identifier
+     */
+    public static UUID defaultAuthorityLineage(UUID intentId) {
+        Objects.requireNonNull(intentId, "intentId");
+        return UUID.nameUUIDFromBytes(("synesis-authority-lineage:" + intentId)
+                .getBytes(StandardCharsets.UTF_8));
+    }
 
     /** Constructs a singleton work-group intent when no parent group is supplied.
      * @param intentId intent ID
@@ -45,7 +59,34 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                       String acceptance, String baseCommit,
                       List<ResourceSelector> selectors, long version, Status status) {
         this(intentId, projectId, participant, provider, taskId, goal, acceptance,
-                baseCommit, selectors, version, intentId, status);
+                baseCommit, selectors, version, intentId, defaultAuthorityLineage(intentId), status);
+    }
+
+    /**
+     * Constructs an intent with a logical work-group and explicit authority
+     * lineage.
+     *
+     * @param intentId intent ID
+     * @param projectId project ID
+     * @param participant participant
+     * @param provider provider
+     * @param taskId task ID
+     * @param goal goal
+     * @param acceptance acceptance
+     * @param baseCommit base commit
+     * @param selectors selectors
+     * @param version intent version
+     * @param workGroupId work-group ID
+     * @param status lifecycle status
+     */
+    public WorkIntent(UUID intentId, UUID projectId, String participant,
+                      String provider, UUID taskId, String goal,
+                      String acceptance, String baseCommit,
+                      List<ResourceSelector> selectors, long version,
+                      UUID workGroupId, Status status) {
+        this(intentId, projectId, participant, provider, taskId, goal, acceptance,
+                baseCommit, selectors, version, workGroupId,
+                defaultAuthorityLineage(intentId), status);
     }
 
     /** Intent lifecycle states. */
@@ -61,6 +102,7 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
         Objects.requireNonNull(intentId, "intentId");
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(workGroupId, "workGroupId");
+        Objects.requireNonNull(authorityLineageId, "authorityLineageId");
         require(participant, "participant");
         require(provider, "provider");
         Objects.requireNonNull(taskId, "taskId");

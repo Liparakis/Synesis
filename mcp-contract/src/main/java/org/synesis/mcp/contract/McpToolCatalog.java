@@ -366,6 +366,8 @@ public final class McpToolCatalog {
         requestPayload.put("contract", contractSchema);
         requestPayload.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$"));
         requestPayload.put("revisionResponse", Map.of("type", "string", "enum", List.of("accept", "counter", "cancel")));
+        requestPayload.put("ownerAuthorityLineageId", Map.of("type", "string", "format", "uuid",
+                "description", "Durable authority lineage of the intended capability publisher"));
         requestPayload.put("workGroupId", Map.of("type", "string", "format", "uuid"));
         requestPayload.put("grantId", Map.of("type", "string", "format", "uuid"));
         requestPayload.put("claimEpoch", Map.of("type", "integer", "minimum", 1));

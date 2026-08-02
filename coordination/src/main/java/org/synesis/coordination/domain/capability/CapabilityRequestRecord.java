@@ -4,6 +4,7 @@ package org.synesis.coordination.domain.capability;
 
 
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Projected durable state for a Stage 2B capability request.
@@ -16,6 +17,7 @@ import java.util.Objects;
  * @param ownerNodeId           assigned semantic owner node ID
  * @param ownerSupervisorId     assigned semantic owner supervisor ID
  * @param ownerWorkerId         assigned semantic owner worker ID
+ * @param authorityLineageId    durable authority lineage required for implementation publication
  * @param contract              current contract specification
  * @param state                 current request lifecycle state
  * @param reason                optional rejection or revision reason
@@ -32,6 +34,7 @@ public record CapabilityRequestRecord(
         String ownerNodeId,
         String ownerSupervisorId,
         String ownerWorkerId,
+        UUID authorityLineageId,
         CapabilityContract contract,
         CapabilityLifecycleState state,
         String reason,
@@ -50,6 +53,7 @@ public record CapabilityRequestRecord(
      * @param ownerNodeId           assigned semantic owner node ID
      * @param ownerSupervisorId     assigned semantic owner supervisor ID
      * @param ownerWorkerId         assigned semantic owner worker ID
+     * @param authorityLineageId    durable authority lineage required for implementation publication
      * @param contract              current contract specification
      * @param state                 current request lifecycle state
      * @param reason                optional rejection or revision reason
@@ -65,22 +69,56 @@ public record CapabilityRequestRecord(
         Objects.requireNonNull(ownerNodeId, "ownerNodeId");
         ownerSupervisorId = ownerSupervisorId == null ? "" : ownerSupervisorId;
         ownerWorkerId = ownerWorkerId == null ? "" : ownerWorkerId;
+        Objects.requireNonNull(authorityLineageId, "authorityLineageId");
         Objects.requireNonNull(contract, "contract");
         Objects.requireNonNull(state, "state");
     }
 
-    /**
-     * Constructs a request without optional worker or supervisor identities.
-     *
-     * @param handle               public request handle locator
-     * @param capability           target capability identifier
-     * @param requesterNodeId      authenticated requester node ID
-     * @param ownerNodeId          assigned semantic owner node ID
-     * @param contract             current contract specification
-     * @param state                current request lifecycle state
-     * @param reason               optional rejection or revision reason
+    /** Constructs a worker-aware request without an explicit authority lineage.
+     * @param handle request handle
+     * @param capability capability identifier
+     * @param requesterNodeId requester node
+     * @param requesterSupervisorId requester supervisor
+     * @param requesterWorkerId requester worker
+     * @param ownerNodeId owner node
+     * @param ownerSupervisorId owner supervisor
+     * @param ownerWorkerId owner worker
+     * @param contract capability contract
+     * @param state lifecycle state
+     * @param reason optional reason
      * @param createdAtEpochMillis creation timestamp
-     * @param updatedAtEpochMillis last modification timestamp
+     * @param updatedAtEpochMillis update timestamp
+     */
+    public CapabilityRequestRecord(
+            CapabilityRequestHandle handle,
+            String capability,
+            String requesterNodeId,
+            String requesterSupervisorId,
+            String requesterWorkerId,
+            String ownerNodeId,
+            String ownerSupervisorId,
+            String ownerWorkerId,
+            CapabilityContract contract,
+            CapabilityLifecycleState state,
+            String reason,
+            long createdAtEpochMillis,
+            long updatedAtEpochMillis
+    ) {
+        this(handle, capability, requesterNodeId, requesterSupervisorId, requesterWorkerId,
+                ownerNodeId, ownerSupervisorId, ownerWorkerId, unresolvedLineage(handle),
+                contract, state, reason, createdAtEpochMillis, updatedAtEpochMillis);
+    }
+
+    /** Constructs a request without optional worker or supervisor identities.
+     * @param handle request handle
+     * @param capability capability identifier
+     * @param requesterNodeId requester node
+     * @param ownerNodeId owner node
+     * @param contract capability contract
+     * @param state lifecycle state
+     * @param reason optional reason
+     * @param createdAtEpochMillis creation timestamp
+     * @param updatedAtEpochMillis update timestamp
      */
     public CapabilityRequestRecord(
             CapabilityRequestHandle handle,
@@ -93,7 +131,36 @@ public record CapabilityRequestRecord(
             long createdAtEpochMillis,
             long updatedAtEpochMillis
     ) {
-        this(handle, capability, requesterNodeId, "", "", ownerNodeId, "", "", contract, state, reason, createdAtEpochMillis, updatedAtEpochMillis);
+        this(handle, capability, requesterNodeId, "", "", ownerNodeId, "", "",
+                unresolvedLineage(handle), contract, state, reason, createdAtEpochMillis, updatedAtEpochMillis);
+    }
+
+    /** Constructs a request with an explicit authority lineage and no optional actors.
+     * @param handle request handle
+     * @param capability capability identifier
+     * @param requesterNodeId requester node
+     * @param ownerNodeId owner node
+     * @param authorityLineageId durable authority lineage
+     * @param contract capability contract
+     * @param state lifecycle state
+     * @param reason optional reason
+     * @param createdAtEpochMillis creation timestamp
+     * @param updatedAtEpochMillis update timestamp
+     */
+    public CapabilityRequestRecord(
+            CapabilityRequestHandle handle,
+            String capability,
+            String requesterNodeId,
+            String ownerNodeId,
+            UUID authorityLineageId,
+            CapabilityContract contract,
+            CapabilityLifecycleState state,
+            String reason,
+            long createdAtEpochMillis,
+            long updatedAtEpochMillis
+    ) {
+        this(handle, capability, requesterNodeId, "", "", ownerNodeId, "", "",
+                authorityLineageId, contract, state, reason, createdAtEpochMillis, updatedAtEpochMillis);
     }
 
     /**
@@ -115,6 +182,7 @@ public record CapabilityRequestRecord(
                 ownerNodeId,
                 ownerSupervisorId,
                 ownerWorkerId,
+                authorityLineageId,
                 newContract != null ? newContract : contract,
                 newState,
                 newReason,
@@ -163,5 +231,10 @@ public record CapabilityRequestRecord(
             return false;
         }
         return true;
+    }
+
+    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
+        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 
 /**
  * Binary codec for Stage 2B Slice 3 task snapshot events.
@@ -47,7 +48,7 @@ public record TaskSnapshotPayload(
 ) {
 
     private static final int MAGIC = 0x534E4150; // "SNAP"
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static final int MAX_TEXT = 64 * 1024;
 
     /**
@@ -134,6 +135,7 @@ public record TaskSnapshotPayload(
             writeText(out, summary);
             writeUuid(out, provenance.workGroupId());
             writeUuid(out, provenance.laneId());
+            writeUuid(out, provenance.authorityLineageId());
             writeText(out, provenance.participant());
             writeText(out, provenance.bindingIdentity());
             out.writeLong(provenance.claimEpoch());
@@ -194,13 +196,15 @@ public record TaskSnapshotPayload(
                         deps, List.of(), List.of(), commitSha, commitSha);
             } else {
                 UUID group = readUuid(in), lane = readUuid(in);
+                UUID authorityLineage = version >= 4
+                        ? readUuid(in) : WorkIntent.defaultAuthorityLineage(lane);
                 String participant = readText(in), binding = readText(in);
                 long epoch = in.readLong();
                 List<String> contracts = readList(in), lineage = readList(in), claims = readList(in);
                 String snapshotRef = readText(in);
                 String integrity = readText(in);
                 String artifacts = version >= 3 ? readText(in) : "UNRECORDED";
-                provenance = new SnapshotProvenance(group, lane, participant, binding, epoch,
+                provenance = new SnapshotProvenance(group, lane, authorityLineage, participant, binding, epoch,
                         contracts, lineage, claims, snapshotRef, integrity, artifacts);
             }
             return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,

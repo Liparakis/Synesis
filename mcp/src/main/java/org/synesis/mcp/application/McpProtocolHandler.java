@@ -752,7 +752,9 @@ public final class McpProtocolHandler {
                                             activeProjectRoot, provider, connectionInstanceId,
                                             String.valueOf(arguments.get("capability")), contract,
                                             arguments.get("capabilityRequestHandle") instanceof String value ? value : null,
-                                            arguments.get("revisionResponse") instanceof String value ? value : null));
+                                            arguments.get("revisionResponse") instanceof String value ? value : null,
+                                            arguments.get("ownerAuthorityLineageId") instanceof String value
+                                                    ? UUID.fromString(value) : null));
                             break;
                         }
                         var result = switch (collaborationOperation) {
@@ -1004,6 +1006,8 @@ public final class McpProtocolHandler {
         result.put("baseCommit", intent.baseCommit());
         result.put("selectors", intent.selectors().stream().map(McpProtocolHandler::selectorMap).toList());
         result.put("version", intent.version());
+        result.put("workGroupId", intent.workGroupId().toString());
+        result.put("authorityLineageId", intent.authorityLineageId().toString());
         result.put("status", intent.status().name());
         return result;
     }
@@ -1160,7 +1164,7 @@ public final class McpProtocolHandler {
         }
         Map<String, Object> payload = (Map<String, Object>) rawPayload;
         List<String> allowed = switch (kind) {
-            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse");
+            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "ownerAuthorityLineageId");
             case "collaboration_status" -> List.of();
             case "contract_proposal" -> List.of("contractId", "body", "selectors", "revision");
             case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");

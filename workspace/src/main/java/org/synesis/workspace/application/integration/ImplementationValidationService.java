@@ -215,7 +215,7 @@ public final class ImplementationValidationService {
 
                 // Append CAPABILITY_VALIDATION_STARTED
                 ImplementationEventPayload startedPayload = new ImplementationEventPayload(
-                        record.handle(), impl.revisionNumber(), impl.baseCommit(), impl.commitSha(),
+                        record.handle(), record.authorityLineageId(), impl.revisionNumber(), impl.baseCommit(), impl.commitSha(),
                         impl.changedPaths(), impl.summary(), "", "", List.of(), worktreePath);
                 store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_VALIDATION_STARTED,
                         requesterNodeId, startedPayload.encode(), identity);
@@ -235,7 +235,7 @@ public final class ImplementationValidationService {
             // Now process the validation result
             if (normalizedResult.equals("accepted")) {
                 ImplementationEventPayload validatedPayload = new ImplementationEventPayload(
-                        record.handle(), impl.revisionNumber(), impl.baseCommit(), impl.commitSha(),
+                        record.handle(), record.authorityLineageId(), impl.revisionNumber(), impl.baseCommit(), impl.commitSha(),
                         impl.changedPaths(), impl.summary(), "accepted", "", List.of(), "");
                 store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED,
                         requesterNodeId, validatedPayload.encode(), identity);
@@ -257,7 +257,7 @@ public final class ImplementationValidationService {
                 List<String> failedTests = request.failedAcceptanceTests();
 
                 ImplementationEventPayload revisionPayload = new ImplementationEventPayload(
-                        record.handle(), impl.revisionNumber(), impl.baseCommit(), impl.commitSha(),
+                        record.handle(), record.authorityLineageId(), impl.revisionNumber(), impl.baseCommit(), impl.commitSha(),
                         impl.changedPaths(), impl.summary(), "revision_required", reason, failedTests, "");
                 store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
                         requesterNodeId, revisionPayload.encode(), identity);

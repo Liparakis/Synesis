@@ -15,6 +15,7 @@ import java.util.UUID;
 public final class CollaborationCodec {
     private static final int MAGIC_INTENT = 0x53494e31;
     private static final int MAGIC_INTENT_V2 = 0x53494e32;
+    private static final int MAGIC_INTENT_V3 = 0x53494e33;
     private static final int MAGIC_RELEASE = 0x53524c31;
     private static final int MAGIC_REQUEST = 0x53525131;
     private static final int MAGIC_RESPONSE = 0x53525331;
@@ -36,10 +37,11 @@ public final class CollaborationCodec {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC_INTENT_V2);
+            out.writeInt(MAGIC_INTENT_V3);
             uuid(out, intent.intentId());
             uuid(out, intent.projectId());
             uuid(out, intent.workGroupId());
+            uuid(out, intent.authorityLineageId());
             text(out, intent.participant());
             text(out, intent.provider());
             uuid(out, intent.taskId());
@@ -69,12 +71,15 @@ public final class CollaborationCodec {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
-            if (magic != MAGIC_INTENT && magic != MAGIC_INTENT_V2) {
+            if (magic != MAGIC_INTENT && magic != MAGIC_INTENT_V2 && magic != MAGIC_INTENT_V3) {
                 throw new IOException("unsupported intent format");
             }
             UUID intentId = readUuid(in);
             UUID projectId = readUuid(in);
-            UUID workGroupId = magic == MAGIC_INTENT_V2 ? readUuid(in) : intentId;
+            UUID workGroupId = magic == MAGIC_INTENT || magic == MAGIC_INTENT_V2 ?
+                    (magic == MAGIC_INTENT_V2 ? readUuid(in) : intentId) : readUuid(in);
+            UUID authorityLineageId = magic == MAGIC_INTENT_V3
+                    ? readUuid(in) : WorkIntent.defaultAuthorityLineage(intentId);
             String participant = readText(in);
             String provider = readText(in);
             UUID taskId = readUuid(in);
@@ -98,7 +103,8 @@ public final class CollaborationCodec {
                 throw new IOException("trailing intent bytes");
             }
             return new WorkIntent(intentId, projectId, participant, provider, taskId, goal, acceptance,
-                    baseCommit, selectors, version, workGroupId, WorkIntent.Status.ANNOUNCED);
+                    baseCommit, selectors, version, workGroupId, authorityLineageId,
+                    WorkIntent.Status.ANNOUNCED);
         } catch (RuntimeException | java.io.EOFException failure) {
             throw new IOException("malformed intent", failure);
         }

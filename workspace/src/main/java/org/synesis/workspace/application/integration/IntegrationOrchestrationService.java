@@ -287,9 +287,9 @@ public final class IntegrationOrchestrationService {
             List<TaskSnapshotRecord> snapshots,
             CapabilityRequestProjection capProj
     ) {
-        Map<String, TaskSnapshotRecord> byWorker = new LinkedHashMap<>();
+        Map<UUID, List<TaskSnapshotRecord>> byLineage = new LinkedHashMap<>();
         for (TaskSnapshotRecord s : snapshots) {
-            byWorker.put(s.nodeId() + ":" + s.workerId(), s);
+            byLineage.computeIfAbsent(s.provenance().authorityLineageId(), ignored -> new ArrayList<>()).add(s);
         }
 
         // Build adjacency: dependent -> dependencies
@@ -300,9 +300,15 @@ public final class IntegrationOrchestrationService {
                 var capOpt = capProj.findByHandle(capHandle);
                 if (capOpt.isPresent()) {
                     CapabilityRequestRecord cap = capOpt.get();
-                    TaskSnapshotRecord ownerSnap = byWorker.get(cap.ownerNodeId() + ":" + cap.ownerWorkerId());
-                    if (ownerSnap != null && !ownerSnap.equals(s) && !deps.contains(ownerSnap)) {
-                        deps.add(ownerSnap);
+                    var ownerCandidates = byLineage.getOrDefault(cap.authorityLineageId(), List.of());
+                    var implementation = capProj.findLatestImplementation(cap.handle().value());
+                    for (TaskSnapshotRecord ownerSnap : ownerCandidates) {
+                        boolean exactPublishedImplementation = implementation.isEmpty()
+                                || implementation.get().commitSha().equals(ownerSnap.commitSha());
+                        if (exactPublishedImplementation && !ownerSnap.equals(s) && !deps.contains(ownerSnap)) {
+                            deps.add(ownerSnap);
+                            break;
+                        }
                     }
                 }
             }
@@ -339,7 +345,8 @@ public final class IntegrationOrchestrationService {
             WorkIntent target = new WorkIntent(repairId, store.projectId(), snapshot.provenance().participant(),
                     "repair", snapshot.taskId(), "Repair integration conflict for " + snapshot.snapshotId(),
                     "Resolve the materialized immutable snapshot conflict", currentHead, selectors,
-                    snapshot.provenance().claimEpoch() + 1, snapshot.provenance().workGroupId(), WorkIntent.Status.ANNOUNCED);
+                    snapshot.provenance().claimEpoch() + 1, snapshot.provenance().workGroupId(),
+                    snapshot.provenance().authorityLineageId(), WorkIntent.Status.ANNOUNCED);
             new WorkIntentService(store, identity).createRepairLane(source, target);
         } catch (Exception ignored) {
             // Older capability-only snapshots may have no active collaboration

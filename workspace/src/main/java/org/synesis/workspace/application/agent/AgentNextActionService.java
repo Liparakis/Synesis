@@ -188,6 +188,7 @@ public final class AgentNextActionService {
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("capabilityRequestHandle", topReq.handle().value());
                     result.put("capability", topReq.capability());
+                    result.put("authorityLineageId", topReq.authorityLineageId().toString());
                     result.put("contract", contractMap);
                     result.put("pending", ownerPending.size());
                     return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_COORDINATION, result);
@@ -243,6 +244,7 @@ public final class AgentNextActionService {
                             Map<String, Object> result = new LinkedHashMap<>();
                             result.put("capabilityRequestHandle", topReq.handle().value());
                             result.put("capability", topReq.capability());
+                            result.put("authorityLineageId", topReq.authorityLineageId().toString());
                             result.put("revision", revision);
                             result.put("pending", reqPending.size());
                             return new AgentResponse(AgentStatus.READY, null, AgentNextAction.VALIDATE_IMPLEMENTATION, result);

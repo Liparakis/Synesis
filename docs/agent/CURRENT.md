@@ -16,11 +16,12 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Tasks 1/2/3/4 are complete for this checkpoint: managed-path classification,
-transaction-owned provenance, semantic index fingerprinting, a durable
-baseline journal, crash/replay recovery, and fresh-project initialization
-wiring and common-directory-keyed reset recovery are present. No MCP tool was
-added.
+Tasks 1 through 6 are complete for this checkpoint: managed-path
+classification, transaction-owned provenance, semantic index fingerprinting,
+durable baseline and reset journals, complete-tree portability and artifact
+policy, stable event wire decoding, and authority-lineage-bound capability
+requests, implementations, and immutable snapshots are present. No MCP tool
+was added.
 
 ## Verification target
 
@@ -33,10 +34,10 @@ without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Implement complete-tree portability and artifact policy for immutable lane
-snapshots: classify every changed path, exclude only explicitly allowed
-provider/admin artifacts, require verified artifact manifests, and fail closed
-on unsupported or out-of-scope paths; add complete-tree and restart tests.
+Implement the fenced integration queue: durable pending/blocked/repair-required
+candidate states, dependency-ready ordering across all eligible snapshots,
+transient retry classification, and fail-closed structural validation before
+control-branch mutation.
 
 ## Task 1 evidence
 
@@ -56,6 +57,15 @@ on unsupported or out-of-scope paths; add complete-tree and restart tests.
   exclusive locking, namespace fencing/transfer, restart discovery, and
   idempotent recovery. The focused reset crash/replay suite and strict
   `:workspace:javadoc` pass.
+- Task 5 is complete at commit `192f839`; complete-tree portability rejects
+  absolute, traversal, reserved, alias, symlink, submodule, and unsupported
+  paths, and snapshot artifact manifests are verified before publication.
+- Task 6 is verified in the current worktree: lineage-bearing intent,
+  capability request, implementation, and snapshot codecs replay deterministically;
+  historical event code 42 remains dependency invalidation while current V3
+  intent events replay as intents; exact active-lane lineage is required for
+  capability request, response, publication, and dependency ordering. Focused
+  coordination, workspace, and two-process MCP tests plus strict Javadocs pass.
 
 ## Completion state
 

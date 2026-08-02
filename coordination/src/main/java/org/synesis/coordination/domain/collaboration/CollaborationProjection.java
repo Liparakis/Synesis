@@ -246,7 +246,7 @@ public final class CollaborationProjection {
         if (target == null || target.state() != Participant.State.ACTIVE) throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
         WorkIntent transferred = new WorkIntent(current.intentId(), current.projectId(), handoff.target(), current.provider(),
                 current.taskId(), current.goal(), current.acceptance(), current.baseCommit(), current.selectors(),
-                current.version() + 1, current.status());
+                current.version() + 1, current.workGroupId(), current.authorityLineageId(), current.status());
         intents.put(current.intentId(), transferred);
         Participant previous = participantHistory.get(current.participant());
         if (previous != null) {

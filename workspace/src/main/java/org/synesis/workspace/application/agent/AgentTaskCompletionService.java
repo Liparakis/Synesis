@@ -217,7 +217,10 @@ public final class AgentTaskCompletionService {
                         summaryText, existingOpt, workerCapabilities, currentClaims,
                         laneIntent.map(intent -> intent.workGroupId()).orElse(taskId),
                         laneIntent.map(intent -> intent.intentId()).orElse(taskId), participantHandle,
-                        binding.sessionId(), laneIntent.map(intent -> intent.version()).orElse(1L), List.of());
+                        binding.sessionId(), laneIntent.map(intent -> intent.version()).orElse(1L),
+                        laneIntent.map(intent -> intent.authorityLineageId())
+                                .orElse(org.synesis.coordination.domain.collaboration.WorkIntent
+                                        .defaultAuthorityLineage(taskId)), List.of());
             } catch (IllegalStateException immutabilityError) {
                 // Task snapshot is immutable and content changed after completion
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);
@@ -277,7 +280,7 @@ public final class AgentTaskCompletionService {
                 TaskSnapshotPayload snapPayload = new TaskSnapshotPayload(
                         snapshot.taskId(), snapshot.snapshotId(), snapshot.nodeId(), snapshot.supervisorId(),
                         snapshot.workerId(), snapshot.providerSessionId(), snapshot.baseCommit(), snapshot.commitSha(),
-                        snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary(), snapshot.provenance());
+                    snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary(), snapshot.provenance());
 
                 store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED,
                         callerNodeId, snapPayload.encode(), identity);
@@ -370,7 +373,7 @@ public final class AgentTaskCompletionService {
                     currentIntent.participant(), currentIntent.provider(), currentIntent.taskId(),
                     currentIntent.goal(), currentIntent.acceptance(), currentIntent.baseCommit(),
                     currentIntent.selectors(), currentIntent.version() + 1, currentIntent.workGroupId(),
-                    WorkIntent.Status.ANNOUNCED);
+                    currentIntent.authorityLineageId(), WorkIntent.Status.ANNOUNCED);
             CompletionUnwoundPayload payload = new CompletionUnwoundPayload(prepared, replacement);
             try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.root().resolve(".synesis/coordination"))) {
                 if (!lock.isHeld()) throw new java.io.IOException("event append lock unavailable");

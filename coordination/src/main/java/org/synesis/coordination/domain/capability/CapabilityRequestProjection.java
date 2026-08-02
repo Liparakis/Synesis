@@ -308,6 +308,7 @@ public final class CapabilityRequestProjection {
                 payload.ownerNodeId(),
                 payload.ownerSupervisorId(),
                 payload.ownerWorkerId(),
+                payload.authorityLineageId(),
                 payload.contract(),
                 payload.state(),
                 payload.reason(),
@@ -384,6 +385,9 @@ public final class CapabilityRequestProjection {
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
         }
+        if (!current.authorityLineageId().equals(payload.authorityLineageId())) {
+            throw new IOException("CAPABILITY_LINEAGE_MISMATCH");
+        }
         // Transition to IMPLEMENTATION_AVAILABLE
         CapabilityRequestRecord updated = current.withUpdate(
                 CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, null, null, event.createdAtEpochMillis());
@@ -391,10 +395,17 @@ public final class CapabilityRequestProjection {
 
         int revision = payload.revisionNumber();
         String revKey = handleKey + ":" + revision;
-        // Idempotency: same commitSha for same revision means no-op
-        if (!implementations.containsKey(revKey)) {
+        // Idempotency is valid only for the same immutable publisher lineage
+        // and commit.  A stale or unrelated publisher must never overwrite a
+        // revision number that has already become authoritative.
+        ImplementationRevisionRecord existing = implementations.get(revKey);
+        if (existing != null && (!existing.authorityLineageId().equals(payload.authorityLineageId())
+                || !existing.commitSha().equals(payload.commitSha()))) {
+            throw new IOException("CAPABILITY_PUBLISHER_STALE");
+        }
+        if (existing == null) {
             implementations.put(revKey, new ImplementationRevisionRecord(
-                    payload.handle(), revision,
+                    payload.handle(), payload.authorityLineageId(), revision,
                     payload.baseCommit(), payload.commitSha(),
                     payload.changedPaths(), payload.summary(),
                     event.createdAtEpochMillis()));

@@ -150,6 +150,12 @@ public enum AgentReason {
      */
     UNRESOLVED_DEPENDENCY("unresolved_dependency"),
 
+    /** Capability publication or resolution does not match its durable authority lineage. */
+    CAPABILITY_LINEAGE_MISMATCH("capability_lineage_mismatch"),
+
+    /** The publisher is no longer the active authority for the capability lineage. */
+    CAPABILITY_PUBLISHER_STALE("capability_publisher_stale"),
+
     /**
      * Task is not ready for completion due to active validation or unverified state.
      */

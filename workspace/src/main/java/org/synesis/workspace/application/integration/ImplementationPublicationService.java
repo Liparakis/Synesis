@@ -18,6 +18,8 @@ import java.util.UUID;
 
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.coordination.domain.integration.ImplementationEventPayload;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -140,6 +142,15 @@ public final class ImplementationPublicationService {
             if (!record.matchesOwner(ownerNodeId, binding.supervisorId(), binding.workerId())) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, null);
             }
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            Optional<WorkIntent> ownerIntent = store.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.participant().equals(participant)).findFirst();
+            if (store.collaborationProjection().activated()
+                    && (ownerIntent.isEmpty()
+                    || !record.authorityLineageId().equals(ownerIntent.get().authorityLineageId()))) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_PUBLISHER_STALE,
+                        AgentNextAction.ENSURE_SESSION, Map.of("reason", "CAPABILITY_PUBLISHER_STALE"));
+            }
 
             // State check: must be ACCEPTED or IMPLEMENTING
             CapabilityLifecycleState state = record.state();
@@ -169,8 +180,10 @@ public final class ImplementationPublicationService {
             int nextRevision = latestOpt.map(r -> r.revisionNumber() + 1).orElse(1);
 
             // Append CAPABILITY_IMPLEMENTATION_PUBLISHED event
+            UUID publisherLineage = ownerIntent.map(WorkIntent::authorityLineageId)
+                    .orElse(record.authorityLineageId());
             ImplementationEventPayload payload = new ImplementationEventPayload(
-                    record.handle(), nextRevision, baseCommit, commitSha,
+                    record.handle(), publisherLineage, nextRevision, baseCommit, commitSha,
                     changedPaths, summary, "", "", List.of(), "");
             store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
                     ownerNodeId, payload.encode(), identity);

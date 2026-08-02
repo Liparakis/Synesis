@@ -139,7 +139,8 @@ public final class WorkspaceCollaborationService {
                 .getBytes(StandardCharsets.UTF_8));
         WorkIntent target = new WorkIntent(targetId, location.projectId(), participantHandle(binding.sessionId()),
                 provider, snapshot.taskId(), source.goal(), source.acceptance(), binding.baseCommit(),
-                source.selectors(), source.version() + 1, source.workGroupId(), WorkIntent.Status.ANNOUNCED);
+                source.selectors(), source.version() + 1, source.workGroupId(), source.authorityLineageId(),
+                WorkIntent.Status.ANNOUNCED);
         new IntegrationWorkspaceService().materializeRepairRepresentation(Path.of(binding.worktreePath()), snapshot.commitSha());
         new WorkIntentService(store, identity).createRepairLane(repairIntentId, target);
         return new ClaimResult(true, target, List.of());
@@ -399,7 +400,7 @@ public final class WorkspaceCollaborationService {
         WorkIntent target = new WorkIntent(targetIntentId, source.projectId(), targetParticipant, provider,
                 UUID.nameUUIDFromBytes((connectionInstanceId + ":" + targetIntentId).getBytes(StandardCharsets.UTF_8)),
                 source.goal(), source.acceptance(), binding.baseCommit(), source.selectors(),
-                source.version() + 1, source.workGroupId(), WorkIntent.Status.ANNOUNCED);
+                source.version() + 1, source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED);
         CollaborationCodec.Continuation continuation = new CollaborationCodec.Continuation(
                 grantId, sourceIntentId, target, source.participant(), targetParticipant, claimEpoch, snapshotReference);
         new WorkIntentService(store, identity).continueFromRecovery(continuation);

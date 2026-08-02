@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Binary codec for Stage 2B Slice 2 capability implementation events.
@@ -24,6 +25,7 @@ import java.util.Objects;
  * {@code CAPABILITY_IMPLEMENTATION_VALIDATED}, and {@code CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED}.
  *
  * @param handle               request handle
+ * @param authorityLineageId   durable authority lineage of the publisher
  * @param revisionNumber       implementation revision number (1-based)
  * @param baseCommit           Git base commit SHA (empty string when not applicable)
  * @param commitSha            Git commit SHA of the implementation snapshot
@@ -37,6 +39,7 @@ import java.util.Objects;
  */
 public record ImplementationEventPayload(
         CapabilityRequestHandle handle,
+        UUID authorityLineageId,
         int revisionNumber,
         String baseCommit,
         String commitSha,
@@ -49,7 +52,7 @@ public record ImplementationEventPayload(
 ) {
 
     private static final int MAGIC = 0x494D504C; // "IMPL"
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final int MAX_TEXT = 64 * 1024;
 
     /**
@@ -68,6 +71,7 @@ public record ImplementationEventPayload(
      */
     public ImplementationEventPayload {
         Objects.requireNonNull(handle, "handle");
+        Objects.requireNonNull(authorityLineageId, "authorityLineageId");
         Objects.requireNonNull(baseCommit, "baseCommit");
         Objects.requireNonNull(commitSha, "commitSha");
         changedPaths = List.copyOf(Objects.requireNonNull(changedPaths, "changedPaths"));
@@ -79,6 +83,27 @@ public record ImplementationEventPayload(
         if (revisionNumber < 1) {
             throw new IllegalArgumentException("revisionNumber must be >= 1");
         }
+    }
+
+    /** Constructs a historical payload without explicit lineage metadata.
+     * @param handle request handle
+     * @param revisionNumber revision number
+     * @param baseCommit base commit
+     * @param commitSha implementation commit
+     * @param changedPaths changed paths
+     * @param summary summary
+     * @param validationResult validation result
+     * @param validationReason validation reason
+     * @param failedAcceptanceTests failed acceptance tests
+     * @param worktreePath validation worktree
+     */
+    public ImplementationEventPayload(CapabilityRequestHandle handle, int revisionNumber,
+            String baseCommit, String commitSha, List<String> changedPaths, String summary,
+            String validationResult, String validationReason, List<String> failedAcceptanceTests,
+            String worktreePath) {
+        this(handle, unresolvedLineage(handle), revisionNumber, baseCommit, commitSha,
+                changedPaths, summary, validationResult, validationReason,
+                failedAcceptanceTests, worktreePath);
     }
 
     /**
@@ -93,6 +118,7 @@ public record ImplementationEventPayload(
             out.writeInt(MAGIC);
             out.writeInt(VERSION);
             writeText(out, handle.value());
+            writeUuid(out, authorityLineageId);
             out.writeInt(revisionNumber);
             writeText(out, baseCommit);
             writeText(out, commitSha);
@@ -128,10 +154,11 @@ public record ImplementationEventPayload(
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
             int version = in.readInt();
-            if (magic != MAGIC || version != VERSION) {
+            if (magic != MAGIC || (version != 1 && version != 2)) {
                 throw new IOException("Unsupported implementation event payload format");
             }
             CapabilityRequestHandle handle = CapabilityRequestHandle.parse(readText(in));
+            UUID authorityLineageId = version >= 2 ? readUuid(in) : unresolvedLineage(handle);
             int revisionNumber = in.readInt();
             String baseCommit = readText(in);
             String commitSha = readText(in);
@@ -158,7 +185,7 @@ public record ImplementationEventPayload(
             }
             String worktreePath = readText(in);
             return new ImplementationEventPayload(
-                    handle, revisionNumber, baseCommit, commitSha, changedPaths,
+                    handle, authorityLineageId, revisionNumber, baseCommit, commitSha, changedPaths,
                     summary, validationResult, validationReason, failedTests, worktreePath);
         } catch (RuntimeException failure) {
             throw new IOException("Malformed implementation event payload", failure);
@@ -184,5 +211,19 @@ public record ImplementationEventPayload(
             throw new IOException("Truncated implementation payload");
         }
         return new String(b, StandardCharsets.UTF_8);
+    }
+
+    private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
+        out.writeLong(value.getMostSignificantBits());
+        out.writeLong(value.getLeastSignificantBits());
+    }
+
+    private static UUID readUuid(DataInputStream in) throws IOException {
+        return new UUID(in.readLong(), in.readLong());
+    }
+
+    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
+        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value())
+                .getBytes(StandardCharsets.UTF_8));
     }
 }
