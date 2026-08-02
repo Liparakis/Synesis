@@ -10,7 +10,7 @@
 [![Go](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](#five-minute-start)
 [![Build tool](https://img.shields.io/badge/build-Gradle%20Wrapper-02303A?logo=gradle&logoColor=white)](#five-minute-start)
 [![Transport](https://img.shields.io/badge/transport-QUIC-8A2BE2)](#implemented-today)
-[![MCP Tools](https://img.shields.io/badge/MCP-tools-11-informational)](#implemented-today)
+[![MCP Tools](https://img.shields.io/badge/MCP-tools-10-informational)](#implemented-today)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](AGENTS.md)
 
 Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded provider integrations.

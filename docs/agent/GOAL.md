@@ -14,6 +14,6 @@
   publication audit, current/reachable-history scan, documentation preparation,
   strict Java verification, and repository validators are recorded at CP-0111.
 - Exact continuation: run `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`, then implement SYN-036 task 2 (managed baseline
-  classification and transaction-owned ignored paths). Keep `SYN-014E` paused
-  and do not add prerelease compatibility aliases.
+  scripts/agent-resume.ps1`, then verify SYN-036 task 9 (prerelease migration
+  and legacy cleanup) before beginning the real-provider acceptance. Keep
+  `SYN-014E` paused and do not add prerelease compatibility aliases.

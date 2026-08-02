@@ -11,10 +11,10 @@
   transfer tests verified.
 - Last passing commands: `./gradlew.bat :workspace:javadoc --no-daemon --max-workers=1 --no-parallel --console plain`; focused `:workspace:test --tests org.synesis.workspace.lifecycle.ManagedBaselineTransactionServiceTest --tests org.synesis.workspace.lifecycle.ManagedPathPolicyTest --tests org.synesis.workspace.lifecycle.SemanticIndexFingerprintTest --tests org.synesis.workspace.application.ProjectApplicationServiceTest --no-daemon --max-workers=1 --no-parallel --console plain`. A full `:workspace:check` attempt timed out without a completed report.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next code action: inspect the prerelease migration and legacy-cleanup
-  implementation against SYN-036 task 9, then implement only the missing
-  fail-closed migration/replay safeguards while preserving active-writer
-  exclusion and the ten-tool surface.
+- Exact next code action: run the real Codex plus Antigravity SYN-036
+  acceptance on a fresh TestProject: one overlapping claim, contract-bound
+  non-overlapping test lane, immutable publication, ordered automatic
+  integration, combined validation, and clean control checkout.
 - Unresolved limitations: Antigravity model-driven autonomy remains unclaimed;
   SYN-036 must preserve this provider-boundary statement.
 - Facts that must not be forgotten: SYN-035 changes the prerelease MCP count

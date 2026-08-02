@@ -42,7 +42,11 @@ authenticated repair join verifies the immutable snapshot ref and lineage,
 materializes the conflict on the current control head, rejects unowned target
 changes, and holds the project append lock across materialization and the
 source-release/target-announcement event. The transfer is epoch-fenced and
-idempotent. Prerelease migration and legacy cleanup remain unfinished.
+idempotent. Prerelease migration and legacy cleanup are verified: canonical
+provider IDs and raw ten-tool names are enforced, obsolete current-facing
+references were removed, provider/project migration and rollback tests pass,
+and historical replay decoders remain only for signed state that must be read.
+Task 10 real-provider acceptance remains unfinished.
 
 ## SYN-035 closure evidence
 
@@ -203,7 +207,7 @@ badge URL as a 20-tool claim; it remains outside this task.
 `workspace.provider` and provider-specific subtrees, lifecycle packages, and
 responsibility-specific infrastructure packages. The required checks passed:
 `:workspace:check`, `:coordination:check`, `:cli:check`, `:mcp:check`, root
-`check`, `go test -count=1 ./...`, `go vet ./...`, and focused MCP 11-tool test.
+`check`, `go test -count=1 ./...`, `go vet ./...`, and focused ten-tool MCP test.
 
 `STRUCT-1A` was restricted to intra-module package restructuring inside
 `:project-record`, `:coordination`, and `:link`. The approved direction is:

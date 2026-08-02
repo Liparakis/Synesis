@@ -1615,4 +1615,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   across current-head capture, immutable conflict materialization, and the
   signed source-to-target scope transfer; dirty repair lanes fail closed and
   repeated joins are idempotent. Task 9 (prerelease migration and legacy
-  cleanup) is the next implementation slice.
+  cleanup) is verified in the current slice: migration/provider focused tests,
+  the ten-tool decorated-name rejection, provider canonical-ID checks, and
+  repository hygiene pass; the task remains limited to migration evidence and
+  removal of stale current-facing references. Task 10 (real-provider
+  acceptance) is the next implementation slice.

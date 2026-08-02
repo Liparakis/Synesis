@@ -1433,3 +1433,22 @@ Append-only operational history.
   autonomy beyond recorded MCP evidence.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1`
+
+## 2026-08-03 — SYN-036 task 9 complete
+
+- Active task: SYN-036 — Canonical baselines and lineage-aware integration.
+- Completed work: Audited the first-release boundary after the atomic repair
+  slice. The current MCP catalog and handler expose exactly ten raw tools and
+  reject decorated/retired lifecycle names; canonical provider IDs are the only
+  accepted runtime IDs. Provider/project migration and rollback tests remain
+  green, unrelated provider configuration is preserved, and stale current-
+  facing ten/eleven-tool and compatibility wording was corrected. Historical
+  signed-event decoders and singleton-work-group replay remain intentionally
+  because they are required to read existing durable state, not to admit old
+  runtime calls.
+- Verification: `repositoryHygieneCheck`, focused ten-tool MCP contract tests,
+  provider/project migration tests, `git diff --check`, and the affected
+  workspace compile pass.
+- Remaining work: SYN-036 task 10 real Codex plus Antigravity acceptance.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`

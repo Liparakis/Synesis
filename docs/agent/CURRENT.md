@@ -39,9 +39,9 @@ without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Implement and verify SYN-036 task 9: perform the prerelease migration and
-legacy-cleanup pass without racing active state writers, then record the
-remaining migration and compatibility evidence before provider acceptance.
+Implement and verify SYN-036 task 10: run the real Codex plus Antigravity
+acceptance against one fresh TestProject, preserving the ten-tool contract and
+recording provider evidence separately from unsupported native autonomy.
 
 ## Task 1 evidence
 
@@ -84,6 +84,12 @@ remaining migration and compatibility evidence before provider acceptance.
   signed event while holding `ProjectAppendLock`. Repeated repair joins are
   idempotent and do not create a second transfer event. The focused coordination
   and workspace repair suites plus strict coordination/workspace Javadocs pass.
+- Task 9 is verified in the current worktree: provider/project migration tests,
+  canonical provider-ID rejection, decorated MCP-name rejection, ten-tool
+  catalog checks, repository hygiene, and stale current-facing reference
+  cleanup pass. Historical event decoders and singleton-work-group replay are
+  retained only where required to read signed existing state; no runtime
+  compatibility alias was added.
 
 ## Completion state
 
@@ -133,7 +139,7 @@ explicit work-group, lane, participant, binding, epoch, claim, and snapshot
 provenance; provider metadata is excluded from source snapshots and both
 snapshots integrate into a dedicated worktree successfully. The CLI exposes
 the shared exact-lane release operation and MCP collaboration schemas describe
-work-group and lane-grant lifecycle operations without changing the 11-tool
+work-group and lane-grant lifecycle operations without changing the ten-tool
 surface. The same fixture now runs the integrated candidate's pytest test and
 requires it to pass. The final post-change Gradle check passes all 50
 actionable tasks with strict dependency verification; bootstrap Go tests/vet
@@ -228,7 +234,7 @@ workspace claim authorization, project append locking, durable post-activation
 claim fencing, exact connection binding resolution for task completion and
 cancellation, MCP `ensure_session` claim input and refresh-empty release,
 lease renewal on verified MCP activity, clean stdio shutdown release, and CLI
-`collaboration announce/status/release` adapters. The existing 11-tool MCP
+`collaboration announce/status/release` adapters. The current ten-tool MCP
 count is unchanged.
 
 SYN-028 now adds explicit SUSPENDED, RECOVERY_HELD, REVOKED, and CANCELLED
@@ -358,9 +364,9 @@ after owner-independent claim release.
 An additional direct Codex/Antigravity MCP process probe completed an accepted
 handoff and revision-checked mutation. Antigravity model-prompt behavior and
 native hooks remain separately unclaimed.
-The fixed 11-tool MCP surface now exposes additive coordination request and
-handoff operations through `describe_required_capability`, structured response
-fields through `respond_to_owner_request`, and JSON-safe collaboration details
+The fixed ten-tool MCP surface exposes coordination request and handoff
+operations through `request_coordination` and `respond_coordination`, structured
+response fields, and JSON-safe collaboration details
 through `get_next_action`; CLI and MCP parity tests pass. SYN-025 is DONE:
 direct MCP acceptance is verified for Codex, Claude, and Antigravity, while
 Antigravity model-driven prompting and native-hook maturity remain explicitly

@@ -258,8 +258,8 @@ public final class AgentTaskCompletionService {
                     snapshot.provenance().laneId() + "\n" + snapshot.provenance().claimEpoch()
                             + "\n" + snapshot.commitSha()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             if (existingOpt.isEmpty()) {
-                // The legacy helper creates the public ref for direct callers;
-                // completion moves that ref behind a durable prepared phase.
+                // Direct callers may create a provisional ref; completion moves
+                // that ref behind a durable prepared phase.
                 snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
             }
             String preparedRef = snapshotService.pinPreparedRef(workerWorktreePath, snapshot, completionId);
