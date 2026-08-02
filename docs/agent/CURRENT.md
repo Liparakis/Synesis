@@ -16,21 +16,31 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Implement task 1: catalog/rendering identities and the administrative-state
-foundation. Establish the three non-circular catalog identities and the
-canonical Git-common-directory state locator without adding an MCP tool.
+Task 1 is complete: the ten-tool MCP catalog/rendering identity foundation and
+canonical Git-common-directory administrative-state locator are implemented.
+No MCP tool was added.
 
 ## Verification target
 
-The catalog, provider health/attestation, documentation, managed guidance, and
-lane provenance derive from one ten-tool descriptor source; wire, catalog
-content, and guidance artifact identities are deterministic and non-circular.
+The catalog, provider health/attestation, and managed guidance derive from one
+ten-tool descriptor source; wire, catalog-content, and guidance-artifact
+identities are deterministic and non-circular. Administrative state resolves
+from canonical Git common-directory identity.
 
 ## Immediate next action
 
-Inspect the current MCP catalog, provider registration, and administrative
-state; map task-1 requirements to existing classes and tests; then implement
-the smallest complete catalog/state slice and run its focused tests.
+Implement task 2: inspect and classify managed baseline paths, including
+transaction-owned ignored managed files, while preserving fail-closed dirty
+control and exact ten-tool behavior.
+
+## Task 1 evidence
+
+- Commit: `71b33c5`.
+- `:mcp-contract:check`, `:workspace:check`, and `:mcp:check` passed
+  sequentially with one worker and no parallel execution.
+- Added one authoritative `McpToolCatalog` descriptor source, exact raw tool
+  schemas, separate wire/catalog/guidance identities, provider freshness
+  diagnostics, and `AdministrativeStateLocator` with focused tests.
 
 ## Completion state
 

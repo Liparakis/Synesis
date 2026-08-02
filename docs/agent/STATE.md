@@ -3,14 +3,20 @@
 ## SYN-036 implementation state
 
 SYN-035 is closed at CP-0399. SYN-036 is the sole active implementation task.
-The repository is clean at commit `5d8a943`. The authoritative objective is the
+Task 1 is complete at commit `71b33c5`; the authoritative objective is the
 Canonical Baselines and Lineage-Aware Integration specification in the active
-goal attachment. No SYN-036 production slice has been implemented yet.
+goal attachment.
 
-Immediate slice: implement catalog/rendering identities and the canonical
-Git-common-directory administrative-state foundation. Keep exactly ten MCP
-tools, derive wire/catalog/guidance identities from one descriptor source, and
-avoid recursive digest construction.
+Immediate slice: implement managed baseline classification. Keep exactly ten
+MCP tools, recognize only journaled transaction-owned ignored managed files,
+and preserve fail-closed dirty-control behavior.
+
+Task 1 evidence: the handler now consumes exact schemas from the shared
+`mcp-contract` catalog; provider health separates wire compatibility,
+catalog-content freshness, and guidance-artifact integrity; and
+`AdministrativeStateLocator` derives external state from the canonical Git
+common directory. Focused `:mcp-contract:check`, `:workspace:check`, and
+`:mcp:check` all pass.
 
 ## SYN-035 closure evidence
 

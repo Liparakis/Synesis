@@ -1603,5 +1603,8 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   reset recovery; (5) portability and artifact policy; (6) lineage
   dependencies; (7) fenced integration; (8) repair transfer; (9) prerelease
   migration and legacy cleanup; (10) real-provider acceptance.
-- Progress: promoted from the verified SYN-035 baseline on 2026-08-02. No
-  SYN-036 production slice has been implemented yet.
+- Progress: promoted from the verified SYN-035 baseline on 2026-08-02. Task 1
+  (catalog/rendering identities and administrative-state foundation) is DONE
+  at commit `71b33c5`; task 2 (managed baseline classification) is the next
+  implementation slice. Focused `:mcp-contract:check`, `:workspace:check`, and
+  `:mcp:check` pass sequentially.

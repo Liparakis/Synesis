@@ -1397,3 +1397,15 @@ Append-only operational history.
   during promotion.
 - Exact continuation: inspect the current MCP catalog and administrative-state
   abstractions, then implement task 1.
+## 2026-08-02 — SYN-036 task 1 complete
+
+- Completed the authoritative ten-tool MCP catalog foundation in `mcp-contract`.
+- Removed the duplicate tools/list schema builder from `McpProtocolHandler`;
+  exact schemas now come from one descriptor source.
+- Added non-circular wire compatibility, catalog-content, and guidance-artifact
+  identities, managed-manual/provider freshness diagnostics, and canonical
+  Git-common-directory administrative-state resolution.
+- Verification: `:mcp-contract:check`, `:workspace:check`, and `:mcp:check`
+  passed sequentially; commit `71b33c5`.
+- Next slice: managed baseline classification and transaction-owned ignored
+  managed paths.
