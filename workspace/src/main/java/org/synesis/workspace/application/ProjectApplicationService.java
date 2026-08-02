@@ -14,6 +14,7 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
+import org.synesis.workspace.lifecycle.ManagedPathPolicy;
 
 /**
  * Owns project discovery, initialization, and project-local profile paths.
@@ -384,6 +385,17 @@ public final class ProjectApplicationService {
 
         UUID projectId = UUID.randomUUID();
         try {
+            if (Files.exists(root.resolve(".git"))) {
+                ManagedPathPolicy.Report controlState = new ManagedPathPolicy().inspect(root);
+                if (controlState.blocked()) {
+                    throw new ProjectApplicationException("CONTROL_CHECKOUT_DIRTY",
+                            "Git control checkout contains unmanaged or changed content: "
+                                    + controlState.findings().stream()
+                                    .filter(ManagedPathPolicy.Finding::blocksTransaction)
+                                    .map(ManagedPathPolicy.Finding::path)
+                                    .findFirst().orElse("unknown"));
+                }
+            }
             Files.createDirectories(synesis.resolve("shared/records"));
             Files.createDirectories(synesis.resolve("local/providers"));
             Files.createDirectories(synesis.resolve("local/runtime"));

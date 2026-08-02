@@ -22,9 +22,20 @@ import java.util.Objects;
 public final class AdministrativeStateLocator {
 
     private static final String APPLICATION_DIRECTORY = "Synesis";
+    private final Path stateRoot;
 
     /** Creates a locator using the current host environment. */
     public AdministrativeStateLocator() {
+        this(applicationStateRoot());
+    }
+
+    /**
+     * Creates a locator rooted at an explicit local state directory.
+     *
+     * @param stateRoot local state directory used for repository administration
+     */
+    public AdministrativeStateLocator(Path stateRoot) {
+        this.stateRoot = normalize(stateRoot, "stateRoot");
     }
 
     /**
@@ -38,7 +49,7 @@ public final class AdministrativeStateLocator {
         Path root = normalize(repositoryRoot, "repositoryRoot");
         Path common = resolveGitCommonDirectory(root);
         String identity = identity(common);
-        Path admin = applicationStateRoot().resolve("repositories").resolve(identity).resolve("admin");
+        Path admin = stateRoot.resolve("repositories").resolve(identity).resolve("admin");
         return new Resolution(root, common, identity, admin,
                 admin.resolve("baseline"), admin.resolve("reset"), admin.resolve("index"));
     }
