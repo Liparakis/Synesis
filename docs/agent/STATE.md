@@ -7,7 +7,7 @@ Task 1 is complete at commit `71b33c5`; the authoritative objective is the
 Canonical Baselines and Lineage-Aware Integration specification in the active
 goal attachment.
 
-Tasks 2/3 are now complete at the current checkpoint: managed-path
+Tasks 2/3/4 are now complete at the current checkpoint: managed-path
 classification, transaction-owned provenance, semantic index comparison, and
 the journaled baseline transaction are implemented and wired into fresh Git
 project initialization. Keep exactly ten MCP tools, recognize only journaled
@@ -21,15 +21,18 @@ catalog-content freshness, and guidance-artifact integrity; and
 common directory. Focused `:mcp-contract:check`, `:workspace:check`, and
 `:mcp:check` all pass.
 
-SYN-036 task 2/3 evidence: commits `14ff54f` and `9e62c9f` add
+SYN-036 task 2/3/4 evidence: commits `14ff54f` and `9e62c9f` add
 managed-path classification, transaction ownership checks, semantic Git-index
 fingerprints, a journaled managed-baseline transaction service, project-init
 wiring, and crash/replay/provenance tests. Strict `:workspace:javadoc` and
 focused workspace tests pass. A repository-wide `:workspace:check` attempt
 timed out in the test runner without a completed report; this is retained as a
-runner limitation, not represented as product evidence. Reset recovery,
-complete-tree portability, lineage dependencies, fenced integration, and
-prerelease cleanup remain unfinished.
+runner limitation, not represented as product evidence. Reset recovery adds
+common-directory-keyed durable journaling, exclusive locking, old-authority
+fencing, namespace staging/transfer, restart discovery, and idempotent
+recovery; its focused crash-point suite passes. Complete-tree portability,
+lineage dependencies, fenced integration, and prerelease cleanup remain
+unfinished.
 
 ## SYN-035 closure evidence
 

@@ -16,10 +16,11 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Tasks 1/2/3 are complete for this checkpoint: managed-path classification,
+Tasks 1/2/3/4 are complete for this checkpoint: managed-path classification,
 transaction-owned provenance, semantic index fingerprinting, a durable
 baseline journal, crash/replay recovery, and fresh-project initialization
-wiring are present. No MCP tool was added.
+wiring and common-directory-keyed reset recovery are present. No MCP tool was
+added.
 
 ## Verification target
 
@@ -32,10 +33,10 @@ without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Implement the reset-recovery journal keyed by canonical Git common-directory
-identity and transaction ID, with exclusive locking, durable phase markers,
-restart discovery, and fail-closed conflict handling; add crash-point tests
-before beginning complete-tree portability.
+Implement complete-tree portability and artifact policy for immutable lane
+snapshots: classify every changed path, exclude only explicitly allowed
+provider/admin artifacts, require verified artifact manifests, and fail closed
+on unsupported or out-of-scope paths; add complete-tree and restart tests.
 
 ## Task 1 evidence
 
@@ -51,6 +52,10 @@ before beginning complete-tree portability.
   provenance, and semantic-index tests. Strict `:workspace:javadoc` and the
   focused workspace suite pass; the timed-out full workspace check remains a
   runner limitation requiring later sequential revalidation.
+- `ResetRecoveryService` adds common-directory-keyed durable reset phases,
+  exclusive locking, namespace fencing/transfer, restart discovery, and
+  idempotent recovery. The focused reset crash/replay suite and strict
+  `:workspace:javadoc` pass.
 
 ## Completion state
 
