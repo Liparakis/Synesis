@@ -1,5 +1,7 @@
 package org.synesis.mcp.application;
 
+import org.synesis.mcp.contract.McpToolCatalog;
+
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -506,6 +508,10 @@ public final class McpProtocolHandler {
     }
 
     private String handleToolsList(Object id) {
+        return createResultResponse(id, Map.of("tools", McpToolCatalog.toolsList()));
+    }
+
+    private String legacyHandleToolsList(Object id) {
         // Tool 1: synesis.ensure_session
         Map<String, Object> taskProperties = new LinkedHashMap<>();
         taskProperties.put("goal", Map.of("type", "string"));

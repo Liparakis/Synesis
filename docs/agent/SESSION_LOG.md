@@ -1386,3 +1386,14 @@ Append-only operational history.
   pytest -q` (45 passed); deferred validator; and `git diff --check` PASS.
 - Remaining work: No collaboration roadmap task remains active. Do not publish,
   push, or claim native provider enforcement without new evidence.
+## 2026-08-02 — SYN-036 promotion
+
+- Active task: SYN-036 — Canonical baselines and lineage-aware integration.
+- Reconciled SYN-035 as DONE at CP-0399 after the ten-tool lifecycle surface,
+  strict schemas, managed manual, Codex ordinary completion evidence, full
+  sequential Gradle verification, bootstrap Go tests/vet, and provider
+  limitation evidence were recorded.
+- Promoted SYN-036 as the sole active task. No production changes were made
+  during promotion.
+- Exact continuation: inspect the current MCP catalog and administrative-state
+  abstractions, then implement task 1.

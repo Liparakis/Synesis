@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.mcp.contract.McpToolCatalog;
 
 /** Installs and verifies the provider-managed Synesis Manual. */
 public final class ProviderManualService {
@@ -24,7 +25,7 @@ public final class ProviderManualService {
     private static final String MANUAL_DIRECTORY = "synesis-manual";
     private static final String MANUAL_FILE = "SKILL.md";
     private static final String MANIFEST_FILE = "manifest.json";
-    private static final String CONTENT = "---\nname: synesis-manual\ndescription: Follow Synesis lane coordination, claim, inbox, mutation, recovery, and safe-stopping rules.\n---\n\n# Synesis Manual\n\nUse the durable Synesis coordination state as authoritative. Establish the exact session before mutation, announce intent, acquire only non-overlapping repository-relative claims, and keep every mutation inside the assigned isolated lane.\n\nTreat `get_next_action` as a durable at-least-once inbox. Read it at session start and after blocked or completed actions. Follow its recommended tool and typed arguments; do not guess identifiers, busy-poll, or blindly retry failed mutations.\n\nPublish capability implementations only when the inbox supplies the exact capability request handle. Ordinary lane completion uses `finish_lane`, which validates, publishes, integrates, and closes the lane. Do not invent legacy tool names or call capability publication as a substitute for lane completion.\n\nIf the lane is suspended, cancelled, revoked, or stale, preserve its work and wait for an authorized recovery or handoff. Never edit another lane or the control checkout.\n\nClose or cancel your own lane when finished, and report actionable failures without bypassing Synesis.\n";
+    private static final String CONTENT_PREFIX = "---\nname: synesis-manual\ndescription: Follow Synesis lane coordination, claim, inbox, mutation, recovery, and safe-stopping rules.\n---\n\n# Synesis Manual\n\nUse the durable Synesis coordination state as authoritative. Establish the exact session before mutation, announce intent, acquire only non-overlapping repository-relative claims, and keep every mutation inside the assigned isolated lane.\n\nTreat `get_next_action` as a durable at-least-once inbox. Read it at session start and after blocked or completed actions. Follow its recommended tool and typed arguments; do not guess identifiers, busy-poll, or blindly retry failed mutations.\n\nPublish capability implementations only when the inbox supplies the exact capability request handle. Ordinary lane completion uses `finish_lane`, which validates, publishes, integrates, and closes the lane. Do not invent legacy tool names or call capability publication as a substitute for lane completion.\n\nIf the lane is suspended, cancelled, revoked, or stale, preserve its work and wait for an authorized recovery or handoff. Never edit another lane or the control checkout.\n\nClose or cancel your own lane when finished, and report actionable failures without bypassing Synesis.\n\n";
     private static final Object INSTALL_LOCK = new Object();
 
     /** Result of a manual ownership and content attestation.
@@ -32,12 +33,32 @@ public final class ProviderManualService {
      * @param version installed manual version
      * @param contentHash actual content hash
      * @param reason attestation reason
+     * @param provider provider identifier
      */
-    public record Attestation(boolean valid, int version, String contentHash, String reason) {
+    public record Attestation(boolean valid, int version, String contentHash, String reason, String provider) {
         /** Validates an attestation result. */
         public Attestation {
             Objects.requireNonNull(contentHash, "contentHash");
             Objects.requireNonNull(reason, "reason");
+            Objects.requireNonNull(provider, "provider");
+        }
+
+        /** Returns the current catalog wire-compatibility digest.
+         * @return current wire compatibility digest
+         */
+        public String wireCompatibilityDigest() { return McpToolCatalog.wireCompatibilityDigest(); }
+
+        /** Returns the current catalog content digest.
+         * @return current catalog content digest
+         */
+        public String catalogContentDigest() { return McpToolCatalog.catalogContentDigest(); }
+
+        /** Returns the installed guidance-artifact digest when attested.
+         * @return installed guidance artifact digest, or empty when unavailable
+         */
+        public String guidanceArtifactDigest() {
+            return valid ? McpToolCatalog.guidanceArtifactDigest("synesis-manual", provider,
+                    contentHash.getBytes(StandardCharsets.UTF_8)) : "";
         }
     }
 
@@ -74,13 +95,18 @@ public final class ProviderManualService {
         Files.createDirectories(staging);
         try {
             Path manual = staging.resolve(MANUAL_FILE);
-            String hash = hash(CONTENT.getBytes(StandardCharsets.UTF_8));
-            Files.writeString(manual, CONTENT, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            String content = content(provider);
+            String hash = hash(content.getBytes(StandardCharsets.UTF_8));
+            Files.writeString(manual, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
             Map<String, Object> manifest = new LinkedHashMap<>();
             manifest.put("provider", provider);
             manifest.put("name", "synesis-manual");
             manifest.put("version", VERSION);
             manifest.put("contentHash", hash);
+            manifest.put("wireCompatibilityDigest", McpToolCatalog.wireCompatibilityDigest());
+            manifest.put("catalogContentDigest", McpToolCatalog.catalogContentDigest());
+            manifest.put("guidanceArtifactDigest", McpToolCatalog.guidanceArtifactDigest(
+                    "synesis-manual", provider, content.getBytes(StandardCharsets.UTF_8)));
             Files.writeString(staging.resolve(MANIFEST_FILE), ProviderJson.write(manifest) + System.lineSeparator(),
                     StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
             if (Files.exists(directory) && attest(provider).valid()) {
@@ -110,21 +136,35 @@ public final class ProviderManualService {
             Path manual = directory.resolve(MANUAL_FILE);
             Path manifestPath = directory.resolve(MANIFEST_FILE);
             if (!Files.isRegularFile(manual) || !Files.isRegularFile(manifestPath)) {
-                return new Attestation(false, 0, "", "MANUAL_MISSING");
+                return new Attestation(false, 0, "", "MANUAL_MISSING", provider);
             }
             Object parsed = ProviderJson.parse(Files.readString(manifestPath));
-            if (!(parsed instanceof Map<?, ?> raw)) return new Attestation(false, 0, "", "MANIFEST_INVALID");
+            if (!(parsed instanceof Map<?, ?> raw)) return new Attestation(false, 0, "", "MANIFEST_INVALID", provider);
             int version = raw.get("version") instanceof Number n ? n.intValue() : 0;
             String expected = String.valueOf(raw.get("contentHash"));
             String actual = hash(Files.readAllBytes(manual));
-            String canonical = hash(CONTENT.getBytes(StandardCharsets.UTF_8));
+            String canonicalContent = content(provider);
+            String canonical = hash(canonicalContent.getBytes(StandardCharsets.UTF_8));
+            String expectedArtifact = String.valueOf(raw.get("guidanceArtifactDigest"));
+            String actualArtifact = McpToolCatalog.guidanceArtifactDigest("synesis-manual", provider,
+                    Files.readAllBytes(manual));
             boolean valid = provider.equals(String.valueOf(raw.get("provider")))
                     && "synesis-manual".equals(String.valueOf(raw.get("name")))
-                    && version == VERSION && expected.equals(canonical) && actual.equals(canonical);
-            return new Attestation(valid, version, actual, valid ? "ATTESTED" : "MANUAL_MODIFIED_OR_OUTDATED");
+                    && version == VERSION && expected.equals(canonical) && actual.equals(canonical)
+                    && McpToolCatalog.wireCompatibilityDigest().equals(String.valueOf(raw.get("wireCompatibilityDigest")))
+                    && McpToolCatalog.catalogContentDigest().equals(String.valueOf(raw.get("catalogContentDigest")))
+                    && expectedArtifact.equals(actualArtifact);
+            return new Attestation(valid, version, actual, valid ? "ATTESTED" : "MANUAL_MODIFIED_OR_OUTDATED", provider);
         } catch (Exception failure) {
-            return new Attestation(false, 0, "", "MANUAL_UNVERIFIABLE");
+            return new Attestation(false, 0, "", "MANUAL_UNVERIFIABLE", provider);
         }
+    }
+
+    private static String content(String provider) {
+        return CONTENT_PREFIX
+                + "MCP wire compatibility digest: `" + McpToolCatalog.wireCompatibilityDigest() + "`\n"
+                + "MCP catalog content digest: `" + McpToolCatalog.catalogContentDigest() + "`\n"
+                + "Provider guidance renderer: `" + provider + "`\n";
     }
 
     /** Requires a valid manual for authority-increasing operations.

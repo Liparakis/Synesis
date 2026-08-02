@@ -1535,7 +1535,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-035
 - Priority: P0
 - Title: Clear MCP lifecycle surface and autonomous action guidance
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Replace the self-imposed 11-tool prerelease MCP surface with ten
   semantically clear tools, remove legacy aliases, and make durable next
   actions executable without identifier guessing.
@@ -1554,7 +1554,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   compatibility decision, provider MCP documentation, Synesis Manual content,
   CURRENT.md, GOAL.md, STATE.md, TEST_MATRIX.md, SESSION_LOG.md, and
   NEXT_SESSION.md.
-- Evidence: CP-0395. CP-0392 and Codex acceptance snapshot `snap_79678eeae2012100f8047ec17ec895d0`; `:mcp:test`, `:workspace:test`, `:coordination:test`,
+- Evidence: CP-0399. CP-0392 and Codex acceptance snapshot `snap_79678eeae2012100f8047ec17ec895d0`; `:mcp:test`, `:workspace:test`, `:coordination:test`,
   sequential `check`, strict Javadocs, repository hygiene, deferred validator,
   and bootstrap Go tests/vet pass. The ten raw tools, strict schemas,
   capability-handle publication, `finish_lane`/`cancel_lane`, managed Manual,
@@ -1564,3 +1564,44 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   `loggedIn: false`; this is an external authentication blocker, not a Synesis
   failure. No compatibility aliases or migration period are retained before
   first release.
+
+## SYN-036
+
+- ID: SYN-036
+- Priority: P0
+- Title: Canonical baselines and lineage-aware integration
+- Status: ACTIVE
+- Purpose: Implement the authoritative Canonical Baselines and Lineage-Aware
+  Integration specification across managed baselines, semantic Git-index
+  transactions, reset recovery, complete-tree portability, generated-artifact
+  policy, authority-lineage dependencies, process-bound integration,
+  worker fencing, atomic repair transfer, and the ten-tool MCP contract.
+- Dependencies: SYN-035 DONE at CP-0399; SYN-032 and SYN-033 DONE; existing
+  project, workspace, coordination, snapshot, integration, provider, and MCP
+  foundations.
+- Acceptance criteria: all ten implementation tasks are implemented in order;
+  no pre-existing untracked content is adopted; unrelated dirty state never
+  advances history; HEAD, semantic real index, and managed worktree remain
+  consistent; portability and artifact policy are fail-closed; capability
+  dependencies follow authorized lineage; expired workers cannot publish;
+  repair scope never becomes unreserved; reset recovery remains discoverable;
+  three catalog identities are deterministic and non-circular; and the real
+  Codex plus Antigravity acceptance completes with ordered automatic
+  integration and a clean control checkout.
+- Required tests: catalog and guidance determinism; managed-path provenance;
+  semantic versus nonsemantic Git-index changes; crash recovery across every
+  baseline and reset phase; complete-tree Windows/Linux portability vectors;
+  generated-artifact policy; lineage continuation/recovery/handoff/
+  supersession; dependency wake and ordering; worker takeover/fencing;
+  concurrent ref advancement; atomic repair transfer; restart recovery; and
+  the final two-provider acceptance.
+- Required documentation: SYN-036 implementation evidence, ADRs for any new
+  architecture decisions, updated CURRENT.md, GOAL.md, STATE.md, TASKS.md,
+  TEST_MATRIX.md, SESSION_LOG.md, and NEXT_SESSION.md.
+- Implementation order: (1) catalog/rendering identities and administrative
+  state; (2) managed classification; (3) semantic index transaction; (4)
+  reset recovery; (5) portability and artifact policy; (6) lineage
+  dependencies; (7) fenced integration; (8) repair transfer; (9) prerelease
+  migration and legacy cleanup; (10) real-provider acceptance.
+- Progress: promoted from the verified SYN-035 baseline on 2026-08-02. No
+  SYN-036 production slice has been implemented yet.

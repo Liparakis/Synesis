@@ -2,36 +2,35 @@
 
 ## Identity
 
-- Task ID: SYN-035
+- Task ID: SYN-036
 - Status: ACTIVE
 - Priority: P0
-- Started checkpoint: CP-0391
+- Started checkpoint: CP-0399
 - Responsible agent: primary architecture-closure engineer
 - Related decisions: ADR-0001, ADR-0008, ADR-0038, ADR-0039, ADR-0040, ADR-0041
 
 ## Objective
 
-Replace the self-imposed eleven-tool prerelease MCP surface with ten clear
-tools, distinguish capability publication from ordinary lane completion, and
-make durable next actions executable without identifier guessing.
+Implement SYN-036 completely and correctly from the authoritative Canonical
+Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Centralize the MCP tool catalog, rename lifecycle tools, fold implementation
-validation into strict coordination responses, update the managed Synesis
-Manual, and preserve SYN-032 completion/integration semantics.
+Implement task 1: catalog/rendering identities and the administrative-state
+foundation. Establish the three non-circular catalog identities and the
+canonical Git-common-directory state locator without adding an MCP tool.
 
 ## Verification target
 
-The ten raw tools, schemas, dispatch, attestation, documentation, CLI parity,
-and real Codex ordinary completion all agree; wrong identifiers and removed
-tool names fail closed without mutation.
+The catalog, provider health/attestation, documentation, managed guidance, and
+lane provenance derive from one ten-tool descriptor source; wire, catalog
+content, and guidance artifact identities are deterministic and non-circular.
 
 ## Immediate next action
 
-Run the real Claude ordinary acceptance only if `claude auth status` reports
-authenticated; otherwise preserve the explicit OAuth blocker and make no
-implementation changes.
+Inspect the current MCP catalog, provider registration, and administrative
+state; map task-1 requirements to existing classes and tests; then implement
+the smallest complete catalog/state slice and run its focused tests.
 
 ## Completion state
 

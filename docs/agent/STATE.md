@@ -1,5 +1,17 @@
 # State
 
+## SYN-036 implementation state
+
+SYN-035 is closed at CP-0399. SYN-036 is the sole active implementation task.
+The repository is clean at commit `5d8a943`. The authoritative objective is the
+Canonical Baselines and Lineage-Aware Integration specification in the active
+goal attachment. No SYN-036 production slice has been implemented yet.
+
+Immediate slice: implement catalog/rendering identities and the canonical
+Git-common-directory administrative-state foundation. Keep exactly ten MCP
+tools, derive wire/catalog/guidance identities from one descriptor source, and
+avoid recursive digest construction.
+
 ## SYN-035 closure evidence
 
 The prerelease MCP lifecycle surface now has ten raw tools. Capability

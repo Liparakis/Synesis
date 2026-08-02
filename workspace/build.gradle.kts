@@ -12,6 +12,7 @@ java {
 }
 
 dependencies {
+    implementation(project(":mcp-contract"))
     implementation(project(":link"))
     implementation(project(":project-record"))
     implementation(project(":coordination"))
