@@ -16,11 +16,12 @@ import java.util.UUID;
  * @param claimSelectors encoded exact-path/subtree claims
  * @param snapshotRef immutable Git ref
  * @param integrityEvidence integrity digest
+ * @param artifactManifestDigest explicit provider/admin artifact manifest digest
  */
 public record SnapshotProvenance(UUID workGroupId, UUID laneId, String participant,
         String bindingIdentity, long claimEpoch, List<String> contractRevisions,
         List<String> handoffLineage, List<String> claimSelectors,
-        String snapshotRef, String integrityEvidence) {
+        String snapshotRef, String integrityEvidence, String artifactManifestDigest) {
     /** Validates bounded provenance fields. */
     public SnapshotProvenance {
         Objects.requireNonNull(workGroupId, "workGroupId");
@@ -33,5 +34,26 @@ public record SnapshotProvenance(UUID workGroupId, UUID laneId, String participa
         claimSelectors = List.copyOf(Objects.requireNonNull(claimSelectors, "claimSelectors"));
         Objects.requireNonNull(snapshotRef, "snapshotRef");
         Objects.requireNonNull(integrityEvidence, "integrityEvidence");
+        Objects.requireNonNull(artifactManifestDigest, "artifactManifestDigest");
+    }
+
+    /** Constructs provenance without an explicit artifact manifest digest.
+     * @param workGroupId group ID
+     * @param laneId lane ID
+     * @param participant participant
+     * @param bindingIdentity binding identity
+     * @param claimEpoch claim epoch
+     * @param contractRevisions contract revisions
+     * @param handoffLineage handoff lineage
+     * @param claimSelectors claim selectors
+     * @param snapshotRef snapshot ref
+     * @param integrityEvidence integrity evidence
+     */
+    public SnapshotProvenance(UUID workGroupId, UUID laneId, String participant,
+            String bindingIdentity, long claimEpoch, List<String> contractRevisions,
+            List<String> handoffLineage, List<String> claimSelectors,
+            String snapshotRef, String integrityEvidence) {
+        this(workGroupId, laneId, participant, bindingIdentity, claimEpoch, contractRevisions,
+                handoffLineage, claimSelectors, snapshotRef, integrityEvidence, "UNRECORDED");
     }
 }

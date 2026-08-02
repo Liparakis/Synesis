@@ -28,10 +28,31 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
  */
 public final class TaskSnapshotService {
 
+    private final SnapshotArtifactPolicy artifactPolicy;
+    private final org.synesis.workspace.lifecycle.RepositoryPortabilityService portabilityService;
+
     /**
      * Creates a task snapshot service.
      */
     public TaskSnapshotService() {
+        this(new SnapshotArtifactPolicy(), new org.synesis.workspace.lifecycle.RepositoryPortabilityService());
+    }
+
+    /** Creates a service with an explicit artifact policy. *
+     * @param artifactPolicy snapshot artifact policy
+     */
+    public TaskSnapshotService(SnapshotArtifactPolicy artifactPolicy) {
+        this(artifactPolicy, new org.synesis.workspace.lifecycle.RepositoryPortabilityService());
+    }
+
+    /** Creates a service with explicit artifact and portability policies.
+     * @param artifactPolicy snapshot artifact policy
+     * @param portabilityService complete-tree portability validator
+     */
+    public TaskSnapshotService(SnapshotArtifactPolicy artifactPolicy,
+                               org.synesis.workspace.lifecycle.RepositoryPortabilityService portabilityService) {
+        this.artifactPolicy = Objects.requireNonNull(artifactPolicy, "artifactPolicy");
+        this.portabilityService = Objects.requireNonNull(portabilityService, "portabilityService");
     }
 
     /**
@@ -140,7 +161,13 @@ public final class TaskSnapshotService {
         boolean dirty = !runGitOutput(workerWorktreePath, "status", "--porcelain").isBlank();
         String headCommit = gitRevParse(workerWorktreePath, "HEAD");
         String baseCommit = dirty ? headCommit : deriveBaseCommit(workerWorktreePath);
-        List<String> changedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
+        List<String> allChangedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
+        SnapshotArtifactPolicy.Manifest artifactManifest = artifactPolicy.classify(allChangedPaths);
+        if (!artifactManifest.valid()) {
+            throw new IllegalStateException("SNAPSHOT_ARTIFACT_POLICY:" + artifactManifest.rejectedArtifacts());
+        }
+        List<String> changedPaths = allChangedPaths.stream()
+                .filter(path -> !artifactManifest.allowedArtifacts().contains(path)).toList();
         if (!claims.isEmpty() && changedPaths.stream().anyMatch(path -> claims.stream()
                 .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
             throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH:" + changedPaths.stream()
@@ -156,6 +183,16 @@ public final class TaskSnapshotService {
             commitSha = headCommit;
             runGitOutput(workerWorktreePath, "update-ref", "refs/synesis/snapshots/" + snapshotId, commitSha);
         }
+        org.synesis.workspace.lifecycle.RepositoryPortabilityService.Report portability =
+                portabilityService.validateTree(workerWorktreePath, commitSha);
+        if (!portability.portable()) {
+            try {
+                runGitOutput(workerWorktreePath, "update-ref", "-d", "refs/synesis/snapshots/" + snapshotId);
+            } catch (IOException ignored) {
+                // The portability failure remains the authoritative result.
+            }
+            throw new IllegalStateException("REPOSITORY_NOT_PORTABLE:" + portability.findings());
+        }
         List<String> capabilityDependencies = new ArrayList<>();
         for (CapabilityRequestRecord cap : activeCapabilities) {
             capabilityDependencies.add(cap.handle().value());
@@ -164,7 +201,8 @@ public final class TaskSnapshotService {
         SnapshotProvenance provenance = new SnapshotProvenance(workGroupId, laneId, participant,
                 bindingIdentity, claimEpoch, capabilityDependencies, handoffLineage,
                 claims.stream().map(selector -> selector.kind().name() + ":" + selector.value()).toList(),
-                "refs/synesis/snapshots/" + snapshotId, integrity(commitSha, changedPaths));
+                "refs/synesis/snapshots/" + snapshotId, integrity(commitSha, changedPaths),
+                artifactManifest.digest());
         return new TaskSnapshotRecord(
                 taskId, snapshotId, nodeId, supervisorId, workerId,
                 providerSessionId, baseCommit, commitSha, changedPaths,
@@ -282,9 +320,6 @@ public final class TaskSnapshotService {
             for (String line : output.split("\\r?\\n")) {
                 String trimmed = line.trim();
                 if (!trimmed.isBlank()) {
-                    if (!isSnapshotManagedPath(trimmed)) {
-                        continue;
-                    }
                     if (!paths.contains(trimmed)) paths.add(trimmed);
                     if (paths.size() >= TaskSnapshotRecord.MAX_CHANGED_PATHS) {
                         break;
@@ -354,14 +389,6 @@ public final class TaskSnapshotService {
         } finally {
             Files.deleteIfExists(index);
         }
-    }
-
-    private static boolean isSnapshotManagedPath(String path) {
-        return !(path.equals(".synesis") || path.startsWith(".synesis/")
-                || path.equals(".codex") || path.startsWith(".codex/")
-                || path.equals(".claude") || path.startsWith(".claude/")
-                || path.equals(".agents") || path.startsWith(".agents/")
-                || path.equals("AGENTS.md") || path.equals(".mcp.json"));
     }
 
     private static void stageSourceIndex(Path workdir, Path index) throws IOException {

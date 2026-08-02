@@ -12,6 +12,8 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for task completion and integration application services.
@@ -105,6 +107,43 @@ class TaskIntegrationServiceTest {
         assertEquals(first.snapshotId(), retry.snapshotId());
         assertEquals(first.commitSha(), gitOutput(root, "rev-parse", first.provenance().snapshotRef()));
         assertEquals(first.commitSha(), gitOutput(root, "rev-parse", prepared));
+    }
+
+    @Test
+    void providerArtifactsAreRecordedAndExcludedFromTheSourceSnapshot(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.email", "test@example.invalid");
+        git(root, "config", "user.name", "Test");
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "base");
+        Files.writeString(root.resolve("README.md"), "changed\n");
+        Files.createDirectories(root.resolve(".codex"));
+        Files.writeString(root.resolve(".codex/session.json"), "runtime\n");
+
+        TaskSnapshotRecord record = new TaskSnapshotService().createSnapshot(
+                UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root,
+                "snapshot", java.util.Optional.empty(), List.of());
+
+        assertEquals(List.of("README.md"), record.changedPaths());
+        assertNotEquals("UNRECORDED", record.provenance().artifactManifestDigest());
+        assertEquals("", gitOutput(root, "ls-tree", "-r", "--name-only", record.commitSha(), ".codex"));
+    }
+
+    @Test
+    void managedContractChangesAreNotSilentlyDropped(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.email", "test@example.invalid");
+        git(root, "config", "user.name", "Test");
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "base");
+        Files.writeString(root.resolve("AGENTS.md"), "changed\n");
+
+        IllegalStateException failure = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> new TaskSnapshotService().createSnapshot(UUID.randomUUID(), "node", "supervisor", "worker",
+                        "lane", root, root, "snapshot", java.util.Optional.empty(), List.of()));
+        assertTrue(failure.getMessage().startsWith("SNAPSHOT_ARTIFACT_POLICY:"));
     }
 
     private static void git(Path root, String... args) throws Exception {

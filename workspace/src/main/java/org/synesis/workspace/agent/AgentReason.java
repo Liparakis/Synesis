@@ -45,6 +45,9 @@ public enum AgentReason {
     /** The agent is operating from the control checkout instead of its assigned worktree. */
     WORKSPACE_MISMATCH("workspace_mismatch"),
 
+    /** The complete Git tree fails the declared cross-platform portability policy. */
+    REPOSITORY_NOT_PORTABLE("repository_not_portable"),
+
     /**
      * A modifying patch omitted the optimistic content precondition returned by a read.
      */

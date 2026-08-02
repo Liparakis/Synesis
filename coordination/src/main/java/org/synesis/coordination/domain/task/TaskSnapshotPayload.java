@@ -47,7 +47,7 @@ public record TaskSnapshotPayload(
 ) {
 
     private static final int MAGIC = 0x534E4150; // "SNAP"
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int MAX_TEXT = 64 * 1024;
 
     /**
@@ -142,6 +142,7 @@ public record TaskSnapshotPayload(
             writeList(out, provenance.claimSelectors());
             writeText(out, provenance.snapshotRef());
             writeText(out, provenance.integrityEvidence());
+            writeText(out, provenance.artifactManifestDigest());
             out.flush();
             return bytes.toByteArray();
         } catch (IOException impossible) {
@@ -196,8 +197,11 @@ public record TaskSnapshotPayload(
                 String participant = readText(in), binding = readText(in);
                 long epoch = in.readLong();
                 List<String> contracts = readList(in), lineage = readList(in), claims = readList(in);
+                String snapshotRef = readText(in);
+                String integrity = readText(in);
+                String artifacts = version >= 3 ? readText(in) : "UNRECORDED";
                 provenance = new SnapshotProvenance(group, lane, participant, binding, epoch,
-                        contracts, lineage, claims, readText(in), readText(in));
+                        contracts, lineage, claims, snapshotRef, integrity, artifacts);
             }
             return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,
                     providerSessionId, baseCommit, commitSha, changedPaths, deps, summary, provenance);

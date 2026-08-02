@@ -12,6 +12,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
+import org.synesis.workspace.lifecycle.RepositoryPortabilityService;
 
 /**
  * Resolves and establishes provider session context ambiently for agent transports.
@@ -28,6 +29,7 @@ public final class AgentSessionService {
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
     private final WorkspaceReadinessService readinessService;
+    private final RepositoryPortabilityService portabilityService;
 
     /**
      * Creates an agent session service using default application services.
@@ -46,6 +48,7 @@ public final class AgentSessionService {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         this.bindingService = Objects.requireNonNull(bindingService, "bindingService");
         this.readinessService = new WorkspaceReadinessService(this.bindingService);
+        this.portabilityService = new RepositoryPortabilityService();
     }
 
     /**
@@ -191,8 +194,16 @@ public final class AgentSessionService {
         if (rootNormalized.contains("/.synesis/local/worktrees/")) {
             throw new IllegalStateException("Assigned worktree path cannot be used as control project root");
         }
+        if (Files.isRegularFile(root.resolve(".git"))) {
+            throw new IllegalStateException("Linked Git worktree cannot be used as control project root");
+        }
 
         ProjectApplicationService.ProjectLocation location = projectService.locate(root);
+
+        RepositoryPortabilityService.Report portability = portabilityService.preflight(root);
+        if (!portability.portable()) {
+            throw new IllegalStateException("REPOSITORY_NOT_PORTABLE");
+        }
 
         ProviderSessionBindingService.BindingResult bindingResult = bindingService.ensure(
                 location, request.provider(), request.connectionInstanceId());
@@ -253,6 +264,10 @@ public final class AgentSessionService {
         } catch (IllegalArgumentException ex) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         } catch (IllegalStateException ex) {
+            if ("REPOSITORY_NOT_PORTABLE".equals(ex.getMessage())) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.REPOSITORY_NOT_PORTABLE,
+                        AgentNextAction.REQUEST_HUMAN_HELP, null);
+            }
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
