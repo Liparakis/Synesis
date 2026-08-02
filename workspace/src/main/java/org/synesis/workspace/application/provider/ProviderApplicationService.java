@@ -35,6 +35,7 @@ import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 import org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
+import org.synesis.mcp.contract.McpToolCatalog;
 
 /**
  * Owns provider lifecycle, local metadata, configuration merging, and diagnostics.
@@ -572,6 +573,9 @@ public final class ProviderApplicationService {
             metadata.put("mcpHealth", health.status());
             metadata.put("manualVersion", manual.version());
             metadata.put("manualContentHash", manual.contentHash());
+            metadata.put("wireCompatibilityDigest", manual.wireCompatibilityDigest());
+            metadata.put("catalogContentDigest", manual.catalogContentDigest());
+            metadata.put("guidanceArtifactDigest", manual.guidanceArtifactDigest());
             metadata.put("manualPath", manualService.skillDirectory(provider.id()).resolve("SKILL.md").toString());
             metadata.put("lastSyntheticCheck",
                     synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED");
@@ -704,9 +708,30 @@ public final class ProviderApplicationService {
             var synthetic = syntheticCheck(location, provider);
             String state = synthetic.blocked() && synthetic.allowed() && synthetic.validJson()
                     ? (provider.requiresRealValidation() ? "DEGRADED" : "HEALTHY") : "BROKEN";
+            boolean wireCompatible = McpToolCatalog.wireCompatibilityDigest()
+                    .equals(String.valueOf(metadata.get("wireCompatibilityDigest")));
+            boolean catalogFresh = McpToolCatalog.catalogContentDigest()
+                    .equals(String.valueOf(metadata.get("catalogContentDigest")));
+            Path managedManual = manualService.skillDirectory(provider.id()).resolve("SKILL.md");
+            boolean guidanceValid = manual.valid() && Files.isRegularFile(managedManual)
+                    && McpToolCatalog.guidanceArtifactDigest("synesis-manual", provider.id(),
+                            Files.readAllBytes(managedManual))
+                    .equals(String.valueOf(metadata.get("guidanceArtifactDigest")));
+            if (!wireCompatible) {
+                state = "DEGRADED";
+            }
             ProviderResult result = status(provider, state, config, true, count, launcherPresent, profilePresent,
                     synthetic.blocked() && synthetic.allowed(), state.equals("HEALTHY") ? 0 : 1);
-            return withValue(result, "SYNESIS_MANUAL", manual.valid() ? "ATTESTED" : manual.reason());
+            result = withValue(result, "SYNESIS_MANUAL", manual.valid() ? "ATTESTED" : manual.reason());
+            result = withValue(result, "MCP_WIRE_COMPATIBILITY", wireCompatible ? "CURRENT" : "MCP_CATALOG_MISMATCH");
+            result = withValue(result, "MCP_CATALOG_CONTENT", catalogFresh ? "CURRENT" : "CATALOG_CONTENT_STALE");
+            result = withValue(result, "GUIDANCE_ARTIFACT", guidanceValid ? "CURRENT" : "GUIDANCE_ARTIFACT_MISMATCH");
+            if (!wireCompatible) {
+                result = withValue(result, "ERROR", "MCP_CATALOG_MISMATCH");
+            } else if (!catalogFresh || !guidanceValid) {
+                result = withValue(result, "ERROR", "MANAGED_GUIDANCE_STALE");
+            }
+            return result;
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_STATUS", 3);
         } catch (Exception failure) {
@@ -828,7 +853,8 @@ public final class ProviderApplicationService {
                 Map<?, ?> initializeResult = object(initializeMap.get("result"));
                 Map<?, ?> toolsResult = object(toolsMap.get("result"));
                 Object advertised = toolsResult.get("tools");
-                if (initializeResult.isEmpty() || !(advertised instanceof List<?> list) || list.size() != 10) {
+                if (initializeResult.isEmpty() || !(advertised instanceof List<?> list)
+                        || !catalogNamesMatch(list)) {
                     return new McpHealth(false, "FAILED:unexpected_tools_or_initialize");
                 }
                 return new McpHealth(true, "PASSED");
@@ -860,6 +886,19 @@ public final class ProviderApplicationService {
                 throw new RuntimeException(failure);
             }
         }).get(10, TimeUnit.SECONDS);
+    }
+
+    private static boolean catalogNamesMatch(List<?> advertised) {
+        if (advertised.size() != McpToolCatalog.rawNames().size()) {
+            return false;
+        }
+        for (int index = 0; index < advertised.size(); index++) {
+            if (!(advertised.get(index) instanceof Map<?, ?> descriptor)
+                    || !McpToolCatalog.rawNames().get(index).equals(descriptor.get("name"))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private record McpHealth(boolean passed, String status) {

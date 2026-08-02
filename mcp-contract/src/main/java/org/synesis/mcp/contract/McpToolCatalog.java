@@ -53,14 +53,9 @@ public final class McpToolCatalog {
             Map.of("status", property("string"), "result", Map.of("type", "object")), List.of());
     private static final List<Descriptor> DESCRIPTORS = buildDescriptors();
     private static final List<String> RAW_NAMES = DESCRIPTORS.stream().map(Descriptor::wireName).toList();
-    private static final String WIRE_DIGEST = digest(canonical(DESCRIPTORS.stream()
-            .sorted(Comparator.comparing(Descriptor::wireName))
-            .map(Descriptor::wireSemantics)
-            .toList()));
-    private static final String CONTENT_DIGEST = digest(canonical(DESCRIPTORS.stream()
-            .sorted(Comparator.comparingInt(Descriptor::displayOrder))
-            .map(Descriptor::contentSemantics)
-            .toList()));
+    private static final Identity IDENTITIES = identities(DESCRIPTORS);
+    private static final String WIRE_DIGEST = IDENTITIES.wireCompatibilityDigest();
+    private static final String CONTENT_DIGEST = IDENTITIES.catalogContentDigest();
 
     private McpToolCatalog() {
         // Constants only.
@@ -100,6 +95,29 @@ public final class McpToolCatalog {
      */
     public static String catalogContentDigest() {
         return CONTENT_DIGEST;
+    }
+
+    /**
+     * Derives the two catalog identities from an authoritative descriptor set.
+     *
+     * <p>This operation intentionally excludes rendered guidance artifacts. It
+     * is public so diagnostics and hermetic tests can prove that a content-only
+     * descriptor change does not masquerade as a wire incompatibility.</p>
+     *
+     * @param descriptors authoritative descriptors
+     * @return wire and complete catalog identities
+     */
+    public static Identity identities(List<Descriptor> descriptors) {
+        Objects.requireNonNull(descriptors, "descriptors");
+        List<Descriptor> copy = List.copyOf(descriptors);
+        if (copy.isEmpty()) {
+            throw new IllegalArgumentException("descriptor set must not be empty");
+        }
+        return new Identity(
+                digest(canonical(copy.stream().sorted(Comparator.comparing(Descriptor::wireName))
+                        .map(Descriptor::wireSemantics).toList())),
+                digest(canonical(copy.stream().sorted(Comparator.comparingInt(Descriptor::displayOrder))
+                        .map(Descriptor::contentSemantics).toList())));
     }
 
     /**
@@ -145,6 +163,20 @@ public final class McpToolCatalog {
         manifest.put("rendererVersion", DESCRIPTOR_VERSION);
         manifest.put("artifactContentHash", digest(renderedBytes));
         return digest(canonical(manifest));
+    }
+
+    /**
+     * Pair of non-circular catalog identities.
+     *
+     * @param wireCompatibilityDigest protocol and execution identity
+     * @param catalogContentDigest complete descriptor-content identity
+     */
+    public record Identity(String wireCompatibilityDigest, String catalogContentDigest) {
+        /** Validates identity values. */
+        public Identity {
+            Objects.requireNonNull(wireCompatibilityDigest, "wireCompatibilityDigest");
+            Objects.requireNonNull(catalogContentDigest, "catalogContentDigest");
+        }
     }
 
     /**
@@ -269,37 +301,109 @@ public final class McpToolCatalog {
 
     private static List<Descriptor> buildDescriptors() {
         List<Descriptor> result = new ArrayList<>();
+        Map<String, Object> claimSelector = objectSchema(Map.of(
+                "path", Map.of("type", "string"),
+                "kind", Map.of("type", "string", "enum", List.of("path_exact", "path_subtree"))), List.of("path"));
+        Map<String, Object> claimArray = Map.of("type", "array", "items", claimSelector);
+        Map<String, Object> taskProperties = new LinkedHashMap<>();
+        taskProperties.put("goal", property("string"));
+        taskProperties.put("acceptance", property("string"));
+        taskProperties.put("likelyScopes", Map.of("type", "array", "items", property("string")));
+        taskProperties.put("knownDependencies", Map.of("type", "array", "items", property("string")));
+        taskProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+        taskProperties.put("unwindCompletion", Map.of("type", "boolean",
+                "description", "Authorized unwind of this caller's prepared but unpublished completion"));
+        taskProperties.put("repairIntentId", Map.of("type", "string", "format", "uuid"));
+        taskProperties.put("repairSnapshotId", property("string"));
+        taskProperties.put("claims", claimArray);
+        Map<String, Object> taskSchema = objectSchema(taskProperties, List.of());
         result.add(descriptor(ENSURE_SESSION, "Ensures an active, verified Synesis workspace session.",
-                objectSchema(Map.of("task", Map.of("type", "object"), "refresh", property("boolean")), List.of()),
+                objectSchema(Map.of("task", taskSchema, "refresh", property("boolean")), List.of()),
                 "ensure-session", "MUTATING", List.of("SESSION_BINDING"), 1));
         result.add(descriptor(READ_FILE, "Reads text file content from the assigned worktree.",
-                objectSchema(Map.of("path", property("string"), "startLine", property("integer"),
-                        "endLine", property("integer"), "maxBytes", property("integer")), List.of("path")),
+                objectSchema(Map.of(
+                        "path", Map.of("type", "string", "description", "Repository-relative file path"),
+                        "startLine", Map.of("type", "integer", "description", "1-based starting line number (default: 1)"),
+                        "endLine", Map.of("type", "integer", "description", "1-based ending line number (default: EOF)"),
+                        "maxBytes", Map.of("type", "integer", "description", "Maximum UTF-8 bytes to return (default: 65536)")), List.of("path")),
                 "read-file", "READ_ONLY", List.of("SESSION_BINDING"), 2));
+        Map<String, Object> editSchema = objectSchema(Map.of(
+                "find", property("string"), "replace", property("string"), "expectedOccurrences", property("integer")),
+                List.of("find", "replace", "expectedOccurrences"));
         result.add(descriptor(APPLY_PATCH, "Applies a structured file patch to the assigned worktree.",
-                objectSchema(Map.of("path", property("string"), "create", property("boolean"),
-                        "content", property("string"), "expectedHash", property("string"), "edits", Map.of("type", "array")), List.of("path")),
+                objectSchema(Map.of(
+                        "path", Map.of("type", "string", "description", "Repository-relative file path"),
+                        "create", Map.of("type", "boolean", "description", "Set true for new file creation"),
+                        "content", Map.of("type", "string", "description", "Full file content for creation mode"),
+                        "expectedHash", Map.of("type", "string", "description", "SHA-256 hex string of existing contentHash returned by synesis.read_file (required for modification)"),
+                        "edits", Map.of("type", "array", "items", editSchema, "description", "List of replacement edits (required for modification)")), List.of("path")),
                 "apply-patch", "MUTATING", List.of("SESSION_BINDING", "CLAIM"), 3));
         result.add(descriptor(RUN_COMMAND, "Executes an approved project command intent inside the assigned worktree.",
-                objectSchema(Map.of("type", property("string"), "target", property("string"), "arguments", Map.of("type", "array")), List.of("type")),
+                objectSchema(Map.of(
+                        "type", Map.of("type", "string", "description", "Command intent classification: build, test, lint, format_check, git_status, git_diff, git_log"),
+                        "target", Map.of("type", "string", "description", "Optional target specifier or test filter"),
+                        "arguments", Map.of("type", "array", "items", property("string"), "description", "Optional additional arguments")), List.of("type")),
                 "run-command", "MUTATING", List.of("SESSION_BINDING"), 4));
         result.add(descriptor(GET_NEXT_ACTION, "Retrieves the highest-priority actionable coordination item.",
-                objectSchema(Map.of("integrationCheck", Map.of("type", "object")), List.of()),
+                objectSchema(Map.of("integrationCheck", Map.of("type", "object", "description", "Explicit pre-merge candidate facts")), List.of()),
                 "get-next-action", "READ_ONLY", List.of("SESSION_BINDING"), 5));
+        Map<String, Object> contractSchema = objectSchema(Map.of(
+                "inputs", Map.of("type", "string", "description", "Input parameter specification"),
+                "output", Map.of("type", "string", "description", "Output return type and semantics"),
+                "requiredBehavior", Map.of("type", "array", "items", property("string"), "description", "List of operational behavior requirements"),
+                "acceptanceTests", Map.of("type", "array", "items", property("string"), "description", "List of acceptance test criteria")), List.of());
+        Map<String, Object> requestPayload = new LinkedHashMap<>();
+        requestPayload.put("conflictingIntentId", Map.of("type", "string", "format", "uuid"));
+        requestPayload.put("intentId", Map.of("type", "string", "format", "uuid"));
+        requestPayload.put("contractId", Map.of("type", "string", "format", "uuid"));
+        requestPayload.put("body", property("string"));
+        requestPayload.put("selectors", Map.of("type", "array", "items", property("string")));
+        requestPayload.put("revision", Map.of("type", "integer", "minimum", 1));
+        requestPayload.put("targetParticipant", property("string"));
+        requestPayload.put("proposal", property("string"));
+        requestPayload.put("artifact", property("string"));
+        requestPayload.put("capability", property("string"));
+        requestPayload.put("contract", contractSchema);
+        requestPayload.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$"));
+        requestPayload.put("revisionResponse", Map.of("type", "string", "enum", List.of("accept", "counter", "cancel")));
+        requestPayload.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+        requestPayload.put("grantId", Map.of("type", "string", "format", "uuid"));
+        requestPayload.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
+        Map<String, Object> requestSchema = objectSchema(Map.of(
+                "kind", Map.of("type", "string", "enum", List.of("capability_request", "collaboration_status", "contract_proposal", "contract_request", "scope_revision", "handoff", "work_group_join", "continuation")),
+                "payload", objectSchema(requestPayload, List.of())), List.of("kind", "payload"));
         result.add(descriptor(REQUEST_COORDINATION, "Submits one strict capability or collaboration request.",
-                objectSchema(Map.of("kind", property("string"), "payload", Map.of("type", "object")), List.of("kind", "payload")),
+                requestSchema,
                 "request-coordination", "MUTATING", List.of("SESSION_BINDING", "COORDINATION"), 6));
+        Map<String, Object> responsePayload = new LinkedHashMap<>();
+        responsePayload.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$"));
+        responsePayload.put("response", Map.of("type", "string", "enum", List.of("accept", "revise", "reject")));
+        responsePayload.put("revision", contractSchema);
+        responsePayload.put("reason", property("string"));
+        responsePayload.put("coordinationRequest", Map.of("type", "string", "format", "uuid"));
+        responsePayload.put("coordinationStatus", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
+        responsePayload.put("proposal", property("string"));
+        responsePayload.put("inboxItemId", Map.of("type", "string", "format", "uuid"));
+        responsePayload.put("resolution", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
+        responsePayload.put("result", Map.of("type", "string", "enum", List.of("accepted", "revision_required")));
+        responsePayload.put("implementationRevision", Map.of("type", "integer", "minimum", 1));
+        responsePayload.put("failedAcceptanceTests", Map.of("type", "array", "items", property("string")));
+        Map<String, Object> responseSchema = objectSchema(Map.of(
+                "kind", Map.of("type", "string", "enum", List.of("capability_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation")),
+                "payload", objectSchema(responsePayload, List.of())), List.of("kind", "payload"));
         result.add(descriptor(RESPOND_COORDINATION, "Responds to a pending coordination item or validates an implementation.",
-                objectSchema(Map.of("kind", property("string"), "payload", Map.of("type", "object")), List.of("kind", "payload")),
+                responseSchema,
                 "respond-coordination", "MUTATING", List.of("SESSION_BINDING", "COORDINATION"), 7));
         result.add(descriptor(PUBLISH_CAPABILITY_IMPLEMENTATION, "Publishes an immutable implementation for an accepted capability request.",
-                objectSchema(Map.of("capabilityRequestHandle", property("string"), "summary", property("string")), List.of("capabilityRequestHandle")),
+                objectSchema(Map.of(
+                        "capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$", "description", "Server-issued capability request handle"),
+                        "summary", Map.of("type", "string", "description", "Human-readable summary of this implementation")), List.of("capabilityRequestHandle")),
                 "publish-capability", "MUTATING", List.of("SESSION_BINDING", "CAPABILITY"), 8));
         result.add(descriptor(FINISH_LANE, "Validates, publishes, integrates, and closes this isolated lane.",
-                objectSchema(Map.of("summary", property("string")), List.of()),
+                objectSchema(Map.of("summary", Map.of("type", "string", "description", "Human-readable summary of completed task work")), List.of()),
                 "finish-lane", "MUTATING", List.of("SESSION_BINDING", "CLAIM", "SNAPSHOT"), 9));
         result.add(descriptor(CANCEL_LANE, "Permanently fences and cancels this isolated lane.",
-                objectSchema(Map.of("reason", property("string")), List.of("reason")),
+                objectSchema(Map.of("reason", Map.of("type", "string", "description", "Cancellation reason string (1-1000 characters)")), List.of("reason")),
                 "cancel-lane", "MUTATING", List.of("SESSION_BINDING"), 10));
         return List.copyOf(result);
     }

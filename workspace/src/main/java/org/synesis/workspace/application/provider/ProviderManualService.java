@@ -34,31 +34,21 @@ public final class ProviderManualService {
      * @param contentHash actual content hash
      * @param reason attestation reason
      * @param provider provider identifier
+     * @param wireCompatibilityDigest verified wire compatibility digest
+     * @param catalogContentDigest verified catalog content digest
+     * @param guidanceArtifactDigest verified rendered guidance artifact digest
      */
-    public record Attestation(boolean valid, int version, String contentHash, String reason, String provider) {
+    public record Attestation(boolean valid, int version, String contentHash, String reason, String provider,
+                              String wireCompatibilityDigest, String catalogContentDigest,
+                              String guidanceArtifactDigest) {
         /** Validates an attestation result. */
         public Attestation {
             Objects.requireNonNull(contentHash, "contentHash");
             Objects.requireNonNull(reason, "reason");
             Objects.requireNonNull(provider, "provider");
-        }
-
-        /** Returns the current catalog wire-compatibility digest.
-         * @return current wire compatibility digest
-         */
-        public String wireCompatibilityDigest() { return McpToolCatalog.wireCompatibilityDigest(); }
-
-        /** Returns the current catalog content digest.
-         * @return current catalog content digest
-         */
-        public String catalogContentDigest() { return McpToolCatalog.catalogContentDigest(); }
-
-        /** Returns the installed guidance-artifact digest when attested.
-         * @return installed guidance artifact digest, or empty when unavailable
-         */
-        public String guidanceArtifactDigest() {
-            return valid ? McpToolCatalog.guidanceArtifactDigest("synesis-manual", provider,
-                    contentHash.getBytes(StandardCharsets.UTF_8)) : "";
+            Objects.requireNonNull(wireCompatibilityDigest, "wireCompatibilityDigest");
+            Objects.requireNonNull(catalogContentDigest, "catalogContentDigest");
+            Objects.requireNonNull(guidanceArtifactDigest, "guidanceArtifactDigest");
         }
     }
 
@@ -136,10 +126,10 @@ public final class ProviderManualService {
             Path manual = directory.resolve(MANUAL_FILE);
             Path manifestPath = directory.resolve(MANIFEST_FILE);
             if (!Files.isRegularFile(manual) || !Files.isRegularFile(manifestPath)) {
-                return new Attestation(false, 0, "", "MANUAL_MISSING", provider);
+                return invalid("MANUAL_MISSING", provider);
             }
             Object parsed = ProviderJson.parse(Files.readString(manifestPath));
-            if (!(parsed instanceof Map<?, ?> raw)) return new Attestation(false, 0, "", "MANIFEST_INVALID", provider);
+            if (!(parsed instanceof Map<?, ?> raw)) return invalid("MANIFEST_INVALID", provider);
             int version = raw.get("version") instanceof Number n ? n.intValue() : 0;
             String expected = String.valueOf(raw.get("contentHash"));
             String actual = hash(Files.readAllBytes(manual));
@@ -154,10 +144,17 @@ public final class ProviderManualService {
                     && McpToolCatalog.wireCompatibilityDigest().equals(String.valueOf(raw.get("wireCompatibilityDigest")))
                     && McpToolCatalog.catalogContentDigest().equals(String.valueOf(raw.get("catalogContentDigest")))
                     && expectedArtifact.equals(actualArtifact);
-            return new Attestation(valid, version, actual, valid ? "ATTESTED" : "MANUAL_MODIFIED_OR_OUTDATED", provider);
+            return new Attestation(valid, version, actual, valid ? "ATTESTED" : "MANUAL_MODIFIED_OR_OUTDATED", provider,
+                    String.valueOf(raw.get("wireCompatibilityDigest")),
+                    String.valueOf(raw.get("catalogContentDigest")),
+                    valid ? actualArtifact : String.valueOf(raw.get("guidanceArtifactDigest")));
         } catch (Exception failure) {
-            return new Attestation(false, 0, "", "MANUAL_UNVERIFIABLE", provider);
+            return invalid("MANUAL_UNVERIFIABLE", provider);
         }
+    }
+
+    private static Attestation invalid(String reason, String provider) {
+        return new Attestation(false, 0, "", reason, provider, "", "", "");
     }
 
     private static String content(String provider) {

@@ -5,6 +5,16 @@ plugins {
 group = "org.synesis"
 version = "0.1.0-SNAPSHOT"
 
+dependencies {
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
+
 java {
     toolchain { languageVersion = JavaLanguageVersion.of(25) }
     withSourcesJar()
