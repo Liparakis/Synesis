@@ -532,4 +532,22 @@ class McpServerTest {
         assertTrue(matcher.find());
         assertTrue(nextActionAgain.contains(matcher.group(1)));
     }
+
+    @Test
+    void providerShapedPathAliasesRemainRevisionChecked() throws Exception {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-aliases");
+
+        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
+        assertTrue(handler.handleMessage(ensureReq).contains("ready"));
+
+        String createReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"relativePath\":\"src/alias.txt\",\"create\":true,\"newContent\":\"alias\"}}}";
+        String createResp = handler.handleMessage(createReq);
+        assertTrue(createResp.contains("completed"));
+
+        String readReq = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"read_file\",\"arguments\":{\"relativePath\":\"src/alias.txt\"}}}";
+        String readResp = handler.handleMessage(readReq);
+        assertTrue(readResp.contains("completed"));
+        assertTrue(readResp.contains("alias"));
+    }
 }

@@ -634,7 +634,7 @@ public final class McpProtocolHandler {
                 }
             }
             case "synesis." + McpToolCatalog.READ_FILE -> {
-                String path = arguments != null ? (String) arguments.get("path") : null;
+                String path = stringArgument(arguments, "path", "relativePath");
                 Integer startLine =
                         (arguments != null && arguments.get("startLine") instanceof Number n) ? n.intValue() : null;
                 Integer endLine =
@@ -647,10 +647,10 @@ public final class McpProtocolHandler {
                 agentResponse = readService.readFile(readReq);
             }
             case "synesis." + McpToolCatalog.APPLY_PATCH -> {
-                String path = arguments != null ? (String) arguments.get("path") : null;
+                String path = stringArgument(arguments, "path", "relativePath");
                 boolean create = arguments != null && Boolean.TRUE.equals(arguments.get("create"));
-                String content = arguments != null ? (String) arguments.get("content") : null;
-                String expectedHash = arguments != null ? (String) arguments.get("expectedHash") : null;
+                String content = stringArgument(arguments, "content", "newContent");
+                String expectedHash = stringArgument(arguments, "expectedHash", "expectedRevision");
 
                 List<WorkspacePatchService.PatchEdit> patchEdits = new java.util.ArrayList<>();
                 if (arguments != null && arguments.get("edits") instanceof List<?> editsList) {
@@ -1087,10 +1087,17 @@ public final class McpProtocolHandler {
             return null;
         }
         Object taskObj = arguments.get("task");
-        if (!(taskObj instanceof Map<?, ?> taskMap)) {
+        Map<String, Object> map;
+        if (taskObj instanceof Map<?, ?> taskMap) {
+            map = (Map<String, Object>) taskMap;
+        } else if (arguments.containsKey("goal") || arguments.containsKey("acceptance")
+                || arguments.containsKey("claims")) {
+            // A few provider renderers flatten the task object.  Normalize
+            // that bounded shape without changing the advertised schema.
+            map = arguments;
+        } else {
             return null;
         }
-        Map<String, Object> map = (Map<String, Object>) taskMap;
         String goal = (String) map.get("goal");
         String acceptance = (String) map.get("acceptance");
         List<String> likelyScopes = (List<String>) map.get("likelyScopes");
@@ -1104,15 +1111,23 @@ public final class McpProtocolHandler {
 
     @SuppressWarnings("unchecked")
     private List<ResourceSelector> parseClaimSelectors(Map<String, Object> arguments) {
-        if (arguments == null || !(arguments.get("task") instanceof Map<?, ?> taskMap)
-                || !(taskMap.get("claims") instanceof List<?> claims)) {
+        if (arguments == null) {
+            return List.of();
+        }
+        Object taskObj = arguments.get("task");
+        Object claimsObj = taskObj instanceof Map<?, ?> taskMap ? taskMap.get("claims") : arguments.get("claims");
+        if (!(claimsObj instanceof List<?> claims)) {
             return List.of();
         }
         List<ResourceSelector> selectors = new java.util.ArrayList<>();
         for (Object item : claims) {
             if (item instanceof Map<?, ?> claim) {
                 Object path = claim.get("path");
-                String kind = claim.get("kind") instanceof String value ? value : "path_exact";
+                if (!(path instanceof String)) {
+                    path = claim.get("relativePath");
+                }
+                String kind = claim.get("kind") instanceof String value
+                        ? value.toLowerCase(java.util.Locale.ROOT) : "path_exact";
                 if (path instanceof String value) {
                     selectors.add("path_subtree".equals(kind)
                             ? ResourceSelector.pathSubtree(value) : ResourceSelector.pathExact(value));
@@ -1123,8 +1138,11 @@ public final class McpProtocolHandler {
     }
 
     private boolean claimsFieldSpecified(Map<String, Object> arguments) {
-        return arguments != null && arguments.get("task") instanceof Map<?, ?> taskMap
-                && taskMap.containsKey("claims");
+        if (arguments == null) {
+            return false;
+        }
+        return arguments.get("task") instanceof Map<?, ?> taskMap
+                ? taskMap.containsKey("claims") : arguments.containsKey("claims");
     }
 
     @SuppressWarnings("unchecked")
@@ -1132,6 +1150,27 @@ public final class McpProtocolHandler {
         if (arguments == null || !(arguments.get("task") instanceof Map<?, ?> taskMap)) return null;
         Object value = ((Map<String, Object>) taskMap).get(field);
         return value instanceof String text && !text.isBlank() ? text : null;
+    }
+
+    /**
+     * Returns the first non-blank string under the canonical key or a bounded
+     * provider-shaped alias.  Aliases are input normalization only: the raw
+     * ten-tool catalog remains canonical and authorization is unchanged.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @param canonical canonical wire key
+     * @param alias provider-shaped spelling accepted at dispatch
+     * @return selected value or {@code null}
+     */
+    private static String stringArgument(Map<String, Object> arguments, String canonical, String alias) {
+        if (arguments == null) {
+            return null;
+        }
+        Object value = arguments.get(canonical);
+        if (!(value instanceof String string) || string.isBlank()) {
+            value = arguments.get(alias);
+        }
+        return value instanceof String string && !string.isBlank() ? string : null;
     }
 
     private static boolean requiresManualAttestation(String name, Map<String, Object> arguments) {
