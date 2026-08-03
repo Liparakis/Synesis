@@ -26,9 +26,11 @@ public final class SynesisMcpServer {
      * @return process exit code
      */
     public static int execute(String[] arguments) {
-        String provider = "codex";
-        Path projectRoot = Path.of(".").toAbsolutePath().normalize();
-        String connectionInstanceId = "conn-instance-" + UUID.randomUUID();
+        String provider = boundedEnvironment("SYNESIS_MCP_PROVIDER", "codex");
+        Path projectRoot = Path.of(boundedEnvironment("SYNESIS_MCP_PROJECT", "."))
+                .toAbsolutePath().normalize();
+        String connectionInstanceId = boundedEnvironment("SYNESIS_MCP_CONNECTION_INSTANCE_ID",
+                "conn-instance-" + UUID.randomUUID());
 
         for (int i = 0; i < arguments.length; i++) {
             String arg = arguments[i];
@@ -49,6 +51,11 @@ public final class SynesisMcpServer {
         McpStdioServer server = new McpStdioServer(handler);
 
         return server.run();
+    }
+
+    private static String boundedEnvironment(String name, String fallback) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() || value.length() > 8_192 ? fallback : value.trim();
     }
 
     /**

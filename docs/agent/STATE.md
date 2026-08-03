@@ -1,5 +1,51 @@
 # State
 
+## SYN-038 current verification state
+
+SYN-038 implementation is complete and recorded at CP-0447; the task remains
+the sole ACTIVE bookkeeping task until handoff. The existing `synesis coordination serve` process is the
+production owner and `ProjectRuntimeHost` retains the Codex-only lifecycle
+attachment. Deterministic lifecycle tests, coordination and CLI checks, strict
+Javadocs, static/format gates, deferred validation, bootstrap Go tests/vet,
+and diff checks pass. The final focused and full repository gates, bootstrap Go
+tests/vet, deferred and fixture validators, and `git diff --check` are green.
+
+The real-owner acceptance is complete for the required lifecycle path and
+evidence-backed: exact authority was
+established before START; the generated-schema App Server reached exact
+thread/turn control; WAIT did not starve STEER or INTERRUPT; interruption,
+passive exact-thread resume, explicit continuation, duplicate STATUS/WAIT
+replay, and bounded hard-stop outcomes were observed. The restarted-harness
+owner run used local Codex `0.146.0-alpha.9.2` with the existing global command
+override and reached `ensure_session`, `apply_patch`, and validation. Its
+foreground barrier remained alive after the exact interrupted terminal event,
+so command cancellation/tree cleanup remains independently unproven and is
+classified as `turn_interrupted_command_remained_active`. A fresh exact
+binding run with installed Codex `0.146.0-alpha.9.2` then resumed the exact
+thread and used Codex-driven MCP mutation, validation, snapshot publication,
+and `finish_lane` integration; snapshot
+`snap_f3bd879455900258bb77ca6cea8fac22` integrated at clean control HEAD
+`9e30f4183434a5f282a6e42fb55e4339c0879578`. Historical Codex 0.145.0 runs still record
+`INTERACTION_REQUIRED` and SYN-038 correctly does not guess approval. See
+`docs/evidence/syn038-real-codex-app-server-acceptance-2026-08-03.md`.
+
+A prior bounded retry supplied the existing task and exact claim to
+`ensure_session`; Synesis returned `overlapping_claim` for the already-owned
+lane. That historical lane was not replayed; the fresh exact binding above
+provided the normal completion evidence.
+
+The harness-restart final3 run also observed a real foreground barrier,
+WAIT/STEER control concurrency, exact-turn interruption with an observable
+command, owner restart/passive reconciliation, explicit exact-thread RESUME,
+and duplicate replay. The direct global MCP smoke returned `initialize` and
+the unchanged ten-tool catalog. SYN-038 remains fail-closed and does not add
+an approval operation or claim Codex-driven command cleanup.
+
+The sequential root `./gradlew.bat check --no-daemon --max-workers=1
+--console=plain` completed successfully; module reports contain zero failures
+and zero errors. No new approval operation, daemon, listener, provider
+abstraction, or MCP tool was added.
+
 ## SYN-037 implementation and closure state
 
 SYN-037 is DONE at CP-0415. The implementation keeps exactly ten raw MCP
@@ -468,6 +514,21 @@ category.
 - MCP tools count remains exactly 10 tools; lifecycle names are explicit and strict.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0190.
 
+## SYN-038 current verification
+
+- SYN-038 is the sole active implementation task. Repository inspection found
+  the concrete long-lived owner: `CoordinationServeCommand` starts the existing
+  `CoordinationHttpServer`; the implementation will retain `ProjectRuntimeHost`
+  in that process and add only the Codex loopback route.
+- The prerequisite authority workflow is verified in existing code:
+  `AgentSessionService.resolveSessionContext`,
+  `ProviderSessionBindingService.ensure/find`, and
+  `WorkspaceCollaborationService.announce` establish the exact binding,
+  participant, WorkIntent, acquired claim, lane/epoch, and isolated worktree.
+- No Codex App Server lifecycle classes, route, ledger, or protocol client exist
+  yet. Do not claim production reachability or acceptance until they are added
+  and tested.
+
 ## SYN-029 current verification
 
 - Added `bootstrap/cmd/synesis-mcp` as a native stdio launcher. The Gradle
@@ -543,3 +604,35 @@ coordination events. Integration refreshes pending coordination requests before
 attempt allocation, and completed provider bindings are terminalized for the
 exact caller while preserving their worktree. Snapshot publication excludes
 provider/admin metadata (`AGENTS.md`, `.synesis`, `.codex`, `.claude`, `.agents`).
+
+## SYN-038 implementation verification
+
+- The existing `synesis coordination serve` process now retains
+  `ProjectRuntimeHost`, which owns the Codex-only loopback lifecycle route,
+  project/binding ownership locks, lifecycle checkpoints, idempotency ledger,
+  protocol attachments, evidence, and shutdown/reconciliation behavior.
+- `ProviderSessionCommand` establishes authority through the existing
+  `AgentSessionService` and `WorkspaceCollaborationService` before freezing the
+  exact binding, participant, WorkIntent/claim, lane/epoch, control root,
+  worktree, and MCP connection identity into the immutable START envelope.
+- The lifecycle implementation enforces durable idempotency before every
+  state-changing mutation, immutable transport retries, bounded raw protocol
+  frames and HTTP bodies, 256 late-response tombstones, event-driven WAIT
+  capacity, 8 MiB generation journals, repeated-discovery hard stop, and
+  independent interruption/command-cleanup outcomes.
+- Focused lifecycle tests (26 tests), compilation, strict Javadocs, deferred
+  validation, and diff checks pass. The sequential root Gradle check completed
+  successfully after the existing Git-heavy initialization fixtures, with zero
+  module test failures/errors. The disposable real owner now also records WAIT control,
+  STEER/INTERRUPT, passive exact-thread resume, explicit continuation,
+  duplicate replay, and the installed Codex MCP elicitation boundary. MCP
+  command cancellation and normal lane completion remain unproven. See
+  `docs/evidence/syn038-real-codex-app-server-acceptance-2026-08-03.md`.
+
+- Harness-restart MCP retry: a fresh installed `synesis-mcp.exe` stdio process
+  returned protocol `2025-06-18`, exactly ten tools, and `ensure_session=ready`.
+  The callable desktop MCP child was stale and returned an internal
+  session-construction error, so it was not used as evidence. The restarted
+  production owner passively reconciled the exact stored thread to STOPPED;
+  the old claim was already released, and lifecycle STATUS failed closed with
+  `lifecycle_claim_not_acquired` rather than guessing continuation authority.

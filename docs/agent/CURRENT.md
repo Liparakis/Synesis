@@ -2,85 +2,141 @@
 
 ## Identity
 
-- Task ID: SYN-037
-- Status: DONE
+- Task ID: SYN-038
+- Status: ACTIVE (implementation, real-Codex acceptance, and final repository
+  verification complete; retained as the sole primary task until handoff)
 - Priority: P0
 - Started checkpoint: CP-0408
-- Completed checkpoint: CP-0415 (final post-commit checkpoint)
-- Responsible agent: primary SYN-037 implementation engineer
-- Related decisions: ADR-0042
+- Last implementation checkpoint: CP-0447
+- Responsible agent: primary implementation engineer
+- Related decisions: ADR-0043
 
 ## Objective
 
-Replace the prerelease command intent/adapter path with direct argv execution,
-maintain exact repository-private runtime exclusions without claiming provider
-configuration ownership, and prove real Codex completion through an
-uncontaminated snapshot, generic validation, integration, and a clean control
-checkout.
+Implement the reliable Codex App Server lifecycle owned by the existing
+`synesis coordination serve` process. Establish exact Synesis authority through
+the existing session and collaboration workflow before constructing START;
+then enforce durable lifecycle idempotency, bounded protocol/evidence
+handling, event-driven control, repeated-discovery hard stop, and independent
+turn/MCP cancellation evidence.
 
 ## Work completed
 
-- Added `ProjectProcessExecutor` and `ProjectCommandSpec` as the single direct
-  argv primitive for agent commands, pre-publication validation, and integration
-  validation. It enforces lane-relative working directories, bounded
-  head/tail evidence, concurrent draining, raw byte read/retained counts,
-  explicit truncation, timeouts, cancellation, and process-tree termination.
-- Replaced the legacy command-intent and build-system adapter route. The MCP
-  surface remains exactly ten raw tools and `run_command` accepts only the
-  canonical `argv`, `workingDirectory`, and `timeoutSeconds` request.
-- Added project metadata schema v2 optional validation; schema v1 remains
-  readable as no configured gate and is not rewritten automatically.
-- Added exact common-directory exclusions for `/.synesis/local/`,
-  `/.synesis/coordination/`, and `/.codex/hooks.json`. Exclusion is visibility
-  only and never proves provider ownership.
-- Added fail-closed Codex hook ownership classification, tracked/symlink/
-  malformed/concurrent conflict handling, preservation of unrelated provider
-  entries, and stable `PROVIDER_CONFIGURATION_CONFLICT` diagnostics.
-- Completion and integration return the same structured command evidence and
-  run the project-owned validation argv through the generic executor.
-- Corrected the two root-verification fixture defects without changing
-  production behavior: the Codex completion assertion compares logical lines
-  across CRLF/LF platforms, and integration snapshots use a lane worktree
-  based on the committed managed baseline before adding only the claimed
-  source path.
+- `CoordinationServeCommand` now constructs and retains `ProjectRuntimeHost`
+  for the life of the existing loopback coordination server and mounts the
+  Codex-only `/codex-lifecycle/v1` route.
+- `ProviderSessionCommand` resolves the existing binding/session workflow,
+  announces and acquires the exact WorkIntent claim, freezes binding,
+  participant, lane/epoch, worktree, control-root, and MCP identities, and
+  submits an immutable signed START envelope.
+- `ProjectRuntimeHost` owns per-binding attachment locks, process attachments,
+  lifecycle checkpoints, idempotency, WAIT capacity, reconciliation, and
+  diagnostics.
+- The Codex-only protocol client uses the generated local schema projection,
+  bounded raw frame/body handling, late-response tombstones, event-driven WAIT,
+  bounded evidence queue/journal/retention, repeated-discovery hard stop, and
+  separate interruption/cancellation evidence surfaces.
 
 ## Verification
 
-- Real Codex acceptance: PASS —
-  `docs/evidence/syn037-real-codex-acceptance-2026-08-03.md`.
-- Focused workspace suites (executor/evidence, project metadata, hook
-  ownership, private exclusions, command service, completion/integration):
-  PASS, including the two repaired tests.
-- `:workspace:check`: PASS in 7m39s (architecture, formatting, Javadocs,
-  static analysis, and all workspace tests).
-- `:mcp-contract:test`, `:mcp:test --tests
-  org.synesis.mcp.application.McpServerTest`: PASS.
-- `:mcp-contract:javadoc`, `:mcp:javadoc`, `:workspace:javadoc`: PASS.
-- Complete profiled root `check`: PASS in 15s after the workspace outputs were
-  current; 57 actionable tasks and profile
-  `build/reports/profile/profile-2026-08-03-09-53-49.html`.
-- Deferred register validator, bootstrap Go tests/vet, and `git diff --check`:
-  PASS.
-- The earlier 13m32s root failure was reproduced and fixed as two test-fixture
-  defects; no production command or snapshot policy behavior was changed.
+- Focused lifecycle suite: PASS (8 classes, 26 tests).
+- Workspace/CLI/MCP compilation: PASS.
+- Strict Javadocs for workspace, coordination, CLI, and MCP: PASS.
+- Deferred validator and `git diff --check`: PASS.
+- Installed schema generation and initialize smoke: PASS; see
+  `docs/evidence/syn038-codex-schema-2026-08-03.md`.
+- Disposable real-owner acceptance: PASS for authority-before-START, durable
+  START, exact thread/turn identity, WAIT control capacity, STEER, INTERRUPT,
+  passive exact-thread resume, explicit continuation, duplicate STATUS/WAIT
+  replay, and bounded hard-stop results. The restarted-harness run used local
+  Codex `0.146.0-alpha.9.2` with the existing global command override and
+  reached Synesis MCP `ensure_session`, `apply_patch`, and validation. It
+  directly observed an interrupted turn while the foreground MCP barrier
+  remained alive, so command cleanup is classified independently and not
+  claimed. See
+  `docs/evidence/syn038-real-codex-app-server-acceptance-2026-08-03.md`.
+- A second post-restart owner run on fixture `syn038-final2-20260803-1815`
+  repeated production START, exact-thread resume, explicit continuation,
+  STEER, INTERRUPT, WAIT, duplicate replay, owner exclusion, and hard-stop
+  evidence. The existing ten-tool MCP surface separately completed
+  `ensure_session`, validation, snapshot, and `finish_lane`; those results are
+  explicitly not attributed to Codex because Codex 0.145.0 stopped at MCP
+  elicitation. See the same acceptance record.
+- A fresh exact binding on fixture `syn038-final3-20260803-1900` ran through
+  the installed Codex `0.146.0-alpha.9.2` executable. After passive exact-
+  thread resume, the same Codex thread used the ten-tool MCP surface to apply
+  the marker, pass validation, publish snapshot
+  `snap_f3bd879455900258bb77ca6cea8fac22`, and complete `finish_lane` with
+  `task=integrated`. The control checkout ended clean at
+  `9e30f4183434a5f282a6e42fb55e4339c0879578`.
+- Post-restart direct Codex CLI MCP smoke: PASS. `ensure_session` returned
+  `ready`, and a supported `run_command`/`git_log` intent completed with
+  `SYN038_MCP_RETRY_OK` after the managed Codex Synesis Manual was refreshed.
+  This is separate from the App Server-owner acceptance and does not prove
+  command cancellation or lane completion.
+- Coordination and CLI checks, strict Javadocs, static/format gates, deferred
+  validation, bootstrap Go tests/vet, fixture validation, and diff checks pass.
+  The latest sequential root `./gradlew.bat check --no-daemon
+  --max-workers=1 --console=plain` completed with `BUILD SUCCESSFUL`; all
+  module reports contain zero failures and zero errors. The focused lifecycle
+  suite, bootstrap Go tests/vet, deferred and fixture validators, and
+  `git diff --check` also pass.
 
 ## Current failures
 
-- None. The two previously reproducible root failures now pass independently,
-  in the workspace check, and in the complete root check.
+- The restarted-harness owner run proves Codex-driven `ensure_session`,
+  `apply_patch`, and validation with local Codex `0.146.0-alpha.9.2`. Its
+  independent INTERRUPT fixture returned the exact terminal interrupted event
+  while the controlled foreground barrier process remained alive; the service
+  reported `turn_interrupted_command_state_unconfirmed`, and direct process
+  evidence classifies the observed outcome as
+  `turn_interrupted_command_remained_active`. Codex/MCP cancellation and
+  `ProjectProcessExecutor` tree termination remain unproven.
+
+- The earlier final3 binding remained blocked at `task_not_ready`; that
+  historical result is superseded for completion evidence by the fresh exact
+  binding run above. The old lane was not replayed or repaired implicitly.
+
+- Historical 0.145.0 runs still record the explicit MCP elicitation boundary;
+  SYN-038 remains fail-closed and adds no approval operation. The latest
+  0.146.0 run used only the existing command configuration override and
+  preserved the exact ten-tool MCP surface.
+
+- After the user harness restart, a fresh `synesis-mcp.exe` process returned
+  `initialize`, exactly ten tools, and `ensure_session=ready` on connection
+  `syn038-harness-retry-2005`. The app-held MCP child was an older long-lived
+  process and returned an internal session-construction error; it was left
+  untouched. A fresh `synesis.cmd coordination serve` owner passively
+  reconciled the stored App Server to `STOPPED` at revision 46. Its old
+  participant could heartbeat, but the prior claim was released, so a STATUS
+  request correctly failed closed with `lifecycle_claim_not_acquired`.
+
+- Restarting only the stale desktop MCP Java child closed the app-side MCP
+  transport without respawning it; the Codex app process remained alive. A
+  standalone post-refresh current-bundle MCP invocation still returned
+  protocol `2025-06-18`, ten tools, and `ensure_session=ready`. Do not treat
+  the closed app transport as a Synesis implementation failure.
+
+- A second direct post-restart smoke used the current `synesis.cmd` bundle and
+  again completed `initialize`, advertised exactly ten tools, and returned
+  `ensure_session=ready` with an isolated worktree. The callable desktop MCP
+  route still returned `Transport closed`; this confirms the remaining issue is
+  connector process state, not the Synesis MCP bundle.
 
 ## Completion state
 
-SYN-037 final verification is complete. The real Codex participant established an exact claim,
-changed only `src/task_tracker.txt`, produced three direct-argv results
-(including `command_executable_not_found`), completed server-owned
-pre-publication and integration validation through the same executor, published
-an uncontaminated one-file snapshot, integrated it, and left the control
-checkout clean. No new MCP tool, adapter, provider lifecycle, coordination
-topology, or unrelated architecture was added.
+SYN-038 implementation is present and complete. The fresh real-owner run
+completed Codex validation, snapshot publication, and normal `finish_lane`
+integration on the exact resumed thread, and the final deterministic and
+repository gates pass. The only independent outcome not proven is
+Codex-to-MCP command cancellation/tree cleanup; the interrupted-turn evidence
+remains `turn_interrupted_command_remained_active`. That is an explicitly
+classified acceptance outcome, not a lifecycle correctness failure. SYN-037
+remains complete at CP-0415; no universal child-cleanup guarantee is inferred.
 
 ## Immediate next action
 
-Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, review
-CP-0415, and promote the next explicitly authorized task. Do not reopen SYN-037
-without new contradictory evidence.
+No implementation action remains. Preserve the independent command-cleanup
+classification in any future review; do not add an approval operation,
+weaken fail-closed interaction handling, or claim command cleanup without
+direct cancellation/process evidence.

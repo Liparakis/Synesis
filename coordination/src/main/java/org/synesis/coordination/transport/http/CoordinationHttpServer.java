@@ -1,6 +1,7 @@
 package org.synesis.coordination.transport.http;
 
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -32,6 +33,21 @@ public final class CoordinationHttpServer implements AutoCloseable {
      * @throws IOException when the listener cannot be created
      */
     public CoordinationHttpServer(CoordinationService service, InetSocketAddress address) throws IOException {
+        this(service, address, null);
+    }
+
+    /**
+     * Creates the existing coordination listener with an optional Codex-only
+     * lifecycle route. The handler is injected by the production owner and no
+     * provider abstraction is introduced in this coordination module.
+     *
+     * @param service coordination service
+     * @param address local loopback address
+     * @param codexLifecycleHandler retained Codex handler, or {@code null}
+     * @throws IOException when the listener cannot be created
+     */
+    public CoordinationHttpServer(CoordinationService service, InetSocketAddress address,
+            HttpHandler codexLifecycleHandler) throws IOException {
         this.service = java.util.Objects.requireNonNull(service, "service");
         java.util.Objects.requireNonNull(address, "address");
         InetAddress host = address.getAddress();
@@ -47,6 +63,9 @@ public final class CoordinationHttpServer implements AutoCloseable {
         server.setExecutor(executor);
         server.createContext("/command", this::command);
         server.createContext("/events", this::events);
+        if (codexLifecycleHandler != null) {
+            server.createContext("/codex-lifecycle/v1", codexLifecycleHandler);
+        }
     }
 
     private static boolean queryBoolean(URI uri, String name) {

@@ -1668,3 +1668,54 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - Completion evidence: CP-0415,
   `docs/evidence/syn037-real-codex-acceptance-2026-08-03.md`, and
   `docs/evidence/syn037-root-verification-fix-2026-08-03.md`.
+
+## SYN-038
+
+- ID: SYN-038
+- Priority: P0
+- Title: Reliable Codex App Server lifecycle integration
+- Status: ACTIVE
+- Purpose: Add the Codex-only lifecycle attachment owned by the existing
+  `synesis coordination serve` process, with exact Synesis authority
+  establishment before START, durable lifecycle idempotency, bounded protocol
+  framing, event-driven control, evidence retention, and independently
+  evidenced interruption and process cleanup.
+- Dependencies: SYN-037 DONE; existing project, workspace, coordination,
+  provider binding, MCP, and ten-tool contract foundations.
+- Acceptance criteria: `ProjectRuntimeHost` is retained by the production
+  coordination host; one App Server attachment exists per binding; START uses
+  exact pre-existing binding/participant/WorkIntent/claim/lane/epoch/worktree
+  authority; durable idempotency is committed before every state-changing
+  mutation; retries preserve the immutable request and deadline; WAIT cannot
+  starve control; protocol, HTTP, journal, queue, tombstone, and ledger bounds
+  are enforced; hard stop uses repeated ownership-verified discovery; turn
+  interruption and MCP command cancellation are independently classified; and
+  deterministic fake-server plus real-Codex acceptance evidence is recorded.
+- Required tests: focused lifecycle authority, owner, ledger, protocol,
+  WAIT, evidence, hard-stop, cancellation, HTTP, and real-Codex acceptance
+  tests; strict Javadocs; full sequential Gradle check; deferred validator;
+  bootstrap Go tests/vet; and `git diff --check`.
+- Required documentation: lifecycle ADR, updated CURRENT.md, GOAL.md,
+  STATE.md, TEST_MATRIX.md, SESSION_LOG.md, NEXT_SESSION.md, and acceptance
+  evidence.
+- Implementation order: (1) immutable authority context and lifecycle
+  envelope; (2) durable ledger and owner/route; (3) bounded App Server client;
+  (4) lifecycle operations, WAIT, reconciliation, evidence, and hard stop;
+  (5) deterministic fixtures and real-Codex acceptance.
+- Evidence: implementation is present and deterministic verification is
+  complete through CP-0447. Focused
+  lifecycle tests, coordination/CLI checks, compilation, strict Javadocs,
+  static/format checks, deferred validation, bootstrap Go tests/vet, and diff
+  checks pass. The real-owner evidence records authority-before-START,
+  exact-thread control, WAIT capacity, STEER, INTERRUPT with an independently
+  live MCP barrier, passive resume, explicit continuation, duplicate replay,
+  Codex-driven validation, snapshot publication, integrated `finish_lane`,
+  and historical interaction-required Codex MCP behavior in
+  `docs/evidence/syn038-real-codex-app-server-acceptance-2026-08-03.md`.
+  MCP command cancellation remains independently unproven and is classified
+  as `turn_interrupted_command_remained_active`; it is not conflated with the
+  completed App Server interruption or normal finish-lane path. The sequential
+  root Gradle check, focused lifecycle suite, strict/static/format gates,
+  deferred and fixture validators, bootstrap Go tests/vet, and diff checks pass.
+  The task remains ACTIVE only for the repository's one-primary-task
+  bookkeeping rule; no implementation action remains.

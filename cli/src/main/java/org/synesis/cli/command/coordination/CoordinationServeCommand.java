@@ -12,6 +12,7 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.lifecycle.codex.ProjectRuntimeHost;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -63,14 +64,18 @@ public final class CoordinationServeCommand implements Callable<Integer> {
                         .stderr("COORDINATION_ERROR=LOOPBACK_ONLY");
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
-            try (var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port))) {
+            try (var lifecycleHost = new ProjectRuntimeHost(location, node);
+                    var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port),
+                            lifecycleHost.handler())) {
                 server.start();
                 runtime.terminal()
                         .stdout("COORDINATION_SERVE_READY endpoint=http://"
                                 + server.address()
                                 .getHostString() + ":" + server.address()
                                 .getPort()
-                                + "/ project=" + location.projectId() + " nodeId=" + node.nodeId());
+                                + "/ project=" + location.projectId() + " nodeId=" + node.nodeId()
+                                + " hostInstanceId=" + lifecycleHost.hostInstanceId()
+                                + " codexLifecycleRoute=" + lifecycleHost.route());
                 if (durationSeconds > 0) {
                     Thread.sleep(Duration.ofSeconds(durationSeconds)
                             .toMillis());
