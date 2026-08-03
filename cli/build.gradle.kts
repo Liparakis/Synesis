@@ -331,6 +331,18 @@ tasks.register("bundleSmokeTest") {
             run("version")
             val project = smokeRoot.resolve("project")
             require(project.mkdirs()) { "Unable to create smoke project: $project" }
+            fun git(vararg arguments: String) {
+                val command = mutableListOf("git", "-C", project.absolutePath).apply { addAll(arguments) }
+                val gitProcess = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true).start()
+                val gitOutput = gitProcess.inputStream.bufferedReader().readText()
+                require(gitProcess.waitFor() == 0) { "Smoke Git command failed: ${command.joinToString(" ")}\n$gitOutput" }
+            }
+            git("init")
+            git("config", "user.name", "Synesis Bundle Smoke")
+            git("config", "user.email", "synesis-bundle-smoke@example.invalid")
+            project.resolve("README.md").writeText("Synesis bundle smoke project\n")
+            git("add", ".")
+            git("commit", "-m", "Initial smoke baseline")
             run("init", "--project", project.absolutePath)
             run("provider", "list", "--project", project.absolutePath)
             run("provider", "install", "antigravity", "--project", project.absolutePath)

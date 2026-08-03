@@ -1452,3 +1452,27 @@ Append-only operational history.
 - Remaining work: SYN-036 task 10 real Codex plus Antigravity acceptance.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1`
+
+## 2026-08-03 — SYN-036 complete with provider-boundary exception
+
+- Active task: SYN-036 — Canonical baselines and lineage-aware integration.
+- Completed tasks 1 through 10. Final fixes included exact requester
+  capability filtering for same-node lanes, explicit `INTEGRATION_BLOCKED`
+  responses when no eligible candidate remains, hermetic Git setup in the
+  bundle smoke test, and removal of generated checkpoint trailing whitespace.
+- Real Codex CLI evidence established the exact `src/task_tracker.py` claim,
+  negotiated the capability contract, published revision 1 on the authorized
+  lineage, and remained fenced while requester validation was pending. A clean
+  Antigravity noninteractive process did not complete the MCP workflow and
+  produced no claim or mutation; direct Antigravity MCP transport remains
+  separately evidenced. No provider-autonomy claim is made.
+- Evidence: `docs/evidence/syn036-real-provider-acceptance-2026-08-03.md`.
+- Verification: sequential Gradle `check` with strict dependency verification
+  PASS; `:mcp:check`, targeted SYN-036 workspace suites, strict Javadocs and
+  static checks, deferred validator, bootstrap Go tests/vet, and
+  `git diff --check` PASS.
+- Disposition: SYN-036 DONE at CP-0407. The only uncompleted requested step is
+  Antigravity's external noninteractive model-driven execution, which is
+  documented as unsupported without weakening Synesis safety guarantees.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`; review CP-0407 before promoting another task.

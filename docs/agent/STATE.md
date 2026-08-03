@@ -2,12 +2,12 @@
 
 ## SYN-036 implementation state
 
-SYN-035 is closed at CP-0399. SYN-036 is the sole active implementation task.
+SYN-035 is closed at CP-0399. SYN-036 is closed at CP-0407.
 Task 1 is complete at commit `71b33c5`; the authoritative objective is the
 Canonical Baselines and Lineage-Aware Integration specification in the active
 goal attachment.
 
-Tasks 2/3/4/5/6/7/8 are now complete at the current checkpoint: managed-path
+Tasks 2 through 10 are now complete at the current checkpoint: managed-path
 classification, transaction-owned provenance, semantic index comparison, and
 the journaled baseline transaction are implemented and wired into fresh Git
 project initialization. Keep exactly ten MCP tools, recognize only journaled
@@ -46,7 +46,19 @@ idempotent. Prerelease migration and legacy cleanup are verified: canonical
 provider IDs and raw ten-tool names are enforced, obsolete current-facing
 references were removed, provider/project migration and rollback tests pass,
 and historical replay decoders remain only for signed state that must be read.
-Task 10 real-provider acceptance remains unfinished.
+Task 10 is complete under the documented external-provider exception. A real
+Codex process established the exact source claim, negotiated and published the
+authority-lineage capability implementation, and remained correctly fenced
+while requester validation was pending. A clean Antigravity noninteractive
+process did not drive the MCP workflow beyond initial/read-only activity, so
+no claim, mutation, publication, or completion was inferred. Direct
+Antigravity MCP transport is evidenced separately; model-driven provider
+autonomy is not claimed. The complete evidence is recorded in
+`docs/evidence/syn036-real-provider-acceptance-2026-08-03.md`.
+
+The final sequential Gradle check, strict Javadocs and static checks, deferred
+validator, bootstrap Go tests/vet, and diff check pass after the task-10
+regression fixes. No active SYN-036 lane remains.
 
 ## SYN-035 closure evidence
 

@@ -3,9 +3,10 @@
 ## Identity
 
 - Task ID: SYN-036
-- Status: ACTIVE
+- Status: DONE
 - Priority: P0
 - Started checkpoint: CP-0399
+- Completed checkpoint: CP-0407
 - Responsible agent: primary architecture-closure engineer
 - Related decisions: ADR-0001, ADR-0008, ADR-0038, ADR-0039, ADR-0040, ADR-0041
 
@@ -16,7 +17,7 @@ Baselines and Lineage-Aware Integration specification.
 
 ## Immediate slice
 
-Tasks 1 through 8 are complete for this checkpoint: managed-path
+Tasks 1 through 10 are complete for this checkpoint: managed-path
 classification, transaction-owned provenance, semantic index fingerprinting,
 durable baseline and reset journals, complete-tree portability and artifact
 policy, stable event wire decoding, and authority-lineage-bound capability
@@ -26,7 +27,10 @@ pending candidates for transient infrastructure failures, and durably removes
 structurally invalid candidates from the eligible queue. Repair conflicts are
 materialized from immutable snapshots into fresh authenticated lanes while a
 project append lock serializes control-head capture, materialization, and the
-signed scope-transfer event. No MCP tool was added.
+signed scope-transfer event. Task 9 removed stale current-facing migration
+references without retaining runtime compatibility aliases. Task 10 recorded
+the real Codex/Antigravity provider evidence and the external Antigravity
+noninteractive limitation. No MCP tool was added.
 
 ## Verification target
 
@@ -39,9 +43,9 @@ without duplicate commits or unsafe index overwrite.
 
 ## Immediate next action
 
-Implement and verify SYN-036 task 10: run the real Codex plus Antigravity
-acceptance against one fresh TestProject, preserving the ten-tool contract and
-recording provider evidence separately from unsupported native autonomy.
+Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, review
+CP-0407, and promote the next explicitly authorized task. Do not claim
+Antigravity model-driven autonomy beyond the recorded MCP transport evidence.
 
 ## Task 1 evidence
 
@@ -91,7 +95,28 @@ recording provider evidence separately from unsupported native autonomy.
   retained only where required to read signed existing state; no runtime
   compatibility alias was added.
 
+## Task 10 evidence
+
+- Real Codex CLI evidence is recorded in
+  `docs/evidence/syn036-real-provider-acceptance-2026-08-03.md`: exact source
+  claim, contract/capability negotiation, authority-lineage publication, and
+  correct requester-only validation fencing.
+- A clean Antigravity CLI process did not complete the MCP-only workflow and
+  created no claim or mutation. Direct Antigravity MCP transport remains
+  separately evidenced; model-driven noninteractive provider autonomy is the
+  only remaining external limitation and is not claimed.
+- Sequential Gradle `check`, strict Javadocs/static checks, MCP/workspace/
+  coordination focused suites, deferred validation, bootstrap Go tests/vet,
+  and `git diff --check` pass. The bundle smoke test now creates a Git baseline
+  before session establishment and passes outside the source tree.
+
 ## Completion state
+
+SYN-036 is DONE at CP-0407. All ten implementation tasks and the repository
+guarantees in the authoritative objective are verified. The final two-provider
+workflow is complete through the real Codex process; Antigravity's
+noninteractive model-driven MCP execution is the sole remaining external
+provider limitation, and no autonomy claim is made beyond direct MCP transport.
 
 The collaboration roadmap remains open for SYN-032 hardening after the
 prepared-snapshot and integration implementation slice. SYN-026 is complete at the

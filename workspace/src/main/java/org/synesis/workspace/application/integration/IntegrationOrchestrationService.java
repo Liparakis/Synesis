@@ -165,12 +165,14 @@ public final class IntegrationOrchestrationService {
                             .thenComparing(TaskSnapshotRecord::snapshotId))
                     .toList();
             TaskSnapshotRecord selected = null;
+            boolean blockedCandidate = false;
             while (selected == null && !eligible.isEmpty()) {
                 boolean sawPendingDependency = false;
                 for (TaskSnapshotRecord candidate : eligible) {
                     CandidateResolution resolution = resolveCandidate(candidate, allSnapshots, capProj,
                             store.taskCompletionProjection());
                     if (!resolution.structuralFailures().isEmpty()) {
+                        blockedCandidate = true;
                         if (!appendBlockedCandidate(store, identity, candidate, expectedControlHead,
                                 resolution.structuralFailures())) {
                             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
@@ -186,6 +188,7 @@ public final class IntegrationOrchestrationService {
                     List<String> metadataFailures = validateSnapshotMetadata(controlRoot,
                             List.of(candidate), expectedControlHead, store);
                     if (!metadataFailures.isEmpty()) {
+                        blockedCandidate = true;
                         if (!appendBlockedCandidate(store, identity, candidate, expectedControlHead, metadataFailures)) {
                             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
                                     AgentNextAction.REQUEST_HUMAN_HELP,
@@ -205,6 +208,11 @@ public final class IntegrationOrchestrationService {
                         if (sawPendingDependency) {
                             return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
                                     AgentNextAction.WAIT, Map.of("pendingDependencies", 1));
+                        }
+                        if (blockedCandidate) {
+                            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                                    AgentNextAction.REQUEST_HUMAN_HELP,
+                                    Map.of("state", "integration_blocked"));
                         }
                         return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
                     }

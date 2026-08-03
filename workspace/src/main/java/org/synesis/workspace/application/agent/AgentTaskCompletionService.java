@@ -159,7 +159,9 @@ public final class AgentTaskCompletionService {
             }
 
             // 1. Completion Readiness Check: Unresolved capability requests
-            List<CapabilityRequestRecord> reqPending = store.capabilityRequestProjection().findAllForRequester(callerNodeId);
+            List<CapabilityRequestRecord> reqPending = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
+                    .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId))
+                    .toList();
             List<CapabilityRequestRecord> callerPending = new ArrayList<>();
             for (CapabilityRequestRecord r : reqPending) {
                 if (r.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)) {
@@ -194,7 +196,9 @@ public final class AgentTaskCompletionService {
             String summaryText = (request.summary() != null && !request.summary().isBlank())
                     ? request.summary().trim() : "Completed task implementation";
 
-            List<CapabilityRequestRecord> workerCapabilities = store.capabilityRequestProjection().findAllForRequester(callerNodeId);
+            List<CapabilityRequestRecord> workerCapabilities = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
+                    .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId))
+                    .toList();
             // Collaboration participants are derived from the verified durable
             // session binding, never from the transient MCP connection ID.
             // Using the connection here made an otherwise valid claimed lane

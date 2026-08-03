@@ -1,22 +1,24 @@
 # Next Session
 
-- Active task: SYN-036 — Canonical baselines and lineage-aware integration.
-  SYN-035 is DONE at CP-0399; SYN-029 through SYN-034 are complete.
+- Active task: none. SYN-036 — Canonical baselines and lineage-aware
+  integration — is DONE at CP-0407; SYN-035 and SYN-029 through SYN-034 are
+  complete.
 - Repository branch: master
-- Last checkpoint: CP-0402. SYN-035 ten-tool lifecycle surface, strict schemas,
-  managed manual guidance, ADR-0041, and the full sequential check passed.
-  SYN-036 tasks 1 through 8 are complete at commits `71b33c5`, `14ff54f`,
-  `9e62c9f`, `b3b260f`, `23dea7c`, `192f839`, and the current integration-queue
-  slice, with the authority-lineage, dependency-ordering, and atomic repair
-  transfer tests verified.
-- Last passing commands: `./gradlew.bat :workspace:javadoc --no-daemon --max-workers=1 --no-parallel --console plain`; focused `:workspace:test --tests org.synesis.workspace.lifecycle.ManagedBaselineTransactionServiceTest --tests org.synesis.workspace.lifecycle.ManagedPathPolicyTest --tests org.synesis.workspace.lifecycle.SemanticIndexFingerprintTest --tests org.synesis.workspace.application.ProjectApplicationServiceTest --no-daemon --max-workers=1 --no-parallel --console plain`. A full `:workspace:check` attempt timed out without a completed report.
+- Last checkpoint: CP-0407. SYN-036 tasks 1 through 10, the ten-tool
+  contract, provider evidence, and the full sequential repository gates are
+  recorded.
+- Last passing commands: `./gradlew.bat check --no-daemon --max-workers=1
+  --no-parallel --dependency-verification=strict --console plain`;
+  `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-validate-deferred.ps1`; `bootstrap\go test -count=1 ./...`;
+  `bootstrap\go vet ./...`; and `git diff --check`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
-- Exact next code action: run the real Codex plus Antigravity SYN-036
-  acceptance on a fresh TestProject: one overlapping claim, contract-bound
-  non-overlapping test lane, immutable publication, ordered automatic
-  integration, combined validation, and clean control checkout.
-- Unresolved limitations: Antigravity model-driven autonomy remains unclaimed;
-  SYN-036 must preserve this provider-boundary statement.
+- Exact next code action: run `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`, review CP-0407, and promote the next explicitly
+  authorized task. No SYN-036 implementation work remains.
+- Unresolved limitation: Antigravity model-driven noninteractive MCP execution
+  did not complete the final provider workflow. Direct MCP transport remains
+  evidenced; native/provider-supervisor autonomy is not claimed.
 - Facts that must not be forgotten: SYN-035 changes the prerelease MCP count
   to exactly ten raw tools and removes legacy aliases. `SL-D-037` is implemented
   at CP-0268; `SL-D-038` is promoted under SYN-023; `SL-D-039` remains deferred.

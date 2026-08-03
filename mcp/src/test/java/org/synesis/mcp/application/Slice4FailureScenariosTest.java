@@ -10,12 +10,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,6 +49,19 @@ class Slice4FailureScenariosTest {
         }
     }
 
+    private static void commitIfNeeded(Path root, String message) throws Exception {
+        Process process = new ProcessBuilder("git", "-C", root.toString(), "status", "--porcelain")
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        if (process.waitFor() != 0) {
+            throw new IllegalStateException("git status failed");
+        }
+        if (!output.isBlank()) {
+            git(root, "commit", "-m", message);
+        }
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         projectRoot = tempDir.resolve("failure-scenarios-test-" + UUID.randomUUID().toString().substring(0, 8));
@@ -73,7 +88,7 @@ class Slice4FailureScenariosTest {
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "codex", "inst-owner-1", null, false));
 
         git(projectRoot, "add", ".");
-        git(projectRoot, "commit", "-m", "Commit agent session files");
+        commitIfNeeded(projectRoot, "Commit agent session files");
 
         var bindings1 = bindingService.list(location, "antigravity");
         if (!bindings1.isEmpty() && bindings1.getLast().worktreePath() != null) {
@@ -121,6 +136,15 @@ class Slice4FailureScenariosTest {
 
         requesterHandler = new McpProtocolHandler(sessionService, projectRoot, "antigravity", "inst-req-1");
         ownerHandler = new McpProtocolHandler(sessionService, projectRoot, "codex", "inst-owner-1");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.announce(projectRoot, "antigravity", "inst-req-1",
+                "Implement the product CLI", "Publish the CLI implementation",
+                List.of(ResourceSelector.pathExact("ProductCli.java")));
+        collaboration.announce(projectRoot, "codex", "inst-owner-1",
+                "Implement the product query service", "Publish the query implementation",
+                List.of(ResourceSelector.pathExact("ProductQuery.java"),
+                        ResourceSelector.pathExact("NewFeature.java")));
 
         String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
                 + projectRoot.toUri().toString().replace("\\", "/") + "\"}}";
@@ -352,7 +376,7 @@ class Slice4FailureScenariosTest {
                 "}";
         String ownerCompRes = ownerHandler.handleMessage(ownerCompJson);
         assertNotNull(ownerCompRes);
-        assertEquals("waiting", extractResponseStatus(ownerCompRes));
+        assertEquals("waiting", extractResponseStatus(ownerCompRes), ownerCompRes);
         assertEquals("integration_pending", extractResponseReason(ownerCompRes));
     }
 

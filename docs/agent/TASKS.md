@@ -1570,7 +1570,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-036
 - Priority: P0
 - Title: Canonical baselines and lineage-aware integration
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Implement the authoritative Canonical Baselines and Lineage-Aware
   Integration specification across managed baselines, semantic Git-index
   transactions, reset recovery, complete-tree portability, generated-artifact
@@ -1587,7 +1587,10 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   repair scope never becomes unreserved; reset recovery remains discoverable;
   three catalog identities are deterministic and non-circular; and the real
   Codex plus Antigravity acceptance completes with ordered automatic
-  integration and a clean control checkout.
+  integration and a clean control checkout. If a provider's external
+  noninteractive capability is demonstrably unsupported, the implementation
+  may close only with that limitation documented separately and no Synesis
+  guarantee weakened.
 - Required tests: catalog and guidance determinism; managed-path provenance;
   semantic versus nonsemantic Git-index changes; crash recovery across every
   baseline and reset phase; complete-tree Windows/Linux portability vectors;
@@ -1598,6 +1601,9 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - Required documentation: SYN-036 implementation evidence, ADRs for any new
   architecture decisions, updated CURRENT.md, GOAL.md, STATE.md, TASKS.md,
   TEST_MATRIX.md, SESSION_LOG.md, and NEXT_SESSION.md.
+- Evidence: `docs/evidence/syn036-real-provider-acceptance-2026-08-03.md`,
+  CP-0407, sequential Gradle verification, deferred validator, bootstrap Go
+  tests/vet, and `git diff --check`.
 - Implementation order: (1) catalog/rendering identities and administrative
   state; (2) managed classification; (3) semantic index transaction; (4)
   reset recovery; (5) portability and artifact policy; (6) lineage
@@ -1617,6 +1623,12 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   repeated joins are idempotent. Task 9 (prerelease migration and legacy
   cleanup) is verified in the current slice: migration/provider focused tests,
   the ten-tool decorated-name rejection, provider canonical-ID checks, and
-  repository hygiene pass; the task remains limited to migration evidence and
-  removal of stale current-facing references. Task 10 (real-provider
-  acceptance) is the next implementation slice.
+  repository hygiene pass; no runtime compatibility alias remains. Task 10 is
+  complete under the documented external-provider exception: real Codex
+  established and published the source lane's authority-lineage capability;
+  the clean Antigravity noninteractive process did not drive MCP beyond
+  read-only activity, so no claim or mutation was inferred. The complete
+  evidence is `docs/evidence/syn036-real-provider-acceptance-2026-08-03.md`.
+  Sequential Gradle `check`, strict Javadocs/static checks, deferred
+  validation, bootstrap Go tests/vet, and `git diff --check` pass. No active
+  SYN-036 lane remains.
