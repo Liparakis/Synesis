@@ -56,6 +56,10 @@ public final class WorkspaceReadinessService {
                 return unavailable(AgentReason.SESSION_NOT_READY, "SESSION_NOT_READY");
             }
             ProviderSessionBindingService.Binding binding = bindingOptional.get();
+            if ("PROVIDER_CONFIGURATION_CONFLICT".equals(binding.lastSeenState())) {
+                return unavailable(AgentReason.PROVIDER_CONFIGURATION_CONFLICT,
+                        "PROVIDER_CONFIGURATION_CONFLICT");
+            }
             if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
                 return unavailable(AgentReason.WORKSPACE_STALE, "SESSION_NOT_ACTIVE");
             }

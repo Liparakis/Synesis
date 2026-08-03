@@ -1476,3 +1476,55 @@ Append-only operational history.
   documented as unsupported without weakening Synesis safety guarantees.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1`; review CP-0407 before promoting another task.
+
+## 2026-08-03 — SYN-037 complete
+
+- Active task: SYN-037 — Generic command execution, private runtime state, and
+  real Codex completion.
+- Completed work: replaced the prerelease command intent/adapter route with
+  direct argv execution; added the shared bounded process/evidence primitive;
+  added exact common-directory Git exclusions; implemented fail-closed Codex
+  hook ownership and conflict diagnostics; added schema-v2 project validation;
+  and routed completion/integration validation through the same executor.
+- Acceptance: a real Codex CLI participant acquired the exact
+  `src/task_tracker.txt` claim, made the change through MCP, produced three
+  structured command results including `command_executable_not_found`, called
+  the permitted `finish_lane`, published snapshot
+  `snap_76f58a1737e488a2a248413dd95d3a3e` with only the tracker path, integrated
+  it, and left control HEAD `0237b31e1d1423861c6ce7e4fbe99b1027315189` with
+  empty `git status --short`. Evidence is in
+  `docs/evidence/syn037-real-codex-acceptance-2026-08-03.md`.
+- Verification: focused workspace suites, MCP contract/server suites, strict
+  `:mcp-contract:javadoc :mcp:javadoc :workspace:javadoc`, deferred validator,
+  bootstrap Go tests/vet, and `git diff --check` PASS. A bounded 300-second
+  sequential root `check` attempt timed out in the existing Gradle test
+  runner without a completed report; no root-check pass is claimed.
+- Decisions: ADR-0042 records the breaking direct-argv schema, shared executor,
+  project validation metadata, hook ownership, and raw-byte evidence semantics.
+- Disposition: SYN-037 DONE at CP-0410. No new MCP tool or out-of-scope
+  provider/coordination architecture was added.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`; review CP-0410 and promote the next authorized
+  task.
+
+## 2026-08-03 — SYN-037 root verification repair
+
+- Root cause 1: `Syn037CompletionValidationTest` compared raw file text to an
+  LF-only string, while Windows Git checkout semantics legitimately returned
+  CRLF. The assertion now compares the exact logical line list, preserving
+  process-output bytes and all command evidence semantics.
+- Root cause 2: `IntegrationOrchestrationServiceTest` initialized Synesis after
+  its initial commit, then snapshotted the repository root against `HEAD^`.
+  That made the managed-baseline commit look like a feature delta and caused
+  `.synesis/project.json` and `AGENTS.md` to hit `SnapshotArtifactPolicy`.
+  The fixture now creates a detached lane from the post-init baseline commit,
+  applies only `src/claimed.py`, asserts the lane base equals that baseline,
+  and observes exactly `src/claimed.py` as the prepared changed path.
+- Focused repaired tests: PASS in 21.6s. `:workspace:check`: PASS in 7m39s.
+  Complete profiled root `check`: PASS in 15s after workspace outputs were
+  current; profile `build/reports/profile/profile-2026-08-03-09-53-49.html`.
+  Deferred validation, bootstrap Go tests/vet, `git diff --check`, and doctor
+  all pass (doctor retains its existing personal-path warning).
+- Disposition: SYN-037 final verification complete at CP-0415. No production
+  command executor or snapshot artifact policy behavior was weakened or
+  redesigned.

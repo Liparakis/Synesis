@@ -33,6 +33,7 @@ class IntegrationOrchestrationServiceTest {
         git(root, "add", "README.md");
         git(root, "commit", "-m", "base");
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        String baselineCommit = gitOutput(root, "rev-parse", "HEAD");
         NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         UUID intentId = UUID.randomUUID();
@@ -45,19 +46,39 @@ class IntegrationOrchestrationServiceTest {
                 org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.CONTRACT,
                 "agree on API");
 
-        TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(UUID.randomUUID(), "node", "sup", "worker",
-                "lane", root, root, "snapshot", java.util.Optional.empty(), List.of(), List.of());
-        TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(), snapshot.snapshotId(), snapshot.nodeId(),
-                snapshot.supervisorId(), snapshot.workerId(), snapshot.providerSessionId(), snapshot.baseCommit(),
-                snapshot.commitSha(), snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary(),
-                snapshot.provenance());
-        store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
+        Path laneParent = Files.createTempDirectory("synesis-integration-lane-parent-");
+        Path lane = laneParent.resolve("lane");
+        try {
+            // Project initialization has already committed the canonical
+            // managed baseline. The lane must start from that exact commit;
+            // only the claimed source change belongs to the feature snapshot.
+            git(root, "worktree", "add", "--detach", lane.toString(), baselineCommit);
+            assertEquals(baselineCommit, gitOutput(lane, "rev-parse", "HEAD"));
+            Files.createDirectories(lane.resolve("src"));
+            Files.writeString(lane.resolve("src/claimed.py"), "claimed\n");
 
-        long eventCount = eventCount(store);
-        var response = new IntegrationOrchestrationService().orchestrateIntegration(root, store, identity);
-        assertEquals(AgentStatus.BLOCKED, response.status());
-        assertEquals(eventCount, eventCount(store),
-                "integration must not append an attempt while coordination is unresolved");
+            TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(UUID.randomUUID(), "node", "sup", "worker",
+                    "lane", lane, root, "snapshot", java.util.Optional.empty(), List.of(), List.of());
+            assertEquals(baselineCommit, snapshot.baseCommit());
+            assertEquals(List.of("src/claimed.py"), snapshot.changedPaths());
+            TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(), snapshot.snapshotId(), snapshot.nodeId(),
+                    snapshot.supervisorId(), snapshot.workerId(), snapshot.providerSessionId(), snapshot.baseCommit(),
+                    snapshot.commitSha(), snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary(),
+                    snapshot.provenance());
+            store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
+
+            long eventCount = eventCount(store);
+            var response = new IntegrationOrchestrationService().orchestrateIntegration(root, store, identity);
+            assertEquals(AgentStatus.BLOCKED, response.status());
+            assertEquals(eventCount, eventCount(store),
+                    "integration must not append an attempt while coordination is unresolved");
+        } finally {
+            try {
+                git(root, "worktree", "remove", "--force", lane.toString());
+            } finally {
+                Files.deleteIfExists(laneParent);
+            }
+        }
     }
 
     private static void git(Path root, String... args) throws Exception {

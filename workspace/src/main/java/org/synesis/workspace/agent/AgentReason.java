@@ -75,6 +75,9 @@ public enum AgentReason {
      */
     INTERCEPTION_REQUIRED("interception_required"),
 
+    /** Provider configuration ownership is tracked, malformed, or ambiguous. */
+    PROVIDER_CONFIGURATION_CONFLICT("provider_configuration_conflict"),
+
     /**
      * Response from capability owner is pending.
      */
@@ -94,6 +97,24 @@ public enum AgentReason {
      * Project command execution exceeded the maximum allowed time limit.
      */
     COMMAND_TIMEOUT("command_timeout"),
+
+    /** The configured command executable could not be found. */
+    COMMAND_EXECUTABLE_NOT_FOUND("command_executable_not_found"),
+
+    /** The configured command working directory failed lane policy. */
+    COMMAND_WORKING_DIRECTORY_INVALID("command_working_directory_invalid"),
+
+    /** The configured command could not be started because of permissions. */
+    COMMAND_PERMISSION_DENIED("command_permission_denied"),
+
+    /** The configured command could not be started for another concrete reason. */
+    COMMAND_START_FAILED("command_start_failed"),
+
+    /** The command caller cancelled execution. */
+    COMMAND_CANCELLED("command_cancelled"),
+
+    /** The command process tree terminated before normal completion. */
+    COMMAND_TERMINATED("command_terminated"),
 
     /**
      * Requested tool or command adapter is not available or supported for this project.

@@ -9,12 +9,9 @@ release/
 !docs/release/
 !docs/release/**
 
-# Synesis local state and generated provider hooks
-.synesis/local/
-**/.synesis/local/
-**/.agents/hooks.json
-**/.claude/settings.json
-**/.codex/hooks.json
+# Synesis runtime visibility is maintained in the repository's canonical
+# Git common-directory info/exclude file. Provider configuration remains
+# visible unless it is explicitly classified as private by that contract.
 
 # IDE and editor state
 .idea/
@@ -41,8 +38,6 @@ jacoco/
 
 # Local tooling and generated analysis output
 graphify-out/
-.codex/
-.agents/
 
 # Operating-system and editor noise
 .DS_Store

@@ -8,13 +8,19 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
+import org.synesis.workspace.application.project.ProjectCommandSpec;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService;
 
 /**
@@ -32,7 +38,7 @@ public final class ProjectApplicationService {
     /**
      * Current project metadata schema.
      */
-    public static final int PROJECT_SCHEMA_VERSION = 1;
+    public static final int PROJECT_SCHEMA_VERSION = 2;
     private static final String SYNESIS_DIRECTORY = ".synesis";
     private static final String PROJECT_FILE = "project.json";
     private static final String AGENTS_FILE = "AGENTS.md";
@@ -73,24 +79,112 @@ public final class ProjectApplicationService {
             throws ProjectApplicationException {
         try {
             String json = Files.readString(metadata, StandardCharsets.UTF_8);
-            int schema = integer(json, "schemaVersion");
-            UUID projectId = UUID.fromString(string(json, "projectId"));
-            Instant createdAt = Instant.parse(string(json, "createdAt"));
-            String lower = json.toLowerCase(java.util.Locale.ROOT);
-            if (schema != PROJECT_SCHEMA_VERSION || lower.contains("identity") || lower.contains("provider")
-                    || lower.contains("private") || lower.contains("absolute") || lower.contains("runtime")
-                    || lower.contains("profile") || lower.contains("secret") || lower.contains("path")) {
+            Object parsed = ProviderJson.parse(json);
+            if (!(parsed instanceof Map<?, ?> raw)) {
                 throw new IOException("unsupported or unsafe project metadata");
             }
-            return new ProjectLocation(root, synesis, metadata, synesis.resolve("local/profile"), projectId, createdAt);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> value = (Map<String, Object>) raw;
+            int schema = integerNumber(value.get("schemaVersion"), "schemaVersion");
+            if (schema != 1 && schema != PROJECT_SCHEMA_VERSION) {
+                throw new IOException("unsupported project metadata schema");
+            }
+            if (!Set.of("schemaVersion", "projectId", "createdAt", "validation").containsAll(value.keySet())) {
+                throw new IOException("unsupported project metadata field");
+            }
+            UUID projectId = UUID.fromString(text(value, "projectId"));
+            Instant createdAt = Instant.parse(text(value, "createdAt"));
+            if (value.containsKey("validation") && value.get("validation") == null) {
+                throw new IOException("validation must be an object when present");
+            }
+            ProjectCommandSpec validation = parseValidation(value.get("validation"));
+            return new ProjectLocation(root, synesis, metadata, synesis.resolve("local/profile"), projectId, createdAt,
+                    validation);
         } catch (Exception failure) {
             throw new ProjectApplicationException("MALFORMED", "Project metadata is malformed", failure);
         }
     }
 
     private static String metadataJson(UUID projectId, Instant createdAt) {
-        return "{\n" + "  \"schemaVersion\": 1,\n" + "  \"projectId\": \"" + projectId + "\",\n"
+        return "{\n" + "  \"schemaVersion\": 2,\n" + "  \"projectId\": \"" + projectId + "\",\n"
                 + "  \"createdAt\": \"" + createdAt + "\"\n" + "}\n";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ProjectCommandSpec parseValidation(Object raw) throws IOException {
+        if (raw == null) {
+            return null;
+        }
+        if (!(raw instanceof Map<?, ?> map)) {
+            throw new IOException("validation must be an object");
+        }
+        if (!Set.of("argv", "workingDirectory", "timeoutSeconds").containsAll(map.keySet())) {
+            throw new IOException("validation contains unsupported fields");
+        }
+        Object argvRaw = map.get("argv");
+        if (!(argvRaw instanceof List<?> list)) {
+            throw new IOException("validation.argv must be an array");
+        }
+        List<String> argv = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof String argument)) {
+                throw new IOException("validation.argv entries must be strings");
+            }
+            argv.add(argument);
+        }
+        Object workingDirectoryRaw = map.get("workingDirectory");
+        if (map.containsKey("workingDirectory") && !(workingDirectoryRaw instanceof String)) {
+            throw new IOException("validation.workingDirectory must be a string");
+        }
+        String workingDirectory = workingDirectoryRaw instanceof String value ? value : ".";
+        Object timeoutRaw = map.get("timeoutSeconds");
+        if (map.containsKey("timeoutSeconds") && timeoutRaw == null) {
+            throw new IOException("validation.timeoutSeconds must be an integer");
+        }
+        int timeoutSeconds = timeoutRaw == null ? ProjectCommandSpec.DEFAULT_TIMEOUT_SECONDS
+                : integerNumber(timeoutRaw, "validation.timeoutSeconds");
+        try {
+            java.nio.file.Path relative = java.nio.file.Path.of(workingDirectory);
+            if (looksLikeAbsolutePath(workingDirectory) || relative.isAbsolute()
+                    || relative.normalize().startsWith(java.nio.file.Path.of(".."))) {
+                throw new IOException("validation workingDirectory must remain relative");
+            }
+            return new ProjectCommandSpec(argv, workingDirectory, timeoutSeconds);
+        } catch (IllegalArgumentException failure) {
+            throw new IOException("invalid project validation command", failure);
+        }
+    }
+
+    private static int integerNumber(Object value, String key) throws IOException {
+        if (!(value instanceof Number number)) {
+            throw new IOException("missing or non-integer " + key);
+        }
+        if (number instanceof Double || number instanceof Float) {
+            throw new IOException("non-integer " + key);
+        }
+        double asDouble = number.doubleValue();
+        if (!Double.isFinite(asDouble) || asDouble != Math.rint(asDouble)
+                || asDouble < Integer.MIN_VALUE || asDouble > Integer.MAX_VALUE) {
+            throw new IOException("non-integer " + key);
+        }
+        int result = number.intValue();
+        if (result != asDouble) {
+            throw new IOException("non-integer " + key);
+        }
+        return result;
+    }
+
+    private static boolean looksLikeAbsolutePath(String value) {
+        return value.startsWith("/") || value.startsWith("\\\\")
+                || value.matches("^[A-Za-z]:[\\\\/].*");
+    }
+
+    private static String text(Map<String, Object> value, String key) throws IOException {
+        Object result = value.get(key);
+        if (!(result instanceof String text) || text.isBlank()) {
+            throw new IOException("missing " + key);
+        }
+        return text;
     }
 
     private static void writeMetadata(Path metadata, UUID projectId) throws IOException {
@@ -294,7 +388,14 @@ public final class ProjectApplicationService {
             Path synesis = current.resolve(SYNESIS_DIRECTORY);
             Path metadata = synesis.resolve(PROJECT_FILE);
             if (Files.exists(metadata)) {
-                return readLocation(current, synesis, metadata);
+                ProjectLocation location = readLocation(current, synesis, metadata);
+                try {
+                    RepositoryPrivateStateService.ensure(location.root());
+                } catch (IOException failure) {
+                    throw new ProjectApplicationException("PRIVATE_STATE_UNAVAILABLE",
+                            "Could not maintain repository-private Synesis exclusions", failure);
+                }
+                return location;
             }
             if (Files.exists(synesis)) {
                 throw new ProjectApplicationException("CONFLICT", "Partial .synesis state is missing project.json");
@@ -320,7 +421,14 @@ public final class ProjectApplicationService {
             throw new ProjectApplicationException("NOT_FOUND",
                     "No initialized Synesis project was found at the requested path");
         }
-        return readLocation(root, root.resolve(SYNESIS_DIRECTORY), metadata);
+        ProjectLocation location = readLocation(root, root.resolve(SYNESIS_DIRECTORY), metadata);
+        try {
+            RepositoryPrivateStateService.ensure(location.root());
+        } catch (IOException failure) {
+            throw new ProjectApplicationException("PRIVATE_STATE_UNAVAILABLE",
+                    "Could not maintain repository-private Synesis exclusions", failure);
+        }
+        return location;
     }
 
     /**
@@ -353,6 +461,7 @@ public final class ProjectApplicationService {
             if (Files.exists(metadata)) {
                 ProjectLocation existing = readLocation(root, synesis, metadata);
                 try {
+                    RepositoryPrivateStateService.ensure(root);
                     ensureAgentsFile(root);
                     if (configureProviderMcp) {
                         ProviderApplicationService providerService = new ProviderApplicationService();
@@ -374,6 +483,9 @@ public final class ProjectApplicationService {
 
         UUID projectId = UUID.randomUUID();
         try {
+            // Install the exact common-directory exclusions before creating
+            // any local or coordination runtime paths.
+            RepositoryPrivateStateService.ensure(root);
             Files.createDirectories(synesis);
             Path profile = synesis.resolve("local/profile");
             Instant createdAt = Instant.now();
@@ -397,6 +509,7 @@ public final class ProjectApplicationService {
             Files.createDirectories(profile.resolve("records"));
             NodeIdentity identity = identity(profile);
             ProjectLocation location = readLocation(root, synesis, metadata);
+            RepositoryPrivateStateService.ensure(root);
             try {
                 if (configureProviderMcp) {
                     ProviderApplicationService providerService = new ProviderApplicationService();
@@ -487,9 +600,26 @@ public final class ProjectApplicationService {
      * @param profile          local profile directory
      * @param projectId        project identifier
      * @param createdAt        creation timestamp
+     * @param validation       optional project-owned validation command
      */
     public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId,
-                                  Instant createdAt) {
+                                  Instant createdAt, ProjectCommandSpec validation) {
+
+        /**
+         * Compatibility constructor for internal synthetic project locations
+         * without validation.
+         *
+         * @param root project root
+         * @param synesisDirectory Synesis directory
+         * @param metadataFile project metadata file
+         * @param profile local profile directory
+         * @param projectId project identifier
+         * @param createdAt creation timestamp
+         */
+        public ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId,
+                Instant createdAt) {
+            this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, null);
+        }
 
         /**
          * Validates and normalizes project paths.

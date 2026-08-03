@@ -24,9 +24,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 /**
  * Detects and plans identity-preserving project schema migrations.
  *
- * <p>The current project schema is version 1 and has no older supported
- * transition. Newer or malformed schemas therefore fail closed and are never
- * rewritten.
+ * <p>Version 1 metadata remains readable as a legacy project without a
+ * configured validation command. Newer or malformed schemas fail closed and
+ * are never rewritten by this service.
  */
 public final class ProjectMigrationService {
 
@@ -160,7 +160,8 @@ public final class ProjectMigrationService {
                 return new Entry(metadata, -1, CURRENT_SCHEMA, hash(raw), Outcome.REQUIRES_HUMAN_REVIEW, "");
             }
             int schema = number.intValue();
-            Outcome outcome = schema == CURRENT_SCHEMA ? Outcome.UP_TO_DATE : Outcome.UNSUPPORTED_SCHEMA;
+            Outcome outcome = schema == CURRENT_SCHEMA || schema == 1
+                    ? Outcome.UP_TO_DATE : Outcome.UNSUPPORTED_SCHEMA;
             return new Entry(metadata, schema, CURRENT_SCHEMA, hash(raw), outcome, projectId);
         } catch (Exception failure) {
             return new Entry(workingDirectory.toAbsolutePath().normalize().resolve(".synesis/project.json"), -1,

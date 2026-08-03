@@ -20,6 +20,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
 /**
  * Creates and resumes project-scoped provider session bindings.
@@ -84,6 +85,7 @@ public final class ProviderSessionBindingService {
                 }
             }
             writeWorkspaceMarker(path, location, binding, branch);
+            RepositoryPrivateStateService.ensure(location.root());
             ProviderIntegration provider = ProviderRegistry.find(binding.provider());
             if (provider != null) {
                 ProviderApplicationService.materializeHook(path,
@@ -104,6 +106,8 @@ public final class ProviderSessionBindingService {
                     binding.providerTrustState());
             return verifyBinding(location.root(), allocated);
         } catch (Exception failure) {
+            String diagnostic = String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")
+                    ? "PROVIDER_CONFIGURATION_CONFLICT" : "WORKSPACE_ALLOCATION_FAILED";
             return copy(binding,
                     null,
                     location.root()
@@ -113,7 +117,7 @@ public final class ProviderSessionBindingService {
                     null,
                     "FAILED",
                     "UNVERIFIED",
-                    "WORKTREE_ALLOCATION_FAILED",
+                    diagnostic,
                     "WORKSPACE_UNVERIFIED");
         }
     }
@@ -460,6 +464,10 @@ public final class ProviderSessionBindingService {
         Objects.requireNonNull(location, "location");
         requireText(provider, "provider");
         try {
+            // Runtime exclusions must exist before session-local state or a
+            // lane worktree can be created. Git visibility is not ownership of
+            // any provider configuration file.
+            RepositoryPrivateStateService.ensure(location.root());
             NodeIdentity identity = new IdentityBootstrap(location.profile()
                     .resolve("link"))
                     .loadOrCreate()

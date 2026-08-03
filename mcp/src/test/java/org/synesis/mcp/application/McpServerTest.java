@@ -126,6 +126,29 @@ class McpServerTest {
     }
 
     @Test
+    void runCommandRejectsTheRemovedIntentSchema() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-legacy-command");
+        String request = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\","
+                + "\"params\":{\"name\":\"run_command\",\"arguments\":{"
+                + "\"type\":\"git_status\",\"target\":\".\",\"arguments\":[]}}}";
+        String response = handler.handleMessage(request);
+        assertTrue(response.contains("invalid_path"), response);
+    }
+
+    @Test
+    void runCommandRejectsNonIntegralOrOutOfRangeTimeouts() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-invalid-timeout");
+        String fractional = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\","
+                + "\"params\":{\"name\":\"run_command\",\"arguments\":{"
+                + "\"argv\":[\"git\",\"status\"],\"timeoutSeconds\":1.5}}}";
+        String tooLarge = fractional.replace("1.5", "3601");
+        assertTrue(handler.handleMessage(fractional).contains("invalid_path"));
+        assertTrue(handler.handleMessage(tooLarge).contains("invalid_path"));
+    }
+
+    @Test
     void collaborationContractPublishReturnsJsonSafeContractProjection() {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-json");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/task_tracker_contract.md\"}]}}}}";
@@ -514,11 +537,11 @@ class McpServerTest {
         String readModResp = handler.handleMessage(readReq);
         assertTrue(readModResp.contains("Hello MCP Antigravity"));
 
-        // 6. Run Command (git_status)
-        String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"run_command\",\"arguments\":{\"type\":\"git_status\"}}}";
+        // 6. Run Command (direct argv)
+        String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"run_command\",\"arguments\":{\"argv\":[\"git\",\"status\",\"--porcelain\"]}}}";
         String runCmdResp = handler.handleMessage(runCmdReq);
         assertTrue(runCmdResp.contains("completed"));
-        assertTrue(runCmdResp.contains("git_status"));
+        assertTrue(runCmdResp.contains("stdoutBytesRead"));
 
         // 7. Get Next Action
         String nextActionReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";

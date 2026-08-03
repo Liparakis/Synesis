@@ -1,5 +1,46 @@
 # State
 
+## SYN-037 implementation and closure state
+
+SYN-037 is DONE at CP-0415. The implementation keeps exactly ten raw MCP
+tools and replaces the prerelease command-intent/adapter path with the direct
+argv `ProjectProcessExecutor`. The same executor serves `run_command`,
+server-owned pre-publication validation, and integration validation. Evidence
+is bounded to 65,536 raw bytes per stream using a 32,768-byte head and rolling
+tail; every result exposes bytes read, bytes retained, and truncation flags.
+
+The repository-private contract is exact and common-directory based:
+`/.synesis/local/`, `/.synesis/coordination/`, and `/.codex/hooks.json`. The
+Codex hook materializer classifies absent, canonical/stale Synesis-owned,
+user/provider-owned, mixed, tracked, malformed, symlinked, non-regular, and
+concurrently changed content. Ambiguous content fails closed with
+`PROVIDER_CONFIGURATION_CONFLICT`; Git exclusion never proves ownership.
+
+Project metadata schema v2 accepts an optional project-owned validation argv;
+schema v1 remains readable as no configured gate. Validation metadata is
+strictly parsed, and completion/integration cannot be overridden by agents or
+toolchain inference. Legacy intent fields, adapters, and `run-tests.cmd` are
+not reachable from production code.
+
+Real Codex evidence is recorded in
+`docs/evidence/syn037-real-codex-acceptance-2026-08-03.md`: participant
+`agt_4f3186fb-0313-3410-ba2b-5b5bfb3c88c7`, session
+`session-935acfb9-2c5e-4c48-9fa3-b67ffcad05de`, lane/intent
+`c5404e85-cbbd-3ad0-878d-25e438939a32`, epoch 1, exact claim
+`src/task_tracker.txt`, three command results, snapshot
+`snap_76f58a1737e488a2a248413dd95d3a3e`, integration attempt
+`att_7c31901698014874`, final control HEAD
+`0237b31e1d1423861c6ce7e4fbe99b1027315189`, and empty final Git status.
+
+Focused workspace/MCP suites, strict module Javadocs, deferred validation,
+bootstrap Go tests/vet, and `git diff --check` pass. The two root failures were
+test defects: one asserted LF instead of logical lines on Windows, and one
+snapshotted the parent of the managed baseline instead of a lane based on that
+baseline. The assertions/fixture now preserve process bytes and strict
+SnapshotArtifactPolicy behavior. `:workspace:check` and the complete profiled
+root `check` both pass; details are in
+`docs/evidence/syn037-root-verification-fix-2026-08-03.md`.
+
 ## SYN-036 implementation state
 
 SYN-035 is closed at CP-0399. SYN-036 is closed at CP-0407.

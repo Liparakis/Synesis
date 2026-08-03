@@ -29,7 +29,7 @@ public final class McpToolCatalog {
     public static final String READ_FILE = "read_file";
     /** MCP revision-checked mutation tool. */
     public static final String APPLY_PATCH = "apply_patch";
-    /** MCP approved command-intent tool. */
+    /** MCP direct-argv command execution tool. */
     public static final String RUN_COMMAND = "run_command";
     /** MCP durable inbox/action discovery tool. */
     public static final String GET_NEXT_ACTION = "get_next_action";
@@ -338,12 +338,28 @@ public final class McpToolCatalog {
                         "expectedHash", Map.of("type", "string", "description", "SHA-256 hex string of existing contentHash returned by synesis.read_file (required for modification)"),
                         "edits", Map.of("type", "array", "items", editSchema, "description", "List of replacement edits (required for modification)")), List.of("path")),
                 "apply-patch", "MUTATING", List.of("SESSION_BINDING", "CLAIM"), 3));
-        result.add(descriptor(RUN_COMMAND, "Executes an approved project command intent inside the assigned worktree.",
+        Map<String, Object> commandEvidence = objectSchema(Map.of(
+                "outcome", property("string"),
+                "exitCode", property("integer"),
+                "stdout", property("string"),
+                "stderr", property("string"),
+                "stdoutTruncated", property("boolean"),
+                "stderrTruncated", property("boolean"),
+                "stdoutBytesRead", property("integer"),
+                "stderrBytesRead", property("integer"),
+                "stdoutBytesRetained", property("integer"),
+                "stderrBytesRetained", property("integer")), List.of());
+        Map<String, Object> commandResult = objectSchema(Map.of(
+                "status", property("string"),
+                "result", commandEvidence), List.of());
+        result.add(descriptor(RUN_COMMAND, "Executes direct argv inside the assigned worktree.",
                 objectSchema(Map.of(
-                        "type", Map.of("type", "string", "description", "Command intent classification: build, test, lint, format_check, git_status, git_diff, git_log"),
-                        "target", Map.of("type", "string", "description", "Optional target specifier or test filter"),
-                        "arguments", Map.of("type", "array", "items", property("string"), "description", "Optional additional arguments")), List.of("type")),
-                "run-command", "MUTATING", List.of("SESSION_BINDING"), 4));
+                        "argv", Map.of("type", "array", "minItems", 1, "items", property("string"),
+                                "description", "Executable and arguments passed directly without a shell"),
+                        "workingDirectory", Map.of("type", "string", "description", "Relative lane directory; default '.'"),
+                        "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600,
+                                "description", "Execution timeout in seconds; default 120")), List.of("argv")),
+                commandResult, "run-command", "MUTATING", List.of("SESSION_BINDING"), 4));
         result.add(descriptor(GET_NEXT_ACTION, "Retrieves the highest-priority actionable coordination item.",
                 objectSchema(Map.of("integrationCheck", Map.of("type", "object", "description", "Explicit pre-merge candidate facts")), List.of()),
                 "get-next-action", "READ_ONLY", List.of("SESSION_BINDING"), 5));
@@ -412,6 +428,11 @@ public final class McpToolCatalog {
 
     private static Descriptor descriptor(String name, String description, Map<String, Object> input,
             String handler, String mutability, List<String> capabilities, int order) {
+        return descriptor(name, description, input, GENERIC_OUTPUT, handler, mutability, capabilities, order);
+    }
+
+    private static Descriptor descriptor(String name, String description, Map<String, Object> input,
+            Map<String, Object> output, String handler, String mutability, List<String> capabilities, int order) {
         List<String> errors = List.of("INVALID_REQUEST", "STALE_AUTHORITY", "COORDINATION_BLOCKED", "RETRYABLE_FAILURE");
         Map<String, String> recoverability = Map.of(
                 "INVALID_REQUEST", "terminal",
@@ -419,7 +440,7 @@ public final class McpToolCatalog {
                 "COORDINATION_BLOCKED", "inspect_inbox",
                 "RETRYABLE_FAILURE", "bounded_retry");
         Map<String, String> idempotency = Map.of("default", "server-issued identity and exact-caller idempotent");
-        return new Descriptor(name, DESCRIPTOR_VERSION, input, GENERIC_OUTPUT, errors, recoverability, idempotency,
+        return new Descriptor(name, DESCRIPTOR_VERSION, input, output, errors, recoverability, idempotency,
                 List.of("EXACT_SESSION_BINDING"), mutability, capabilities, PROTOCOL_RANGE, handler, description,
                 Map.of("source", "synesis-mcp-contract", "version", DESCRIPTOR_VERSION), order,
                 List.of("follow the durable next action and typed arguments"),

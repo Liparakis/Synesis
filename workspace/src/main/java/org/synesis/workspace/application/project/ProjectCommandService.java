@@ -1,97 +1,98 @@
 package org.synesis.workspace.application.project;
-import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
-import org.synesis.workspace.application.ProjectApplicationService;
-
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.infrastructure.command.DotNetProjectCommandAdapter;
-import org.synesis.workspace.infrastructure.command.GradleProjectCommandAdapter;
-import org.synesis.workspace.infrastructure.command.MavenProjectCommandAdapter;
-import org.synesis.workspace.infrastructure.command.NpmProjectCommandAdapter;
-import org.synesis.workspace.infrastructure.git.GitProjectCommandAdapter;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 /**
- * Application service for executing bounded, session-verified project build and git commands
- * inside an assigned worker worktree.
+ * Application boundary for direct argv execution in an authenticated lane.
+ *
+ * <p>This service owns session and control-checkout safety. Process creation,
+ * timeout, output evidence, and stream draining are centralized in
+ * {@link ProjectProcessExecutor}; no build-system or shell adapter is
+ * selected here.</p>
  *
  * @since 1.0
  */
 public final class ProjectCommandService {
 
-    private static final int MAX_OUTPUT_BYTES = 65536;
-
     private final ProjectApplicationService projectService;
     private final WorkspaceReadinessService readinessService;
-    private final List<ProjectCommandAdapter> adapters;
+    private final ProjectProcessExecutor executor;
 
-    /**
-     * Creates a project command application service with default adapters.
-     */
+    /** Creates a command service using the default project and process services. */
     public ProjectCommandService() {
-        this.projectService = new ProjectApplicationService();
-        this.readinessService = new WorkspaceReadinessService();
-        this.adapters = List.of(
-                new GitProjectCommandAdapter(),
-                new GradleProjectCommandAdapter(),
-                new MavenProjectCommandAdapter(),
-                new DotNetProjectCommandAdapter(),
-                new NpmProjectCommandAdapter()
-        );
+        this(new ProjectApplicationService(), new WorkspaceReadinessService(), new ProjectProcessExecutor());
     }
 
     /**
-     * Request payload for project command execution.
+     * Creates a command service with explicit collaborators.
      *
-     * @param projectRoot          control project checkout directory
-     * @param provider             provider identifier (e.g., "antigravity", "codex")
-     * @param connectionInstanceId active MCP connection identifier
-     * @param intent               structured command intent
+     * @param projectService project discovery service
+     * @param readinessService lane readiness service
+     * @param executor shared direct process executor
      */
-    public record CommandRequest(
-            Path projectRoot,
-            String provider,
-            String connectionInstanceId,
-            ProjectCommandIntent intent
-    ) {
-        /**
-         * Validates non-null request components.
-         */
+    public ProjectCommandService(ProjectApplicationService projectService,
+            WorkspaceReadinessService readinessService, ProjectProcessExecutor executor) {
+        this.projectService = Objects.requireNonNull(projectService, "projectService");
+        this.readinessService = Objects.requireNonNull(readinessService, "readinessService");
+        this.executor = Objects.requireNonNull(executor, "executor");
+    }
+
+    /**
+     * Direct argv request from the MCP boundary.
+     *
+     * @param projectRoot          control checkout
+     * @param provider             canonical provider ID
+     * @param connectionInstanceId exact persistent MCP connection identity
+     * @param argv                 executable and arguments, passed unchanged
+     * @param workingDirectory     relative lane directory, or {@code null}
+     * @param timeoutSeconds       timeout in seconds, or {@code null} for default
+     */
+    public record CommandRequest(Path projectRoot, String provider, String connectionInstanceId,
+            List<String> argv, String workingDirectory, Integer timeoutSeconds) {
+        /** Validates and copies request values. */
         public CommandRequest {
             Objects.requireNonNull(projectRoot, "projectRoot");
             Objects.requireNonNull(provider, "provider");
             Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-            Objects.requireNonNull(intent, "intent");
+            Objects.requireNonNull(argv, "argv");
+            argv = List.copyOf(argv);
+        }
+
+        /**
+         * Creates a request with default working directory and timeout.
+         *
+         * @param projectRoot control checkout
+         * @param provider provider identifier
+         * @param connectionInstanceId exact connection identity
+         * @param argv direct executable and arguments
+         */
+        public CommandRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> argv) {
+            this(projectRoot, provider, connectionInstanceId, argv, ".", null);
         }
     }
 
     /**
-     * Executes an approved project command intent inside the session's assigned worktree.
+     * Executes direct argv after exact session/worktree readiness checks.
      *
      * @param request command request
-     * @return concise agent response
+     * @return bounded structured command evidence
      */
     public AgentResponse runCommand(CommandRequest request) {
         Objects.requireNonNull(request, "request");
-
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY,
+                    AgentNextAction.ENSURE_SESSION, null);
         }
 
         ProjectApplicationService.ProjectLocation location;
@@ -99,221 +100,65 @@ public final class ProjectCommandService {
         try {
             location = projectService.locate(root);
             readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY,
+                    AgentNextAction.ENSURE_SESSION, null);
         }
         if (!readiness.ready()) {
             return readiness.response();
         }
+
         Path assignedWorktree = readiness.worktree();
-
-        // 2. Validate Command Intent Type
-        ProjectCommandIntent intent = request.intent();
-        String type = intent.type().toLowerCase(Locale.ROOT);
-        boolean isGitCommand = type.startsWith("git_");
-        if (!isGitCommand && !List.of("build", "test", "lint", "format_check").contains(type)) {
-            return AgentResponse.blocked(AgentReason.TOOL_UNAVAILABLE);
-        }
-
-        // 3. Adapter Resolution
-        ProjectCommandAdapter selectedAdapter = null;
-        if (isGitCommand) {
-            selectedAdapter = adapters.stream()
-                    .filter(a -> "git".equals(a.id()))
-                    .findFirst()
-                    .orElse(null);
-        } else {
-            selectedAdapter = adapters.stream()
-                    .filter(a -> !"git".equals(a.id()) && a.supports(assignedWorktree))
-                    .findFirst()
-                    .orElse(null);
-        }
-
-        boolean scriptTest = "test".equals(type) && "run-tests.cmd".equalsIgnoreCase(intent.target())
-                && Files.isRegularFile(assignedWorktree.resolve("run-tests.cmd"));
-        if (selectedAdapter == null && !scriptTest) {
-            return AgentResponse.blocked(AgentReason.TOOL_UNAVAILABLE);
-        }
-
-        List<String> commandTokens;
-        try {
-            if (scriptTest) {
-                commandTokens = new ArrayList<>(List.of("cmd.exe", "/d", "/c", "run-tests.cmd"));
-            } else {
-                commandTokens = new ArrayList<>(selectedAdapter.buildCommandTokens(assignedWorktree, intent));
-                if (intent.arguments() != null && !intent.arguments().isEmpty()) {
-                    commandTokens.addAll(intent.arguments());
-                }
-            }
-        } catch (IllegalArgumentException ex) {
-            return AgentResponse.blocked(AgentReason.INVALID_PATH);
-        }
-
-        // 4. Capture Pre-execution Snapshot of Control Checkout & Protected Files
-        long controlLastModified = getDirectoryLastModified(location.root());
-
-        // 5. Execute Process
-        int timeoutSeconds = isGitCommand ? 15 : 60;
-        Process process = null;
-        ByteArrayOutputStream stdoutBuffer = new ByteArrayOutputStream();
-        ByteArrayOutputStream stderrBuffer = new ByteArrayOutputStream();
-
-        try {
-            ProcessBuilder pb = new ProcessBuilder(commandTokens);
-            pb.directory(assignedWorktree.toFile());
-
-            // Filtered environment
-            Map<String, String> env = pb.environment();
-            List<String> keysToRemove = new ArrayList<>();
-            for (String key : env.keySet()) {
-                String upper = key.toUpperCase(Locale.ROOT);
-                if (upper.contains("TOKEN") || upper.contains("SECRET") || upper.contains("KEY") || upper.contains("AUTH")) {
-                    keysToRemove.add(key);
-                }
-            }
-            for (String k : keysToRemove) {
-                env.remove(k);
-            }
-
-            process = pb.start();
-
-            InputStream procOut = process.getInputStream();
-            InputStream procErr = process.getErrorStream();
-
-            Thread outThread = new Thread(() -> readBoundedStream(procOut, stdoutBuffer));
-            Thread errThread = new Thread(() -> readBoundedStream(procErr, stderrBuffer));
-            outThread.start();
-            errThread.start();
-
-            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-            if (!finished) {
-                killProcessTree(process);
-                outThread.interrupt();
-                errThread.interrupt();
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.COMMAND_TIMEOUT, AgentNextAction.REQUEST_HUMAN_HELP, null);
-            }
-
-            outThread.join(1000);
-            errThread.join(1000);
-
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            if (process != null) {
-                killProcessTree(process);
-            }
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-        } catch (Exception ex) {
-            if (process != null) {
-                killProcessTree(process);
-            }
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-        }
-
-        // 6. Post-execution Control Checkout Non-mutation Verification
-        long controlAfterModified = getDirectoryLastModified(location.root());
-        if (controlAfterModified > controlLastModified) {
+        long controlBefore = getDirectoryLastModified(location.root());
+        ProjectProcessExecutor.ExecutionResult result = executor.execute(
+                new ProjectProcessExecutor.ExecutionRequest(request.argv(), assignedWorktree,
+                        request.workingDirectory(), request.timeoutSeconds(), location.root()));
+        long controlAfter = getDirectoryLastModified(location.root());
+        if (controlAfter > controlBefore) {
             return AgentResponse.blocked(AgentReason.PROTECTED_CONFIGURATION);
         }
 
-        int exitCode = process.exitValue();
-        String stdoutText = sanitizeOutput(stdoutBuffer.toString(StandardCharsets.UTF_8), location.root(), assignedWorktree);
-        String stderrText = sanitizeOutput(stderrBuffer.toString(StandardCharsets.UTF_8), location.root(), assignedWorktree);
-
-        // 7. Result Construction & Concise Response Serialization
-        if (exitCode == 0) {
-            Map<String, Object> resultMap = new LinkedHashMap<>();
-            resultMap.put("command", intent.type());
-            resultMap.put("exitCode", 0);
-            if (isGitCommand) {
-                resultMap.put("output", stdoutText.isBlank() ? stderrText : stdoutText);
-            } else {
-                String summary = extractSummary(intent.type(), stdoutText, stderrText);
-                resultMap.put("summary", summary);
-            }
-            return new AgentResponse(AgentStatus.COMPLETED, null, null, resultMap);
-        } else {
-            Map<String, Object> resultMap = new LinkedHashMap<>();
-            resultMap.put("command", intent.type());
-            resultMap.put("exitCode", exitCode);
-            String summary = extractSummary(intent.type(), stdoutText, stderrText);
-            resultMap.put("summary", summary.isBlank() ? "Command failed with exit code " + exitCode : summary);
-            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COMMAND_FAILED, null, resultMap);
-        }
+        return new AgentResponse(statusFor(result.outcome()), reasonFor(result.outcome()),
+                nextActionFor(result.outcome()), result.toMap());
     }
 
-    private static void killProcessTree(Process process) {
-        if (process == null) return;
-        try {
-            process.descendants().forEach(ph -> ph.destroyForcibly());
-            process.destroyForcibly();
-        } catch (Exception ignored) {
-        }
+    private static AgentStatus statusFor(ProjectProcessExecutor.Outcome outcome) {
+        return switch (outcome) {
+            case COMPLETED -> AgentStatus.COMPLETED;
+            case NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND,
+                    COMMAND_PERMISSION_DENIED -> AgentStatus.BLOCKED;
+            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentStatus.FAILED;
+        };
     }
 
-    private static void readBoundedStream(InputStream in, ByteArrayOutputStream out) {
-        try {
-            byte[] buf = new byte[1024];
-            int n;
-            int total = 0;
-            while ((n = in.read(buf)) != -1) {
-                if (total + n <= MAX_OUTPUT_BYTES) {
-                    out.write(buf, 0, n);
-                    total += n;
-                } else {
-                    int remaining = MAX_OUTPUT_BYTES - total;
-                    if (remaining > 0) {
-                        out.write(buf, 0, remaining);
-                    }
-                    break;
-                }
-            }
-        } catch (Exception ignored) {
-        }
+    private static AgentReason reasonFor(ProjectProcessExecutor.Outcome outcome) {
+        return switch (outcome) {
+            case COMPLETED -> null;
+            case NON_ZERO_EXIT -> AgentReason.COMMAND_FAILED;
+            case COMMAND_WORKING_DIRECTORY_INVALID -> AgentReason.COMMAND_WORKING_DIRECTORY_INVALID;
+            case COMMAND_EXECUTABLE_NOT_FOUND -> AgentReason.COMMAND_EXECUTABLE_NOT_FOUND;
+            case COMMAND_PERMISSION_DENIED -> AgentReason.COMMAND_PERMISSION_DENIED;
+            case COMMAND_TIMED_OUT -> AgentReason.COMMAND_TIMEOUT;
+            case COMMAND_CANCELLED -> AgentReason.COMMAND_CANCELLED;
+            case COMMAND_START_FAILED -> AgentReason.COMMAND_START_FAILED;
+            case COMMAND_TERMINATED -> AgentReason.COMMAND_TERMINATED;
+        };
+    }
+
+    private static AgentNextAction nextActionFor(ProjectProcessExecutor.Outcome outcome) {
+        return switch (outcome) {
+            case COMPLETED, NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID,
+                    COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> null;
+            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED ->
+                    AgentNextAction.REQUEST_HUMAN_HELP;
+        };
     }
 
     private static long getDirectoryLastModified(Path path) {
         try {
-            if (!Files.exists(path)) return 0L;
-            return Files.getLastModifiedTime(path).toMillis();
-        } catch (Exception ex) {
+            return Files.exists(path) ? Files.getLastModifiedTime(path).toMillis() : 0L;
+        } catch (Exception failure) {
             return 0L;
         }
-    }
-
-    private static String sanitizeOutput(String raw, Path controlRoot, Path assignedWorktree) {
-        if (raw == null) return "";
-        String text = raw;
-        if (controlRoot != null) {
-            text = text.replace(controlRoot.toAbsolutePath().normalize().toString(), "[PROJECT_ROOT]");
-        }
-        if (assignedWorktree != null) {
-            text = text.replace(assignedWorktree.toAbsolutePath().normalize().toString(), "[WORKTREE_ROOT]");
-        }
-        String home = System.getProperty("user.home");
-        if (home != null && !home.isBlank()) {
-            text = text.replace(home, "~");
-        }
-        if (text.length() > 4096) {
-            text = text.substring(0, 4096) + "\n...[truncated]";
-        }
-        return text.trim();
-    }
-
-    private static String extractSummary(String type, String stdout, String stderr) {
-        String combined = (stdout + "\n" + stderr).trim();
-        if (combined.isBlank()) {
-            return type + " completed successfully";
-        }
-        String[] lines = combined.split("\r?\n");
-        for (int i = lines.length - 1; i >= 0; i--) {
-            String line = lines[i].trim();
-            if (!line.isBlank() && !line.startsWith("BUILD") && !line.startsWith("Progress")) {
-                if (line.length() > 128) {
-                    return line.substring(0, 128);
-                }
-                return line;
-            }
-        }
-        return type + " completed";
     }
 }

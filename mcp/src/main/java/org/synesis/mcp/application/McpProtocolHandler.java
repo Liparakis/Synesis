@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.contract.ContractDependency;
@@ -39,7 +40,6 @@ import org.synesis.workspace.application.integration.ImplementationPublicationSe
 import org.synesis.workspace.application.integration.ImplementationValidationService;
 import org.synesis.workspace.application.integration.IntegrationCompatibilityService;
 import org.synesis.workspace.application.integration.WorkspaceIntegrationReadinessService;
-import org.synesis.workspace.application.project.ProjectCommandIntent;
 import org.synesis.workspace.application.project.ProjectCommandService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
 import org.synesis.workspace.application.workspace.WorkspaceReadService;
@@ -679,24 +679,41 @@ public final class McpProtocolHandler {
                 agentResponse = patchService.applyPatch(patchReq);
             }
             case "synesis." + McpToolCatalog.RUN_COMMAND -> {
-                String type = arguments != null ? (String) arguments.get("type") : null;
-                String target = arguments != null ? (String) arguments.get("target") : null;
-                List<String> commandArgs = new java.util.ArrayList<>();
-                if (arguments != null && arguments.get("arguments") instanceof List<?> list) {
+                List<String> argv = new java.util.ArrayList<>();
+                boolean unsupportedField = arguments != null && arguments.keySet().stream()
+                        .anyMatch(key -> !Set.of("argv", "workingDirectory", "timeoutSeconds").contains(key));
+                if (arguments != null && arguments.get("argv") instanceof List<?> list) {
                     for (Object item : list) {
-                        if (item instanceof String s) {
-                            commandArgs.add(s);
+                        if (!(item instanceof String s)) {
+                            argv = null;
+                            break;
                         }
+                        argv.add(s);
+                    }
+                } else {
+                    argv = null;
+                }
+                boolean malformedWorkingDirectory = arguments != null && arguments.containsKey("workingDirectory")
+                        && !(arguments.get("workingDirectory") instanceof String);
+                String workingDirectory = arguments != null && arguments.get("workingDirectory") instanceof String value
+                        ? value : ".";
+                Integer timeoutSeconds = null;
+                boolean malformedTimeout = false;
+                if (arguments != null && arguments.containsKey("timeoutSeconds")) {
+                    Object rawTimeout = arguments.get("timeoutSeconds");
+                    if (rawTimeout instanceof Number number && isStrictInteger(number)
+                            && number.longValue() >= 1 && number.longValue() <= 3600) {
+                        timeoutSeconds = number.intValue();
+                    } else {
+                        malformedTimeout = true;
                     }
                 }
-
-                if (type == null || type.isBlank()) {
+                if (argv == null || argv.isEmpty() || malformedWorkingDirectory || malformedTimeout || unsupportedField) {
                     agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
                 } else {
                     try {
-                        ProjectCommandIntent intent = new ProjectCommandIntent(type, target, commandArgs);
                         ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(
-                                activeProjectRoot, provider, connectionInstanceId, intent);
+                                activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
                         agentResponse = commandService.runCommand(cmdReq);
                     } catch (IllegalArgumentException ex) {
                         agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
@@ -1343,6 +1360,14 @@ public final class McpProtocolHandler {
             return List.of();
         }
         return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
+    }
+
+    private static boolean isStrictInteger(Number number) {
+        if (number instanceof Double || number instanceof Float) {
+            return false;
+        }
+        long value = number.longValue();
+        return number.doubleValue() == value;
     }
 
     private String createResultResponse(Object id, Map<String, Object> result) {

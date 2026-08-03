@@ -32,4 +32,16 @@ final class ProjectMigrationServiceTest {
         ProjectMigrationService service = new ProjectMigrationService(project.resolve("admin"));
         assertEquals(ProjectMigrationService.Outcome.UNSUPPORTED_SCHEMA, service.inspect(project).outcome());
     }
+
+    @Test
+    void versionOneSchemaRemainsReadableWithoutMigrationRewrite() throws Exception {
+        Path project = Files.createTempDirectory("project-migration-v1-");
+        var location = new ProjectApplicationService().init(project).location();
+        String v1 = "{\"schemaVersion\":1,\"projectId\":\"" + location.projectId()
+                + "\",\"createdAt\":\"" + location.createdAt() + "\"}";
+        Files.writeString(location.metadataFile(), v1);
+        ProjectMigrationService service = new ProjectMigrationService(project.resolve("admin"));
+        assertEquals(ProjectMigrationService.Outcome.UP_TO_DATE, service.inspect(project).outcome());
+        assertEquals(v1, Files.readString(location.metadataFile()));
+    }
 }

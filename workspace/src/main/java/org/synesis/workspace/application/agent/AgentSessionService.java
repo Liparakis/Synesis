@@ -213,6 +213,9 @@ public final class AgentSessionService {
         WorkspaceReadinessService.ReadinessResult readiness = readinessService.assess(
                 location, request.provider(), request.connectionInstanceId());
         if (!readiness.ready()) {
+            if ("PROVIDER_CONFIGURATION_CONFLICT".equals(readiness.internalReason())) {
+                throw new IllegalStateException("PROVIDER_CONFIGURATION_CONFLICT");
+            }
             throw new IllegalStateException("Workspace readiness failed: " + readiness.internalReason());
         }
         binding = readiness.binding();
@@ -267,6 +270,11 @@ public final class AgentSessionService {
             if ("REPOSITORY_NOT_PORTABLE".equals(ex.getMessage())) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.REPOSITORY_NOT_PORTABLE,
                         AgentNextAction.REQUEST_HUMAN_HELP, null);
+            }
+            if (String.valueOf(ex.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_CONFIGURATION_CONFLICT,
+                        AgentNextAction.REQUEST_HUMAN_HELP,
+                        java.util.Map.of("diagnostic", "PROVIDER_CONFIGURATION_CONFLICT"));
             }
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         } catch (Exception ex) {

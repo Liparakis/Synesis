@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.synesis.projectrecord.domain.DecisionRecord;
@@ -43,6 +44,7 @@ import org.synesis.mcp.contract.McpToolCatalog;
 public final class ProviderApplicationService {
 
     private static final int METADATA_SCHEMA = 1;
+    private static final Map<Path, Object> HOOK_LOCKS = new ConcurrentHashMap<>();
     private final ProviderManualService manualService = new ProviderManualService();
 
     /**
@@ -344,6 +346,10 @@ public final class ProviderApplicationService {
 
     static void materializeHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile)
             throws IOException {
+        if ("codex".equals(provider.id())) {
+            materializeCodexHook(worktree, provider, launcher, profile);
+            return;
+        }
         Path config = provider.configurationPath(worktree);
         Map<String, Object> root = Files.exists(config) ? readObject(config) : new LinkedHashMap<>();
         Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(),
@@ -359,6 +365,149 @@ public final class ProviderApplicationService {
         }
         group.put("SessionStart", sessionHooks);
         atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
+    }
+
+    private static void materializeCodexHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile)
+            throws IOException {
+        Path config = provider.configurationPath(worktree).toAbsolutePath().normalize();
+        Object lock = HOOK_LOCKS.computeIfAbsent(config, ignored -> new Object());
+        synchronized (lock) {
+            Path parent = config.getParent();
+            if (parent == null || !parent.startsWith(worktree.toAbsolutePath().normalize())) {
+                throw providerConflict("hook path is outside the worktree");
+            }
+            if (Files.exists(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    && (Files.isSymbolicLink(parent)
+                    || !Files.isDirectory(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
+                throw providerConflict("hook parent is not a regular directory");
+            }
+            if (Files.isDirectory(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                try {
+                    if (!parent.toRealPath().startsWith(worktree.toAbsolutePath().normalize().toRealPath())) {
+                        throw providerConflict("hook parent escapes the worktree");
+                    }
+                } catch (java.nio.file.NoSuchFileException missing) {
+                    throw providerConflict("hook parent cannot be verified");
+                } catch (IOException failure) {
+                    throw providerConflict("hook parent cannot be verified");
+                }
+            }
+            if (Files.isSymbolicLink(config)
+                    || (Files.exists(config, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    && !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
+                throw providerConflict("hook path is not a regular file");
+            }
+            if (isTracked(worktree, ".codex/hooks.json")) {
+                throw providerConflict("tracked hook file cannot be managed");
+            }
+            byte[] originalBytes = Files.exists(config) ? Files.readAllBytes(config) : null;
+            Map<String, Object> root;
+            if (originalBytes == null) {
+                root = new LinkedHashMap<>();
+            } else {
+                try {
+                    root = readObject(config);
+                } catch (RuntimeException failure) {
+                    throw providerConflict("hook JSON is malformed");
+                }
+            }
+            Map<String, Object> group = object(root.get(provider.hookGroup()));
+            if (root.containsKey(provider.hookGroup()) && group == null) {
+                throw providerConflict("hook group ownership is ambiguous");
+            }
+            if (group == null) {
+                group = new LinkedHashMap<>();
+                root.put(provider.hookGroup(), group);
+            }
+            List<Object> preToolHooks = hookList(group, "PreToolUse");
+            List<Object> sessionHooks = hookList(group, "SessionStart");
+            for (Object value : preToolHooks) {
+                if (sameMatcher(value, provider.matcher()) && !provider.isManagedHook(value)) {
+                    throw providerConflict("pre-tool hook overlaps Synesis matcher");
+                }
+            }
+            for (Object value : sessionHooks) {
+                if (hasSynesisSessionId(value) && !canonicalSessionHook(value, provider)) {
+                    throw providerConflict("session hook ownership is ambiguous");
+                }
+            }
+            preToolHooks.removeIf(provider::isManagedHook);
+            preToolHooks.add(provider.managedHook(launcher, profile));
+            sessionHooks.removeIf(provider::isManagedSessionHook);
+            Map<String, Object> sessionHook = provider.managedSessionHook(launcher, profile);
+            if (sessionHook != null) {
+                sessionHooks.add(sessionHook);
+            }
+            group.put("PreToolUse", preToolHooks);
+            group.put("SessionStart", sessionHooks);
+            String updated = ProviderJson.write(root) + System.lineSeparator();
+            if (Files.isSymbolicLink(config)
+                    || (Files.exists(config, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    && !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
+                throw providerConflict("hook path changed to a non-regular file");
+            }
+            if (Files.isSymbolicLink(parent)
+                    || (Files.exists(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    && !Files.isDirectory(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
+                throw providerConflict("hook parent changed to a non-regular directory");
+            }
+            byte[] currentBytes = Files.exists(config) ? Files.readAllBytes(config) : null;
+            if (!java.util.Arrays.equals(originalBytes, currentBytes)) {
+                throw providerConflict("hook changed during materialization");
+            }
+            if (!java.util.Arrays.equals(originalBytes, updated.getBytes(StandardCharsets.UTF_8))) {
+                atomicWrite(config, updated);
+            }
+        }
+    }
+
+    private static List<Object> hookList(Map<String, Object> group, String key) throws IOException {
+        Object value = group.get(key);
+        if (value == null) {
+            return new ArrayList<>();
+        }
+        if (!(value instanceof List<?> list)) {
+            throw providerConflict("hook list is malformed");
+        }
+        return new ArrayList<>(list);
+    }
+
+    private static boolean sameMatcher(Object value, String matcher) {
+        return value instanceof Map<?, ?> map && matcher.equals(map.get("matcher"));
+    }
+
+    private static boolean hasSynesisSessionId(Object value) {
+        return value instanceof Map<?, ?> map && "synesis-codex-session".equals(map.get("id"));
+    }
+
+    private static boolean canonicalSessionHook(Object value, ProviderIntegration provider) {
+        if (!provider.isManagedSessionHook(value) || !(value instanceof Map<?, ?> map)
+                || !"startup|resume".equals(map.get("matcher"))) {
+            return false;
+        }
+        return map.get("hooks") instanceof List<?> list && list.size() == 1
+                && list.getFirst() instanceof Map<?, ?> handler
+                && "command".equals(handler.get("type"))
+                && handler.get("command") instanceof String command
+                && command.endsWith(" hook codex");
+    }
+
+    private static boolean isTracked(Path worktree, String relativePath) throws IOException {
+        try {
+            Process process = new ProcessBuilder("git", "-C", worktree.toString(), "ls-files", "--error-unmatch",
+                    "--", relativePath).redirectErrorStream(true).start();
+            process.getInputStream().readAllBytes();
+            return process.waitFor() == 0;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw providerConflict("could not verify tracked state");
+        } catch (IOException failure) {
+            throw providerConflict("could not verify tracked state");
+        }
+    }
+
+    private static IOException providerConflict(String detail) {
+        return new IOException("PROVIDER_CONFIGURATION_CONFLICT: " + detail);
     }
 
     private static ProviderResult result(ProviderIntegration provider,
@@ -509,36 +658,44 @@ public final class ProviderApplicationService {
                     return failure(id, "OBSOLETE_PROVIDER_STATE", "PROVIDER_INSTALL_RESULT", 10);
                 }
             }
-            Map<String, Object> root = readObject(config);
-            Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(),
-                    ignored -> new LinkedHashMap<>()));
-            List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
             Map<String, Object> expectedHook = provider.managedHook(launcher, profile);
-            if (provider instanceof AntigravityProviderIntegration antigravity && isWindows()) {
-                antigravity.writeWrapper(profile);
-            }
-            boolean already = hooks.stream()
-                    .filter(provider::isManagedHook)
-                    .count() == 1
-                    && expectedHook.equals(hooks.stream()
-                    .filter(provider::isManagedHook)
-                    .findFirst()
-                    .orElse(null))
-                    && Files.exists(metadata(location, provider));
-            hooks.removeIf(provider::isManagedHook);
-            hooks.add(expectedHook);
-            List<Object> sessionHooks = list(group.get("SessionStart"));
-            sessionHooks.removeIf(provider::isManagedSessionHook);
-            Map<String, Object> expectedSessionHook = provider.managedSessionHook(launcher, profile);
-            if (expectedSessionHook != null) {
-                sessionHooks.add(expectedSessionHook);
-            }
-            if (sessionHooks.isEmpty()) {
-                group.remove("SessionStart");
+            boolean already;
+            if ("codex".equals(provider.id())) {
+                // Codex hook ownership is classified and materialized by the
+                // fail-closed path before any provider session authority exists.
+                materializeHook(location.root(), provider, launcher, profile);
+                already = Files.exists(metadata(location, provider));
             } else {
-                group.put("SessionStart", sessionHooks);
+                Map<String, Object> root = readObject(config);
+                Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(),
+                        ignored -> new LinkedHashMap<>()));
+                List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
+                if (provider instanceof AntigravityProviderIntegration antigravity && isWindows()) {
+                    antigravity.writeWrapper(profile);
+                }
+                already = hooks.stream()
+                        .filter(provider::isManagedHook)
+                        .count() == 1
+                        && expectedHook.equals(hooks.stream()
+                        .filter(provider::isManagedHook)
+                        .findFirst()
+                        .orElse(null))
+                        && Files.exists(metadata(location, provider));
+                hooks.removeIf(provider::isManagedHook);
+                hooks.add(expectedHook);
+                List<Object> sessionHooks = list(group.get("SessionStart"));
+                sessionHooks.removeIf(provider::isManagedSessionHook);
+                Map<String, Object> expectedSessionHook = provider.managedSessionHook(launcher, profile);
+                if (expectedSessionHook != null) {
+                    sessionHooks.add(expectedSessionHook);
+                }
+                if (sessionHooks.isEmpty()) {
+                    group.remove("SessionStart");
+                } else {
+                    group.put("SessionStart", sessionHooks);
+                }
+                atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
             }
-            atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
             Path mcpLauncher = mcpLauncherPath();
             String mcpStatus = ensureMcpConfig(location, provider, mcpLauncher);
             McpHealth health = probeMcp(mcpLauncher, provider.id(), location.root());
@@ -610,6 +767,9 @@ public final class ProviderApplicationService {
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_INSTALL_RESULT", 10);
         } catch (Exception failure) {
+            if (String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")) {
+                return failure(id, "PROVIDER_CONFIGURATION_CONFLICT", "PROVIDER_INSTALL_RESULT", 10);
+            }
             return failure(id, "INSTALL_FAILED", "PROVIDER_INSTALL_RESULT", 10);
         }
     }
@@ -757,6 +917,13 @@ public final class ProviderApplicationService {
             return simple(provider, "PROVIDER_UNINSTALL_RESULT", "NOT_INSTALLED", 0);
         }
         try {
+            if ("codex".equals(provider.id()) && Files.exists(config)) {
+                if (Files.isSymbolicLink(config)
+                        || !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                        || isTracked(location.root(), ".codex/hooks.json")) {
+                    throw providerConflict("tracked or non-regular hook cannot be rewritten");
+                }
+            }
             boolean removed = false;
             if (Files.exists(config)) {
                 Map<String, Object> root = readObject(config);
@@ -797,6 +964,9 @@ public final class ProviderApplicationService {
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_UNINSTALL_RESULT", 10);
         } catch (Exception failure) {
+            if (String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")) {
+                return failure(id, "PROVIDER_CONFIGURATION_CONFLICT", "PROVIDER_UNINSTALL_RESULT", 10);
+            }
             return failure(id, "UNINSTALL_FAILED", "PROVIDER_UNINSTALL_RESULT", 10);
         }
     }

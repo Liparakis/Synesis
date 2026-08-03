@@ -2,7 +2,6 @@ package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -12,13 +11,13 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.project.ProjectCommandIntent;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.project.ProjectCommandService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
+/** Verifies direct argv execution remains lane-bound and provider-neutral. */
 class ProjectCommandServiceTest {
 
     private Path controlRoot;
@@ -30,7 +29,7 @@ class ProjectCommandServiceTest {
         command[2] = root.toString();
         System.arraycopy(arguments, 0, command, 3, arguments.length);
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes()).trim();
+        String output = new String(process.getInputStream().readAllBytes());
         if (process.waitFor() != 0) {
             throw new IllegalStateException("git failed: " + output);
         }
@@ -42,95 +41,63 @@ class ProjectCommandServiceTest {
         git(controlRoot, "init");
         git(controlRoot, "config", "user.name", "Test User");
         git(controlRoot, "config", "user.email", "test@example.com");
-
         Files.createDirectories(controlRoot.resolve("src"));
         Files.writeString(controlRoot.resolve("src/Product.java"), "public class Product {}\n");
-
         git(controlRoot, "add", ".");
         git(controlRoot, "commit", "-m", "Initial commit");
-
         new ProjectApplicationService().init(controlRoot);
     }
 
+    private void ensureSession(String connection) {
+        AgentResponse response = new AgentSessionService().ensureSession(
+                new AgentSessionService.SessionResolutionRequest(controlRoot, "codex", connection, null, false));
+        assertEquals(AgentStatus.READY, response.status(), response.toJson());
+    }
+
     @Test
-    void testExecutesGitStatusInAssignedWorktree() throws Exception {
-        AgentSessionService sessionService = new AgentSessionService();
-        AgentSessionService.SessionResolutionRequest sessionReq = new AgentSessionService.SessionResolutionRequest(
-                controlRoot, "codex", "conn-cmd-1", null, false);
-        sessionService.ensureSession(sessionReq);
-
-        // Verify workspace trust
-        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
-        var bindings = bindingService.list(location, "codex");
-        var binding = bindings.getLast();
-        bindingService.verifyWorkspaceTrust(location, "codex", binding.sessionId(), Path.of(binding.worktreePath()));
-
-        ProjectCommandService commandService = new ProjectCommandService();
-        ProjectCommandIntent intent = new ProjectCommandIntent("git_status", null, List.of());
-        ProjectCommandService.CommandRequest request = new ProjectCommandService.CommandRequest(
-                controlRoot, "codex", "conn-cmd-1", intent);
-
-        AgentResponse response = commandService.runCommand(request);
-        assertEquals(AgentStatus.COMPLETED, response.status());
-
+    void executesDirectGitArgvInAssignedWorktree() {
+        ensureSession("conn-cmd-1");
+        AgentResponse response = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
+                controlRoot, "codex", "conn-cmd-1", List.of("git", "status", "--porcelain")));
+        assertEquals(AgentStatus.COMPLETED, response.status(), response.toJson());
         String json = response.toJson();
-        assertTrue(json.contains("git_status"));
-        assertFalse(json.contains(controlRoot.toString())); // No absolute paths leaked
+        assertTrue(json.contains("\"outcome\":\"completed\""));
+        assertTrue(json.contains("stdoutBytesRead"));
+        assertTrue(json.contains("stdoutBytesRetained"));
+        assertTrue(json.contains("stdoutTruncated"));
+        assertFalse(json.contains(controlRoot.toString()));
     }
 
     @Test
-    void testRejectsUnsupportedBuildSystem() throws Exception {
-        AgentSessionService sessionService = new AgentSessionService();
-        AgentSessionService.SessionResolutionRequest sessionReq = new AgentSessionService.SessionResolutionRequest(
-                controlRoot, "codex", "conn-cmd-2", null, false);
-        sessionService.ensureSession(sessionReq);
-
-        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
-        var bindings = bindingService.list(location, "codex");
-        var binding = bindings.getLast();
-        bindingService.verifyWorkspaceTrust(location, "codex", binding.sessionId(), Path.of(binding.worktreePath()));
-
-        ProjectCommandService commandService = new ProjectCommandService();
-        // "build" in project without Gradle/Maven/npm/dotnet
-        ProjectCommandIntent intent = new ProjectCommandIntent("build", null, List.of());
-        ProjectCommandService.CommandRequest request = new ProjectCommandService.CommandRequest(
-                controlRoot, "codex", "conn-cmd-2", intent);
-
-        AgentResponse response = commandService.runCommand(request);
-        assertEquals(AgentStatus.BLOCKED, response.status());
-        assertTrue(response.toJson().contains("tool_unavailable"));
+    void missingExecutableReturnsConcreteDiagnostic() {
+        ensureSession("conn-cmd-2");
+        AgentResponse response = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
+                controlRoot, "codex", "conn-cmd-2", List.of("synesis-command-that-does-not-exist")));
+        assertEquals(AgentStatus.BLOCKED, response.status(), response.toJson());
+        assertTrue(response.toJson().contains("command_executable_not_found"), response.toJson());
     }
 
     @Test
-    void testEnforcesControlCheckoutProtection() throws Exception {
-        AgentSessionService sessionService = new AgentSessionService();
-        AgentSessionService.SessionResolutionRequest sessionReq = new AgentSessionService.SessionResolutionRequest(
-                controlRoot, "codex", "conn-cmd-3", null, false);
-        sessionService.ensureSession(sessionReq);
+    void preservesArgumentBoundariesWithoutImplicitShell() {
+        ensureSession("conn-cmd-3");
+        AgentResponse response = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
+                controlRoot, "codex", "conn-cmd-3",
+                List.of("powershell.exe", "-NoProfile", "-Command", "Write-Output 'hello world'")));
+        assertEquals(AgentStatus.COMPLETED, response.status(), response.toJson());
+        assertTrue(response.toJson().contains("hello world"), response.toJson());
+    }
 
-        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
-        var bindings = bindingService.list(location, "codex");
-        var binding = bindings.getLast();
-        Path worktree = Path.of(binding.worktreePath());
-        bindingService.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
+    @Test
+    void commandCannotMutateControlCheckout() throws Exception {
+        ensureSession("conn-cmd-4");
+        var location = new ProjectApplicationService().locate(controlRoot);
+        var binding = new ProviderSessionBindingService().list(location, "codex").getLast();
+        Path lane = Path.of(binding.worktreePath());
+        Files.writeString(lane.resolve("src/Product.java"), "public class Product { int v = 2; }\n");
 
-        // Control root contains Product.java
-        assertTrue(Files.exists(controlRoot.resolve("src/Product.java")));
-        // Modify file in worktree
-        Files.writeString(worktree.resolve("src/Product.java"), "public class Product { int v = 2; }\n");
-
-        ProjectCommandService commandService = new ProjectCommandService();
-        ProjectCommandIntent intent = new ProjectCommandIntent("git_status", null, List.of());
-        ProjectCommandService.CommandRequest request = new ProjectCommandService.CommandRequest(
-                controlRoot, "codex", "conn-cmd-3", intent);
-
-        AgentResponse response = commandService.runCommand(request);
-        assertEquals(AgentStatus.COMPLETED, response.status());
-
-        // Control checkout remains completely unchanged
+        AgentResponse response = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
+                controlRoot, "codex", "conn-cmd-4", List.of("git", "status", "--porcelain")));
+        assertEquals(AgentStatus.COMPLETED, response.status(), response.toJson());
         assertEquals("public class Product {}\n", Files.readString(controlRoot.resolve("src/Product.java")));
     }
 }

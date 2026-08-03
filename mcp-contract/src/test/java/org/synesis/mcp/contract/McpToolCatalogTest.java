@@ -23,6 +23,31 @@ class McpToolCatalogTest {
     }
 
     @Test
+    void runCommandUsesOnlyDirectArgvAndExposesCompleteEvidenceMetadata() {
+        McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
+                .filter(candidate -> candidate.wireName().equals(McpToolCatalog.RUN_COMMAND))
+                .findFirst().orElseThrow();
+        Map<String, Object> input = descriptor.inputSchema();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> properties = (Map<String, Object>) input.get("properties");
+        assertTrue(properties.containsKey("argv"));
+        assertTrue(properties.containsKey("workingDirectory"));
+        assertTrue(properties.containsKey("timeoutSeconds"));
+        assertFalse(properties.containsKey("type"));
+        assertFalse(properties.containsKey("target"));
+        assertFalse(properties.containsKey("arguments"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> envelopeProperties = (Map<String, Object>) descriptor.outputSchema().get("properties");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> outputProperties = (Map<String, Object>) ((Map<String, Object>) envelopeProperties.get("result"))
+                .get("properties");
+        assertTrue(outputProperties.keySet().containsAll(List.of(
+                "stdout", "stderr", "stdoutBytesRead", "stderrBytesRead",
+                "stdoutBytesRetained", "stderrBytesRetained", "stdoutTruncated", "stderrTruncated")));
+    }
+
+    @Test
     void identitiesAreDeterministicAndGuidanceDoesNotRecurse() {
         McpToolCatalog.Identity first = McpToolCatalog.identities(McpToolCatalog.descriptors());
         McpToolCatalog.Identity second = McpToolCatalog.identities(McpToolCatalog.descriptors());

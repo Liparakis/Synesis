@@ -7,6 +7,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.task.TaskSnapshotService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.project.ProjectProcessExecutor;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,6 +58,7 @@ public final class AgentTaskCompletionService {
     private final SessionAuthorityResolver authorityResolver;
     private final WorkspaceCollaborationService collaborationService;
     private final ProviderManualService manualService;
+    private final ProjectProcessExecutor processExecutor;
 
     /**
      * Creates an agent task completion service.
@@ -69,6 +71,7 @@ public final class AgentTaskCompletionService {
         this.authorityResolver = new SessionAuthorityResolver(bindingService);
         this.collaborationService = new WorkspaceCollaborationService();
         this.manualService = new ProviderManualService();
+        this.processExecutor = new ProjectProcessExecutor();
     }
 
     /**
@@ -143,6 +146,7 @@ public final class AgentTaskCompletionService {
         try {
             Path coordDir = location.root().resolve(".synesis/coordination");
             PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
+            ProjectProcessExecutor.ExecutionResult prePublicationValidation = null;
 
             if (terminalRetry) {
                 UUID completedTaskId = deriveTaskId(binding);
@@ -152,7 +156,7 @@ public final class AgentTaskCompletionService {
                     return completionResult(store, completedSnapshot.get(),
                             WorkspaceCollaborationService.participantHandle(binding.sessionId()),
                             new AgentResponse(AgentStatus.COMPLETED, null, null,
-                                    Map.of("task", "already_integrated")));
+                                    Map.of("task", "already_integrated")), null);
                 }
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY,
                         AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "COMPLETED_BINDING_WITHOUT_SNAPSHOT"));
@@ -212,6 +216,23 @@ public final class AgentTaskCompletionService {
             }
             List<ResourceSelector> currentClaims = laneIntent.map(intent -> intent.selectors()).orElse(List.of());
             Optional<TaskSnapshotRecord> existingOpt = store.taskCompletionProjection().findSnapshotForTask(taskId);
+
+            // Project-owned validation is a server gate. It runs through the
+            // same direct argv primitive exposed by run_command, against the
+            // authenticated lane worktree, before any snapshot can become
+            // prepared or visible to integration.
+            if (location.validation() != null) {
+                prePublicationValidation = processExecutor.execute(
+                        ProjectProcessExecutor.ExecutionRequest.from(location.validation(), workerWorktreePath,
+                                location.root()));
+                if (!prePublicationValidation.succeeded()) {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("phase", "pre_publication");
+                    result.put("validation", prePublicationValidation.toMap());
+                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.VALIDATION_FAILED,
+                            AgentNextAction.RETRY, result);
+                }
+            }
 
             TaskSnapshotRecord snapshot;
             try {
@@ -292,7 +313,7 @@ public final class AgentTaskCompletionService {
 
             // 6. Trigger integration orchestration
             AgentResponse result = integrationOrchestrationService.orchestrateIntegration(location.root(), store, identity);
-            result = completionResult(store, snapshot, participantHandle, result);
+            result = completionResult(store, snapshot, participantHandle, result, prePublicationValidation);
             if (result.status() == AgentStatus.COMPLETED) {
                 releaseClaims(request, collaborationService);
                 // Complete only the exact calling connection.  Keeping the
@@ -312,7 +333,8 @@ public final class AgentTaskCompletionService {
     }
 
     private static AgentResponse completionResult(PredictionEventStore store, TaskSnapshotRecord snapshot,
-            String participantHandle, AgentResponse integrationResult) {
+            String participantHandle, AgentResponse integrationResult,
+            ProjectProcessExecutor.ExecutionResult prePublicationValidation) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (integrationResult.result() instanceof Map<?, ?> map) {
             map.forEach((key, value) -> result.put(String.valueOf(key), value));
@@ -323,6 +345,9 @@ public final class AgentTaskCompletionService {
         result.put("snapshotId", snapshot.snapshotId());
         result.put("snapshotState", "PUBLISHED");
         result.put("integrationState", store.taskCompletionProjection().taskState(snapshot.taskId()).value());
+        if (prePublicationValidation != null) {
+            result.put("prePublicationValidation", prePublicationValidation.toMap());
+        }
         if (integrationResult.nextAction() != null) {
             result.put("nextAction", integrationResult.nextAction().value());
         }

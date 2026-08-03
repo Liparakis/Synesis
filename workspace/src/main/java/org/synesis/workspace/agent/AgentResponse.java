@@ -28,9 +28,11 @@ public record AgentResponse(
 ) {
 
     /**
-     * Maximum allowed size for a serialized normal agent response (64 KB).
+     * Maximum allowed size for a serialized normal agent response (1 MiB).
+     * This accommodates two bounded 64 KiB raw output streams plus JSON
+     * escaping and structured evidence metadata.
      */
-    public static final int MAX_RESPONSE_BYTES = 65536;
+    public static final int MAX_RESPONSE_BYTES = 1_048_576;
 
     /**
      * Validates required response fields.

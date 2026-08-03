@@ -31,6 +31,8 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.project.ProjectProcessExecutor;
 
 /**
  * Orchestrates the integration pipeline for ready task snapshots.
@@ -53,6 +55,8 @@ public final class IntegrationOrchestrationService {
     private static final Object INTEGRATION_LOCK = new Object();
     private final IntegrationWorkspaceService workspaceService;
     private final ControlBranchAdvancementService advancementService;
+    private final ProjectApplicationService projectService;
+    private final ProjectProcessExecutor processExecutor;
 
     /**
      * Creates an integration orchestration service.
@@ -60,6 +64,8 @@ public final class IntegrationOrchestrationService {
     public IntegrationOrchestrationService() {
         this.workspaceService = new IntegrationWorkspaceService();
         this.advancementService = new ControlBranchAdvancementService();
+        this.projectService = new ProjectApplicationService();
+        this.processExecutor = new ProjectProcessExecutor();
     }
 
     /**
@@ -291,14 +297,27 @@ public final class IntegrationOrchestrationService {
                                 ? AgentNextAction.REQUEST_HUMAN_HELP : AgentNextAction.RETRY, result);
             }
 
-            // 6. Execute project integration gate inside the integration worktree
-            boolean gatePassed = runIntegrationGate(prepResult.worktreePath());
-            if (!gatePassed) {
+            // 6. Execute the project-owned validation argv through the same
+            // generic primitive used by run_command and finish_lane.
+            ProjectProcessExecutor.ExecutionResult validation = null;
+            try {
+                ProjectApplicationService.ProjectLocation location = projectService.locate(controlRoot);
+                if (location.validation() != null) {
+                    validation = processExecutor.execute(ProjectProcessExecutor.ExecutionRequest.from(
+                            location.validation(), prepResult.worktreePath(), controlRoot));
+                }
+            } catch (Exception failure) {
+                validation = new ProjectProcessExecutor.ExecutionResult(
+                        ProjectProcessExecutor.Outcome.COMMAND_START_FAILED, null, "", "", 0, 0, 0, 0,
+                        false, false);
+            }
+            if (validation != null && !validation.succeeded()) {
                 try {
                     IntegrationAttemptPayload failPayload = new IntegrationAttemptPayload(
                             attemptId, store.projectId(),
                             ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                            expectedControlHead, prepResult.integrationCommitSha(), "pending", "Integration gate unavailable or failed");
+                            expectedControlHead, prepResult.integrationCommitSha(), "pending",
+                            "VALIDATION_FAILED:" + validation.outcome().value());
                     store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
                             identity.nodeId(), failPayload.encode(), identity);
                 } catch (Exception ignored) {
@@ -306,8 +325,10 @@ public final class IntegrationOrchestrationService {
 
                 workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
                 Map<String, Object> result = new LinkedHashMap<>();
-                result.put("pending", 1);
-                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, result);
+                result.put("phase", "integration");
+                result.put("validation", validation.toMap());
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_FAILED,
+                        AgentNextAction.RETRY, result);
             }
 
             // Record INTEGRATION_COMMIT_CREATED
@@ -348,6 +369,9 @@ public final class IntegrationOrchestrationService {
             // Success! Fully integrated
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("task", "integrated");
+            if (validation != null) {
+                result.put("validation", validation.toMap());
+            }
             return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
         }
     }
@@ -521,13 +545,6 @@ public final class IntegrationOrchestrationService {
             visited.add(node);
             sorted.add(node);
         }
-    }
-
-    private static boolean runIntegrationGate(Path integrationWorktree) {
-        // Synesis is a collaboration and provenance boundary, not a build
-        // system detector. Providers/projects own validation commands; absent
-        // an explicit configured gate, integration does not guess one.
-        return true;
     }
 
     private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots,

@@ -1632,3 +1632,39 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   Sequential Gradle `check`, strict Javadocs/static checks, deferred
   validation, bootstrap Go tests/vet, and `git diff --check` pass. No active
   SYN-036 lane remains.
+
+## SYN-037
+
+- ID: SYN-037
+- Priority: P0
+- Title: Generic command execution, private runtime state, and real Codex completion
+- Status: DONE
+- Purpose: Replace the prerelease command intent/adapter path with direct argv
+  execution, keep Synesis runtime paths private without claiming provider
+  configuration ownership, and prove that real Codex command evidence carries
+  through completion, uncontaminated snapshot publication, integration, and a
+  clean control checkout.
+- Dependencies: SYN-036 DONE; existing ten-tool MCP catalog, provider binding,
+  workspace, snapshot, completion, and integration foundations.
+- Acceptance criteria: exact private Git exclusions are maintained; hook
+  ownership is classified and conflicts fail closed; one generic process
+  executor serves agent commands and server validation; bounded evidence
+  exposes raw bytes read, bytes retained, and truncation; project-configured
+  validation runs through the same executor during completion and integration;
+  the real Codex acceptance completes with an uncontaminated one-file snapshot,
+  integrated `src/task_tracker.txt = implemented`, and empty final Git status.
+- Required tests: focused hook/exclusion, generic execution/evidence, MCP
+  schema/dispatch, completion validation, integration validation, and real
+  Codex acceptance tests; strict Javadocs, full sequential Gradle check,
+  deferred validator, bootstrap Go tests/vet, and `git diff --check`.
+- Required documentation: ADR for the breaking command schema, shared
+  executor, project validation metadata, hook ownership, and raw-byte evidence;
+  updated CURRENT.md, GOAL.md, STATE.md, TEST_MATRIX.md, SESSION_LOG.md, and
+  NEXT_SESSION.md; final acceptance evidence report.
+- Implementation order: (1) shared process/evidence model and executor; (2)
+  direct-argv MCP contract and adapter removal; (3) project validation metadata
+  and completion/integration gates; (4) Git private exclusions; (5) hook
+  ownership/conflict materialization; (6) focused and real-Codex acceptance.
+- Completion evidence: CP-0415,
+  `docs/evidence/syn037-real-codex-acceptance-2026-08-03.md`, and
+  `docs/evidence/syn037-root-verification-fix-2026-08-03.md`.
