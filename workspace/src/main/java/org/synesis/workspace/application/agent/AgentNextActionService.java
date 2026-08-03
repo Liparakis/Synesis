@@ -152,6 +152,27 @@ public final class AgentNextActionService {
                             AgentNextAction.RESPOND_COORDINATION, collaboration);
                 }
 
+                // A session that has not established its own active intent is
+                // not eligible to service another lane's capability inbox.
+                // Provider models may receive an implementation-available
+                // item before they have successfully decoded a claim-bearing
+                // ensure_session request.  Returning that item here would
+                // allow the unclaimed session to answer as the owner or
+                // requester of a different lane.  Keep the response
+                // actionable: the caller must refresh/establish its own
+                // claim first, while discovery remains available in the
+                // bounded result payload.
+                String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+                boolean callerHasActiveIntent = store.collaborationProjection().activeIntents().stream()
+                        .anyMatch(intent -> intent.participant().equals(callerParticipant));
+                if (store.collaborationProjection().activated() && !callerHasActiveIntent) {
+                    Map<String, Object> claimRequired = new LinkedHashMap<>(collaboration);
+                    claimRequired.put("claimsRequired", true);
+                    claimRequired.put("reason", AgentReason.COORDINATION_INTENT_REQUIRED.value());
+                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED,
+                            AgentNextAction.ENSURE_SESSION, claimRequired);
+                }
+
                 List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerPending = capProj.findPendingForOwner(callerNodeId);
 
                 // Slice 3: Check active integration projection states

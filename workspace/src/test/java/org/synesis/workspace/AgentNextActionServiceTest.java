@@ -14,10 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.agent.AgentNextAction;
+import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 class AgentNextActionServiceTest {
 
@@ -152,5 +156,30 @@ class AgentNextActionServiceTest {
         AgentResponse response = service.getNextAction(req);
         assertEquals(AgentStatus.READY, response.status());
         assertTrue(response.toJson().contains("\"pending\":0"));
+    }
+
+    @Test
+    void unclaimedSessionCannotServiceAnotherLanesCapabilityInbox() throws Exception {
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
+
+        AgentSessionService sessionService = new AgentSessionService();
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "claim-owner", null, false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "antigravity", "claim-contender", null, false));
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.announce(controlRoot, "codex", "claim-owner", "Implement source", "Publish source",
+                List.of(ResourceSelector.pathExact("src/task_tracker.py")));
+
+        AgentNextActionService service = new AgentNextActionService();
+        AgentResponse response = service.getNextAction(new AgentNextActionService.NextActionRequest(
+                controlRoot, "antigravity", "claim-contender"));
+
+        assertEquals(AgentStatus.BLOCKED, response.status());
+        assertEquals(AgentReason.COORDINATION_INTENT_REQUIRED, response.reason());
+        assertEquals(AgentNextAction.ENSURE_SESSION, response.nextAction());
+        assertTrue(response.toJson().contains("\"claimsRequired\":true"));
     }
 }
