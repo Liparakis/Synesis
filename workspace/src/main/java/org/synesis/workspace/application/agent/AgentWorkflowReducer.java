@@ -119,13 +119,35 @@ public final class AgentWorkflowReducer {
         return switch (next) {
             case ENSURE_SESSION -> new LaneAction("RECOVER", List.of(reasonCode(reason)),
                     List.of("ensure_session"), true);
-            case REQUEST_COORDINATION, RESPOND_COORDINATION, REVISE_CAPABILITY_REQUEST ->
-                    new LaneAction(next == AgentNextAction.RESPOND_COORDINATION ? "REVIEW_CONTRACT" : "REVISE_SCOPE",
+            case REQUEST_COORDINATION, REVISE_CAPABILITY_REQUEST ->
+                    new LaneAction("REVISE_SCOPE",
                             List.of(reasonCode(reason)), List.of("request_coordination", "respond_coordination"), true);
+            case RESPOND_COORDINATION -> {
+                // A capability owner may need to accept a request before the
+                // implementation is ready.  Keep the exact response handle
+                // required, but do not fence the owner's already-authorized
+                // lane: claim/revision checks on each mutation remain the
+                // final authority boundary.
+                boolean capabilityOwner = result.containsKey("capabilityRequestHandle")
+                        && result.containsKey("capability");
+                yield new LaneAction("REVIEW_CONTRACT", List.of(reasonCode(reason)),
+                        capabilityOwner
+                                ? List.of("request_coordination", "respond_coordination", "read_file",
+                                        "apply_patch", "run_command", "get_next_action")
+                                : List.of("request_coordination", "respond_coordination"), true);
+            }
             case VALIDATE_IMPLEMENTATION, RESPOND_TO_VALIDATION_REVISION ->
                     new LaneAction("PUBLISH", List.of(reasonCode(reason)),
                             List.of("respond_coordination", "publish_capability_implementation"), true);
-            case WAIT -> new LaneAction("WAIT", List.of(reasonCode(reason)), List.of("get_next_action"), true);
+            case WAIT -> {
+                boolean capabilityImplementation = reason == AgentReason.IMPLEMENTATION_UNAVAILABLE
+                        && result.containsKey("capabilityRequestHandle");
+                yield new LaneAction(capabilityImplementation ? "IMPLEMENT" : "WAIT",
+                        List.of(reasonCode(reason)), capabilityImplementation
+                                ? List.of("read_file", "apply_patch", "run_command",
+                                        "publish_capability_implementation", "get_next_action")
+                                : List.of("get_next_action"), true);
+            }
             case RETRY -> new LaneAction("RECOVER", List.of(reasonCode(reason)), List.of("ensure_session", "get_next_action"), true);
             case REQUEST_HUMAN_HELP -> new LaneAction("INTEGRATION_REPAIR", List.of(reasonCode(reason)),
                     List.of("get_next_action", "request_coordination"), false);

@@ -48,4 +48,26 @@ final class AgentWorkflowReducerTest {
         assertEquals("CLOSE", ((Map<?, ?>) ((Map<?, ?>) terminal.result()).get("workflow")).get("type"));
         assertEquals("RECOVER", ((Map<?, ?>) ((Map<?, ?>) recovery.result()).get("workflow")).get("type"));
     }
+
+    /** Capability handoff does not fence the owner's already-authorized lane. */
+    @Test
+    void capabilityOwnerMayImplementAfterRequestAcceptance() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+                Path.of("."), "codex", "connection-1");
+
+        AgentResponse ownerReview = reducer.decorate(request,
+                new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_COORDINATION,
+                        Map.of("capabilityRequestHandle", "req_123456789012", "capability", "task-tracker")));
+        Map<?, ?> reviewWorkflow = (Map<?, ?>) ((Map<?, ?>) ownerReview.result()).get("workflow");
+        assertTrue(((java.util.List<?>) reviewWorkflow.get("permittedOperations")).contains("apply_patch"));
+
+        AgentResponse implementation = reducer.decorate(request,
+                new AgentResponse(AgentStatus.WAITING, AgentReason.IMPLEMENTATION_UNAVAILABLE,
+                        AgentNextAction.WAIT, Map.of("capabilityRequestHandle", "req_123456789012")));
+        Map<?, ?> implementationWorkflow = (Map<?, ?>) ((Map<?, ?>) implementation.result()).get("workflow");
+        assertEquals("IMPLEMENT", implementationWorkflow.get("type"));
+        assertTrue(((java.util.List<?>) implementationWorkflow.get("permittedOperations"))
+                .contains("publish_capability_implementation"));
+    }
 }

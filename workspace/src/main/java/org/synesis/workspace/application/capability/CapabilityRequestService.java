@@ -162,19 +162,31 @@ public final class CapabilityRequestService {
                 return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, null);
             }
 
-            // Resolve semantic owner for capability
-            String ownerNodeId = resolveOwnerNodeId(location.root(), store, capability);
+            String requesterParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            Optional<WorkIntent> requesterIntent = currentIntent(store, requesterParticipant);
+            if (requesterIntent.isEmpty() && store.collaborationProjection().activated()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED,
+                        AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
+            }
+            UUID requestedOwnerLineage = request.ownerAuthorityLineageId();
+            UUID inferredOwnerLineage = requestedOwnerLineage != null
+                    ? requestedOwnerLineage
+                    : requesterIntent.isPresent()
+                            ? inferUniqueOwnerLineage(store, requesterIntent.get().participant())
+                            : null;
+
+            // First-release collaboration lanes are the authoritative owner
+            // source.  The older semantic-ownership projection is still
+            // honored when present, but a capability request tied to an
+            // active foreign lane must not require a second, unrelated task
+            // ownership record before it can be durably recorded.
+            String ownerNodeId = resolveOwnerNodeId(store, capability, inferredOwnerLineage,
+                    requesterParticipant, requesterNodeId);
             if (ownerNodeId == null || ownerNodeId.isBlank()) {
                 Map<String, Object> result = Map.of("capability", capability);
                 return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
             }
 
-            Optional<WorkIntent> requesterIntent = currentIntent(store,
-                    WorkspaceCollaborationService.participantHandle(binding.sessionId()));
-            if (requesterIntent.isEmpty() && store.collaborationProjection().activated()) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED,
-                        AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
-            }
             UUID ownerLineage = request.ownerAuthorityLineageId() != null
                     ? request.ownerAuthorityLineageId()
                     : requesterIntent.isPresent()
@@ -310,9 +322,22 @@ public final class CapabilityRequestService {
         };
     }
 
-    private static String resolveOwnerNodeId(Path root, PredictionEventStore store, String capability) {
+    private static String resolveOwnerNodeId(PredictionEventStore store, String capability,
+            UUID requestedOwnerLineage, String requesterParticipant, String localNodeId) {
         Optional<OwnershipClaim> claim = store.coordinationProjection().ownership(capability);
-        return claim.map(OwnershipClaim::ownerNodeId).orElse(null);
+        if (claim.isPresent()) {
+            return claim.get().ownerNodeId();
+        }
+        if (requestedOwnerLineage == null) {
+            return null;
+        }
+        boolean foreignActiveLineage = store.collaborationProjection().activeIntents().stream()
+                .anyMatch(intent -> !intent.participant().equals(requesterParticipant)
+                        && intent.authorityLineageId().equals(requestedOwnerLineage));
+        // Provider bindings in the local project share the project node
+        // identity; the durable lineage and exact owner session remain the
+        // authority boundary for the response and publication steps.
+        return foreignActiveLineage ? localNodeId : null;
     }
 
     private static Optional<WorkIntent> currentIntent(PredictionEventStore store, String participant) {

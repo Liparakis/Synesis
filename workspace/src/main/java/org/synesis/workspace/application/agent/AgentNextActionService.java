@@ -412,7 +412,9 @@ public final class AgentNextActionService {
         map.put("acceptance", intent.acceptance());
         map.put("selectors", intent.selectors().stream().map(AgentNextActionService::selectorMap).toList());
         map.put("version", intent.version());
+        map.put("claimEpoch", intent.version());
         map.put("workGroupId", intent.workGroupId().toString());
+        map.put("authorityLineageId", intent.authorityLineageId().toString());
         map.put("status", intent.status().name());
         return map;
     }

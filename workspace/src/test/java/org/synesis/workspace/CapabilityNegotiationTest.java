@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -24,6 +25,8 @@ import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderManualService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -204,5 +207,41 @@ class CapabilityNegotiationTest {
 
         assertEquals(AgentStatus.WAITING, acceptRevResp.status());
         assertEquals(AgentReason.IMPLEMENTATION_UNAVAILABLE, acceptRevResp.reason());
+    }
+
+    @Test
+    void activeIntentLineageCanAuthorizeCapabilityWithoutLegacySemanticOwnership() throws Exception {
+        new ProviderManualService().install("codex");
+        new ProviderManualService().install("antigravity");
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.announce(projectRoot, "codex", "inst-2", "Implement task tracker",
+                "Publish the source implementation", List.of(ResourceSelector.pathExact("src/task_tracker.py")));
+        collaboration.announce(projectRoot, "antigravity", "inst-1", "Implement task tracker tests",
+                "Publish tests after the source contract is accepted",
+                List.of(ResourceSelector.pathExact("tests/task_tracker_test.py")));
+
+        var location = projectService.locate(projectRoot);
+        PredictionEventStore store = new PredictionEventStore(
+                location.root().resolve(".synesis/coordination"), location.projectId());
+        String ownerParticipant = WorkspaceCollaborationService.participantHandle(
+                bindingService.list(location, "codex").getLast().sessionId());
+        UUID ownerLineage = store.collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.participant().equals(ownerParticipant))
+                .findFirst().orElseThrow().authorityLineageId();
+
+        CapabilityContract contract = new CapabilityContract(
+                "task records", "JSON-serializable task records",
+                List.of("preserve the accepted task-tracker contract"),
+                List.of("the dependent test lane can import the published implementation"));
+        AgentResponse response = requestService.describeRequiredCapability(
+                new CapabilityRequestService.DescribeCapabilityRequest(
+                        projectRoot, "antigravity", "inst-1", "task-tracker", contract,
+                        null, null, ownerLineage));
+
+        assertEquals(AgentStatus.WAITING, response.status());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason());
+        PredictionEventStore reloaded = new PredictionEventStore(
+                location.root().resolve(".synesis/coordination"), location.projectId());
+        assertEquals(1, reloaded.capabilityRequestProjection().records().size());
     }
 }
