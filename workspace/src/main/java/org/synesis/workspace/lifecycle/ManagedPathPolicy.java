@@ -140,19 +140,8 @@ public final class ManagedPathPolicy {
     }
 
     private static Result run(Path root, String... args) throws IOException {
-        List<String> command = new ArrayList<>();
-        command.add("git");
-        command.addAll(List.of(args));
-        ProcessBuilder builder = new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true);
-        try {
-            Process process = builder.start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            int exit = process.waitFor();
-            return new Result(exit, output);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git inspection interrupted", interrupted);
-        }
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root, args);
+        return new Result(result.exitCode(), result.output());
     }
 
     private static Path normalize(Path root) {

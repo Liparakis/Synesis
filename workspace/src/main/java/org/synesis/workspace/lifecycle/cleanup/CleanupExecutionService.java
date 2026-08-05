@@ -13,6 +13,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
+import org.synesis.workspace.lifecycle.command.ProjectCommandMaintenanceService;
 
 /**
  * Execution engine for executing reviewed cleanup plans safely with strict precondition re-verification,
@@ -114,6 +117,12 @@ public final class CleanupExecutionService {
 
         Path root = controlRoot.toAbsolutePath().normalize();
         projectService.locate(root);
+        ProjectCommandDiagnostics.Report commandNamespace = ProjectCommandDiagnostics.inspect(
+                AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
+        if (commandNamespace.present() && (!commandNamespace.formatValid()
+                || commandNamespace.newerObjectCount() > 0 || commandNamespace.corruptObjectCount() > 0)) {
+            throw new IOException("COMMAND_NAMESPACE_UNSAFE_CLEANUP_BLOCKED");
+        }
 
         // 1. Acquire project execution lock
         try (CleanupExecutionLock lock = CleanupExecutionLock.acquire(root, planId)) {
@@ -389,6 +398,19 @@ public final class CleanupExecutionService {
                     failedCount, bytesReclaimed, resultStatus, Collections.unmodifiableList(records)
             );
         }
+    }
+
+    /** Executes the command-namespace terminal retention step through the existing cleanup entry point.
+     * @param namespaceRoot host-wide command namespace root
+     * @param anchorId dead process anchor to review and compact
+     * @param now retention clock value
+     * @param retention required diagnostic retention interval
+     * @return compacted terminal-history result
+     * @throws IOException if command state is live, blocking, pinned, corrupt, or unsupported
+     */
+    public ProjectCommandMaintenanceService.CleanupResult cleanupDeadCommandAnchor(
+            Path namespaceRoot, String anchorId, Instant now, Duration retention) throws IOException {
+        return new ProjectCommandMaintenanceService().cleanupDeadAnchor(namespaceRoot, anchorId, now, retention);
     }
 
     private static boolean isGitWorktreeRegistered(Path controlRoot, Path worktreePath) {

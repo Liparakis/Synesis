@@ -148,6 +148,24 @@ public record AgentResponse(
         return map;
     }
 
+    /** Reconstructs a bounded response previously produced by {@link #toMap()}.
+     * @param map response map produced by {@link #toMap()}
+     * @return reconstructed response
+     */
+    public static AgentResponse fromMap(Map<String, Object> map) {
+        Objects.requireNonNull(map, "map");
+        Object rawStatus = map.get("status");
+        if (!(rawStatus instanceof String status)) {
+            throw new IllegalArgumentException("response status is required");
+        }
+        AgentReason reason = map.get("reason") instanceof String value
+                ? AgentReason.fromValue(value) : null;
+        AgentNextAction nextAction = map.get("nextAction") instanceof String value
+                ? AgentNextAction.fromValue(value) : null;
+        Object result = map.get("result");
+        return new AgentResponse(AgentStatus.fromValue(status), reason, nextAction, result);
+    }
+
     /**
      * Serializes this response to a compact JSON string, omitting null fields.
      *

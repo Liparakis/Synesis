@@ -8,6 +8,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 
 /**
  * Application service that coordinates lifecycle resource inventory discovery, path safety verification,
@@ -112,5 +114,12 @@ public final class CleanupPlanService {
                 diskBudgetWarning,
                 Collections.unmodifiableList(entries)
         );
+    }
+
+    /** Returns the bounded command-retention projection alongside a cleanup review.
+     * @return read-only durable command diagnostic report
+     */
+    public ProjectCommandDiagnostics.Report commandNamespaceDiagnostics() {
+        return ProjectCommandDiagnostics.inspect(AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
     }
 }

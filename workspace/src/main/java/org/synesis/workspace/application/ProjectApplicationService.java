@@ -311,19 +311,7 @@ public final class ProjectApplicationService {
     }
 
     private static String runGit(Path root, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true)
-                .start();
-        String output = new String(process.getInputStream()
-                .readAllBytes(), StandardCharsets.UTF_8);
-        if (process.waitFor() != 0) {
-            throw new IOException("git failed: " + output);
-        }
-        return output;
+        return org.synesis.workspace.lifecycle.GitProcessRunner.run(root, arguments);
     }
 
     private static Path directory(Path path, String label) throws ProjectApplicationException {

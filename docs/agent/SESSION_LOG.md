@@ -1,5 +1,103 @@
 # Session Log
 
+## 2026-08-05 — SYN-038 bounded Git subprocess repair
+
+- Timestamp: 2026-08-05 Europe/Athens
+- Active task: SYN-038 durable project-command extension
+- Reproduction: focused `McpServerTest` initially blocked at
+  `ManagedBaselineTransactionService.runOutput` on `git status --porcelain`
+  in a per-test `synesis-mcp-test-*` repository while calling unbounded
+  `readAllBytes()` before `waitFor()`. A later thread dump found the same
+  pattern in `ManagedPathPolicy.run`.
+- Implementation: added the reusable bounded process/Git runner; it closes
+  stdin, merges and bounds output, disables Git prompts/editors/signing/hooks,
+  applies local Synesis author/committer identity, enforces a ten-second
+  deadline, and kills exact descendants on timeout. Routed baseline,
+  path-policy, semantic-index, common-directory, project-init, and focused
+  test Git setup through it. Added deterministic regression coverage for
+  stderr pressure, stdin EOF, timeout diagnostics, descendant cleanup, and
+  ordinary/indexed Git setup.
+- Verification: runner tests, ProjectApplicationService tests, SYN-038
+  namespace tests, MCP framing tests, deferred/fixture validators, and diff
+  checks pass. Focused MCP setup no longer hangs; its repeated 31-test class
+  still has one existing `command_admission_stale` assertion at line 535.
+  Full `check` reaches the same non-hang assertion after 48 tests.
+- Exact continuation: capture the stable admission failure and preserve the
+  durable SYN-038 protocol while resolving it.
+
+## 2026-08-05 — SYN-038 full-check retry
+
+- Timestamp: 2026-08-05 Europe/Athens
+- Active task: SYN-038 durable project-command extension
+- Retry: `./gradlew.bat check --no-daemon --max-workers=1 --console=plain`
+  timed out after 184 seconds. A `jcmd` dump of the surviving Gradle worker
+  showed `org.synesis.mcp.application.McpServerTest.setUp` blocked in
+  `Process.getInputStream().readAllBytes()` while its Git helper waited for a
+  child process pipe to close. No durable-command test failure was reported.
+- Cleanup: stopped only the Gradle daemon/test-worker processes created by the
+  retry; the pre-existing long-lived Synesis CLI process was not touched.
+- Exact continuation: inspect the existing `McpServerTest` Git helper and
+  rerun the checked-in verification without changing unrelated test behavior.
+
+## 2026-08-04 — SYN-038 durable project-command extension activated
+
+- Timestamp: 2026-08-04 Europe/Athens
+- Active task: SYN-038
+- Completed work: Reconciled SYN-038 as an extension of the completed Codex
+  App Server lifecycle phase. Preserved the prior commit, CP-0447/CP-0448,
+  ADR-0043, and all prior acceptance evidence. No SYN-038 tag existed in the
+  repository, so no historical tag was overwritten or recreated.
+- Decisions: Added ADR-0044 for the frozen durable-command architecture.
+  Durable project commands are the active SYN-038 phase. Capacity, cleanup,
+  unsupported-format, crash-injection, and pinned-evidence cases are
+  deterministic fixtures only; real-Codex acceptance is limited to identity,
+  durability, replay, admission, protected interruption, and natural
+  completion.
+- Remaining work: Begin the bounded namespace, permanent-lock, format,
+  process-anchor, and two-process implementation spike.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`
+
+- Timestamp: 2026-08-05 Europe/Athens
+- Checkpoint: CP-0450
+- Active task: SYN-038 durable project-command extension
+- Completed work: Added the bounded command namespace, permanent physical
+  locks, format/integrity gates and supported migration evidence, one fresh
+  MCP process identity, typed replay/conflict admission, read-only existing
+  lookup, STARTING/RUNNING/TERMINAL persistence, strict bounded MCP framing,
+  WorkIntent mutation preconditions, namespace reconciliation, terminal
+  history compaction through cleanup, cleanup/repair fail-closed guards, and
+  doctor/get_next_action diagnostics. Preserved the existing ten-tool catalog
+  and prior App Server history.
+- Verification: focused namespace/lock/capacity/migration/cleanup tests,
+  focused MCP framing tests, workspace/MCP compilation, strict Javadocs,
+  `check -x test`, deferred/fixture validators, bootstrap Go tests/vet,
+  doctor, and `git diff --check` pass.
+- Failed attempts: requested aggregate tests and full `check` blocked in
+  pre-existing Git/CLI subprocess readers (`McpServerTest` setup,
+  `WorkspacePatchServiceTest`, and `UnifiedCliSyncProcessTest`); runs were
+  stopped after thread-stack evidence, with no durable-command assertion
+  failure reported. Do not reinterpret this as a durable-command pass.
+- Exact continuation: investigate the independent subprocess-test hang, then
+  rerun the full requested verification. Preserve prior interruption evidence,
+  do not create SYN-039, and do not add an approval operation.
+
+## 2026-08-04 — SYN-038 durable-command namespace and admission slice
+
+- Active task: SYN-038 durable project-command extension
+- Completed work: Added the host-wide namespace skeleton, permanent lock
+  objects, atomic compatibility/integrity metadata, physical worktree
+  identity, fresh process anchors, typed request/digest canonicalization,
+  durable records, process-local command protection, and the first MCP
+  `run_command` admission/replay path. Added `ProjectCommandNamespaceSpikeTest`.
+- Verification: The focused workspace spike suite passed; workspace and MCP
+  Java compilation passed. Strict workspace Javadocs failed only because new
+  public APIs still need complete `@param`/`@return` documentation.
+- Remaining work: Repair Javadocs, add lease-gap/capacity/cleanup/format/crash
+  and two-process deterministic fixtures, then complete lifecycle integration.
+- Exact continuation: `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`
+
 Append-only operational history.
 
 ## Entry format
@@ -1843,3 +1941,31 @@ Append-only operational history.
   keep the independent command-cleanup outcome explicitly unproven.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1`
+# 2026-08-05 — SYN-038 durable command admission and Git runner verification
+
+- Reproduced `McpServerTest.testMcpReadFileAndApplyPatchEndToEnd` alone. The
+  expected response was terminal `completed`; the actual response was blocked
+  with `command_admission_stale` and `LEASE_RENEWAL_FAILED`. The underlying
+  failure was `IOException:PARTICIPANT_NOT_FOUND` from the collaboration
+  heartbeat after one successful lease renewal. The durable namespace held the
+  verified scope and process anchor at object revision 1, namespace revision
+  12 in the captured run, an ACTIVE lease, and no STARTING record.
+- Traced `McpProtocolHandler → ProjectCommandService → ProjectCommandAdmissionService`.
+  The admission protocol already performed one renewal, exact post-renew
+  snapshot, authority comparison, protection reacquisition, revalidation, and
+  fail-closed no-launch behavior. The production defect was treating a valid
+  no-claims session with no participant as a failed heartbeat.
+- Added `WorkspaceCollaborationService.heartbeatIfPresent` and used it only in
+  durable command admission. It ignores only `PARTICIPANT_NOT_FOUND`; all other
+  errors remain blocking. Added a direct no-claims MCP regression and retained
+  the original end-to-end assertion.
+- Fixed the remaining raw integration-orchestration Git subprocess paths to use
+  the shared bounded runner. Added wall-clock timeout protection and Git
+  optional-lock/fsmonitor suppression. Captured two bounded full-gate stalls
+  with exact worker stacks before this fix; no process tree was left running.
+- Updated the doctor read-only test to permit only valid host-wide command
+  namespace reconciliation/retention warnings caused by prior test evidence.
+- Verification: full `check` PASS in 8m53s; focused MCP class PASS (32 tests),
+  SYN-038 focused suite PASS, validators PASS, doctor PASS, bootstrap
+  `go test`/`go vet` PASS, and `git diff --check` PASS with existing CRLF
+  normalization warnings only. No commit, tag, or SYN-039 created.

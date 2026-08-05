@@ -200,14 +200,6 @@ class ManagedBaselineTransactionServiceTest {
     }
 
     private static String git(Path root, String... args) throws Exception {
-        String[] command = new String[args.length + 1];
-        command[0] = "git";
-        System.arraycopy(args, 0, command, 1, args.length);
-        Process process = new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException(output);
-        }
-        return output;
+        return GitProcessRunner.run(root, args).trim();
     }
 }

@@ -2,10 +2,11 @@
 
 ## SYN-038 current verification state
 
-SYN-038 implementation is complete and recorded at CP-0447; the task remains
-the sole ACTIVE bookkeeping task until handoff. The existing `synesis coordination serve` process is the
-production owner and `ProjectRuntimeHost` retains the Codex-only lifecycle
-attachment. Deterministic lifecycle tests, coordination and CLI checks, strict
+The SYN-038 Codex App Server lifecycle phase is complete and recorded at
+CP-0447/CP-0448; the durable project-command extension is now the active phase
+of the sole ACTIVE task. The existing `synesis coordination serve` process is
+the production owner and `ProjectRuntimeHost` retains the Codex-only lifecycle
+attachment. Prior deterministic lifecycle tests, coordination and CLI checks, strict
 Javadocs, static/format gates, deferred validation, bootstrap Go tests/vet,
 and diff checks pass. The final focused and full repository gates, bootstrap Go
 tests/vet, deferred and fixture validators, and `git diff --check` are green.
@@ -45,6 +46,44 @@ The sequential root `./gradlew.bat check --no-daemon --max-workers=1
 --console=plain` completed successfully; module reports contain zero failures
 and zero errors. No new approval operation, daemon, listener, provider
 abstraction, or MCP tool was added.
+
+The durable-command extension bookkeeping is recorded in ADR-0044. No prior
+command namespace, permanent command locks, durable command records, or typed
+request replay path existed before this phase. The immediate implementation
+slice is the bounded namespace/lock/format/process-anchor spike and its
+deterministic two-process fixtures. Prior App Server commits, checkpoints, and
+acceptance evidence must remain unchanged.
+
+The implementation spike now covers the host-wide namespace skeleton,
+permanent namespace/worktree lock objects, atomic metadata writes,
+compatibility/integrity verification, supported older-format migration
+evidence, real-path worktree locators, typed request-ID and digest
+canonicalization, one fresh MCP process identity, process-anchor persistence,
+durable phase records, read-only replay, bounded command protection, strict
+MCP framing, WorkIntent mutation preconditions, namespace reconciliation,
+terminal-history compaction, and doctor/cleanup/repair/next-action diagnostics.
+`ProjectCommandNamespaceSpikeTest`, `ProcessCommandRunnerTest`, and
+`McpFrameReaderTest` pass. The MCP Git setup hang is fixed in the shared
+runner, and `McpServerTest` passes 32 tests.
+
+The remaining MCP failure was diagnosed from the exact response
+`command_admission_stale` / `LEASE_RENEWAL_FAILED` with the underlying
+`IOException:PARTICIPANT_NOT_FOUND`. `ensure_session` creates an active lease
+without a collaboration participant when no claims are requested. The durable
+path now calls `heartbeatIfPresent`: the no-participant case is a valid
+no-intent session, while all other heartbeat, lease, readiness, and authority
+failures remain blocking. The failed run persisted only the scope and anchor
+(object revision 1), renewed the lease once to ACTIVE, and wrote no STARTING
+record; after the fix the no-claims regression reaches terminal completion.
+
+The shared Git runner also owns the raw integration-orchestration Git calls,
+uses optional-lock/fsmonitor suppression, and has monotonic plus wall-clock
+deadlines. The full root `check` passed in 8m53s; focused SYN-038 tests,
+validators, doctor, bootstrap Go tests/vet, and `git diff --check` also pass.
+
+At CP-0457, the full aggregate gate is green. Doctor's read-only regression
+now allows only the valid host-wide durable-command reconciliation/retention
+warnings that earlier tests may leave, and rejects unrelated findings.
 
 ## SYN-037 implementation and closure state
 

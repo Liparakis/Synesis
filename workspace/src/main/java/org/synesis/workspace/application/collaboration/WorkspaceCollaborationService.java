@@ -191,7 +191,11 @@ public final class WorkspaceCollaborationService {
         NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
-        new WorkIntentService(store, identity).release(intentId, participantHandle(binding.sessionId()));
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent current = store.collaborationProjection().intent(intentId)
+                .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+        service.release(intentId, participantHandle(binding.sessionId()),
+                WorkspaceWorkIntentMutationPrecondition.capture(current).coordinationPrecondition());
     }
 
     /** Detaches the exact session lane after a clean connection shutdown.
@@ -324,6 +328,27 @@ public final class WorkspaceCollaborationService {
         NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         new WorkIntentService(store, identity).heartbeat(participantHandle(binding.sessionId()));
+    }
+
+    /** Records a heartbeat when this session has an announced collaboration participant.
+     *
+     * <p>A verified session may own a lease without announcing a claim. Such a session has no
+     * collaboration participant to heartbeat, so the absence is not a heartbeat failure. Any
+     * other persistence, binding, or signing failure remains blocking.</p>
+     *
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection instance ID
+     * @throws Exception when a registered participant cannot be heartbeated
+     */
+    public void heartbeatIfPresent(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
+        try {
+            heartbeat(projectRoot, provider, connectionInstanceId);
+        } catch (IOException failure) {
+            if (!"PARTICIPANT_NOT_FOUND".equals(failure.getMessage())) {
+                throw failure;
+            }
+        }
     }
 
     /** Lists active intents and pending/resolved coordination requests.

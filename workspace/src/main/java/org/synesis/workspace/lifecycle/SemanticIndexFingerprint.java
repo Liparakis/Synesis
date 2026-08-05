@@ -172,18 +172,8 @@ public final class SemanticIndexFingerprint {
     }
 
     private static Result runResult(Path root, String... args) throws IOException {
-        List<String> command = new ArrayList<>();
-        command.add("git");
-        command.addAll(List.of(args));
-        try {
-            Process process = new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            int exit = process.waitFor();
-            return new Result(exit, output);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Git index inspection interrupted", interrupted);
-        }
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root, args);
+        return new Result(result.exitCode(), result.output());
     }
 
     /** Semantic comparison categories used by recovery decisions. */

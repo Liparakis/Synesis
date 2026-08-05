@@ -116,6 +116,21 @@ public enum AgentReason {
     /** The command process tree terminated before normal completion. */
     COMMAND_TERMINATED("command_terminated"),
 
+    /** A repeated typed request carried a different semantic digest. */
+    COMMAND_IDEMPOTENCY_CONFLICT("command_idempotency_conflict"),
+
+    /** A durable command remains unresolved and blocks a new launch. */
+    COMMAND_AMBIGUOUS("command_ambiguous"),
+
+    /** The live process anchor has reached its bounded request-ID capacity. */
+    COMMAND_CAPACITY_EXCEEDED("command_capacity_exceeded"),
+
+    /** Durable command state uses an unsupported or corrupt format. */
+    COMMAND_FORMAT_UNSUPPORTED("command_format_unsupported"),
+
+    /** Authority changed during the lease release/reacquire admission gap. */
+    COMMAND_ADMISSION_STALE("command_admission_stale"),
+
     /**
      * Requested tool or command adapter is not available or supported for this project.
      */

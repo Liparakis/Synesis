@@ -106,6 +106,19 @@ public final class WorkIntentService {
      */
     public synchronized void release(UUID intentId, String participant)
             throws IOException, GeneralSecurityException {
+        release(intentId, participant, null);
+    }
+
+    /** Releases an intent after checking an optimistic mutation precondition.
+     * @param intentId intent identifier
+     * @param participant participant handle
+     * @param precondition expected immutable intent state, or {@code null}
+     * @throws IOException when the intent is missing, stale, or persistence fails
+     * @throws GeneralSecurityException when signing fails
+     */
+    public synchronized void release(UUID intentId, String participant,
+            WorkIntentMutationPrecondition precondition)
+            throws IOException, GeneralSecurityException {
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) {
                 throw new IOException("event append lock unavailable");
@@ -115,6 +128,9 @@ public final class WorkIntentService {
                     .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
             if (!intent.participant().equals(participant)) {
                 throw new IOException("INTENT_OWNER_MISMATCH");
+            }
+            if (precondition != null) {
+                precondition.requireMatches(intent);
             }
             current.append(intentId, PredictionEventType.WORK_INTENT_RELEASED,
                     signer.nodeId(), CollaborationCodec.encodeRelease(intentId), signer);

@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -88,7 +89,14 @@ public final class ProjectCommandService {
      * @return bounded structured command evidence
      */
     public AgentResponse runCommand(CommandRequest request) {
+        return runCommand(request, ignored -> {
+        });
+    }
+
+    /** Executes direct argv while observing the exact child process at start. */
+    AgentResponse runCommand(CommandRequest request, Consumer<ProjectProcessExecutor.StartedProcessIdentity> observer) {
         Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(observer, "observer");
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY,
@@ -112,7 +120,7 @@ public final class ProjectCommandService {
         long controlBefore = getDirectoryLastModified(location.root());
         ProjectProcessExecutor.ExecutionResult result = executor.execute(
                 new ProjectProcessExecutor.ExecutionRequest(request.argv(), assignedWorktree,
-                        request.workingDirectory(), request.timeoutSeconds(), location.root()));
+                        request.workingDirectory(), request.timeoutSeconds(), location.root()), observer);
         long controlAfter = getDirectoryLastModified(location.root());
         if (controlAfter > controlBefore) {
             return AgentResponse.blocked(AgentReason.PROTECTED_CONFIGURATION);

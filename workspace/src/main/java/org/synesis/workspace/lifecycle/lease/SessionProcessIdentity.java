@@ -26,5 +26,8 @@ public record SessionProcessIdentity(
         Objects.requireNonNull(executableIdentity, "executableIdentity");
         Objects.requireNonNull(commandLine, "commandLine");
         Objects.requireNonNull(connectionNonce, "connectionNonce");
+        if (pid <= 0L || processStartTime < 0L || connectionNonce.isBlank()) {
+            throw new IllegalArgumentException("invalid process identity evidence");
+        }
     }
 }

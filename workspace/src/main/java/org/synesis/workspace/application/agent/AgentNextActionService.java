@@ -24,6 +24,8 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 
 /**
  * Application service for retrieving the single highest-priority actionable coordination item
@@ -294,7 +296,30 @@ public final class AgentNextActionService {
 
         List<CoordinationItem> items = loadCoordinationItems(assignedWorktree, location.root(), request.provider());
         if (items.isEmpty()) {
-            Map<String, Object> collaboration = collaborationDetailsForRequest(location, request);
+            Map<String, Object> collaboration = new LinkedHashMap<>(collaborationDetailsForRequest(location, request));
+            ProjectCommandDiagnostics.Report command = ProjectCommandDiagnostics.inspect(
+                    AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
+            Map<String, Object> durableCommands = new LinkedHashMap<>();
+            durableCommands.put("namespacePresent", command.present());
+            durableCommands.put("formatValid", command.formatValid());
+            durableCommands.put("newerObjects", command.newerObjectCount());
+            durableCommands.put("olderFormats", command.olderFormatCount());
+            durableCommands.put("permanentLocks", command.permanentLockCount());
+            durableCommands.put("scopes", command.scopeCount());
+            durableCommands.put("anchors", command.anchorCount());
+            durableCommands.put("requests", command.requestCount());
+            durableCommands.put("liveAtCapacity", command.liveAtCapacityCount());
+            durableCommands.put("deadAnchors", command.deadAnchorCount());
+            durableCommands.put("terminalEligible", command.eligibleTerminalCount());
+            durableCommands.put("pinnedEvidence", command.pinnedEvidenceCount());
+            durableCommands.put("staleIndex", command.staleIndexCount());
+            durableCommands.put("enumerationComplete", command.enumerationComplete());
+            durableCommands.put("terminalHistoryCompactions", command.terminalHistoryCompactionCount());
+            durableCommands.put("leaseGapRevisionMismatches", command.leaseGapRevisionMismatchCount());
+            durableCommands.put("admissionRestarts", command.admissionRestartCount());
+            durableCommands.put("cleanCloseDetachBlocked", command.cleanCloseDetachBlockedCount());
+            durableCommands.put("deferredMutations", command.deferredMutationCount());
+            collaboration.put("durableCommands", durableCommands);
             return new AgentResponse(AgentStatus.READY, null, null, collaboration);
         }
 

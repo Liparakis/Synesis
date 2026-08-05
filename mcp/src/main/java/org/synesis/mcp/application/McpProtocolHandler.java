@@ -41,9 +41,19 @@ import org.synesis.workspace.application.integration.ImplementationValidationSer
 import org.synesis.workspace.application.integration.IntegrationCompatibilityService;
 import org.synesis.workspace.application.integration.WorkspaceIntegrationReadinessService;
 import org.synesis.workspace.application.project.ProjectCommandService;
+import org.synesis.workspace.application.project.ProjectCommandAdmissionService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
 import org.synesis.workspace.application.workspace.WorkspaceReadService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.command.PhysicalWorktreeIdentity;
+import org.synesis.workspace.lifecycle.command.ProjectCommandAuthoritySnapshot;
+import org.synesis.workspace.lifecycle.command.ProjectCommandProcessAnchor;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
  * Handles JSON-RPC 2.0 requests for the Synesis Model Context Protocol (MCP) server over stdio.
@@ -64,6 +74,7 @@ public final class McpProtocolHandler {
     private final WorkspaceReadService readService;
     private final WorkspacePatchService patchService;
     private final ProjectCommandService commandService;
+    private final ProjectCommandAdmissionService commandAdmissionService;
     private final AgentNextActionService nextActionService;
     private final CapabilityRequestService capabilityRequestService;
     private final CapabilityResponseService capabilityResponseService;
@@ -81,6 +92,8 @@ public final class McpProtocolHandler {
     private boolean isSessionBound;
     private final String provider;
     private final String connectionInstanceId;
+    private final SessionProcessIdentity commandProcessIdentity;
+    private ProjectCommandProcessAnchor commandProcessAnchor;
     private Path antigravityProjectsDir;
 
     /**
@@ -95,10 +108,29 @@ public final class McpProtocolHandler {
             Path projectRoot,
             String provider,
             String connectionInstanceId) {
+        this(sessionService, projectRoot, provider, connectionInstanceId, captureProcessIdentity(connectionInstanceId));
+    }
+
+    /**
+     * Creates an MCP protocol handler with process identity captured by the server entrypoint.
+     *
+     * @param sessionService       application session service
+     * @param projectRoot          canonical control project root path
+     * @param provider             stable provider name
+     * @param connectionInstanceId unique process connection-instance ID
+     * @param processIdentity      one immutable identity captured for this MCP process
+     */
+    public McpProtocolHandler(AgentSessionService sessionService,
+            Path projectRoot,
+            String provider,
+            String connectionInstanceId,
+            SessionProcessIdentity processIdentity) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
         this.readService = new WorkspaceReadService();
         this.patchService = new WorkspacePatchService();
         this.commandService = new ProjectCommandService();
+        this.commandAdmissionService = new ProjectCommandAdmissionService(commandService,
+                AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
         this.nextActionService = new AgentNextActionService();
         this.capabilityRequestService = new CapabilityRequestService();
         this.capabilityResponseService = new CapabilityResponseService();
@@ -115,6 +147,7 @@ public final class McpProtocolHandler {
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        this.commandProcessIdentity = Objects.requireNonNull(processIdentity, "processIdentity");
         String userHome = System.getProperty("user.home");
         this.antigravityProjectsDir = (userHome != null)
                 ? Path.of(userHome, ".gemini", "config", "projects")
@@ -511,6 +544,71 @@ public final class McpProtocolHandler {
         return createResultResponse(id, Map.of("tools", McpToolCatalog.toolsList()));
     }
 
+    private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {
+        ProcessHandle.Info info = ProcessHandle.current().info();
+        String executable = info.command().orElse("unknown");
+        String commandLine = info.commandLine().orElse(executable);
+        long start = info.startInstant().map(java.time.Instant::toEpochMilli)
+                .orElse(System.currentTimeMillis());
+        return new SessionProcessIdentity(ProcessHandle.current().pid(), executable, commandLine, start,
+                connectionInstanceId + ":" + UUID.randomUUID());
+    }
+
+    private AgentResponse runDurableCommand(ProjectCommandService.CommandRequest request, Object requestId) {
+        ProjectApplicationService.ProjectLocation location;
+        WorkspaceReadinessService.ReadinessResult readiness;
+        try {
+            location = new ProjectApplicationService().locate(activeProjectRoot);
+            readiness = new WorkspaceReadinessService().assess(location, provider, connectionInstanceId);
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY,
+                    AgentNextAction.ENSURE_SESSION, Map.of("error", "WORKSPACE_UNVERIFIED"));
+        }
+        if (!readiness.ready()) {
+            return readiness.response();
+        }
+
+        PhysicalWorktreeIdentity worktree;
+        try {
+            worktree = PhysicalWorktreeIdentity.capture(activeProjectRoot, readiness.worktree(),
+                    new LifecyclePathVerifier());
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_STALE,
+                    AgentNextAction.ENSURE_SESSION, Map.of("error", "WORKTREE_IDENTITY_UNVERIFIED"));
+        }
+        if (commandProcessAnchor == null) {
+            commandProcessAnchor = ProjectCommandProcessAnchor.capture(worktree.locator(), commandProcessIdentity,
+                    java.time.Instant.now().toEpochMilli());
+        } else if (!commandProcessAnchor.scopeLocator().equals(worktree.locator())) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COMMAND_ADMISSION_STALE,
+                    AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "MCP_PROCESS_SCOPE_CHANGED"));
+        }
+        ProjectCommandAuthoritySnapshot before = captureAuthoritySnapshot(readiness, worktree);
+        return commandAdmissionService.execute(request, requestId, commandProcessAnchor, worktree, before,
+                () -> renewLeaseForCommand(worktree));
+    }
+
+    private ProjectCommandAuthoritySnapshot renewLeaseForCommand(PhysicalWorktreeIdentity worktree) throws Exception {
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
+        var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
+        String nodeId = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
+        leaseService.createOrRenewLease(activeProjectRoot, location.projectId().toString(), provider,
+                connectionInstanceId, nodeId, binding.sessionId(), leasePolicy);
+        collaborationService.heartbeatIfPresent(activeProjectRoot, provider, connectionInstanceId);
+        WorkspaceReadinessService.ReadinessResult readiness = new WorkspaceReadinessService()
+                .assess(location, provider, connectionInstanceId);
+        if (!readiness.ready()) {
+            throw new IllegalStateException("COMMAND_AUTHORITY_REFRESH_FAILED");
+        }
+        return captureAuthoritySnapshot(readiness, worktree);
+    }
+
+    private ProjectCommandAuthoritySnapshot captureAuthoritySnapshot(
+            WorkspaceReadinessService.ReadinessResult readiness, PhysicalWorktreeIdentity worktree) {
+        SessionLeaseRecord lease = new SessionLeaseStore().load(activeProjectRoot, connectionInstanceId).orElse(null);
+        return ProjectCommandAuthoritySnapshot.capture(readiness.binding(), worktree, lease, "none");
+    }
+
     @SuppressWarnings("unchecked")
     private String handleToolsCall(Object id, Map<String, Object> params) {
         if (params == null) {
@@ -526,7 +624,10 @@ public final class McpProtocolHandler {
         Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
 
         AgentResponse agentResponse;
-        renewLease();
+        boolean durableCommand = name.equals("synesis." + McpToolCatalog.RUN_COMMAND);
+        if (!durableCommand) {
+            renewLease();
+        }
 
         if (requiresManualAttestation(name, arguments) && !manualService.attest(provider).valid()) {
             Map<String, Object> details = new LinkedHashMap<>();
@@ -714,7 +815,7 @@ public final class McpProtocolHandler {
                     try {
                         ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(
                                 activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
-                        agentResponse = commandService.runCommand(cmdReq);
+                        agentResponse = runDurableCommand(cmdReq, id);
                     } catch (IllegalArgumentException ex) {
                         agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
                     }

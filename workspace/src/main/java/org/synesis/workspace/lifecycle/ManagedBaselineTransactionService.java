@@ -522,23 +522,10 @@ public final class ManagedBaselineTransactionService {
     }
 
     private static String runOutput(Path root, Path index, String[] args, boolean required) throws IOException {
-        List<String> command = new ArrayList<>(); command.add("git"); command.addAll(List.of(args));
-        ProcessBuilder builder = new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true);
-        if (index != null) builder.environment().put("GIT_INDEX_FILE", index.toString());
-        builder.environment().put("GIT_AUTHOR_NAME", "Synesis");
-        builder.environment().put("GIT_AUTHOR_EMAIL", "synesis@localhost");
-        builder.environment().put("GIT_COMMITTER_NAME", "Synesis");
-        builder.environment().put("GIT_COMMITTER_EMAIL", "synesis@localhost");
-        try {
-            Process process = builder.start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            int exit = process.waitFor();
-            if (required && exit != 0) throw new IOException("git " + args[0] + " failed: " + output);
-            if (!required && exit != 0) return "";
-            return output;
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt(); throw new IOException("git transaction interrupted", interrupted);
+        if (index == null) {
+            return required ? GitProcessRunner.run(root, args) : GitProcessRunner.runOptional(root, args);
         }
+        return GitProcessRunner.runWithIndex(root, index, args).trim();
     }
 
     private void writeJournal(AdministrativeStateLocator.Resolution resolution, Journal journal) throws IOException {

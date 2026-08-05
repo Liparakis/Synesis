@@ -33,6 +33,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectProcessExecutor;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 
 /**
  * Orchestrates the integration pipeline for ready task snapshots.
@@ -633,34 +634,13 @@ public final class IntegrationOrchestrationService {
 
     private static boolean isAncestor(Path workdir, String base, String head) {
         try {
-            ProcessBuilder pb = new ProcessBuilder("git", "merge-base", "--is-ancestor", base, head);
-            pb.directory(workdir.toFile());
-            return pb.start().waitFor() == 0;
+            return GitProcessRunner.runResult(workdir, "merge-base", "--is-ancestor", base, head).exitCode() == 0;
         } catch (Exception failure) {
             return false;
         }
     }
 
     private static String runGitOutput(Path workdir, String... args) throws IOException {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("git");
-        for (String arg : args) {
-            cmd.add(arg);
-        }
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git " + args[0] + " failed: " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git " + args[0] + " interrupted", e);
-        }
-        return output;
+        return GitProcessRunner.run(workdir, args);
     }
 }

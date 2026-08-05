@@ -241,7 +241,19 @@ public enum DoctorFindingCode {
     PROJECT_MIGRATION_RESTORED("project_migration_restored"),
 
     /** Rollback restoration did not reach a verified terminal state. */
-    ROLLBACK_RESTORATION_INCOMPLETE("rollback_restoration_incomplete");
+    ROLLBACK_RESTORATION_INCOMPLETE("rollback_restoration_incomplete"),
+
+    /** Durable command namespace contains unsupported or corrupt state. */
+    COMMAND_NAMESPACE_UNSAFE("command_namespace_unsafe"),
+
+    /** Durable command namespace requires migration or reconciliation. */
+    COMMAND_NAMESPACE_RECONCILIATION_REQUIRED("command_namespace_reconciliation_required"),
+
+    /** Durable command capacity or retention requires operator action. */
+    COMMAND_CAPACITY_OR_RETENTION("command_capacity_or_retention"),
+
+    /** Durable command admission observed a lease-gap or deferred mutation. */
+    COMMAND_ADMISSION_DEFERRED("command_admission_deferred");
 
     private final String value;
 

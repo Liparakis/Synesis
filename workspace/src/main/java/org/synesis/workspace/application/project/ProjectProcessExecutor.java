@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Executes one bounded direct argv process inside an authoritative worktree.
@@ -197,6 +198,24 @@ public final class ProjectProcessExecutor {
         }
     }
 
+    /** Exact process identity captured immediately after a command starts.
+     * @param pid operating-system process ID
+     * @param executableIdentity executable identity reported by the process handle
+     * @param commandLine bounded process command line evidence
+     * @param processStartTime process start epoch milliseconds
+     */
+    public record StartedProcessIdentity(long pid, String executableIdentity,
+            String commandLine, long processStartTime) {
+        /** Validates process identity evidence. */
+        public StartedProcessIdentity {
+            if (pid <= 0 || processStartTime < 0) {
+                throw new IllegalArgumentException("invalid started process identity");
+            }
+            Objects.requireNonNull(executableIdentity, "executableIdentity");
+            Objects.requireNonNull(commandLine, "commandLine");
+        }
+    }
+
     /** Creates a stateless generic executor. */
     public ProjectProcessExecutor() {
     }
@@ -208,7 +227,20 @@ public final class ProjectProcessExecutor {
      * @return structured bounded evidence; never {@code null}
      */
     public ExecutionResult execute(ExecutionRequest request) {
+        return execute(request, ignored -> {
+        });
+    }
+
+    /**
+     * Executes one request and notifies the caller before waiting for completion.
+     *
+     * @param request command execution request
+     * @param startedObserver callback invoked after process start and before waiting
+     * @return bounded execution evidence
+     */
+    public ExecutionResult execute(ExecutionRequest request, Consumer<StartedProcessIdentity> startedObserver) {
         Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(startedObserver, "startedObserver");
         Path worktreeRoot = request.worktreeRoot().toAbsolutePath().normalize();
         Path workingDirectory;
         try {
@@ -233,6 +265,24 @@ public final class ProjectProcessExecutor {
             builder.directory(workingDirectory.toFile());
             filterEnvironment(builder.environment());
             process = builder.start();
+            ProcessHandle.Info processInfo = process.info();
+            long processStart = processInfo.startInstant().map(java.time.Instant::toEpochMilli)
+                    .orElse(System.currentTimeMillis());
+            try {
+                startedObserver.accept(new StartedProcessIdentity(process.pid(),
+                        processInfo.command().orElse(argv.getFirst()),
+                        processInfo.commandLine().orElse(String.join(" ", argv)), processStart));
+            } catch (RuntimeException observerFailure) {
+                killProcessTree(process);
+                terminalOutcome = Outcome.COMMAND_START_FAILED;
+            }
+            if (terminalOutcome != null) {
+                closeQuietly(process.getInputStream());
+                closeQuietly(process.getErrorStream());
+                stdout.markComplete();
+                stderr.markComplete();
+                return result(terminalOutcome, null, stdout, stderr, request);
+            }
             Thread stdoutThread = startCollector(process.getInputStream(), stdout, "synesis-command-stdout");
             Thread stderrThread = startCollector(process.getErrorStream(), stderr, "synesis-command-stderr");
             boolean finished;

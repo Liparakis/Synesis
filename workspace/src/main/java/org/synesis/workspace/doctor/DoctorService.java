@@ -19,6 +19,8 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.cleanup.CleanupEligibilityService;
 import org.synesis.workspace.lifecycle.cleanup.LifecycleInventoryService;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
@@ -272,6 +274,7 @@ public final class DoctorService {
     }
 
     private void checkAdministrativeState(Path root, List<DoctorFinding> findings) {
+        checkCommandNamespace(findings);
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
         Path adminDir = workspaceRoot.resolve("admin");
 
@@ -310,6 +313,63 @@ public final class DoctorService {
             checkCorruptJsonFiles(adminDir.resolve("cleanup-plans"), DoctorFindingCode.CORRUPT_CLEANUP_PLAN, "Corrupt cleanup plan", findings);
             // Corrupt reconciliation plans
             checkCorruptJsonFiles(adminDir.resolve("reconciliation-plans"), DoctorFindingCode.CORRUPT_RECONCILIATION_PLAN, "Corrupt reconciliation plan", findings);
+        }
+    }
+
+    private void checkCommandNamespace(List<DoctorFinding> findings) {
+        ProjectCommandDiagnostics.Report report = ProjectCommandDiagnostics.inspect(
+                AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
+        if (!report.present()) {
+            return;
+        }
+        Map<String, String> details = new java.util.LinkedHashMap<>();
+        details.put("newerObjects", String.valueOf(report.newerObjectCount()));
+        details.put("olderFormats", String.valueOf(report.olderFormatCount()));
+        details.put("corruptObjects", String.valueOf(report.corruptObjectCount()));
+        details.put("permanentLocks", String.valueOf(report.permanentLockCount()));
+        details.put("scopes", String.valueOf(report.scopeCount()));
+        details.put("anchors", String.valueOf(report.anchorCount()));
+        details.put("requests", String.valueOf(report.requestCount()));
+        details.put("liveAtCapacity", String.valueOf(report.liveAtCapacityCount()));
+        details.put("deadAnchors", String.valueOf(report.deadAnchorCount()));
+        details.put("terminalEligible", String.valueOf(report.eligibleTerminalCount()));
+        details.put("pinnedEvidence", String.valueOf(report.pinnedEvidenceCount()));
+        details.put("staleIndex", String.valueOf(report.staleIndexCount()));
+        details.put("temporaryArtifacts", String.valueOf(report.temporaryArtifactCount()));
+        details.put("terminalHistoryCompactions", String.valueOf(report.terminalHistoryCompactionCount()));
+        details.put("enumerationComplete", String.valueOf(report.enumerationComplete()));
+        if (!report.formatValid() || report.newerObjectCount() > 0 || report.corruptObjectCount() > 0) {
+            findings.add(new DoctorFinding(
+                    DoctorFindingCode.COMMAND_NAMESPACE_UNSAFE, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED,
+                    "Durable command namespace unsafe",
+                    "Command records, anchors, locks, or compatibility metadata require fail-closed review.",
+                    "command_namespace", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    computeHash("command_namespace_unsafe"), details));
+        } else if (!report.enumerationComplete() || report.staleIndexCount() > 0 || report.olderFormatCount() > 0) {
+            findings.add(new DoctorFinding(
+                    DoctorFindingCode.COMMAND_NAMESPACE_RECONCILIATION_REQUIRED, DoctorSeverity.WARNING,
+                    DoctorConfidence.HIGH_CONFIDENCE, "Durable command namespace needs reconciliation",
+                    "The rebuildable command index or compatibility state is not fully current.",
+                    "command_namespace", true, DoctorRecommendation.PREPARE_REPAIR_PLAN,
+                    computeHash("command_namespace_reconcile"), details));
+        }
+        if (report.eligibleTerminalCount() > 0 || report.pinnedEvidenceCount() > 0
+                || report.deadAnchorCount() > 0 || report.liveAtCapacityCount() > 0) {
+            findings.add(new DoctorFinding(
+                    DoctorFindingCode.COMMAND_CAPACITY_OR_RETENTION, DoctorSeverity.WARNING,
+                    DoctorConfidence.HIGH_CONFIDENCE, "Durable command retention requires review",
+                    "Terminal evidence, dead anchors, pins, or live request capacity require the existing cleanup workflow.",
+                    "command_namespace", false, DoctorRecommendation.RUN_CLEANUP_DRY_RUN,
+                    computeHash("command_namespace_retention"), details));
+        }
+        if (report.leaseGapRevisionMismatchCount() > 0 || report.deferredMutationCount() > 0
+                || report.cleanCloseDetachBlockedCount() > 0) {
+            findings.add(new DoctorFinding(
+                    DoctorFindingCode.COMMAND_ADMISSION_DEFERRED, DoctorSeverity.WARNING,
+                    DoctorConfidence.AMBIGUOUS, "Durable command admission deferred",
+                    "A lease-gap or protected mutation requires reconciliation before mutation resumes.",
+                    "command_namespace", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    computeHash("command_namespace_deferred"), details));
         }
     }
 

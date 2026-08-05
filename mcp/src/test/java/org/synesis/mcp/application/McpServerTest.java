@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderManualService;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
 class McpServerTest {
@@ -28,16 +29,7 @@ class McpServerTest {
     private Path tempRoot;
 
     private static void git(Path root, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes()).trim();
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException("git failed: " + output);
-        }
+        GitProcessRunner.run(root, arguments);
     }
 
     @BeforeEach
@@ -540,7 +532,7 @@ class McpServerTest {
         // 6. Run Command (direct argv)
         String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"run_command\",\"arguments\":{\"argv\":[\"git\",\"status\",\"--porcelain\"]}}}";
         String runCmdResp = handler.handleMessage(runCmdReq);
-        assertTrue(runCmdResp.contains("completed"));
+        assertTrue(runCmdResp.contains("completed"), runCmdResp);
         assertTrue(runCmdResp.contains("stdoutBytesRead"));
 
         // 7. Get Next Action
@@ -554,6 +546,24 @@ class McpServerTest {
         Matcher matcher = Pattern.compile("actionId[^0-9a-f]*([0-9a-f]{8}-[0-9a-f-]{27})").matcher(nextActionResp);
         assertTrue(matcher.find());
         assertTrue(nextActionAgain.contains(matcher.group(1)));
+    }
+
+    @Test
+    void runCommandWithoutClaimsRenewsLeaseAndPersistsTerminalResult() {
+        AgentSessionService sessionService = new AgentSessionService();
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity",
+                "conn-mcp-no-claims");
+
+        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
+                + "\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
+        assertTrue(handler.handleMessage(ensureReq).contains("ready"));
+
+        String runReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\","
+                + "\"params\":{\"name\":\"run_command\",\"arguments\":{\"argv\":[\"git\",\"status\",\"--porcelain\"]}}}";
+        String response = handler.handleMessage(runReq);
+
+        assertTrue(response.contains("completed"), response);
+        assertFalse(response.contains("LEASE_RENEWAL_FAILED"), response);
     }
 
     @Test

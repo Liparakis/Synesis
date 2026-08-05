@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.synesis.mcp.application.McpProtocolHandler;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
  * Main process entrypoint for the Synesis Model Context Protocol (MCP) server.
@@ -47,7 +48,9 @@ public final class SynesisMcpServer {
         System.err.println("SYNESIS_MCP_STARTUP pid=" + pid + " version=0.1.0-SNAPSHOT commit=bc334ac conn=" + connectionInstanceId + " provider=" + provider + " cwd=" + Path.of(".").toAbsolutePath().normalize());
 
         AgentSessionService sessionService = new AgentSessionService();
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider, connectionInstanceId);
+        SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider,
+                connectionInstanceId, processIdentity);
         McpStdioServer server = new McpStdioServer(handler);
 
         return server.run();
@@ -56,6 +59,16 @@ public final class SynesisMcpServer {
     private static String boundedEnvironment(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() || value.length() > 8_192 ? fallback : value.trim();
+    }
+
+    private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {
+        ProcessHandle.Info info = ProcessHandle.current().info();
+        String executable = info.command().orElse("unknown");
+        String commandLine = info.commandLine().orElse(executable);
+        long start = info.startInstant().map(java.time.Instant::toEpochMilli)
+                .orElse(System.currentTimeMillis());
+        return new SessionProcessIdentity(ProcessHandle.current().pid(), executable, commandLine, start,
+                connectionInstanceId + ":" + UUID.randomUUID());
     }
 
     /**

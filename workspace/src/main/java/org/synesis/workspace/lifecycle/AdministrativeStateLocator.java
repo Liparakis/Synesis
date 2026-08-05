@@ -63,19 +63,14 @@ public final class AdministrativeStateLocator {
      */
     public Path resolveGitCommonDirectory(Path repositoryRoot) throws IOException {
         Path root = normalize(repositoryRoot, "repositoryRoot");
-        ProcessBuilder builder = new ProcessBuilder("git", "rev-parse", "--path-format=absolute", "--git-common-dir");
-        builder.directory(root.toFile());
-        builder.redirectErrorStream(true);
         try {
-            Process process = builder.start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            int exit = process.waitFor();
-            if (exit == 0 && !output.isBlank()) {
-                return canonicalPath(root.resolve(output));
+            GitProcessRunner.Result result = GitProcessRunner.runResult(root,
+                    "rev-parse", "--path-format=absolute", "--git-common-dir");
+            if (result.exitCode() == 0 && !result.output().isBlank()) {
+                return canonicalPath(root.resolve(result.output()));
             }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git common-directory resolution interrupted", interrupted);
+        } catch (IOException unavailable) {
+            // Fall through to the conservative .git fallback below.
         }
         Path dotGit = root.resolve(".git");
         if (Files.isDirectory(dotGit)) {

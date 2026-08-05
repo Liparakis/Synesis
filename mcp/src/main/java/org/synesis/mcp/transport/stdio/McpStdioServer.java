@@ -1,8 +1,6 @@
 package org.synesis.mcp.transport.stdio;
 
-import java.io.BufferedReader;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -62,10 +60,11 @@ public final class McpStdioServer {
      * @return process exit code (0 for clean EOF shutdown)
      */
     public int run() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+        boolean cleanClose = false;
+        try {
+            McpFrameReader reader = new McpFrameReader(in);
             String line;
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
+            while ((line = reader.readFrame()) != null) {
                 if (line.isEmpty()) {
                     continue;
                 }
@@ -88,13 +87,16 @@ public final class McpStdioServer {
                     out.flush();
                 }
             }
+            cleanClose = true;
             return 0;
         } catch (Throwable failure) {
             err.println("[synesis-mcp] Stdio loop terminated with error: " + failure.getMessage());
             failure.printStackTrace(err);
             return 1;
         } finally {
-            handler.close();
+            if (cleanClose) {
+                handler.close();
+            }
         }
     }
 

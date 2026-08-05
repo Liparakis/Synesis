@@ -19,6 +19,8 @@ import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.doctor.DoctorReport;
 import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 
 /**
  * Primary administrative repair service preparing and executing reviewed repair plans.
@@ -182,6 +184,12 @@ public final class RepairService {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(planId, "planId");
         Path root = controlRoot.toAbsolutePath().normalize();
+        ProjectCommandDiagnostics.Report commandNamespace = ProjectCommandDiagnostics.inspect(
+                AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
+        if (commandNamespace.present() && (commandNamespace.newerObjectCount() > 0
+                || commandNamespace.corruptObjectCount() > 0)) {
+            throw new IOException("COMMAND_NAMESPACE_UNSAFE_REPAIR_BLOCKED");
+        }
 
         try (RepairExecutionLock lock = RepairExecutionLock.acquire(root, planId)) {
             Objects.requireNonNull(lock);
