@@ -3,13 +3,14 @@
 ## Identity
 
 - Task ID: SYN-038
-- Status: ACTIVE (App Server lifecycle phase complete; durable project-command
-  extension in implementation)
+- Status: DONE (App Server lifecycle and durable project-command extension
+  complete)
 - Priority: P0
 - Started checkpoint: CP-0408
 - Last completed phase checkpoint: CP-0447
 - Extension bookkeeping checkpoint: CP-0448
 - Latest implementation checkpoint: CP-0457
+- Closure checkpoint: CP-0458
 - Responsible agent: primary implementation engineer
 - Related decisions: ADR-0043, ADR-0044
 
@@ -45,8 +46,9 @@ changing the ten-tool MCP boundary or existing App Server ownership.
   Server commit, checkpoints, ADR-0043, and acceptance evidence remain intact.
 - No SYN-038 durable command namespace, permanent command locks, command
   records, or typed request replay path existed before this extension.
-- The immediate implementation slice is the bounded namespace/lock/format/
-  process-anchor spike and its deterministic two-process fixtures.
+- The implementation slice is complete. The bounded namespace/lock/format/
+  process-anchor spike and deterministic two-process fixtures are preserved in
+  the implementation commit.
 
 ## Extension verification
 
@@ -82,6 +84,16 @@ changing the ten-tool MCP boundary or existing App Server ownership.
   setup.
 - Full root `check` passed on 2026-08-05 in 8m53s after the doctor regression
   was updated to recognize valid host-wide durable-command retention warnings.
+
+## Closure
+
+- Implementation commit: `ad9fdd8addc9f71e806dfb2da5b5d78f050f87ac`
+  (`Complete SYN-038 durable project-command extension`).
+- Prior evidence CP-0457 remains preserved; CP-0458 records the final closure
+  state, including the resolved Git subprocess hang, the `heartbeatIfPresent`
+  no-participant admission fix, and all final verification results.
+- The previous SYN-038 Codex App Server lifecycle history and acceptance
+  evidence were not amended or replaced. No SYN-039 was created.
 
 ## Verification
 
@@ -128,7 +140,7 @@ changing the ten-tool MCP boundary or existing App Server ownership.
   suite, bootstrap Go tests/vet, deferred and fixture validators, and
   `git diff --check` also pass.
 
-## Current failures
+## Historical limitations and resolved failures
 
 - The restarted-harness owner run proves Codex-driven `ensure_session`,
   `apply_patch`, and validation with local Codex `0.146.0-alpha.9.2`. Its
@@ -169,14 +181,15 @@ changing the ten-tool MCP boundary or existing App Server ownership.
   route still returned `Transport closed`; this confirms the remaining issue is
   connector process state, not the Synesis MCP bundle.
 
-- The 2026-08-05 full-check retry reproduced the existing test-environment
-  blocker: `McpServerTest.setUp` hung while reading a Git subprocess pipe.
-  The retry produced no test failure or durable-command assertion failure.
-- After the fix, the focused MCP class completes all 31 tests in 2m47s on
-  repeated runs; one existing durable-command assertion still fails at
-  `McpServerTest.java:535` with `command_admission_stale` /
-  `LEASE_RENEWAL_FAILED`. The full `check` reaches that same non-hang failure
-  after 48 tests and stops; it no longer hangs in Git subprocess capture.
+- The 2026-08-05 full-check retry reproduced the test-environment blocker
+  where `McpServerTest.setUp` hung while reading a Git subprocess pipe. The
+  shared bounded Git runner fixed that hang; the focused MCP class now passes
+  32/32 tests and the full `check` is green.
+- The later durable-command assertion at `McpServerTest.java:535` returned
+  `command_admission_stale` / `LEASE_RENEWAL_FAILED` because a valid no-claims
+  session had no collaboration participant. The exact cause is recorded in
+  CP-0457/CP-0458; `heartbeatIfPresent` now ignores only that absence and the
+  regression passes without weakening lease validation.
 
 ## Completion state
 
@@ -185,12 +198,12 @@ run completed Codex validation, snapshot publication, and normal `finish_lane`
 integration on the exact resumed thread; its deterministic and repository gates
 pass; and its independent command-cleanup limitation remains
 `turn_interrupted_command_remained_active`. The durable project-command
-extension is active and must not overwrite or reinterpret that evidence.
+extension is complete in `ad9fdd8`; it does not overwrite or reinterpret that
+evidence.
 
 ## Immediate next action
 
-Capture the stable `McpServerTest.java:535` admission failure in the next
-verification record, then resolve it only with evidence that preserves the
-durable SYN-038 admission protocol. Preserve the prior independent
+Verify the pushed SYN-038 closure commit and annotated durable-command tag
+before any new task is promoted. Preserve the prior independent
 command-cleanup classification and do not add an approval operation or
 universal cleanup claim.

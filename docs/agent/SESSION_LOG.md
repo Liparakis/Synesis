@@ -1,5 +1,16 @@
 # Session Log
 
+# 2026-08-05 — SYN-038 durable project-command closure
+
+- Preserved CP-0457 as prior evidence and committed the verified durable
+  project-command extension as `ad9fdd8addc9f71e806dfb2da5b5d78f050f87ac`.
+- Created CP-0458 for closure. It records the shared Git subprocess hang fix,
+  the `heartbeatIfPresent` no-participant admission fix, one-renewal lease
+  semantics, final verification, preservation of the prior lifecycle history,
+  and the absence of SYN-039.
+- The repository is ready for the annotated durable-command completion tag and
+  safe branch/tag push after the closure documentation commit.
+
 ## 2026-08-05 — SYN-038 bounded Git subprocess repair
 
 - Timestamp: 2026-08-05 Europe/Athens

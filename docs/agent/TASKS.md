@@ -1674,14 +1674,15 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-038
 - Priority: P0
 - Title: Reliable Codex App Server lifecycle integration and durable project commands
-- Status: ACTIVE
+- Status: DONE
 - Purpose: Preserve the completed Codex App Server lifecycle slice and extend
   it with durable project-command admission across Codex interruption.
-- Completed phase: The App Server lifecycle implementation remains completed
+- Preserved phase: The App Server lifecycle implementation remains completed
   history at the existing SYN-038 commit, CP-0447/CP-0448, ADR-0043, and
   acceptance evidence. That evidence is not overwritten.
-- Active phase: Durable project commands across Codex interruption, beginning
-  with the bounded namespace/lock/format/process-anchor implementation spike.
+- Completed phase: Durable project commands across Codex interruption, including
+  the bounded namespace/lock/format/process-anchor spike, durable admission,
+  bounded Git subprocess execution, diagnostics, and deterministic fixtures.
 - Dependencies: SYN-037 DONE; existing project, workspace, coordination,
   provider binding, MCP, and ten-tool contract foundations.
 - Acceptance criteria: Preserve all completed App Server acceptance. Add the
@@ -1699,6 +1700,13 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   fixture validators; bootstrap Go tests/vet; and `git diff --check`.
 - Required documentation: ADR-0044, updated durable-memory files, and
   acceptance evidence without replacing the prior SYN-038 evidence.
+- Completion evidence: CP-0457 prior verification; CP-0458 closure checkpoint;
+  implementation commit `ad9fdd8addc9f71e806dfb2da5b5d78f050f87ac`; full and
+  focused verification gates; and the annotated durable-command completion tag.
+- Closure: The earlier Codex App Server lifecycle commit, tag/history,
+  checkpoints, ADR-0043, and acceptance evidence remain preserved. The Git
+  subprocess hang and `heartbeatIfPresent` admission fix are recorded in the
+  closure evidence. No SYN-039 was created.
 - Implementation order: (1) bookkeeping and bounded namespace/lock/format/
   process-anchor spike; (2) durable records and typed request replay/conflict;
   (3) release/reacquire admission and phase transitions; (4) cleanup,

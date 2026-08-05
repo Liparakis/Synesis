@@ -3,8 +3,8 @@
 ## SYN-038 current verification state
 
 The SYN-038 Codex App Server lifecycle phase is complete and recorded at
-CP-0447/CP-0448; the durable project-command extension is now the active phase
-of the sole ACTIVE task. The existing `synesis coordination serve` process is
+CP-0447/CP-0448; the durable project-command extension is complete at CP-0458.
+The existing `synesis coordination serve` process is
 the production owner and `ProjectRuntimeHost` retains the Codex-only lifecycle
 attachment. Prior deterministic lifecycle tests, coordination and CLI checks, strict
 Javadocs, static/format gates, deferred validation, bootstrap Go tests/vet,
@@ -84,6 +84,27 @@ validators, doctor, bootstrap Go tests/vet, and `git diff --check` also pass.
 At CP-0457, the full aggregate gate is green. Doctor's read-only regression
 now allows only the valid host-wide durable-command reconciliation/retention
 warnings that earlier tests may leave, and rejects unrelated findings.
+
+## SYN-038 closure
+
+Implementation commit `ad9fdd8addc9f71e806dfb2da5b5d78f050f87ac` completed the
+durable project-command extension without changing the earlier lifecycle
+commit, tag/history, checkpoints, ADR-0043, or acceptance evidence. CP-0457 is
+the prior verification evidence; CP-0458 is the final closure checkpoint.
+
+The resolved Git subprocess hang is covered by the shared bounded runner:
+stdin closes immediately, output is concurrently safe and bounded, Git is
+non-interactive, and timeout cleanup terminates descendants. The admission
+regression was narrowed to `PARTICIPANT_NOT_FOUND` for a valid no-claims
+session; `heartbeatIfPresent` ignores only that absence and preserves all other
+lease/readiness failures. The lease protocol still renews once, snapshots
+exactly after renewal, reacquires and revalidates, and persists no STARTING
+record after an unexpected change.
+
+Final closure verification passed: full `check`; focused 32-test
+`McpServerTest`; durable namespace/process/MCP framing and supporting
+regressions; deferred and fixture validators; bootstrap Go tests/vet; strict
+Javadocs and format; doctor; and `git diff --check`. No SYN-039 was created.
 
 ## SYN-037 implementation and closure state
 
