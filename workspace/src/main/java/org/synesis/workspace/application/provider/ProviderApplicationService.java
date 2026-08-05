@@ -494,13 +494,9 @@ public final class ProviderApplicationService {
 
     private static boolean isTracked(Path worktree, String relativePath) throws IOException {
         try {
-            Process process = new ProcessBuilder("git", "-C", worktree.toString(), "ls-files", "--error-unmatch",
-                    "--", relativePath).redirectErrorStream(true).start();
-            process.getInputStream().readAllBytes();
-            return process.waitFor() == 0;
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw providerConflict("could not verify tracked state");
+            return org.synesis.workspace.lifecycle.GitProcessRunner
+                    .runResult(worktree, "ls-files", "--error-unmatch", "--", relativePath)
+                    .exitCode() == 0;
         } catch (IOException failure) {
             throw providerConflict("could not verify tracked state");
         }

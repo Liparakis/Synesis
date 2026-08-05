@@ -18,6 +18,7 @@ import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 
 /**
  * Service for creating and verifying immutable task snapshots from worker worktrees.
@@ -449,59 +450,16 @@ public final class TaskSnapshotService {
     }
 
     private static String runGitWithIndexOutput(Path workdir, Path index, String... args) throws IOException {
-        return runGitProcess(workdir, index, null, args);
+        return GitProcessRunner.runWithIndex(workdir, index, args).trim();
     }
     private static void runGitWithIndex(Path workdir, Path index, String... args) throws IOException {
-        runGitProcess(workdir, index, null, args);
+        GitProcessRunner.runWithIndex(workdir, index, args);
     }
-    private static void runGitInput(Path workdir, Path index, byte[] input, String... args) throws IOException {
-        runGitProcess(workdir, index, input, args);
-    }
-    private static String runGitProcess(Path workdir, Path index, byte[] input, String... args) throws IOException {
-        List<String> command = new ArrayList<>(); command.add("git"); command.addAll(List.of(args));
-        ProcessBuilder pb = new ProcessBuilder(command); pb.directory(workdir.toFile());
-        pb.environment().put("GIT_INDEX_FILE", index.toString()); pb.environment().put("GIT_AUTHOR_NAME", "Synesis");
-        pb.environment().put("GIT_AUTHOR_EMAIL", "synesis@localhost"); pb.environment().put("GIT_COMMITTER_NAME", "Synesis");
-        pb.environment().put("GIT_COMMITTER_EMAIL", "synesis@localhost"); pb.redirectErrorStream(true);
-        Process process = pb.start(); if (input != null) { process.getOutputStream().write(input); process.getOutputStream().close(); }
-        else process.getOutputStream().close();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-        try { if (process.waitFor() != 0) throw new IOException("git snapshot command failed: " + output); }
-        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IOException("git snapshot interrupted", interrupted); }
-        return output;
-    }
-
     private static String runGitOutput(Path workdir, String... args) throws IOException {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("git");
-        for (String arg : args) {
-            cmd.add(arg);
-        }
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git " + args[0] + " failed (code=" + code + "): " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git " + args[0] + " interrupted", e);
-        }
-        return output;
+        return GitProcessRunner.run(workdir, args).trim();
     }
 
     private static String runGitStdout(Path workdir, String... args) throws IOException {
-        List<String> cmd = new ArrayList<>(); cmd.add("git"); cmd.addAll(List.of(args));
-        ProcessBuilder pb = new ProcessBuilder(cmd); pb.directory(workdir.toFile());
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-        String error = new String(proc.getErrorStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-        try { if (proc.waitFor() != 0) throw new IOException("git " + args[0] + " failed: " + error); }
-        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IOException("git interrupted", interrupted); }
-        return output;
+        return GitProcessRunner.run(workdir, args).trim();
     }
 }

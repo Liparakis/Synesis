@@ -1,5 +1,7 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
+import org.synesis.workspace.lifecycle.GitProcessRunner;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -288,11 +290,7 @@ public final class LifecycleInventoryService {
 
     private static List<GitWorktreeEntry> listGitWorktrees(Path controlRoot) {
         try {
-            Process proc = new ProcessBuilder("git", "-C", controlRoot.toString(), "worktree", "list", "--porcelain")
-                    .redirectErrorStream(true)
-                    .start();
-            String output = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            proc.waitFor();
+            String output = GitProcessRunner.run(controlRoot, "worktree", "list", "--porcelain");
 
             List<GitWorktreeEntry> entries = new ArrayList<>();
             String currentPath = null;

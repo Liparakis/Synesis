@@ -20,6 +20,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
 /**
@@ -210,18 +211,8 @@ public final class ProviderSessionBindingService {
         if (!validCommit(baseCommit)) {
             return false;
         }
-        Process process = new ProcessBuilder("git",
-                "-C",
-                assigned.toString(),
-                "merge-base",
-                "--is-ancestor",
-                baseCommit,
-                "HEAD")
-                .redirectErrorStream(true)
-                .start();
-        process.getInputStream()
-                .readAllBytes();
-        return process.waitFor() == 0;
+        return GitProcessRunner.runResult(assigned, "merge-base", "--is-ancestor", baseCommit, "HEAD")
+                .exitCode() == 0;
     }
 
     private static boolean validCommit(String value) {
@@ -296,19 +287,7 @@ public final class ProviderSessionBindingService {
     }
 
     private static String runGit(Path root, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true)
-                .start();
-        String output = new String(process.getInputStream()
-                .readAllBytes(), StandardCharsets.UTF_8);
-        if (process.waitFor() != 0) {
-            throw new IOException("git failed: " + output);
-        }
-        return output;
+        return GitProcessRunner.run(root, arguments);
     }
 
     private static String fallbackEvidence(ProjectApplicationService.ProjectLocation location, String provider)

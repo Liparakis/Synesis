@@ -17,14 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WorkerCleanupTest {
 
     private static void runGit(Path root, String... args) throws Exception {
-        String[] cmd = new String[args.length + 3];
-        cmd[0] = "git";
-        cmd[1] = "-C";
-        cmd[2] = root.toString();
-        System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        p.getInputStream().readAllBytes();
-        p.waitFor();
+        org.synesis.workspace.test.TestGit.run(root, args);
     }
 
     @Test
@@ -72,14 +65,6 @@ class WorkerCleanupTest {
     }
 
     private static String runGitOutput(Path root, String... args) throws Exception {
-        String[] cmd = new String[args.length + 3];
-        cmd[0] = "git";
-        cmd[1] = "-C";
-        cmd[2] = root.toString();
-        System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        String out = new String(p.getInputStream().readAllBytes()).trim();
-        p.waitFor();
-        return out;
+        return org.synesis.workspace.test.TestGit.output(root, args);
     }
 }

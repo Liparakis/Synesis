@@ -45,16 +45,7 @@ class CapabilityNegotiationTest {
     private AgentNextActionService nextActionService;
 
     private static void git(Path root, String... args) throws Exception {
-        String[] cmd = new String[args.length + 3];
-        cmd[0] = "git";
-        cmd[1] = "-C";
-        cmd[2] = root.toString();
-        System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        p.getInputStream().readAllBytes();
-        if (p.waitFor() != 0) {
-            throw new IllegalStateException("git failed");
-        }
+        org.synesis.workspace.test.TestGit.run(root, args);
     }
 
     @BeforeEach

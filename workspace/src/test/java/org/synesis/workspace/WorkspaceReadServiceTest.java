@@ -21,16 +21,7 @@ class WorkspaceReadServiceTest {
     private Path controlRoot;
 
     private static void git(Path root, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes()).trim();
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException("git failed: " + output);
-        }
+        org.synesis.workspace.test.TestGit.run(root, arguments);
     }
 
     @BeforeEach

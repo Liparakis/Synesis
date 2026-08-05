@@ -231,26 +231,7 @@ public final class ControlBranchAdvancementService {
     }
 
     private static String runGitOutput(Path workdir, String... args) throws IOException {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("git");
-        for (String arg : args) {
-            cmd.add(arg);
-        }
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git " + args[0] + " failed: " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git " + args[0] + " interrupted", e);
-        }
-        return output;
+        return org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, args).trim();
     }
 
     private static void runGit(Path workdir, String... args) throws IOException {

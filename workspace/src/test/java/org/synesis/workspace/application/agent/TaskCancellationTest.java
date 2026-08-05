@@ -22,15 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TaskCancellationTest {
 
     private static void git(Path root, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException("git failed");
-        }
+        org.synesis.workspace.test.TestGit.run(root, arguments);
     }
 
     @Test

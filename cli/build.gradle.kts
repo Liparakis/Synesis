@@ -1,6 +1,9 @@
 import org.gradle.internal.os.OperatingSystem
 import java.nio.file.Files
+import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import java.util.*
 
 plugins {
@@ -333,9 +336,37 @@ tasks.register("bundleSmokeTest") {
             require(project.mkdirs()) { "Unable to create smoke project: $project" }
             fun git(vararg arguments: String) {
                 val command = mutableListOf("git", "-C", project.absolutePath).apply { addAll(arguments) }
-                val gitProcess = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true).start()
-                val gitOutput = gitProcess.inputStream.bufferedReader().readText()
-                require(gitProcess.waitFor() == 0) { "Smoke Git command failed: ${command.joinToString(" ")}\n$gitOutput" }
+                val gitProcessBuilder = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true)
+                gitProcessBuilder.environment().putAll(
+                    mapOf(
+                        "GIT_CONFIG_NOSYSTEM" to "1",
+                        "GIT_CONFIG_NOGLOBAL" to "1",
+                        "GIT_TERMINAL_PROMPT" to "0",
+                        "GIT_OPTIONAL_LOCKS" to "0",
+                        "GIT_AUTHOR_NAME" to "Synesis Bundle Smoke",
+                        "GIT_AUTHOR_EMAIL" to "synesis-bundle-smoke@example.invalid",
+                        "GIT_COMMITTER_NAME" to "Synesis Bundle Smoke",
+                        "GIT_COMMITTER_EMAIL" to "synesis-bundle-smoke@example.invalid",
+                    ),
+                )
+                val gitProcess = gitProcessBuilder.start()
+                gitProcess.outputStream.close()
+                val output = CompletableFuture.supplyAsync {
+                    val bytes = gitProcess.inputStream.readAllBytes()
+                    String(bytes, StandardCharsets.UTF_8)
+                }
+                if (!gitProcess.waitFor(30, TimeUnit.SECONDS)) {
+                    gitProcess.toHandle().descendants().forEach { it.destroyForcibly() }
+                    gitProcess.destroyForcibly()
+                    val diagnostic = output.get(5, TimeUnit.SECONDS)
+                    throw GradleException(
+                        "Smoke Git command timed out: ${command.joinToString(" ")}\n$diagnostic",
+                    )
+                }
+                val gitOutput = output.get(5, TimeUnit.SECONDS)
+                require(gitProcess.exitValue() == 0) {
+                    "Smoke Git command failed: ${command.joinToString(" ")}\n$gitOutput"
+                }
             }
             git("init")
             git("config", "user.name", "Synesis Bundle Smoke")

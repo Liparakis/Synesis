@@ -10,7 +10,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Runs a bounded local process with deterministic stdin, output, timeout, and
@@ -53,43 +57,125 @@ final class ProcessCommandRunner {
                 .directory(directory.toFile())
                 .redirectErrorStream(true);
         builder.environment().putAll(environment);
-        Process process = builder.start();
+        Process process = startProcess(builder, command, directory, timeout);
         process.getOutputStream().close();
         OutputCollector collector = new OutputCollector(process.getInputStream(), maxOutputBytes);
         Thread reader = Thread.ofPlatform().daemon(true).name("synesis-process-output").start(collector);
-        long deadline = System.nanoTime() + timeout.toNanos();
-        long wallClockDeadline = System.currentTimeMillis() + timeout.toMillis();
-        boolean timedOut = false;
-        try {
-            while (process.isAlive()) {
-                if (System.nanoTime() >= deadline || System.currentTimeMillis() >= wallClockDeadline) {
-                    timedOut = true;
-                    break;
+        FutureTask<Integer> wait = new FutureTask<>(process::waitFor);
+        Thread waiter = Thread.ofPlatform().daemon(true).name("synesis-process-wait").start(wait);
+        AtomicBoolean timedOut = new AtomicBoolean();
+        Thread watchdog = Thread.ofPlatform().daemon(true).name("synesis-process-watchdog").start(() -> {
+            try {
+                Thread.sleep(timeout.toMillis());
+                if (!wait.isDone()) {
+                    timedOut.set(true);
+                    terminateProcessTree(process);
                 }
-                long remainingMillis = Math.min(
-                        TimeUnit.NANOSECONDS.toMillis(remainingNanos(deadline)),
-                        Math.max(1L, wallClockDeadline - System.currentTimeMillis()));
-                Thread.sleep(Math.min(25L, Math.max(1L, remainingMillis)));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
             }
-            if (timedOut || process.isAlive()) {
+        });
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        try {
+            while (!wait.isDone() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(25L);
+            }
+            if (timedOut.get() || !wait.isDone()) {
+                wait.cancel(true);
                 terminateProcessTree(process);
                 joinReaderAfterTermination(reader, process);
                 throw timeout(command, directory, timeout, collector.text());
             }
-            joinReader(reader, process, deadline);
+            int exitCode = wait.get();
+            joinReader(reader, process, System.nanoTime() + TimeUnit.SECONDS.toNanos(1));
+            return new Result(exitCode, collector.text(), collector.bytes());
         } catch (InterruptedException interrupted) {
+            wait.cancel(true);
             terminateProcessTree(process);
             joinReaderUnbounded(reader, process);
             Thread.currentThread().interrupt();
             throw new IOException("Process interrupted: command=" + command
                     + ", directory=" + directory, interrupted);
+        } catch (ExecutionException failure) {
+            throw new IOException("Process wait failed: command=" + command
+                    + ", directory=" + directory, failure.getCause());
+        } finally {
+            if (waiter.isAlive() && wait.isCancelled()) {
+                waiter.interrupt();
+            }
+            watchdog.interrupt();
         }
-        int exitCode = process.exitValue();
-        return new Result(exitCode, collector.text());
     }
 
     private static long remainingNanos(long deadline) {
         return Math.max(1L, deadline - System.nanoTime());
+    }
+
+    private static Process startProcess(ProcessBuilder builder, List<String> command,
+                                        Path directory, Duration timeout) throws IOException {
+        AtomicBoolean timedOut = new AtomicBoolean();
+        AtomicReference<Process> started = new AtomicReference<>();
+        FutureTask<Process> launch = new FutureTask<>(() -> {
+            Process process = builder.start();
+            started.set(process);
+            if (timedOut.get()) {
+                terminateProcessTree(process);
+            }
+            return process;
+        });
+        Thread launcher = Thread.ofPlatform().daemon(true).name("synesis-process-launch").start(launch);
+        Thread watchdog = Thread.ofPlatform().daemon(true).name("synesis-process-launch-watchdog").start(() -> {
+            try {
+                Thread.sleep(timeout.toMillis());
+                if (!launch.isDone()) {
+                    timedOut.set(true);
+                    Process process = started.get();
+                    if (process != null) {
+                        terminateProcessTree(process);
+                    }
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        try {
+            while (!launch.isDone() && !timedOut.get() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(25L);
+            }
+            if (timedOut.get() || !launch.isDone()) {
+                timedOut.set(true);
+                launch.cancel(true);
+                Process process = started.get();
+                if (process != null) {
+                    terminateProcessTree(process);
+                }
+                throw timeout(command, directory, timeout, "process launch timed out");
+            }
+            return launch.get();
+        } catch (InterruptedException interrupted) {
+            timedOut.set(true);
+            launch.cancel(true);
+            Process process = started.get();
+            if (process != null) {
+                terminateProcessTree(process);
+            }
+            Thread.currentThread().interrupt();
+            throw new IOException("Process launch interrupted: command=" + command
+                    + ", directory=" + directory, interrupted);
+        } catch (ExecutionException failure) {
+            Throwable cause = failure.getCause();
+            if (cause instanceof IOException ioFailure) {
+                throw ioFailure;
+            }
+            throw new IOException("Process launch failed: command=" + command
+                    + ", directory=" + directory, cause);
+        } finally {
+            if (launcher.isAlive() && launch.isCancelled()) {
+                launcher.interrupt();
+            }
+            watchdog.interrupt();
+        }
     }
 
     private static void joinReader(Thread reader, Process process, long deadline) throws IOException {
@@ -169,7 +255,32 @@ final class ProcessCommandRunner {
     }
 
     /** Result of a completed process. */
-    record Result(int exitCode, String output) {
+    static final class Result {
+        private final int exitCode;
+        private final String output;
+        private final byte[] bytes;
+
+        Result(int exitCode, String output) {
+            this(exitCode, output, output.getBytes(StandardCharsets.UTF_8));
+        }
+
+        Result(int exitCode, String output, byte[] bytes) {
+            this.exitCode = exitCode;
+            this.output = output;
+            this.bytes = bytes.clone();
+        }
+
+        int exitCode() {
+            return exitCode;
+        }
+
+        String output() {
+            return output;
+        }
+
+        byte[] bytes() {
+            return bytes.clone();
+        }
     }
 
     /** Describes a process that exceeded its bounded lifetime. */
@@ -236,6 +347,10 @@ final class ProcessCommandRunner {
         private synchronized String text() {
             String value = output.toString(StandardCharsets.UTF_8);
             return truncated ? value + "\n[output truncated]" : value;
+        }
+
+        private synchronized byte[] bytes() {
+            return output.toByteArray();
         }
     }
 }

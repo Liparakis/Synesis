@@ -36,6 +36,18 @@ public final class GitProcessRunner {
     }
 
     /**
+     * Runs a required Git command and preserves its bounded raw output bytes.
+     *
+     * @param workdir Git working directory
+     * @param arguments Git arguments after {@code git}
+     * @return bounded raw Git output
+     * @throws IOException if Git fails to start, times out, or exits nonzero
+     */
+    static byte[] runBytes(Path workdir, String... arguments) throws IOException {
+        return runInternal(workdir, null, DEFAULT_TIMEOUT, true, arguments).bytes();
+    }
+
+    /**
      * Runs a required Git command with an explicit timeout.
      *
      * @param workdir Git working directory
@@ -121,7 +133,7 @@ public final class GitProcessRunner {
                         + ", directory=" + workdir + ", exit=" + result.exitCode()
                         + ", output=" + result.output());
             }
-            return new Result(result.exitCode(), result.output().trim());
+            return new Result(result.exitCode(), result.output().trim(), result.bytes());
         } finally {
             Files.deleteIfExists(hooks);
         }
@@ -139,6 +151,29 @@ public final class GitProcessRunner {
      * @param exitCode process exit code
      * @param output bounded UTF-8 process output
      */
-    public record Result(int exitCode, String output) {
+    public static final class Result {
+        private final int exitCode;
+        private final String output;
+        private final byte[] bytes;
+
+        private Result(int exitCode, String output, byte[] bytes) {
+            this.exitCode = exitCode;
+            this.output = output;
+            this.bytes = bytes.clone();
+        }
+
+        /** @return process exit code */
+        public int exitCode() {
+            return exitCode;
+        }
+
+        /** @return bounded process output */
+        public String output() {
+            return output;
+        }
+
+        byte[] bytes() {
+            return bytes.clone();
+        }
     }
 }

@@ -16,6 +16,8 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.project.ProjectCommandService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.test.PortableTestCommand;
+import org.synesis.workspace.test.TestGit;
 
 /** Verifies direct argv execution remains lane-bound and provider-neutral. */
 class ProjectCommandServiceTest {
@@ -23,16 +25,7 @@ class ProjectCommandServiceTest {
     private Path controlRoot;
 
     private static void git(Path root, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = root.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException("git failed: " + output);
-        }
+        TestGit.run(root, arguments);
     }
 
     @BeforeEach
@@ -82,7 +75,7 @@ class ProjectCommandServiceTest {
         ensureSession("conn-cmd-3");
         AgentResponse response = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
                 controlRoot, "codex", "conn-cmd-3",
-                List.of("powershell.exe", "-NoProfile", "-Command", "Write-Output 'hello world'")));
+                PortableTestCommand.stdout("hello world")));
         assertEquals(AgentStatus.COMPLETED, response.status(), response.toJson());
         assertTrue(response.toJson().contains("hello world"), response.toJson());
     }

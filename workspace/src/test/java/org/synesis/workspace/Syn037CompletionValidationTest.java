@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -26,6 +25,8 @@ import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.workspace.test.PortableTestCommand;
+import org.synesis.workspace.test.TestGit;
 
 /** Exercises the configured validation argv through command, completion, and integration paths. */
 class Syn037CompletionValidationTest {
@@ -49,7 +50,6 @@ class Syn037CompletionValidationTest {
 
     @Test
     void commandEvidenceFlowsThroughFinishAndIntegration(@TempDir Path root) throws Exception {
-        assumePowerShell();
         git(root, "init");
         git(root, "config", "user.name", "Synesis Test");
         git(root, "config", "user.email", "synesis-test@example.invalid");
@@ -81,8 +81,7 @@ class Syn037CompletionValidationTest {
         Path lane = Path.of(binding.worktreePath());
         Files.writeString(lane.resolve("src/task_tracker.txt"), "implemented\n");
 
-        List<String> validationArgv = List.of("powershell.exe", "-NoProfile", "-Command",
-                "if ((Get-Content -Raw src/task_tracker.txt).Trim() -ne 'implemented') { exit 1 }");
+        List<String> validationArgv = PortableTestCommand.validation();
         AgentResponse gitResult = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
                 root, "codex", "syn037-codex", List.of("git", "status", "--porcelain")));
         AgentResponse missingResult = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
@@ -124,8 +123,7 @@ class Syn037CompletionValidationTest {
         value.put("projectId", projectId.toString());
         value.put("createdAt", createdAt.toString());
         value.put("validation", Map.of(
-                "argv", List.of("powershell.exe", "-NoProfile", "-Command",
-                        "if ((Get-Content -Raw src/task_tracker.txt).Trim() -ne 'implemented') { exit 1 }"),
+                "argv", PortableTestCommand.validation(),
                 "workingDirectory", ".",
                 "timeoutSeconds", 120));
         Files.writeString(metadata, ProviderJson.write(value) + System.lineSeparator());
@@ -151,37 +149,11 @@ class Syn037CompletionValidationTest {
         assertTrue(result.containsKey("stderrTruncated"), result.toString());
     }
 
-    private static void assumePowerShell() {
-        Assumptions.assumeTrue(findExecutable("powershell.exe") || findExecutable("pwsh"),
-                "PowerShell is required for the canonical validation fixture");
-    }
-
-    private static boolean findExecutable(String executable) {
-        try {
-            Process process = new ProcessBuilder(executable, "-NoProfile", "-Command", "exit 0")
-                    .redirectErrorStream(true).start();
-            process.getInputStream().close();
-            return process.waitFor() == 0;
-        } catch (Exception failure) {
-            return false;
-        }
-    }
-
     private static void git(Path root, String... args) throws Exception {
-        gitOutput(root, args);
+        TestGit.run(root, args);
     }
 
     private static String gitOutput(Path root, String... args) throws Exception {
-        String[] command = new String[args.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = root.toString();
-        System.arraycopy(args, 0, command, 3, args.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException(output);
-        }
-        return output.trim();
+        return TestGit.output(root, args);
     }
 }

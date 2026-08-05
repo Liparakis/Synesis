@@ -147,20 +147,10 @@ class TaskIntegrationServiceTest {
     }
 
     private static void git(Path root, String... args) throws Exception {
-        Process process = new ProcessBuilder(withGit(args)).directory(root.toFile()).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (process.waitFor() != 0) throw new IllegalStateException(output);
+        org.synesis.workspace.test.TestGit.run(root, args);
     }
 
     private static String gitOutput(Path root, String... args) throws Exception {
-        Process process = new ProcessBuilder(withGit(args)).directory(root.toFile()).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes()).trim();
-        if (process.waitFor() != 0) throw new IllegalStateException(output);
-        return output;
-    }
-
-    private static String[] withGit(String[] args) {
-        String[] command = new String[args.length + 1]; command[0] = "git";
-        System.arraycopy(args, 0, command, 1, args.length); return command;
+        return org.synesis.workspace.test.TestGit.output(root, args);
     }
 }

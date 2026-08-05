@@ -288,21 +288,7 @@ public final class IntegrationWorkspaceService {
     }
 
     private static String gitRevParse(Path workdir, String ref) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("git", "rev-parse", ref);
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git rev-parse failed: " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git rev-parse interrupted", e);
-        }
-        return output;
+        return org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, "rev-parse", ref).trim();
     }
 
     private static Path gitPath(Path workdir, String name) throws IOException {
@@ -312,21 +298,7 @@ public final class IntegrationWorkspaceService {
     }
 
     private static String runGitOutput(Path workdir, String... args) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(buildGitCommand(args));
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git " + args[0] + " failed: " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git " + args[0] + " interrupted", e);
-        }
-        return output;
+        return org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, args).trim();
     }
 
     private static List<String> buildGitCommand(String... args) {
@@ -374,74 +346,24 @@ public final class IntegrationWorkspaceService {
     }
 
     private static String gitDiff(Path workdir, String from, String to) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("git", "diff", from, to);
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(false);
-        Process proc = pb.start();
-        String diff = new String(proc.getInputStream().readAllBytes());
-        try {
-            proc.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git diff interrupted", e);
-        }
-        return diff;
+        return org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, "diff", from, to);
     }
 
     private static void applyPatch(Path worktreeDir, Path patchFile) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("git", "apply", "--3way", patchFile.toAbsolutePath().toString());
-        pb.directory(worktreeDir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git apply failed: " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git apply interrupted", e);
-        }
+        org.synesis.workspace.lifecycle.GitProcessRunner.run(worktreeDir, "apply", "--3way",
+                patchFile.toAbsolutePath().toString());
     }
 
     private static void runGit(Path workdir, String... args) throws IOException {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("git");
-        for (String arg : args) {
-            cmd.add(arg);
-        }
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git " + args[0] + " failed: " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git " + args[0] + " interrupted", e);
-        }
+        org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, args);
     }
 
     private static Path resolveGitTopLevel(Path path) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("git", "rev-parse", "--show-toplevel");
-        pb.directory(path.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
         try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                return path;
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            return Path.of(org.synesis.workspace.lifecycle.GitProcessRunner
+                    .run(path, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
+        } catch (IOException failure) {
             return path;
         }
-        return Path.of(output).toAbsolutePath().normalize();
     }
 }

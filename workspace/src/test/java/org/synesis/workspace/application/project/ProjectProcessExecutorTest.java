@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
+import org.synesis.workspace.test.PortableTestCommand;
 
 /** Tests deterministic direct-process outcomes and bounded stream evidence. */
 class ProjectProcessExecutorTest {
@@ -22,7 +23,7 @@ class ProjectProcessExecutorTest {
     @Test
     void noOutputSuccessIsComplete() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-empty-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command", "exit 0"), 10);
+        var result = run(root, PortableTestCommand.fixture("exit"), 10);
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertEquals(0, result.stdoutBytesRead());
         assertEquals(0, result.stdoutBytesRetained());
@@ -46,8 +47,7 @@ class ProjectProcessExecutorTest {
     @Test
     void stdoutOverflowRetainsHeadAndTailAndCountsAllReadBytes() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-stdout-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Out.Write(('A' * 100000)); exit 0"), 20);
+        var result = run(root, PortableTestCommand.fixture("stdout", "A", "100000"), 20);
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertTrue(result.stdoutBytesRead() >= 100000, result.toString());
         assertEquals(ProjectProcessExecutor.MAX_RETAINED_BYTES, result.stdoutBytesRetained());
@@ -59,8 +59,7 @@ class ProjectProcessExecutorTest {
     @Test
     void stderrOnlyOverflowRetainsHeadAndTailAndCountsAllReadBytes() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-stderr-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Error.Write(('E' * 100000)); exit 0"), 20);
+        var result = run(root, PortableTestCommand.fixture("stderr", "E", "100000"), 20);
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertTrue(result.stderrBytesRead() >= 100000, result.toString());
         assertEquals(ProjectProcessExecutor.MAX_RETAINED_BYTES, result.stderrBytesRetained());
@@ -72,8 +71,7 @@ class ProjectProcessExecutorTest {
     @Test
     void exactLimitOutputIsCompleteWhenEofIsObserved() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-limit-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Out.Write(('L' * 65536)); exit 0"), 20);
+        var result = run(root, PortableTestCommand.fixture("stdout", "L", "65536"), 20);
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertEquals(65536, result.stdoutBytesRead());
         assertEquals(65536, result.stdoutBytesRetained());
@@ -84,8 +82,7 @@ class ProjectProcessExecutorTest {
     @Test
     void exactLimitMultibyteOutputRemainsCompleteAcrossInternalBufferBoundary() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-limit-utf8-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); [Console]::Out.Write(('😀' * 16384)); exit 0"), 20);
+        var result = run(root, PortableTestCommand.fixture("utf8", "16384"), 20);
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertEquals(65536, result.stdoutBytesRead());
         assertEquals(65536, result.stdoutBytesRetained());
@@ -97,8 +94,7 @@ class ProjectProcessExecutorTest {
     @Test
     void simultaneousStreamsAreDrainedWithoutDeadlock() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-both-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Out.Write(('O' * 100000)); [Console]::Error.Write(('E' * 100000)); exit 0"), 20);
+        var result = run(root, PortableTestCommand.fixture("both"), 20);
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertTrue(result.stdoutBytesRead() >= 100000, result.toString());
         assertTrue(result.stderrBytesRead() >= 100000, result.toString());
@@ -109,8 +105,7 @@ class ProjectProcessExecutorTest {
     @Test
     void multibyteUtf8BoundaryDoesNotLeakReplacementAtRetainedEdges() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-utf8-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); [Console]::Out.Write(('x' + ('😀' * 20000))); exit 0"), 20);
+        var result = run(root, PortableTestCommand.fixture("utf8-prefix", "x", "20000"), 20);
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertTrue(result.stdoutTruncated());
         assertTrue(result.stdoutBytesRead() > result.stdoutBytesRetained());
@@ -122,8 +117,7 @@ class ProjectProcessExecutorTest {
     @Test
     void nonZeroExitPreservesEvidence() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-nonzero-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Error.Write('failed'); exit 7"), 10);
+        var result = run(root, PortableTestCommand.fixture("fail", "failed", "7"), 10);
         assertEquals(ProjectProcessExecutor.Outcome.NON_ZERO_EXIT, result.outcome());
         assertEquals(7, result.exitCode());
         assertTrue(result.stderr().contains("failed"));
@@ -134,8 +128,7 @@ class ProjectProcessExecutorTest {
     @Test
     void timeoutPreservesPartialOutputAndTerminatesTree() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-timeout-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Out.Write('partial'); Start-Sleep -Seconds 5"), 1);
+        var result = run(root, PortableTestCommand.fixture("partial", "partial", "1", "5"), 1);
         assertEquals(ProjectProcessExecutor.Outcome.COMMAND_TIMED_OUT, result.outcome());
         assertTrue(result.stdout().contains("partial"));
         assertTrue(result.stdoutBytesRead() >= 7);
@@ -144,8 +137,7 @@ class ProjectProcessExecutorTest {
     @Test
     void timeoutPreservesPartialTruncatedOutput() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-timeout-overflow-");
-        var result = run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Out.Write(('T' * 100000)); Start-Sleep -Seconds 5"), 1);
+        var result = run(root, PortableTestCommand.fixture("partial", "T", "100000", "5"), 1);
         assertEquals(ProjectProcessExecutor.Outcome.COMMAND_TIMED_OUT, result.outcome());
         assertTrue(result.stdoutBytesRead() >= 100000, result.toString());
         assertTrue(result.stdoutTruncated(), result.toString());
@@ -156,8 +148,8 @@ class ProjectProcessExecutorTest {
     void cancellationPreservesPartialOutput() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-cancel-");
         AtomicReference<ProjectProcessExecutor.ExecutionResult> reference = new AtomicReference<>();
-        Thread caller = new Thread(() -> reference.set(run(root, List.of("powershell.exe", "-NoProfile", "-Command",
-                "[Console]::Out.Write('partial'); Start-Sleep -Seconds 5"), 30)));
+        Thread caller = new Thread(() -> reference.set(run(root,
+                PortableTestCommand.fixture("partial", "partial", "1", "5"), 30)));
         caller.start();
         Thread.sleep(250);
         caller.interrupt();
@@ -171,10 +163,10 @@ class ProjectProcessExecutorTest {
     void rejectsAbsoluteAndEscapingWorkingDirectories() throws Exception {
         Path root = Files.createTempDirectory("synesis-exec-path-");
         var absolute = new ProjectProcessExecutor().execute(new ProjectProcessExecutor.ExecutionRequest(
-                List.of("powershell.exe", "-NoProfile", "-Command", "exit 0"), root,
+                PortableTestCommand.fixture("exit"), root,
                 root.toString(), 10, root));
         var escape = new ProjectProcessExecutor().execute(new ProjectProcessExecutor.ExecutionRequest(
-                List.of("powershell.exe", "-NoProfile", "-Command", "exit 0"), root,
+                PortableTestCommand.fixture("exit"), root,
                 "..", 10, root));
         assertEquals(ProjectProcessExecutor.Outcome.COMMAND_WORKING_DIRECTORY_INVALID, absolute.outcome());
         assertEquals(ProjectProcessExecutor.Outcome.COMMAND_WORKING_DIRECTORY_INVALID, escape.outcome());

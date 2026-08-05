@@ -221,12 +221,8 @@ public final class ImplementationPublicationService {
             return List.of();
         }
         try {
-            ProcessBuilder pb = new ProcessBuilder("git", "diff", "--name-only", baseCommit, "HEAD");
-            pb.directory(ownerWorktreePath.toFile());
-            pb.redirectErrorStream(false);
-            Process proc = pb.start();
-            String output = new String(proc.getInputStream().readAllBytes()).trim();
-            proc.waitFor();
+            String output = org.synesis.workspace.lifecycle.GitProcessRunner
+                    .run(ownerWorktreePath, "diff", "--name-only", baseCommit, "HEAD").trim();
             if (output.isBlank()) {
                 return List.of();
             }
@@ -247,25 +243,6 @@ public final class ImplementationPublicationService {
     }
 
     private static String runGitOutput(Path workdir, String... args) throws IOException {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("git");
-        for (String arg : args) {
-            cmd.add(arg);
-        }
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(workdir.toFile());
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes()).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git " + args[0] + " failed (code=" + code + "): " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git " + args[0] + " interrupted", e);
-        }
-        return output;
+        return org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, args).trim();
     }
 }

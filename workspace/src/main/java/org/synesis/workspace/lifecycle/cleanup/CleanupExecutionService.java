@@ -1,5 +1,7 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
+import org.synesis.workspace.lifecycle.GitProcessRunner;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -432,23 +434,6 @@ public final class CleanupExecutionService {
     }
 
     private static String runGit(Path workdir, String... args) throws IOException {
-        String[] cmd = new String[args.length + 3];
-        cmd[0] = "git";
-        cmd[1] = "-C";
-        cmd[2] = workdir.toString();
-        System.arraycopy(args, 0, cmd, 3, args.length);
-
-        Process proc = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        String output = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-        try {
-            int code = proc.waitFor();
-            if (code != 0) {
-                throw new IOException("git command failed (code=" + code + "): " + output);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("git command interrupted", e);
-        }
-        return output;
+        return GitProcessRunner.run(workdir, args).trim();
     }
 }

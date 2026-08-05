@@ -77,11 +77,6 @@ class SemanticIndexFingerprintTest {
     }
 
     private static void git(Path root, String... args) throws Exception {
-        String[] command = new String[args.length + 1];
-        command[0] = "git";
-        System.arraycopy(args, 0, command, 1, args.length);
-        Process process = new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (process.waitFor() != 0) throw new IllegalStateException(output);
+        org.synesis.workspace.test.TestGit.run(root, args);
     }
 }

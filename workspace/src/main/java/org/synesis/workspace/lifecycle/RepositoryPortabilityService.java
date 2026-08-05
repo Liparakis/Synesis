@@ -331,18 +331,6 @@ public final class RepositoryPortabilityService {
     }
 
     private static byte[] gitBytes(Path root, String... args) throws IOException {
-        List<String> command = new ArrayList<>();
-        command.add("git");
-        Collections.addAll(command, args);
-        Process process = new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();
-        byte[] output = process.getInputStream().readAllBytes();
-        try {
-            int exit = process.waitFor();
-            if (exit != 0) throw new IOException("TREE_UNAVAILABLE:" + new String(output, StandardCharsets.UTF_8).trim());
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("TREE_INSPECTION_INTERRUPTED", interrupted);
-        }
-        return output;
+        return GitProcessRunner.runBytes(root, args);
     }
 }

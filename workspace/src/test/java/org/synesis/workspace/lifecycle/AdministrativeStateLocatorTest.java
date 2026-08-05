@@ -57,10 +57,7 @@ class AdministrativeStateLocatorTest {
     }
 
     private static void run(Path directory, String... command) throws Exception {
-        Process process = new ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException(String.join(" ", command) + ": " + output);
-        }
+        org.synesis.workspace.test.TestGit.run(directory,
+                java.util.Arrays.copyOfRange(command, 1, command.length));
     }
 }

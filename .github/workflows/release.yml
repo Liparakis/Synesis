@@ -13,6 +13,8 @@ permissions:
 jobs:
     java:
         runs-on: ubuntu-24.04
+        env:
+            JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
         steps:
             -   uses: actions/checkout@v5
             -   uses: actions/setup-java@v5
@@ -47,6 +49,8 @@ jobs:
                 if: runner.os == 'Windows'
             -   run: ./gradlew :cli:bundleSmokeTest :cli:platformArchive -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict
                 if: runner.os != 'Windows'
+                env:
+                    JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
             -   uses: actions/upload-artifact@v6
                 with:
                     name: internal-bundle-${{ matrix.platform }}
