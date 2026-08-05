@@ -147,27 +147,39 @@ public final class GitProcessRunner {
         return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
-    /** Result of one Git process.
-     * @param exitCode process exit code
-     * @param output bounded UTF-8 process output
-     */
+    /** Result of one Git process. */
     public static final class Result {
         private final int exitCode;
         private final String output;
         private final byte[] bytes;
 
+        /**
+         * Creates a Git process result.
+         *
+         * @param exitCode process exit code
+         * @param output bounded UTF-8 process output
+         * @param bytes bounded raw process output
+         */
         private Result(int exitCode, String output, byte[] bytes) {
             this.exitCode = exitCode;
             this.output = output;
             this.bytes = bytes.clone();
         }
 
-        /** @return process exit code */
+        /**
+         * Returns the process exit code.
+         *
+         * @return process exit code
+         */
         public int exitCode() {
             return exitCode;
         }
 
-        /** @return bounded process output */
+        /**
+         * Returns the bounded process output.
+         *
+         * @return bounded UTF-8 process output
+         */
         public String output() {
             return output;
         }
