@@ -8,12 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.test.TestGit;
+import org.synesis.workspace.test.PortableTestCommand;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
@@ -85,10 +88,8 @@ final class MultiChatLogicalWorkspaceTest {
             assertTrue(integrated.success(), integrated.failureReason());
             assertEquals("lane-a\n", Files.readString(integrated.worktreePath().resolve("src/a.py")).replace("\r\n", "\n"));
             assertEquals("lane-b\n", Files.readString(integrated.worktreePath().resolve("src/b.py")).replace("\r\n", "\n"));
-            Process pytest = new ProcessBuilder("python", "-m", "pytest", "-q")
-                    .directory(integrated.worktreePath().toFile()).redirectErrorStream(true).start();
-            String pytestOutput = new String(pytest.getInputStream().readAllBytes());
-            assertTrue(pytest.waitFor() == 0, pytestOutput);
+            assertPortableValidation(integrated.worktreePath(), "src/a.py", "lane-a");
+            assertPortableValidation(integrated.worktreePath(), "src/b.py", "lane-b");
         } finally {
             integration.removeIntegrationWorktree(integrated.worktreePath());
         }
@@ -189,5 +190,18 @@ final class MultiChatLogicalWorkspaceTest {
 
     private static void git(Path root, String... args) throws Exception {
         TestGit.run(root, args);
+    }
+
+    private static void assertPortableValidation(Path worktree, String relativePath, String expected)
+            throws Exception {
+        Process validator = new ProcessBuilder(PortableTestCommand.fixture(
+                "validate", relativePath, expected))
+                .directory(worktree.toFile()).redirectErrorStream(true).start();
+        if (!validator.waitFor(5, TimeUnit.SECONDS)) {
+            validator.destroyForcibly();
+            assertTrue(false, "portable validation timed out for " + relativePath);
+        }
+        String output = new String(validator.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, validator.exitValue(), output);
     }
 }

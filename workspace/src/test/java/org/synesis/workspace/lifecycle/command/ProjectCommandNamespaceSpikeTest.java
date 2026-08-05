@@ -5,9 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -172,21 +173,28 @@ class ProjectCommandNamespaceSpikeTest {
         Path lockPath = temp.resolve("namespace.lock");
         String javaExecutable = Path.of(System.getProperty("java.home"), "bin",
                 System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java").toString();
-        Process holder = new ProcessBuilder(javaExecutable, "-cp", System.getProperty("java.class.path"),
-                CommandLockProbe.class.getName(), "hold", lockPath.toString())
-                .redirectErrorStream(true).start();
+        Process holder = startLockProbe(javaExecutable, "hold", lockPath);
         try {
             assertEquals("ready", new String(holder.getInputStream().readNBytes(6), java.nio.charset.StandardCharsets.UTF_8)
                     .trim());
-            Process contender = new ProcessBuilder(javaExecutable, "-cp", System.getProperty("java.class.path"),
-                    CommandLockProbe.class.getName(), "try", lockPath.toString())
-                    .redirectErrorStream(true).start();
+            Process contender = startLockProbe(javaExecutable, "try", lockPath);
             assertTrue(contender.waitFor(5, TimeUnit.SECONDS));
             assertNotEquals(0, contender.exitValue());
         } finally {
             holder.getOutputStream().close();
             assertTrue(holder.waitFor(5, TimeUnit.SECONDS));
         }
+    }
+
+    private static Process startLockProbe(String javaExecutable, String mode, Path lockPath)
+            throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(javaExecutable, "-cp", System.getProperty("java.class.path"),
+                CommandLockProbe.class.getName(), mode, lockPath.toString())
+                .redirectErrorStream(true);
+        builder.environment().remove("JAVA_TOOL_OPTIONS");
+        builder.environment().remove("JDK_JAVA_OPTIONS");
+        builder.environment().remove("_JAVA_OPTIONS");
+        return builder.start();
     }
 
     @Test
