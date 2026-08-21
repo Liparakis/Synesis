@@ -320,6 +320,13 @@ public final class WorkIntentService {
                     .filter(candidate -> candidate.requestId().equals(requestId)).findFirst()
                     .orElseThrow(() -> new IOException("REQUEST_NOT_FOUND"));
             if (!request.target().equals(participant)) throw new IOException("REQUEST_TARGET_MISMATCH");
+            if (request.status() != CoordinationRequest.Status.PENDING) {
+                if (request.status() != status) throw new IOException("REQUEST_ALREADY_RESOLVED");
+                if (status == CoordinationRequest.Status.ACCEPTED && request.kind() == CoordinationRequest.Kind.REVIEW) {
+                    issueReviewGrantIfAbsent(current, request);
+                }
+                return;
+            }
             current.append(requestId, PredictionEventType.COORDINATION_RESPONDED, signer.nodeId(),
                     CollaborationCodec.encodeResponse(requestId, status, proposal), signer);
             if (status == CoordinationRequest.Status.ACCEPTED && request.kind() == CoordinationRequest.Kind.HANDOFF) {
@@ -327,6 +334,25 @@ public final class WorkIntentService {
                         signer.nodeId(), CollaborationCodec.encodeHandoff(request.conflictingIntentId(), request.target(),
                                 current.collaborationProjection().intent(request.conflictingIntentId()).orElseThrow().version()), signer);
             }
+            if (status == CoordinationRequest.Status.ACCEPTED && request.kind() == CoordinationRequest.Kind.REVIEW) {
+                issueReviewGrantIfAbsent(current, request);
+            }
+        }
+    }
+
+    private void issueReviewGrantIfAbsent(PredictionEventStore current, CoordinationRequest request)
+            throws IOException, GeneralSecurityException {
+        WorkIntent intent = current.collaborationProjection().intent(request.conflictingIntentId())
+                .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+        UUID grantId = UUID.nameUUIDFromBytes(("synesis-review-grant:" + request.requestId())
+                .getBytes(StandardCharsets.UTF_8));
+        boolean exists = current.workGroupProjection().grants().stream()
+                .anyMatch(grant -> grant.grantId().equals(grantId));
+        if (!exists) {
+            LaneGrant grant = new LaneGrant(grantId, intent.workGroupId(), intent.intentId(),
+                    request.requester(), intent.version(), true);
+            current.append(grantId, PredictionEventType.LANE_GRANT_ISSUED,
+                    signer.nodeId(), CollaborationCodec.encodeLaneGrant(grant), signer);
         }
     }
 

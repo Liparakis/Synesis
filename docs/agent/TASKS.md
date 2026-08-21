@@ -1786,9 +1786,14 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   rejection-to-implementer handoff; (4) connect accepted work to guarded
   integration and complete WorkGroup cleanup/Doctor closure; (5) rerun the
   unattended Todo experiment with no babysitting and record all evidence.
-- Current state: Baseline reproduction captured; no SYN-039 production code
-  has been changed. The exact next implementation action is to inspect the
-  existing LaneGrant, snapshot projection, validation, completion, and
-  integration transitions and add the smallest deterministic regression fixture
-  for the missing reviewer grant and the contradictory
-  `pytest`-passing/`TESTS_FAILED` completion result.
+- Current state: The first implementation slice is complete. Deterministic
+  tests prove typed reviewer admission through the existing LaneGrant model,
+  snapshot/grant projection, and correct interpretation of the recorded
+  passing Todo evidence. The unattended rerun integrated snapshot
+  `snap_3e673171518792f078f394bf5dab7cd5` into clean control commit `97664dc`,
+  then stopped with WorkGroup `932d024e-06ff-3176-bef6-12c33279e486` still
+  ACTIVE because reviewer validation and closure did not occur. Exact evidence
+  is `docs/evidence/syn039-unattended-todo-slice-2026-08-22.md`. The next
+  implementation action is to make the admitted reviewer validate that
+  snapshot through the existing path; do not broaden the task or create
+  SYN-040.

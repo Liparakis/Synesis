@@ -5,17 +5,20 @@
   acceptance evidence, and `turn_interrupted_command_remained_active`
   limitation remain preserved.
 - Repository branch: master.
-- Activation is bookkeeping-only. No SYN-039 production code has changed.
+- The first SYN-039 production slice is implemented and verified by focused
+  deterministic tests.
 - Primary failure input: the user-supplied unattended Todo smoke test. The
   reproduced baseline is recorded in
   `docs/evidence/syn039-unattended-todo-baseline-2026-08-22.md`; raw Codex
   JSONL remains in the disposable fixture's `baseline-logs` directory.
+- Evidence: `docs/evidence/syn039-unattended-todo-slice-2026-08-22.md`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`; then inspect the existing LaneGrant, snapshot
-  projection, validation, completion, and integration transitions.
-- Exact next code action: add the smallest deterministic regression fixture
-  for the missing reviewer grant and the contradictory `pytest`-passing /
-  `TESTS_FAILED` completion result. Keep `SYN-014E` paused.
+  scripts/agent-resume.ps1`; then inspect the admitted reviewer validation and
+  WorkGroup-close transition in fixture
+  `C:\Users\Liparakis\AppData\Local\Temp\syn039-unattended-todo-slice-20260822`.
+- Exact next code action: make the admitted reviewer validate the published
+  snapshot through the existing path, preserving any later failure as the
+  next SYN-039 blocker. Keep `SYN-014E` paused; do not create SYN-040.
 - Facts that must not be forgotten: the MCP surface is exactly ten raw tools;
   `run_command` is direct argv only; `/.synesis/local/`,
   `/.synesis/coordination/`, and `/.codex/hooks.json` are the only Synesis

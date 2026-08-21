@@ -363,7 +363,7 @@ public final class WorkspaceCollaborationService {
                 new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
         return new CollaborationSnapshot(service.activeIntents(), service.requests(),
                 store.collaborationProjection().participants(), store.workGroupProjection().groups(),
-                store.workGroupProjection().grants());
+                store.workGroupProjection().grants(), store.taskCompletionProjection().allSnapshots());
     }
 
     /** Creates a logical work group through the shared coordination service.
@@ -539,10 +539,12 @@ public final class WorkspaceCollaborationService {
      * @param requests requests
      * @param participants participants
      * @param groups logical work groups
-     * @param grants continuation grants
+     * @param grants targeted lane grants
+     * @param snapshots immutable task snapshots available for review
      */
     public record CollaborationSnapshot(List<WorkIntent> intents, List<CoordinationRequest> requests,
-            List<Participant> participants, List<WorkGroup> groups, List<LaneGrant> grants) { }
+            List<Participant> participants, List<WorkGroup> groups, List<LaneGrant> grants,
+            List<TaskSnapshotRecord> snapshots) { }
 
     /** Returns whether the session owns the target or no collaboration protocol is active.
      * @param projectRoot project root

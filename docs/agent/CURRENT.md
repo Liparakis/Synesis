@@ -22,8 +22,7 @@ work must integrate, and the WorkGroup must close with no unresolved state.
 
 ## Activation boundary
 
-- This activation changes durable task bookkeeping only. No SYN-039 production
-  code has been changed.
+- The first SYN-039 production slice is implemented and under verification.
 - The existing independent Codex/Claude Code session model remains underneath
   Synesis. Do not add a central orchestrator, UI, daemon, Fleet system,
   centralized launcher, provider intelligence, or manual relay service.
@@ -78,41 +77,47 @@ could not obtain review authorization: `work_group_join` required an unavailable
 checkout stayed at baseline `7a5925f`; post-run Doctor was `DEGRADED` with two
 `stale_session_lease` warnings and reconciliation recommended.
 
-No SYN-039 production code changed. The baseline identifies the first narrow
-implementation seam as reviewer snapshot authorization plus structured
-validation and completion handoff; it does not authorize a new orchestrator,
-daemon, UI, Fleet system, or launcher.
+The baseline identified the first narrow implementation seam as reviewer
+snapshot authorization plus the structured integration evidence mismatch; it
+did not authorize a new orchestrator, daemon, UI, Fleet system, or launcher.
 
 ## Work completed
 
-Reproduced the two-agent Todo failure, captured raw session output and exact
-durable identifiers, recorded control/lane Git state, recorded final
-coordination and Doctor state, and updated the SYN-039 evidence and test
-matrix. No production code changed.
+Implemented the first two defects and deterministic regressions. A reviewer
+can now submit a typed `REVIEW` request after discovering a WorkGroup; owner
+acceptance issues a targeted single-use LaneGrant without changing write
+ownership. Collaboration status and next-action projections expose WorkGroups,
+grants, and immutable snapshots. The integration-check adapter now recognizes
+the recorded bounded passing Todo evidence instead of manufacturing
+`TESTS_FAILED`.
+
+The exact implementation and unattended rerun evidence is recorded in
+`docs/evidence/syn039-unattended-todo-slice-2026-08-22.md`.
 
 ## Current failures
 
-Reviewer authorization requires an unavailable `grantId`; no validation item
-or snapshot projection is exposed. The published implementation reaches
-`integration_failed` / `TESTS_FAILED` despite three passing isolated tests.
-The control checkout remains at baseline, the implementer lane was active at
-stop, and final Doctor reports two stale session leases.
+The exact rerun now reaches a clean control checkout at snapshot commit
+`97664dc` after Agent A's `pytest` 3/3. Agent B's request was accepted and
+grant `79ef69cd-55bc-3925-a179-ff272cc94d12` was issued. The next failure is
+later: Agent B did not consume the grant or validate the published snapshot,
+so WorkGroup `932d024e-06ff-3176-bef6-12c33279e486` remains `ACTIVE` with no
+validation decision or clean-close evidence. Doctor is `DEGRADED` with five
+warnings and reconciliation recommended.
 
 ## Implementation order
 
 1. Reproduce and capture the supplied unattended Todo failure.
-2. Inspect the existing reviewer/validator access and evidence boundaries.
-3. Implement the smallest read-only review path and explicit validation
-   decision contract.
-4. Implement autonomous rejection routing, handoff lineage, accepted
-   integration, and WorkGroup cleanup/Doctor closure.
+2. Implement reviewer admission and the integration evidence fix.
+3. Make the admitted reviewer validate the immutable snapshot through the
+   existing path and preserve the next failure as a bounded blocker.
+4. Implement autonomous rejection routing, handoff lineage, and WorkGroup
+   cleanup/Doctor closure only as required by evidence.
 5. Rerun the same unattended Todo experiment with no babysitting and record
    the complete evidence.
 
 ## Immediate next action
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-inspect the existing LaneGrant, snapshot projection, validation, completion,
-and integration transitions. Add the smallest deterministic regression fixture
-for the missing reviewer grant and the `pytest`-passing / `TESTS_FAILED`
-completion contradiction before changing broader production behavior.
+inspect the admitted reviewer validation/closure transition in the exact
+fixture evidence. Implement only the next concrete blocker exposed by that
+rerun; do not create SYN-040 or broaden SYN-039 speculatively.

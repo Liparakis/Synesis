@@ -2,8 +2,9 @@
 
 ## SYN-039 current verification state
 
-SYN-039, Autonomous Workgroup Completion, is ACTIVE. Activation is
-bookkeeping-only; no SYN-039 production code has changed. SYN-038 remains DONE
+SYN-039, Autonomous Workgroup Completion, is ACTIVE. The first production
+implementation slice is complete and the task remains active for the next
+evidence-bounded lifecycle slice. SYN-038 remains DONE
 at CP-0458 and its prior App Server history, acceptance evidence, and
 `turn_interrupted_command_remained_active` limitation remain authoritative.
 
@@ -29,7 +30,7 @@ authorized by this task.
 No architecture ADR is required for activation alone. An ADR is required if
 implementation changes a product boundary or protocol guarantee.
 
-## SYN-039 baseline reproduction — CP-0462 pending
+## SYN-039 first implementation slice — CP-0465 follow-up
 
 The unattended Todo baseline was reproduced on 2026-08-22 in disposable
 fixture `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-baseline-20260822`.
@@ -59,10 +60,28 @@ three managed worktrees remained. Doctor was `DEGRADED` with two
 available. This is a failed baseline, not implementation success. No SYN-039
 production code changed.
 
-Exact next implementation action: inspect existing LaneGrant, snapshot
-projection, validation, completion, and integration transitions, then add the
-smallest deterministic regression fixture for the missing reviewer grant and
-the contradictory `pytest`-passing / `TESTS_FAILED` completion result.
+The first implementation slice is recorded in
+`docs/evidence/syn039-unattended-todo-slice-2026-08-22.md`. `REVIEW` is now a
+typed coordination request. Owner acceptance issues deterministic single-use
+grant `79ef69cd-55bc-3925-a179-ff272cc94d12` targeted at reviewer
+`agt_93870f01-30a0-30f9-bf9b-29ac7de500dd`, for owner intent
+`3db91f37-9ad0-364c-aaab-cb26494fdee1` at claim epoch 1, without changing the
+owner's claims. Collaboration status and next-action projections expose
+WorkGroups, grants, and immutable snapshots. The integration-check adapter no
+longer classifies the recorded `pytest` 3/3 evidence as `TESTS_FAILED`.
+
+The exact unattended rerun used fixture
+`C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-slice-20260822`.
+Agent A published `snap_3e673171518792f078f394bf5dab7cd5`, which integrated to
+clean control commit `97664dc`; the control checkout's `pytest` run reported
+`3 passed in 0.02s`. WorkGroup `932d024e-06ff-3176-bef6-12c33279e486` remains
+ACTIVE because Agent B did not consume the grant or validate the snapshot.
+There is no validation decision or clean-close evidence. Doctor is DEGRADED
+with five warnings and reconciliation recommended.
+
+Exact next implementation action: make the admitted reviewer validate the
+published snapshot through the existing path. Preserve any later lifecycle
+failure as the next bounded SYN-039 blocker; do not create SYN-040.
 
 ## SYN-038 current verification state
 

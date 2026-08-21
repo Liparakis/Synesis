@@ -18,6 +18,41 @@
   no raw copy was found in the repository, so reproducing and capturing it is
   the exact next implementation action.
 
+# 2026-08-22 — SYN-039 reviewer/integration slice
+
+- Implemented typed `REVIEW` admission using the existing coordination request
+  and LaneGrant model. Owner acceptance issues a deterministic single-use grant
+  targeted to the requesting reviewer and the owner's existing intent/claim
+  epoch; owner file claims remain unchanged and duplicate acceptance is
+  idempotent.
+- Exposed WorkGroups, targeted grants, and immutable task snapshots through
+  collaboration status and `get_next_action`. Normalized a missing-`grantId`
+  `work_group_join` into a fail-closed typed review request; supplied grants
+  still use the existing consuming path.
+- Fixed the narrow integration-check evidence mismatch: recorded bounded
+  `pytest`-passing evidence is no longer treated as false `TESTS_FAILED`.
+  Direct project validation remains arbitrary direct argv.
+- Deterministic regressions passed in `WorkIntentServiceTest` and
+  `McpSyn039SliceTest`; focused workspace integration/completion tests and
+  `cli:installDist` passed; `git diff --check` passed. Full root verification
+  reached the long-running `:mcp:test` stage after compilation, packaging,
+  Javadoc, static analysis, hygiene, and launcher stages, then was bounded and
+  stopped without an emitted test failure.
+- Exact unattended rerun fixture:
+  `C:\Users\Liparakis\AppData\Local\Temp\syn039-unattended-todo-slice-20260822`.
+  Review request `0c85ee01-5841-4a6b-896e-789815a378d8` was accepted and grant
+  `79ef69cd-55bc-3925-a179-ff272cc94d12` was issued. Snapshot
+  `snap_3e673171518792f078f394bf5dab7cd5` integrated into clean control commit
+  `97664dc`; `pytest` reported `3 passed in 0.02s`.
+- The rerun then stopped at the next concrete blocker: the reviewer did not
+  consume the grant or validate the snapshot, so WorkGroup
+  `932d024e-06ff-3176-bef6-12c33279e486` remained ACTIVE and Doctor remained
+  DEGRADED with five warnings. Evidence is
+  `docs/evidence/syn039-unattended-todo-slice-2026-08-22.md`.
+- Exact continuation: run `scripts/agent-resume.ps1`, inspect the existing
+  admitted-review validation/closure transition, and implement only the next
+  evidence-backed blocker. Do not create SYN-040.
+
 # 2026-08-05 — SYN-038 durable project-command closure
 
 - Preserved CP-0457 as prior evidence and committed the verified durable

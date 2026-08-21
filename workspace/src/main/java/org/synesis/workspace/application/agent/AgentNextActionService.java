@@ -23,6 +23,9 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
@@ -442,6 +445,12 @@ public final class AgentNextActionService {
         result.put("pending", pending.size());
         result.put("participants", participants);
         result.put("intents", intents);
+        result.put("groups", store.workGroupProjection().groups().stream()
+                .map(AgentNextActionService::workGroupMap).toList());
+        result.put("grants", store.workGroupProjection().grants().stream()
+                .map(AgentNextActionService::laneGrantMap).toList());
+        result.put("snapshots", store.taskCompletionProjection().allSnapshots().stream()
+                .map(AgentNextActionService::snapshotMap).toList());
         result.put("currentParticipant", participantId);
         result.put("currentIntent", currentIntent);
         result.put("pendingCoordination", pending);
@@ -486,6 +495,35 @@ public final class AgentNextActionService {
         map.put("kind", request.kind().name());
         map.put("proposal", request.proposal());
         map.put("status", request.status().name());
+        return map;
+    }
+
+    private static Map<String, Object> workGroupMap(WorkGroup group) {
+        return Map.of("workGroupId", group.workGroupId().toString(),
+                "projectId", group.projectId().toString(), "goal", group.goal(),
+                "acceptance", group.acceptance(), "version", group.version(),
+                "status", group.status().name());
+    }
+
+    private static Map<String, Object> laneGrantMap(LaneGrant grant) {
+        return Map.of("grantId", grant.grantId().toString(),
+                "workGroupId", grant.workGroupId().toString(),
+                "targetIntentId", grant.targetIntentId().toString(),
+                "targetParticipant", grant.targetParticipant(),
+                "claimEpoch", grant.claimEpoch(), "singleUse", grant.singleUse());
+    }
+
+    private static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("taskId", snapshot.taskId().toString());
+        map.put("snapshotId", snapshot.snapshotId());
+        map.put("baseCommit", snapshot.baseCommit());
+        map.put("commitSha", snapshot.commitSha());
+        map.put("changedPaths", snapshot.changedPaths());
+        map.put("summary", snapshot.summary());
+        map.put("createdAtMillis", snapshot.createdAtMillis());
+        map.put("laneId", snapshot.provenance().laneId().toString());
+        map.put("claimEpoch", snapshot.provenance().claimEpoch());
         return map;
     }
 

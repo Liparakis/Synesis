@@ -124,6 +124,38 @@ final class WorkIntentServiceTest {
     }
 
     @Test
+    void reviewerCanRequestAdmissionWithoutAWriteClaimAndConsumesIssuedGrant(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+
+        CoordinationRequest request = service.request("agt-reviewer", owner.intentId(),
+                CoordinationRequest.Kind.REVIEW, "Review the published snapshot without claiming its files");
+        assertEquals(CoordinationRequest.Status.PENDING, request.status());
+        service.respond("agt-owner", request.requestId(), CoordinationRequest.Status.ACCEPTED, "review admitted");
+
+        var grants = new PredictionEventStore(temp, project).workGroupProjection().grants();
+        assertEquals(1, grants.size());
+        LaneGrant grant = grants.getFirst();
+        assertEquals("agt-reviewer", grant.targetParticipant());
+        assertEquals(owner.intentId(), grant.targetIntentId());
+        assertEquals(owner.version(), grant.claimEpoch());
+        assertTrue(service.owns("agt-owner", ResourceSelector.pathExact("src/task_tracker.py")));
+        assertFalse(service.owns("agt-reviewer", ResourceSelector.pathExact("src/task_tracker.py")));
+
+        new WorkGroupService(new PredictionEventStore(temp, project), identity)
+                .consume(grant.grantId(), "agt-reviewer", owner.intentId(), owner.version());
+        assertFalse(new PredictionEventStore(temp, project).workGroupProjection().grantAvailable(grant.grantId()));
+
+        // The owner response is idempotent and must not mint a second grant.
+        service.respond("agt-owner", request.requestId(), CoordinationRequest.Status.ACCEPTED, "review admitted");
+        assertEquals(1, new PredictionEventStore(temp, project).workGroupProjection().grants().size());
+    }
+
+    @Test
     void handoffRetainsOwnerUntilAcceptedThenFencesSourceEpoch(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         NodeIdentity identity = NodeIdentity.generate();

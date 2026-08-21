@@ -16,7 +16,7 @@ import java.util.UUID;
 public record CoordinationRequest(UUID requestId, UUID projectId, String requester,
         String target, UUID conflictingIntentId, Kind kind, String proposal, Status status) {
     /** Request categories supported by the first negotiation slice. */
-    public enum Kind { /** Contract negotiation. */ CONTRACT, /** Ownership handoff negotiation. */ HANDOFF, /** Scope revision negotiation. */ SCOPE_REVISION }
+    public enum Kind { /** Contract negotiation. */ CONTRACT, /** Ownership handoff negotiation. */ HANDOFF, /** Scope revision negotiation. */ SCOPE_REVISION, /** Read-only review admission negotiation. */ REVIEW }
     /** Durable request lifecycle. */
     public enum Status { /** Pending. */ PENDING, /** Accepted. */ ACCEPTED, /** Revised. */ REVISED, /** Rejected. */ REJECTED, /** Cancelled. */ CANCELLED, /** Completed. */ COMPLETED }
 

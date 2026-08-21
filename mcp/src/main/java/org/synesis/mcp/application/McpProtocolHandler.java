@@ -34,6 +34,7 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
@@ -831,7 +832,7 @@ public final class McpProtocolHandler {
                         var snapshot = new IntegrationCompatibilityService.SnapshotInput("mcp-candidate", base, paths,
                                 claims.stream().map(ResourceSelector::pathExact).toList(), List.of(), List.of());
                         var result = new WorkspaceIntegrationReadinessService().check(new IntegrationCompatibilityService.CheckRequest(
-                                head, List.of(snapshot), List.of(), Boolean.TRUE.equals(check.get("testsPassed"))));
+                                head, List.of(snapshot), List.of(), testsPassed(check)));
                         List<String> failureCodes = result.failures().stream().map(Enum::name).toList();
                         agentResponse = new AgentResponse(result.accepted() ? AgentStatus.COMPLETED : AgentStatus.BLOCKED,
                                 result.accepted() ? null : AgentReason.INTEGRATION_CONFLICT,
@@ -1108,7 +1109,82 @@ public final class McpProtocolHandler {
         result.put("intents", snapshot.intents().stream().map(McpProtocolHandler::intentMap).toList());
         result.put("requests", snapshot.requests().stream().map(McpProtocolHandler::requestMap).toList());
         result.put("participants", snapshot.participants().stream().map(McpProtocolHandler::participantMap).toList());
+        result.put("groups", snapshot.groups().stream().map(McpProtocolHandler::workGroupMap).toList());
+        result.put("grants", snapshot.grants().stream().map(McpProtocolHandler::laneGrantMap).toList());
+        result.put("snapshots", snapshot.snapshots().stream().map(McpProtocolHandler::snapshotMap).toList());
         return result;
+    }
+
+    /** Converts one logical work group to a JSON-safe map. */
+    private static Map<String, Object> workGroupMap(WorkGroup group) {
+        return Map.of("workGroupId", group.workGroupId().toString(),
+                "projectId", group.projectId().toString(), "goal", group.goal(),
+                "acceptance", group.acceptance(), "version", group.version(),
+                "status", group.status().name());
+    }
+
+    /** Converts one targeted grant to a JSON-safe map. */
+    private static Map<String, Object> laneGrantMap(LaneGrant grant) {
+        return Map.of("grantId", grant.grantId().toString(),
+                "workGroupId", grant.workGroupId().toString(),
+                "targetIntentId", grant.targetIntentId().toString(),
+                "targetParticipant", grant.targetParticipant(),
+                "claimEpoch", grant.claimEpoch(), "singleUse", grant.singleUse());
+    }
+
+    /** Converts one immutable task snapshot to a JSON-safe review projection. */
+    private static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("taskId", snapshot.taskId().toString());
+        result.put("snapshotId", snapshot.snapshotId());
+        result.put("baseCommit", snapshot.baseCommit());
+        result.put("commitSha", snapshot.commitSha());
+        result.put("changedPaths", snapshot.changedPaths());
+        result.put("summary", snapshot.summary());
+        result.put("createdAtMillis", snapshot.createdAtMillis());
+        result.put("laneId", snapshot.provenance().laneId().toString());
+        result.put("claimEpoch", snapshot.provenance().claimEpoch());
+        return result;
+    }
+
+    /**
+     * Reads the bounded validation evidence accepted by the integration-check
+     * compatibility adapter. Explicit structured results remain authoritative;
+     * the legacy provider text forms are accepted only for an unambiguous
+     * passing count and are rejected when failure wording is present.
+     *
+     * @param check provider-supplied integration evidence
+     * @return whether the supplied validation evidence is a pass
+     */
+    private static boolean testsPassed(Map<?, ?> check) {
+        Object explicit = check.get("testsPassed");
+        if (explicit instanceof Boolean value) {
+            return value;
+        }
+        Object testResult = check.get("testResult");
+        if (testResult instanceof Map<?, ?> result) {
+            Object outcome = result.get("outcome");
+            Object exitCode = result.get("exitCode");
+            return "completed".equalsIgnoreCase(String.valueOf(outcome))
+                    && exitCode instanceof Number number && number.intValue() == 0;
+        }
+        if (testResult instanceof String text && passingTestText(text)) {
+            return true;
+        }
+        Object tests = check.get("tests");
+        if (tests instanceof List<?> entries) {
+            return entries.stream().anyMatch(entry -> entry instanceof String text && passingTestText(text))
+                    && entries.stream().noneMatch(entry -> entry instanceof String text
+                            && text.toLowerCase(java.util.Locale.ROOT)
+                                    .matches("(?s).*\\b(?:failed|failure|error|errors|exit\\s*code\\s*[1-9]\\d*)\\b.*"));
+        }
+        return false;
+    }
+
+    private static boolean passingTestText(String text) {
+        String normalized = text.toLowerCase(java.util.Locale.ROOT);
+        return normalized.matches("(?s).*\\b\\d+\\s+passed\\b.*")
+                && !normalized.matches("(?s).*\\b(?:failed|failure|error|errors|exit\\s*code\\s*[1-9]\\d*)\\b.*");
     }
 
     /** Converts one work intent to a JSON-safe map. */
@@ -1327,7 +1403,7 @@ public final class McpProtocolHandler {
             case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
             case "scope_revision" -> List.of("intentId", "selectors", "proposal");
             case "handoff" -> List.of("intentId", "targetParticipant", "proposal", "artifact");
-            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant");
+            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant", "proposal");
             case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
             default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_KIND");
         };
@@ -1341,7 +1417,9 @@ public final class McpProtocolHandler {
             case "contract_request" -> List.of("conflictingIntentId", "proposal");
             case "scope_revision" -> List.of("intentId", "selectors", "proposal");
             case "handoff" -> List.of("intentId", "targetParticipant", "proposal");
-            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant");
+            case "work_group_join" -> payload.containsKey("grantId")
+                    ? List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant")
+                    : List.of("workGroupId", "intentId", "proposal");
             case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
             default -> List.of();
         };
@@ -1358,7 +1436,7 @@ public final class McpProtocolHandler {
             case "contract_proposal" -> "publish";
             case "contract_request", "scope_revision" -> "request_coordination";
             case "handoff" -> "handoff";
-            case "work_group_join" -> "lane_grant_consume";
+            case "work_group_join" -> payload.containsKey("grantId") ? "lane_grant_consume" : "request_coordination";
             default -> kind;
         });
         if ("contract_proposal".equals(kind)) {
@@ -1374,6 +1452,11 @@ public final class McpProtocolHandler {
         }
         if ("work_group_join".equals(kind)) {
             normalized.put("targetParticipant", payload.get("targetParticipant"));
+            if (!payload.containsKey("grantId")) {
+                normalized.put("collaborationIntentId", payload.get("intentId"));
+                normalized.put("collaborationRequestKind", "REVIEW");
+                normalized.put("collaborationProposal", payload.get("proposal"));
+            }
         }
         if ("contract_request".equals(kind) || "scope_revision".equals(kind)) {
             normalized.putIfAbsent("collaborationIntentId", payload.get("conflictingIntentId"));
