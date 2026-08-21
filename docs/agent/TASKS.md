@@ -1727,11 +1727,16 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   their independent Codex/Claude Code sessions; no central orchestrator is
   introduced.
 - Primary failure evidence: The user-supplied previous unattended Todo smoke
-  test is the primary failure input for this task. No raw Todo run artifact was
-  found in the current checkout, so implementation must first reproduce and
-  capture it rather than inventing historical details. Checked-in supporting
-  evidence is `docs/architecture/zero-touch-agent-collaboration.md`, whose
-  two-process path is marked DEMO_ONLY and manually driven, and
+  test was reproduced with two ordinary Codex sessions. Formal evidence is
+  `docs/evidence/syn039-unattended-todo-baseline-2026-08-22.md`; raw JSONL
+  captures remain in the disposable fixture's `baseline-logs` directory.
+  Agent A published `snap_6162f6fd4ff4d51aadb5484609270ab3` after three passing
+  focused tests, but integration returned `integration_failed` /
+  `TESTS_FAILED`. Agent B discovered the WorkGroup but could not obtain a
+  review grant (`COORDINATION_FIELD_REQUIRED:grantId`); no validation item or
+  snapshot projection was exposed. Checked-in supporting evidence remains
+  `docs/architecture/zero-touch-agent-collaboration.md`, whose two-process
+  path is marked DEMO_ONLY and manually driven, and
   `docs/validation/multi-chat-provider-acceptance.md`, which does not claim
   autonomous end-to-end integration.
 - Dependencies: SYN-038 DONE at CP-0458; existing WorkGroup/LaneGrant,
@@ -1781,6 +1786,9 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   rejection-to-implementer handoff; (4) connect accepted work to guarded
   integration and complete WorkGroup cleanup/Doctor closure; (5) rerun the
   unattended Todo experiment with no babysitting and record all evidence.
-- Current state: Active task definition only. No SYN-039 production code has
-  been changed. The exact next implementation action is the reproduction and
-  capture described in step (1).
+- Current state: Baseline reproduction captured; no SYN-039 production code
+  has been changed. The exact next implementation action is to inspect the
+  existing LaneGrant, snapshot projection, validation, completion, and
+  integration transitions and add the smallest deterministic regression fixture
+  for the missing reviewer grant and the contradictory
+  `pytest`-passing/`TESTS_FAILED` completion result.

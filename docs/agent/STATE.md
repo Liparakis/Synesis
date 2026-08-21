@@ -29,6 +29,41 @@ authorized by this task.
 No architecture ADR is required for activation alone. An ADR is required if
 implementation changes a product boundary or protocol guarantee.
 
+## SYN-039 baseline reproduction — CP-0462 pending
+
+The unattended Todo baseline was reproduced on 2026-08-22 in disposable
+fixture `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-baseline-20260822`.
+Formal evidence is
+`docs/evidence/syn039-unattended-todo-baseline-2026-08-22.md`; raw Codex JSONL
+captures remain in the fixture's `baseline-logs` directory.
+
+Agent A created WorkGroup `7c5ab815-5f05-365b-a78b-3478440036af`, lane/intent
+`e167026d-3340-3892-b66c-0cbcb5a1c7ee`, participant
+`agt_19a81786-c8c0-3dc3-a31d-0f8335a28ad0`, and task
+`39168b91-9fc9-37d5-9703-6d06d251620e`. It implemented and tested the Todo
+completion change in an isolated lane (`pytest`: 3 passed) and published
+snapshot `snap_6162f6fd4ff4d51aadb5484609270ab3`. `finish_lane` then returned
+`integration_pending` / `integration_failed`; retry returned
+`integration_conflict` / `TESTS_FAILED` and requested human help.
+
+Agent B discovered the WorkGroup and A's claims but could not obtain a review
+grant: its status request was rejected with
+`COORDINATION_FIELD_NOT_ALLOWED:body`, and `work_group_join` was rejected with
+`COORDINATION_FIELD_REQUIRED:grantId`. No validation item, snapshot projection,
+handoff, accept/reject decision, or actionable reviewer lane was exposed.
+
+At post-run inspection, the fixture control checkout remained at baseline
+`7a5925f`; coordination status reported zero tasks and zero ownerships, while
+three managed worktrees remained. Doctor was `DEGRADED` with two
+`stale_session_lease` warnings, reconciliation recommended, and no repair
+available. This is a failed baseline, not implementation success. No SYN-039
+production code changed.
+
+Exact next implementation action: inspect existing LaneGrant, snapshot
+projection, validation, completion, and integration transitions, then add the
+smallest deterministic regression fixture for the missing reviewer grant and
+the contradictory `pytest`-passing / `TESTS_FAILED` completion result.
+
 ## SYN-038 current verification state
 
 The SYN-038 Codex App Server lifecycle phase is complete and recorded at

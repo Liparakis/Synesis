@@ -1998,3 +1998,36 @@ Append-only operational history.
   SYN-038 focused suite PASS, validators PASS, doctor PASS, bootstrap
   `go test`/`go vet` PASS, and `git diff --check` PASS with existing CRLF
   normalization warnings only. No commit, tag, or SYN-039 created.
+
+# 2026-08-22 — SYN-039 unattended Todo baseline reproduction
+
+- Ran `scripts/agent-resume.ps1`; repository was clean on `master`, active
+  task was SYN-039, and CP-0461 was current. No production code was changed.
+- Created disposable fixture
+  `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-baseline-20260822`
+  with baseline commit `f0c0f99`, then initialized Synesis. Raw Codex JSONL
+  captures are retained under the fixture's `baseline-logs` directory.
+- Launched two ordinary concurrent Codex sessions without manual relay. Agent
+  A created WorkGroup `7c5ab815-5f05-365b-a78b-3478440036af`, lane/intent
+  `e167026d-3340-3892-b66c-0cbcb5a1c7ee`, and task
+  `39168b91-9fc9-37d5-9703-6d06d251620e`; it implemented Todo completion and
+  passed `pytest` with 3 tests.
+- Agent B discovered A's WorkGroup and claims but no actionable review grant.
+  Its status request failed with `COORDINATION_FIELD_NOT_ALLOWED:body`, its
+  join failed with `COORDINATION_FIELD_REQUIRED:grantId`, and status returned
+  no requests. No validation item, snapshot projection, or handoff was
+  exposed.
+- Agent A published snapshot `snap_6162f6fd4ff4d51aadb5484609270ab3`, but
+  `finish_lane` returned `integration_pending` / `integration_failed`; retry
+  returned `integration_conflict` / `TESTS_FAILED` and requested human help.
+  The control checkout stayed at baseline `7a5925f`.
+- Post-run coordination status reported zero tasks and zero ownerships, but
+  three managed worktrees remained. Doctor was `DEGRADED` with two
+  high-confidence `stale_session_lease` warnings, reconciliation recommended,
+  and no repair available. Formal evidence is
+  `docs/evidence/syn039-unattended-todo-baseline-2026-08-22.md`.
+- Result: baseline acceptance FAIL. Exact continuation: inspect existing
+  LaneGrant, snapshot projection, validation, completion, and integration
+  transitions, then add the smallest deterministic regression fixture for the
+  missing reviewer grant and contradictory `pytest`-passing / `TESTS_FAILED`
+  completion result.
