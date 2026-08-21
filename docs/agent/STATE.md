@@ -1,5 +1,34 @@
 # State
 
+## SYN-039 current verification state
+
+SYN-039, Autonomous Workgroup Completion, is ACTIVE. Activation is
+bookkeeping-only; no SYN-039 production code has changed. SYN-038 remains DONE
+at CP-0458 and its prior App Server history, acceptance evidence, and
+`turn_interrupted_command_remained_active` limitation remain authoritative.
+
+The task is grounded in the user-supplied previous unattended Todo smoke-test
+failure. No raw Todo run artifact is present in this checkout, so the first
+implementation action is to reproduce and capture that failure. The checked-in
+zero-touch architecture ledger marks its two-process path DEMO_ONLY and
+manually driven, while the multi-chat provider checklist does not claim
+autonomous end-to-end integration:
+
+- `docs/architecture/zero-touch-agent-collaboration.md`
+- `docs/validation/multi-chat-provider-acceptance.md`
+
+The accepted scope is limited to the existing Synesis model: reviewer/
+validator access to another agent's immutable snapshot without conflicting
+write ownership; structured accept/reject decisions; rejection routing to the
+correct implementer; accepted guarded integration; WorkGroup completion;
+cleanup of pending requests, ownerships, detached coordination state, and
+temporary artifacts; and healthy final Doctor diagnostics. No new orchestrator,
+UI, daemon, Fleet system, centralized launcher, or provider intelligence is
+authorized by this task.
+
+No architecture ADR is required for activation alone. An ADR is required if
+implementation changes a product boundary or protocol guarantee.
+
 ## SYN-038 current verification state
 
 The SYN-038 Codex App Server lifecycle phase is complete and recorded at
@@ -574,9 +603,9 @@ category.
 - MCP tools count remains exactly 10 tools; lifecycle names are explicit and strict.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0190.
 
-## SYN-038 current verification
+## SYN-038 historical implementation verification
 
-- SYN-038 is the sole active implementation task. Repository inspection found
+- Before CP-0458, SYN-038 was the sole active implementation task. Repository inspection found
   the concrete long-lived owner: `CoordinationServeCommand` starts the existing
   `CoordinationHttpServer`; the implementation will retain `ProjectRuntimeHost`
   in that process and add only the Codex loopback route.

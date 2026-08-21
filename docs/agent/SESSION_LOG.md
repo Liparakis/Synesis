@@ -1,5 +1,23 @@
 # Session Log
 
+# 2026-08-22 — SYN-039 activation
+
+- Ran `scripts/agent-resume.ps1`: SYN-038 is DONE at CP-0458, the roadmap had
+  no active task, and the worktree contained only the modified
+  `CoordinationService.java`.
+- Inspected and restored `CoordinationService.java` to the `HEAD` blob. The
+  uncommitted change was mechanical formatting and redundant exception
+  rethrow cleanup with no task record or verification evidence; it was not
+  folded into SYN-039.
+- Reconciled the stale SYN-038 `TEST_MATRIX.md` rows with CP-0458. The limited
+  real-Codex row now records PASS only for its documented scope; deterministic-
+  only cleanup/capacity cases and command-tree cleanup remain explicitly
+  bounded.
+- Activated SYN-039 as a bookkeeping-only task. No production code changed.
+- The user-supplied unattended Todo smoke failure is the primary failure input;
+  no raw copy was found in the repository, so reproducing and capturing it is
+  the exact next implementation action.
+
 # 2026-08-05 — SYN-038 durable project-command closure
 
 - Preserved CP-0457 as prior evidence and committed the verified durable

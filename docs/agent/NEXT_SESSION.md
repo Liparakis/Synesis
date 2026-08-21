@@ -1,20 +1,21 @@
 # Next Session
 
-- SYN-038 is DONE at CP-0458. The prior Codex App Server lifecycle history,
-  CP-0457 evidence, and acceptance records remain preserved.
+- SYN-039 is ACTIVE: Autonomous Workgroup Completion.
+- SYN-038 remains DONE at CP-0458; its prior App Server history, tag,
+  acceptance evidence, and `turn_interrupted_command_remained_active`
+  limitation remain preserved.
 - Repository branch: master.
-- Implementation commit: `ad9fdd8addc9f71e806dfb2da5b5d78f050f87ac`.
-- Final closure checkpoint: CP-0458. The final annotated durable-command tag
-  and remote branch must be verified before any new task is promoted.
-- Final verification passed: full `check`, focused MCP and SYN-038 tests,
-  validators, Go tests/vet, Javadocs/format, doctor, and `git diff --check`.
+- Activation is bookkeeping-only. No SYN-039 production code has changed.
+- Primary failure input: the user-supplied unattended Todo smoke test. Its raw
+  run artifact is not present in this checkout and must be captured first.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`; then verify the pushed closure commit and tag.
-- Exact next code action: none. Do not create SYN-039, alter prior evidence,
-  or begin unrelated work. Keep `SYN-014E` paused.
+  scripts/agent-resume.ps1`; then reproduce the two-agent Todo failure and
+  record the exact evidence before implementation.
+- Exact next code action: none until the reproduction is captured and the
+  existing reviewer, handoff, validation, integration, cleanup, and Doctor
+  boundaries are inspected. Keep `SYN-014E` paused.
 - Facts that must not be forgotten: the MCP surface is exactly ten raw tools;
   `run_command` is direct argv only; `/.synesis/local/`,
   `/.synesis/coordination/`, and `/.codex/hooks.json` are the only Synesis
-  private exclusions; exclusion never proves provider ownership; and the
-  interrupted-turn classification remains
-  `turn_interrupted_command_remained_active`.
+  private exclusions; exclusion never proves provider ownership; and SYN-039
+  must not add a daemon, UI, Fleet system, central orchestrator, or launcher.

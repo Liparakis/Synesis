@@ -1713,3 +1713,74 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   diagnostics, and deterministic fixtures; (5) limited real-Codex acceptance.
 - Scope rule: Do not create SYN-039, add a daemon/listener/tool/event bus/
   provider abstraction/process owner, or claim universal command cancellation.
+
+## SYN-039
+
+- ID: SYN-039
+- Priority: P0
+- Title: Autonomous Workgroup Completion
+- Status: ACTIVE
+- Purpose: Make two ordinary Synesis-aware coding agents complete one shared
+  repository task unattended through the existing durable WorkGroup, isolated
+  mutation lanes, review/validation, handoff, snapshot, integration, cleanup,
+  and doctor boundaries. The agents must coordinate because Synesis is beneath
+  their independent Codex/Claude Code sessions; no central orchestrator is
+  introduced.
+- Primary failure evidence: The user-supplied previous unattended Todo smoke
+  test is the primary failure input for this task. No raw Todo run artifact was
+  found in the current checkout, so implementation must first reproduce and
+  capture it rather than inventing historical details. Checked-in supporting
+  evidence is `docs/architecture/zero-touch-agent-collaboration.md`, whose
+  two-process path is marked DEMO_ONLY and manually driven, and
+  `docs/validation/multi-chat-provider-acceptance.md`, which does not claim
+  autonomous end-to-end integration.
+- Dependencies: SYN-038 DONE at CP-0458; existing WorkGroup/LaneGrant,
+  provider binding, snapshot, completion, integration, cleanup, and Doctor
+  foundations.
+- Scope boundary: reviewer/validator access to another agent's completed
+  immutable snapshot without conflicting write ownership; autonomous handoff
+  and validation; explicit accept/reject results; rejection routing back to
+  the correct implementer; accepted integration into the final project;
+  workgroup completion; cleanup of pending requests, ownerships, detached
+  coordination state, and temporary artifacts; and healthy final diagnostics.
+  Do not add a new orchestration framework, UI, daemon, Fleet system,
+  centralized agent launcher, provider intelligence, or manual relay service.
+- Acceptance criteria: (1) two ordinary Synesis-aware sessions discover and
+  join one durable WorkGroup without user file assignment or message relay;
+  (2) Agent B can inspect and validate Agent A's completed immutable snapshot
+  through a read-only/delegated review path without acquiring A's mutation
+  ownership; (3) validation emits structured accept/reject evidence and a
+  rejection returns durable work to the correct implementer with preserved
+  lineage and idempotent request handling; (4) accepted work integrates through
+  the existing guarded integration path into the final project state without
+  manual intervention; (5) completion closes participants, claims, lane
+  grants, pending requests, detached coordination state, and temporary
+  artifacts; (6) final `synesis doctor` is healthy or reports only explicitly
+  accepted non-blocking warnings; (7) the same unattended two-agent Todo
+  experiment passes end to end: Agent A implements, Agent B reviews/validates,
+  one rejected result routes back correctly, the corrected result is accepted,
+  tests pass, the control checkout contains the completed application, the
+  WorkGroup closes, and no unresolved coordination state remains; and (8) the
+  ten-tool MCP boundary and independent-provider product model remain intact.
+- Required tests: focused review-read authorization and snapshot visibility;
+  rejection/handoff lineage and duplicate replay; ownership and lane fencing;
+  accepted integration and conflict handling; restart/recovery; cleanup of
+  pending coordination state and temporary artifacts; Doctor closure
+  diagnostics; two-process deterministic fixtures; and the real unattended
+  two-agent Todo acceptance with final Git, tests, WorkGroup, and Doctor
+  evidence. Also run strict Javadocs, the affected Gradle checks, deferred and
+  fixture validators, bootstrap Go tests/vet where affected, and
+  `git diff --check`.
+- Required documentation: acceptance reproduction and final evidence report;
+  any architecture ADR only if an actual boundary changes; updated
+  CURRENT.md, GOAL.md, STATE.md, TASKS.md, TEST_MATRIX.md, SESSION_LOG.md,
+  and NEXT_SESSION.md.
+- Implementation order: (1) reproduce and capture the supplied Todo failure;
+  (2) define the smallest read-only reviewer/validator access and evidence
+  contract; (3) implement autonomous validation, explicit decisions, and
+  rejection-to-implementer handoff; (4) connect accepted work to guarded
+  integration and complete WorkGroup cleanup/Doctor closure; (5) rerun the
+  unattended Todo experiment with no babysitting and record all evidence.
+- Current state: Active task definition only. No SYN-039 production code has
+  been changed. The exact next implementation action is the reproduction and
+  capture described in step (1).
