@@ -180,6 +180,12 @@ public final class AgentWorkflowReducer {
                         "kind", "implementation_validation", "payload", payload));
             }
             case RESPOND_COORDINATION -> {
+                Object kind = result.get("nextProtocolKind");
+                Object payload = result.get("nextProtocolPayload");
+                if (kind instanceof String && payload instanceof Map<?, ?>) {
+                    return Map.of("tool", "respond_coordination", "arguments", Map.of(
+                            "kind", kind, "payload", payload));
+                }
                 return Map.of("tool", "respond_coordination", "arguments", Map.of());
             }
             case FINISH_LANE -> {

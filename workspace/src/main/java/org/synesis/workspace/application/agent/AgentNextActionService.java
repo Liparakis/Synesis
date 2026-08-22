@@ -170,8 +170,13 @@ public final class AgentNextActionService {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> pendingCoordination = (List<Map<String, Object>>) collaboration.get("pendingCoordination");
                 if (!pendingCoordination.isEmpty()) {
+                    Map<String, Object> ownerAction = new LinkedHashMap<>(collaboration);
+                    Map<String, Object> reviewAcceptance = reviewAcceptanceAction(pendingCoordination);
+                    if (reviewAcceptance != null) {
+                        ownerAction.putAll(reviewAcceptance);
+                    }
                     return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
-                            AgentNextAction.RESPOND_COORDINATION, collaboration);
+                            AgentNextAction.RESPOND_COORDINATION, ownerAction);
                 }
 
                 // A session that has not established its own active intent is
@@ -456,9 +461,12 @@ public final class AgentNextActionService {
                 .filter(request -> !store.collaborationProjection().inboxAcknowledged(request.requestId()))
                 .filter(request -> participantId.isBlank() || request.target().equals(participantId))
                 .map(AgentNextActionService::requestMap).toList();
+        List<Map<String, Object>> enrichedPending = pending.stream()
+                .map(request -> enrichPendingRequest(request, store))
+                .toList();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("workspace", "isolated");
-        result.put("pending", pending.size());
+        result.put("pending", enrichedPending.size());
         result.put("participants", participants);
         result.put("intents", intents);
         result.put("groups", store.workGroupProjection().groups().stream()
@@ -469,10 +477,59 @@ public final class AgentNextActionService {
                 .map(AgentNextActionService::snapshotMap).toList());
         result.put("currentParticipant", participantId);
         result.put("currentIntent", currentIntent);
-        result.put("pendingCoordination", pending);
+        result.put("pendingCoordination", enrichedPending);
         result.put("reviewActions", reviewActions(store, participantId));
         result.put("claimConflicts", List.of());
         return result;
+    }
+
+    private static Map<String, Object> enrichPendingRequest(Map<String, Object> request,
+            org.synesis.coordination.persistence.PredictionEventStore store) {
+        Map<String, Object> enriched = new LinkedHashMap<>(request);
+        Object conflictingIntent = request.get("conflictingIntentId");
+        if (conflictingIntent instanceof String intentId) {
+            store.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.intentId().toString().equals(intentId))
+                    .findFirst()
+                    .ifPresent(intent -> {
+                        enriched.put("intentId", intent.intentId().toString());
+                        enriched.put("workGroupId", intent.workGroupId().toString());
+                        enriched.put("claimEpoch", intent.version());
+                    });
+        }
+        return enriched;
+    }
+
+    private static Map<String, Object> reviewAcceptanceAction(List<Map<String, Object>> pendingCoordination) {
+        for (Map<String, Object> request : pendingCoordination) {
+            if (!"REVIEW".equals(request.get("kind"))) continue;
+            Object requestId = request.get("requestId");
+            Object intentId = request.get("intentId");
+            Object workGroupId = request.get("workGroupId");
+            Object claimEpoch = request.get("claimEpoch");
+            if (!(requestId instanceof String) || !(intentId instanceof String)
+                    || !(workGroupId instanceof String) || !(claimEpoch instanceof Number)) {
+                continue;
+            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("coordinationRequest", requestId);
+            payload.put("coordinationStatus", CoordinationRequest.Status.ACCEPTED.name());
+            payload.put("proposal", "admitted");
+            Map<String, Object> context = new LinkedHashMap<>();
+            context.put("requestId", requestId);
+            context.put("kind", request.get("kind"));
+            context.put("workGroupId", workGroupId);
+            context.put("intentId", intentId);
+            context.put("claimEpoch", claimEpoch);
+            context.put("requester", request.get("requester"));
+            context.put("target", request.get("target"));
+            return Map.of(
+                    "nextProtocolAction", "respond_coordination",
+                    "nextProtocolKind", "coordination_response",
+                    "nextProtocolPayload", payload,
+                    "nextProtocolContext", context);
+        }
+        return null;
     }
 
     private static List<Map<String, Object>> reviewActions(

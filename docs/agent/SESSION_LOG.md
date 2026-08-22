@@ -2128,3 +2128,24 @@ Append-only operational history.
   with projected owner acceptance, verify `finish_lane` after grant
   consumption, and preserve the next lifecycle blocker. No push and no
   SYN-040.
+
+# 2026-08-22 — SYN-039 owner REVIEW-acceptance slice
+
+- Fixed the smallest projection defect after tracing `get_next_action` through
+  `AgentWorkflowReducer`: `RESPOND_COORDINATION` previously emitted empty
+  arguments even though the owner had a pending REVIEW request. The owner now
+  receives the exact strict response payload plus request/WorkGroup/intent/epoch
+  context. No new tool, role, orchestrator, side channel, or ownership bypass.
+- Added deterministic MCP coverage for exact request projection, correct
+  payload, valid advancement, wrong-request fail-closed behavior, and existing
+  review-grant progression. Focused tests, Javadocs, validators, Go tests/vet,
+  and diff check passed.
+- A fresh app-managed unattended run stopped at initial `overlapping_claim`
+  admission because another participant already owned both Todo paths. It did
+  not reach this slice; no end-to-end success is claimed. Evidence:
+  `docs/evidence/syn039-unattended-todo-owner-acceptance-2026-08-22.md`.
+- Root `check` reproduced the Git subprocess stall at
+  `WorkspaceCliTest.setUp:74` / `ProcessCommandRunner.execute:81` with worker
+  `29372` and child `git.exe` `22824`; existing hardening was preserved.
+- Next action: rerun the exact fresh Todo acceptance with isolated initial
+  ownership. No push and no SYN-040.

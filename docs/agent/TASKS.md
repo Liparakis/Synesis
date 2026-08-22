@@ -1803,3 +1803,20 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   is incomplete. Doctor remains DEGRADED. Exact next action: rerun with the
   owner following the projected acceptance, then verify `finish_lane` and
   preserve any later lifecycle failure. Do not create SYN-040.
+
+## SYN-039 CP-0471 update
+
+Implemented the narrow owner-side REVIEW acceptance projection. The existing
+`respond_coordination` action now carries the exact request ID, strict
+coordination-response payload, and WorkGroup/intent/claim-epoch context needed
+for autonomous execution. Deterministic regression and focused verification
+pass; authorization, replay, ownership, and epoch fencing remain in the
+existing services. Evidence is
+`docs/evidence/syn039-unattended-todo-owner-acceptance-2026-08-22.md`.
+
+The fresh unattended rerun stopped earlier at a typed `overlapping_claim`
+admission failure caused by an already-active participant, so no end-to-end
+success or later lifecycle blocker is claimed. Root `check` remains incomplete
+because the Git subprocess stall reproduced at `WorkspaceCliTest.setUp:74`;
+Doctor remains DEGRADED. Exact next action: rerun the fresh two-agent Todo test
+with isolated initial ownership and observe the projected owner acceptance.

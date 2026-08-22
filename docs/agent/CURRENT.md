@@ -137,3 +137,24 @@ projected `respond_coordination` acceptance action. Verify whether the new
 post-grant `finish_lane` projection is reached; do not add production behavior
 for the provider-side admission stop without new evidence. Do not create
 SYN-040 or broaden SYN-039 speculatively.
+
+## CP-0471 owner REVIEW-acceptance slice
+
+The owner-side projection defect is fixed. For a pending REVIEW request,
+`get_next_action` now includes the exact request-specific strict
+`respond_coordination` payload and WorkGroup/intent/claim-epoch context;
+`AgentWorkflowReducer` carries that payload into the existing executable
+workflow action. The collaboration service still performs authorization and
+replay checks. Deterministic MCP, workspace, coordination, Javadocs,
+validator, Go, vet, and diff checks pass. Evidence:
+`docs/evidence/syn039-unattended-todo-owner-acceptance-2026-08-22.md`.
+
+The fresh app-managed two-agent rerun did not reach this state: initial
+ownership admission returned the existing typed `overlapping_claim` blocker
+because another participant already held both Todo paths. It is not a valid
+end-to-end result for this slice. Root `check` remains incomplete at the known
+Git subprocess stall in `WorkspaceCliTest.setUp:74`; Doctor remains DEGRADED.
+
+Immediate next action: run the exact fresh two-agent Todo acceptance with
+isolated initial ownership, then verify autonomous owner acceptance and
+preserve the next lifecycle failure. Do not broaden SYN-039 or create SYN-040.

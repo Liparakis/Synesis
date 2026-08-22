@@ -111,11 +111,34 @@ final class McpSyn039SliceTest {
         String requestId = nestedField(joinRequest, "request", "requestId");
         assertTrue(requestId != null, joinRequest);
 
-        String accepted = owner.handleMessage(toolCall("respond_coordination",
+        Map<String, Object> ownerNext = innerResult(owner.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("owner_request_pending", ownerNext.get("reason"), ownerNext.toString());
+        assertEquals("respond_coordination", ownerNext.get("nextAction"), ownerNext.toString());
+        Map<String, Object> ownerResult = (Map<String, Object>) ownerNext.get("result");
+        List<Map<String, Object>> pending = (List<Map<String, Object>>) ownerResult.get("pendingCoordination");
+        assertEquals(1, pending.size());
+        Map<String, Object> pendingReview = pending.getFirst();
+        assertEquals(requestId, pendingReview.get("requestId"));
+        assertEquals("REVIEW", pendingReview.get("kind"));
+        assertEquals(ids.intentId.toString(), pendingReview.get("intentId"));
+        assertEquals(ids.groupId.toString(), pendingReview.get("workGroupId"));
+        assertEquals(1L, ((Number) pendingReview.get("claimEpoch")).longValue());
+        Map<String, Object> workflow = (Map<String, Object>) ownerResult.get("workflow");
+        assertEquals("respond_coordination", workflow.get("recommendedTool"));
+        Map<String, Object> responseArguments = (Map<String, Object>) workflow.get("arguments");
+        assertEquals("coordination_response", responseArguments.get("kind"));
+        Map<String, Object> responsePayload = (Map<String, Object>) responseArguments.get("payload");
+        assertEquals(requestId, responsePayload.get("coordinationRequest"));
+        assertEquals("ACCEPTED", responsePayload.get("coordinationStatus"));
+        assertEquals("admitted", responsePayload.get("proposal"));
+
+        String wrongRequest = owner.handleMessage(toolCall("respond_coordination",
                 "{\"kind\":\"coordination_response\",\"payload\":{"
-                        + "\"coordinationRequest\":\"" + requestId + "\","
-                        + "\"coordinationStatus\":\"ACCEPTED\","
-                        + "\"proposal\":\"admitted\"}}"));
+                        + "\"coordinationRequest\":\"00000000-0000-0000-0000-000000000000\","
+                        + "\"coordinationStatus\":\"ACCEPTED\"}}"));
+        assertTrue(wrongRequest.contains("REQUEST_NOT_FOUND"), wrongRequest);
+
+        String accepted = owner.handleMessage(toolCall("respond_coordination", ProviderJson.write(responseArguments)));
         assertTrue(accepted.contains("completed"), accepted);
 
         String status = reviewer.handleMessage(toolCall("request_coordination",

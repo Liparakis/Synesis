@@ -825,3 +825,23 @@ provider/admin metadata (`AGENTS.md`, `.synesis`, `.codex`, `.claude`, `.agents`
   production owner passively reconciled the exact stored thread to STOPPED;
   the old claim was already released, and lifecycle STATUS failed closed with
   `lifecycle_claim_not_acquired` rather than guessing continuation authority.
+
+## SYN-039 CP-0471 owner acceptance projection
+
+The owner-side `respond_coordination` gap is fixed. A pending REVIEW request
+is enriched with its exact request, conflicting intent, WorkGroup, and claim
+epoch. `get_next_action` projects the exact request-specific coordination
+response payload; the workflow reducer exposes it as the existing
+`respond_coordination` recommendation. Wrong request handling remains
+fail-closed in `WorkIntentService`, and the valid response advances through
+the existing review-grant path.
+
+Focused tests, strict Javadocs, validators, Go tests/vet, and `git diff --check`
+passed. Root `check` reproduced the Git subprocess stall at
+`WorkspaceCliTest.setUp:74`, with worker `29372` waiting in
+`ProcessCommandRunner.execute` and child `git.exe` `22824` present. Doctor
+remains DEGRADED. The fresh unattended rerun stopped before this slice at a
+typed `overlapping_claim` admission blocker. Evidence is
+`docs/evidence/syn039-unattended-todo-owner-acceptance-2026-08-22.md`.
+Next action: rerun the exact fresh two-agent Todo acceptance with isolated
+initial ownership and preserve the next actual lifecycle blocker.

@@ -28,3 +28,19 @@
   `/.synesis/coordination/`, and `/.codex/hooks.json` are the only Synesis
   private exclusions; exclusion never proves provider ownership; and SYN-039
   must not add a daemon, UI, Fleet system, central orchestrator, or launcher.
+
+## CP-0471 continuation
+
+The owner REVIEW-acceptance projection is implemented and covered by
+`McpSyn039SliceTest`: the exact request, WorkGroup, intent, epoch, and strict
+`respond_coordination` arguments are now exposed. Focused verification is
+green. The root check remains incomplete at the Git subprocess stall in
+`WorkspaceCliTest.setUp:74`; Doctor remains DEGRADED. The fresh unattended
+rerun stopped before this slice at an existing `overlapping_claim` admission
+blocker, so it must be rerun with an isolated initial owner before drawing a
+SYN-039 lifecycle conclusion. Do not push yet; do not create SYN-040.
+
+Immediate next action: run
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
+launch the exact fresh two-agent Todo acceptance with isolated initial
+ownership and no manual relay. Preserve the next concrete lifecycle failure.
