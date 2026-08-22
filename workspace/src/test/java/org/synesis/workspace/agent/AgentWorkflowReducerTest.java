@@ -70,4 +70,25 @@ final class AgentWorkflowReducerTest {
         assertTrue(((java.util.List<?>) implementationWorkflow.get("permittedOperations"))
                 .contains("publish_capability_implementation"));
     }
+
+    /** A publication-required response recommends the existing finish lane tool. */
+    @Test
+    void snapshotPublicationUsesExistingFinishLaneTool() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+                Path.of("."), "codex", "connection-1");
+
+        AgentResponse publication = reducer.decorate(request,
+                new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                        AgentNextAction.FINISH_LANE,
+                        Map.of("snapshotPublicationRequired", true, "workGroupId", "group-1")));
+        Map<?, ?> result = (Map<?, ?>) publication.result();
+        Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
+        Map<?, ?> arguments = (Map<?, ?>) workflow.get("arguments");
+
+        assertEquals("PUBLISH", workflow.get("type"));
+        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("finish_lane"));
+        assertEquals("finish_lane", workflow.get("recommendedTool"));
+        assertTrue(arguments.isEmpty());
+    }
 }

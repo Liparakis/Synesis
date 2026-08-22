@@ -117,12 +117,6 @@ final class McpSyn039SliceTest {
                         + "\"coordinationStatus\":\"ACCEPTED\","
                         + "\"proposal\":\"admitted\"}}"));
         assertTrue(accepted.contains("completed"), accepted);
-        collaboration.release(project, "codex", "syn039-owner");
-
-        appendReviewableSnapshot(project, ids, claim.intent().participant());
-        String next = reviewer.handleMessage(toolCall("get_next_action", "{}"));
-        assertTrue(next.contains("work_group_join"), next);
-        assertTrue(next.contains("snap_reviewable"), next);
 
         String status = reviewer.handleMessage(toolCall("request_coordination",
                 "{\"kind\":\"collaboration_status\",\"payload\":{}}"));
@@ -140,6 +134,18 @@ final class McpSyn039SliceTest {
                         + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
                         + "\"targetParticipant\":\"" + grant.get("targetParticipant") + "\"}}"));
         assertTrue(consumed.contains("\\\"status\\\":\\\"completed\\\""), consumed);
+
+        String ownerPublication = owner.handleMessage(toolCall("get_next_action", "{}"));
+        assertTrue(ownerPublication.contains("snapshot_publication_required"), ownerPublication);
+        assertTrue(ownerPublication.contains("finish_lane"), ownerPublication);
+        assertTrue(ownerPublication.contains(ids.groupId.toString()), ownerPublication);
+        assertTrue(ownerPublication.contains("claimEpoch"), ownerPublication);
+
+        collaboration.release(project, "codex", "syn039-owner");
+        appendReviewableSnapshot(project, ids, claim.intent().participant());
+        String next = reviewer.handleMessage(toolCall("get_next_action", "{}"));
+        assertTrue(next.contains("review_validation"), next);
+        assertTrue(next.contains("snap_reviewable"), next);
 
         String validationNext = reviewer.handleMessage(toolCall("get_next_action", "{}"));
         assertTrue(validationNext.contains("review_validation"), validationNext);

@@ -161,6 +161,12 @@ public final class AgentNextActionService {
                             : AgentNextAction.REQUEST_COORDINATION;
                     return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, collaboration);
                 }
+                String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+                Map<String, Object> publicationAction = snapshotPublicationAction(store, callerParticipant);
+                if (publicationAction != null) {
+                    return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                            AgentNextAction.FINISH_LANE, publicationAction);
+                }
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> pendingCoordination = (List<Map<String, Object>>) collaboration.get("pendingCoordination");
                 if (!pendingCoordination.isEmpty()) {
@@ -178,7 +184,6 @@ public final class AgentNextActionService {
                 // actionable: the caller must refresh/establish its own
                 // claim first, while discovery remains available in the
                 // bounded result payload.
-                String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
                 boolean callerHasActiveIntent = store.collaborationProjection().activeIntents().stream()
                         .anyMatch(intent -> intent.participant().equals(callerParticipant));
                 if (store.collaborationProjection().activated() && !callerHasActiveIntent) {
@@ -536,6 +541,37 @@ public final class AgentNextActionService {
             }
         }
         return List.copyOf(actions);
+    }
+
+    private static Map<String, Object> snapshotPublicationAction(
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+        var collaboration = store.collaborationProjection();
+        var completion = store.taskCompletionProjection();
+        for (var intent : collaboration.activeIntents()) {
+            if (!intent.participant().equals(participantId)) continue;
+            boolean reviewGrantConsumed = store.workGroupProjection().grants().stream()
+                    .anyMatch(grant -> grant.workGroupId().equals(intent.workGroupId())
+                            && grant.targetIntentId().equals(intent.intentId())
+                            && grant.claimEpoch() == intent.version()
+                            && !grant.targetParticipant().equals(participantId)
+                            && store.workGroupProjection().grantConsumed(grant.grantId()));
+            if (!reviewGrantConsumed) continue;
+            boolean snapshotPublished = completion.allSnapshots().stream().anyMatch(snapshot ->
+                    snapshot.provenance().workGroupId().equals(intent.workGroupId())
+                            && snapshot.provenance().laneId().equals(intent.intentId())
+                            && snapshot.provenance().claimEpoch() == intent.version());
+            if (snapshotPublished) continue;
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("snapshotPublicationRequired", true);
+            result.put("workGroupId", intent.workGroupId().toString());
+            result.put("intentId", intent.intentId().toString());
+            result.put("claimEpoch", intent.version());
+            result.put("participant", participantId);
+            result.put("nextProtocolAction", "finish_lane");
+            result.put("nextProtocolPayload", Map.of("summary", "Publish the completed immutable snapshot"));
+            return result;
+        }
+        return null;
     }
 
     private static Map<String, Object> intentMap(WorkIntent intent) {

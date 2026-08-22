@@ -139,6 +139,8 @@ public final class AgentWorkflowReducer {
             case VALIDATE_IMPLEMENTATION, RESPOND_TO_VALIDATION_REVISION ->
                     new LaneAction("PUBLISH", List.of(reasonCode(reason)),
                             List.of("respond_coordination", "publish_capability_implementation"), true);
+            case FINISH_LANE -> new LaneAction("PUBLISH", List.of(reasonCode(reason)),
+                    List.of("finish_lane", "get_next_action"), true);
             case WAIT -> {
                 boolean capabilityImplementation = reason == AgentReason.IMPLEMENTATION_UNAVAILABLE
                         && result.containsKey("capabilityRequestHandle");
@@ -179,6 +181,9 @@ public final class AgentWorkflowReducer {
             }
             case RESPOND_COORDINATION -> {
                 return Map.of("tool", "respond_coordination", "arguments", Map.of());
+            }
+            case FINISH_LANE -> {
+                return Map.of("tool", "finish_lane", "arguments", Map.of());
             }
             case REQUEST_COORDINATION -> {
                 return Map.of("tool", "request_coordination", "arguments", Map.of());

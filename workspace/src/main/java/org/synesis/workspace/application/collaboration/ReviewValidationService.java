@@ -35,7 +35,22 @@ public final class ReviewValidationService {
     private final SessionAuthorityResolver authorityResolver = new SessionAuthorityResolver(bindingService);
     private final ProviderManualService manualService = new ProviderManualService();
 
-    /** Parameters for one review decision. */
+    /** Creates the review validation service. */
+    public ReviewValidationService() {
+    }
+
+    /** Parameters for one review decision.
+     *
+     * @param projectRoot project root
+     * @param provider provider identifier
+     * @param connectionInstanceId provider connection instance
+     * @param grantId targeted review grant
+     * @param snapshotId immutable snapshot under review
+     * @param intentId reviewed owner intent
+     * @param claimEpoch reviewed owner claim epoch
+     * @param result ACCEPTED or REJECTED decision
+     * @param reason actionable rejection reason, when rejected
+     */
     public record ValidateRequest(Path projectRoot, String provider, String connectionInstanceId,
             UUID grantId, String snapshotId, UUID intentId, long claimEpoch, String result, String reason) {
         /** Validates required request fields and normalizes only structural whitespace. */
@@ -51,7 +66,11 @@ public final class ReviewValidationService {
         }
     }
 
-    /** Consumes no authority itself; records a decision only after the targeted grant was consumed. */
+    /** Consumes no authority itself; records a decision only after the targeted grant was consumed.
+     *
+     * @param request review decision request
+     * @return completed decision or fail-closed blocked response
+     */
     public AgentResponse validate(ValidateRequest request) {
         Objects.requireNonNull(request, "request");
         try {

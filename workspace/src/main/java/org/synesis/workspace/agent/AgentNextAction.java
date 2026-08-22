@@ -55,7 +55,12 @@ public enum AgentNextAction {
     /**
      * Respond to a validation revision request by fixing and republishing the implementation.
      */
-    RESPOND_TO_VALIDATION_REVISION("respond_to_validation_revision");
+    RESPOND_TO_VALIDATION_REVISION("respond_to_validation_revision"),
+
+    /**
+     * Publish the current implementation as an immutable lane snapshot.
+     */
+    FINISH_LANE("finish_lane");
 
     private final String value;
 

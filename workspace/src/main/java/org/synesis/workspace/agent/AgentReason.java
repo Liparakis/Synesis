@@ -203,6 +203,11 @@ public enum AgentReason {
     INTEGRATION_PENDING("integration_pending"),
 
     /**
+     * A consumed review grant requires the implementation lane to publish its snapshot.
+     */
+    SNAPSHOT_PUBLICATION_REQUIRED("snapshot_publication_required"),
+
+    /**
      * Integration attempt encountered git merge conflict.
      */
     INTEGRATION_CONFLICT("integration_conflict"),
