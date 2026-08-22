@@ -2095,3 +2095,36 @@ Append-only operational history.
   the next bounded blocker is producer snapshot publication after reviewer
   admission. Exact evidence is
   `docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`.
+
+# 2026-08-22 — SYN-039 producer snapshot-publication slice
+
+- Preserved CP-0469 and local commits. Added `SNAPSHOT_PUBLICATION_REQUIRED`
+  and the existing `finish_lane` next action. After a consumed targeted REVIEW
+  grant, the owner projection now exposes the exact WorkGroup, intent, claim
+  epoch, and immutable-publication action. A matching published snapshot
+  suppresses the action; ownership, grant, epoch, and fail-closed checks remain
+  intact. No new MCP tool or orchestration layer was added.
+- Added deterministic MCP/workspace regression coverage and recorded the
+  slice in `docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
+  Focused coordination/workspace/MCP tests, `:cli:installDist`, validators,
+  bootstrap Go tests/vet, strict Javadocs, and `git diff --check` pass.
+- Three fresh ordinary two-session Todo reruns were launched with no manual
+  relay or protocol intervention. They all stopped before grant consumption at
+  the existing owner REVIEW request. The final fixture
+  `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-publication-20260822-112743-lf3`
+  exposed `owner_request_pending`, `respond_coordination`, and request
+  `4998d76b-fe4b-4d08-b627-103ed21d4122`; the owner did not accept it. This is
+  the current provider-side blocker, not evidence against the new post-grant
+  publication projection.
+- The serialized root `check` remains incomplete. Focused
+  `:mcp:test --tests org.synesis.mcp.application.McpServerTest` reproduced the
+  Git subprocess startup stall at `McpServerTest.java:181`; worker PID `24912`
+  was blocked through `AgentNextActionService`,
+  `RepositoryPrivateStateService`, `GitProcessRunner`, and
+  `ProcessCommandRunner`. Existing bounded subprocess hardening was preserved;
+  no larger timeout was introduced.
+- Implementation commit: `8d4d854 Make SYN-039 snapshot publication
+  actionable`. Exact next action: run resume, rerun the two-agent Todo flow
+  with projected owner acceptance, verify `finish_lane` after grant
+  consumption, and preserve the next lifecycle blocker. No push and no
+  SYN-040.

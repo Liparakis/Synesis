@@ -22,8 +22,9 @@ work must integrate, and the WorkGroup must close with no unresolved state.
 
 ## Activation boundary
 
-- The reviewer-validation production slice is implemented and under
-  verification; reviewer admission and grant consumption are now covered.
+- The reviewer-validation and producer-publication slices are implemented and
+  under verification; reviewer admission, grant consumption, and the explicit
+  owner publication action are now covered.
 - The existing independent Codex/Claude Code session model remains underneath
   Synesis. Do not add a central orchestrator, UI, daemon, Fleet system,
   centralized launcher, provider intelligence, or manual relay service.
@@ -92,31 +93,37 @@ grants, and immutable snapshots. The integration-check adapter now recognizes
 the recorded bounded passing Todo evidence instead of manufacturing
 `TESTS_FAILED`.
 
-The exact implementation and rerun evidence is recorded in
-`docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`.
+The prior implementation and rerun evidence is recorded in
+`docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`. The
+producer-publication slice is recorded in
+`docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
 
 ## Current failures
 
-The fresh rerun used fixture
-`C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-review-20260822-4`.
-Agent A ran `pytest` 3/3. Agent B autonomously discovered the exact
-`work_group_join` action, submitted the review request, received grant
-`2f248cda-272e-3a3f-bf9c-92d871198670`, and consumed it. The next projected
-action was `SNAPSHOT_PENDING` / `wait`, but Agent A never published a snapshot.
-No validation decision was recorded; WorkGroup
-`ed61f1d9-02d8-350b-8188-e27854dc9a21` remains `ACTIVE`. The control checkout
-remained at managed baseline `4794183`. Doctor is `DEGRADED` with five
-warnings. Full root `check` reached `:mcp:test` but did not complete because
-`McpServerTest.setUp` remained blocked in the Git subprocess runner; it is not
-reported as green.
+The new deterministic projection now tells the owner to publish with the
+existing `finish_lane` tool after a reviewer consumes the targeted grant; a
+matching published snapshot suppresses that action. Three fresh unattended
+Todo reruns are recorded in the new evidence file, but all stopped earlier at
+the existing owner REVIEW-admission step. The final fixture exposed
+`owner_request_pending`, `respond_coordination`, and request
+`4998d76b-fe4b-4d08-b627-103ed21d4122`; the owner did not accept it, so no
+grant or snapshot was reached. This is a provider-side protocol-compliance
+blocker, not evidence that the new publication action failed.
+
+The serialized root `check` remains incomplete. A focused
+`:mcp:test --tests org.synesis.mcp.application.McpServerTest` reproduced the
+Git subprocess stall at `McpServerTest.java:181`; worker `24912` was blocked
+through `AgentNextActionService` → `RepositoryPrivateStateService` →
+`GitProcessRunner` → `ProcessCommandRunner`. It was stopped only after thread
+and child-process evidence was captured. Doctor remains `DEGRADED` with the
+existing documented warnings.
 
 ## Implementation order
 
 1. Reproduce and capture the supplied unattended Todo failure.
 2. Implement reviewer admission and the integration evidence fix.
-3. Make producer completion publish the immutable snapshot after the admitted
-   reviewer consumes its grant, then let the reviewer validate through the
-   existing path and preserve the next failure as a bounded blocker.
+3. Re-run the admitted-review path through the new owner `finish_lane` action;
+   if reached, preserve the next lifecycle failure as a bounded blocker.
 4. Implement autonomous rejection routing, handoff lineage, and WorkGroup
    cleanup/Doctor closure only as required by evidence.
 5. Rerun the same unattended Todo experiment with no babysitting and record
@@ -125,7 +132,8 @@ reported as green.
 ## Immediate next action
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-trace the producer snapshot-publication transition for WorkGroup
-`ed61f1d9-02d8-350b-8188-e27854dc9a21` and add the narrowest deterministic fix
-that lets the admitted reviewer reach the immutable snapshot. Do not create
+rerun the exact two-agent Todo acceptance with the owner executing the
+projected `respond_coordination` acceptance action. Verify whether the new
+post-grant `finish_lane` projection is reached; do not add production behavior
+for the provider-side admission stop without new evidence. Do not create
 SYN-040 or broaden SYN-039 speculatively.

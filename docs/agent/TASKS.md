@@ -1786,20 +1786,20 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   rejection-to-implementer handoff; (4) connect accepted work to guarded
   integration and complete WorkGroup cleanup/Doctor closure; (5) rerun the
   unattended Todo experiment with no babysitting and record all evidence.
-- Current state: The reviewer-validation slice is implemented. Deterministic
-  tests prove typed reviewer admission, exact next-action projection,
-  single-use grant consumption, wrong-participant/snapshot rejection, replay
-  rejection, structured ACCEPT/REJECT payloads, and the existing-model
-  completion transition. Evidence is
-  `docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`.
-  In the fresh unattended rerun, Agent B autonomously discovered the join
-  action, received grant `2f248cda-272e-3a3f-bf9c-92d871198670`, and consumed
-  it. Agent A did not publish a snapshot, so the reviewer correctly reached
-  `SNAPSHOT_PENDING` / `wait`; WorkGroup
-  `ed61f1d9-02d8-350b-8188-e27854dc9a21` remains ACTIVE and no validation or
-  closure occurred. The control checkout stayed at baseline `4794183` and
-  Doctor remained DEGRADED with five warnings. The full root check reached
-  `:mcp:test` but did not complete because `McpServerTest.setUp` blocked in the
-  Git subprocess runner. The next implementation action is to trace and fix
-  only the producer snapshot-publication transition; do not broaden the task
-  or create SYN-040.
+- Current state: The reviewer-validation and producer-publication slices are
+  implemented. Deterministic tests prove typed reviewer admission, exact
+  reviewer/grant projections, single-use and epoch fencing, structured
+  ACCEPT/REJECT payloads, and the existing `finish_lane` publication action
+  after grant consumption. Evidence is
+  `docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
+  Three fresh unattended reruns stopped earlier: Agent B submitted a durable
+  REVIEW request, while Agent A did not execute the projected
+  `respond_coordination` acceptance action. The final request is
+  `4998d76b-fe4b-4d08-b627-103ed21d4122`; no grant or snapshot was reached.
+  This is the current provider-side blocker, not a reason to broaden the
+  production slice. The focused MCP `McpServerTest` reproduced the recurring
+  Git subprocess stall at `McpServerTest.java:181` with worker `24912` blocked
+  through `AgentNextActionService` and `ProcessCommandRunner`; the root check
+  is incomplete. Doctor remains DEGRADED. Exact next action: rerun with the
+  owner following the projected acceptance, then verify `finish_lane` and
+  preserve any later lifecycle failure. Do not create SYN-040.

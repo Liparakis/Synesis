@@ -91,6 +91,44 @@ publication transition after reviewer grant consumption, then rerun the same
 unattended test. Preserve any later lifecycle failure as the next bounded
 SYN-039 blocker; do not create SYN-040.
 
+## SYN-039 producer snapshot-publication slice — CP-0470 follow-up
+
+The producer next-action gap is fixed in commit `8d4d854`. After the targeted
+single-use REVIEW grant is consumed, the owner projection now returns the
+existing `finish_lane` action with `snapshot_publication_required`, the exact
+WorkGroup ID, intent ID, and claim epoch. `AgentWorkflowReducer` renders this
+as a `PUBLISH` workflow and recommends only the existing `finish_lane` tool;
+matching published provenance suppresses the action. No ownership, grant,
+epoch, MCP catalog, or orchestration model was bypassed.
+
+Deterministic evidence is
+`docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
+Focused coordination, workspace, MCP, CLI distribution, validators,
+bootstrap Go tests/vet, and strict Javadocs pass. The root `check` is not
+green: the recurring Git subprocess stall reproduced in focused
+`McpServerTest` at `McpServerTest.java:181`, with worker `24912` blocked from
+`AgentNextActionService` through `RepositoryPrivateStateService`,
+`GitProcessRunner`, and `ProcessCommandRunner`; the existing bounded process
+hardening was preserved.
+
+Three fresh unattended Todo runs did not reach grant consumption. The final
+fixture is
+`C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-publication-20260822-112743-lf3`;
+Agent A passed the Todo tests, Agent B submitted the durable REVIEW request,
+and the owner projection exposed `owner_request_pending`,
+`respond_coordination`, and request
+`4998d76b-fe4b-4d08-b627-103ed21d4122`. The owner did not accept it, so no
+grant or snapshot was produced. This is the current provider-side blocker;
+the new post-grant publication behavior remains deterministic-test verified
+but not real-agent reached. Doctor remains DEGRADED with the existing
+warnings.
+
+Exact next action: run `scripts/agent-resume.ps1`, then rerun the exact
+two-agent Todo acceptance with the owner following the projected
+`respond_coordination` acceptance action. If grant consumption is reached,
+verify the owner executes `finish_lane`; preserve any later lifecycle failure
+as the next SYN-039 blocker. Do not create SYN-040.
+
 ## SYN-038 current verification state
 
 The SYN-038 Codex App Server lifecycle phase is complete and recorded at
