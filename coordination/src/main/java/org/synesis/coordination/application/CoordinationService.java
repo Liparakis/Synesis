@@ -297,6 +297,7 @@ public final class CoordinationService {
                 || command.type() == PredictionEventType.REPAIR_REQUIRED
                 || command.type() == PredictionEventType.REPAIR_LANE_CREATED
                 || command.type() == PredictionEventType.COMPLETION_UNWOUND
+                || command.type() == PredictionEventType.REVIEW_VALIDATION_RECORDED
                 || command.type() == PredictionEventType.WORK_GROUP_STATUS_CHANGED) {
             // Payload-level authorization is enforced in application services before signing.
             return;
@@ -333,7 +334,7 @@ public final class CoordinationService {
                  LANE_GRANT_CONSUMED, LANE_REVOKED, WORK_GROUP_STATUS_CHANGED,
                  PARTICIPANT_SUSPENDED, RECOVERY_SNAPSHOT_HELD, PARTICIPANT_REVOKED,
                  INBOX_ITEM_ACKNOWLEDGED, PARTICIPANT_CANCELLED, LANE_CONTINUATION_ACCEPTED,
-                 PARTICIPANT_DETACHED -> true;
+                 PARTICIPANT_DETACHED, REVIEW_VALIDATION_RECORDED -> true;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");

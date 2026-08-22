@@ -18,6 +18,7 @@ public final class WorkGroupProjection {
     private final Map<UUID, LaneGrant> grants = new LinkedHashMap<>();
     private final Set<UUID> consumedGrants = new HashSet<>();
     private final Set<UUID> revokedGrants = new HashSet<>();
+    private final Map<UUID, ReviewValidationPayload> validations = new LinkedHashMap<>();
 
     /** Creates an empty projection. */
     public WorkGroupProjection() { }
@@ -40,6 +41,7 @@ public final class WorkGroupProjection {
                 groups.putIfAbsent(intent.workGroupId(), new WorkGroup(intent.workGroupId(), intent.projectId(),
                         intent.goal(), intent.acceptance(), 1, WorkGroup.Status.ACTIVE));
             }
+            case REVIEW_VALIDATION_RECORDED -> recordReview(ReviewValidationPayload.decode(event.payload()));
             default -> { }
         }
     }
@@ -52,6 +54,7 @@ public final class WorkGroupProjection {
         WorkGroupProjection copy = new WorkGroupProjection();
         copy.groups.putAll(groups); copy.grants.putAll(grants);
         copy.consumedGrants.addAll(consumedGrants); copy.revokedGrants.addAll(revokedGrants);
+        copy.validations.putAll(validations);
         copy.apply(event);
     }
 
@@ -72,6 +75,35 @@ public final class WorkGroupProjection {
      */
     public synchronized boolean grantAvailable(UUID id) {
         return grants.containsKey(id) && !consumedGrants.contains(id) && !revokedGrants.contains(id);
+    }
+
+    /** Returns whether a grant has been consumed.
+     * @param id grant ID
+     * @return true when consumed
+     */
+    public synchronized boolean grantConsumed(UUID id) { return consumedGrants.contains(id); }
+
+    /** Returns all recorded review decisions.
+     * @return immutable decisions
+     */
+    public synchronized List<ReviewValidationPayload> reviewValidations() {
+        return List.copyOf(validations.values());
+    }
+
+    /** Returns the decision recorded for one grant, when present.
+     * @param grantId grant ID
+     * @return recorded decision
+     */
+    public synchronized Optional<ReviewValidationPayload> reviewValidationForGrant(UUID grantId) {
+        return validations.values().stream().filter(value -> value.grantId().equals(grantId)).findFirst();
+    }
+
+    /** Returns the decision recorded for one snapshot, when present.
+     * @param snapshotId snapshot ID
+     * @return recorded decision
+     */
+    public synchronized Optional<ReviewValidationPayload> reviewValidationForSnapshot(String snapshotId) {
+        return validations.values().stream().filter(value -> value.snapshotId().equals(snapshotId)).findFirst();
     }
 
     private void create(WorkGroup group) throws IOException {
@@ -100,5 +132,20 @@ public final class WorkGroupProjection {
         if (current == null) throw new IOException("WORK_GROUP_NOT_FOUND");
         if (update.version() != current.version() + 1) throw new IOException("WORK_GROUP_VERSION_STALE");
         groups.put(update.workGroupId(), update);
+    }
+
+    private void recordReview(ReviewValidationPayload payload) throws IOException {
+        LaneGrant grant = grants.get(payload.grantId());
+        if (grant == null) throw new IOException("LANE_GRANT_NOT_FOUND");
+        if (!consumedGrants.contains(payload.grantId())) throw new IOException("LANE_GRANT_NOT_CONSUMED");
+        if (!grant.workGroupId().equals(payload.workGroupId())
+                || !grant.targetIntentId().equals(payload.targetIntentId())
+                || !grant.targetParticipant().equals(payload.targetParticipant())
+                || grant.claimEpoch() != payload.claimEpoch()) {
+            throw new IOException("REVIEW_GRANT_BINDING_MISMATCH");
+        }
+        ReviewValidationPayload previous = validations.get(payload.grantId());
+        if (previous != null && !previous.equals(payload)) throw new IOException("REVIEW_DECISION_CONFLICT");
+        validations.put(payload.grantId(), payload);
     }
 }

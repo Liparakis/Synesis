@@ -62,26 +62,34 @@ production code changed.
 
 The first implementation slice is recorded in
 `docs/evidence/syn039-unattended-todo-slice-2026-08-22.md`. `REVIEW` is now a
-typed coordination request. Owner acceptance issues deterministic single-use
-grant `79ef69cd-55bc-3925-a179-ff272cc94d12` targeted at reviewer
-`agt_93870f01-30a0-30f9-bf9b-29ac7de500dd`, for owner intent
-`3db91f37-9ad0-364c-aaab-cb26494fdee1` at claim epoch 1, without changing the
-owner's claims. Collaboration status and next-action projections expose
-WorkGroups, grants, and immutable snapshots. The integration-check adapter no
-longer classifies the recorded `pytest` 3/3 evidence as `TESTS_FAILED`.
+typed coordination request. Owner acceptance issues a deterministic targeted
+single-use grant without changing the owner's claims. Collaboration status and
+next-action projections expose WorkGroups, grants, immutable snapshots, and
+the exact reviewer protocol action. The integration-check adapter no longer
+classifies the recorded `pytest` 3/3 evidence as `TESTS_FAILED`.
 
-The exact unattended rerun used fixture
-`C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-slice-20260822`.
-Agent A published `snap_3e673171518792f078f394bf5dab7cd5`, which integrated to
-clean control commit `97664dc`; the control checkout's `pytest` run reported
-`3 passed in 0.02s`. WorkGroup `932d024e-06ff-3176-bef6-12c33279e486` remains
-ACTIVE because Agent B did not consume the grant or validate the snapshot.
-There is no validation decision or clean-close evidence. Doctor is DEGRADED
-with five warnings and reconciliation recommended.
+The reviewer-validation slice is recorded in
+`docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`. Its
+deterministic focused tests prove valid grant consumption, wrong-reviewer and
+wrong-snapshot rejection, replay rejection, structured ACCEPT/REJECT payloads,
+and reviewer next-action discovery.
 
-Exact next implementation action: make the admitted reviewer validate the
-published snapshot through the existing path. Preserve any later lifecycle
-failure as the next bounded SYN-039 blocker; do not create SYN-040.
+The fresh unattended rerun used fixture
+`C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-review-20260822-4`.
+Agent A ran `pytest` 3/3. Agent B discovered the exact admission action,
+submitted the review request, received grant
+`2f248cda-272e-3a3f-bf9c-92d871198670`, and consumed it autonomously. The next
+action was `SNAPSHOT_PENDING` / `wait`, but Agent A never published an
+immutable snapshot. No validation decision or clean-close evidence exists;
+WorkGroup `ed61f1d9-02d8-350b-8188-e27854dc9a21` remains ACTIVE and the control
+checkout remains at managed baseline `4794183`. Doctor is DEGRADED with five
+warnings. The full root check reached `:mcp:test` but did not complete because
+`McpServerTest.setUp` remained blocked in the Git subprocess runner.
+
+Exact next implementation action: trace and fix only the producer snapshot-
+publication transition after reviewer grant consumption, then rerun the same
+unattended test. Preserve any later lifecycle failure as the next bounded
+SYN-039 blocker; do not create SYN-040.
 
 ## SYN-038 current verification state
 

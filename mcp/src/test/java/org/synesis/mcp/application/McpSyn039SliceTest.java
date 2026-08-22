@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -16,6 +17,11 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.SnapshotProvenance;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /** Locks the SYN-039 reviewer and integration evidence boundaries. */
@@ -92,6 +98,10 @@ final class McpSyn039SliceTest {
         McpProtocolHandler owner = new McpProtocolHandler(sessions, project, "codex", "syn039-owner");
         McpProtocolHandler reviewer = new McpProtocolHandler(sessions, project, "codex", "syn039-reviewer");
 
+        String admissionNext = reviewer.handleMessage(toolCall("get_next_action", "{}"));
+        assertTrue(admissionNext.contains("work_group_join"), admissionNext);
+        assertTrue(admissionNext.contains(ids.groupId.toString()), admissionNext);
+
         String joinRequest = reviewer.handleMessage(toolCall("request_coordination",
                 "{\"kind\":\"work_group_join\",\"payload\":{"
                         + "\"workGroupId\":\"" + ids.groupId + "\","
@@ -107,6 +117,12 @@ final class McpSyn039SliceTest {
                         + "\"coordinationStatus\":\"ACCEPTED\","
                         + "\"proposal\":\"admitted\"}}"));
         assertTrue(accepted.contains("completed"), accepted);
+        collaboration.release(project, "codex", "syn039-owner");
+
+        appendReviewableSnapshot(project, ids, claim.intent().participant());
+        String next = reviewer.handleMessage(toolCall("get_next_action", "{}"));
+        assertTrue(next.contains("work_group_join"), next);
+        assertTrue(next.contains("snap_reviewable"), next);
 
         String status = reviewer.handleMessage(toolCall("request_coordination",
                 "{\"kind\":\"collaboration_status\",\"payload\":{}}"));
@@ -124,6 +140,36 @@ final class McpSyn039SliceTest {
                         + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
                         + "\"targetParticipant\":\"" + grant.get("targetParticipant") + "\"}}"));
         assertTrue(consumed.contains("\\\"status\\\":\\\"completed\\\""), consumed);
+
+        String validationNext = reviewer.handleMessage(toolCall("get_next_action", "{}"));
+        assertTrue(validationNext.contains("review_validation"), validationNext);
+        String wrongSnapshot = reviewer.handleMessage(toolCall("respond_coordination",
+                "{\"kind\":\"review_validation\",\"payload\":{"
+                        + "\"grantId\":\"" + grant.get("grantId") + "\","
+                        + "\"snapshotId\":\"snap_wrong\","
+                        + "\"intentId\":\"" + grant.get("targetIntentId") + "\","
+                        + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
+                        + "\"result\":\"accepted\"}}"));
+        assertTrue(wrongSnapshot.contains("REVIEW_SNAPSHOT"), wrongSnapshot);
+        String validated = reviewer.handleMessage(toolCall("respond_coordination",
+                "{\"kind\":\"review_validation\",\"payload\":{"
+                        + "\"grantId\":\"" + grant.get("grantId") + "\","
+                        + "\"snapshotId\":\"snap_reviewable\","
+                        + "\"intentId\":\"" + grant.get("targetIntentId") + "\","
+                        + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
+                        + "\"result\":\"accepted\"}}"));
+        assertTrue(validated.contains("ACCEPTED"), validated);
+        String replayed = reviewer.handleMessage(toolCall("request_coordination",
+                "{\"kind\":\"work_group_join\",\"payload\":{"
+                        + "\"workGroupId\":\"" + grant.get("workGroupId") + "\","
+                        + "\"grantId\":\"" + grant.get("grantId") + "\","
+                        + "\"intentId\":\"" + grant.get("targetIntentId") + "\","
+                        + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
+                        + "\"targetParticipant\":\"" + grant.get("targetParticipant") + "\"}}"));
+        assertTrue(replayed.contains("LANE_GRANT_REPLAYED"), replayed);
+        String completedStatus = reviewer.handleMessage(toolCall("request_coordination",
+                "{\"kind\":\"collaboration_status\",\"payload\":{}}"));
+        assertTrue(completedStatus.contains("COMPLETED"), completedStatus);
     }
 
     private static String toolCall(String name, String arguments) {
@@ -156,6 +202,21 @@ final class McpSyn039SliceTest {
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes());
         if (process.waitFor() != 0) throw new IllegalStateException(output);
+    }
+
+    private static void appendReviewableSnapshot(Path project, UUIDs ids, String ownerParticipant) throws Exception {
+        var location = new ProjectApplicationService().locate(project);
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        SnapshotProvenance provenance = new SnapshotProvenance(ids.groupId(), ids.intentId(),
+                identity.nodeId(), ownerParticipant, 1, List.of(), List.of(), List.of("PATH_EXACT:todo.py"),
+                "refs/synesis/snapshots/snap_reviewable", "test-integrity");
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(
+                UUID.nameUUIDFromBytes("syn039-review-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                "snap_reviewable", identity.nodeId(), "supervisor", "worker", "owner-session",
+                "HEAD", "HEAD", List.of("todo.py"), List.of(), "reviewable Todo", provenance);
+        store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED,
+                identity.nodeId(), snapshot.encode(), identity);
     }
 
     private record UUIDs(java.util.UUID groupId, java.util.UUID intentId) { }

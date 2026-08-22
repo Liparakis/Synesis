@@ -168,9 +168,10 @@ class AgentNextActionServiceTest {
         AgentResponse response = service.getNextAction(new AgentNextActionService.NextActionRequest(
                 controlRoot, "antigravity", "claim-contender"));
 
-        assertEquals(AgentStatus.BLOCKED, response.status());
-        assertEquals(AgentReason.COORDINATION_INTENT_REQUIRED, response.reason());
-        assertEquals(AgentNextAction.ENSURE_SESSION, response.nextAction());
-        assertTrue(response.toJson().contains("\"claimsRequired\":true"));
+        assertEquals(AgentStatus.READY, response.status());
+        assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());
+        assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
+        assertTrue(response.toJson().contains("REVIEW_ADMISSION_REQUIRED"));
+        assertTrue(response.toJson().contains("work_group_join"));
     }
 }

@@ -61,6 +61,7 @@ public final class PredictionProjection {
                     || type == PredictionEventType.REPAIR_REQUIRED
                     || type == PredictionEventType.REPAIR_LANE_CREATED
                     || type == PredictionEventType.COMPLETION_UNWOUND
+                    || type == PredictionEventType.REVIEW_VALIDATION_RECORDED
                     || type == PredictionEventType.DEPENDENCY_INVALIDATED) {
                 return null;
             }
@@ -100,7 +101,8 @@ public final class PredictionProjection {
                  PARTICIPANT_SUSPENDED, RECOVERY_SNAPSHOT_HELD, PARTICIPANT_REVOKED,
                  INBOX_ITEM_ACKNOWLEDGED, PARTICIPANT_CANCELLED, LANE_CONTINUATION_ACCEPTED,
                  PARTICIPANT_DETACHED, COMPLETION_PREPARED, INTEGRATION_BLOCKED,
-                 REPAIR_REQUIRED, REPAIR_LANE_CREATED, COMPLETION_UNWOUND -> current;
+                 REPAIR_REQUIRED, REPAIR_LANE_CREATED, COMPLETION_UNWOUND,
+                 REVIEW_VALIDATION_RECORDED -> current;
         };
     }
 
@@ -136,7 +138,7 @@ public final class PredictionProjection {
                  INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
                  INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
                  COMPLETION_PREPARED, INTEGRATION_BLOCKED, REPAIR_REQUIRED, REPAIR_LANE_CREATED,
-                 COMPLETION_UNWOUND -> false;
+                 COMPLETION_UNWOUND, REVIEW_VALIDATION_RECORDED -> false;
             default -> true;
         };
     }

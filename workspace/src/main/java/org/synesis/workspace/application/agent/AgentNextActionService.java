@@ -151,6 +151,17 @@ public final class AgentNextActionService {
                 org.synesis.coordination.domain.capability.CapabilityRequestProjection capProj = store.capabilityRequestProjection();
                 Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
                 @SuppressWarnings("unchecked")
+                List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) collaboration.get("reviewActions");
+                if (!reviewActions.isEmpty()) {
+                    Map<String, Object> review = reviewActions.getFirst();
+                    String protocolAction = String.valueOf(review.get("nextProtocolAction"));
+                    AgentNextAction next = "respond_coordination".equals(protocolAction)
+                            ? AgentNextAction.RESPOND_COORDINATION
+                            : "wait".equals(protocolAction) ? AgentNextAction.WAIT
+                            : AgentNextAction.REQUEST_COORDINATION;
+                    return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, collaboration);
+                }
+                @SuppressWarnings("unchecked")
                 List<Map<String, Object>> pendingCoordination = (List<Map<String, Object>>) collaboration.get("pendingCoordination");
                 if (!pendingCoordination.isEmpty()) {
                     return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
@@ -454,8 +465,77 @@ public final class AgentNextActionService {
         result.put("currentParticipant", participantId);
         result.put("currentIntent", currentIntent);
         result.put("pendingCoordination", pending);
+        result.put("reviewActions", reviewActions(store, participantId));
         result.put("claimConflicts", List.of());
         return result;
+    }
+
+    private static List<Map<String, Object>> reviewActions(
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+        List<Map<String, Object>> actions = new ArrayList<>();
+        var projection = store.workGroupProjection();
+        for (LaneGrant grant : projection.grants()) {
+            if (!grant.targetParticipant().equals(participantId)) continue;
+            TaskSnapshotRecord snapshot = store.taskCompletionProjection().allSnapshots().stream()
+                    .filter(value -> value.provenance().workGroupId().equals(grant.workGroupId()))
+                    .filter(value -> value.provenance().laneId().equals(grant.targetIntentId()))
+                    .filter(value -> value.provenance().claimEpoch() == grant.claimEpoch())
+                    .findFirst().orElse(null);
+            if (snapshot == null && !projection.grantAvailable(grant.grantId())) {
+                Map<String, Object> waiting = new LinkedHashMap<>();
+                waiting.put("state", "SNAPSHOT_PENDING");
+                waiting.put("nextProtocolAction", "wait");
+                waiting.put("nextProtocolKind", "review_validation");
+                waiting.put("nextProtocolPayload", Map.of("grantId", grant.grantId().toString(),
+                        "workGroupId", grant.workGroupId().toString(), "snapshotRequired", true));
+                waiting.put("grant", laneGrantMap(grant));
+                actions.add(waiting);
+                continue;
+            }
+            if (projection.reviewValidationForGrant(grant.grantId()).isPresent()) continue;
+            Map<String, Object> action = new LinkedHashMap<>();
+            action.put("state", projection.grantAvailable(grant.grantId()) ? "GRANT_AVAILABLE" : "VALIDATION_REQUIRED");
+            action.put("nextProtocolAction", projection.grantAvailable(grant.grantId())
+                    ? "request_coordination" : "respond_coordination");
+            action.put("nextProtocolKind", projection.grantAvailable(grant.grantId())
+                    ? "work_group_join" : "review_validation");
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("workGroupId", grant.workGroupId().toString());
+            payload.put("grantId", grant.grantId().toString());
+            payload.put("intentId", grant.targetIntentId().toString());
+            payload.put("claimEpoch", grant.claimEpoch());
+            payload.put("targetParticipant", grant.targetParticipant());
+            if (!projection.grantAvailable(grant.grantId())) {
+                payload.put("snapshotId", snapshot.snapshotId());
+                payload.put("result", "accepted|rejected");
+            }
+            action.put("nextProtocolPayload", payload);
+            action.put("grant", laneGrantMap(grant));
+            if (snapshot != null) action.put("snapshot", snapshotMap(snapshot));
+            actions.add(action);
+        }
+        if (actions.isEmpty() && !participantId.isBlank()
+                && store.collaborationProjection().activeIntents().stream()
+                        .noneMatch(intent -> intent.participant().equals(participantId))) {
+            for (WorkGroup group : projection.groups()) {
+                if (group.status() != WorkGroup.Status.ACTIVE) continue;
+                WorkIntent owner = store.collaborationProjection().activeIntents().stream()
+                        .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
+                        .findFirst().orElse(null);
+                if (owner == null) continue;
+                Map<String, Object> action = new LinkedHashMap<>();
+                action.put("state", "REVIEW_ADMISSION_REQUIRED");
+                action.put("nextProtocolAction", "request_coordination");
+                action.put("nextProtocolKind", "work_group_join");
+                action.put("nextProtocolPayload", Map.of(
+                        "workGroupId", group.workGroupId().toString(),
+                        "intentId", owner.intentId().toString(),
+                        "proposal", "Review the immutable snapshot for this work group"));
+                action.put("workGroup", workGroupMap(group));
+                actions.add(action);
+            }
+        }
+        return List.copyOf(actions);
     }
 
     private static Map<String, Object> intentMap(WorkIntent intent) {
@@ -524,6 +604,8 @@ public final class AgentNextActionService {
         map.put("createdAtMillis", snapshot.createdAtMillis());
         map.put("laneId", snapshot.provenance().laneId().toString());
         map.put("claimEpoch", snapshot.provenance().claimEpoch());
+        map.put("workGroupId", snapshot.provenance().workGroupId().toString());
+        map.put("participant", snapshot.provenance().participant());
         return map;
     }
 

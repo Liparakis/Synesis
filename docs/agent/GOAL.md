@@ -22,8 +22,9 @@
   `docs/evidence/syn038-real-codex-acceptance-2026-08-03.md`,
   `docs/evidence/syn038-real-codex-app-server-acceptance-2026-08-03.md`, and
   ADR-0043.
-- Exact continuation: implement SYN-039 from its first step: reproduce and
-  capture the supplied unattended Todo failure using two ordinary Synesis-aware
-  sessions, then inspect the existing reviewer, handoff, validation,
-  integration, cleanup, and doctor paths before changing production code. Keep
-  `SYN-014E` paused and do not add prerelease compatibility aliases.
+- Exact continuation: run `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`, then trace the producer snapshot-publication
+  transition for WorkGroup `ed61f1d9-02d8-350b-8188-e27854dc9a21` exposed by
+  `docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`.
+  Implement only that next SYN-039 blocker. Keep `SYN-014E` paused and do not
+  create SYN-040 or add prerelease compatibility aliases.

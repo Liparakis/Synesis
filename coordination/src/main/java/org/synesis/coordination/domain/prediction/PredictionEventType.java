@@ -232,7 +232,9 @@ public enum PredictionEventType {
     /** Atomically transfers reserved selectors into a new repair lane. */
     REPAIR_LANE_CREATED,
     /** Unfences a prepared but unpublished completion at a new claim epoch. */
-    COMPLETION_UNWOUND;
+    COMPLETION_UNWOUND,
+    /** Records an authenticated review decision for an immutable task snapshot. */
+    REVIEW_VALIDATION_RECORDED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -266,6 +268,7 @@ public enum PredictionEventType {
             case REPAIR_REQUIRED -> 67;
             case REPAIR_LANE_CREATED -> 68;
             case COMPLETION_UNWOUND -> 69;
+            case REVIEW_VALIDATION_RECORDED -> 70;
             default -> ordinal();
         };
     }

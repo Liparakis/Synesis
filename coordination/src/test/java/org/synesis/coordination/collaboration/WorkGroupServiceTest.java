@@ -46,4 +46,18 @@ final class WorkGroupServiceTest {
         service.revoke(grantId);
         assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 4));
     }
+
+    @Test
+    void grantCannotBeConsumedByWrongReviewer(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID intentId = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project), identity);
+        service.create(new WorkGroup(groupId, project, "review", "decision", 1, WorkGroup.Status.ACTIVE));
+        UUID grantId = UUID.randomUUID();
+        service.issue(new LaneGrant(grantId, groupId, intentId, "agt-reviewer", 1, true));
+        assertThrows(Exception.class, () -> service.consume(grantId, "agt-other", intentId, 1));
+        service.consume(grantId, "agt-reviewer", intentId, 1);
+    }
 }

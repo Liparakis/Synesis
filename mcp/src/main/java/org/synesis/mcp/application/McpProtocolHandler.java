@@ -20,6 +20,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.agent.AgentTaskCompletionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 import org.synesis.workspace.application.provider.ProviderManualService;
@@ -81,6 +82,7 @@ public final class McpProtocolHandler {
     private final CapabilityResponseService capabilityResponseService;
     private final ImplementationPublicationService publicationService;
     private final ImplementationValidationService validationService;
+    private final ReviewValidationService reviewValidationService;
     private final AgentTaskCompletionService taskCompletionService;
     private final org.synesis.workspace.application.agent.AgentTaskCancellationService taskCancellationService;
     private final WorkspaceCollaborationService collaborationService;
@@ -137,6 +139,7 @@ public final class McpProtocolHandler {
         this.capabilityResponseService = new CapabilityResponseService();
         this.publicationService = new ImplementationPublicationService();
         this.validationService = new ImplementationValidationService();
+        this.reviewValidationService = new ReviewValidationService();
         this.taskCompletionService = new AgentTaskCompletionService();
         this.taskCancellationService = new org.synesis.workspace.application.agent.AgentTaskCancellationService();
         this.collaborationService = new WorkspaceCollaborationService();
@@ -999,7 +1002,18 @@ public final class McpProtocolHandler {
                                                 String.valueOf(payload.get("result")),
                                                 payload.get("reason") == null ? null : String.valueOf(payload.get("reason")),
                                                 ((Number) payload.get("implementationRevision")).intValue(),
-                                                failedTests));
+                                        failedTests));
+                            }
+                            case "review_validation" -> {
+                                agentResponse = reviewValidationService.validate(
+                                        new ReviewValidationService.ValidateRequest(
+                                                activeProjectRoot, provider, connectionInstanceId,
+                                                UUID.fromString(String.valueOf(payload.get("grantId"))),
+                                                String.valueOf(payload.get("snapshotId")),
+                                                UUID.fromString(String.valueOf(payload.get("intentId"))),
+                                                ((Number) payload.get("claimEpoch")).longValue(),
+                                                String.valueOf(payload.get("result")),
+                                                payload.get("reason") == null ? null : String.valueOf(payload.get("reason"))));
                             }
                             case "capability_response" -> {
                                 agentResponse = capabilityResponseService.respondToOwnerRequest(
@@ -1489,8 +1503,9 @@ public final class McpProtocolHandler {
             case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus", "proposal");
             case "inbox_acknowledge" -> List.of("inboxItemId");
             case "inbox_resolve" -> List.of("inboxItemId", "resolution", "proposal");
-                            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason",
+            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason",
                     "failedAcceptanceTests");
+            case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result", "reason");
             default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_RESPONSE_KIND");
         };
         for (String key : payload.keySet()) {
@@ -1504,6 +1519,7 @@ public final class McpProtocolHandler {
             case "inbox_acknowledge" -> List.of("inboxItemId");
             case "inbox_resolve" -> List.of("inboxItemId", "resolution");
             case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result");
+            case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result");
             default -> List.of();
         };
         for (String key : required) {
@@ -1531,6 +1547,19 @@ public final class McpProtocolHandler {
                 if (!(reason instanceof String reasonText) || reasonText.isBlank()) {
                     throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
                 }
+            }
+        }
+        if ("review_validation".equals(kind)) {
+            Object result = payload.get("result");
+            if (!(result instanceof String reviewResult)
+                    || !("accept".equalsIgnoreCase(reviewResult) || "accepted".equalsIgnoreCase(reviewResult)
+                    || "reject".equalsIgnoreCase(reviewResult) || "rejected".equalsIgnoreCase(reviewResult))) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESULT");
+            }
+            if (("reject".equalsIgnoreCase(String.valueOf(result))
+                    || "rejected".equalsIgnoreCase(String.valueOf(result)))
+                    && (!(payload.get("reason") instanceof String reason) || reason.isBlank())) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
             }
         }
         Map<String, Object> normalized = new LinkedHashMap<>();

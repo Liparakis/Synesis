@@ -2066,3 +2066,32 @@ Append-only operational history.
   transitions, then add the smallest deterministic regression fixture for the
   missing reviewer grant and contradictory `pytest`-passing / `TESTS_FAILED`
   completion result.
+
+# 2026-08-22 — SYN-039 reviewer validation and snapshot-publication blocker
+
+- Preserved CP-0467's reviewer-admission and integration work. Added the
+  existing-model typed review-validation payload/event, projection state,
+  reviewer next-action projection, single-use grant consumption path, and
+  structured ACCEPT/REJECT handling. No new MCP tool or orchestration layer
+  was added.
+- Focused coordination, workspace, and MCP tests passed, including valid
+  consumption, wrong reviewer, wrong snapshot, replay, ACCEPT, REJECT, and
+  reviewer next-action fixtures. `git diff --check` passed.
+- Rebuilt `:cli:installDist` successfully and launched two ordinary Codex
+  sessions without manual relay in disposable fixture
+  `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-review-20260822-4`.
+  Agent B discovered `REVIEW_ADMISSION_REQUIRED`, submitted the projected
+  join request, received grant
+  `2f248cda-272e-3a3f-bf9c-92d871198670`, and consumed it. The next action was
+  `SNAPSHOT_PENDING` / `wait`; Agent A never published a snapshot. The
+  WorkGroup `ed61f1d9-02d8-350b-8188-e27854dc9a21` remained ACTIVE, and the
+  control checkout stayed at baseline `4794183`.
+- Doctor for the fixture was `DEGRADED` with five warnings. No cleanup or
+  repair was performed. The full root `check` reached `:mcp:test` but did not
+  complete: `McpServerTest.setUp` remained blocked in
+  `ManagedBaselineTransactionService.prepare` / `ProcessCommandRunner` while
+  starting a Git subprocess. This is not recorded as a green full check.
+- Result: this slice's reviewer admission and grant consumption are verified;
+  the next bounded blocker is producer snapshot publication after reviewer
+  admission. Exact evidence is
+  `docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`.
