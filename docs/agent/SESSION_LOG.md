@@ -1,5 +1,34 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 snapshot-publication projection slice
+
+- Reproduced the owner contradiction with a deterministic MCP fixture:
+  `get_next_action` supplied `nextProtocolPayload.summary` for
+  `snapshot_publication_required`, while `AgentWorkflowReducer` emitted empty
+  `finish_lane` arguments. The exact projected summary was required for the
+  existing completion path to execute.
+- Applied the minimal reducer fix only. The fixture now reaches real
+  `finish_lane`, publishes an immutable `PUBLISHED` snapshot, and exposes its
+  snapshot ID through the reviewer coordination projection. Existing
+  wrong-snapshot, replay, wrong-reviewer, epoch, and fail-closed fixtures
+  remain in scope.
+- Focused SYN-039 tests, Javadocs, deferred/fixture validators, Go vet, and
+  `git diff --check` passed. Bootstrap Go tests retain the three known
+  `update migrations not prepared` failures. Root `check` again reaches the
+  known `McpServerTest` Git subprocess stall and was stopped without changing
+  timeout or behavior.
+- Fresh unattended agent-harness attempts did not yield a valid shared
+  WorkGroup: one failed at `workspace_not_ready`, one saw no peer WorkGroup,
+  and a second retry remained non-terminal until bounded shutdown. Direct
+  preflight against the current bundled MCP did return `ready / isolated`, so
+  these are recorded as harness/configuration evidence rather than a new
+  production readiness defect.
+- Evidence: `docs/evidence/syn039-unattended-todo-snapshot-publication-cp0475-2026-08-24.md`.
+- Exact continuation: run the fresh two-agent acceptance with both MCP
+  processes independently proven current/project-pinned, then preserve the
+  first lifecycle result after corrected `finish_lane` execution. Do not push
+  or create SYN-040.
+
 # 2026-08-22 — SYN-039 activation
 
 - Ran `scripts/agent-resume.ps1`: SYN-038 is DONE at CP-0458, the roadmap had

@@ -16,13 +16,12 @@
 - Evidence: `docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`
   and `docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`; then rerun the exact two-agent Todo acceptance and
-  follow the projected owner `respond_coordination` acceptance action.
-- Exact next code action: verify that an admitted reviewer grant now causes the
-  owner to receive and execute `finish_lane`; preserve any later lifecycle
-  failure as the next SYN-039 blocker. The latest real-agent stop is earlier:
-  the owner did not accept request `4998d76b-fe4b-4d08-b627-103ed21d4122`.
-  Keep `SYN-014E` paused; do not create SYN-040.
+  scripts/agent-resume.ps1`; then run the exact fresh two-agent Todo acceptance
+  with both MCP processes independently verified against the current bundle
+  and initialized project root.
+- Exact next code action: preserve the first lifecycle result after the owner
+  executes the corrected projected `finish_lane` action. Keep `SYN-014E`
+  paused; do not create SYN-040.
 - Facts that must not be forgotten: the MCP surface is exactly ten raw tools;
   `run_command` is direct argv only; `/.synesis/local/`,
   `/.synesis/coordination/`, and `/.codex/hooks.json` are the only Synesis
@@ -88,3 +87,18 @@ publication path, and implement only that narrow protocol fix if confirmed.
 Then rerun the exact unattended Todo test. Keep cleanup, Doctor, ownership,
 integration redesign, the Git stall, and bootstrap migration failures
 separate. Do not push or create SYN-040.
+
+## CP-0475 continuation
+
+The executable `finish_lane` projection now carries the existing summary from
+`nextProtocolPayload`. The deterministic MCP fixture published a real immutable
+snapshot and exposed its ID in reviewer coordination status. Evidence:
+`docs/evidence/syn039-unattended-todo-snapshot-publication-cp0475-2026-08-24.md`.
+
+The fresh agent-harness attempts did not produce a valid shared WorkGroup: one
+stopped at `workspace_not_ready`, one saw no peer WorkGroup, and a second retry
+remained non-terminal until bounded shutdown. Immediate next action: run the
+exact two-agent Todo acceptance with both independent MCP processes verified
+against the current bundled executable and project root, then preserve the
+first post-publication lifecycle blocker. Do not modify production behavior
+speculatively, push, or create SYN-040.

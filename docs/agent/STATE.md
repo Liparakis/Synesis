@@ -922,3 +922,32 @@ control checkout remained clean at baseline `38f63a3`. The Git subprocess stall
 and bootstrap migration-test failures remain independent verification issues.
 The exact next slice is deterministic reproduction and trace of the owner
 `PUBLISH` projection/action; do not broaden SYN-039 or create SYN-040.
+
+## SYN-039 CP-0475 snapshot-publication projection
+
+The deterministic owner fixture reproduced the exact contradiction: the
+`snapshot_publication_required` response included
+`nextProtocolPayload.summary`, but the executable workflow emitted empty
+`finish_lane` arguments. `AgentWorkflowReducer` now carries that existing
+payload into the existing tool. The fixture verified the WorkGroup, intent,
+claim epoch, REVIEW grant consumption, and claimed Todo path; exact projected
+arguments then made `finish_lane` succeed, publish an immutable `PUBLISHED`
+snapshot, and expose its ID in reviewer coordination status. No ownership,
+grant, epoch, readiness, or fail-closed guard was weakened.
+
+Evidence is recorded in
+`docs/evidence/syn039-unattended-todo-snapshot-publication-cp0475-2026-08-24.md`.
+Focused SYN-039/workspace tests, Javadocs, deferred and fixture validators,
+Go vet, and diff checks pass. Bootstrap Go tests retain three migration
+failures (`update migrations not prepared`); root `check` retains the known
+`McpServerTest` Git subprocess stall; Doctor remains DEGRADED.
+
+The fresh CP-0475 agent harness did not produce a valid shared WorkGroup: one
+agent stopped at `workspace_not_ready`, its peer saw no WorkGroup and canceled,
+and a second retry remained non-terminal until bounded shutdown. Direct
+preflight against the current repository bundle did return `ready / isolated`,
+so these attempts are classified as harness/configuration evidence rather than
+a new production readiness defect. Exact next action: run the fresh unattended
+two-agent Todo acceptance with both MCP processes independently verified
+current/project-pinned, then preserve the first post-publication lifecycle
+blocker. Do not create SYN-040 or push.

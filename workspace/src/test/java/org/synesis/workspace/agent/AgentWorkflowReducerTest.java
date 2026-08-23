@@ -81,7 +81,8 @@ final class AgentWorkflowReducerTest {
         AgentResponse publication = reducer.decorate(request,
                 new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
                         AgentNextAction.FINISH_LANE,
-                        Map.of("snapshotPublicationRequired", true, "workGroupId", "group-1")));
+                        Map.of("snapshotPublicationRequired", true, "workGroupId", "group-1",
+                                "nextProtocolPayload", Map.of("summary", "Publish the completed immutable snapshot"))));
         Map<?, ?> result = (Map<?, ?>) publication.result();
         Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
         Map<?, ?> arguments = (Map<?, ?>) workflow.get("arguments");
@@ -89,6 +90,6 @@ final class AgentWorkflowReducerTest {
         assertEquals("PUBLISH", workflow.get("type"));
         assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("finish_lane"));
         assertEquals("finish_lane", workflow.get("recommendedTool"));
-        assertTrue(arguments.isEmpty());
+        assertEquals("Publish the completed immutable snapshot", arguments.get("summary"));
     }
 }

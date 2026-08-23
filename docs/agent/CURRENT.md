@@ -98,17 +98,24 @@ The prior implementation and rerun evidence is recorded in
 producer-publication slice is recorded in
 `docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
 
+The CP-0475 publication slice fixed the executable workflow projection: the
+existing `nextProtocolPayload.summary` is now passed to `finish_lane` instead
+of being discarded. A deterministic MCP fixture reached real `finish_lane`
+execution, produced a `PUBLISHED` immutable snapshot, and exposed its ID in
+the reviewer coordination projection. Evidence is recorded in
+`docs/evidence/syn039-unattended-todo-snapshot-publication-cp0475-2026-08-24.md`.
+
 ## Current failures
 
-The new deterministic projection now tells the owner to publish with the
-existing `finish_lane` tool after a reviewer consumes the targeted grant; a
-matching published snapshot suppresses that action. Three fresh unattended
-Todo reruns are recorded in the new evidence file, but all stopped earlier at
-the existing owner REVIEW-admission step. The final fixture exposed
-`owner_request_pending`, `respond_coordination`, and request
-`4998d76b-fe4b-4d08-b627-103ed21d4122`; the owner did not accept it, so no
-grant or snapshot was reached. This is a provider-side protocol-compliance
-blocker, not evidence that the new publication action failed.
+The CP-0475 deterministic reproduction confirmed that the publication action
+was emitted with an empty executable argument map even though the protocol
+payload supplied the required summary. The minimal reducer fix is verified.
+The first fresh two-agent harness attempt then failed before coordination:
+Agent A remained at `workspace_not_ready` / `ensure_session`, while Agent B
+reached a ready session with no peer WorkGroup and canceled its lane. A second
+fresh attempt remained non-terminal for a bounded five-minute observation and
+was stopped. These are harness/configuration failures, not a valid lifecycle
+result and not a reason to change production readiness behavior.
 
 The serialized root `check` remains incomplete. A focused
 `:mcp:test --tests org.synesis.mcp.application.McpServerTest` reproduced the
@@ -131,11 +138,12 @@ existing documented warnings.
 
 ## Immediate next action
 
-Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-inspect the per-project MCP/session startup path that caused both fresh agents
-to receive `workspace_not_ready` before `ensure_session`; reproduce that
-readiness state with a deterministic fixture before changing production code.
-Do not broaden SYN-039 or create SYN-040.
+Run a fresh two-agent unattended Todo acceptance with both sessions proven to
+use the current repository-bundled MCP and exact project pin; preserve the
+first lifecycle result after the owner executes the corrected projected
+`finish_lane` action. Do not relay messages, manually trigger transitions, or
+broaden SYN-039. Keep the Git stall, bootstrap migration failures, and Doctor
+warnings separate. Do not create SYN-040.
 
 ## CP-0471 owner REVIEW-acceptance slice
 
@@ -212,3 +220,26 @@ implementer does not execute the already-projected snapshot-publication path.
 Implement only that narrow producer transition if the evidence confirms a
 protocol defect. Keep cleanup, Doctor, ownership, integration redesign, the
 Git stall, and bootstrap migration failures separate; do not create SYN-040.
+
+## CP-0475 snapshot-publication projection slice
+
+The exact contradiction was reproduced: `get_next_action` projected
+`snapshot_publication_required` and `nextProtocolPayload.summary`, while the
+workflow reducer emitted empty `finish_lane` arguments. The reducer now carries
+that existing payload into the executable action. The deterministic fixture
+verified the exact WorkGroup, intent, claim epoch, and summary, then executed
+the real MCP `finish_lane` path and observed a `PUBLISHED` immutable snapshot
+visible in reviewer coordination status. Focused MCP/workspace tests and
+Javadocs pass.
+
+The fresh CP-0475 agent harness attempts did not reach a valid shared
+WorkGroup: the first had one readiness failure and one isolated peer with no
+WorkGroup; the second remained non-terminal and was stopped after bounded
+observation. Evidence:
+`docs/evidence/syn039-unattended-todo-snapshot-publication-cp0475-2026-08-24.md`.
+
+Immediate next action: run the exact unattended two-agent Todo acceptance with
+both MCP processes independently verified against the current bundle and
+project root. Preserve the first post-publication lifecycle blocker if the run
+reaches it; do not modify review, cleanup, Doctor, or integration behavior
+speculatively.

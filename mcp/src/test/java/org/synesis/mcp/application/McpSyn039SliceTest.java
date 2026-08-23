@@ -89,7 +89,6 @@ final class McpSyn039SliceTest {
                 bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), Path.of(binding.worktreePath()));
             }
         }
-
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var claim = collaboration.announce(project, "codex", "syn039-owner",
                 "Implement Todo", "Review the completed Todo snapshot",
@@ -201,6 +200,94 @@ final class McpSyn039SliceTest {
         assertTrue(completedStatus.contains("COMPLETED"), completedStatus);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void projectedFinishLanePublishesImmutableSnapshotVisibleToReviewer(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        String ownerPublication = fixture.owner.handleMessage(toolCall("get_next_action", "{}"));
+        Map<String, Object> projection = innerResult(ownerPublication);
+        assertEquals("snapshot_publication_required", projection.get("reason"));
+        assertEquals("finish_lane", projection.get("nextAction"));
+        Map<String, Object> projectedResult = (Map<String, Object>) projection.get("result");
+        assertEquals(fixture.groupId.toString(), projectedResult.get("workGroupId"));
+        assertEquals(fixture.intentId.toString(), projectedResult.get("intentId"));
+        assertEquals(1L, ((Number) projectedResult.get("claimEpoch")).longValue());
+        Map<String, Object> workflow = (Map<String, Object>) projectedResult.get("workflow");
+        assertEquals("finish_lane", workflow.get("recommendedTool"));
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        assertEquals(Map.of("summary", "Publish the completed immutable snapshot"), arguments);
+
+        Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
+                "def add_todo(items, item):\n    return [*items, item]\n\n\ndef remove_todo(items, item):\n    return [value for value in items if value != item]\n");
+        String published = fixture.owner.handleMessage(toolCall("finish_lane", ProviderJson.write(arguments)));
+        Map<String, Object> publishedResult = (Map<String, Object>) innerResult(published).get("result");
+        assertEquals("PUBLISHED", publishedResult.get("snapshotState"), published);
+        String snapshotId = String.valueOf(publishedResult.get("snapshotId"));
+        assertTrue(snapshotId.startsWith("snap_"), published);
+
+        String reviewerStatus = fixture.reviewer.handleMessage(toolCall("request_coordination",
+                "{\"kind\":\"collaboration_status\",\"payload\":{}}"));
+        assertTrue(reviewerStatus.contains(snapshotId), reviewerStatus);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ReviewFixture prepareReviewFixture(Path temp) throws Exception {
+        Path project = temp.resolve("review-publication-project");
+        Files.createDirectories(project);
+        git(project, "init");
+        git(project, "config", "user.name", "SYN-039 Test");
+        git(project, "config", "user.email", "syn039@example.test");
+        Files.writeString(project.resolve("todo.py"), "def add_todo(items, item):\n    return [*items, item]\n");
+        git(project, "add", ".");
+        git(project, "commit", "-m", "baseline");
+
+        new ProjectApplicationService().init(project);
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                project, "codex", "syn039-owner-publication", null, false));
+        sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                project, "codex", "syn039-reviewer-publication", null, false));
+        var location = new ProjectApplicationService().locate(project);
+        var bindings = new ProviderSessionBindingService();
+        for (var binding : bindings.list(location, "codex")) {
+            if (binding.worktreePath() != null) {
+                bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), Path.of(binding.worktreePath()));
+            }
+        }
+        var ownerBinding = bindings.find(location, "codex", "syn039-owner-publication").orElseThrow();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var claim = collaboration.announce(project, "codex", "syn039-owner-publication",
+                "Implement Todo", "Review the completed Todo snapshot",
+                List.of(ResourceSelector.pathExact("todo.py")));
+        UUIDs ids = new UUIDs(claim.intent().workGroupId(), claim.intent().intentId());
+        McpProtocolHandler owner = new McpProtocolHandler(sessions, project, "codex", "syn039-owner-publication");
+        McpProtocolHandler reviewer = new McpProtocolHandler(sessions, project, "codex", "syn039-reviewer-publication");
+        String join = reviewer.handleMessage(toolCall("request_coordination",
+                "{\"kind\":\"work_group_join\",\"payload\":{"
+                        + "\"workGroupId\":\"" + ids.groupId + "\","
+                        + "\"intentId\":\"" + ids.intentId + "\","
+                        + "\"proposal\":\"Review the published Todo snapshot\"}}"));
+        String requestId = nestedField(join, "request", "requestId");
+        Map<String, Object> ownerNext = innerResult(owner.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> ownerResult = (Map<String, Object>) ownerNext.get("result");
+        Map<String, Object> workflow = (Map<String, Object>) ownerResult.get("workflow");
+        Map<String, Object> responseArguments = (Map<String, Object>) workflow.get("arguments");
+        assertEquals(requestId, ((Map<String, Object>) responseArguments.get("payload")).get("coordinationRequest"));
+        owner.handleMessage(toolCall("respond_coordination", ProviderJson.write(responseArguments)));
+        Map<String, Object> status = (Map<String, Object>) innerResult(reviewer.handleMessage(toolCall(
+                "request_coordination", "{\"kind\":\"collaboration_status\",\"payload\":{}}"))).get("result");
+        Map<String, Object> grant = ((List<Map<String, Object>>) status.get("grants")).getFirst();
+        reviewer.handleMessage(toolCall("request_coordination",
+                "{\"kind\":\"work_group_join\",\"payload\":{"
+                        + "\"workGroupId\":\"" + grant.get("workGroupId") + "\","
+                        + "\"grantId\":\"" + grant.get("grantId") + "\","
+                        + "\"intentId\":\"" + grant.get("targetIntentId") + "\","
+                        + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
+                        + "\"targetParticipant\":\"" + grant.get("targetParticipant") + "\"}}"));
+        return new ReviewFixture(Path.of(ownerBinding.worktreePath()), owner, reviewer, ids.groupId, ids.intentId);
+    }
+
     private static String toolCall(String name, String arguments) {
         return "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
                 + "\"params\":{\"name\":\"" + name + "\",\"arguments\":" + arguments + "}}";
@@ -249,4 +336,7 @@ final class McpSyn039SliceTest {
     }
 
     private record UUIDs(java.util.UUID groupId, java.util.UUID intentId) { }
+
+    private record ReviewFixture(Path ownerWorktree, McpProtocolHandler owner, McpProtocolHandler reviewer,
+            UUID groupId, UUID intentId) { }
 }
