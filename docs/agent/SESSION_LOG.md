@@ -1,5 +1,32 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0476 harness preflight
+
+- Created fresh fixture
+  `C:\Users\Liparakis\AppData\Local\Temp\syn039-unattended-todo-cp0476-20260824-001`
+  with project ID `c6fe0862-b75a-4e9f-8d9a-6c0e9aa0ea43`; the fixture remained
+  clean at managed baseline `b6165ec686a1df3518ccc8ffa0567e8ec9bd4df0`.
+- Explicit control connections using the repository-bundled MCP
+  `synesis-mcp.exe` (SHA-256
+  `FAECFCB1B9ED43E9786C922BA880841FCD950FE612B1C359DCD61CD9807FB1BA`,
+  startup `0.1.0-SNAPSHOT`, commit `bc334ac`) passed the required preflight:
+  protocol `2025-06-18`, exactly ten tools, same project, distinct isolated
+  sessions, and `ensure_session(refresh=true)=ready`.
+- Both independent Luna High agents failed before Todo work. Each received
+  exactly `retry_required / workspace_not_ready / ensure_session` on three
+  attempts. No WorkGroup, claim, request, grant, snapshot, validation,
+  integration, or closure state was created; coordination sequence remained
+  zero.
+- This is a harness/configuration blocker because the explicit current-bundle
+  control invocation succeeds against the same fixture. No production code
+  changed. Doctor remains degraded and the Git subprocess stall/bootstrap
+  migration failures remain separately classified.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-harness-preflight-cp0476-2026-08-24.md`.
+- Exact continuation: capture the effective agent-route executable, startup
+  line, project arguments, connection identity, and readiness trace before
+  changing readiness or lifecycle code. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 snapshot-publication projection slice
 
 - Reproduced the owner contradiction with a deterministic MCP fixture:

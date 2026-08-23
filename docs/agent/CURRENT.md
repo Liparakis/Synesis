@@ -117,6 +117,16 @@ fresh attempt remained non-terminal for a bounded five-minute observation and
 was stopped. These are harness/configuration failures, not a valid lifecycle
 result and not a reason to change production readiness behavior.
 
+The CP-0476 fresh fixture passed an explicit two-connection control preflight
+with the current bundled MCP, but both independent agent harnesses failed
+three times at `ensure_session(refresh=true)` with
+`retry_required / workspace_not_ready / ensure_session`. No Todo work or
+coordination lifecycle state was created. The first blocker is therefore the
+agent-route configuration/session mismatch; it is not yet a production
+readiness defect because the same executable and project passed through the
+explicit control route. Evidence:
+`docs/evidence/syn039-unattended-todo-harness-preflight-cp0476-2026-08-24.md`.
+
 The serialized root `check` remains incomplete. A focused
 `:mcp:test --tests org.synesis.mcp.application.McpServerTest` reproduced the
 Git subprocess stall at `McpServerTest.java:181`; worker `24912` was blocked
@@ -138,12 +148,12 @@ existing documented warnings.
 
 ## Immediate next action
 
-Run a fresh two-agent unattended Todo acceptance with both sessions proven to
-use the current repository-bundled MCP and exact project pin; preserve the
-first lifecycle result after the owner executes the corrected projected
-`finish_lane` action. Do not relay messages, manually trigger transitions, or
-broaden SYN-039. Keep the Git stall, bootstrap migration failures, and Doctor
-warnings separate. Do not create SYN-040.
+Capture the effective MCP executable, startup version/commit, project
+arguments, connection identity, and readiness trace from the failing agent
+route, then reconcile it with the passing explicit current-bundle control
+invocation before changing readiness or lifecycle code. Keep the Git stall,
+bootstrap migration failures, and Doctor warnings separate. Do not create
+SYN-040.
 
 ## CP-0471 owner REVIEW-acceptance slice
 
@@ -243,3 +253,27 @@ both MCP processes independently verified against the current bundle and
 project root. Preserve the first post-publication lifecycle blocker if the run
 reaches it; do not modify review, cleanup, Doctor, or integration behavior
 speculatively.
+
+## CP-0476 harness preflight
+
+Evidence is recorded in
+`docs/evidence/syn039-unattended-todo-harness-preflight-cp0476-2026-08-24.md`.
+The fresh fixture and exact repository-bundled MCP passed an explicit
+two-connection control preflight: protocol `2025-06-18`, exactly ten tools,
+the same initialized project ID, distinct isolated worktrees, and
+`ensure_session(refresh=true)=ready`.
+
+Both independent `gpt-5.6-luna` agent harnesses nevertheless failed their
+required preflight three times at `ensure_session(refresh=true)` with the
+typed state `retry_required / workspace_not_ready / ensure_session`. Neither
+agent began Todo work; coordination sequence remained zero and no WorkGroup,
+claim, request, grant, snapshot, validation, integration, or closure state was
+created. This is the first CP-0476 blocker and is not evidence for changing
+production readiness or lifecycle behavior because the same bundled executable
+and project succeed through the explicit control invocation.
+
+Exact next action: capture the effective MCP executable, startup version/commit,
+project arguments, connection identity, and readiness trace from the agent
+route itself, then reconcile that route with the passing control invocation.
+Keep the Git subprocess stall, bootstrap migration failures, and Doctor
+warnings separate. Do not push or create SYN-040.

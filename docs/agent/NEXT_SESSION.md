@@ -16,12 +16,12 @@
 - Evidence: `docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`
   and `docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`; then run the exact fresh two-agent Todo acceptance
-  with both MCP processes independently verified against the current bundle
-  and initialized project root.
-- Exact next code action: preserve the first lifecycle result after the owner
-  executes the corrected projected `finish_lane` action. Keep `SYN-014E`
-  paused; do not create SYN-040.
+  scripts/agent-resume.ps1`; then capture the effective MCP executable,
+  startup version/commit, project arguments, connection identity, and
+  readiness trace from the failing agent route.
+- Exact next code action: reconcile the failing agent route with the passing
+  explicit current-bundle control invocation before changing readiness or
+  lifecycle code. Keep `SYN-014E` paused; do not create SYN-040.
 - Facts that must not be forgotten: the MCP surface is exactly ten raw tools;
   `run_command` is direct argv only; `/.synesis/local/`,
   `/.synesis/coordination/`, and `/.codex/hooks.json` are the only Synesis
@@ -102,3 +102,21 @@ exact two-agent Todo acceptance with both independent MCP processes verified
 against the current bundled executable and project root, then preserve the
 first post-publication lifecycle blocker. Do not modify production behavior
 speculatively, push, or create SYN-040.
+
+## CP-0476 continuation
+
+Evidence is recorded in
+`docs/evidence/syn039-unattended-todo-harness-preflight-cp0476-2026-08-24.md`.
+The exact current bundled MCP passed an explicit two-connection control
+preflight for the fresh fixture: protocol `2025-06-18`, ten tools, same project
+ID, distinct isolated worktrees, and `ensure_session(refresh=true)=ready`.
+
+Both independent Luna High agent harnesses failed before Todo work with three
+repeated `retry_required / workspace_not_ready / ensure_session` results. No
+WorkGroup or lifecycle state was created. Immediate next action: reproduce the
+agent-route difference and record its effective MCP executable, startup line,
+project arguments, connection identity, and readiness trace. Only fix a
+provider/harness distribution or project-pin defect if that evidence proves
+one; do not change production lifecycle code speculatively. Keep the Git stall,
+bootstrap migration failures, and Doctor warnings separate. Do not push or
+create SYN-040.
