@@ -70,3 +70,21 @@ Synesis MCP distribution for both agents, rerun the exact unattended Todo test
 with no relay or manual transitions, and preserve the first lifecycle blocker.
 Keep the Git stall and bootstrap migration-test failures separate. Do not
 push, create SYN-040, or broaden the task.
+
+## CP-0474 continuation
+
+The current-bundle rerun is recorded in
+`docs/evidence/syn039-unattended-todo-cp0474-2026-08-24.md`. Both independent
+Luna High agents used the rebuilt project-pinned MCP executable and reached
+`ready / isolated`. The reviewer discovered the WorkGroup, consumed REVIEW
+grant `496f1893-ca32-3939-82a1-24f860dea86a`, and the implementer passed four
+pytest tests. The first real lifecycle blocker is the implementer's projected
+`PUBLISH` action remaining at `snapshot_publication_required`; no immutable
+snapshot or validation was reached.
+
+Exact next action: reproduce this owner-side `PUBLISH` stop deterministically,
+trace why the implementer does not execute the already-projected snapshot
+publication path, and implement only that narrow protocol fix if confirmed.
+Then rerun the exact unattended Todo test. Keep cleanup, Doctor, ownership,
+integration redesign, the Git stall, and bootstrap migration failures
+separate. Do not push or create SYN-040.

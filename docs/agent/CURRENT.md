@@ -188,7 +188,27 @@ distribution and project-schema-v2 readiness failure. No lifecycle state was
 created. Evidence:
 `docs/evidence/syn039-workspace-readiness-cp0473-2026-08-23.md`.
 
-Immediate next action: reproduce the unattended test with the current bundled
-Synesis MCP distribution installed for both agents, then preserve the first
-post-readiness lifecycle blocker without manual relay. Keep the recurring Git
-stall and bootstrap migration-test failures separate; do not create SYN-040.
+## CP-0474 current-bundle unattended acceptance
+
+The fresh acceptance used two independent GPT-5.6 Luna High agents and the
+rebuilt Windows platform bundle. Both MCP processes launched the current
+`synesis-mcp.exe` with the exact disposable project root. Initialize reported
+protocol `2025-06-18`, the catalog contained exactly ten tools, and both agents
+reached `ready / isolated`.
+
+The run reached the real lifecycle: Agent B discovered WorkGroup
+`33e8329c-fd66-3174-9e3f-f115f6dae550`, autonomously obtained and consumed
+REVIEW grant `496f1893-ca32-3939-82a1-24f860dea86a`, and did not take write
+ownership. Agent A implemented the Todo operation and passed four pytest tests,
+but its projected `PUBLISH` action remained blocked by
+`snapshot_publication_required`; repeated `finish_lane` returned
+`task_not_ready` / `retry`. No snapshot, validation, integration, or closure
+was reached. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0474-2026-08-24.md`.
+
+Immediate next action: reproduce the owner-side `PUBLISH` /
+`snapshot_publication_required` stop deterministically and trace why the
+implementer does not execute the already-projected snapshot-publication path.
+Implement only that narrow producer transition if the evidence confirms a
+protocol defect. Keep cleanup, Doctor, ownership, integration redesign, the
+Git stall, and bootstrap migration failures separate; do not create SYN-040.

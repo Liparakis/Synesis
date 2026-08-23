@@ -2186,3 +2186,29 @@ ownership. No push and no SYN-040.
   The fresh unattended two-agent rerun still stopped before coordination due
   to an incompatible/stale MCP distribution used by the agent harness. No
   WorkGroup or lifecycle state was created. No push and no SYN-040.
+
+# 2026-08-24 — SYN-039 CP-0474 current-bundle unattended acceptance
+
+- Rebuilt `:cli:platformBundle` and configured Codex against the current
+  Windows bundle's `bin/synesis-mcp.exe`, SHA-256
+  `FAECFCB1B9ED43E9786C922BA880841FCD950FE612B1C359DCD61CD9807FB1BA`.
+  Direct preflight reported `0.1.0-SNAPSHOT`, protocol `2025-06-18`, and the
+  exact ten-tool catalog.
+- Launched two independent GPT-5.6 Luna High agents with no relay,
+  assignment, or manual lifecycle transition. Both current-bundle MCP
+  processes were observed with the exact project root and both sessions became
+  `ready / isolated`.
+- Agent A implemented the Todo completion operation and passed four pytest
+  tests. Agent B autonomously discovered WorkGroup
+  `33e8329c-fd66-3174-9e3f-f115f6dae550`, consumed REVIEW grant
+  `496f1893-ca32-3939-82a1-24f860dea86a`, and kept review ownership
+  non-overlapping.
+- The first post-readiness blocker is producer publication: Agent A's durable
+  next action was `PUBLISH` / `snapshot_publication_required`, while repeated
+  `finish_lane` calls returned `task_not_ready` / `retry`. No snapshot,
+  validation, integration, or closure occurred. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0474-2026-08-24.md`.
+- Focused SYN-039/provider/session/coordination/MCP tests passed; deferred and
+  fixture validators, Go vet, and `git diff --check` passed. Doctor remains
+  `DEGRADED` with five warnings. The recurring root Git stall and bootstrap
+  migration-test failures remain separate.

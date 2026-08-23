@@ -889,3 +889,36 @@ harness used an incompatible/stale MCP distribution and reported project
 schema-v2 readiness failure. Exact next action: install/use the current bundled
 Synesis MCP distribution for both agents and rerun the same unattended Todo
 experiment without intervention. Do not create SYN-040.
+
+## SYN-039 CP-0474 current-bundle unattended acceptance
+
+The stale-distribution blocker was isolated without changing production
+lifecycle code. A rebuilt platform bundle was installed into the Codex MCP
+configuration for disposable project
+`C:\Users\Liparakis\AppData\Local\Temp\syn039-unattended-todo-cp0474-20260823-235645`.
+The configured executable was the bundle's `bin/synesis-mcp.exe`; its SHA-256
+was `FAECFCB1B9ED43E9786C922BA880841FCD950FE612B1C359DCD61CD9807FB1BA`.
+Direct preflight reported `0.1.0-SNAPSHOT`, protocol `2025-06-18`, and exactly
+ten tools. Two independent current-bundle MCP processes were observed with
+the exact project root and both sessions reached `ready / isolated`.
+
+The unattended run is recorded in
+`docs/evidence/syn039-unattended-todo-cp0474-2026-08-24.md`. Agent A
+(`agt_1d9ff29b-8df8-3731-86a5-e2b3770eb93f`) implemented the Todo completion
+operation and passed four pytest tests. Agent B
+(`agt_756d9bcc-314d-36ff-bb9c-de9f72bef7f9`) discovered WorkGroup
+`33e8329c-fd66-3174-9e3f-f115f6dae550`, obtained and consumed REVIEW grant
+`496f1893-ca32-3939-82a1-24f860dea86a`, and preserved non-overlapping review
+ownership. Agent A's next action was `PUBLISH` with
+`snapshot_publication_required`; `finish_lane` returned
+`task_not_ready` / `retry`. No snapshot, validation decision, integration, or
+closure occurred. The first real post-readiness blocker is therefore the
+owner's failure to execute the projected snapshot-publication transition.
+
+Final Doctor was `DEGRADED` with five warnings: one stale session lease,
+durable command namespace reconciliation, command retention/capacity, and two
+provider-migration warnings. Coordination status itself was PASS, while the
+control checkout remained clean at baseline `38f63a3`. The Git subprocess stall
+and bootstrap migration-test failures remain independent verification issues.
+The exact next slice is deterministic reproduction and trace of the owner
+`PUBLISH` projection/action; do not broaden SYN-039 or create SYN-040.
