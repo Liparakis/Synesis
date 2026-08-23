@@ -132,11 +132,10 @@ existing documented warnings.
 ## Immediate next action
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-rerun the exact two-agent Todo acceptance with the owner executing the
-projected `respond_coordination` acceptance action. Verify whether the new
-post-grant `finish_lane` projection is reached; do not add production behavior
-for the provider-side admission stop without new evidence. Do not create
-SYN-040 or broaden SYN-039 speculatively.
+inspect the per-project MCP/session startup path that caused both fresh agents
+to receive `workspace_not_ready` before `ensure_session`; reproduce that
+readiness state with a deterministic fixture before changing production code.
+Do not broaden SYN-039 or create SYN-040.
 
 ## CP-0471 owner REVIEW-acceptance slice
 
@@ -158,3 +157,16 @@ Git subprocess stall in `WorkspaceCliTest.setUp:74`; Doctor remains DEGRADED.
 Immediate next action: run the exact fresh two-agent Todo acceptance with
 isolated initial ownership, then verify autonomous owner acceptance and
 preserve the next lifecycle failure. Do not broaden SYN-039 or create SYN-040.
+
+## CP-0472 unattended acceptance result
+
+The fresh two-agent run is recorded in
+`docs/evidence/syn039-unattended-todo-workspace-not-ready-2026-08-23.md`.
+Both independent Luna High agents stopped at the same typed
+`workspace_not_ready` → `ensure_session` recovery projection. No WorkGroup,
+claim, request, grant, snapshot, validation, integration, or closure state was
+created. The fixture remained at coordination sequence zero with zero tasks and
+zero ownerships. This is the first blocker for this run, but it is currently
+classified as per-project MCP/session readiness until reproduced
+deterministically outside the agent harness. No production behavior was
+changed.

@@ -1820,3 +1820,14 @@ success or later lifecycle blocker is claimed. Root `check` remains incomplete
 because the Git subprocess stall reproduced at `WorkspaceCliTest.setUp:74`;
 Doctor remains DEGRADED. Exact next action: rerun the fresh two-agent Todo test
 with isolated initial ownership and observe the projected owner acceptance.
+
+## SYN-039 CP-0472 update
+
+The fresh unattended acceptance did not reach initial work. Both independent
+Luna High agents received the same typed `workspace_not_ready` recovery state
+and could only retry `ensure_session`; no WorkGroup or coordination lifecycle
+state was created. Evidence is
+`docs/evidence/syn039-unattended-todo-workspace-not-ready-2026-08-23.md`.
+Do not modify production code for this result until the per-project MCP/session
+readiness path is reproduced deterministically and shown to be a Synesis
+protocol defect. Do not create SYN-040.

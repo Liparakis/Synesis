@@ -44,3 +44,14 @@ Immediate next action: run
 `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
 launch the exact fresh two-agent Todo acceptance with isolated initial
 ownership and no manual relay. Preserve the next concrete lifecycle failure.
+
+## CP-0472 continuation
+
+The fresh two-agent run stopped before WorkGroup creation: both agents received
+`workspace_not_ready` and a projected `ensure_session` recovery action. The
+fixture remained at coordination sequence zero, with no claims, requests,
+grants, snapshots, validation, integration, or closure. Evidence:
+`docs/evidence/syn039-unattended-todo-workspace-not-ready-2026-08-23.md`.
+Do not change production code yet. First reproduce the same state using a
+deterministic per-project MCP/session fixture and inspect readiness binding.
+Keep the recurring Git stall separate, do not push, and do not create SYN-040.

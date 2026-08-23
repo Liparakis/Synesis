@@ -845,3 +845,21 @@ typed `overlapping_claim` admission blocker. Evidence is
 `docs/evidence/syn039-unattended-todo-owner-acceptance-2026-08-22.md`.
 Next action: rerun the exact fresh two-agent Todo acceptance with isolated
 initial ownership and preserve the next actual lifecycle blocker.
+
+## SYN-039 CP-0472 unattended acceptance
+
+A fresh fixture was initialized at project
+`6148fa85-90b7-4cbc-8400-51d0d43d2541`, baseline `7c8d341`. Two independent
+GPT-5.6 Luna High agents were launched with complementary owner/reviewer-only
+responsibilities and no manual intervention. Both stopped at
+`workspace_not_ready`, with `get_next_action` projecting only
+`RECOVER → ensure_session`; retrying the projected action did not advance.
+There were no participants, claims, intents, requests, grants, snapshots,
+validation decisions, integration attempts, or WorkGroup state. Coordination
+status was PASS at sequence zero; Doctor was DEGRADED with three warnings.
+Evidence: `docs/evidence/syn039-unattended-todo-workspace-not-ready-2026-08-23.md`.
+
+This is not yet a production lifecycle defect because the MCP/session startup
+path was not proven to be project-bound. Immediate next action: reproduce the
+same `workspace_not_ready` state with a deterministic per-project MCP fixture
+and inspect the exact readiness error before implementing anything.

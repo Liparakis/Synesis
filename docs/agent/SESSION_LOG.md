@@ -2148,4 +2148,20 @@ Append-only operational history.
   `WorkspaceCliTest.setUp:74` / `ProcessCommandRunner.execute:81` with worker
   `29372` and child `git.exe` `22824`; existing hardening was preserved.
 - Next action: rerun the exact fresh Todo acceptance with isolated initial
-  ownership. No push and no SYN-040.
+ownership. No push and no SYN-040.
+
+# 2026-08-23 — SYN-039 CP-0472 unattended Todo acceptance
+
+- Created a fresh disposable Git + Synesis fixture with project
+  `6148fa85-90b7-4cbc-8400-51d0d43d2541` and baseline `7c8d341`.
+- Launched two independent GPT-5.6 Luna High agents: Agent A was the sole
+  initial Todo implementer; Agent B was review-only discovery and could not
+  claim Todo paths or create an implementation intent before discovery.
+- Both agents independently stopped at typed `workspace_not_ready`, with
+  `get_next_action` projecting only `RECOVER → ensure_session`. No WorkGroup,
+  claims, requests, grants, snapshots, validation, integration, or closure was
+  created. Coordination status remained PASS at sequence zero; Doctor was
+  DEGRADED with three warnings.
+- No production code changed. The first blocker is recorded as per-project
+  MCP/session readiness pending deterministic reproduction. No push and no
+  SYN-040.
