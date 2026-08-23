@@ -170,3 +170,25 @@ zero ownerships. This is the first blocker for this run, but it is currently
 classified as per-project MCP/session readiness until reproduced
 deterministically outside the agent harness. No production behavior was
 changed.
+
+## CP-0473 workspace-readiness implementation and rerun
+
+The readiness trace identified that Codex's managed global MCP entry omitted
+the initialized project root. `ensure_session` therefore depended on the MCP
+process directory when a provider did not send MCP roots. Codex installation
+now writes the existing `--project <root>` argument through the explicit-root
+configuration path. Fresh provider installation, repeated session ensure, and
+two independent bindings are covered by deterministic tests. Commit:
+`bea47c4`.
+
+The direct MCP process with the generated project-pinned entry returned
+`ready/isolated`. The fresh unattended CP-0473 rerun still stopped before
+coordination because the agent harness reported an incompatible/stale MCP
+distribution and project-schema-v2 readiness failure. No lifecycle state was
+created. Evidence:
+`docs/evidence/syn039-workspace-readiness-cp0473-2026-08-23.md`.
+
+Immediate next action: reproduce the unattended test with the current bundled
+Synesis MCP distribution installed for both agents, then preserve the first
+post-readiness lifecycle blocker without manual relay. Keep the recurring Git
+stall and bootstrap migration-test failures separate; do not create SYN-040.

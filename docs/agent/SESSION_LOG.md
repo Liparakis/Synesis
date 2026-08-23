@@ -2165,3 +2165,24 @@ ownership. No push and no SYN-040.
 - No production code changed. The first blocker is recorded as per-project
   MCP/session readiness pending deterministic reproduction. No push and no
   SYN-040.
+
+# 2026-08-23 — SYN-039 CP-0473 workspace-readiness slice
+
+- Reproduced the project-boundary failure path: Codex's managed MCP entry had
+  no explicit project root, so a provider session without MCP roots fell back
+  to its process directory and failed closed at `workspace_not_ready` →
+  `ensure_session`.
+- Added the smallest fix in `CodexTomlConfiguration` and
+  `ProviderMcpConfigurationService`: project installation now writes the
+  existing `--project <root>` MCP argument. Added fresh provider install,
+  repeated ensure, and two-independent-session regression coverage.
+- Commit `bea47c4 Pin Codex MCP sessions to initialized projects`; evidence:
+  `docs/evidence/syn039-workspace-readiness-cp0473-2026-08-23.md`.
+- Focused tests, Javadocs, validators, Go vet, and diff check passed. Root
+  `check` progressed to the recurring `McpServerTest.setUp:45` Git subprocess
+  stall; exact thread evidence was captured. Bootstrap Go tests separately
+  failed three migration tests with `update migrations not prepared`.
+- Direct MCP with the generated project-pinned entry returned `ready/isolated`.
+  The fresh unattended two-agent rerun still stopped before coordination due
+  to an incompatible/stale MCP distribution used by the agent harness. No
+  WorkGroup or lifecycle state was created. No push and no SYN-040.

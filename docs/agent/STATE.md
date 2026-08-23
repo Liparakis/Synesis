@@ -863,3 +863,29 @@ This is not yet a production lifecycle defect because the MCP/session startup
 path was not proven to be project-bound. Immediate next action: reproduce the
 same `workspace_not_ready` state with a deterministic per-project MCP fixture
 and inspect the exact readiness error before implementing anything.
+
+## SYN-039 CP-0473 workspace-readiness slice
+
+The deterministic trace showed that Codex's managed MCP configuration did not
+pin the initialized project root. When the provider omitted MCP roots, the
+server used its process directory, so `ensure_session` evaluated the wrong
+workspace and correctly failed closed. `CodexTomlConfiguration` now has an
+explicit project-root path used by Codex installation, producing
+`mcp --provider codex --project <root>`. The public legacy overloads remain
+available, and no binding, trust, ownership, process-anchor, or namespace gate
+was bypassed. Commit `bea47c4`; evidence is
+`docs/evidence/syn039-workspace-readiness-cp0473-2026-08-23.md`.
+
+Focused tests, strict Javadocs, validators, Go vet, and diff check passed. The
+root check reached the known Git subprocess stall in
+`McpServerTest.setUp:45`; exact thread evidence is in the evidence file.
+Bootstrap Go tests separately failed three existing migration tests with
+`update migrations not prepared`. Doctor remains DEGRADED with three warnings
+that are not inputs to `WorkspaceReadinessService`.
+
+The direct project-pinned MCP process returned `ready/isolated`, but the fresh
+two-agent rerun still stopped before WorkGroup creation because the agent
+harness used an incompatible/stale MCP distribution and reported project
+schema-v2 readiness failure. Exact next action: install/use the current bundled
+Synesis MCP distribution for both agents and rerun the same unattended Todo
+experiment without intervention. Do not create SYN-040.

@@ -55,3 +55,18 @@ grants, snapshots, validation, integration, or closure. Evidence:
 Do not change production code yet. First reproduce the same state using a
 deterministic per-project MCP/session fixture and inspect readiness binding.
 Keep the recurring Git stall separate, do not push, and do not create SYN-040.
+
+## CP-0473 continuation
+
+The Codex provider configuration now pins the initialized project root with
+`--project`; deterministic provider/session tests pass and direct MCP returns
+`ready/isolated`. Evidence:
+`docs/evidence/syn039-workspace-readiness-cp0473-2026-08-23.md`.
+
+The fresh unattended rerun still stopped before lifecycle creation because the
+agent harness used an incompatible/stale MCP distribution and reported schema
+v2 as unsupported. Immediate next action: install/use the current bundled
+Synesis MCP distribution for both agents, rerun the exact unattended Todo test
+with no relay or manual transitions, and preserve the first lifecycle blocker.
+Keep the Git stall and bootstrap migration-test failures separate. Do not
+push, create SYN-040, or broaden the task.

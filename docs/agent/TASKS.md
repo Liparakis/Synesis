@@ -1831,3 +1831,23 @@ state was created. Evidence is
 Do not modify production code for this result until the per-project MCP/session
 readiness path is reproduced deterministically and shown to be a Synesis
 protocol defect. Do not create SYN-040.
+
+## SYN-039 CP-0473 update
+
+The per-project readiness trace found a provider configuration defect rather
+than a coordination defect: Codex's managed MCP entry omitted the initialized
+project root. Codex installation now emits the existing `--project` argument
+using the explicit-root configuration overload. Fresh provider install,
+repeated `ensure_session`, and two independent ready bindings pass
+deterministically. Commit `bea47c4`; evidence is
+`docs/evidence/syn039-workspace-readiness-cp0473-2026-08-23.md`.
+
+The direct project-pinned MCP process reached `ready/isolated`. The fresh
+unattended two-agent rerun nevertheless stopped before coordination because
+the agent harness used an incompatible/stale MCP distribution and reported
+project schema-v2 readiness failure. No WorkGroup or lifecycle state was
+created. The root Gradle check remains incomplete at the recurring Git
+subprocess stall; bootstrap Go migration tests also remain separately failing.
+Exact next action: install/use the current bundled Synesis MCP distribution
+for both agents and rerun the same unattended Todo test without babysitting.
+Do not create SYN-040.
