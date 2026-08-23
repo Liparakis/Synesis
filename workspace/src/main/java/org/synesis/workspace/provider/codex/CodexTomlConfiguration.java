@@ -52,6 +52,17 @@ public final class CodexTomlConfiguration {
      * @throws IOException when the file cannot be read
      */
     public static Inspection inspect(Path path, Path launcher) throws IOException {
+        return inspect(path, launcher, null);
+    }
+
+    /** Inspects the configured Codex TOML for one explicit project root.
+     * @param path config path
+     * @param launcher stable launcher
+     * @param projectRoot initialized project root, or {@code null} for the legacy unpinned shape
+     * @return inspection result
+     * @throws IOException when the file cannot be read
+     */
+    public static Inspection inspect(Path path, Path launcher, Path projectRoot) throws IOException {
         Objects.requireNonNull(path, "path");
         if (!Files.exists(path)) return new Inspection(Outcome.MISSING, "", "", "");
         byte[] bytes = Files.readAllBytes(path);
@@ -60,7 +71,7 @@ public final class CodexTomlConfiguration {
         if (parsed.outcome != Outcome.UP_TO_DATE && parsed.outcome != Outcome.MIGRATION_REQUIRED) {
             return new Inspection(parsed.outcome, sha(bytes), parsed.unrelated, parsed.synesis);
         }
-        String desired = canonical(desired(launcher));
+        String desired = canonical(desired(launcher, projectRoot));
         String current = canonical(parsed.parentDirect);
         Outcome outcome = desired.equals(current) ? Outcome.UP_TO_DATE : Outcome.MIGRATION_REQUIRED;
         return new Inspection(outcome, sha(bytes), parsed.unrelated, sha(current.getBytes(StandardCharsets.UTF_8)));
@@ -73,8 +84,19 @@ public final class CodexTomlConfiguration {
      * @throws IOException when the file cannot be safely updated
      */
     public static Inspection upsert(Path path, Path launcher) throws IOException {
+        return upsert(path, launcher, null);
+    }
+
+    /** Ensures the Synesis table exists and is current for one explicit project root.
+     * @param path config path
+     * @param launcher stable launcher
+     * @param projectRoot initialized project root, or {@code null} for the legacy unpinned shape
+     * @return result after the operation
+     * @throws IOException when the file cannot be safely updated
+     */
+    public static Inspection upsert(Path path, Path launcher, Path projectRoot) throws IOException {
         Objects.requireNonNull(path, "path");
-        Inspection before = inspect(path, launcher);
+        Inspection before = inspect(path, launcher, projectRoot);
         if (before.outcome() == Outcome.UP_TO_DATE) return before;
         if (before.outcome() == Outcome.MALFORMED || before.outcome() == Outcome.DUPLICATE_SYNSESIS_ENTRY
                 || before.outcome() == Outcome.UNSUPPORTED_SCHEMA) return before;
@@ -84,14 +106,14 @@ public final class CodexTomlConfiguration {
             newline = text.contains("\r\n") ? "\r\n" : "\n";
             Parsed parsed = parse(text);
             String updated = parsed.parentStart < 0
-                    ? appendTable(text, desired(launcher), newline)
-                    : replaceParent(text, parsed, desired(launcher), newline);
+                    ? appendTable(text, desired(launcher, projectRoot), newline)
+                    : replaceParent(text, parsed, desired(launcher, projectRoot), newline);
             atomicWrite(path, updated);
         } else {
             Files.createDirectories(path.toAbsolutePath().normalize().getParent());
-            atomicWrite(path, desired(launcher) + newline);
+            atomicWrite(path, desired(launcher, projectRoot) + newline);
         }
-        return inspect(path, launcher);
+        return inspect(path, launcher, projectRoot);
     }
 
     /** Removes only the Synesis table, preserving nested and unrelated TOML.
@@ -133,14 +155,20 @@ public final class CodexTomlConfiguration {
         return text.substring(0, p.parentStart) + header + nl + direct + nl + suffix + text.substring(p.parentEnd);
     }
 
-    private static String desired(Path launcher) {
+    private static String desired(Path launcher, Path projectRoot) {
         String command = launcher != null && Files.isRegularFile(launcher)
                 ? launcher.toAbsolutePath().normalize().toString()
                 : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
                         ? "synesis-mcp.exe" : "synesis-mcp");
+        String projectArg = projectRoot == null ? "" : ", \"--project\", \""
+                + escapeBasic(projectRoot.toAbsolutePath().normalize().toString()) + "\"";
         return "[mcp_servers.synesis]\n"
                 + "command = '" + escapeLiteral(command) + "'\n"
-                + "args = [\"mcp\", \"--provider\", \"codex\"]";
+                + "args = [\"mcp\", \"--provider\", \"codex\"" + projectArg + "]";
+    }
+
+    private static String escapeBasic(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static String escapeLiteral(String value) {

@@ -2,6 +2,7 @@ package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -13,7 +14,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
 
@@ -234,7 +237,8 @@ final class ProviderApplicationServiceTest {
             assertTrue(parsed.contains("[mcp_servers.other-server]"));
             assertTrue(parsed.contains("[mcp_servers.synesis]"));
             assertTrue(parsed.contains("command = '" + mcpLauncher.toAbsolutePath().normalize() + "'"));
-            assertTrue(parsed.contains("\"mcp\", \"--provider\", \"codex\""));
+            assertTrue(parsed.contains("\"mcp\", \"--provider\", \"codex\", \"--project\""));
+            assertTrue(parsed.contains(root.toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
             Map<?, ?> legacy = (Map<?, ?>) ProviderJson.parse(Files.readString(legacyProjectMcp));
             assertTrue(((Map<?, ?>) legacy.get("mcpServers")).containsKey("other"));
             assertFalse(((Map<?, ?>) legacy.get("mcpServers")).containsKey("synesis"));
@@ -249,6 +253,58 @@ final class ProviderApplicationServiceTest {
             } else {
                 System.setProperty("synesis.mcp.launcher", previousMcp);
             }
+        }
+    }
+
+    @Test
+    void freshCodexInstallPinsProjectAndIndependentSessionsConverge() throws Exception {
+        Path root = Files.createTempDirectory("provider-readiness-");
+        git(root, "init");
+        git(root, "config", "user.name", "Test User");
+        git(root, "config", "user.email", "test@example.com");
+        Files.writeString(root.resolve("README.md"), "# Readiness\n");
+        git(root, "add", ".");
+        git(root, "commit", "-m", "Initial commit");
+
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        Path mcpLauncher = Files.createTempFile("synesis-mcp-", ".exe");
+        String previousLauncher = System.getProperty("synesis.launcher");
+        String previousMcp = System.getProperty("synesis.mcp.launcher");
+        System.setProperty("synesis.launcher", launcher.toString());
+        System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
+        try {
+            ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+            ProviderApplicationService service = new ProviderApplicationService();
+            service.install(location, "codex");
+
+            Path config = ProviderRegistry.find("codex").mcpConfigurationPath(root);
+            String configured = Files.readString(config);
+            assertTrue(configured.contains("\"--project\""));
+            assertTrue(configured.contains(root.toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
+
+            AgentSessionService sessions = new AgentSessionService();
+            AgentSessionService.SessionResolutionRequest first =
+                    new AgentSessionService.SessionResolutionRequest(root, "codex", "fresh-agent-a", null, false);
+            AgentSessionService.SessionResolutionRequest second =
+                    new AgentSessionService.SessionResolutionRequest(root, "codex", "fresh-agent-b", null, false);
+            assertEquals(AgentStatus.READY, sessions.ensureSession(first).status());
+            assertEquals(AgentStatus.READY, sessions.ensureSession(first).status());
+            assertEquals(AgentStatus.READY, sessions.ensureSession(second).status());
+            assertTrue(sessions.resolveSessionContext(first).isIsolatedWorkspace());
+            assertTrue(sessions.resolveSessionContext(second).isIsolatedWorkspace());
+            assertNotEquals(sessions.resolveSessionContext(first).sessionId(),
+                    sessions.resolveSessionContext(second).sessionId());
+        } finally {
+            restoreProperty("synesis.launcher", previousLauncher);
+            restoreProperty("synesis.mcp.launcher", previousMcp);
+        }
+    }
+
+    private static void restoreProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
         }
     }
 

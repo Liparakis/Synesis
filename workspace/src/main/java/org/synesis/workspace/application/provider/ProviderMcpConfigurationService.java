@@ -25,12 +25,14 @@ final class ProviderMcpConfigurationService {
         }
         try {
             if ("codex".equals(provider.id())) {
-                CodexTomlConfiguration.Inspection before = CodexTomlConfiguration.inspect(configPath, launcher);
+                CodexTomlConfiguration.Inspection before = CodexTomlConfiguration.inspect(configPath, launcher,
+                        location.root());
                 if (before.outcome() == CodexTomlConfiguration.Outcome.MALFORMED
                         || before.outcome() == CodexTomlConfiguration.Outcome.DUPLICATE_SYNSESIS_ENTRY) {
                     return "MALFORMED_CONFIG";
                 }
-                CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher);
+                CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher,
+                        location.root());
                 cleanObsoleteProjectFile(location.root().resolve(".codex/mcp.json"));
                 return before.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE
                         && after.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE ? "UNCHANGED" : "INSTALLED";
