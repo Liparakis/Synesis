@@ -16,12 +16,12 @@
 - Evidence: `docs/evidence/syn039-unattended-todo-review-validation-2026-08-22.md`
   and `docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`; then capture the effective MCP executable,
-  startup version/commit, project arguments, connection identity, and
-  readiness trace from the failing agent route.
-- Exact next code action: reconcile the failing agent route with the passing
-  explicit current-bundle control invocation before changing readiness or
-  lifecycle code. Keep `SYN-014E` paused; do not create SYN-040.
+  scripts/agent-resume.ps1`; then rerun the explicit two-agent acceptance with
+  strict exact `get_next_action` execution and no manual relay.
+- Exact next code action: preserve the first typed result after the reviewer
+  submits the projected `request_coordination(work_group_join)` action. No
+  production change is authorized by CP-0477. Keep `SYN-014E` paused; do not
+  create SYN-040.
 - Facts that must not be forgotten: the MCP surface is exactly ten raw tools;
   `run_command` is direct argv only; `/.synesis/local/`,
   `/.synesis/coordination/`, and `/.codex/hooks.json` are the only Synesis

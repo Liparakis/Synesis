@@ -1,5 +1,33 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0477 explicit harness and lifecycle rerun
+
+- Compared the failing agent routes with the direct current-bundle control:
+  one stale installed launcher omitted `--project`; the pinned current-bundle
+  route pointed at a disposable project that no longer existed.
+- Corrected only the acceptance harness by using explicit per-agent Codex CLI
+  MCP overrides for the current bundled executable, exact stable fixture root,
+  provider, and distinct connection IDs. No production code changed.
+- Both independent preflight agents passed: project ID
+  `065d8765-ab19-46c6-bcb2-f919854e95dd`, current bundled MCP, ten tools,
+  `ensure_session=ready`, and isolated distinct worktrees.
+- Full unattended run reached WorkGroup
+  `62f4a6d0-0061-3e3d-8cc5-7536b556782c`, intent
+  `8fcbab57-9293-3321-8945-e5a5fd4af6b9`, claim epoch 1, and implementer
+  `pytest -q` 3/3. The owner called `finish_lane` before review readiness and
+  received `task_not_ready / retry`.
+- The reviewer saw the exact review admission projection but attempted an
+  invalid inbox acknowledgement, received `policy_denied / INBOX_ITEM_NOT_FOUND`,
+  and stopped. No grant, snapshot, validation, integration, or closure state
+  was reached. This is agent action ordering, not a proven production defect.
+- Final Doctor is DEGRADED with eight warnings; stale session leases,
+  command-state warnings, and provider migration remain separate.
+- Evidence: `docs/evidence/syn039-unattended-todo-cp0477-2026-08-24.md`.
+- Exact continuation: rerun the explicit two-agent acceptance with strict
+  exact `get_next_action` execution and preserve the first typed result after
+  the reviewer submits `request_coordination(work_group_join)`. Do not push or
+  create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0476 harness preflight
 
 - Created fresh fixture

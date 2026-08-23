@@ -127,6 +127,17 @@ readiness defect because the same executable and project passed through the
 explicit control route. Evidence:
 `docs/evidence/syn039-unattended-todo-harness-preflight-cp0476-2026-08-24.md`.
 
+CP-0477 then corrected the harness with explicit per-agent current-bundle
+configuration and reached a real WorkGroup. The owner implemented the Todo
+completion change and passed 3 tests, but called `finish_lane` before review
+readiness and received `task_not_ready / retry`. The reviewer saw the exact
+`request_coordination(work_group_join)` review-admission projection, attempted
+an invalid inbox acknowledgement, received `policy_denied / INBOX_ITEM_NOT_FOUND`,
+and stopped. No grant, snapshot, validation, integration, or closure was
+reached. This is agent action ordering, not a proven production protocol
+defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0477-2026-08-24.md`.
+
 The serialized root `check` remains incomplete. A focused
 `:mcp:test --tests org.synesis.mcp.application.McpServerTest` reproduced the
 Git subprocess stall at `McpServerTest.java:181`; worker `24912` was blocked
@@ -149,11 +160,11 @@ existing documented warnings.
 ## Immediate next action
 
 Capture the effective MCP executable, startup version/commit, project
-arguments, connection identity, and readiness trace from the failing agent
-route, then reconcile it with the passing explicit current-bundle control
-invocation before changing readiness or lifecycle code. Keep the Git stall,
-bootstrap migration failures, and Doctor warnings separate. Do not create
-SYN-040.
+arguments, connection identity, and readiness trace from any future failing
+agent route, then rerun the explicit two-agent acceptance with strict exact
+`get_next_action` execution. Preserve the first typed result after the
+reviewer submits the projected review request. Keep the Git stall, bootstrap
+migration failures, and Doctor warnings separate. Do not create SYN-040.
 
 ## CP-0471 owner REVIEW-acceptance slice
 
@@ -253,6 +264,26 @@ both MCP processes independently verified against the current bundle and
 project root. Preserve the first post-publication lifecycle blocker if the run
 reaches it; do not modify review, cleanup, Doctor, or integration behavior
 speculatively.
+
+## CP-0477 explicit harness and lifecycle rerun
+
+The CP-0477 comparison confirmed that one ordinary multi-agent route selected a
+stale installed launcher without `--project`, while a pinned current-bundle
+route failed when its disposable project had disappeared. The acceptance
+harness was corrected with explicit per-agent current-bundle, project,
+provider, and connection-instance overrides; no production code changed.
+
+Both explicit preflight agents passed. The unattended lifecycle reached
+WorkGroup `62f4a6d0-0061-3e3d-8cc5-7536b556782c`, intent
+`8fcbab57-9293-3321-8945-e5a5fd4af6b9`, claim epoch 1, and a passing 3-test
+Todo implementation. The owner called `finish_lane` before review readiness
+and received `task_not_ready / retry`. The reviewer observed the exact
+`REVIEW_ADMISSION_REQUIRED → request_coordination(work_group_join)` projection,
+attempted an invalid inbox acknowledgement, received
+`policy_denied / INBOX_ITEM_NOT_FOUND`, and stopped. No grant, snapshot,
+validation, integration, or closure was reached. This is agent action ordering,
+not a proven production protocol defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0477-2026-08-24.md`.
 
 ## CP-0476 harness preflight
 
