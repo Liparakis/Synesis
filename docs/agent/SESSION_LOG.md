@@ -1,5 +1,33 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0478 exact-action protocol diagnostic
+
+- Created fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0478-001`
+  with project `72b38176-c65c-47a6-942e-cf91eee4348f`, baseline `25bd256`,
+  and managed baseline `7ee03be`.
+- Both independent agents used the current bundled MCP
+  (`0.1.0-SNAPSHOT`, commit `bc334ac`, protocol `2025-06-18`, ten tools),
+  the same project root, distinct connection IDs, and reached
+  `ready / isolated` sessions.
+- Agent A's `IMPLEMENT` projection was action
+  `6995fdb3-51b4-3939-9872-f123eaa804fd`; Agent B's was
+  `4fe9cbb5-1478-3b1a-8066-bf3b613acec0`. Neither projection supplied a
+  specific lifecycle tool or argument because no WorkGroup existed.
+- Both agents selected the unprojected `read_file(".synesis/project.json")`
+  path and received `blocked / invalid_path`. Agent B successfully inspected
+  the metadata with `git show HEAD:.synesis/project.json` and stopped. No
+  claims, edits, WorkGroup, requests, grants, snapshots, validation,
+  integration, or closure were created.
+- Coordination status remained sequence zero with zero tasks and ownerships.
+  Doctor was `DEGRADED` with six existing warnings. No production code
+  changed; the exact evidence is
+  `docs/evidence/syn039-unattended-todo-cp0478-protocol-diagnostic-2026-08-24.md`.
+- Classification: agent-selected hidden-path inspection before lifecycle,
+  not a proven production defect. No second acceptance was run. Exact next
+  action: assess the hidden metadata path contract, then run only a bounded
+  diagnostic with valid initial repository inspection. Do not push or create
+  SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0477 explicit harness and lifecycle rerun
 
 - Compared the failing agent routes with the direct current-bundle control:

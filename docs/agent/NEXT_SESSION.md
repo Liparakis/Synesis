@@ -28,6 +28,26 @@
   private exclusions; exclusion never proves provider ownership; and SYN-039
   must not add a daemon, UI, Fleet system, central orchestrator, or launcher.
 
+## CP-0478 continuation
+
+Evidence is recorded in
+`docs/evidence/syn039-unattended-todo-cp0478-protocol-diagnostic-2026-08-24.md`.
+Both agents used the current bundled MCP, the same project root, distinct
+connection IDs, exactly ten tools, and reached `ready / isolated`. Their
+initial `IMPLEMENT` projections exposed only permitted operation classes; no
+specific lifecycle action was available before a WorkGroup existed. Both
+agents then selected the unprojected `read_file(".synesis/project.json")`
+path and received `blocked / invalid_path`. Agent B confirmed the project
+metadata using `git show HEAD:.synesis/project.json` and stopped. No
+coordination state was created, so no second ordinary-agent acceptance was
+run.
+
+This is agent-selected hidden-path inspection, not a proven production
+protocol defect. Immediate next action: assess the MCP hidden-metadata path
+contract, then rerun only a bounded diagnostic whose initial repository
+inspection uses valid operations. Do not change lifecycle production code,
+push, or create SYN-040.
+
 ## CP-0471 continuation
 
 The owner REVIEW-acceptance projection is implemented and covered by

@@ -308,3 +308,29 @@ project arguments, connection identity, and readiness trace from the agent
 route itself, then reconcile that route with the passing control invocation.
 Keep the Git subprocess stall, bootstrap migration failures, and Doctor
 warnings separate. Do not push or create SYN-040.
+
+## CP-0478 exact-action protocol diagnostic
+
+The fresh CP-0478 fixture used the current bundled MCP, explicit project pin,
+distinct connection IDs, exactly ten tools, and two `ready / isolated`
+sessions. Both agents reached an initial `IMPLEMENT` projection, but no
+specific lifecycle tool or arguments were projected because no WorkGroup yet
+existed. Agent A then selected `read_file(".synesis/project.json")` and Agent
+B selected the same hidden-path read; both received `blocked / invalid_path`.
+Agent B confirmed the metadata through the valid command
+`git show HEAD:.synesis/project.json` and stopped. No files or coordination
+state changed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0478-protocol-diagnostic-2026-08-24.md`.
+
+This is an agent-selected repository-inspection failure, not an exact
+projected lifecycle action failure and not a proven production defect. No
+second ordinary-agent acceptance was run. Coordination sequence remained
+zero with no WorkGroup, claims, requests, grants, snapshots, validation, or
+integration. Doctor was `DEGRADED` with six existing warnings; the Git
+subprocess stall, bootstrap migration failures, and Doctor findings remain
+separate.
+
+Exact next action: preserve CP-0478, assess the hidden metadata path contract,
+and only rerun a diagnostic after the initial agent inspection uses valid
+repository operations. Do not modify production lifecycle code, push, or
+create SYN-040.
