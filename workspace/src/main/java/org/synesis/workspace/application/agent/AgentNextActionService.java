@@ -582,6 +582,7 @@ public final class AgentNextActionService {
         }
         if (actions.isEmpty() && !participantId.isBlank()) {
             List<WorkIntent> activeIntents = store.collaborationProjection().activeIntents();
+            List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().allSnapshots();
             boolean callerHasActiveIntent = activeIntents.stream()
                     .anyMatch(intent -> intent.participant().equals(participantId));
             for (WorkGroup group : projection.groups()) {
@@ -591,7 +592,17 @@ public final class AgentNextActionService {
                                 && intent.workGroupId().equals(group.workGroupId()))) continue;
                 WorkIntent owner = activeIntents.stream()
                         .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
+                        .filter(intent -> !intent.participant().equals(participantId))
+                        .filter(intent -> snapshots.stream().anyMatch(snapshot ->
+                                snapshot.provenance().workGroupId().equals(group.workGroupId())
+                                        && snapshot.provenance().laneId().equals(intent.intentId())
+                                        && snapshot.provenance().claimEpoch() == intent.version()))
                         .findFirst().orElse(null);
+                if (owner == null) {
+                    owner = activeIntents.stream()
+                            .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
+                            .findFirst().orElse(null);
+                }
                 if (owner == null || owner.participant().equals(participantId)) continue;
                 Map<String, Object> action = new LinkedHashMap<>();
                 action.put("state", "REVIEW_ADMISSION_REQUIRED");

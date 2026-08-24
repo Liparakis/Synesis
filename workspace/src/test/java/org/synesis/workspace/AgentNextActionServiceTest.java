@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,11 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.SnapshotProvenance;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.IdentityBootstrap;
 
 class AgentNextActionServiceTest {
 
@@ -220,5 +226,64 @@ class AgentNextActionServiceTest {
         AgentResponse ownerResponse = service.getNextAction(new AgentNextActionService.NextActionRequest(
                 controlRoot, "codex", "active-owner"));
         assertFalse(ownerResponse.toJson().contains("REVIEW_ADMISSION_REQUIRED"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void reviewerFirstIntentTargetsThePublishedPeerSnapshot() throws Exception {
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
+
+        AgentSessionService sessionService = new AgentSessionService();
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "antigravity", "reviewer-first", null, false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "owner-second", null, false));
+
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var reviewerBinding = bindings.find(location, "antigravity", "reviewer-first").orElseThrow();
+        var ownerBinding = bindings.find(location, "codex", "owner-second").orElseThrow();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var reviewerClaim = collaboration.announce(controlRoot, "antigravity", "reviewer-first",
+                "Review source", "Validate the published source",
+                List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")));
+        var ownerClaim = collaboration.announce(controlRoot, "codex", "owner-second",
+                "Implement source", "Publish the completed source",
+                List.of(ResourceSelector.pathExact("src/task_tracker.py")));
+        assertEquals(reviewerClaim.intent().workGroupId(), ownerClaim.intent().workGroupId());
+
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        String ownerParticipant = WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId());
+        SnapshotProvenance provenance = new SnapshotProvenance(ownerClaim.intent().workGroupId(),
+                ownerClaim.intent().intentId(), ownerParticipant, ownerBinding.sessionId(), 1,
+                List.of(), List.of(), List.of("PATH_EXACT:src/task_tracker.py"),
+                "refs/synesis/snapshots/snap_reviewer_first", "reviewer-first-integrity");
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(
+                UUID.nameUUIDFromBytes("syn039-reviewer-first-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                "snap_reviewer_first", identity.nodeId(), "supervisor", "worker", ownerBinding.sessionId(),
+                ownerBinding.baseCommit(), ownerBinding.baseCommit(), List.of("src/task_tracker.py"), List.of(),
+                "Published source", provenance);
+        store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED,
+                identity.nodeId(), snapshot.encode(), identity);
+
+        AgentResponse response = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "antigravity", "reviewer-first"));
+
+        assertEquals(AgentStatus.READY, response.status());
+        assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());
+        assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
+        Map<String, Object> result = (Map<String, Object>) response.result();
+        List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) result.get("reviewActions");
+        assertEquals(1, reviewActions.size());
+        assertEquals("REVIEW_ADMISSION_REQUIRED", reviewActions.getFirst().get("state"));
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
+        assertEquals("request_coordination", workflow.get("recommendedTool"));
+        assertEquals("work_group_join", arguments.get("kind"));
+        assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
+        assertEquals(ownerClaim.intent().intentId().toString(), payload.get("intentId"));
     }
 }
