@@ -38,6 +38,31 @@ diagnostic that keeps both sessions alive through grant consumption and peer
 snapshot publication, capturing the first later projected action or failure.
 Do not push or create SYN-040.
 
+## Work completed
+
+CP-0505 recorded the exact projection/action trace through REVIEW admission,
+idempotent request replay, owner acceptance, and single-use grant consumption.
+Focused MCP/workspace tests, Javadocs, validators, `go vet`, and
+`git diff --check` pass. No production code changed because no projected
+lifecycle action failed.
+
+## Current failures
+
+Both agents stopped after executing the exact `WAIT` →
+`get_next_action({})` continuation, before the producer polled after grant
+consumption. The WorkGroup remained ACTIVE with no snapshot, validation,
+integration, or closure. This is agent-compliance evidence. Fixture Doctor is
+DEGRADED with six warnings; the known Git subprocess stall, bootstrap
+migration failures, and format findings remain separately classified.
+
+## Immediate next action
+
+Run one fresh bounded diagnostic with both agents kept alive through grant
+consumption and peer snapshot publication; capture the first later projection
+and immediately following action. Do not change lifecycle production code
+unless an exact projected action fails or progress is required with no usable
+projection.
+
 ## CP-0503 post-fix producer-polling diagnostic
 
 The CP-0502 reproduction proved a concrete owner-side projection gap: an
