@@ -1,5 +1,24 @@
 # 2026-08-24 — SYN-039 CP-0524 clean-recovery identity fix diagnostic
 
+- Fresh ordinary CP-0525 acceptance used only complementary visible coding
+  prompts with the current bundled MCP. Both agents reached ready/isolated
+  sessions, disjoint claims, and one WorkGroup. The run reached exact REVIEW
+  admission, owner acceptance, grant consumption, A snapshot publication and
+  integration, and B's structured ACCEPT.
+- The first concrete remaining blocker is B's active reviewer lane after
+  ACCEPT: repeated `get_next_action` returned bare `IMPLEMENT` with no
+  executable lifecycle action while B retained a legitimate dirty
+  `test_todo.py` claim. The WorkGroup remained ACTIVE and B's change was not
+  integrated. No exact projected action failed and no manual lifecycle action
+  was performed.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`.
+- Exact next action: reproduce the active-reviewer no-action state
+  deterministically and implement only the smallest fail-closed existing-model
+  completion/publication projection. Keep Doctor, Git stall, bootstrap
+  migration failures, cleanup, and detached-agent state separate. Do not push
+  or create SYN-040.
+
 - CP-0523's concrete recovery trace showed a clean worker already at the
   advanced control HEAD being rebound to a new provider session, which
   stranded its durable active intent and review grant on the old participant.

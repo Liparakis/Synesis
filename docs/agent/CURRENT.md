@@ -1,5 +1,50 @@
 # Current Task
 
+## SYN-039 CP-0525 ordinary acceptance
+
+The fresh ordinary two-agent acceptance used only complementary visible coding
+prompts and the current bundled MCP. It reached one shared WorkGroup, exact
+REVIEW admission, owner acceptance, single-use grant consumption, immutable
+snapshot publication, snapshot integration, and structured ACCEPT validation.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`.
+
+The first concrete remaining blocker is the active reviewer's completion
+projection. After ACCEPT, Agent B's `test_todo.py` intent and claim remained
+ACTIVE with a legitimate dirty recovery worktree, while repeated
+`get_next_action` returned bare `IMPLEMENT` with no executable lifecycle action.
+The WorkGroup remained ACTIVE and B's test change was not integrated. This is a
+protocol/product gap, not an agent-compliance deviation; B did not invent an
+unprojected `finish_lane`.
+
+## Work completed
+
+The accepted A snapshot is present in the clean control checkout at `09c0d52`,
+and control `python -B -m pytest` passes 2/2. Focused SYN-039 MCP tests,
+deferred/fixture validators, and `git diff --check` pass. Doctor remains
+DEGRADED with six separately classified warnings. The known Git subprocess
+stall and bootstrap migration failures remain independent.
+
+## Current failures
+
+WorkGroup `d34f88e2-83f2-34af-a84c-c2bb351f65cc` is ACTIVE. A is COMPLETED with
+snapshot `snap_1b7221059ac7a398520b7efdb220bfbb` integrated; B is ACTIVE with
+intent `f63dee3c-0822-3852-916b-767882eb3b64`, claim `PATH_EXACT test_todo.py`,
+and an unpublished visible change. No exact projected action failed. The
+missing behavior is a usable existing-model completion/review projection for
+an active reviewer lane after sibling ACCEPT.
+
+## Immediate next action
+
+Reproduce the post-ACCEPT active-reviewer bare-`IMPLEMENT` state in a
+deterministic MCP fixture, trace the existing publication/finish and review
+authorization predicates, and implement only the smallest fail-closed
+completion projection needed for that active lane. Preserve claims, epochs,
+grant fencing, snapshot validation, and ownership; do not broaden cleanup,
+Doctor, detached-agent, or orchestration behavior, push, or create SYN-040.
+
+## SYN-039 CP-0524 clean-recovery identity fix diagnostic
+
 ## SYN-039 CP-0524 clean-recovery identity fix diagnostic
 
 CP-0523 proved that a clean recovered worker already at the advanced control

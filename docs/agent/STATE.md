@@ -1,5 +1,30 @@
 # State
 
+## SYN-039 CP-0525 ordinary acceptance
+
+Fresh ordinary two-agent evidence is recorded in
+`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`. Current
+MCP preflight/control probe was protocol `2025-06-18`, server version
+`0.1.0-SNAPSHOT`, bundle commit `bc334ac`, and exactly ten tools. Both agents
+reached ready/isolated sessions with disjoint claims and one WorkGroup.
+
+The run reached exact REVIEW admission, owner acceptance, single-use grant
+consumption, immutable A snapshot publication, integration, and B's structured
+ACCEPT. It then reproduced the first concrete remaining blocker: B's active
+intent and dirty `test_todo.py` claim remained after ACCEPT, but repeated
+`get_next_action` returned bare `IMPLEMENT` without an executable lifecycle
+action. The WorkGroup stayed ACTIVE; B's test change remained outside the
+clean control checkout. No exact projected action failed and no manual repair
+was performed.
+
+Immediate next action: reproduce this post-ACCEPT active-reviewer no-action
+state deterministically, trace the existing completion/publication and review
+authorization predicates, and implement only the smallest fail-closed
+completion projection. Do not broaden cleanup, Doctor, detached-agent,
+ownership, or orchestration work; do not push or create SYN-040.
+
+## SYN-039 CP-0524 clean-recovery identity fix diagnostic
+
 ## SYN-039 CP-0524 clean-recovery identity fix diagnostic
 
 CP-0523's recovery trace showed a clean worker at the advanced control HEAD

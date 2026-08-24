@@ -1,5 +1,27 @@
 # Tasks
 
+## SYN-039 CP-0525 update
+
+The fresh ordinary acceptance is recorded in
+`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`. It
+reached one shared WorkGroup, exact REVIEW admission, owner acceptance,
+single-use grant consumption, immutable snapshot publication, integration, and
+structured ACCEPT. The first concrete remaining blocker is the active
+reviewer's completion path: B's `test_todo.py` intent stayed ACTIVE after its
+visible work and the accepted sibling snapshot, while repeated
+`get_next_action` returned bare `IMPLEMENT` with no executable lifecycle action.
+The WorkGroup remained ACTIVE and B's change was not integrated.
+
+This authorizes only the next narrow slice: deterministically reproduce the
+post-ACCEPT active-reviewer no-action state, trace the existing completion /
+publication and review authorization predicates, and project the smallest
+existing-model fail-closed action for that lane. Preserve ownership, claims,
+epochs, grants, snapshot validation, and rejection/acceptance semantics. Do
+not broaden cleanup, detached-agent retention, Doctor, or orchestration, push,
+or create SYN-040.
+
+## SYN-039 CP-0524 update
+
 ## SYN-039 CP-0524 update
 
 The clean-recovery identity defect is fixed narrowly in commit `dd9f0eb`.

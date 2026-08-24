@@ -1,5 +1,29 @@
 # Next Session
 
+## CP-0525 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`.
+
+The ordinary acceptance reached one WorkGroup, exact REVIEW admission, grant
+consumption, snapshot publication/integration, and structured ACCEPT. The
+first concrete blocker is B's active `test_todo.py` lane after ACCEPT:
+repeated `get_next_action` returned bare `IMPLEMENT` with no executable
+lifecycle action, leaving the WorkGroup ACTIVE and B's change unpublished.
+Control is clean at `09c0d52`; no production code changed in this run.
+
+- Exact next action: reproduce the active-reviewer bare-`IMPLEMENT` state in a
+  deterministic fixture and trace the existing completion/publication and
+  review predicates.
+- Exact code action: implement only the smallest fail-closed projection that
+  gives that active lane an existing-model completion/review path; preserve
+  claims, epochs, grants, snapshots, and ownership.
+- Keep Doctor warnings, the Git subprocess stall, bootstrap migration failures,
+  cleanup, detached-agent retention, and orchestration separately classified.
+  Do not push, relay, broaden SYN-039, or create SYN-040.
+
+## CP-0524 continuation
+
 ## CP-0524 continuation
 
 Evidence:
