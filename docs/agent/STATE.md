@@ -1,5 +1,30 @@
 # State
 
+## SYN-039 CP-0522 third ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-third-ordinary-2026-08-24.md`.
+
+Fresh project `a7163c0d-1946-45d1-91e2-aa0efa82875d`, WorkGroup
+`e769b143-f9b0-337f-b06a-9eb1603c8cc9`, and sessions
+`01a03554-e78f-7ad2-8c71-99c4fd1543c2` /
+`01a03554-e854-7a20-a561-772869812bc9` used the current bundled MCP. Both
+reached ready/isolated. A's exact REVIEW request and grant consumption
+succeeded. A then received durable `WAIT → get_next_action({})` but chose
+unprojected reads and recovery; those responses failed closed. B's exact
+`finish_lane` published and integrated
+`snap_012bbfe1bc5f22b8e69d51e9638b4c05`, while A rejected it after its test
+failed against the incomplete base. The control checkout is `ffba5f6` with
+pytest `1 failed, 2 passed`; WorkGroup remains ACTIVE and grant
+`4ced56de-ae1e-3d6d-b665-fe74c8e7764b` remains unresolved.
+
+No unchanged projected lifecycle action failed. This is agent/session
+projection compliance evidence; do not modify production lifecycle code.
+
+Immediate next action: run focused SYN-039 tests, validators, Doctor, and
+`git diff --check`, then create CP-0523. Keep the known Git stall, bootstrap
+migration failures, and Doctor warnings separate.
+
 ## SYN-039 CP-0522 valid diagnostic and ordinary acceptance
 
 Evidence:

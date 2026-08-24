@@ -1,5 +1,49 @@
 # Current Task
 
+## SYN-039 CP-0522 third ordinary acceptance
+
+The third fresh ordinary run used current bundled MCP sessions and the same
+two visible coding prompts. Both agents reached ready/isolated state and one
+shared WorkGroup. A implemented `todo.py`, then followed exact REVIEW
+admission and grant-consumption projections. Once A received `WAIT` with
+`recommendedTool=get_next_action` and `{}`, it instead performed unprojected
+reads/recovery and hit the expected fail-closed `workspace_stale` and
+`internal_failure` responses. B's exact `finish_lane` succeeded, publishing
+and integrating `snap_012bbfe1bc5f22b8e69d51e9638b4c05`; A rejected that
+snapshot because its completion test failed against the incomplete base.
+WorkGroup `e769b143-f9b0-337f-b06a-9eb1603c8cc9` remains `ACTIVE`.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-third-ordinary-2026-08-24.md`.
+
+No unchanged projected lifecycle action failed and no production protocol
+defect is proven. This is a repeat of the ordinary agent/session projection
+compliance boundary, with additional evidence that a test-only lane can be
+published before the sibling implementation lane is integrated when the
+agent executes the projected action despite its local failing test.
+
+## Immediate next action
+
+Do not change production code for CP-0522. First run focused SYN-039 tests,
+validators, Doctor, and `git diff --check`, then create CP-0523. Preserve the
+exact ordinary blocker; any production slice requires an unchanged projected
+action to fail or a valid active lane to have no usable projected action.
+
+## Work completed
+
+The third ordinary acceptance evidence is recorded alongside the successful
+bounded CP-0522 diagnostic and the prior ordinary run. No production code
+changed and nothing was pushed.
+
+## Current failures
+
+The real ordinary acceptance remains incomplete: A ignored a concrete WAIT
+projection and did not publish its implementation snapshot; B's test snapshot
+integrated but control pytest is `1 failed, 2 passed`. The WorkGroup remains
+ACTIVE with an unresolved REVIEW grant. Doctor remains DEGRADED with six
+warnings. The root Git subprocess stall and bootstrap migration failures are
+still independent verification issues. No SYN-040 is defined or created.
+
 ## SYN-039 CP-0522 valid diagnostic and ordinary acceptance
 
 The corrected bounded diagnostic used a genuinely incomplete Todo seed and

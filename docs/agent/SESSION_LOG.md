@@ -1,3 +1,19 @@
+## 2026-08-24 — SYN-039 CP-0522 third ordinary acceptance
+
+- Ran a fresh ordinary acceptance from a clean seed with current bundled MCP,
+  two independent ready/isolated sessions, and disjoint `todo.py` /
+  `test_todo.py` claims.
+- A followed exact REVIEW admission and grant consumption, then ignored a
+  durable WAIT projection and selected unprojected workspace reads/recovery;
+  Synesis failed those actions closed. B exact-published and integrated its
+  test snapshot; A rejected it because the test failed without the separate
+  implementation. WorkGroup `e769b143-f9b0-337f-b06a-9eb1603c8cc9` remained
+  ACTIVE, and control pytest was `1 failed, 2 passed`.
+- No production code changed. No unchanged projected lifecycle action failed.
+  Doctor remains DEGRADED with six warnings; root Git and bootstrap failures
+  remain independent. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0522-third-ordinary-2026-08-24.md`.
+
 ## 2026-08-24 — SYN-039 CP-0522 valid diagnostic and ordinary acceptance
 
 - Ran a corrected bounded diagnostic with a genuinely incomplete Todo seed.

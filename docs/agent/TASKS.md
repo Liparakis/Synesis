@@ -1,5 +1,27 @@
 # Tasks
 
+## SYN-039 CP-0522 third ordinary acceptance update
+
+The third fresh ordinary acceptance used one shared WorkGroup and current
+bundled-MCP ready/isolated sessions. A followed exact REVIEW admission and
+grant-consumption actions, then ignored a durable `WAIT → get_next_action({})`
+projection and selected unprojected reads/recovery. B executed exact
+`finish_lane`, publishing and integrating
+`snap_012bbfe1bc5f22b8e69d51e9638b4c05`; A rejected that test-only snapshot
+because its test failed against the incomplete base. WorkGroup
+`e769b143-f9b0-337f-b06a-9eb1603c8cc9` remains ACTIVE and control pytest is
+`1 failed, 2 passed`.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-third-ordinary-2026-08-24.md`.
+
+No unchanged projected action failed. Preserve this as ordinary
+agent/session compliance evidence; do not change production code without a
+concrete Synesis protocol failure.
+
+The immediate bookkeeping action is focused verification followed by
+CP-0523. No push or SYN-040.
+
 ## SYN-039 CP-0522 valid diagnostic and ordinary acceptance update
 
 The corrected bounded diagnostic used a genuinely incomplete Todo seed and

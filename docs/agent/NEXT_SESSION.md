@@ -1,5 +1,22 @@
 # Next Session
 
+## CP-0522 third ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-third-ordinary-2026-08-24.md`.
+
+The third ordinary run used project `a7163c0d-1946-45d1-91e2-aa0efa82875d`
+and WorkGroup `e769b143-f9b0-337f-b06a-9eb1603c8cc9`. A followed exact
+admission and grant consumption, then ignored `WAIT → get_next_action({})`
+and selected unprojected reads/recovery. B exact-published and integrated
+`snap_012bbfe1bc5f22b8e69d51e9638b4c05`; A rejected it because the test-only
+snapshot failed without A's unpublished implementation. WorkGroup remains
+ACTIVE; no unchanged projected action failed.
+
+- Exact next action: run focused SYN-039 tests, validators, Doctor, and
+  `git diff --check`, then create CP-0523. Do not modify production code for
+  this compliance boundary, push, or create SYN-040.
+
 ## CP-0522 continuation
 
 Evidence:

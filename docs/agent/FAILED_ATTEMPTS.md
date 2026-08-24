@@ -1,5 +1,29 @@
 # Failed Attempts
 
+## 2026-08-24 — SYN-039 CP-0522 third ordinary projection-compliance stop
+
+- Attempted approach: Run a third fresh ordinary two-agent Todo acceptance
+  with only the two complementary coding prompts and current bundled MCP.
+- Expected result: Both agents would remain engaged through reciprocal review,
+  implementation snapshot publication, validation, integration, and closure.
+- Observed result: Both sessions reached one WorkGroup. A implemented
+  `todo.py`, followed exact REVIEW admission and grant consumption, then
+  received durable `WAIT → get_next_action({})` and instead performed
+  unprojected reads/recovery. Those responses returned `workspace_stale` and
+  later `internal_failure`. B executed exact `finish_lane`, publishing and
+  integrating `snap_012bbfe1bc5f22b8e69d51e9638b4c05`; A rejected it after its
+  test failed against the incomplete base. WorkGroup
+  `e769b143-f9b0-337f-b06a-9eb1603c8cc9` remained ACTIVE.
+- Root cause/classification: agent/session compliance with the durable
+  projection contract. Exact projected lifecycle calls succeeded; invalid or
+  unprojected calls failed closed. No production defect is proven.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0522-third-ordinary-2026-08-24.md`.
+- Retry prohibition: Do not add cleanup, lifecycle, test-gating, or
+  orchestration behavior from this run. Run focused verification and create
+  CP-0523; a production change requires an unchanged projected action failure
+  or a missing usable action.
+
 ## 2026-08-24 — SYN-039 CP-0522 ordinary session-engagement stop
 
 - Attempted approach: Run a fresh ordinary two-agent Todo acceptance using
