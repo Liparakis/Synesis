@@ -1,5 +1,29 @@
 # State
 
+## SYN-039 CP-0497 reviewer-continuity diagnostic
+
+The fresh project `4d0fa215-d2e4-4a72-9a1c-0e7b858a3b1e` used the rebuilt
+current bundle (`0.1.0-SNAPSHOT`, protocol `2025-06-18`, ten tools) and two
+independent GPT-5.6 Luna sessions. Both reached `ready / isolated` with
+distinct identities and disjoint claims. WorkGroup
+`7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771` reached exact REVIEW admission,
+acceptance, grant consumption, exact producer `finish_lane`, immutable
+snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`, integration, reviewer stale
+recovery, and two exact projected ACCEPT decisions. The repaired recovery path
+preserved the reviewer session identity while rebinding to a new isolated
+worktree. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0497-review-continuity-diagnostic-2026-08-24.md`.
+
+No exact projected action failed. The first concrete blocker is a status
+contradiction: the ACCEPT response reports `workGroupStatus=COMPLETED` even
+when the durable WorkGroup remains `ACTIVE` because Agent A's separate intent
+and duplicate grants remain live. Final CLI status showed B `COMPLETED`, A
+`ACTIVE`, both requests `ACCEPTED`, and the WorkGroup `ACTIVE`. The second
+ordinary acceptance was not run because this diagnostic did not reach clean
+closure. The next narrow code action is a deterministic regression and fix so
+the response reports the durable group status; cleanup/deduplication remains a
+later evidence-bounded slice.
+
 ## SYN-039 CP-0494 post-fix review-projection diagnostic
 
 The fresh CP-0494 project `03dad00b-fbb4-4500-aa9a-22f91c7d7494` used the

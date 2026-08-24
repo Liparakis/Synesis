@@ -1,5 +1,31 @@
 # Next Session
 
+## CP-0497 continuation
+
+The fresh CP-0497 diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0497-001`, the
+repository-built current MCP, and two independent GPT-5.6 Luna sessions. Both
+preflighted against the same project, ten-tool catalog, and distinct
+ready/isolated bindings.
+
+The run reached WorkGroup `7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771`, exact REVIEW
+admission, owner acceptance, grant consumption, exact projected producer
+`finish_lane`, immutable snapshot
+`snap_3eb0df616deb0c00e78540f63877b1c2`, integration, reviewer stale recovery,
+and two exact projected ACCEPT decisions. No exact projected action failed.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0497-review-continuity-diagnostic-2026-08-24.md`.
+
+The first concrete blocker is a truthful-status defect: ACCEPT returns
+`workGroupStatus=COMPLETED` even though final durable status is `ACTIVE` with
+Agent A's separate active intent and two duplicate REVIEW grants. The run did
+not qualify for the second ordinary acceptance. The next exact code action is:
+add a deterministic `ReviewValidationService` regression for ACCEPT with live
+intents/grants, return the durable WorkGroup status instead of unconditional
+`COMPLETED`, run focused coordination/MCP tests, then rerun a fresh bounded
+single-producer/reviewer diagnostic. Do not broaden cleanup or ownership, push,
+or create SYN-040.
+
 ## CP-0494 continuation
 
 The fresh CP-0494 diagnostic used project

@@ -1975,3 +1975,26 @@ Exact next action: run another fresh bounded diagnostic to determine whether an
 ordinary reviewer executes the now-executable projected validation action. Do
 not add lifecycle behavior for an agent that ignores a valid projection. Do
 not create SYN-040 or push.
+
+## SYN-039 CP-0497 update
+
+The fresh CP-0497 exact-action diagnostic used the current bundled MCP,
+project `4d0fa215-d2e4-4a72-9a1c-0e7b858a3b1e`, two ready/isolated GPT-5.6 Luna
+sessions, and disjoint `todo.py` / `test_todo.py` claims. One shared WorkGroup
+`7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771` reached exact REVIEW admission, both
+owner acceptances, grant consumption, exact projected producer publication,
+immutable snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`, integration, stale
+reviewer recovery, and two exact projected ACCEPT decisions. No exact
+projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0497-review-continuity-diagnostic-2026-08-24.md`.
+
+The first concrete post-validation blocker is a false terminal status: the
+ACCEPT response says `workGroupStatus=COMPLETED`, while durable collaboration
+status remains `ACTIVE` with Agent A's separate active implementation intent
+and two duplicate REVIEW grants. This diagnostic did not qualify for the
+second ordinary acceptance. The next narrow implementation slice is a
+deterministic `ReviewValidationService` status regression and correction so
+the response reflects the durable group status. Broader grant deduplication,
+cleanup, and closure remain unimplemented. Doctor is still DEGRADED; the
+known Git subprocess stall and three bootstrap migration failures remain
+separate verification issues. Do not create SYN-040 or push.

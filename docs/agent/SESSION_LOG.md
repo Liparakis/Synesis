@@ -2597,3 +2597,32 @@ ownership. No push and no SYN-040.
   cleanup review. Exact next action: launch the implementation agent first in
   a fresh bounded diagnostic and capture producer publication through reviewer
   validation without relay or manual transition. No push and no SYN-040.
+
+# 2026-08-24 — SYN-039 CP-0497 reviewer-continuity diagnostic
+
+- Committed the previously implemented CP-0495 review-validation catalog fix
+  as `706b743` and the CP-0496 reviewer recovery-continuity fix as `d578223`.
+  The reviewer now keeps its participant/session identity when only the
+  control checkout advances and receives a fresh isolated recovery worktree.
+- Ran fresh project
+  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0497-001` with two
+  independent GPT-5.6 Luna sessions and the repository-built MCP. Both
+  reached ready/isolated preflight with the same project and ten tools.
+- The run reached WorkGroup
+  `7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771`, exact REVIEW admission, owner
+  acceptance, grant consumption, exact projected `finish_lane`, immutable
+  snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`, integration, exact stale
+  reviewer recovery, and two exact projected ACCEPT decisions. No exact
+  projected action failed. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0497-review-continuity-diagnostic-2026-08-24.md`.
+- The first concrete blocker after validation is status inconsistency:
+  `respond_coordination` reports `workGroupStatus=COMPLETED`, while final
+  collaboration status reports the same group `ACTIVE` with Agent A's active
+  second intent and two duplicate grants. The run did not qualify for the
+  ordinary second acceptance. The next narrow code action is a deterministic
+  response-status regression/fix; do not broaden cleanup or push.
+- Focused MCP/workspace tests and Javadocs passed; validators, Go vet, and
+  `git diff --check` passed. Bootstrap Go tests retain three migration
+  failures. The full root check reproduced the known `McpServerTest` Git
+  subprocess failure/stall and was bounded/interrupted after process evidence
+  capture. Doctor remains DEGRADED with six fixture warnings.

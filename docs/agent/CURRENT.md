@@ -12,6 +12,31 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0497 reviewer-continuity diagnostic
+
+The fresh current-bundle diagnostic used project
+`4d0fa215-d2e4-4a72-9a1c-0e7b858a3b1e`, two independent GPT-5.6 Luna sessions,
+the same pinned MCP executable, ten tools, distinct ready/isolated bindings,
+and disjoint `todo.py` / `test_todo.py` claims. The reviewer-continuity fix
+preserved Agent A's participant/session identity across the control checkout
+advance and exact `ensure_session` recovery.
+
+The run reached one WorkGroup
+`7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771`, exact REVIEW admission, both exact
+owner acceptances, grant consumption, exact projected producer
+`finish_lane`, immutable snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`,
+integration, and two exact projected `review_validation` ACCEPT decisions.
+No exact projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0497-review-continuity-diagnostic-2026-08-24.md`.
+
+The first concrete post-validation defect is inconsistent terminal reporting:
+the accepted `respond_coordination` response returned
+`workGroupStatus=COMPLETED`, while final durable status remained `ACTIVE` with
+Agent A's separate active implementation intent and two duplicate REVIEW
+grants. The diagnostic was therefore not a clean product acceptance, and the
+second ordinary run was not started. This is a protocol/reporting blocker,
+not agent non-compliance; the exact projected actions were followed.
+
 ## CP-0494 post-fix review-projection diagnostic
 
 The fresh CP-0494 fixture used the rebuilt current bundle, two independent
@@ -144,36 +169,39 @@ Evidence:
 ## Work completed
 
 The reviewer-first snapshot-admission projection fix is committed as
-`5fe613f`. This slice adds the narrow CP-0490 Python bytecode-cache artifact
-policy fix and the CP-0493 reviewer-validation projection fix. The strict
+`5fe613f`. The CP-0490 Python bytecode-cache artifact policy fix and CP-0493
+reviewer-validation MCP schema fix are committed in `706b743`. The strict
 review response remains fail-closed, while its executable projection now
-matches the accepted `respond_coordination` payload contract. Deterministic
-workspace/MCP regressions, focused Javadocs, bundle rebuild, and diff checks
-pass. CP-0494 proves exact admission, grant consumption, exact producer
-publication, immutable snapshot creation, and guarded integration on the
-rebuilt bundle.
+matches the accepted `respond_coordination` payload contract. The CP-0496
+reviewer recovery-continuity fix is committed in `d578223`; a control-only
+checkout advance now preserves reviewer session identity while allocating a
+fresh isolated worktree. Deterministic workspace/MCP regressions, focused
+Javadocs, bundle rebuild, validators, and diff checks pass. CP-0497 proves
+exact admission, grant consumption, exact producer publication, immutable
+snapshot creation, integration, reviewer recovery, and exact ACCEPT decisions
+on the rebuilt bundle.
 
 ## Current failures
 
-CP-0494 stopped after the reviewer received an executable exact
-`review_validation` projection and chose an unprojected `read_file`, which
-returned `workspace_stale`. No exact post-fix projected action failed, so no
-new production change is authorized from that agent choice. The WorkGroup
-remains ACTIVE with accepted requests and REVIEW grants; validation, closure,
-cleanup, and final Doctor health remain unproven. The recurring Git subprocess
-stall, bootstrap migration failures, and six fixture Doctor warnings remain
-separate.
+CP-0497 followed every concrete projection through two ACCEPT decisions, but
+the response reported `workGroupStatus=COMPLETED` while the durable projection
+reported WorkGroup `7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771` as `ACTIVE` with a
+live second intent and duplicate grants. Clean closure is therefore still
+unproven. The next implementation slice is limited to making review response
+status truthful and regression-tested; broader grant deduplication, cleanup,
+and closure behavior remain deferred until a single-producer/reviewer run
+isolates them. The recurring Git subprocess stall, bootstrap migration
+failures, and six fixture Doctor warnings remain separate.
 
 ## Immediate next action
 
-Run another fresh bounded two-agent diagnostic with the current bundle and
-capture whether an ordinary reviewer executes the now-executable projected
-`respond_coordination(review_validation)` action. Do not relay or trigger
-transitions. If that exact action executes and a later lifecycle transition
-fails, implement only that proven narrow defect; if the reviewer ignores it
-again, preserve agent-compliance evidence and do not change production code.
-Only after the bounded diagnostic completes may the second ordinary unattended
-acceptance run. Do not push or create SYN-040.
+Add a deterministic `ReviewValidationService` regression for an ACCEPT where
+active intents or available grants prevent durable WorkGroup closure, then
+return the actual projected group status instead of unconditional
+`COMPLETED`; run the focused coordination/MCP tests and a fresh bounded
+single-producer/reviewer diagnostic. Do not broaden cleanup or ownership,
+do not run the ordinary acceptance until that diagnostic is terminal, and do
+not push or create SYN-040.
 
 ## CP-0480 convergence projection slice
 
