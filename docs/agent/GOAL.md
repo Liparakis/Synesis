@@ -23,9 +23,9 @@
   `docs/evidence/syn038-real-codex-app-server-acceptance-2026-08-03.md`, and
   ADR-0043.
 - Exact continuation: run `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`, then rerun the exact unattended Todo acceptance
-  with the owner following the projected `respond_coordination` acceptance
-  action. Verify the new `finish_lane` publication action if grant consumption
-  is reached; preserve any later lifecycle failure as the next bounded blocker.
-  Keep `SYN-014E` paused and do not create SYN-040 or add prerelease
-  compatibility aliases.
+  scripts/agent-resume.ps1`, then audit the preserved CP-0525 ordinary JSONL
+  and Codex process termination at the final projected `WAIT` action. A fresh
+  production change requires a concrete unchanged projected-action failure or
+  a missing usable action; repeated provider turn termination alone remains
+  agent/session evidence. Keep `SYN-014E` paused and do not create SYN-040 or
+  add prerelease compatibility aliases.
