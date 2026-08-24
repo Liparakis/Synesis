@@ -580,15 +580,19 @@ public final class AgentNextActionService {
             if (snapshot != null) action.put("snapshot", snapshotMap(snapshot));
             actions.add(action);
         }
-        if (actions.isEmpty() && !participantId.isBlank()
-                && store.collaborationProjection().activeIntents().stream()
-                        .noneMatch(intent -> intent.participant().equals(participantId))) {
+        if (actions.isEmpty() && !participantId.isBlank()) {
+            List<WorkIntent> activeIntents = store.collaborationProjection().activeIntents();
+            boolean callerHasActiveIntent = activeIntents.stream()
+                    .anyMatch(intent -> intent.participant().equals(participantId));
             for (WorkGroup group : projection.groups()) {
                 if (group.status() != WorkGroup.Status.ACTIVE) continue;
-                WorkIntent owner = store.collaborationProjection().activeIntents().stream()
+                if (callerHasActiveIntent && activeIntents.stream()
+                        .noneMatch(intent -> intent.participant().equals(participantId)
+                                && intent.workGroupId().equals(group.workGroupId()))) continue;
+                WorkIntent owner = activeIntents.stream()
                         .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
                         .findFirst().orElse(null);
-                if (owner == null) continue;
+                if (owner == null || owner.participant().equals(participantId)) continue;
                 Map<String, Object> action = new LinkedHashMap<>();
                 action.put("state", "REVIEW_ADMISSION_REQUIRED");
                 action.put("nextProtocolAction", "request_coordination");
