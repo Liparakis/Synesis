@@ -134,6 +134,15 @@ recorded before the agents stopped. No unchanged projected lifecycle action
 returned an error, and no valid action was absent; the stop is classified as
 ordinary agent/session engagement rather than a production protocol defect.
 
+The final preserved A trace makes the boundary explicit: item `item_36`
+returned workflow action `1970a9ba-708d-3d2f-8758-2087bb37ebac`,
+`nextAction=wait`, `recommendedTool=get_next_action`, and exact arguments
+`{}` while B was still ACTIVE and its review grant was in `SNAPSHOT_PENDING`.
+The next event was A's final report (`item_37`) followed by `turn.completed`;
+there was no failing follow-up call. B subsequently published
+`snap_b78e80fc552f8df1a890812d587b2e72` and completed its own lane, after A's
+session had already ended.
+
 Final ordinary state:
 
 - `collaboration status`: both participants `COMPLETED`, both requests
