@@ -135,7 +135,15 @@ final class WorkIntentServiceTest {
         CoordinationRequest request = service.request("agt-reviewer", owner.intentId(),
                 CoordinationRequest.Kind.REVIEW, "Review the published snapshot without claiming its files");
         assertEquals(CoordinationRequest.Status.PENDING, request.status());
+        CoordinationRequest replayedRequest = service.request("agt-reviewer", owner.intentId(),
+                CoordinationRequest.Kind.REVIEW, "Review the published snapshot without claiming its files");
+        assertEquals(request.requestId(), replayedRequest.requestId());
+        assertEquals(1, service.requests().size());
         service.respond("agt-owner", request.requestId(), CoordinationRequest.Status.ACCEPTED, "review admitted");
+
+        CoordinationRequest acceptedReplay = service.request("agt-reviewer", owner.intentId(),
+                CoordinationRequest.Kind.REVIEW, "Review the published snapshot without claiming its files");
+        assertEquals(request.requestId(), acceptedReplay.requestId());
 
         var grants = new PredictionEventStore(temp, project).workGroupProjection().grants();
         assertEquals(1, grants.size());

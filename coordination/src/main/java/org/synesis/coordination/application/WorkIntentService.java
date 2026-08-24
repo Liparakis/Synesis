@@ -263,6 +263,21 @@ public final class WorkIntentService {
             PredictionEventStore current = freshStore();
             WorkIntent conflict = current.collaborationProjection().intent(conflictingIntentId)
                     .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+            if (kind == CoordinationRequest.Kind.REVIEW) {
+                // A review admission is one authority negotiation between a
+                // reviewer and a target lane. The response projection may
+                // replace the request proposal, so proposal text is not part
+                // of this replay identity.
+                CoordinationRequest existing = current.collaborationProjection().requests().stream()
+                        .filter(candidate -> candidate.requester().equals(requester))
+                        .filter(candidate -> candidate.target().equals(conflict.participant()))
+                        .filter(candidate -> candidate.conflictingIntentId().equals(conflictingIntentId))
+                        .filter(candidate -> candidate.kind() == kind)
+                        .findFirst().orElse(null);
+                if (existing != null) {
+                    return existing;
+                }
+            }
             CoordinationRequest request = new CoordinationRequest(UUID.randomUUID(), current.projectId(), requester,
                     conflict.participant(), conflictingIntentId, kind, proposal, CoordinationRequest.Status.PENDING);
             current.append(request.requestId(), PredictionEventType.COORDINATION_REQUESTED, signer.nodeId(),
