@@ -1,5 +1,27 @@
 # Tasks
 
+## SYN-039 CP-0522 valid diagnostic and ordinary acceptance update
+
+The corrected bounded diagnostic used a genuinely incomplete Todo seed and
+completed the existing review/snapshot/validation/integration protocol. It
+closed WorkGroup `eaa7631f-ce23-310f-b94c-d44db63b8eda` with both immutable
+snapshots integrated and structured ACCEPT decisions recorded.
+
+The ordinary acceptance used only the actual coding prompts. It reached one
+shared WorkGroup, integrated `snap_d0a18b8641e2054682eb15f95d3a772c`, and
+received B's ACCEPT, but A's Codex turn ended after a valid repeated
+`request_coordination` projection. B correctly remained in projected WAIT;
+WorkGroup `0f999cd8-e9b2-38cc-a382-ab6722b76139` remains ACTIVE. No
+unchanged projected action failed and no production defect is proven.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-valid-diagnostic-and-ordinary-2026-08-24.md`.
+
+The next narrow action is one third fresh ordinary acceptance with the same
+coding prompts and no lifecycle coaching. Preserve the external
+agent/session blocker if it repeats. Do not modify lifecycle code, push, or
+create SYN-040 unless a concrete Synesis defect is reproduced.
+
 ## SYN-039 CP-0521 continuation diagnostic seed correction
 
 The bounded continuation diagnostic did not reach completed-lane continuation

@@ -1,5 +1,36 @@
 # State
 
+## SYN-039 CP-0522 valid diagnostic and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-valid-diagnostic-and-ordinary-2026-08-24.md`.
+
+The corrected bounded diagnostic used project
+`83c114a1-05db-44dc-813f-b5ce36265b7c`, WorkGroup
+`eaa7631f-ce23-310f-b94c-d44db63b8eda`, and two current bundled-MCP,
+ready/isolated sessions. It completed with accepted requests
+`e9162cfc-c9aa-4e35-9625-629c9d95f1a9` and
+`a1562cd6-7fb2-453e-b62a-a4be6fdc7e76`, consumed grants
+`6cb26e55-de30-3dd9-abb0-09e823008383` and
+`98cd5343-32b0-345c-a2a2-74bd979215d8`, published snapshots
+`snap_68dcebb4c449128430a24accb65d2471` and
+`snap_ba7aa4d87ce49564755ae9467e86657c`, recorded structured ACCEPT
+decisions, integrated both snapshots, passed control pytest 4/4, and closed
+the WorkGroup.
+
+The ordinary run used only the actual coding prompts and reached WorkGroup
+`0f999cd8-e9b2-38cc-a382-ab6722b76139`. A published and integrated
+`snap_d0a18b8641e2054682eb15f95d3a772c`; B consumed its grant and ACCEPTed.
+A then ended before consuming pending grant
+`051f07ff-e0c0-3f10-8422-705d066afc57`, despite the repeated concrete
+projection. B correctly remained in `WAIT`; no unchanged projection failed.
+This is agent/session compliance evidence, not a production defect.
+
+Immediate next action: run one third fresh ordinary acceptance with the same
+two coding prompts and no lifecycle coaching. Preserve the first unchanged
+projection failure or missing usable action. Do not change production code,
+push, or create SYN-040 for a repeated turn-ending boundary alone.
+
 ## SYN-039 CP-0521 continuation diagnostic seed correction
 
 Evidence:

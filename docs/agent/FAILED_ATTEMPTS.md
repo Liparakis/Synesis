@@ -1,5 +1,31 @@
 # Failed Attempts
 
+## 2026-08-24 — SYN-039 CP-0522 ordinary session-engagement stop
+
+- Attempted approach: Run a fresh ordinary two-agent Todo acceptance using
+  only the complementary coding prompts after a bounded diagnostic had
+  completed the protocol.
+- Expected result: Ordinary agents would continue through reciprocal REVIEW,
+  snapshot publication, validation, integration, and WorkGroup closure.
+- Observed result: The ordinary run reached one shared WorkGroup. A executed
+  exact `finish_lane`, integrated `snap_d0a18b8641e2054682eb15f95d3a772c`,
+  and executed the projected REVIEW admission request. B consumed its grant,
+  accepted A's snapshot, and then correctly followed projected WAIT. A's
+  turn ended while a repeated concrete `request_coordination` projection
+  remained pending for A; grant `051f07ff-e0c0-3f10-8422-705d066afc57`
+  remained unconsumed and WorkGroup
+  `0f999cd8-e9b2-38cc-a382-ab6722b76139` remained ACTIVE.
+- Root cause/classification: deterministic ordinary Codex session/projection
+  compliance boundary. No unchanged projected action failed and no valid
+  active lane lacked a usable action. The bounded diagnostic closed with
+  explicit post-completion session engagement, so this is not evidence of a
+  backend lifecycle defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0522-valid-diagnostic-and-ordinary-2026-08-24.md`.
+- Retry prohibition: Do not add lifecycle machinery or weaken fail-closed
+  behavior for this run. One third ordinary acceptance may test repeatability;
+  a production change requires a concrete protocol failure.
+
 ## 2026-08-24 — SYN-039 CP-0521 invalid continuation seed
 
 - Attempted approach: Run the bounded completed-lane continuation diagnostic

@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0522 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-valid-diagnostic-and-ordinary-2026-08-24.md`.
+
+The bounded diagnostic completed WorkGroup
+`eaa7631f-ce23-310f-b94c-d44db63b8eda` through reciprocal REVIEW, immutable
+snapshots, structured ACCEPT, integration, and terminal completion. The
+ordinary run reached WorkGroup `0f999cd8-e9b2-38cc-a382-ab6722b76139`,
+integrated A's snapshot, and received B's ACCEPT, but A's Codex turn ended
+after a repeated concrete `request_coordination` projection; B correctly
+remained in exact WAIT. No unchanged projected action failed.
+
+- Exact next action: run one third fresh ordinary unattended two-agent Todo
+  acceptance with the same two actual complementary coding prompts and no
+  lifecycle coaching. Capture every projection and following action. If the
+  same turn-ending boundary repeats, classify it as the external
+  agent/session blocker and do not change production code.
+- Run `scripts/agent-resume.ps1` first. Do not relay messages, trigger
+  transitions, push, or create SYN-040.
+
 ## CP-0521 continuation
 
 Evidence:

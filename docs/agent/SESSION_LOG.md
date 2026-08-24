@@ -1,3 +1,22 @@
+## 2026-08-24 — SYN-039 CP-0522 valid diagnostic and ordinary acceptance
+
+- Ran a corrected bounded diagnostic with a genuinely incomplete Todo seed.
+  Both current bundled-MCP sessions reached ready/isolated state and one
+  shared WorkGroup. Exact review admission, grant consumption, snapshot
+  publication, structured ACCEPT, integration, and terminal WorkGroup
+  completion succeeded without relay; control pytest passed 4/4.
+- Ran a second ordinary acceptance with only the two coding prompts. A
+  integrated `snap_d0a18b8641e2054682eb15f95d3a772c`; B consumed its grant and
+  submitted ACCEPT. A then ended instead of consuming a repeated concrete
+  `request_coordination` projection; B correctly remained in WAIT. WorkGroup
+  `0f999cd8-e9b2-38cc-a382-ab6722b76139` remained ACTIVE.
+- No production code changed. No unchanged projected action failed. Doctor
+  remains DEGRADED with six unrelated warnings; the root Git stall and
+  bootstrap migration failures remain separately classified. Nothing was
+  pushed and no SYN-040 was created.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0522-valid-diagnostic-and-ordinary-2026-08-24.md`.
+
 ## 2026-08-24 — SYN-039 CP-0521 invalid continuation seed
 
 - Ran a fresh bounded continuation diagnostic with current bundled MCP and two
