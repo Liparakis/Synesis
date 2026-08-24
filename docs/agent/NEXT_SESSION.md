@@ -1,5 +1,29 @@
 # Next Session
 
+## CP-0528 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-2026-08-24.md`.
+
+The fresh exact-action diagnostic reached one shared WorkGroup, exact REVIEW
+admission, owner acceptance, grant consumption, immutable snapshot publication,
+and integration. B once omitted `targetParticipant` from a projection that
+contained it; the exact retry succeeded. B then received the structured
+`review_decision` payload for snapshot `snap_2d4def43740098712b51e82199d84153`
+but chose an unprojected Git read, which returned `workspace_stale`; exact
+recovery returned `internal_failure / request_human_help`. No unchanged
+concrete projection failed and no validation or closure occurred.
+
+- Exact next action: audit the existing provider/manual guidance for
+  `review_decision`; if it is clear, run a fresh ordinary unattended
+  acceptance; otherwise make only a minimal agent-facing clarification.
+- Exact code action: none until that audit proves a contract defect. Preserve
+  fail-closed review, workspace, ownership, and epoch checks.
+- Keep Doctor warnings, the Git subprocess stall, bootstrap migration failures,
+  and cleanup separately classified. Do not push or create SYN-040.
+
+## CP-0527 continuation
+
 ## CP-0527 continuation
 
 Evidence:

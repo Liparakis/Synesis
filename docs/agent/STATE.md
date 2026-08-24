@@ -1,5 +1,26 @@
 # State
 
+## SYN-039 CP-0528 post-fix exact-action diagnostic
+
+CP-0528 used the current bundled MCP and two separate live Codex sessions in
+fresh Git + Synesis state. Both reached ready/isolated, one WorkGroup, exact
+REVIEW admission, owner acceptance, grant consumption, snapshot publication,
+and integration. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-2026-08-24.md`.
+
+The grant projection contained `targetParticipant`; B omitted it once and
+received fail-closed `COORDINATION_FIELD_REQUIRED:targetParticipant`, then
+executed the unchanged projection and consumed the single-use grant. This is
+agent-compliance evidence, not a production defect. The reviewer then received
+the structured `review_decision` contract but chose an unprojected Git read;
+the workspace correctly returned `workspace_stale`, and recovery returned
+`internal_failure / request_human_help`. No unchanged concrete projection
+failed and no validation/closure occurred.
+
+Immediate next action: audit the agent-facing review-decision contract, then
+run a fresh ordinary unattended acceptance or make only a proven minimal
+guidance clarification. Preserve fail-closed workspace and review behavior.
+
 ## SYN-039 CP-0527 post-fix projection diagnostic
 
 CP-0526 established and fixed a concrete projection mismatch: a recovered lane

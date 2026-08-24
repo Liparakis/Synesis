@@ -1,5 +1,25 @@
 # Tasks
 
+## SYN-039 CP-0528 update
+
+CP-0528 proves that exact REVIEW admission works with separate live session
+services. The diagnostic reached owner acceptance, single-use grant
+consumption, `finish_lane`, immutable snapshot publication, integration, and
+the reviewer `review_decision` state. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-2026-08-24.md`.
+
+B once omitted the projected `targetParticipant`; the exact unchanged retry
+consumed the grant, so this remains agent-compliance evidence. The reviewer did
+not submit the structured validation decision and instead selected an
+unprojected Git read, which failed closed as `workspace_stale`. No unchanged
+concrete Synesis action failed, and production code remains unchanged for this
+run.
+
+The next narrow action is to audit the existing agent-facing review-decision
+contract and run a fresh ordinary acceptance. Only a proven ambiguity in that
+contract authorizes a minimal guidance/projection change. Do not weaken review,
+workspace, ownership, or epoch checks; do not push or create SYN-040.
+
 ## SYN-039 CP-0527 update
 
 CP-0526 proved and fixed a narrow claim/publication projection defect. The

@@ -1,5 +1,36 @@
 # Current Task
 
+## SYN-039 CP-0528 post-fix exact-action diagnostic
+
+The fresh CP-0528 diagnostic used the current bundled MCP, two independent
+ready/isolated Codex sessions, disjoint epoch-1 claims, and one shared
+WorkGroup. Exact REVIEW admission, owner acceptance, single-use grant
+consumption, `finish_lane`, immutable snapshot publication, and integration
+all succeeded. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-2026-08-24.md`.
+
+The first incomplete lifecycle boundary was reviewer validation. B received a
+structured `review_decision` projection with the exact grant, snapshot,
+intent, and epoch, plus `accepted|rejected` and rejection-reason rules, but
+did not submit `review_validation`; it chose an unprojected `git show` and
+then hit fail-closed `workspace_stale`. The earlier omitted
+`targetParticipant` was also agent-compliance evidence because the later
+unchanged projection consumed the grant successfully. No unchanged concrete
+Synesis action failed, so no production behavior changed for CP-0528.
+
+WorkGroup `0d63aa77-fa6b-3dbd-a1a7-09e0d9ad0cda` remains ACTIVE. Doctor is
+DEGRADED with six separately classified warnings. The known Git subprocess
+stall and bootstrap migration failures remain independent.
+
+## Immediate next action
+
+Audit the provider/manual contract for the `review_decision` state and run a
+deterministic reviewer-decision fixture. If the existing decision contract is
+already unambiguous, run a fresh ordinary unattended acceptance; if it is
+ambiguous, make only the smallest agent-facing clarification. Do not change
+review validation semantics, workspace readiness, ownership, cleanup,
+Doctor, push, or create SYN-040 without a new concrete defect.
+
 ## SYN-039 CP-0527 post-fix projection diagnostic
 
 The CP-0526 diagnostic proved a concrete publication-projection defect: an

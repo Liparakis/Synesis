@@ -270,6 +270,54 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void projectedReviewAdmissionSurvivesSeparateSessionServices(@TempDir Path temp) throws Exception {
+        Path project = temp.resolve("separate-session-review-project");
+        Files.createDirectories(project);
+        git(project, "init");
+        git(project, "config", "user.name", "SYN-039 Test");
+        git(project, "config", "user.email", "syn039@example.test");
+        Files.writeString(project.resolve("todo.py"), "def add_todo(items, item):\n    return [*items, item]\n");
+        git(project, "add", ".");
+        git(project, "commit", "-m", "baseline");
+
+        new ProjectApplicationService().init(project);
+        new ProviderManualService().install("codex");
+        AgentSessionService ownerSessions = new AgentSessionService();
+        AgentSessionService reviewerSessions = new AgentSessionService();
+        ownerSessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                project, "codex", "separate-owner", null, false));
+        reviewerSessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                project, "codex", "separate-reviewer", null, false));
+        var location = new ProjectApplicationService().locate(project);
+        var bindings = new ProviderSessionBindingService();
+        for (var binding : bindings.list(location, "codex")) {
+            if (binding.worktreePath() != null) {
+                bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), Path.of(binding.worktreePath()));
+            }
+        }
+        var claim = new WorkspaceCollaborationService().announce(project, "codex", "separate-owner",
+                "Implement Todo", "Review the completed Todo snapshot",
+                List.of(ResourceSelector.pathExact("todo.py")));
+        McpProtocolHandler owner = new McpProtocolHandler(ownerSessions, project, "codex", "separate-owner");
+        McpProtocolHandler reviewer = new McpProtocolHandler(reviewerSessions, project, "codex", "separate-reviewer");
+
+        Map<String, Object> projection = innerResult(reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("request_coordination", projection.get("nextAction"), projection.toString());
+        Map<String, Object> result = (Map<String, Object>) projection.get("result");
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        assertEquals("work_group_join", arguments.get("kind"), projection.toString());
+        Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
+        assertEquals(claim.intent().intentId().toString(), payload.get("intentId"), projection.toString());
+
+        String request = reviewer.handleMessage(toolCall("request_coordination", ProviderJson.write(arguments)));
+        assertFalse(request.contains("INTENT_NOT_FOUND"), request);
+        assertTrue(nestedField(request, "request", "requestId") != null, request);
+        assertTrue(owner.handleMessage(toolCall("get_next_action", "{}")).contains("respond_coordination"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void emptyLaneDoesNotProjectUnexecutableFinishLaneAfterReviewGrantConsumption(
             @TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);

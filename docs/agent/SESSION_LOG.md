@@ -87,6 +87,29 @@
 
 # Session Log
 
+## 2026-08-24 — SYN-039 CP-0528 post-fix exact-action diagnostic
+
+- Fresh project `syn039-diagnostic-cp0528-001` used the current bundled MCP,
+  two independent GPT-5.6 Luna High Codex sessions, ready/isolated worktrees,
+  disjoint claims, and one shared WorkGroup.
+- Exact REVIEW admission, owner response, single-use grant consumption,
+  `finish_lane`, immutable snapshot publication, integration, and the control
+  checkout's `pytest` 2/2 passed. The reviewer then received a structured
+  `review_decision` projection for snapshot
+  `snap_2d4def43740098712b51e82199d84153` but chose an unprojected Git read;
+  Synesis returned `workspace_stale`, and recovery returned
+  `internal_failure / request_human_help`.
+- B's earlier omitted `targetParticipant` was fail-closed and later exact
+  retry succeeded, so it is agent-compliance evidence. No unchanged concrete
+  projection failed; no production code changed. WorkGroup remains ACTIVE and
+  Doctor remains DEGRADED with six warnings.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0528-diagnostic-2026-08-24.md`.
+- Exact next action: audit the review-decision agent contract, then run a fresh
+  ordinary acceptance or implement only a proven minimal guidance clarification.
+
+## 2026-08-24 — SYN-039 CP-0526 fix and CP-0527 projection diagnostic
+
 ## 2026-08-24 — SYN-039 CP-0521 ordinary acceptance and CP-0522 diagnostic
 
 - Fresh ordinary project `syn039-ordinary-cp0521-001` used two independent
