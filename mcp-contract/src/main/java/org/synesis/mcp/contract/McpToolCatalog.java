@@ -403,11 +403,15 @@ public final class McpToolCatalog {
         responsePayload.put("proposal", property("string"));
         responsePayload.put("inboxItemId", Map.of("type", "string", "format", "uuid"));
         responsePayload.put("resolution", Map.of("type", "string", "enum", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
-        responsePayload.put("result", Map.of("type", "string", "enum", List.of("accepted", "revision_required")));
+        responsePayload.put("grantId", Map.of("type", "string", "format", "uuid"));
+        responsePayload.put("snapshotId", property("string"));
+        responsePayload.put("intentId", Map.of("type", "string", "format", "uuid"));
+        responsePayload.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
+        responsePayload.put("result", Map.of("type", "string", "enum", List.of("accepted", "revision_required", "rejected")));
         responsePayload.put("implementationRevision", Map.of("type", "integer", "minimum", 1));
         responsePayload.put("failedAcceptanceTests", Map.of("type", "array", "items", property("string")));
         Map<String, Object> responseSchema = objectSchema(Map.of(
-                "kind", Map.of("type", "string", "enum", List.of("capability_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation")),
+                "kind", Map.of("type", "string", "enum", List.of("capability_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation", "review_validation")),
                 "payload", objectSchema(responsePayload, List.of())), List.of("kind", "payload"));
         result.add(descriptor(RESPOND_COORDINATION, "Responds to a pending coordination item or validates an implementation.",
                 responseSchema,

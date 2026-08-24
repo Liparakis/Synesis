@@ -98,6 +98,11 @@ final class McpSyn039SliceTest {
         McpProtocolHandler owner = new McpProtocolHandler(sessions, project, "codex", "syn039-owner");
         McpProtocolHandler reviewer = new McpProtocolHandler(sessions, project, "codex", "syn039-reviewer");
 
+        String catalog = reviewer.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}");
+        assertTrue(catalog.contains("\"review_validation\""), catalog);
+        assertTrue(catalog.contains("\"grantId\""), catalog);
+        assertTrue(catalog.contains("\"snapshotId\""), catalog);
+
         String admissionNext = reviewer.handleMessage(toolCall("get_next_action", "{}"));
         assertTrue(admissionNext.contains("work_group_join"), admissionNext);
         assertTrue(admissionNext.contains(ids.groupId.toString()), admissionNext);
@@ -259,6 +264,40 @@ final class McpSyn039SliceTest {
         assertTrue(reviewerStatus.contains(snapshotId), reviewerStatus);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void reviewerRecoveryPreservesConsumedGrantAfterControlCheckoutAdvances(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        var location = new ProjectApplicationService().locate(fixture.project);
+        var bindings = new ProviderSessionBindingService();
+        var ownerBinding = bindings.find(location, "codex", "syn039-owner-publication").orElseThrow();
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()));
+        var before = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+
+        Files.writeString(fixture.project.resolve("README.md"), "integrated control state\n");
+        git(fixture.project, "add", "README.md");
+        git(fixture.project, "commit", "-m", "integrated snapshot");
+
+        Map<String, Object> stale = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("workspace_stale", stale.get("reason"), stale.toString());
+        assertEquals("ensure_session", stale.get("nextAction"), stale.toString());
+
+        Map<String, Object> ensured = innerResult(fixture.reviewer.handleMessage(toolCall("ensure_session", "{}")));
+        assertEquals("ready", ensured.get("status"), ensured.toString());
+        var after = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        assertEquals(before.sessionId(), after.sessionId());
+        assertFalse(before.worktreePath().equals(after.worktreePath()), after.toString());
+
+        Map<String, Object> validation = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("validation_required", validation.get("reason"), validation.toString());
+        assertEquals("respond_coordination", validation.get("nextAction"), validation.toString());
+        Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
+        assertEquals("review_validation", validationResult.get("nextProtocolKind"), validation.toString());
+        assertTrue(validationResult.containsKey("nextProtocolPayload"), validation.toString());
+    }
+
     @SuppressWarnings("unchecked")
     private static ReviewFixture prepareReviewFixture(Path temp) throws Exception {
         Path project = temp.resolve("review-publication-project");
@@ -314,7 +353,8 @@ final class McpSyn039SliceTest {
                         + "\"intentId\":\"" + grant.get("targetIntentId") + "\","
                         + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
                         + "\"targetParticipant\":\"" + grant.get("targetParticipant") + "\"}}"));
-        return new ReviewFixture(Path.of(ownerBinding.worktreePath()), owner, reviewer, ids.groupId, ids.intentId);
+        return new ReviewFixture(project, Path.of(ownerBinding.worktreePath()), owner, reviewer,
+                ids.groupId, ids.intentId);
     }
 
     private static String toolCall(String name, String arguments) {
@@ -366,6 +406,6 @@ final class McpSyn039SliceTest {
 
     private record UUIDs(java.util.UUID groupId, java.util.UUID intentId) { }
 
-    private record ReviewFixture(Path ownerWorktree, McpProtocolHandler owner, McpProtocolHandler reviewer,
-            UUID groupId, UUID intentId) { }
+    private record ReviewFixture(Path project, Path ownerWorktree, McpProtocolHandler owner,
+            McpProtocolHandler reviewer, UUID groupId, UUID intentId) { }
 }

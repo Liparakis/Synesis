@@ -60,6 +60,23 @@ class McpToolCatalogTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void advertisesTheExistingReviewValidationKindAndPayloadFields() {
+        McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
+                .filter(candidate -> candidate.wireName().equals(McpToolCatalog.RESPOND_COORDINATION))
+                .findFirst().orElseThrow();
+        Map<String, Object> properties = (Map<String, Object>) descriptor.inputSchema().get("properties");
+        Map<String, Object> kind = (Map<String, Object>) properties.get("kind");
+        assertTrue(((List<String>) kind.get("enum")).contains("review_validation"));
+        Map<String, Object> payload = (Map<String, Object>) properties.get("payload");
+        Map<String, Object> payloadProperties = (Map<String, Object>) payload.get("properties");
+        assertTrue(payloadProperties.keySet().containsAll(List.of(
+                "grantId", "snapshotId", "intentId", "claimEpoch", "result")));
+        Map<String, Object> result = (Map<String, Object>) payloadProperties.get("result");
+        assertTrue(((List<String>) result.get("enum")).contains("rejected"));
+    }
+
+    @Test
     void identitiesAreDeterministicAndGuidanceDoesNotRecurse() {
         McpToolCatalog.Identity first = McpToolCatalog.identities(McpToolCatalog.descriptors());
         McpToolCatalog.Identity second = McpToolCatalog.identities(McpToolCatalog.descriptors());
