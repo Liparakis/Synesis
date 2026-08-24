@@ -542,6 +542,9 @@ public final class AgentNextActionService {
         if (review.containsKey("reviewDecision")) {
             projection.put("reviewDecision", review.get("reviewDecision"));
         }
+        if (review.containsKey("reviewAccess")) {
+            projection.put("reviewAccess", review.get("reviewAccess"));
+        }
         return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
                 next, projection);
     }
@@ -726,6 +729,13 @@ public final class AgentNextActionService {
                         "field", "result",
                         "allowedResults", List.of("accepted", "rejected"),
                         "rejectionReasonRequired", true));
+                action.put("reviewAccess", Map.of(
+                        "workspace", "immutable_review_snapshot",
+                        "snapshotId", snapshot.snapshotId(),
+                        "commitSha", snapshot.commitSha(),
+                        "readTools", List.of("read_file", "run_command"),
+                        "writeLaneProtected", true,
+                        "instruction", "Inspect the immutable snapshot with read_file and run_command before deciding; do not patch it."));
             }
             action.put("nextProtocolPayload", payload);
             action.put("grant", laneGrantMap(grant));

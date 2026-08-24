@@ -20,6 +20,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.agent.AgentTaskCompletionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
@@ -86,6 +87,7 @@ public final class McpProtocolHandler {
     private final AgentTaskCompletionService taskCompletionService;
     private final org.synesis.workspace.application.agent.AgentTaskCancellationService taskCancellationService;
     private final WorkspaceCollaborationService collaborationService;
+    private final ReviewSnapshotAccessService reviewSnapshotAccessService;
     private final SessionAuthorityResolver authorityResolver;
     private final SessionLeaseService leaseService;
     private final SessionLeasePolicy leasePolicy;
@@ -143,6 +145,7 @@ public final class McpProtocolHandler {
         this.taskCompletionService = new AgentTaskCompletionService();
         this.taskCancellationService = new org.synesis.workspace.application.agent.AgentTaskCancellationService();
         this.collaborationService = new WorkspaceCollaborationService();
+        this.reviewSnapshotAccessService = new ReviewSnapshotAccessService();
         this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
         this.leaseService = new SessionLeaseService();
         this.leasePolicy = new SessionLeasePolicy();
@@ -817,9 +820,15 @@ public final class McpProtocolHandler {
                     agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
                 } else {
                     try {
-                        ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(
+                        AgentResponse reviewCommand = reviewSnapshotAccessService.runReviewCommand(
                                 activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
-                        agentResponse = runDurableCommand(cmdReq, id);
+                        if (reviewCommand != null) {
+                            agentResponse = reviewCommand;
+                        } else {
+                            ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(
+                                    activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
+                            agentResponse = runDurableCommand(cmdReq, id);
+                        }
                     } catch (IllegalArgumentException ex) {
                         agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
                     }

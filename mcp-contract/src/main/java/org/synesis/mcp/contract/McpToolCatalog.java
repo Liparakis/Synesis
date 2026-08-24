@@ -323,7 +323,7 @@ public final class McpToolCatalog {
         result.add(descriptor(ENSURE_SESSION, "Ensures an active, verified Synesis workspace session. Before visible task mutation, include task.goal, task.acceptance, and task.claims to announce intent and acquire the exact repository-relative ownership selectors; likelyScopes alone does not announce work or acquire claims.",
                 objectSchema(Map.of("task", taskSchema, "refresh", property("boolean")), List.of()),
                 "ensure-session", "MUTATING", List.of("SESSION_BINDING"), 1));
-        result.add(descriptor(READ_FILE, "Reads text file content from the assigned worktree.",
+        result.add(descriptor(READ_FILE, "Reads text file content from the assigned worktree, or from the authorized immutable snapshot workspace while a REVIEW decision is pending.",
                 objectSchema(Map.of(
                         "path", Map.of("type", "string", "description", "Repository-relative file path"),
                         "startLine", Map.of("type", "integer", "description", "1-based starting line number (default: 1)"),
@@ -355,7 +355,7 @@ public final class McpToolCatalog {
         Map<String, Object> commandResult = objectSchema(Map.of(
                 "status", property("string"),
                 "result", commandEvidence), List.of());
-        result.add(descriptor(RUN_COMMAND, "Executes direct argv inside the assigned worktree.",
+        result.add(descriptor(RUN_COMMAND, "Executes direct argv inside the assigned worktree, or inside the authorized immutable snapshot workspace during REVIEW validation.",
                 objectSchema(Map.of(
                         "argv", Map.of("type", "array", "minItems", 1, "items", property("string"),
                                 "description", "Executable and arguments passed directly without a shell"),

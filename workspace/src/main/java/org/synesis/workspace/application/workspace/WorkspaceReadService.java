@@ -15,6 +15,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentWorkspaceGuidance;
+import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.infrastructure.filesystem.TextFileDocument;
 import org.synesis.workspace.project.ProjectPathResolver;
 
@@ -30,6 +31,7 @@ public final class WorkspaceReadService {
 
     private final ProjectApplicationService projectService;
     private final WorkspaceReadinessService readinessService;
+    private final ReviewSnapshotAccessService reviewSnapshotAccessService;
 
     /**
      * Creates a workspace read service instance.
@@ -37,6 +39,7 @@ public final class WorkspaceReadService {
     public WorkspaceReadService() {
         this.projectService = new ProjectApplicationService();
         this.readinessService = new WorkspaceReadinessService();
+        this.reviewSnapshotAccessService = new ReviewSnapshotAccessService();
     }
 
     /**
@@ -86,25 +89,38 @@ public final class WorkspaceReadService {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
 
-        ProjectApplicationService.ProjectLocation location;
-        WorkspaceReadinessService.ReadinessResult readiness;
-        try {
-            location = projectService.locate(root);
-            readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-        }
-        if (!readiness.ready()) {
-            return readiness.response();
-        }
-        Path assignedWorktree = readiness.worktree();
-
-        // 2. Relative Path & Traversal Validation
         String rawPath = request.relativePath();
-        if (Path.of(rawPath).isAbsolute() || rawPath.contains("..")) {
+        if (isInvalidOrProtectedPath(rawPath)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
+        ProjectApplicationService.ProjectLocation location;
+        ReviewSnapshotAccessService.Access reviewAccess = null;
+        Path assignedWorktree;
+        try {
+            location = projectService.locate(root);
+            ReviewSnapshotAccessService.AccessResult reviewResolution = reviewSnapshotAccessService.resolve(
+                    root, request.provider(), request.connectionInstanceId());
+            if (reviewResolution.denied()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                        AgentNextAction.RETRY, Map.of("error", reviewResolution.error()));
+            }
+            if (reviewResolution.available()) {
+                reviewAccess = reviewResolution.access();
+                assignedWorktree = reviewAccess.worktreePath();
+            } else {
+                WorkspaceReadinessService.ReadinessResult readiness = readinessService.assess(
+                        location, request.provider(), request.connectionInstanceId());
+                if (!readiness.ready()) {
+                    return readiness.response();
+                }
+                assignedWorktree = readiness.worktree();
+            }
+        } catch (Exception ex) {
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        }
+
+        // 2. Relative Path & Traversal Validation
         String resolvedRelative;
         try {
             resolvedRelative = ProjectPathResolver.resolve(assignedWorktree, rawPath);
@@ -113,11 +129,7 @@ public final class WorkspaceReadService {
         }
 
         // Protected internal path check (.synesis, .codex, .agents, .git)
-        String normTarget = resolvedRelative.replace('\\', '/').toLowerCase();
-        if (normTarget.startsWith(".synesis/") || normTarget.startsWith(".codex/")
-                || normTarget.startsWith(".agents/") || normTarget.startsWith(".git/")
-                || normTarget.equals(".synesis") || normTarget.equals(".codex")
-                || normTarget.equals(".agents") || normTarget.equals(".git")) {
+        if (isInvalidOrProtectedPath(resolvedRelative)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
@@ -141,6 +153,7 @@ public final class WorkspaceReadService {
             missing.put("contentHash", "");
             missing.put("truncated", false);
             missing.put("createAllowed", true);
+            addReviewMetadata(missing, reviewAccess);
             return new AgentResponse(AgentStatus.COMPLETED, null, null, missing);
         }
 
@@ -186,6 +199,7 @@ public final class WorkspaceReadService {
             res.put("content", "");
             res.put("contentHash", document.revision());
             res.put("truncated", true);
+            addReviewMetadata(res, reviewAccess);
             return new AgentResponse(AgentStatus.COMPLETED, null, null, res);
         }
 
@@ -222,8 +236,38 @@ public final class WorkspaceReadService {
         result.put("content", finalContent);
         result.put("contentHash", document.revision());
         result.put("truncated", truncated);
+        addReviewMetadata(result, reviewAccess);
 
         return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
+    }
+
+    private static boolean isInvalidOrProtectedPath(String path) {
+        if (path == null || path.isBlank()) {
+            return true;
+        }
+        try {
+            if (Path.of(path).isAbsolute() || path.contains("..")) {
+                return true;
+            }
+        } catch (RuntimeException invalidPath) {
+            return true;
+        }
+        String normalized = path.replace('\\', '/').toLowerCase(java.util.Locale.ROOT);
+        return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/")
+                || normalized.startsWith(".agents/") || normalized.startsWith(".git/")
+                || normalized.equals(".synesis") || normalized.equals(".codex")
+                || normalized.equals(".agents") || normalized.equals(".git");
+    }
+
+    private static void addReviewMetadata(Map<String, Object> result,
+            ReviewSnapshotAccessService.Access reviewAccess) {
+        if (reviewAccess == null) {
+            return;
+        }
+        result.put("workspace", "immutable_review_snapshot");
+        result.put("reviewGrantId", reviewAccess.grant().grantId().toString());
+        result.put("reviewSnapshotId", reviewAccess.snapshot().snapshotId());
+        result.put("reviewCommitSha", reviewAccess.snapshot().commitSha());
     }
 
     private static AgentResponse workspaceMismatch(Path controlRoot, Path assignedWorktree) {

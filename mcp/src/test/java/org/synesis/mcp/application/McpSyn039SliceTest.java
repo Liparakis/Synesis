@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
@@ -237,6 +238,11 @@ final class McpSyn039SliceTest {
         assertEquals(List.of("accepted", "rejected"), reviewDecision.get("allowedResults"));
         assertEquals(Boolean.TRUE, reviewDecision.get("rejectionReasonRequired"));
         assertEquals(reviewDecision, validationWorkflow.get("decision"));
+        Map<String, Object> reviewAccess = (Map<String, Object>) validationResult.get("reviewAccess");
+        assertEquals("immutable_review_snapshot", reviewAccess.get("workspace"));
+        assertEquals("snap_reviewable", reviewAccess.get("snapshotId"));
+        assertEquals(List.of("read_file", "run_command"), reviewAccess.get("readTools"));
+        assertEquals(Boolean.TRUE, reviewAccess.get("writeLaneProtected"));
         assertFalse(projectedValidationPayload.containsKey("workGroupId"));
         assertFalse(projectedValidationPayload.containsKey("targetParticipant"));
         String wrongSnapshot = reviewer.handleMessage(toolCall("respond_coordination",
@@ -489,6 +495,82 @@ final class McpSyn039SliceTest {
         var after = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
         assertEquals(reviewerBinding.worktreePath(), after.worktreePath(),
                 "review-only continuation must not replace a dirty worktree");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void dirtyReviewerCannotReadAuthorizedImmutableSnapshotAfterControlAdvances(
+            @TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        var location = new ProjectApplicationService().locate(fixture.project);
+        var bindings = new ProviderSessionBindingService();
+        var ownerBinding = bindings.find(location, "codex", "syn039-owner-publication").orElseThrow();
+        var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+        Path reviewerWork = reviewerWorktree.resolve("reviewer-notes.txt");
+        Files.writeString(reviewerWork, "legitimate review notes\n");
+
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()));
+        Files.writeString(fixture.project.resolve("README.md"), "integrated control state\n");
+        git(fixture.project, "add", "README.md");
+        git(fixture.project, "commit", "-m", "integrated snapshot");
+
+        String read = fixture.reviewer.handleMessage(toolCall("read_file", "{\"path\":\"todo.py\"}"));
+        Map<String, Object> readEnvelope = innerResult(read);
+        assertEquals("completed", readEnvelope.get("status"), read);
+        Map<String, Object> readResult = mapValue(readEnvelope.get("result"));
+        assertEquals("immutable_review_snapshot", readResult.get("workspace"), read);
+        assertEquals("snap_reviewable", readResult.get("reviewSnapshotId"), read);
+        assertTrue(String.valueOf(readResult.get("content")).contains("add_todo"), read);
+
+        String command = fixture.reviewer.handleMessage(toolCall("run_command",
+                "{\"argv\":[\"git\",\"rev-parse\",\"HEAD\"]}"));
+        Map<String, Object> commandEnvelope = innerResult(command);
+        assertEquals("completed", commandEnvelope.get("status"), command);
+        Map<String, Object> commandResult = mapValue(commandEnvelope.get("result"));
+        assertEquals("completed", commandResult.get("outcome"), command);
+        assertEquals("immutable_review_snapshot", commandResult.get("workspace"), command);
+        assertEquals("snap_reviewable", commandResult.get("reviewSnapshotId"), command);
+
+        String recovery = fixture.reviewer.handleMessage(toolCall("ensure_session", "{}"));
+        assertEquals("failed", innerResult(recovery).get("status"), recovery);
+        assertEquals("internal_failure", innerResult(recovery).get("reason"), recovery);
+        assertTrue(Files.exists(reviewerWork), "dirty reviewer work must remain intact");
+        var after = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        assertEquals(reviewerBinding.worktreePath(), after.worktreePath(),
+                "failed recovery must not replace the dirty reviewer worktree");
+
+        ReviewSnapshotAccessService accessService = new ReviewSnapshotAccessService();
+        ReviewSnapshotAccessService.AccessResult access = accessService.resolve(
+                fixture.project, "codex", "syn039-reviewer-publication");
+        assertTrue(access.available(), String.valueOf(access.error()));
+        accessService.remove(fixture.project, access.access().grant().grantId());
+    }
+
+    @Test
+    void reviewSnapshotAccessFailsClosedForWrongParticipantAndMismatchedRef(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        new AgentSessionService().ensureSession(new AgentSessionService.SessionResolutionRequest(
+                fixture.project, "codex", "syn039-wrong-reviewer", null, false));
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                currentParticipant(fixture.project, "syn039-owner-publication"));
+
+        ReviewSnapshotAccessService accessService = new ReviewSnapshotAccessService();
+        ReviewSnapshotAccessService.AccessResult wrongParticipant = accessService.resolve(
+                fixture.project, "codex", "syn039-wrong-reviewer");
+        assertFalse(wrongParticipant.available());
+
+        Files.writeString(fixture.project.resolve("README.md"), "different ref target\n");
+        git(fixture.project, "add", "README.md");
+        git(fixture.project, "commit", "-m", "advance ref target");
+        String wrongCommit = gitOutput(fixture.project, "rev-parse", "HEAD");
+        git(fixture.project, "update-ref", "refs/synesis/snapshots/snap_reviewable", wrongCommit);
+
+        ReviewSnapshotAccessService.AccessResult mismatchedRef = accessService.resolve(
+                fixture.project, "codex", "syn039-reviewer-publication");
+        assertTrue(mismatchedRef.denied(), String.valueOf(mismatchedRef.error()));
+        assertEquals("REVIEW_SNAPSHOT_COMMIT_MISMATCH", mismatchedRef.error());
     }
 
     @Test
@@ -754,6 +836,11 @@ final class McpSyn039SliceTest {
         return value instanceof Map<?, ?> map && map.get(field) instanceof String text ? text : null;
     }
 
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mapValue(Object value) {
+        return (Map<String, Object>) value;
+    }
+
     private static void git(Path root, String... args) throws Exception {
         String[] command = new String[args.length + 3];
         command[0] = "git";
@@ -765,17 +852,31 @@ final class McpSyn039SliceTest {
         if (process.waitFor() != 0) throw new IllegalStateException(output);
     }
 
+    private static String gitOutput(Path root, String... args) throws Exception {
+        String[] command = new String[args.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = root.toString();
+        System.arraycopy(args, 0, command, 3, args.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes()).trim();
+        if (process.waitFor() != 0) throw new IllegalStateException(output);
+        return output;
+    }
+
     private static void appendReviewableSnapshot(Path project, UUIDs ids, String ownerParticipant) throws Exception {
         var location = new ProjectApplicationService().locate(project);
         var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        String commit = gitOutput(project, "rev-parse", "HEAD");
         SnapshotProvenance provenance = new SnapshotProvenance(ids.groupId(), ids.intentId(),
-                identity.nodeId(), ownerParticipant, 1, List.of(), List.of(), List.of("PATH_EXACT:todo.py"),
+                ownerParticipant, "owner-session", 1, List.of(), List.of(), List.of("PATH_EXACT:todo.py"),
                 "refs/synesis/snapshots/snap_reviewable", "test-integrity");
         TaskSnapshotPayload snapshot = new TaskSnapshotPayload(
                 UUID.nameUUIDFromBytes("syn039-review-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 "snap_reviewable", identity.nodeId(), "supervisor", "worker", "owner-session",
-                "HEAD", "HEAD", List.of("todo.py"), List.of(), "reviewable Todo", provenance);
+                commit, commit, List.of("todo.py"), List.of(), "reviewable Todo", provenance);
+        git(project, "update-ref", "refs/synesis/snapshots/snap_reviewable", commit);
         store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED,
                 identity.nodeId(), snapshot.encode(), identity);
     }

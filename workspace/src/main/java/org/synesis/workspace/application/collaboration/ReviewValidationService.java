@@ -34,6 +34,7 @@ public final class ReviewValidationService {
     private final ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
     private final SessionAuthorityResolver authorityResolver = new SessionAuthorityResolver(bindingService);
     private final ProviderManualService manualService = new ProviderManualService();
+    private final ReviewSnapshotAccessService reviewSnapshotAccessService = new ReviewSnapshotAccessService();
 
     /** Creates the review validation service. */
     public ReviewValidationService() {
@@ -145,6 +146,7 @@ public final class ReviewValidationService {
                             identity.nodeId(), CollaborationCodec.encodeWorkGroup(completed), identity);
                     group = completed;
                 }
+                reviewSnapshotAccessService.remove(root, grant.grantId());
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("grantId", grant.grantId().toString());
                 result.put("snapshotId", snapshot.snapshotId());
