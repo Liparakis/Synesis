@@ -1,5 +1,46 @@
 # Next Session
 
+## CP-0485 continuation
+
+The clean-harness exact-rule diagnostic used fresh project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0485-001`, with the
+harness outside the project and a clean control checkout before launch. Both
+independent GPT-5.6 Luna sessions used the current bundled MCP
+(`0.1.0-SNAPSHOT`, SHA-256
+`27D6BE820B82A8C8CED3966DF9DD2A0AEE1FC897659F46462D8B7166D46CF7E3`), reached
+the same project in distinct `ready / isolated` sessions, held disjoint claims,
+and converged on WorkGroup `a5b6fdc4-51cb-3398-be5a-76126258984f`.
+
+The reviewer executed the exact projected `request_coordination` admission
+action. The owner executed the exact projected `respond_coordination` action
+for requests `4a2d5e88-22b4-40d6-95b3-2053472487b0` and
+`e4617626-b3b8-4772-99d1-57b3b7ffea03`; grants
+`ce12bf95-e493-38c7-a75b-fc78f5b03782` and
+`7b4f4964-8631-3b80-bb99-0552b05c67d7` targeted the reviewer at epoch 1.
+The owner subsequently chose unprojected `finish_lane` during ordinary
+`IMPLEMENT`; preserve this as agent-compliance evidence only.
+
+The first exact projected-action failure was reviewer recovery:
+`workspace_stale` projected `ensure_session({})`, and two exact retries both
+returned `internal_failure` / `request_human_help`. No grant consumption,
+snapshot review, validation, or closure occurred. Final WorkGroup state was
+ACTIVE; the integrated control checkout was clean at `166228f5`. Doctor was
+DEGRADED with six warnings, including two `stale_session_lease` warnings.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0485-exact-rule-diagnostic-2026-08-24.md`.
+
+- Exact next code action: reproduce the live reviewer stale-session recovery
+  in a deterministic two-session fixture and trace lease, heartbeat,
+  connection, binding, worktree, process-anchor, and provider-process state
+  through `ensure_session`; fix only a proven fail-closed readiness defect.
+- Do not run the second ordinary acceptance until the bounded diagnostic
+  completes, and do not modify production code for the owner's unprojected
+  lifecycle choice.
+- Run focused session/readiness/MCP tests, SYN-039 tests, validators, Javadocs,
+  Doctor, and `git diff --check`; keep the root Git stall, bootstrap migration
+  failures, and unrelated Doctor warnings separate.
+- Do not push or create SYN-040.
+
 ## CP-0483 continuation
 
 The fresh post-fix diagnostic fixture

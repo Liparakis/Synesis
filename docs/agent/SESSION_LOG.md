@@ -1,5 +1,36 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0485 clean-harness exact-rule diagnostic
+
+- Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0485-001`
+  used a harness outside the project, a clean control checkout, and the
+  rebuilt bundled MCP (`0.1.0-SNAPSHOT`, SHA-256
+  `27D6BE820B82A8C8CED3966DF9DD2A0AEE1FC897659F46462D8B7166D46CF7E3`). Both
+  independent GPT-5.6 Luna sessions reached the same project in distinct
+  `ready / isolated` sessions and held disjoint claims.
+- The sessions converged on WorkGroup
+  `a5b6fdc4-51cb-3398-be5a-76126258984f`. The reviewer executed exact
+  projected `request_coordination(work_group_join)`; the owner executed exact
+  projected acceptance for requests
+  `4a2d5e88-22b4-40d6-95b3-2053472487b0` and
+  `e4617626-b3b8-4772-99d1-57b3b7ffea03`. Grants
+  `ce12bf95-e493-38c7-a75b-fc78f5b03782` and
+  `7b4f4964-8631-3b80-bb99-0552b05c67d7` targeted the reviewer at epoch 1.
+- The owner chose unprojected `finish_lane` while ordinary `IMPLEMENT` was
+  projected. This is agent-compliance evidence and caused no production
+  change. The first exact projected action failure was reviewer recovery:
+  `workspace_stale` → `ensure_session({})`, twice returning
+  `internal_failure` / `request_human_help`.
+- No grant consumption, snapshot validation, structured decision, or closure
+  was reached. WorkGroup remained ACTIVE; the integrated control checkout was
+  clean at `166228f5a6b17208175231984f7cbce9e4090dfc`. Doctor remained
+  DEGRADED with six warnings, including two `stale_session_lease` warnings.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0485-exact-rule-diagnostic-2026-08-24.md`.
+  No second ordinary acceptance was run because the diagnostic did not
+  complete. Exact next action: trace the live reviewer lease/readiness failure
+  before changing production code.
+
 # 2026-08-24 — SYN-039 CP-0483 active-reviewer projection diagnostic
 
 - Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0483-001`

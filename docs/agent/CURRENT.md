@@ -12,6 +12,69 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0485 clean-harness exact-rule diagnostic
+
+The clean-harness rerun used a fresh Git + Synesis project and the rebuilt
+bundled MCP (`0.1.0-SNAPSHOT`, SHA-256
+`27D6BE820B82A8C8CED3966DF9DD2A0AEE1FC897659F46462D8B7166D46CF7E3`). Both
+GPT-5.6 Luna sessions reached `ready / isolated` on the same project with
+distinct identities, disjoint `todo.py` / `test_todo.py` claims, and one
+shared WorkGroup. The harness was outside the project and the control
+checkout was clean before launch.
+
+WorkGroup `a5b6fdc4-51cb-3398-be5a-76126258984f` was reached. The reviewer
+received the exact `REVIEW_ADMISSION_REQUIRED` projection and executed the
+projected `request_coordination(work_group_join)` action. The owner executed
+both exact projected `respond_coordination` acceptance actions, producing
+requests `4a2d5e88-22b4-40d6-95b3-2053472487b0` and
+`e4617626-b3b8-4772-99d1-57b3b7ffea03`, and grants
+`ce12bf95-e493-38c7-a75b-fc78f5b03782` and
+`7b4f4964-8631-3b80-bb99-0552b05c67d7` targeted to the reviewer at epoch 1.
+
+The owner then violated the diagnostic rule by selecting unprojected
+`finish_lane` while `get_next_action` still returned ordinary `IMPLEMENT`.
+That is agent-compliance evidence, not a production defect. The reviewer later
+received the concrete recovery projection `workspace_stale` →
+`ensure_session`, executed `ensure_session({})` twice exactly, and both calls
+returned `internal_failure` / `request_human_help`. No validation decision or
+WorkGroup closure was reached. The integrated control checkout was clean at
+`166228f5a6b17208175231984f7cbce9e4090dfc`, but the WorkGroup remained ACTIVE
+with the two pending REVIEW grants.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0485-exact-rule-diagnostic-2026-08-24.md`.
+
+## Work completed
+
+The reviewer-first snapshot-admission projection fix is committed as
+`5fe613f`. Focused workspace/MCP regression coverage, Javadocs, bundle rebuild,
+validators, and `git diff --check` pass. The CP-0485 clean-harness run proves
+exact REVIEW admission and owner acceptance, but does not prove grant
+consumption, validation, rejection routing, closure, or final Doctor health.
+
+## Current failures
+
+The first exact projected action failure in the valid clean-harness run is the
+reviewer session recovery path: after both REVIEW requests were accepted, the
+reviewer became `workspace_stale`; its projected `ensure_session({})` failed
+twice with `internal_failure`. This is directly associated with the existing
+`stale_session_lease` Doctor warning, but the lease/heartbeat/process evidence
+has not yet been traced to a production root cause. The recurring Git
+subprocess stall, bootstrap migration failures, and other Doctor warnings
+remain separately classified. No second ordinary acceptance was run because
+the diagnostic did not complete and the owner violated the exact-action rule.
+
+## Immediate next action
+
+Reproduce the live reviewer `workspace_stale` → `ensure_session` failure in a
+deterministic two-session MCP fixture. Capture connection IDs, lease/session/
+binding/worktree identities, heartbeat timestamps, process-anchor evidence,
+provider process lifetime, and the exact exception path. Only if that trace
+proves a Synesis lease/readiness defect, implement the smallest fail-closed
+fix and regression; otherwise preserve it as harness/provider evidence. Do
+not change review, snapshot, validation, integration, cleanup, Doctor, or
+ownership behavior speculatively. Do not push or create SYN-040.
+
 ## CP-0480 convergence projection slice
 
 The CP-0480 diagnostic and ordinary runs did not reproduce a backend

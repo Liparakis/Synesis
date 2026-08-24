@@ -1851,3 +1851,34 @@ subprocess stall; bootstrap Go migration tests also remain separately failing.
 Exact next action: install/use the current bundled Synesis MCP distribution
 for both agents and rerun the same unattended Todo test without babysitting.
 Do not create SYN-040.
+
+## SYN-039 CP-0485 update
+
+The clean-harness exact-rule diagnostic used the current bundled MCP and a
+fresh project with the harness outside the project and a clean control
+checkout. Both independent sessions reached distinct `ready / isolated`
+bindings, held disjoint claims, and converged on WorkGroup
+`a5b6fdc4-51cb-3398-be5a-76126258984f`.
+
+The reviewer executed the exact projected `request_coordination` admission
+action. The owner executed the exact projected `respond_coordination`
+acceptance for requests `4a2d5e88-22b4-40d6-95b3-2053472487b0` and
+`e4617626-b3b8-4772-99d1-57b3b7ffea03`, producing reviewer grants
+`ce12bf95-e493-38c7-a75b-fc78f5b03782` and
+`7b4f4964-8631-3b80-bb99-0552b05c67d7` at epoch 1. The owner then selected
+unprojected `finish_lane` during ordinary `IMPLEMENT`; this remains
+agent-compliance evidence, not a production defect.
+
+The first exact projected-action failure was reviewer recovery:
+`workspace_stale` projected `ensure_session({})`, and two exact retries
+returned `internal_failure` / `request_human_help`. No grant consumption,
+validation, integration, or closure was reached. The WorkGroup remained
+ACTIVE and Doctor remained DEGRADED with six warnings, including two
+`stale_session_lease` warnings. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0485-exact-rule-diagnostic-2026-08-24.md`.
+
+Exact next action: reproduce the live reviewer stale-session recovery with
+connection, lease, heartbeat, binding, worktree, process-anchor, and provider
+process evidence. Implement only a proven fail-closed readiness defect; keep
+the root Git subprocess stall, bootstrap migration failures, and unrelated
+Doctor warnings separate. Do not create SYN-040.
