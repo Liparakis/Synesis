@@ -1,5 +1,30 @@
 # Tasks
 
+## SYN-039 CP-0536 update
+
+CP-0535 proved a concrete lifecycle defect: a late disjoint intent could be
+announced into a terminal WorkGroup, leaving the participant active with no
+usable completion projection. The narrow fix rejects explicit intents whose
+WorkGroup is not `ACTIVE` and allocates a fresh default WorkGroup when the
+canonical default is terminal. Deterministic coordination and workspace
+regressions pass.
+
+The CP-0536 bounded diagnostic reached exact REVIEW admission, grant
+consumption, snapshot publication, immutable review inspection, structured
+REJECT/ACCEPT, integration, and WorkGroup `COMPLETED`. The second ordinary
+acceptance reached one shared WorkGroup and integrated the first test snapshot,
+but an agent changed and then ignored a concrete projected coordination action
+before its turn ended. The reciprocal grant remained unresolved. This is
+agent-compliance evidence, not a new production defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
+
+The next narrow action is focused/full verification and local commit of this
+guard, its regressions, and the durable evidence/state updates. Preserve
+fail-closed ownership, grant, epoch, snapshot, validation, integration, and
+cleanup semantics. Do not push or create SYN-040.
+
 ## SYN-039 CP-0534 update
 
 The reviewer snapshot-access slice is implemented in commit `a03abe0` and

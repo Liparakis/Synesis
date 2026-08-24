@@ -34,6 +34,40 @@ import org.synesis.workspace.agent.AgentStatus;
 /** Deterministic acceptance of two isolated same-provider mutation lanes. */
 final class MultiChatLogicalWorkspaceTest {
     @Test
+    void newDefaultLaneUsesFreshWorkGroupAfterDefaultGroupCompletes() throws Exception {
+        Path root = Files.createTempDirectory("synesis-workgroup-terminal-");
+        git(root, "init");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", ".");
+        git(root, "commit", "-m", "base");
+
+        new ProviderManualService().install("codex");
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        bindings.ensure(location, "codex", "terminal-owner");
+        bindings.ensure(location, "codex", "terminal-late");
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+
+        assertTrue(collaboration.announce(root, "codex", "terminal-owner", "initial", "complete",
+                List.of(ResourceSelector.pathExact("src/initial.py"))).acquired());
+        var original = collaboration.status(root).groups().stream().findFirst().orElseThrow();
+        collaboration.closeWorkGroup(root, original.workGroupId(),
+                org.synesis.coordination.domain.collaboration.WorkGroup.Status.COMPLETED, original.version());
+
+        var late = collaboration.announce(root, "codex", "terminal-late", "new task", "complete",
+                List.of(ResourceSelector.pathExact("src/new.py")));
+        assertTrue(late.acquired());
+        assertNotEquals(original.workGroupId(), late.intent().workGroupId());
+        var groups = collaboration.status(root).groups();
+        assertEquals(org.synesis.coordination.domain.collaboration.WorkGroup.Status.COMPLETED,
+                groups.stream().filter(group -> group.workGroupId().equals(original.workGroupId()))
+                        .findFirst().orElseThrow().status());
+        assertEquals(org.synesis.coordination.domain.collaboration.WorkGroup.Status.ACTIVE,
+                groups.stream().filter(group -> group.workGroupId().equals(late.intent().workGroupId()))
+                        .findFirst().orElseThrow().status());
+    }
+
+    @Test
     void disjointLanesMutateIndependentlyAndOverlapHasOneWinner() throws Exception {
         Path root = Files.createTempDirectory("synesis-workgroup-acceptance-");
         git(root, "init");

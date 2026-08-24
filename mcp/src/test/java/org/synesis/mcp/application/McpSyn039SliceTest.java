@@ -582,10 +582,20 @@ final class McpSyn039SliceTest {
         var bindings = new ProviderSessionBindingService();
         var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
         Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+
+        // Keep the reviewer intent active before accepting the owner's snapshot.
+        // A new intent must not be appended to a WorkGroup after that group has
+        // reached a terminal state; the active sibling is the existing-model
+        // continuation this fixture is intended to exercise.
+        var reviewerClaim = collaboration.announce(fixture.project, "codex",
+                "syn039-reviewer-publication", "Add reviewer regression coverage",
+                "Publish the reviewer test snapshot after owner admission",
+                List.of(ResourceSelector.pathExact("reviewer-notes.txt")));
+        assertEquals(fixture.groupId, reviewerClaim.intent().workGroupId());
 
         appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
                 currentParticipant(fixture.project, "syn039-owner-publication"));
-        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         collaboration.release(fixture.project, "codex", "syn039-owner-publication");
         Map<String, Object> validation = innerResult(
                 fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
@@ -599,12 +609,6 @@ final class McpSyn039SliceTest {
         String accepted = fixture.reviewer.handleMessage(toolCall(
                 "respond_coordination", ProviderJson.write(validationArguments)));
         assertTrue(accepted.contains("ACCEPTED"), accepted);
-
-        var reviewerClaim = collaboration.announce(fixture.project, "codex",
-                "syn039-reviewer-publication", "Add reviewer regression coverage",
-                "Publish the reviewer test snapshot after owner admission",
-                List.of(ResourceSelector.pathExact("reviewer-notes.txt")));
-        assertEquals(fixture.groupId, reviewerClaim.intent().workGroupId());
 
         String reviewRequest = fixture.owner.handleMessage(toolCall("request_coordination",
                 "{\"kind\":\"work_group_join\",\"payload\":{"

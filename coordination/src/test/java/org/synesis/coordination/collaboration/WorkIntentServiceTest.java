@@ -16,6 +16,7 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
@@ -75,6 +76,33 @@ final class WorkIntentServiceTest {
         assertEquals(legacyId, new WorkIntent(legacyId, project, "agt-legacy", "codex", UUID.randomUUID(),
                 "g", "a", "base", List.of(ResourceSelector.pathExact("src/b.py")), 1,
                 WorkIntent.Status.ANNOUNCED).workGroupId());
+    }
+
+    @Test
+    void lateIntentCannotBeAnnouncedIntoCompletedWorkGroup(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent completedLane = intent(project, "agt-completed", ResourceSelector.pathExact("src/completed.py"));
+        assertTrue(service.announce(completedLane).acquired());
+
+        WorkGroup group = new PredictionEventStore(temp, project).workGroupProjection()
+                .group(completedLane.workGroupId()).orElseThrow();
+        new WorkGroupService(new PredictionEventStore(temp, project), identity)
+                .close(group.workGroupId(), WorkGroup.Status.COMPLETED, group.version());
+
+        WorkIntent lateLane = new WorkIntent(UUID.randomUUID(), project, "agt-late", "codex",
+                UUID.randomUUID(), completedLane.goal(), completedLane.acceptance(), completedLane.baseCommit(),
+                List.of(ResourceSelector.pathExact("src/late.py")), 1, completedLane.workGroupId(),
+                WorkIntent.Status.ANNOUNCED);
+        assertThrows(java.io.IOException.class, () -> service.announce(lateLane));
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertEquals(WorkGroup.Status.COMPLETED,
+                replayed.workGroupProjection().group(completedLane.workGroupId()).orElseThrow().status());
+        assertTrue(replayed.collaborationProjection().activeIntents().stream()
+                .noneMatch(candidate -> candidate.intentId().equals(lateLane.intentId())));
     }
 
     @Test

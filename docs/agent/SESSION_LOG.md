@@ -1,3 +1,21 @@
+## 2026-08-24 — SYN-039 CP-0536 bounded and ordinary acceptance
+
+- Reproduced the CP-0535 late-intent defect: an active intent could enter a
+  completed WorkGroup and then had no executable completion action.
+- Implemented the narrow terminal WorkGroup guard and fresh default-group
+  allocation; deterministic coordination/workspace regressions passed.
+- Rebuilt the current MCP and ran a fresh bounded exact-action diagnostic.
+  WorkGroup `62241cb0-1e0d-3030-a945-e7f2dc5c37fb` completed after exact
+  admission, grants, snapshot publication, immutable review, structured
+  REJECT/ACCEPT, integration, and control pytest 5/5.
+- Ran the required second ordinary acceptance. It stopped at agent compliance:
+  Agent B ignored a concrete projected `request_coordination` action and its
+  turn ended, leaving WorkGroup `1c9fd0e2-eda4-3505-a20e-db86de14ec8a`
+  ACTIVE with grant `4ba34d35-976a-3d55-bc40-0d7c9656f46b` unresolved.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
+- No push, remote mutation, or SYN-040 creation.
+
 # 2026-08-24 — SYN-039 CP-0534 reviewer snapshot access
 
 - Commit `a03abe0` fixed the concrete reviewer snapshot-access defect by

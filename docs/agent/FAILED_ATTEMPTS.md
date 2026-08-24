@@ -1,5 +1,28 @@
 # Failed Attempts
 
+## 2026-08-24 — SYN-039 CP-0536 ordinary acceptance compliance stop
+
+- Attempted approach: Run a fresh ordinary two-agent Todo acceptance after the
+  CP-0535 terminal-WorkGroup guard, with only complementary visible coding
+  prompts.
+- Expected result: Agents would follow the existing projected coordination
+  actions through reciprocal review, publication, validation, integration, and
+  closure without relay.
+- Observed result: The first test snapshot published and integrated. Agent A
+  initially changed the projected WorkGroup ID in a REVIEW admission request,
+  then corrected it. Agent B later received the exact projected
+  `request_coordination(work_group_join)` action, called `get_next_action`
+  again instead, and its turn ended. WorkGroup
+  `1c9fd0e2-eda4-3505-a20e-db86de14ec8a` remained ACTIVE with reciprocal grant
+  `4ba34d35-976a-3d55-bc40-0d7c9656f46b` unresolved.
+- Root cause: Agent action/turn engagement deviated from the durable
+  projection contract. No unchanged projected lifecycle action failed and no
+  backend defect is proven.
+- Evidence: `docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
+- Retry prohibition: Do not change production lifecycle behavior for this
+  compliance deviation. A future acceptance may be run only to test ordinary
+  agent behavior after the verified local commit.
+
 ## 2026-07-20 — Java 25 ephemeral TLS certificate generation
 
 - Date: 2026-07-20

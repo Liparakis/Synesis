@@ -1,5 +1,30 @@
 # State
 
+## SYN-039 CP-0536 terminal-WorkGroup guard and acceptance evidence
+
+The CP-0535 late-intent reproduction showed that an intent could be appended
+to a terminal WorkGroup. The active lane then had no valid publication or
+completion projection. `WorkIntentService` now fails closed for an explicit
+non-active WorkGroup, and `WorkspaceCollaborationService` chooses a fresh
+default group when the canonical default is terminal and no active group is
+available. Deterministic coordination and workspace regressions pass.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
+
+The fresh bounded run reached WorkGroup
+`62241cb0-1e0d-3030-a945-e7f2dc5c37fb` `COMPLETED`, published and integrated
+three review-cycle snapshots, recorded structured REJECT/ACCEPT decisions,
+and passed control pytest 5/5. The fresh ordinary run reached WorkGroup
+`1c9fd0e2-eda4-3505-a20e-db86de14ec8a`, but Agent B changed/ignored a concrete
+projected coordination action and ended; the reciprocal grant remained
+pending. No new production defect is proven by that run.
+
+Immediate next action: stage and commit the verified terminal-WorkGroup guard,
+deterministic regressions, MCP fixture correction, and CP-0536 evidence/state
+updates locally, then create the next checkpoint; do not push or create
+SYN-040.
+
 ## SYN-039 CP-0534 reviewer snapshot access
 
 CP-0534 used fresh Git + Synesis state, the current bundled ten-tool MCP, and

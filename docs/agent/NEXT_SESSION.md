@@ -1,5 +1,29 @@
 # Next Session
 
+## CP-0536 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
+
+The terminal-WorkGroup guard and fresh-default-group regression are present
+and focused tests pass. The bounded exact-action run closed WorkGroup
+`62241cb0-1e0d-3030-a945-e7f2dc5c37fb` after both snapshot/validation paths;
+the ordinary run stopped at Agent B's changed/ignored projected
+`request_coordination` action with WorkGroup
+`1c9fd0e2-eda4-3505-a20e-db86de14ec8a` still ACTIVE and grant
+`4ba34d35-976a-3d55-bc40-0d7c9656f46b` unresolved. No further lifecycle code
+change is justified.
+
+- Exact next documentation action: create the next checkpoint after the local
+  commit; CP-0536 evidence already contains the final command results.
+- Exact next code action: commit the already verified terminal-WorkGroup guard,
+  its two deterministic regressions, and the necessary MCP fixture correction;
+  do not alter production lifecycle behavior unless a new unchanged projected
+  action fails.
+- Keep the Git subprocess stall, bootstrap migration failures, and Doctor
+  warnings separately classified. Do not relay, repair the disposable
+  acceptance state, push, or create SYN-040.
+
 ## CP-0534 continuation
 
 Evidence:

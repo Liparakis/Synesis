@@ -1,5 +1,51 @@
 # Current Task
 
+## SYN-039 CP-0536 terminal-WorkGroup guard and acceptance evidence
+
+CP-0535 proved a concrete lifecycle defect: a late disjoint intent could be
+announced into a completed WorkGroup, leaving an active participant with no
+executable completion action. The narrow fix is present in
+`WorkIntentService` and `WorkspaceCollaborationService`, with deterministic
+coordination and workspace regressions. Evidence and the fresh acceptance
+traces are recorded in
+`docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
+
+The bounded CP-0536 diagnostic reached exact REVIEW admission, grant
+consumption, both snapshot publications, immutable review inspection,
+structured REJECT/ACCEPT, integration, and WorkGroup `COMPLETED` with control
+pytest 5/5. The second ordinary acceptance reached one shared WorkGroup and
+integrated the test snapshot, but stopped when an agent changed then ignored a
+concrete projected coordination action. Its WorkGroup remains ACTIVE with the
+reciprocal grant unresolved. No additional production defect is proven.
+
+## Immediate next action
+
+Stage and commit the verified terminal-WorkGroup guard, deterministic
+regressions, MCP fixture correction, and CP-0536 evidence/state updates
+locally, then run `scripts/agent-checkpoint.ps1`; do not push or create
+SYN-040.
+
+## Work completed
+
+The terminal-WorkGroup guard and fresh-default-group allocation are implemented
+and their deterministic RED/GREEN regressions pass. The CP-0536 bounded run
+proves the existing review/snapshot/validation/integration path can close a
+WorkGroup. The ordinary run is preserved as agent-compliance evidence rather
+than used to justify speculative lifecycle changes. Focused tests, Javadocs,
+bundle rebuild, validators, Go vet, and diff checks pass; the known full-check,
+Git subprocess, bootstrap migration, and Doctor issues are recorded in the
+CP-0536 evidence.
+
+## Current failures
+
+The ordinary CP-0536 WorkGroup
+`1c9fd0e2-eda4-3505-a20e-db86de14ec8a` remains ACTIVE because Agent B did not
+execute its projected `request_coordination(work_group_join)` and then ended
+its turn; reciprocal grant `4ba34d35-976a-3d55-bc40-0d7c9656f46b` remains
+unresolved. This is not an unchanged projected-action failure. The root Git
+subprocess stall, three bootstrap migration failures, and Doctor's six
+DEGRADED warnings remain separately classified.
+
 ## SYN-039 CP-0534 reviewer snapshot access
 
 CP-0534 is recorded in

@@ -89,14 +89,16 @@ public final class WorkspaceCollaborationService {
         }
         WorkIntentService service = new WorkIntentService(store, identity);
         UUID taskId = UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
+        UUID defaultGroup = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
+                .getBytes(StandardCharsets.UTF_8));
         UUID group = workGroupId == null
                 ? store.workGroupProjection().groups().stream()
                         .filter(candidate -> candidate.projectId().equals(location.projectId()))
                         .filter(candidate -> candidate.status() == WorkGroup.Status.ACTIVE)
                         .map(WorkGroup::workGroupId)
                         .findFirst()
-                        .orElseGet(() -> UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
-                                .getBytes(StandardCharsets.UTF_8)))
+                        .orElseGet(() -> store.workGroupProjection().group(defaultGroup).isEmpty()
+                                ? defaultGroup : UUID.randomUUID())
                 : workGroupId;
         WorkIntent intent = new WorkIntent(UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId())
                 .getBytes(StandardCharsets.UTF_8)), location.projectId(), participant,

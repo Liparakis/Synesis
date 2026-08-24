@@ -54,7 +54,11 @@ public final class WorkIntentService {
                 appendAutomaticConflictInbox(current, intent, conflicts);
                 return new ClaimResult(false, intent, conflicts);
             }
-            if (current.workGroupProjection().group(intent.workGroupId()).isEmpty()) {
+            WorkGroup existingGroup = current.workGroupProjection().group(intent.workGroupId()).orElse(null);
+            if (existingGroup != null && existingGroup.status() != WorkGroup.Status.ACTIVE) {
+                throw new IOException("WORK_GROUP_NOT_ACTIVE");
+            }
+            if (existingGroup == null) {
                 WorkGroup group = new WorkGroup(intent.workGroupId(), intent.projectId(), intent.goal(),
                         intent.acceptance(), 1, WorkGroup.Status.ACTIVE);
                 current.append(group.workGroupId(), PredictionEventType.WORK_GROUP_CREATED,
