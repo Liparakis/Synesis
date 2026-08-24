@@ -224,6 +224,7 @@ final class McpSyn039SliceTest {
         assertFalse(validationWorkflow.containsKey("arguments"), validationWorkflow.toString());
         Map<String, Object> projectedValidationPayload =
                 (Map<String, Object>) validationResult.get("nextProtocolPayload");
+        assertEquals("review_decision", validationResult.get("nextProtocolAction"));
         assertEquals("review_validation", validationResult.get("nextProtocolKind"));
         assertEquals(grant.get("grantId"), projectedValidationPayload.get("grantId"));
         assertEquals("snap_reviewable", projectedValidationPayload.get("snapshotId"));
@@ -351,7 +352,7 @@ final class McpSyn039SliceTest {
         Map<String, Object> validation = innerResult(
                 fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
         assertEquals("validation_required", validation.get("reason"), validation.toString());
-        assertEquals("respond_coordination", validation.get("nextAction"), validation.toString());
+        assertEquals("review_decision", validation.get("nextAction"), validation.toString());
         Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
         assertEquals("review_validation", validationResult.get("nextProtocolKind"), validation.toString());
         assertTrue(validationResult.containsKey("nextProtocolPayload"), validation.toString());

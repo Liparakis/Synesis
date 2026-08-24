@@ -1,5 +1,34 @@
 # State
 
+## SYN-039 CP-0510 review-decision postfix verification
+
+CP-0509 demonstrated that a review-validation projection labeled
+`respond_coordination` could omit required `result`, causing the exact agent
+call to fail with `COORDINATION_RESPONSE_FIELD_REQUIRED:result`. The fix adds
+an explicit `review_decision` next-action state. It exposes the existing
+immutable snapshot and exact grant, intent, and epoch context plus structured
+`accepted`/`rejected` choices, while the reducer emits no guessed executable
+tool arguments.
+
+CP-0510 used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0510-001`, WorkGroup
+`ba7d9344-fa33-3564-832d-b68222c93296`, and the rebuilt bundle. REVIEW
+admission, grant consumption, exact `finish_lane`, snapshot publication, and
+integration passed. A reached `nextAction=review_decision` after recovery.
+B then changed an exact projected intent ID and received
+`INTENT_NOT_FOUND`; this is agent-compliance evidence. The WorkGroup remains
+ACTIVE and closure is not proven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0510-review-decision-postfix-2026-08-24.md`.
+
+Verification: focused MCP/workspace tests, platform bundle, Javadocs, fixture
+and deferred validators, `go vet`, Doctor, and `git diff --check` pass. The
+fixture Doctor remains DEGRADED with six warning findings; the root Git stall
+and bootstrap migration failures remain separate.
+
+Immediate next action: run the completely ordinary two-agent acceptance with
+only complementary coding prompts. Do not modify production code for the
+CP-0510 argument typo.
+
 ## SYN-039 CP-0508 validation-projection postfix
 
 Commit `ca9a2f3` replaces the invalid review-validation projection value

@@ -43,6 +43,12 @@ public enum AgentNextAction {
     RESPOND_COORDINATION("respond_coordination"),
 
     /**
+     * Choose the structured result for a visible review decision before
+     * submitting the existing coordination response.
+     */
+    REVIEW_DECISION("review_decision"),
+
+    /**
      * Revise capability request contract in response to owner feedback.
      */
     REVISE_CAPABILITY_REQUEST("revise_capability_request"),

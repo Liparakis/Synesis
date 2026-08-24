@@ -164,10 +164,7 @@ public final class AgentNextActionService {
                 if (!reviewActions.isEmpty()) {
                     Map<String, Object> review = reviewActions.getFirst();
                     String protocolAction = String.valueOf(review.get("nextProtocolAction"));
-                    AgentNextAction next = "respond_coordination".equals(protocolAction)
-                            ? AgentNextAction.RESPOND_COORDINATION
-                            : "wait".equals(protocolAction) ? AgentNextAction.WAIT
-                            : AgentNextAction.REQUEST_COORDINATION;
+                    AgentNextAction next = protocolNextAction(protocolAction);
                     Map<String, Object> reviewProjection = new LinkedHashMap<>(collaboration);
                     reviewProjection.put("nextProtocolAction", review.get("nextProtocolAction"));
                     reviewProjection.put("nextProtocolKind", review.get("nextProtocolKind"));
@@ -468,10 +465,7 @@ public final class AgentNextActionService {
             }
             Map<String, Object> review = reviewActions.getFirst();
             String protocolAction = String.valueOf(review.get("nextProtocolAction"));
-            AgentNextAction next = "respond_coordination".equals(protocolAction)
-                    ? AgentNextAction.RESPOND_COORDINATION
-                    : "wait".equals(protocolAction) ? AgentNextAction.WAIT
-                    : AgentNextAction.REQUEST_COORDINATION;
+            AgentNextAction next = protocolNextAction(protocolAction);
             Map<String, Object> projection = new LinkedHashMap<>(collaboration);
             projection.put("reviewOnly", true);
             projection.put("nextProtocolAction", review.get("nextProtocolAction"));
@@ -650,7 +644,7 @@ public final class AgentNextActionService {
             Map<String, Object> action = new LinkedHashMap<>();
             action.put("state", projection.grantAvailable(grant.grantId()) ? "GRANT_AVAILABLE" : "VALIDATION_REQUIRED");
             action.put("nextProtocolAction", projection.grantAvailable(grant.grantId())
-                    ? "request_coordination" : "respond_coordination");
+                    ? "request_coordination" : "review_decision");
             action.put("nextProtocolKind", projection.grantAvailable(grant.grantId())
                     ? "work_group_join" : "review_validation");
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -711,6 +705,15 @@ public final class AgentNextActionService {
             }
         }
         return List.copyOf(actions);
+    }
+
+    private static AgentNextAction protocolNextAction(String protocolAction) {
+        return switch (protocolAction) {
+            case "respond_coordination" -> AgentNextAction.RESPOND_COORDINATION;
+            case "review_decision" -> AgentNextAction.REVIEW_DECISION;
+            case "wait" -> AgentNextAction.WAIT;
+            default -> AgentNextAction.REQUEST_COORDINATION;
+        };
     }
 
     private static Map<String, Object> snapshotPublicationAction(

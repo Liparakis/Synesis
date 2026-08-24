@@ -1,5 +1,30 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0510 review-decision postfix verification
+
+- CP-0509 proved that review validation was projected as executable
+  `respond_coordination` without `result`; the exact call failed closed with
+  `COORDINATION_RESPONSE_FIELD_REQUIRED:result`.
+- The narrow fix exposes `review_decision` with exact review context and
+  explicit `accepted` / `rejected` choices, without recommending an incomplete
+  response command. Focused MCP/workspace tests and the rebuilt bundle pass.
+- Fresh CP-0510 project
+  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0510-001` reached
+  WorkGroup `ba7d9344-fa33-3564-832d-b68222c93296`, exact REVIEW admission,
+  grant consumption, snapshot `snap_9b3fae1c10ee7f69f381d035d77d211b`, and
+  integration.
+- Agent A then received `nextAction=review_decision` with exact grant,
+  snapshot, intent, epoch, and choice data. Agent B later changed a projected
+  intent ID in `work_group_join`; Synesis returned `INTENT_NOT_FOUND`. This is
+  agent-compliance evidence, not a production defect. WorkGroup remained
+  ACTIVE, so no ordinary second acceptance was started.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0510-review-decision-postfix-2026-08-24.md`.
+- Fixture Doctor remained DEGRADED with six warnings; the known Git stall,
+  bootstrap migration failures, and Doctor warnings remain separate.
+- Exact next action: run the ordinary unattended acceptance with only
+  complementary coding prompts. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0508 review-decision postfix diagnostic
 
 - Fresh project `syn039-cp0508-001` used the rebuilt current bundled MCP

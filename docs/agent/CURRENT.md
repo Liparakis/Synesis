@@ -1,5 +1,42 @@
 # Current Task
 
+## SYN-039 CP-0510 review-decision postfix verification
+
+CP-0509 proved a production projection defect: review validation was exposed
+as executable `respond_coordination` while its projected payload omitted the
+required reviewer-selected `result`, and executing it failed closed with
+`COORDINATION_RESPONSE_FIELD_REQUIRED:result`. The narrow fix introduces the
+explicit `review_decision` state while retaining the existing response tool,
+strict validation, and explicit ACCEPT/REJECT choice.
+
+## Work completed
+
+`McpSyn039SliceTest` and `AgentWorkflowReducerTest` pass with the corrected
+contract. The rebuilt bundled MCP exposes the fix. CP-0510 used a fresh Git +
+Synesis project, two independent GPT-5.6 Luna agents, ten tools, one shared
+WorkGroup, and disjoint epoch-1 claims. REVIEW admission, grant consumption,
+snapshot publication, and integration reached the corrected review projection.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0510-review-decision-postfix-2026-08-24.md`.
+
+## Current failures
+
+The corrected reviewer projection reached Agent A as
+`nextAction=review_decision` with exact grant/snapshot/intent/epoch context,
+explicit `accepted`/`rejected` choices, and no executable tool recommendation.
+The first later deviation was Agent B changing the exact projected A-intent
+ID in a `work_group_join` call; Synesis returned fail-closed
+`INTENT_NOT_FOUND`. The WorkGroup remains `ACTIVE`; no new production defect
+is proven. Reciprocal validation, A's snapshot, final integration, cleanup,
+and closure remain unproven. Doctor is `DEGRADED` with six separate warnings.
+
+## Immediate next action
+
+Run a fresh completely ordinary unattended two-agent acceptance using only
+the complementary coding prompts and the current bundled MCP. Do not add
+lifecycle coaching, relay messages, trigger transitions, or modify production
+code for the CP-0510 argument typo.
+
 ## SYN-039 CP-0508 review-decision postfix diagnostic
 
 The CP-0507 review-result projection fix is committed as `ca9a2f3` and

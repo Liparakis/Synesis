@@ -139,6 +139,8 @@ public final class AgentWorkflowReducer {
                                         "apply_patch", "run_command", "get_next_action")
                                 : List.of("request_coordination", "respond_coordination"), true);
             }
+            case REVIEW_DECISION -> new LaneAction("REVIEW_CONTRACT", List.of(reasonCode(reason)),
+                    List.of("respond_coordination", "get_next_action"), true);
             case VALIDATE_IMPLEMENTATION, RESPOND_TO_VALIDATION_REVISION ->
                     new LaneAction("PUBLISH", List.of(reasonCode(reason)),
                             List.of("respond_coordination", "publish_capability_implementation"), true);

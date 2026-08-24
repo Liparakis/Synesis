@@ -1,5 +1,27 @@
 # Tasks
 
+## SYN-039 CP-0510 update
+
+The CP-0509 production projection defect is fixed narrowly. Review validation
+now projects `review_decision`, not executable `respond_coordination`, until a
+reviewer chooses a valid result. The projection carries exact snapshot,
+grant, intent, and epoch context and explicit ACCEPT/REJECT choices; existing
+MCP response validation remains fail-closed.
+
+CP-0510 verified the corrected projection after REVIEW admission, grant
+consumption, snapshot publication, and integration. Agent B then changed the
+exact projected intent ID in a later admission call and received
+`INTENT_NOT_FOUND`. This is agent-compliance evidence, not a new production
+defect. WorkGroup closure and the ordinary unattended acceptance remain
+unproven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0510-review-decision-postfix-2026-08-24.md`.
+
+The active task remains SYN-039. Next work is one completely ordinary
+two-agent acceptance with only complementary coding prompts; do not add
+lifecycle coaching or broaden production code for this argument deviation.
+
+Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
+
 ## SYN-039 CP-0508 update
 
 Commit `ca9a2f3` fixes the CP-0507 review-validation projection. A reviewer

@@ -105,13 +105,16 @@ final class AgentWorkflowReducerTest {
                 "rejectionReasonRequired", true);
         AgentResponse review = reducer.decorate(request,
                 new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
-                        AgentNextAction.RESPOND_COORDINATION,
-                        Map.of("nextProtocolKind", "review_validation",
+                        AgentNextAction.REVIEW_DECISION,
+                        Map.of("nextProtocolAction", "review_decision",
+                                "nextProtocolKind", "review_validation",
                                 "nextProtocolPayload", Map.of("grantId", "grant-1", "snapshotId", "snap-1",
                                         "intentId", "intent-1", "claimEpoch", 1),
                                 "reviewDecision", decision)));
 
+        assertEquals(AgentNextAction.REVIEW_DECISION, review.nextAction());
         Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) review.result()).get("workflow");
+        assertEquals("REVIEW_CONTRACT", workflow.get("type"));
         assertEquals(decision, workflow.get("decision"));
         assertFalse(workflow.containsKey("recommendedTool"));
         assertFalse(workflow.containsKey("arguments"));

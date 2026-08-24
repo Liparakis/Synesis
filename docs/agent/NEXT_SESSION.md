@@ -1,5 +1,29 @@
 # Next Session
 
+## CP-0510 continuation
+
+CP-0509 proved and fixed a projection defect where review validation was
+misreported as executable `respond_coordination` without the required
+reviewer-selected result. The rebuilt bundle now exposes
+`nextAction=review_decision`, exact snapshot/grant/intent/epoch context,
+explicit `accepted`/`rejected` choices, and no fabricated executable tool
+arguments.
+
+CP-0510 fresh diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0510-001`, one shared
+WorkGroup `ba7d9344-fa33-3564-832d-b68222c93296`, and two independent
+ready/isolated Luna agents. REVIEW admission, grant consumption, exact
+`finish_lane`, snapshot publication, and integration passed. The first later
+failure was Agent B changing the projected intent ID and receiving the
+expected fail-closed `INTENT_NOT_FOUND`; no new production defect is proven.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0510-review-decision-postfix-2026-08-24.md`.
+
+Exact next action: run a fresh completely ordinary unattended two-agent Todo
+acceptance with only the complementary coding prompts and no lifecycle
+coaching or manual intervention. Do not change production code for the
+CP-0510 argument typo, push, or create SYN-040.
+
 ## CP-0508 continuation
 
 The CP-0507 review-result projection fix is committed as `ca9a2f3`. The fresh
