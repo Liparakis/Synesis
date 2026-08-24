@@ -1,5 +1,35 @@
 # Next Session
 
+## CP-0503 continuation
+
+The CP-0502 owner-side projection defect is fixed and covered. CP-0503 proves
+the owner now remains active through grant consumption, executes the exact
+`finish_lane` projection, and publishes/integrates snapshot
+`snap_5733de0976ad177cc349e9fa2fbdebcb`. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0503-postfix-diagnostic-2026-08-24.md`.
+
+The reviewer consumed grant
+`c9cb80ae-679d-3290-902c-c55647723aae` and received exact
+`SNAPSHOT_PENDING` → `WAIT` → `get_next_action` twice, but stopped before
+polling after publication. No projected action failed; do not change
+production code from this agent-compliance result.
+
+- Exact next action: run one fresh bounded two-agent diagnostic with both
+  agents kept alive after every WAIT and after peer-side publication, then
+  capture the reviewer validation projection and the first later lifecycle
+  blocker.
+- If a concrete projected action fails, preserve its exact arguments and
+  state as the next defect. If an agent stops again without such a failure,
+  record compliance evidence and stop the slice.
+- Do not push or create SYN-040. Keep Doctor warnings, the Git subprocess
+  stall, and bootstrap migration failures separate unless directly causal.
+
+Verification note: focused MCP/workspace tests, Javadocs, validators, `go vet`,
+and `git diff --check` pass. Root `check` remains non-green because of the
+pre-existing `:link:formatCheck` trailing-whitespace findings and the captured
+Git subprocess stall in `ProviderApplicationServiceTest` /
+`ProcessCommandRunner`; bootstrap `go test` retains three migration failures.
+
 ## CP-0501 continuation
 
 The fresh diagnostic used project

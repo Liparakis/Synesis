@@ -155,6 +155,33 @@ final class McpSyn039SliceTest {
         String accepted = owner.handleMessage(toolCall("respond_coordination", ProviderJson.write(responseArguments)));
         assertTrue(accepted.contains("completed"), accepted);
 
+        Map<String, Object> ownerGrantPending = innerResult(owner.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("validation_required", ownerGrantPending.get("reason"), ownerGrantPending.toString());
+        assertEquals("wait", ownerGrantPending.get("nextAction"), ownerGrantPending.toString());
+        Map<String, Object> ownerGrantPendingResult =
+                (Map<String, Object>) ownerGrantPending.get("result");
+        assertEquals(Boolean.TRUE, ownerGrantPendingResult.get("reviewGrantPending"));
+        Map<String, Object> pendingGrant =
+                (Map<String, Object>) ownerGrantPendingResult.get("reviewGrant");
+        assertEquals(ids.groupId.toString(), pendingGrant.get("workGroupId"));
+        assertEquals(ids.intentId.toString(), pendingGrant.get("targetIntentId"));
+        assertEquals(1L, ((Number) pendingGrant.get("claimEpoch")).longValue());
+        assertEquals(Boolean.TRUE, pendingGrant.get("singleUse"));
+        assertEquals("wait", ownerGrantPendingResult.get("nextProtocolAction"));
+        assertEquals("review_grant_consumption", ownerGrantPendingResult.get("nextProtocolKind"));
+        Map<String, Object> pendingPayload =
+                (Map<String, Object>) ownerGrantPendingResult.get("nextProtocolPayload");
+        assertEquals(pendingGrant.get("grantId"), pendingPayload.get("grantId"));
+        assertEquals(ids.groupId.toString(), pendingPayload.get("workGroupId"));
+        assertEquals(ids.intentId.toString(), pendingPayload.get("intentId"));
+        assertEquals(1L, ((Number) pendingPayload.get("claimEpoch")).longValue());
+        assertEquals(Boolean.TRUE, pendingPayload.get("snapshotRequired"));
+        Map<String, Object> ownerGrantPendingWorkflow =
+                (Map<String, Object>) ownerGrantPendingResult.get("workflow");
+        assertEquals("WAIT", ownerGrantPendingWorkflow.get("type"));
+        assertEquals("get_next_action", ownerGrantPendingWorkflow.get("recommendedTool"));
+        assertEquals(Map.of(), ownerGrantPendingWorkflow.get("arguments"));
+
         String status = reviewer.handleMessage(toolCall("request_coordination",
                 "{\"kind\":\"collaboration_status\",\"payload\":{}}"));
         Map<String, Object> statusEnvelope = innerResult(status);

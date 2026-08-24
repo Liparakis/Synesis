@@ -1,5 +1,46 @@
 # State
 
+## SYN-039 CP-0503 post-fix producer-polling diagnostic
+
+CP-0502 established and fixed the missing owner-side continuation projection.
+The fresh CP-0503 project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0503-001` used the
+current bundled MCP (`0.1.0-SNAPSHOT`, protocol `2025-06-18`, commit
+`bc334ac`, ten tools) and two independent ready/isolated GPT-5.6 Luna
+sessions. They converged on WorkGroup
+`49082d5e-ecc5-3503-82fb-3d62f37597c8` with disjoint claims.
+
+Owner A accepted REVIEW request
+`10fe11a8-c4bc-46ae-a11f-cd70489741d2`. Reviewer B consumed single-use grant
+`c9cb80ae-679d-3290-902c-c55647723aae` at epoch 1. The owner then received and
+executed exact `finish_lane` arguments, publishing
+`snap_5733de0976ad177cc349e9fa2fbdebcb` and integrating it into control commit
+`7c4d11d`.
+
+Reviewer B received `SNAPSHOT_PENDING` / `WAIT` with exact
+`get_next_action({})` twice, but stopped before observing the post-publication
+review-validation projection. No projected action failed. The first remaining
+blocker is agent compliance; validation, the second lane, cleanup, and clean
+WorkGroup closure remain unproven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0503-postfix-diagnostic-2026-08-24.md`.
+
+The production change is limited to `AgentNextActionService` plus the
+deterministic MCP assertion in `McpSyn039SliceTest`. The owner-side projection
+is read-only and fail-closed; it does not consume grants or publish snapshots.
+The next action is another bounded diagnostic with both agents alive through
+WAIT and peer-side publication. Do not push or create SYN-040.
+
+Focused verification passed: SYN-039 MCP and workspace tests, strict Javadocs,
+deferred/fixture validators, `go vet`, and `git diff --check`. Bootstrap
+`go test -count=1 ./...` retains the three migration failures at
+`bootstrap/main_test.go:132`, `:201`, and `:288`. `:link:formatCheck` retains
+pre-existing trailing whitespace in CP-0488, CP-0489, and the CP-0494 evidence
+file. The bounded root `check` reproduced the Git subprocess stall in
+`ProviderApplicationServiceTest.codexInstallationMaterializesHookIntoAssignedWorktree`;
+the captured thread dump showed `ProcessCommandRunner.execute:81` waiting while
+the output collector remained in `ProcessCommandRunner.java:333`. Root check
+was stopped after the evidence and is not green.
+
 ## SYN-039 CP-0501 producer-polling diagnostic
 
 The fresh project

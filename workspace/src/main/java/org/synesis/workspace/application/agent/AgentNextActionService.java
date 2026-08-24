@@ -189,6 +189,14 @@ public final class AgentNextActionService {
                             AgentNextAction.RESPOND_COORDINATION, ownerAction);
                 }
 
+                Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(store, callerParticipant);
+                if (pendingReviewGrant != null) {
+                    Map<String, Object> ownerWait = new LinkedHashMap<>(collaboration);
+                    ownerWait.putAll(pendingReviewGrant);
+                    return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
+                            AgentNextAction.WAIT, ownerWait);
+                }
+
                 // A session that has not established its own active intent is
                 // not eligible to service another lane's capability inbox.
                 // Provider models may receive an implementation-available
@@ -718,6 +726,51 @@ public final class AgentNextActionService {
             result.put("nextProtocolAction", "finish_lane");
             result.put("nextProtocolPayload", Map.of("summary", "Publish the completed immutable snapshot"));
             return result;
+        }
+        return null;
+    }
+
+    private static Map<String, Object> pendingReviewGrantAction(
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+        var collaboration = store.collaborationProjection();
+        var workGroups = store.workGroupProjection();
+        var completion = store.taskCompletionProjection();
+        for (WorkIntent intent : collaboration.activeIntents()) {
+            if (!intent.participant().equals(participantId)) continue;
+            WorkGroup group = workGroups.group(intent.workGroupId()).orElse(null);
+            if (group == null || group.status() != WorkGroup.Status.ACTIVE) continue;
+            boolean snapshotPublished = completion.allSnapshots().stream().anyMatch(snapshot ->
+                    snapshot.provenance().workGroupId().equals(intent.workGroupId())
+                            && snapshot.provenance().laneId().equals(intent.intentId())
+                            && snapshot.provenance().claimEpoch() == intent.version());
+            if (snapshotPublished) continue;
+            for (LaneGrant grant : workGroups.grants()) {
+                if (!grant.workGroupId().equals(intent.workGroupId())
+                        || !grant.targetIntentId().equals(intent.intentId())
+                        || grant.claimEpoch() != intent.version()
+                        || grant.targetParticipant().equals(participantId)
+                        || !workGroups.grantAvailable(grant.grantId())
+                        || workGroups.reviewValidationForGrant(grant.grantId()).isPresent()) {
+                    continue;
+                }
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("grantId", grant.grantId().toString());
+                payload.put("workGroupId", grant.workGroupId().toString());
+                payload.put("intentId", grant.targetIntentId().toString());
+                payload.put("claimEpoch", grant.claimEpoch());
+                payload.put("targetParticipant", grant.targetParticipant());
+                payload.put("snapshotRequired", true);
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("state", "REVIEW_GRANT_PENDING");
+                result.put("reviewGrantPending", true);
+                result.put("reviewGrant", laneGrantMap(grant));
+                result.put("workGroup", workGroupMap(group));
+                result.put("reviewerParticipant", grant.targetParticipant());
+                result.put("nextProtocolAction", "wait");
+                result.put("nextProtocolKind", "review_grant_consumption");
+                result.put("nextProtocolPayload", payload);
+                return result;
+            }
         }
         return null;
     }

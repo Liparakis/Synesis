@@ -12,6 +12,63 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0503 post-fix producer-polling diagnostic
+
+The CP-0502 reproduction proved a concrete owner-side projection gap: an
+active owner with an issued, current-epoch, unconsumed REVIEW grant targeted
+to a peer received ordinary `IMPLEMENT` with no executable continuation. The
+narrow fix in `AgentNextActionService` now projects `WAIT` with the exact
+grant, WorkGroup, target participant, intent, epoch, and
+`review_grant_consumption` context. It grants no mutation authority.
+
+The fresh post-fix project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0503-001` used the
+rebuilt current bundle and two independent GPT-5.6 Luna sessions. Both passed
+ten-tool `ready / isolated` preflight, held disjoint `todo.py` /
+`test_todo.py` claims, and converged on WorkGroup
+`49082d5e-ecc5-3503-82fb-3d62f37597c8`.
+
+The owner accepted REVIEW request
+`10fe11a8-c4bc-46ae-a11f-cd70489741d2`, the peer consumed grant
+`c9cb80ae-679d-3290-902c-c55647723aae`, and the owner remained active through
+the exact `snapshot_publication_required` → `finish_lane` projection. Snapshot
+`snap_5733de0976ad177cc349e9fa2fbdebcb` was published and integrated.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0503-postfix-diagnostic-2026-08-24.md`.
+
+## Work completed
+
+The CP-0502 owner-side waiting projection is implemented with deterministic
+MCP regression coverage. Focused MCP and workspace tests pass, and the
+platform bundle was rebuilt. Existing grant, participant, intent, epoch,
+snapshot, and WorkGroup checks remain fail-closed.
+
+## Current failures
+
+CP-0503 stopped at the reviewer after it consumed the grant and executed the
+exact `WAIT` → `get_next_action` projection twice. It ended before polling
+after the producer published the snapshot, so validation, the second lane's
+snapshot, cleanup, and WorkGroup closure remain unproven. No exact projected
+tool failed; this is agent-compliance evidence, not a new production defect.
+The known Git subprocess stall, bootstrap migration failures, and six Doctor
+warnings remain separately classified.
+
+The focused Javadocs, deferred/fixture validators, `go vet`, and
+`git diff --check` pass. The root check is not green: `:link:formatCheck`
+still reports pre-existing trailing whitespace in CP-0488, CP-0489, and the
+CP-0494 evidence file, and the run reproduced the Git subprocess stall in
+`ProviderApplicationServiceTest` / `ProcessCommandRunner` before it was
+bounded and stopped.
+
+## Immediate next action
+
+Run one fresh bounded diagnostic with both agents remaining alive after every
+`WAIT` projection and after peer-side publication; capture the first
+post-publication reviewer projection and continue only through exact projected
+actions. If an agent stops again without a projected action failure, preserve
+agent-compliance evidence and do not broaden production code. Do not push or
+create SYN-040.
+
 ## CP-0501 producer-polling diagnostic
 
 The fresh project

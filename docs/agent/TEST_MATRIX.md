@@ -1,3 +1,12 @@
+# SYN-039 latest acceptance evidence
+
+| Invariant | Automated check | Fixture | Expected result | Latest result | Evidence |
+|---|---|---|---|---|---|
+| Owner with an issued current-epoch REVIEW grant remains discoverably active without extra authority | `McpSyn039SliceTest.missingGrantRequestBecomesOwnerAuthorizedReviewAdmission` | deterministic MCP review fixture | `WAIT` with exact grant context and `get_next_action({})` | PASS | CP-0502 / CP-0503 |
+| Existing grant, participant, intent, epoch, snapshot, and WorkGroup fencing remains fail-closed | focused MCP/workspace tests | REVIEW grant and publication fixtures | no ownership or grant bypass | PASS | CP-0503 |
+| Post-fix producer publication remains executable | `McpSyn039SliceTest.projectedFinishLanePublishesImmutableSnapshotVisibleToReviewerDespitePythonCache` | deterministic MCP review fixture | exact `finish_lane` publishes immutable snapshot | PASS | CP-0503 |
+| Two-agent reviewer continuation after peer publication | fresh GPT-5.6 Luna diagnostic | `syn039-cp0503-001` | reviewer validates and closes WorkGroup | NOT REACHED: reviewer stopped after two correct WAIT continuations | CP-0503 |
+
 # Persistence Test Matrix
 
 | Invariant                                                                                                                                             | Automated check                        | Fixture                                                                                       | Expected result               | Latest result | Evidence      |

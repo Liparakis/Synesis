@@ -1,5 +1,46 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0503 post-fix producer-polling diagnostic
+
+- The CP-0502 fresh diagnostic reproduced the owner-side missing continuation
+  projection: after REVIEW acceptance, an active owner with an unconsumed
+  peer grant received ordinary `IMPLEMENT` with no executable action. The
+  owner had no safe mutation, but unattended progress still required it to
+  remain active until peer grant consumption. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0502-owner-polling-diagnostic-2026-08-24.md`.
+- Implemented the smallest fix in `AgentNextActionService`: current active
+  owner intent + active WorkGroup + matching current-epoch available REVIEW
+  grant targeted to another participant + no owner snapshot now projects
+  read-only `WAIT` with exact grant context and `get_next_action({})`.
+- Added deterministic MCP coverage in `McpSyn039SliceTest` for the grant,
+  WorkGroup, intent, epoch, target, snapshot-required state, and executable
+  WAIT continuation. The focused MCP and workspace suites passed; the current
+  platform bundle was rebuilt.
+- Fresh CP-0503 post-fix diagnostic used project
+  `syn039-cp0503-001`, current MCP SHA-256
+  `D27A9F4D3C833C3C5581DD012254E7AE767D96FC71F53DC2718461CBC6822CD1`, and
+  two independent ready/isolated sessions. WorkGroup
+  `49082d5e-ecc5-3503-82fb-3d62f37597c8` reached exact REVIEW admission,
+  grant `c9cb80ae-679d-3290-902c-c55647723aae` consumption, owner
+  `finish_lane`, snapshot publication, and integration.
+- Reviewer B received the correct `SNAPSHOT_PENDING` / `WAIT` projection with
+  executable `get_next_action({})` twice, then ended before polling after
+  publication. No exact projected action failed, so this is agent-compliance
+  evidence and no further production code changed from CP-0503.
+- Fixture Doctor remained DEGRADED with six warnings; known Git subprocess
+  and bootstrap migration issues remain separate.
+- Focused Javadocs, deferred/fixture validators, `go vet`, and `git diff --check`
+  passed. `:link:formatCheck` still fails on pre-existing trailing whitespace
+  in CP-0488, CP-0489, and the CP-0494 evidence file. The bounded root
+  `check` reproduced the Git subprocess stall in
+  `ProviderApplicationServiceTest.codexInstallationMaterializesHookIntoAssignedWorktree`;
+  a thread dump captured `ProcessCommandRunner.execute:81` waiting while its
+  output collector remained in `ProcessCommandRunner.java:333`. It was stopped
+  after evidence and is not reported green.
+- Exact next action: run a fresh bounded diagnostic with both agents alive
+  after every WAIT and after peer-side publication, then preserve the first
+  later blocker. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0501 producer-polling diagnostic
 
 - Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0501-002`

@@ -2,6 +2,23 @@
 
 Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
+## SYN-039 CP-0503 update
+
+The CP-0502 owner-side continuation defect is implemented narrowly. An active
+owner with an unconsumed current-epoch REVIEW grant now receives a read-only
+`WAIT` projection exposing the exact grant, WorkGroup, peer, intent, epoch, and
+`get_next_action` continuation. CP-0503 proves the owner executes the later
+exact `finish_lane`, publishes snapshot
+`snap_5733de0976ad177cc349e9fa2fbdebcb`, and integrates it. The reviewer then
+stops after two correct `SNAPSHOT_PENDING` / `WAIT` projections; no projected
+action fails. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0502-owner-polling-diagnostic-2026-08-24.md`;
+`docs/evidence/syn039-unattended-todo-cp0503-postfix-diagnostic-2026-08-24.md`.
+
+The next slice remains bounded to reviewer continuation after WAIT and
+publication. Do not broaden cleanup, ownership, Doctor, or orchestration, push,
+or create SYN-040.
+
 ## SL-SETUP-001
 
 - ID: SL-SETUP-001
