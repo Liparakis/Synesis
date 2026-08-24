@@ -1,44 +1,48 @@
 # Current Task
 
-## SYN-039 CP-0515 exact-action diagnostic
+## SYN-039 CP-0516 producer-first exact-action diagnostic
 
-The fresh exact-action diagnostic used the current bundled MCP, two independent
-GPT-5.6 Luna agents, and disjoint claim-bearing sessions. It reached one
-WorkGroup `ed155087-41fd-39e6-8380-d2c5663aae64`, exact REVIEW admission,
-owner acceptance, and single-use grant consumption
-`d401e6d4-fc52-3055-9355-ef083aeb48ad`. Both agents executed every observed
-concrete lifecycle projection, including repeated `WAIT -> get_next_action({})`
-continuations. The producer stopped before observing post-consumption
-publication, while the reviewer stopped in `SNAPSHOT_PENDING` WAIT. No exact
-projected action failed; no snapshot, validation, integration, or closure was
-reached. Evidence:
-`docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+The fresh producer-first diagnostic used the current bundled MCP, two
+independent GPT-5.6 Luna agents, disjoint claim-bearing sessions, and one
+shared WorkGroup. It reached exact REVIEW admission, owner acceptance,
+single-use grant consumption, producer `snapshot_publication_required`, exact
+`finish_lane`, immutable snapshot publication, and integration. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0516-producer-first-diagnostic-2026-08-24.md`.
 
 ## Work completed
 
-The CP-0514 claim-announcement contract remains verified: ordinary agents now
-send disjoint `ensure_session.task.claims`, converge on one WorkGroup, and
-reach REVIEW admission without harness relay. Focused contract/MCP/workspace
-tests, bundle rebuild, deferred validation, and `git diff --check` remain
-green. No production lifecycle code changed for CP-0515.
+All observed concrete lifecycle projections were executed unchanged. A's
+snapshot `snap_171a6f766e26454cf60e6cebc3106f63` integrated into the control
+checkout. The first later blocker is now reproduced and source-traced: B's
+control checkout became stale while B's assigned worktree still contained its
+legitimate uncommitted `test_todo.py` work. Synesis correctly refused to
+discard dirty work, but the projected `ensure_session({})` recovery returned
+`internal_failure / request_human_help` rather than a safe review/continuation
+path. No production code changed in CP-0516.
+
+Focused MCP/workspace tests, Javadocs, validators, `go vet`, and diff checks
+pass. Bootstrap migration failures and the known Git subprocess stall remain
+separate verification issues. Fixture Doctor remains DEGRADED with six
+warnings.
 
 ## Current failures
 
-The first post-grant stop remains agent continuation/order, not a proven
-protocol defect. The grant was consumed, but the producer did not poll again
-after that event; the reviewer only saw `SNAPSHOT_PENDING` and no immutable
-snapshot. The WorkGroup remains ACTIVE. Doctor is DEGRADED with six warnings;
-the known Git subprocess stall and bootstrap migration failures remain
-separate.
+The WorkGroup remains ACTIVE with B's claim retained, no review decision, no
+B snapshot, and no closure. The stale-dirty guard itself must remain
+fail-closed; the missing behavior is safe grant-authorized review access and
+continuation after sibling integration without losing or silently replacing
+the reviewer's dirty work. This is a concrete SYN-039 product blocker, not an
+agent-compliance deviation.
 
 ## Immediate next action
 
-Run one fresh bounded exact-action diagnostic with the implementation producer
-establishing its claim/WorkGroup before the complementary reviewer session,
-then let both agents execute exact projections and remain engaged until the
-producer observes grant consumption. Preserve the first exact failure or
-missing usable action; do not relay, manually transition, change lifecycle
-code, push, or create SYN-040.
+Implement the smallest deterministic stale-reviewer continuation slice: allow
+grant-authorized durable review projection/validation after sibling control
+integration while preserving the reviewer's dirty work and keeping any unsafe
+mutation/replacement fail-closed. Add focused fencing/recovery coverage, then
+rerun the exact producer-first diagnostic before attempting ordinary acceptance.
+Do not broaden cleanup, ownership, Doctor, or orchestration, push, or create
+SYN-040.
 
 ## SYN-039 CP-0514 ordinary acceptance
 

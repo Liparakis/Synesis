@@ -1,19 +1,21 @@
 # State
 
-## SYN-039 CP-0515 exact-action diagnostic
+## SYN-039 CP-0516 producer-first exact-action diagnostic
 
-CP-0515 reached one shared WorkGroup, exact REVIEW admission, owner response,
-and single-use grant consumption with both agents executing all observed
-concrete projections. The producer stopped before polling after the reviewer
-consumed the grant; the reviewer stopped at `SNAPSHOT_PENDING ->
-get_next_action({})`. No snapshot, validation, integration, or terminal
-WorkGroup state was reached. No exact projected lifecycle call failed, so this
-remains agent continuation/order evidence. Evidence:
-`docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+CP-0516 reached one shared WorkGroup, exact REVIEW admission, owner response,
+single-use grant consumption, exact producer `finish_lane`, immutable snapshot
+publication, and integration. The first later failure was B's exact projected
+`ensure_session({})` recovery after A advanced control: B's assigned worktree
+was dirty with its legitimate `test_todo.py` change, so the existing
+`WORKSPACE_STALE_DIRTY` guard correctly refused replacement, while the
+agent-facing response became `internal_failure / request_human_help`. No
+review decision or WorkGroup closure was reached. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0516-producer-first-diagnostic-2026-08-24.md`.
 
-Immediate next action: repeat one bounded exact-action diagnostic with the
-implementation producer establishing the WorkGroup first, preserving the
-existing fail-closed protocol and no-relay rule.
+Immediate next action: implement and deterministically test the smallest safe
+grant-authorized reviewer continuation after sibling control integration,
+without discarding dirty work or weakening ownership, epoch, or readiness
+fencing.
 
 ## SYN-039 CP-0514 ordinary acceptance
 

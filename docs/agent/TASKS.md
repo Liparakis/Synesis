@@ -1,19 +1,24 @@
 # Tasks
 
-## SYN-039 CP-0515 update
+## SYN-039 CP-0516 update
 
-The exact-action diagnostic reached REVIEW admission, owner acceptance, and
-single-use grant consumption in one shared WorkGroup. Both agents executed the
-observed concrete projections, including repeated WAIT continuations, but the
-producer stopped before observing post-consumption publication and the
-reviewer stopped in SNAPSHOT_PENDING. No exact projected action failed; no
-production change is justified. Evidence:
-`docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+The producer-first exact-action diagnostic reached one shared WorkGroup, exact
+REVIEW admission, owner acceptance, single-use grant consumption, exact
+producer publication, immutable snapshot `snap_171a6f766e26454cf60e6cebc3106f63`,
+and integration. B then executed the exact projected stale-workspace recovery
+`ensure_session({})`, which failed `internal_failure / request_human_help`
+because B's assigned worktree contained legitimate uncommitted
+`test_todo.py` work. The stale-dirty refusal is intentionally fail-closed, but
+there is no safe grant-authorized review/continuation path after sibling
+control integration. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0516-producer-first-diagnostic-2026-08-24.md`.
 
-The active task remains SYN-039. Next work is one fresh bounded diagnostic with
-the implementation producer establishing the WorkGroup first, then exact
-projection execution through snapshot, validation, integration, and closure.
-Do not broaden lifecycle code, push, or create SYN-040.
+The active task remains SYN-039. The next narrow implementation slice is the
+stale-reviewer continuation boundary only: preserve dirty reviewer work,
+expose the immutable snapshot/review decision through the existing grant and
+epoch authority, and keep unsafe mutation or replacement fail-closed. Add
+deterministic coverage before rerunning the exact diagnostic. Do not broaden
+cleanup, ownership, Doctor, orchestration, push, or create SYN-040.
 
 ## SYN-039 CP-0514 update
 

@@ -1,5 +1,8 @@
 # SYN-039 latest acceptance evidence
 
+| Dirty reviewer recovery after sibling integration | fresh producer-first exact-action diagnostic | `syn039-cp0516-001` | reviewer preserves its own dirty claim, sees the immutable snapshot, validates, and continues without unsafe workspace replacement | FAIL; B executed exact `ensure_session({})` after `workspace_stale`, but `WORKSPACE_STALE_DIRTY` became `internal_failure / request_human_help`; WorkGroup ACTIVE, no validation/closure | SYN-039 / CP-0516 |
+| Producer-first publication after exact REVIEW flow | fresh producer-first exact-action diagnostic | `syn039-cp0516-001` | exact admission, owner response, grant consumption, projected `finish_lane`, publication, and integration | PASS; WorkGroup `f4bba8b9...`, grant `9bab2075...`, snapshot `snap_171a6f...` | SYN-039 / CP-0516 |
+
 | Exact post-grant continuation | fresh exact-action two-agent diagnostic | `syn039-cp0515-001` | producer observes grant consumption, publishes, reviewer validates, integrates, and closes | NOT REACHED; producer stopped before post-consumption poll and reviewer stopped at `SNAPSHOT_PENDING` WAIT; no exact projected call failed | SYN-039 / CP-0515 |
 | REVIEW admission and single-use grant remain executable after claim-contract fix | fresh exact-action two-agent diagnostic | `syn039-cp0515-001` | exact request, owner response, and grant consumption | PASS; WorkGroup `ed155087...`, request `beafd523...`, grant `d401e6d4...` | SYN-039 / CP-0515 |
 

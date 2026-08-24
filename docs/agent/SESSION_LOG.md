@@ -1,5 +1,29 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0516 producer-first exact-action diagnostic
+
+- Fresh producer-first diagnostic used the current bundled MCP and two
+  independent GPT-5.6 Luna agents against project
+  `84886099-22fe-489a-ae5c-94fcb6159b9d`. Both claim-bearing sessions were
+  ready/isolated with disjoint `todo.py` and `test_todo.py` claims, and one
+  WorkGroup formed without relay.
+- Exact REVIEW admission, owner acceptance, single-use grant consumption,
+  producer `snapshot_publication_required`, exact `finish_lane`, immutable
+  snapshot `snap_171a6f766e26454cf60e6cebc3106f63`, and integration passed.
+- The first later blocker was reviewer B's exact projected
+  `ensure_session({})` after control advanced. B's dirty worktree correctly
+  triggered the fail-closed `WORKSPACE_STALE_DIRTY` guard, but the agent-facing
+  result was `internal_failure / request_human_help`; no validation or closure
+  was reached. This is a concrete stale-reviewer continuation gap, not agent
+  projection noncompliance. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0516-producer-first-diagnostic-2026-08-24.md`.
+- Focused SYN-039/workspace tests, Javadocs, validators, `go vet`, and
+  `git diff --check` passed. Existing bootstrap migration failures, root Git
+  subprocess stall, and six fixture Doctor warnings remain separate.
+- Exact next action: implement and test the smallest safe reviewer
+  continuation that preserves dirty work and keeps all grant/claim/epoch
+  fencing fail-closed; then rerun the exact diagnostic.
+
 # 2026-08-24 — SYN-039 CP-0515 exact-action continuation diagnostic
 
 - Fresh exact-action diagnostic reached one shared WorkGroup

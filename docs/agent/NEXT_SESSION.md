@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0516 continuation
+
+CP-0516 producer-first exact-action evidence reached WorkGroup
+`f4bba8b9-1d6f-36ba-9285-5b63cbf702cd`, request
+`5b80bc40-70f7-43d9-8c98-09f70a2ee669`, consumed grant
+`9bab2075-4ef2-32a8-a46e-6da66cc7f27d`, exact producer `finish_lane`, snapshot
+`snap_171a6f766e26454cf60e6cebc3106f63`, and integration. The first later
+blocker is reviewer B's exact projected `ensure_session({})` recovery after
+control advanced. B's dirty `test_todo.py` worktree was correctly protected
+by `WORKSPACE_STALE_DIRTY`, but the response was
+`internal_failure / request_human_help`; no review decision or closure was
+reached. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0516-producer-first-diagnostic-2026-08-24.md`.
+
+Exact next action: implement and test the smallest safe grant-authorized
+reviewer continuation after sibling control integration. Preserve dirty work;
+do not replace or reopen it unsafely. Keep the existing participant, claim,
+epoch, grant, snapshot, and fail-closed checks. Then rebuild the bundle and
+rerun the producer-first exact-action diagnostic. Do not relay, manually
+transition, push, or create SYN-040.
+
 ## CP-0515 continuation
 
 CP-0515 exact-action evidence reached WorkGroup
