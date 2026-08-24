@@ -159,7 +159,11 @@ public final class AgentNextActionService {
                             ? AgentNextAction.RESPOND_COORDINATION
                             : "wait".equals(protocolAction) ? AgentNextAction.WAIT
                             : AgentNextAction.REQUEST_COORDINATION;
-                    return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, collaboration);
+                    Map<String, Object> reviewProjection = new LinkedHashMap<>(collaboration);
+                    reviewProjection.put("nextProtocolAction", review.get("nextProtocolAction"));
+                    reviewProjection.put("nextProtocolKind", review.get("nextProtocolKind"));
+                    reviewProjection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
+                    return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, reviewProjection);
                 }
                 String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
                 Map<String, Object> publicationAction = snapshotPublicationAction(store, callerParticipant);

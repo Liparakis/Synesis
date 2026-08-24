@@ -12,6 +12,22 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0480 convergence projection slice
+
+The CP-0480 diagnostic and ordinary runs did not reproduce a backend
+WorkGroup split. Claim-bearing sessions with complementary exact scopes
+converged on one deterministic active WorkGroup. The ordinary run exposed the
+existing WorkGroup and exact REVIEW admission payload, but the executable
+workflow reduced `request_coordination` to empty arguments. `AgentNextActionService`
+now promotes the selected review protocol kind/payload to the response root,
+and `AgentWorkflowReducer` copies it into exact executable arguments. Focused
+MCP/workspace tests pass. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0480-convergence-projection-2026-08-24.md`.
+
+Immediate next action: rerun a fresh post-fix diagnostic and ordinary
+acceptance, then preserve the first lifecycle blocker after exact REVIEW
+admission. Do not broaden cleanup, integration, Doctor, or ownership behavior.
+
 ## Objective
 
 Make two ordinary Synesis-aware coding agents complete one shared repository

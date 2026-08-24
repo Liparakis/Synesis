@@ -1,5 +1,18 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0480 convergence projection slice
+
+- Fresh claim-bearing diagnostic `syn039-cp0480-003` converged two disjoint
+  claims on WorkGroup `82223437-5c6b-38a3-bf18-c0216df46d5e`; no split occurred.
+- Ordinary `syn039-cp0480-004` also converged. It exposed REVIEW admission but
+  the executable workflow had empty `request_coordination` arguments; the
+  agent inferred the nested payload, then succeeded after one fail-closed
+  unsupported-field retry.
+- Promoted the existing review protocol payload into exact executable
+  `request_coordination` arguments and added deterministic regression coverage.
+- Focused tests and bundle rebuild passed. Bootstrap Go tests retain three
+  migration failures; Doctor remains DEGRADED; root check remains separate.
+
 # 2026-08-24 — SYN-039 CP-0479 contract clarification and acceptance reruns
 
 - Audited root `AGENTS.md`, `docs/providers/codex.md`, the managed

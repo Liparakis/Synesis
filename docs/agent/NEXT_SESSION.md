@@ -1,5 +1,17 @@
 # Next Session
 
+## CP-0480 continuation
+
+CP-0480 confirmed deterministic WorkGroup convergence and fixed the narrower
+projection defect where REVIEW admission exposed `request_coordination` with
+empty executable arguments. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0480-convergence-projection-2026-08-24.md`.
+
+Immediate next action: run fresh post-fix diagnostic and ordinary unattended
+Todo acceptances with the rebuilt current MCP. Capture exact projections and
+the first later lifecycle blocker. Keep Git, bootstrap migration, Doctor, and
+cleanup issues separate. Do not push or create SYN-040.
+
 - SYN-039 is ACTIVE: Autonomous Workgroup Completion.
 - SYN-038 remains DONE at CP-0458; its prior App Server history, tag,
   acceptance evidence, and `turn_interrupted_command_remained_active`

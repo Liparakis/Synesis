@@ -100,6 +100,15 @@ final class McpSyn039SliceTest {
         String admissionNext = reviewer.handleMessage(toolCall("get_next_action", "{}"));
         assertTrue(admissionNext.contains("work_group_join"), admissionNext);
         assertTrue(admissionNext.contains(ids.groupId.toString()), admissionNext);
+        Map<String, Object> admissionEnvelope = innerResult(admissionNext);
+        Map<String, Object> admissionResult = (Map<String, Object>) admissionEnvelope.get("result");
+        Map<String, Object> admissionWorkflow = (Map<String, Object>) admissionResult.get("workflow");
+        assertEquals("request_coordination", admissionWorkflow.get("recommendedTool"));
+        Map<String, Object> admissionArguments = (Map<String, Object>) admissionWorkflow.get("arguments");
+        assertEquals("work_group_join", admissionArguments.get("kind"));
+        Map<String, Object> admissionPayload = (Map<String, Object>) admissionArguments.get("payload");
+        assertEquals(ids.groupId.toString(), admissionPayload.get("workGroupId"));
+        assertEquals(ids.intentId.toString(), admissionPayload.get("intentId"));
 
         String joinRequest = reviewer.handleMessage(toolCall("request_coordination",
                 "{\"kind\":\"work_group_join\",\"payload\":{"
