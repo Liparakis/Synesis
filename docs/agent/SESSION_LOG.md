@@ -1,3 +1,30 @@
+# 2026-08-24 — SYN-039 CP-0533 engaged diagnostic
+
+- Fresh project `syn039-diagnostic-cp0533-001` used the rebuilt bundled MCP,
+  two independent GPT-5.6 Luna High Codex sessions, disjoint epoch-1 claims,
+  and one shared WorkGroup. Both sessions reached ready/isolated and exactly
+  ten MCP tools.
+- The diagnostic reached exact REVIEW admission, owner response, both
+  single-use grant consumptions, both exact projected `finish_lane` calls,
+  immutable snapshots `snap_6064cd14a4fcf0028614b1ce8fc9bd6d` and
+  `snap_b367ea88864a7653386dac1d6e3b3702`, integration, and WorkGroup
+  `cf3f65dd-c43b-3ad1-855b-0d72c68a419a` `COMPLETED`.
+- After control advanced, reviewers' snapshot reads returned
+  `workspace_stale`. B's attempted `ensure_session({"refresh":true})`
+  returned `internal_failure / request_human_help`; it submitted a structured
+  REJECT without being able to validate. A later submitted ACCEPT after the
+  same stale-read condition. WorkGroup closure therefore does not prove
+  trustworthy review validation.
+- Control pytest passed 4/4. Focused SYN-039 tests, fixture validators,
+  Doctor, and `git diff --check` passed. The root check remains separately
+  blocked at `:link:formatCheck` by trailing whitespace in older checkpoint and
+  evidence documents. No production code changed and no second ordinary
+  acceptance was run.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0533-engaged-diagnostic-2026-08-24.md`.
+- Exact next action: reproduce the reviewer stale-read and session-recovery
+  transition in a deterministic MCP fixture before changing production code.
+
 # 2026-08-24 — SYN-039 CP-0532 snapshot artifact fix and ordinary acceptance
 
 - CP-0531's ordinary acceptance reproduced a concrete integration defect:

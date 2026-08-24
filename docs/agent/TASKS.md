@@ -1,5 +1,28 @@
 # Tasks
 
+## SYN-039 CP-0533 update
+
+The fresh engaged diagnostic is recorded in
+`docs/evidence/syn039-unattended-todo-cp0533-engaged-diagnostic-2026-08-24.md`.
+Both independent agents reached one WorkGroup, exact REVIEW admission,
+single-use grants, both exact projected `finish_lane` calls, immutable
+publication, integration, and durable WorkGroup completion. Control pytest
+passed 4/4 and no production code changed for this run.
+
+The first concrete blocker is reviewer snapshot access after control advances.
+The review projection exposed the exact grant, snapshot, intent, and epoch,
+but reviewer reads returned `workspace_stale`; recovery returned
+`internal_failure / request_human_help`. Structured decisions were still
+recorded, so WorkGroup completion does not prove that the immutable snapshots
+were actually validated.
+
+The next narrow action is a deterministic fixture for the existing reviewer
+snapshot-read and session-recovery path. Trace the exact projection, binding,
+worktree, control revision, snapshot commit, and lease state before changing
+production code. Preserve fail-closed workspace, claims, ownership, grants,
+participants, epochs, cleanup, and Doctor behavior. Do not push or create
+SYN-040.
+
 ## SYN-039 CP-0532 update
 
 CP-0531 exposed and fixed the concrete snapshot-materialization defect where

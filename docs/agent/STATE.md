@@ -1,5 +1,35 @@
 # State
 
+## SYN-039 CP-0533 engaged diagnostic
+
+CP-0533 used fresh Git + Synesis state, the rebuilt current MCP, two
+independent GPT-5.6 Luna High sessions, disjoint epoch-1 claims, and one
+shared WorkGroup. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0533-engaged-diagnostic-2026-08-24.md`.
+
+Both agents reached ready/isolated, exact REVIEW admission, owner response,
+single-use grant consumption, exact projected `finish_lane`, immutable
+snapshot publication, and integration. A's snapshot was
+`snap_6064cd14a4fcf0028614b1ce8fc9bd6d`; B's snapshot was
+`snap_b367ea88864a7653386dac1d6e3b3702`. Both integrated and control pytest
+passed 4/4. The WorkGroup reached durable `COMPLETED` with zero tasks and
+ownerships.
+
+The first invalid review boundary was snapshot access after control advanced.
+B's `review_decision` projection exposed grant, snapshot, intent, and epoch,
+but `read_file` and pytest returned `workspace_stale`; B's attempted
+`ensure_session({"refresh":true})` returned `internal_failure /
+request_human_help`. B submitted a structured REJECT because validation was
+unavailable. A later submitted ACCEPT after its own snapshot read also returned
+`workspace_stale`. The WorkGroup closed, but reviewer decisions were not
+trustworthy validation evidence.
+
+Immediate next action: reproduce the reviewer stale-read and recovery
+transition in a deterministic MCP fixture and trace the existing immutable
+snapshot access/session-binding path before changing production behavior.
+Preserve fail-closed review, workspace, ownership, grant, participant, epoch,
+cleanup, and Doctor behavior. Do not push or create SYN-040.
+
 ## SYN-039 CP-0532 snapshot-artifact fix and ordinary acceptance
 
 CP-0531's ordinary run executed the exact projected `finish_lane` after both

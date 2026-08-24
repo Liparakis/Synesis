@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0533 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0533-engaged-diagnostic-2026-08-24.md`.
+
+The engaged CP-0533 diagnostic reached both exact projected
+`finish_lane` calls, immutable snapshots, integration, structured review
+responses, and WorkGroup `cf3f65dd-c43b-3ad1-855b-0d72c68a419a` `COMPLETED`.
+The control checkout is clean and pytest passes 4/4. The review decisions are
+not trustworthy validation evidence: after control advanced, both reviewers'
+snapshot reads returned `workspace_stale`; B's attempted
+`ensure_session({"refresh":true})` returned `internal_failure`.
+
+- Exact next documentation action: preserve the reviewer stale-read and
+  recovery trace as the next SYN-039 blocker and keep the root format failure,
+  Git stall, bootstrap migration failures, and Doctor warnings separate.
+- Exact next code action: reproduce the reviewer snapshot-read and
+  `ensure_session` recovery transition in a deterministic MCP fixture; make no
+  production change until the binding/worktree/lease cause is identified.
+- Do not relay, consume grants, repair state, push, or create SYN-040.
+
 ## CP-0532 continuation
 
 Evidence:
