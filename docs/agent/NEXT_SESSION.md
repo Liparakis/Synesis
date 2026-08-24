@@ -1,5 +1,36 @@
 # Next Session
 
+## CP-0532 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0531-ordinary-2026-08-24.md`.
+Post-fix acceptance trace:
+`docs/evidence/syn039-unattended-todo-cp0532-ordinary-2026-08-24.md`.
+
+Commit `b249790` fixes snapshot staging so root and nested Python `__pycache__`
+artifacts classified by the existing policy cannot enter immutable snapshots.
+The deterministic two-lane integration regression, focused tests, Javadocs,
+validators, Go vet, bundle rebuild, and diff check pass. Bootstrap migration
+tests still have the three known failures; the MCP Git launch stall remains
+separate.
+
+The fresh CP-0532 ordinary run reached one shared WorkGroup, exact reciprocal
+REVIEW requests, grant consumption, exact `finish_lane`, immutable snapshot
+publication, and integration at `20ab964` without the prior conflict. Agent A
+then ended after an unchanged reciprocal request projection; B remained in
+exact WAIT polling for A's grant and did not publish its own test change.
+WorkGroup `f81adf5d-1845-31b6-9eda-199dbcf8cb6f` is ACTIVE and Doctor is
+DEGRADED with six warnings.
+
+- Exact next documentation action: run a bounded diagnostic with both agents
+  kept engaged through the reciprocal request and WAIT projections; capture
+  whether the active reviewer later receives its own implementation/publication
+  action.
+- Exact next code action: none until an engaged participant executes an unchanged
+  projection that fails or Synesis reaches a required state with no usable
+  action.
+- Do not relay, consume grants, repair state, push, or create SYN-040.
+
 ## CP-0530 continuation
 
 Evidence:

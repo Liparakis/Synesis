@@ -1,53 +1,60 @@
 # Current Task
 
-## SYN-039 CP-0530 exact-rule diagnostic
+## SYN-039 CP-0532 snapshot-artifact fix and ordinary acceptance
 
-The fresh CP-0530 diagnostic used two independent GPT-5.6 Luna High Codex
-sessions, the current bundled MCP, one fresh project, disjoint epoch-1 claims,
-and one shared WorkGroup. It reached exact REVIEW admission, owner response,
-grant consumption, `finish_lane`, immutable snapshot publication, integration,
-and structured ACCEPT. Evidence:
-`docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+CP-0531 proved the first concrete post-review lifecycle defect: Python
+`__pycache__` files were classified as allowed runtime artifacts but remained
+in the immutable snapshot commit because `TaskSnapshotService.stageSourceIndex`
+staged them after `git add -A`. Two disjoint snapshots then conflicted on the
+same generated binaries. The fix is committed as `b249790` and resets root and
+nested `__pycache__` paths from the temporary snapshot index. Evidence and a
+two-lane integration regression are recorded in
+`docs/evidence/syn039-unattended-todo-cp0531-ordinary-2026-08-24.md`.
+The post-fix acceptance trace is recorded in
+`docs/evidence/syn039-unattended-todo-cp0532-ordinary-2026-08-24.md`.
 
-The first stop was agent compliance, not a production failure. After Agent A
-created the reciprocal REVIEW request, its next `get_next_action` again
-projected the exact executable `request_coordination` action, but A ended its
-turn without executing it or continuing to the reciprocal grant. Agent B
-remained engaged and repeatedly executed the projected `WAIT ->
-get_next_action({})` continuation for the grant targeted at A. No unchanged
-concrete Synesis action failed, and production code remains unchanged for this
-run. The separate ordinary precheck is recorded at
-`docs/evidence/syn039-unattended-todo-cp0529-ordinary-precheck-2026-08-24.md`.
+The fresh CP-0532 ordinary acceptance used the rebuilt bundle and reached one
+shared WorkGroup, reciprocal REVIEW requests, grant consumption, exact
+projected `finish_lane`, immutable snapshot publication, and successful
+integration. Agent A's snapshot `snap_fe293a7bd698ba24def510ab25c6a6a0`
+integrated at control commit `20ab964` without the prior binary conflict.
 
 ## Immediate next action
 
-Do not change production lifecycle behavior from CP-0530. First classify the
-Codex turn-ending boundary that ignores a final unchanged executable
-projection, then run one fresh ordinary acceptance only if that observation
-needs confirmation. If an engaged run later executes an unchanged projection
-that fails or reaches a required state with no usable action, implement only
-that narrow defect. Preserve fail-closed review, workspace, ownership, epoch,
-cleanup, and Doctor behavior; do not push or create SYN-040.
+Run a bounded diagnostic with the same fresh two-agent setup while preserving
+the ordinary no-relay rule, but keep both agents engaged through reciprocal
+review polling. Determine whether the active reviewer lane receives its own
+implementation/publication action after the accepted sibling snapshot, or
+whether the run only stops because the implementer ends after a repeated
+reciprocal projection. Change production code only if an engaged participant
+executes an unchanged projection that fails or Synesis reaches a required
+state with no usable action. Preserve fail-closed review, workspace,
+ownership, epoch, cleanup, and Doctor behavior; do not push or create SYN-040.
 
 ## Work completed
 
-CP-0530 proves the current review, grant, publication, integration, and
-structured ACCEPT transitions remain executable under the exact-action rule.
-The control checkout in the disposable fixture passed its visible Todo tests
-(`2 passed`) at `3843a47`. Doctor remains DEGRADED with six separately
-classified warnings; the Git subprocess stall and bootstrap migration failures
-remain independent verification issues.
+The snapshot artifact fix is covered by
+`TaskIntegrationServiceTest.generatedPythonBytecodeDoesNotConflictWhenDisjointSnapshotsIntegrate`.
+Focused workspace, MCP, coordination, validators, Javadocs, bundle rebuild,
+Go vet, and `git diff --check` passed. Bootstrap Go tests still reproduce the
+three known migration failures. The root MCP verification reproduced the
+known bounded Git launch stall in `McpSyn039SliceTest` and completed green;
+the stall remains separately classified.
 
 ## Current failures
 
-The CP-0530 WorkGroup `58c39d35-7835-3efe-b9ed-731e53e87465` remains ACTIVE.
-Agent A is COMPLETED after publishing and integrating snapshot
-`snap_2d49b85428978b46934f2a308975ae73`; Agent B remains ACTIVE with the
-epoch-1 `test_todo.py` claim. Reciprocal grant
-`99fe5115-716b-32ea-aa12-171e22a918c4` targets A and remains unresolved because
-A ended after the unchanged executable reciprocal request projection. B's
-snapshot and WorkGroup closure are not reached. This is agent-compliance
-evidence, not a production failure.
+CP-0532 WorkGroup `f81adf5d-1845-31b6-9eda-199dbcf8cb6f` remains ACTIVE.
+Agent A `agt_16d8d907-3cda-3c99-b59f-190466196787` is COMPLETED after exact
+`finish_lane` publication/integration; Agent B
+`agt_bfa21b05-002a-30de-935b-255dd64d732a` remains ACTIVE with the
+`test_todo.py` claim. Grant
+`a1fa1459-1e77-358c-9969-df4fc8809469` targets A to review B and remains
+unconsumed because A ended after the unchanged reciprocal request projection.
+B followed exact `WAIT -> get_next_action({})` projections, including the
+fail-closed correction of one malformed review argument, but did not publish
+its test change. This is agent-engagement/compliance evidence; no new
+production defect is proven. Doctor is DEGRADED with six warnings and
+reconciliation recommended.
 
 ## SYN-039 CP-0528 post-fix exact-action diagnostic
 

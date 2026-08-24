@@ -1,25 +1,33 @@
 # State
 
-## SYN-039 CP-0530 exact-rule diagnostic
+## SYN-039 CP-0532 snapshot-artifact fix and ordinary acceptance
 
-CP-0530 used fresh Git + Synesis state, the current bundled MCP, two distinct
-ready/isolated Codex sessions, disjoint epoch-1 claims, and one shared
-WorkGroup. It reached exact REVIEW admission, owner acceptance, single-use
-grant consumption, immutable snapshot publication, integration, and
-structured ACCEPT. Evidence:
-`docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+CP-0531's ordinary run executed the exact projected `finish_lane` after both
+lanes had been reviewed. Synesis returned `integration_conflict` because each
+Python test run generated the same `__pycache__` binaries and the snapshot
+staging path retained them despite the artifact policy excluding them from
+metadata. Commit `b249790` resets root and nested Python bytecode cache paths
+from the temporary snapshot index. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0531-ordinary-2026-08-24.md`.
+The post-fix acceptance trace is
+`docs/evidence/syn039-unattended-todo-cp0532-ordinary-2026-08-24.md`.
 
-Agent A then ended after `get_next_action` re-projected the exact reciprocal
-`request_coordination` action. Agent B remained in exact `WAIT ->
-get_next_action({})` polling for the grant targeted at A. The WorkGroup is
-ACTIVE; A is COMPLETED, B is ACTIVE, A's snapshot is integrated, B's snapshot
-is unpublished, and closure is not reached. The two malformed grant calls and
-the unprojected stale read were correctly fail-closed and remain agent-
-compliance evidence. No unchanged projected action failed.
+The deterministic two-lane regression and focused tests pass. CP-0532 used
+fresh Git + Synesis state and the rebuilt bundle. It reached one WorkGroup,
+reciprocal REVIEW requests, B's grant consumption and ACCEPT of A's snapshot,
+and A's exact `finish_lane`; A's snapshot
+`snap_fe293a7bd698ba24def510ab25c6a6a0` integrated at `20ab964` without
+generated cache files. A then ended after the unchanged reciprocal
+`request_coordination` projection. B remained in exact WAIT polling for the
+grant targeted at A and did not publish its own test change. No unchanged
+projected action failed; no new production defect is proven.
 
-Immediate next action: classify the provider turn-ending behavior that stops
-after an unchanged executable projection, then run a fresh ordinary acceptance
-only if needed to confirm it. Do not change production code for CP-0530 alone.
+Immediate next action: run a bounded diagnostic that keeps both agents alive
+through the reciprocal REVIEW request and WAIT projections, then determine
+whether the active reviewer receives a usable implementation/publication
+action after the sibling snapshot is accepted. Do not change production code
+unless an engaged participant executes an unchanged projection that fails or
+Synesis requires progress while projecting no usable action.
 
 ## SYN-039 CP-0528 post-fix exact-action diagnostic
 

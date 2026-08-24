@@ -1,25 +1,27 @@
 # Tasks
 
-## SYN-039 CP-0530 update
+## SYN-039 CP-0532 update
 
-CP-0530 reached the current executable protocol boundary with the exact-action
-rule: one shared WorkGroup, exact REVIEW admission, owner response, grant
-consumption, immutable snapshot publication, integration, and structured
-ACCEPT. Evidence:
-`docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+CP-0531 exposed and fixed the concrete snapshot-materialization defect where
+allowed Python bytecode artifacts remained in immutable commits and caused
+disjoint snapshot integration conflicts. Commit `b249790` adds the narrow
+temporary-index fix and deterministic two-lane regression. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0531-ordinary-2026-08-24.md`.
+The post-fix acceptance trace is
+`docs/evidence/syn039-unattended-todo-cp0532-ordinary-2026-08-24.md`.
 
-The first stop is agent compliance. Agent A ended after a repeated exact
-`request_coordination` projection for the reciprocal REVIEW request instead
-of executing that unchanged action and continuing to its grant. Agent B
-continued the exact projected wait. The malformed grant arguments and the
-unprojected stale read were fail-closed and are not production defects. No
-production code changed.
+The CP-0532 fresh ordinary acceptance verified that exact `finish_lane` now
+publishes and integrates A's snapshot without the binary conflict. It then
+stopped at agent engagement: A ended after a repeated exact reciprocal review
+request projection, while B correctly followed the projected WAIT continuation
+for A's unresolved grant. No unchanged projected action failed and no new
+production defect is proven.
 
-The next narrow action is to classify this provider turn-ending boundary and
-confirm it with a fresh ordinary acceptance if necessary. Only an unchanged
-projected action that fails, or an engaged run that requires progress while
-projecting no usable action, authorizes a production slice. Do not broaden
-SYN-039, push, or create SYN-040.
+The next narrow action is a bounded diagnostic preserving the no-relay rule
+while keeping both agents engaged through reciprocal REVIEW polling. Trace
+whether B receives a usable implementation/publication action after A's
+accepted snapshot or whether the only blocker is A's turn-ending behavior.
+Do not broaden SYN-039, push, or create SYN-040.
 
 ## SYN-039 CP-0528 update
 

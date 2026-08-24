@@ -1,4 +1,35 @@
-# 2026-08-24 — SYN-039 CP-0530 exact-rule diagnostic
+# 2026-08-24 — SYN-039 CP-0532 snapshot artifact fix and ordinary acceptance
+
+- CP-0531's ordinary acceptance reproduced a concrete integration defect:
+  `SnapshotArtifactPolicy` excluded Python bytecode from `changedPaths`, but
+  `TaskSnapshotService.stageSourceIndex()` still committed root and nested
+  `__pycache__` files. Commit `b249790` resets those paths from the temporary
+  index. The deterministic two-lane regression proves disjoint snapshots
+  publish only their claimed source files and integrate cleanly.
+- Focused workspace/MCP/coordination tests, Javadocs, validators, the rebuilt
+  bundle, Go vet, and `git diff --check` pass. Bootstrap Go tests reproduce
+  the three known migration failures. MCP verification reproduced the known
+  bounded Git process-launch stall and completed green.
+- Fresh CP-0532 ordinary project `syn039-ordinary-cp0532-001` used the rebuilt
+  bundle and two independent GPT-5.6 Luna High sessions. It reached one shared
+  WorkGroup, reciprocal REVIEW requests, grant consumption, exact
+  `finish_lane`, immutable snapshot `snap_fe293a7bd698ba24def510ab25c6a6a0`,
+  and successful integration at control `20ab964`; the prior binary conflict
+  did not recur.
+- Agent A then ended after an unchanged reciprocal `request_coordination`
+  projection. Agent B remained in exact `WAIT -> get_next_action({})` polling
+  for A's unresolved grant and did not publish its own test change. The
+  WorkGroup remains ACTIVE and Doctor is DEGRADED with six warnings. This is
+  agent-engagement/compliance evidence, not a new production defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0531-ordinary-2026-08-24.md`.
+- Post-fix acceptance evidence:
+  `docs/evidence/syn039-unattended-todo-cp0532-ordinary-2026-08-24.md`.
+- Exact next action: run a bounded diagnostic that keeps both agents engaged
+  through reciprocal REVIEW polling and captures whether B later receives a
+  usable implementation/publication action. Do not push or create SYN-040.
+
+## 2026-08-24 — SYN-039 CP-0530 exact-rule diagnostic
 
 - Fresh project `syn039-diagnostic-cp0530-001` used the current bundled MCP,
   two independent GPT-5.6 Luna High Codex sessions, the explicit exact-action
