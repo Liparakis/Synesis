@@ -13,10 +13,10 @@ production change is justified.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
 
-Next narrow action: audit the preserved ordinary CP-0525 provider-session
-termination at the final valid `WAIT` projection. Do not repeat the same
-acceptance or change production without a concrete unchanged projected-action
-failure; keep the known infrastructure failures separate.
+Next narrow action: run one bounded provider-session continuation check from the
+preserved ordinary CP-0525 `WAIT` boundary with the same participant/intent and
+exact `get_next_action({})`; do not create a new coding intent or relay state.
+Keep production unchanged unless the exact continuation fails.
 
 ## SYN-039 CP-0522 third ordinary acceptance update
 

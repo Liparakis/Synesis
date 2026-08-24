@@ -17,12 +17,12 @@ engagement evidence, not a proven production defect.
 
 ## Immediate next action
 
-Audit the preserved CP-0525 ordinary JSONL at the final `WAIT` boundary and
-the corresponding Codex process termination. Confirm whether Synesis emitted a
-usable continuation and whether the provider session ended without executing
-it. Do not repeat the same acceptance or change production lifecycle code
-without new evidence of an unchanged projected action failure. Do not push or
-create SYN-040.
+Run one bounded provider-session continuation check from the preserved CP-0525
+ordinary `WAIT` boundary, retaining the same participant/intent and executing
+only the projected `get_next_action({})`. Do not create a new coding intent or
+relay lifecycle state. If the provider ends again without executing the exact
+continuation, classify the limitation as external agent/session behavior and
+do not change production lifecycle code. Do not push or create SYN-040.
 
 ## Work completed
 

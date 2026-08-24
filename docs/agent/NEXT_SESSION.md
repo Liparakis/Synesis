@@ -13,11 +13,12 @@ left WorkGroup `5e0a82d7-635d-3e47-9e3e-5a4c37d83822` ACTIVE when the Codex
 session stopped during a valid projected continuation. No unchanged projected
 action failed.
 
-- Exact next action: audit the preserved ordinary CP-0525 JSONL and Codex
-  process termination at the final valid `WAIT` projection. Determine whether
-  Synesis emitted a usable continuation before the provider session ended. Do
-  not repeat the same acceptance or change production without a concrete
-  unchanged projected-action failure; do not push or create SYN-040.
+- Exact next action: run one bounded provider-session continuation check from
+  the preserved ordinary CP-0525 `WAIT` boundary, retaining the same
+  participant/intent and executing only exact `get_next_action({})`. Do not
+  create a new coding intent or relay state. If the provider ends again, keep
+  production unchanged and classify the external session limitation; do not
+  push or create SYN-040.
 
 ## CP-0523 continuation
 
