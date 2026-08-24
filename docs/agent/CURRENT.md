@@ -12,6 +12,30 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0500 REVIEW admission idempotency diagnostic
+
+The fresh post-fix diagnostic used project
+`5c4700bd-9765-4886-9aea-261bfb65be4a`, the rebuilt current bundled MCP, and
+two independent GPT-5.6 Luna sessions. Both exposed ten tools, reached
+`ready / isolated`, held disjoint `todo.py` / `test_todo.py` claims, and
+converged on WorkGroup `4c0005dc-4358-32b5-922a-3cf554cfb54d`.
+
+The narrow REVIEW admission idempotency fix worked. Repeated execution of
+the same projected `request_coordination(work_group_join)` returned the same
+request ID `90ab5c3b-e663-4230-94df-5f0077015508`; it did not create duplicate
+requests or grants. The run reached exact owner acceptance, grant consumption,
+producer `finish_lane`, immutable snapshot publication, integration, and
+structured ACCEPT. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0500-review-admission-idempotency-2026-08-24.md`.
+
+The first deviation was Agent A ignoring two repeated concrete review-admission
+projections after its successful request, then stopping. Agent B later
+accepted the request and received grant
+`b1b5b243-b6a5-308d-af57-bce3d3fc63d4`, but A was no longer polling to consume
+it. The WorkGroup remained ACTIVE with B's active test intent and no B
+snapshot. This is agent-compliance evidence; no further production change is
+authorized from this run.
+
 ## CP-0499 post-fix bounded diagnostic
 
 The fresh CP-0499 diagnostic used project
@@ -233,26 +257,30 @@ in `ca6d644`; its deterministic review-only projection and authority tests
 pass. CP-0499 then proved the next active-reviewer no-action blocker after
 ACCEPT. The bounded evidence is recorded in
 `docs/evidence/syn039-unattended-todo-cp0499-postfix-diagnostic-2026-08-24.md`.
+The CP-0500 coordination idempotency slice is covered by
+`WorkIntentServiceTest`; focused coordination, workspace, MCP, Javadoc,
+validator, Doctor, and diff checks pass. The known Git subprocess stall,
+bootstrap migration failures, and Doctor warnings remain separate.
 
 ## Current failures
 
-CP-0499 verified the truthful ACCEPT status and completed-participant review
-continuity, but ended with B's active reviewer intent still live while its
-final `get_next_action` returned ordinary IMPLEMENT with no executable
-lifecycle action. The WorkGroup remained ACTIVE and B's visible test work had
-no snapshot. The same run produced three duplicate REVIEW requests/grants
-from a still-actionable identical admission projection. The recurring Git
-subprocess stall, bootstrap migration failures, and six fixture Doctor
-warnings remain separate.
+CP-0500 verified that repeated REVIEW admission execution is idempotent, but
+the bounded agents did not reach clean closure: Agent A ignored two repeated
+concrete `request_coordination` projections after its first successful request,
+and B's later grant could not be consumed. The WorkGroup remained ACTIVE with
+B's active claim and no B snapshot. This is agent-compliance evidence, not a
+new lifecycle defect. The recurring Git subprocess stall, bootstrap migration
+failures, and six fixture Doctor warnings remain separate.
 
 ## Immediate next action
 
-Reproduce the CP-0499 post-ACCEPT active-reviewer no-action state with a
-deterministic coordination/MCP fixture, trace why the existing model does not
-project the reviewer's publication/finish or a terminal closure action, and
-cover the repeated identical REVIEW admission projection. Implement only that
-narrow production fix if the fixture confirms it. Do not broaden cleanup,
-ownership, Doctor, push, or create SYN-040.
+Run the next fresh bounded diagnostic with the same exact-projection rule and
+verify that both agents continue polling after an idempotent REVIEW admission
+until the second grant is consumed, B publishes its snapshot, validation and
+integration complete, and the WorkGroup closes. If an agent again ignores a
+concrete projection, preserve that as compliance evidence; do not change
+production lifecycle code. Do not broaden cleanup, ownership, Doctor, push, or
+create SYN-040.
 
 ## CP-0480 convergence projection slice
 

@@ -2051,3 +2051,32 @@ deterministic coverage for the repeated admission projection/idempotency.
 Do not broaden cleanup, detached-agent retention, ownership, Doctor, or
 orchestration. The second ordinary acceptance remains deferred until this
 bounded diagnostic blocker is resolved. Do not create SYN-040 or push.
+
+## SYN-039 CP-0500 update
+
+The fresh post-fix bounded diagnostic used the rebuilt current bundled MCP,
+project `5c4700bd-9765-4886-9aea-261bfb65be4a`, and two independent GPT-5.6
+Luna sessions. Both exposed ten tools, reached `ready / isolated`, held
+disjoint `todo.py` / `test_todo.py` claims, and converged on WorkGroup
+`4c0005dc-4358-32b5-922a-3cf554cfb54d`.
+
+The narrow REVIEW admission idempotency fix is verified. Repeated execution
+of the same projected `request_coordination(work_group_join)` returned request
+`90ab5c3b-e663-4230-94df-5f0077015508` every time and did not mint duplicate
+requests or grants. The run reached exact owner acceptance, grant consumption,
+producer `finish_lane`, immutable snapshot publication, integration, and
+structured ACCEPT. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0500-review-admission-idempotency-2026-08-24.md`.
+
+The first deviation was Agent A ignoring two repeated concrete review-admission
+projections after request `d9d89b66-c0bf-46ac-958f-926c411564e7` succeeded and
+stopping. B later accepted the request and received grant
+`b1b5b243-b6a5-308d-af57-bce3d3fc63d4`, but A was no longer polling to consume
+it. WorkGroup closure remains unproven. This is agent-compliance evidence;
+no further production lifecycle change is justified by this run. Focused
+coordination/workspace/MCP tests, Javadocs, validators, Doctor, and diff
+checks pass; the known Git stall and bootstrap migration failures remain
+separate. Exact next action: run another fresh bounded diagnostic with the
+same exact-projection rule and verify continued polling through the second
+grant, B snapshot, validation, integration, and closure. Do not create
+SYN-040 or push.

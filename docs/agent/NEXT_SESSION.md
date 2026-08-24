@@ -1,5 +1,35 @@
 # Next Session
 
+## CP-0500 continuation
+
+The fresh post-fix diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0500-002`, the
+rebuilt current bundled MCP, and two independent GPT-5.6 Luna sessions. Both
+agents exposed ten tools, reached `ready / isolated`, held disjoint claims,
+and converged on WorkGroup `4c0005dc-4358-32b5-922a-3cf554cfb54d`.
+
+The repeated REVIEW admission projection was fixed narrowly: all replays
+returned request `90ab5c3b-e663-4230-94df-5f0077015508`, with no duplicate
+request or grant. The run reached exact acceptance, grant consumption,
+`finish_lane`, snapshot `snap_6b8ee8837a67aca57c5c28baed57a8a2`, integration,
+and structured ACCEPT. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0500-review-admission-idempotency-2026-08-24.md`.
+
+Agent A then ignored two repeated concrete review-admission projections after
+request `d9d89b66-c0bf-46ac-958f-926c411564e7` and stopped. B later accepted
+the request and received grant `b1b5b243-b6a5-308d-af57-bce3d3fc63d4`, but A
+was no longer polling to consume it. The WorkGroup remains ACTIVE with B's
+active claim and no B snapshot. Treat this as agent-compliance evidence; do
+not change lifecycle production code from it.
+
+- Exact next code action: run a fresh bounded two-agent diagnostic with the
+  same exact-projection rule and verify both agents continue polling after the
+  idempotent REVIEW request until the second grant, B snapshot, validation,
+  integration, and WorkGroup closure. If a concrete projection is ignored
+  again, record compliance evidence and stop the slice.
+- Do not broaden cleanup, ownership, Doctor, or orchestration. Do not push or
+  create SYN-040.
+
 ## CP-0499 continuation
 
 The fresh CP-0499 post-fix diagnostic used project

@@ -1,5 +1,25 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0500 REVIEW admission idempotency diagnostic
+
+- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0500-002`
+  used the rebuilt bundled MCP and two independent GPT-5.6 Luna sessions.
+  Both reached ten-tool `ready / isolated` sessions with disjoint claims and
+  one WorkGroup `4c0005dc-4358-32b5-922a-3cf554cfb54d`.
+- Replaying the same projected REVIEW admission returned the same request
+  `90ab5c3b-e663-4230-94df-5f0077015508`; no duplicate request or grant was
+  created. The run reached exact acceptance, grant consumption, producer
+  `finish_lane`, immutable snapshot publication, integration, and structured
+  ACCEPT. The regression is covered by `WorkIntentServiceTest`.
+- Agent A then ignored two repeated concrete review-admission projections
+  after request `d9d89b66-c0bf-46ac-958f-926c411564e7` and stopped. B later
+  accepted the request and received grant
+  `b1b5b243-b6a5-308d-af57-bce3d3fc63d4`, but A was no longer polling to
+  consume it. WorkGroup remained ACTIVE with B's active claim and no B
+  snapshot. This is agent-compliance evidence, not a new production defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0500-review-admission-idempotency-2026-08-24.md`.
+
 # 2026-08-24 — SYN-039 CP-0499 post-fix bounded diagnostic
 
 - Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0499-003`
