@@ -1,5 +1,31 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0483 active-reviewer projection diagnostic
+
+- Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0483-001`
+  used the current bundled MCP (`0.1.0-SNAPSHOT`, SHA-256
+  `9064A9A96B0DD09595409E886214C5C2F35D4778B221ABB77DCE60D6161B576E`) and
+  two independent GPT-5.6 Luna sessions. Both reached `ready / isolated` on
+  project `da065c4f-a823-4792-9245-95a179766d9e` with disjoint claims.
+- The sessions converged on WorkGroup
+  `af1807bc-ab46-3c98-8908-7073a807a7a6`. Agent A published snapshot
+  `snap_2ecbf452a75a69a8048168e6a1f177f2` for `todo.py`; the reviewer intent
+  was recorded first and then received ordinary `IMPLEMENT` with no concrete
+  action even though the implementation snapshot was visible.
+- No REVIEW request, grant, validation decision, accepted integration, or
+  WorkGroup closure was created. Agent A and B each selected unprojected
+  `finish_lane` at different points; those results remain agent-compliance
+  evidence. The first genuine blocker is order-dependent review-admission
+  producer selection.
+- The active-peer projection slice is committed locally as `9e6d971`.
+  Focused MCP/workspace tests, workspace Javadocs, validators, Doctor
+  structural checks, and `git diff --check` pass. Doctor in the disposable
+  project remains DEGRADED with six existing warnings. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0483-active-reviewer-projection-2026-08-24.md`.
+- Exact next action: reproduce reviewer-first ordering deterministically and
+  trace/fix only the existing-model producer selection in
+  `AgentNextActionService.reviewActions`. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0482 actionable projection defect
 
 - Fresh fixture `syn039-cp0481-001` used the current bundled MCP, project

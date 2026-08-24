@@ -1,5 +1,30 @@
 # Next Session
 
+## CP-0483 continuation
+
+The fresh post-fix diagnostic fixture
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0483-001` used the
+current bundled MCP and two distinct `ready / isolated` GPT-5.6 Luna sessions.
+They held disjoint claims and converged on WorkGroup
+`af1807bc-ab46-3c98-8908-7073a807a7a6`. Agent A published snapshot
+`snap_2ecbf452a75a69a8048168e6a1f177f2`; the reviewer intent was recorded
+first, and the reviewer then received ordinary `IMPLEMENT` with no usable
+REVIEW admission action despite the visible implementation snapshot. No
+request, grant, validation, integration, or closure state was created.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0483-active-reviewer-projection-2026-08-24.md`.
+
+- Exact next action: reproduce the reviewer-first ordering deterministically,
+  trace `reviewActions` producer selection, and minimally project the existing
+  review admission action from WorkGroup/intent/epoch/snapshot provenance.
+- Focused MCP/workspace tests, workspace Javadocs, validators, Doctor
+  structural checks, and `git diff --check` pass. Commit `9e6d971` is local.
+- Agent A and B both made unprojected lifecycle choices; preserve those as
+  compliance evidence, not as production failures.
+- Do not push or create SYN-040. Keep the Git subprocess stall, bootstrap
+  migration failures, and Doctor warnings separate.
+
 ## CP-0482 continuation
 
 The fresh bounded diagnostic `syn039-cp0481-001` proved the first concrete

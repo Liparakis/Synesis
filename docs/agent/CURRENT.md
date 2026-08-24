@@ -178,6 +178,22 @@ publication, grant, validation, or integration action was exposed. This is a
 confirmed projection defect, not agent noncompliance. Evidence:
 `docs/evidence/syn039-unattended-todo-cp0482-actionable-projection-2026-08-24.md`.
 
+## CP-0483 active-reviewer projection rerun
+
+The fresh post-fix diagnostic used the current bundled MCP, two distinct
+ready/isolated sessions, and disjoint `todo.py` / `test_todo.py` claims. Both
+intents converged on WorkGroup `af1807bc-ab46-3c98-8908-7073a807a7a6`. Agent A
+published snapshot `snap_2ecbf452a75a69a8048168e6a1f177f2`, but the reviewer
+intent was recorded first. The reviewer then repeatedly received ordinary
+`IMPLEMENT` with no executable action even though the implementation snapshot
+was visible. No REVIEW request, grant, validation, integration, or closure was
+created. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0483-active-reviewer-projection-2026-08-24.md`.
+
+The active-peer admission slice is verified by focused workspace/MCP tests,
+but the live run proves an order-dependent producer/reviewer selection gap.
+The known unprojected `finish_lane` calls remain agent-compliance evidence.
+
 ## Implementation order
 
 1. Reproduce and capture the supplied unattended Todo failure.
@@ -191,13 +207,15 @@ confirmed projection defect, not agent noncompliance. Evidence:
 
 ## Immediate next action
 
-Trace the completion-state projection in `AgentNextActionService` and its
-coordination projections. Implement only the smallest fix that exposes the
-existing REVIEW admission or snapshot-publication action with exact arguments
-after visible implementation completes. Add deterministic regression coverage
-and preserve fail-closed ownership, epoch, grant, and snapshot behavior. Keep
-the Git stall, bootstrap migration failures, and Doctor warnings separate.
-Do not push or create SYN-040.
+Trace the order-dependent review-admission owner selection in
+`AgentNextActionService.reviewActions`. Reproduce the reviewer-first state with
+a deterministic fixture, then implement only the smallest existing-model fix
+that lets the reviewer discover the implementation snapshot and exact
+`request_coordination(work_group_join)` action using WorkGroup, intent,
+claim-epoch, and snapshot provenance. Preserve fail-closed ownership and do
+not add roles, orchestration, cleanup, or a side channel. Keep the Git stall,
+bootstrap migration failures, and Doctor warnings separate. Do not push or
+create SYN-040.
 
 ## CP-0471 owner REVIEW-acceptance slice
 
