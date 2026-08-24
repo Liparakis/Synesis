@@ -1,5 +1,22 @@
 # Next Session
 
+## CP-0481 continuation
+
+The corrected post-fix fixture `syn039-cp0480-006` used the current bundled
+MCP, the same initialized project, distinct ready/isolated sessions, and
+disjoint `todo.py` / `test_todo.py` claims. Both agents converged on WorkGroup
+`f0666aa0-31db-3025-a7e7-2e46f3fad1de`. Agent A published snapshot
+`snap_0c58f76fb959553d7d64d64ce7b0d21c`, but selected unprojected
+`finish_lane`; integration returned `integration_failed` and no REVIEW action
+was projected. Evidence is in
+`docs/evidence/syn039-unattended-todo-cp0481-postfix-review-admission-2026-08-24.md`.
+
+- Exact next action: run a fresh bounded diagnostic with disjoint claims and
+  execute every concrete `get_next_action` projection exactly; preserve the
+  first post-publication projection/action mismatch or exact projected failure.
+- Do not change production behavior based on unprojected agent actions. Do not
+  push or create SYN-040.
+
 ## CP-0480 continuation
 
 CP-0480 confirmed deterministic WorkGroup convergence and fixed the narrower

@@ -1,5 +1,30 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0481 post-fix diagnostic
+
+- The first fresh launch (`syn039-cp0480-005`) was invalid as a product
+  fixture because Agent A claimed both Todo paths while Agent B claimed
+  `test_todo.py`; Synesis correctly rejected the overlap. Logs remain
+  preserved and no production code changed.
+- The corrected fixture (`syn039-cp0480-006`, project
+  `df45ded4-0b90-4f6e-8cc5-f810d714942f`) used the current bundled MCP and two
+  independent GPT-5.6 Luna sessions. Both reached `ready / isolated`, held
+  disjoint exact claims, and converged on WorkGroup
+  `f0666aa0-31db-3025-a7e7-2e46f3fad1de`.
+- Agent A implemented `todo.py` and published snapshot
+  `snap_0c58f76fb959553d7d64d64ce7b0d21c` / commit
+  `cf4e313abe5175b53b5240415c376af4c3e38994`. Its `get_next_action` remained
+  ordinary `IMPLEMENT` with no concrete lifecycle action, but it selected
+  `finish_lane`; integration returned `integration_failed`. Agent B never saw
+  REVIEW admission. This is agent-compliance evidence, not a proven
+  production defect; no ordinary second acceptance was run.
+- Doctor was `DEGRADED` with six warnings. The Git subprocess stall and
+  bootstrap migration failures remain separate. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0481-postfix-review-admission-2026-08-24.md`.
+- Exact next action: run a fresh bounded diagnostic with exact execution of
+  concrete projected actions and preserve the first post-publication result.
+  Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0480 convergence projection slice
 
 - Fresh claim-bearing diagnostic `syn039-cp0480-003` converged two disjoint

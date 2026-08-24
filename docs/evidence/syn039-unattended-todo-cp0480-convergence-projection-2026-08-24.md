@@ -36,8 +36,8 @@ Project: `9af18337-dfc9-46b0-adad-384b0cfb0bc8`
 WorkGroup: `019b6e0a-b1da-3e8f-9e44-bbd5496f031b`
 
 With only complementary coding prompts, the agents also converged on one
-WorkGroup. Agent A first overclaimed `test_todo.py`; Synesis correctly returned
-`overlapping_claim`. Its next projection exposed
+WorkGroup. Agent A first overclaimed `test_todo.py`; Synesis rejected that
+claim with `overlapping_claim`. Its next projection exposed
 `REVIEW_ADMISSION_REQUIRED`, `request_coordination`, `work_group_join`, and
 the exact WorkGroup/intent payload. The agent executed that request
 successfully. An owner response initially included an unsupported `reason`

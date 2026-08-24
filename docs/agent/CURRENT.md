@@ -162,6 +162,15 @@ through `AgentNextActionService` → `RepositoryPrivateStateService` →
 and child-process evidence was captured. Doctor remains `DEGRADED` with the
 existing documented warnings.
 
+The corrected CP-0481 diagnostic used the current bundled MCP with two
+distinct ready/isolated sessions and disjoint claims. The agents converged on
+WorkGroup `f0666aa0-31db-3025-a7e7-2e46f3fad1de`; Agent A published
+`snap_0c58f76fb959553d7d64d64ce7b0d21c` but selected unprojected
+`finish_lane`, which returned `integration_failed`. No REVIEW action was
+projected and Agent B never reached admission. This is agent-compliance
+evidence, not a production defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0481-postfix-review-admission-2026-08-24.md`.
+
 ## Implementation order
 
 1. Reproduce and capture the supplied unattended Todo failure.
@@ -175,12 +184,11 @@ existing documented warnings.
 
 ## Immediate next action
 
-Capture the effective MCP executable, startup version/commit, project
-arguments, connection identity, and readiness trace from any future failing
-agent route, then rerun the explicit two-agent acceptance with strict exact
-`get_next_action` execution. Preserve the first typed result after the
-reviewer submits the projected review request. Keep the Git stall, bootstrap
-migration failures, and Doctor warnings separate. Do not create SYN-040.
+Run a fresh bounded diagnostic with disjoint claims and exact execution of
+every concrete `get_next_action` projection. Preserve the first
+post-publication projection/action mismatch or exact projected failure. Keep
+the Git stall, bootstrap migration failures, and Doctor warnings separate.
+Do not push or create SYN-040.
 
 ## CP-0471 owner REVIEW-acceptance slice
 
@@ -360,6 +368,22 @@ Git subprocess stall and bootstrap migration failures remain separate.
 Exact next action: preserve CP-0479 and design the smallest evidence-led slice
 for ordinary peer/WorkGroup discovery and convergence, without changing
 hidden-path protection or adding orchestration. Do not push or create SYN-040.
+
+## CP-0481 post-fix diagnostic
+
+The fresh corrected fixture `syn039-cp0480-006` used the current bundled MCP,
+the same initialized project, distinct ready/isolated sessions, and disjoint
+`todo.py` / `test_todo.py` claims. Both agents converged on WorkGroup
+`f0666aa0-31db-3025-a7e7-2e46f3fad1de`. Agent A published snapshot
+`snap_0c58f76fb959553d7d64d64ce7b0d21c`, but selected unprojected
+`finish_lane`; integration returned `integration_failed` and no REVIEW action
+was projected. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0481-postfix-review-admission-2026-08-24.md`.
+
+This is agent action/compliance evidence, not a production integration defect.
+The next bounded diagnostic must execute every concrete projected action
+exactly and preserve the first post-publication result. Do not push or create
+SYN-040.
 
 ## CP-0478 exact-action protocol diagnostic
 
