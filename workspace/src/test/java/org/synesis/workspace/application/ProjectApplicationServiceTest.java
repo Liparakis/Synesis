@@ -41,6 +41,9 @@ final class ProjectApplicationServiceTest {
         assertTrue(agents.contains("integrationCheck input only evaluates explicitly supplied compatibility facts"));
         assertTrue(agents.contains("When get_next_action projects WAIT"));
         assertTrue(agents.contains("Do not report success or stop merely because your own lane is complete"));
+        assertTrue(agents.contains("A ready session is not yet an announced collaboration intent"));
+        assertTrue(agents.contains("task.claims containing the exact repository-relative files or subtrees"));
+        assertTrue(agents.contains("likelyScopes is descriptive only"));
         String metadata = Files.readString(root.resolve(".synesis/project.json"));
         assertTrue(metadata.contains("\"schemaVersion\": 2"));
         assertFalse(metadata.contains("identity.bin"));

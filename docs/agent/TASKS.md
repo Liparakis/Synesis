@@ -1,5 +1,26 @@
 # Tasks
 
+## SYN-039 CP-0514 update
+
+The agent-facing claim contract is clarified narrowly. The ten-tool MCP now
+describes `ensure_session.task.claims` as the existing intent/ownership
+announcement and identifies `likelyScopes` as descriptive only. Generated
+`AGENTS.md`, the managed provider manual, and provider documentation carry the
+same rule, with deterministic contract assertions. No ownership or lifecycle
+semantics changed.
+
+Fresh ordinary evidence proves both agents independently establish disjoint
+claims and converge on one WorkGroup, then reach REVIEW admission, owner
+acceptance, and single-use grant consumption. The first later stop is agent
+continuation at the producer's grant-pending WAIT and the reviewer's
+`SNAPSHOT_PENDING` WAIT. The WorkGroup remains ACTIVE; no exact projected
+action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0514-ordinary-claims-contract-2026-08-24.md`.
+
+The active task remains SYN-039. Next work is one bounded exact-projection
+diagnostic through snapshot publication, validation, integration, and closure;
+do not broaden lifecycle code, push, or create SYN-040.
+
 ## SYN-039 CP-0512 update
 
 CP-0512 exact-action diagnostic used the current bundled MCP, two independent

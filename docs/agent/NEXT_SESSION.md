@@ -1,5 +1,27 @@
 # Next Session
 
+## CP-0514 continuation
+
+The post-contract ordinary acceptance used the current bundled MCP and two
+independent GPT-5.6 Luna agents. Both claim-bearing `ensure_session` calls
+reached ready/isolated, one shared WorkGroup formed, REVIEW admission and owner
+acceptance succeeded, and grant
+`91988d4d-9f80-311d-860f-55d46a3a5eff` was consumed. Agent A stopped after
+repeated exact `WAIT -> get_next_action({})` polls while the grant was still
+pending; Agent B stopped after two exact `SNAPSHOT_PENDING -> WAIT` polls. No
+snapshot, validation, integration, or closure was reached. B's omitted
+`targetParticipant` was rejected fail-closed and corrected. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0514-ordinary-claims-contract-2026-08-24.md`.
+
+Exact next action: create a fresh bounded diagnostic with the explicit rule
+that every concrete `get_next_action` recommendation is executed unchanged and
+that both agents remain engaged through every projected WAIT while the
+WorkGroup is active. If an exact projected action fails, preserve it as the
+next production blocker; if agents stop or omit arguments again, classify that
+as compliance evidence. If it reaches end-to-end completion, run a second
+ordinary unattended acceptance. Do not modify lifecycle code, push, or create
+SYN-040.
+
 ## CP-0512 continuation
 
 CP-0512 exact-action diagnostic reached two reciprocal REVIEW admissions,

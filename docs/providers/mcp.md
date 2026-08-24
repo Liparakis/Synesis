@@ -20,3 +20,11 @@ One persistent MCP process owns one provider binding and one worker/session
 context. Reads return logical UTF-8 text plus a revision derived from exact raw
 bytes. `apply_patch` requires the matching revision for modifications;
 stale reads are rejected. Worker worktrees and session state are isolated.
+
+Before mutating visible task files, the agent must call `ensure_session` with
+`task.goal`, `task.acceptance`, and `task.claims`. Each claim is an exact
+repository-relative `path_exact` or `path_subtree` selector and is the existing
+intent/ownership announcement. Claims must be disjoint; Synesis rejects
+overlapping ownership. `likelyScopes` is descriptive planning information only
+and does not announce intent or acquire claims. There is no separate announce
+tool in the ten-tool MCP surface.

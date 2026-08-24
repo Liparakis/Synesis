@@ -302,13 +302,16 @@ public final class McpToolCatalog {
     private static List<Descriptor> buildDescriptors() {
         List<Descriptor> result = new ArrayList<>();
         Map<String, Object> claimSelector = objectSchema(Map.of(
-                "path", Map.of("type", "string"),
+                "path", Map.of("type", "string", "description", "Repository-relative path"),
                 "kind", Map.of("type", "string", "enum", List.of("path_exact", "path_subtree"))), List.of("path"));
-        Map<String, Object> claimArray = Map.of("type", "array", "items", claimSelector);
+        Map<String, Object> claimArray = Map.of("type", "array",
+                "description", "Intent and ownership selectors acquired by this session; keep them disjoint from other work",
+                "items", claimSelector);
         Map<String, Object> taskProperties = new LinkedHashMap<>();
-        taskProperties.put("goal", property("string"));
-        taskProperties.put("acceptance", property("string"));
-        taskProperties.put("likelyScopes", Map.of("type", "array", "items", property("string")));
+        taskProperties.put("goal", Map.of("type", "string", "description", "Announced task goal"));
+        taskProperties.put("acceptance", Map.of("type", "string", "description", "Announced acceptance criteria"));
+        taskProperties.put("likelyScopes", Map.of("type", "array", "items", property("string"),
+                "description", "Descriptive planning hints only; these do not announce intent or acquire ownership"));
         taskProperties.put("knownDependencies", Map.of("type", "array", "items", property("string")));
         taskProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
         taskProperties.put("unwindCompletion", Map.of("type", "boolean",
@@ -317,7 +320,7 @@ public final class McpToolCatalog {
         taskProperties.put("repairSnapshotId", property("string"));
         taskProperties.put("claims", claimArray);
         Map<String, Object> taskSchema = objectSchema(taskProperties, List.of());
-        result.add(descriptor(ENSURE_SESSION, "Ensures an active, verified Synesis workspace session.",
+        result.add(descriptor(ENSURE_SESSION, "Ensures an active, verified Synesis workspace session. Before visible task mutation, include task.goal, task.acceptance, and task.claims to announce intent and acquire the exact repository-relative ownership selectors; likelyScopes alone does not announce work or acquire claims.",
                 objectSchema(Map.of("task", taskSchema, "refresh", property("boolean")), List.of()),
                 "ensure-session", "MUTATING", List.of("SESSION_BINDING"), 1));
         result.add(descriptor(READ_FILE, "Reads text file content from the assigned worktree.",

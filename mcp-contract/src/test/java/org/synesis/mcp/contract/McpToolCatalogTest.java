@@ -69,6 +69,22 @@ class McpToolCatalogTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void ensureSessionExplainsThatClaimsAnnounceIntentAndLikelyScopesDoNot() {
+        McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
+                .filter(candidate -> candidate.wireName().equals(McpToolCatalog.ENSURE_SESSION))
+                .findFirst().orElseThrow();
+        assertTrue(descriptor.description().contains("task.claims"));
+        assertTrue(descriptor.description().contains("acquire"));
+        assertTrue(descriptor.description().contains("likelyScopes alone does not announce"));
+        Map<String, Object> task = (Map<String, Object>) ((Map<String, Object>) descriptor.inputSchema()
+                .get("properties")).get("task");
+        Map<String, Object> properties = (Map<String, Object>) task.get("properties");
+        assertTrue(String.valueOf(properties.get("claims")).contains("Intent and ownership selectors"));
+        assertTrue(String.valueOf(properties.get("likelyScopes")).contains("do not announce intent"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void advertisesTheExistingReviewValidationKindAndPayloadFields() {
         McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
                 .filter(candidate -> candidate.wireName().equals(McpToolCatalog.RESPOND_COORDINATION))

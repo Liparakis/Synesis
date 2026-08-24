@@ -1,5 +1,26 @@
 # State
 
+## SYN-039 CP-0514 ordinary acceptance
+
+The claim-announcement contract is now explicit. `ensure_session.task.claims`
+announces the intent and acquires exact repository-relative ownership; the
+descriptive `likelyScopes` field does not. A fresh ordinary run proved that
+both independent agents now form disjoint epoch-1 intents in one shared
+WorkGroup and reach REVIEW admission, owner acceptance, and single-use grant
+consumption. The run stopped only at agent continuation: the producer did not
+poll after the reviewer consumed the grant, and the reviewer stopped at the
+projected `SNAPSHOT_PENDING -> get_next_action` continuation. No exact
+projected lifecycle call failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0514-ordinary-claims-contract-2026-08-24.md`.
+
+The active implementation boundary remains the agent-facing contract and the
+existing lifecycle model. Doctor remains DEGRADED with six warnings; the root
+Git subprocess stall and bootstrap migration failures remain separate.
+
+Immediate next action: run the exact-projection diagnostic through snapshot,
+validation, integration, and closure, preserving agent-compliance deviations
+without adding speculative lifecycle behavior.
+
 ## SYN-039 CP-0512 exact-action diagnostic
 
 CP-0512 proved that the existing protocol can execute reciprocal REVIEW

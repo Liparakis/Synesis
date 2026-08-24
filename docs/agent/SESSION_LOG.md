@@ -1,5 +1,30 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0513/CP-0514 claim contract and ordinary acceptance
+
+- CP-0513 showed both ordinary agents calling `ensure_session` with only
+  `goal`, `acceptance`, and descriptive `likelyScopes`; no intent, claim, or
+  WorkGroup was created. The catalog exposed `claims` without explaining its
+  role, and the manual said to announce intent without naming the existing
+  `ensure_session.task.claims` path. This was a concrete agent-facing contract
+  ambiguity, not a lifecycle authorization defect.
+- The narrow fix clarified `task.claims`, `likelyScopes`, exact selector kinds,
+  and disjoint ownership in the MCP catalog, generated `AGENTS.md`, provider
+  manual, and provider documentation. Deterministic contract tests, focused
+  MCP/workspace tests, bundle rebuild, and `git diff --check` passed.
+- CP-0514 fresh ordinary acceptance proved both agents independently created
+  disjoint claims and one shared WorkGroup, reached REVIEW admission, accepted
+  the request, and consumed the targeted single-use grant. Agent A stopped
+  during grant-pending WAIT before polling after consumption; Agent B stopped
+  during `SNAPSHOT_PENDING` WAIT. B's omitted `targetParticipant` was rejected
+  fail-closed and corrected. No snapshot, validation, integration, or closure
+  was reached; no exact projected action failed.
+- Evidence: `docs/evidence/syn039-unattended-todo-cp0514-ordinary-claims-contract-2026-08-24.md`.
+- Exact next action: run the fresh bounded exact-projection diagnostic through
+  snapshot, validation, integration, and closure without relay or manual
+  transitions. Keep known Git stall, bootstrap migration failures, and six
+  Doctor warnings separate.
+
 # 2026-08-24 — SYN-039 CP-0511/CP-0512 acceptance evidence
 
 - CP-0511 ordinary acceptance used only complementary visible coding prompts.

@@ -30,6 +30,9 @@ class ProviderManualServiceTest {
             assertTrue(content.contains("optional `integrationCheck` input only evaluates explicitly supplied compatibility facts"));
             assertTrue(content.contains("When `get_next_action` projects `WAIT`"));
             assertTrue(content.contains("Do not report success or stop merely because your own lane is complete"));
+            assertTrue(content.contains("call `ensure_session` with `task.goal`, `task.acceptance`, and `task.claims`"));
+            assertTrue(content.contains("likelyScopes` is descriptive only"));
+            assertTrue(content.contains("A ready session without claims is not permission to mutate task files"));
             Files.writeString(manual, Files.readString(manual) + "tampered\n");
             assertFalse(service.attest("codex").valid());
             assertTrue(service.install("codex").valid());

@@ -1,5 +1,40 @@
 # Current Task
 
+## SYN-039 CP-0514 ordinary acceptance
+
+CP-0513 exposed a concrete agent-facing contract ambiguity: ordinary agents
+passed only `goal`, `acceptance`, and descriptive `likelyScopes` to
+`ensure_session`, so no intent or claims were announced and no WorkGroup could
+form. The MCP catalog, generated `AGENTS.md`, provider manual, and provider
+documentation now state that `ensure_session.task.claims` is the existing
+intent/ownership announcement, while `likelyScopes` is descriptive only. The
+change is contract/guidance-only; lifecycle authorization and fail-closed
+ownership behavior are unchanged. Deterministic catalog, generated guidance,
+and provider-manual tests pass. Evidence of the pre-fix run is retained in the
+CP-0513 harness; the contract slice is in commit `c176626` plus the current
+uncommitted reconciliation.
+
+The fresh post-fix ordinary run used two independent GPT-5.6 Luna agents and
+the current bundled MCP. Both independently sent disjoint claim-bearing
+`ensure_session` requests, reached one WorkGroup, executed REVIEW admission,
+and consumed the targeted single-use grant. A then stopped while repeatedly
+polling the grant-pending `WAIT -> get_next_action` before observing B's later
+consumption. B reached `SNAPSHOT_PENDING -> WAIT -> get_next_action` and
+stopped. No snapshot, validation, integration, or closure was reached. B's
+first omitted `targetParticipant` was rejected fail-closed and corrected; no
+exact projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0514-ordinary-claims-contract-2026-08-24.md`.
+
+## Immediate next action
+
+Run a fresh bounded exact-projection diagnostic with both agents explicitly
+required to execute every concrete projected action unchanged and remain
+engaged through `WAIT -> get_next_action` while the WorkGroup is active. Do not
+relay messages or trigger transitions. Preserve the first exact projected
+failure or first missing usable action; if the diagnostic completes, run the
+second completely ordinary acceptance. Do not change lifecycle behavior,
+push, or create SYN-040 for CP-0514 agent-compliance evidence.
+
 ## SYN-039 CP-0512 exact-action diagnostic
 
 CP-0512 used a fresh project and the current bundled MCP with two independent

@@ -1,5 +1,9 @@
 # SYN-039 latest acceptance evidence
 
+| Claim-bearing session announcement | fresh ordinary two-agent acceptance | `syn039-ordinary-cp0514-001` | both agents use `ensure_session.task.claims` for disjoint intent/ownership and converge on one WorkGroup | PASS; both intents and claims formed one WorkGroup; REVIEW admission and grant consumption reached | SYN-039 / CP-0514 |
+| Exact post-grant continuation through publication | fresh ordinary two-agent acceptance | `syn039-ordinary-cp0514-001` | producer observes grant consumption and publishes; reviewer continues from `SNAPSHOT_PENDING` | NOT REACHED; both agents stopped during projected WAIT continuation; no exact projected call failed | SYN-039 / CP-0514 |
+| Agent-facing claim contract is explicit | catalog, generated guidance, provider manual tests | CP-0513 / CP-0514 | `task.claims` announces intent; `likelyScopes` does not | PASS; deterministic contract tests and rebuilt bundle pass | SYN-039 / CP-0514 |
+
 | Invariant | Automated check | Fixture | Expected result | Latest result | Evidence |
 |---|---|---|---|---|---|
 | Ordinary agent returns to the durable inbox after visible implementation | fresh ordinary two-agent acceptance | `syn039-ordinary-cp0511-001` | no optional pre-merge shortcut replaces lifecycle discovery | FAIL as agent-facing contract/compliance evidence; A used `get_next_action({integrationCheck:{...}})` and stopped; no accepted snapshot was integrated | SYN-039 / CP-0511 |
