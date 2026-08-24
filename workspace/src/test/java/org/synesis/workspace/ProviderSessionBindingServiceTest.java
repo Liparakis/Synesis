@@ -143,6 +143,43 @@ final class ProviderSessionBindingServiceTest {
     }
 
     @Test
+    void preservesSessionIdentityWhenOnlyTheControlCheckoutAdvanced() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-control-advance-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "control@example.invalid");
+        git(root, "config", "user.name", "Control Test");
+        git(root, "commit", "-m", "baseline");
+
+        var service = new ProviderSessionBindingService();
+        var first = service.ensure(location, "codex", "reviewer-recovery").binding();
+        String originalSession = first.sessionId();
+        String originalWorktree = first.worktreePath();
+        Files.writeString(root.resolve("README.md"), "integrated control state\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "integrated snapshot");
+
+        var recovered = service.ensure(location, "codex", "reviewer-recovery").binding();
+
+        assertEquals(originalSession, recovered.sessionId());
+        assertNotEquals(originalWorktree, recovered.worktreePath());
+        assertEquals(gitHead(root), recovered.baseCommit());
+        assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath())).verified());
+    }
+
+    private static String gitHead(Path root) throws Exception {
+        Process process = new ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD")
+                .redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes()).trim();
+        if (process.waitFor() != 0) {
+            throw new IllegalStateException(output);
+        }
+        return output;
+    }
+
+    @Test
     void allocatesDistinctWorktreeOnlyForACommittedGitProject() throws Exception {
         Path root = Files.createTempDirectory("synesis-session-worktree-");
         var location = new ProjectApplicationService().init(root)

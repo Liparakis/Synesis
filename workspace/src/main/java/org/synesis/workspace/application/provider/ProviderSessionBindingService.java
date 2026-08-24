@@ -47,15 +47,22 @@ public final class ProviderSessionBindingService {
     }
 
     private static Binding withWorktree(ProjectApplicationService.ProjectLocation location, Binding binding) {
+        return withWorktree(location, binding, null);
+    }
+
+    private static Binding withWorktree(ProjectApplicationService.ProjectLocation location, Binding binding,
+            String allocationSuffix) {
         String baseCommit = validCommit(binding.baseCommit()) ? binding.baseCommit() : "GIT_HEAD_UNAVAILABLE";
-        String worktreeId = "worktree-" + binding.sessionId()
-                .substring("session-".length());
+        String suffix = allocationSuffix == null || allocationSuffix.isBlank()
+                ? binding.sessionId()
+                : binding.sessionId() + "-" + allocationSuffix;
+        String worktreeId = "worktree-" + suffix.substring("session-".length());
         Path path = workspaceRoot().resolve(binding.projectId())
                 .resolve("worktrees")
-                .resolve(binding.sessionId())
+                .resolve(suffix)
                 .toAbsolutePath()
                 .normalize();
-        String branch = "synesis/" + binding.provider() + "/" + binding.sessionId();
+        String branch = "synesis/" + binding.provider() + "/" + suffix;
         Path control = location.root()
                 .toAbsolutePath()
                 .normalize();
@@ -483,6 +490,12 @@ public final class ProviderSessionBindingService {
                             throw new BindingException("WORKSPACE_STALE_DIRTY",
                                     "Stored provider workspace contains uncommitted work");
                         }
+                        if (controlAdvancedWithoutWorkerAdvance(location, binding)) {
+                            Binding rebound = reallocatePreservingSession(location, binding).touch();
+                            write(bindingPath, rebound);
+                            return new BindingResult(rebound,
+                                    instanceEvidence == null || instanceEvidence.isBlank());
+                        }
                         binding = newBinding(location, identity, provider, fingerprint);
                     }
                     Binding refreshed = withWorktree(location, binding).touch();
@@ -562,6 +575,38 @@ public final class ProviderSessionBindingService {
         } catch (Exception failure) {
             return false;
         }
+    }
+
+    private static boolean controlAdvancedWithoutWorkerAdvance(ProjectApplicationService.ProjectLocation location,
+            Binding binding) {
+        if (binding == null || binding.worktreePath() == null || !validCommit(binding.baseCommit())) {
+            return false;
+        }
+        try {
+            String controlHead = currentCommit(location.root());
+            String workerHead = currentCommit(Path.of(binding.worktreePath()));
+            return validCommit(controlHead) && validCommit(workerHead)
+                    && !binding.baseCommit().equals(controlHead)
+                    && binding.baseCommit().equals(workerHead);
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    private static Binding reallocatePreservingSession(ProjectApplicationService.ProjectLocation location,
+            Binding binding) {
+        String suffix = "recovery-" + UUID.randomUUID();
+        Binding replacement = copy(binding,
+                null,
+                location.root().toString(),
+                null,
+                currentCommit(location.root()),
+                null,
+                "UNASSIGNED",
+                "UNVERIFIED",
+                "WORKSPACE_REBOUND",
+                "WORKSPACE_UNVERIFIED");
+        return withWorktree(location, replacement, suffix);
     }
 
     private static boolean isWorktreeClean(Binding binding) {
