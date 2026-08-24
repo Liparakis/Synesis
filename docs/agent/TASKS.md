@@ -1951,3 +1951,27 @@ remains DEGRADED with six fixture warnings. Exact next action: run a fresh
 bounded diagnostic that keeps both agents polling after wait/peer-side state
 changes, then capture producer publication through reviewer validation
 without relay or manual transition. Do not create SYN-040 or push.
+
+## SYN-039 CP-0494 update
+
+The CP-0493 rerun proved one concrete protocol defect: the executable
+`review_validation` projection included `workGroupId` and `targetParticipant`,
+but strict `respond_coordination` rejected those fields. The projection now
+matches the existing fail-closed response contract. The same implementation
+slice fixes the normal Python `__pycache__` artifact that previously caused an
+exact projected `finish_lane` action to collapse to `task_not_ready`.
+
+Focused workspace/MCP regressions pass and the rebuilt current bundle was used
+for a fresh two-agent diagnostic. It reached one WorkGroup, exact REVIEW
+admission, grant consumption, exact producer `finish_lane`, immutable snapshot
+publication, and integration. Agent B then received the corrected exact
+review-validation projection but chose unprojected `read_file("todo.py")`,
+which produced `workspace_stale`; no validation decision or closure occurred.
+This is agent-compliance evidence, not a new production defect. WorkGroup
+`471a4f65-5210-327f-ad5a-ba2897d022ab` remains ACTIVE. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0494-review-projection-2026-08-24.md`.
+
+Exact next action: run another fresh bounded diagnostic to determine whether an
+ordinary reviewer executes the now-executable projected validation action. Do
+not add lifecycle behavior for an agent that ignores a valid projection. Do
+not create SYN-040 or push.

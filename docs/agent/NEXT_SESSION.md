@@ -1,5 +1,43 @@
 # Next Session
 
+## CP-0494 continuation
+
+The fresh CP-0494 diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0494-001`, external
+harness `harness-cp0494-001`, and the rebuilt current bundle. Both independent
+GPT-5.6 Luna sessions used the same current MCP executable and project pin,
+reached distinct `ready / isolated` sessions, and the direct bundle control
+preflight reported protocol `2025-06-18`, server `0.1.0-SNAPSHOT`, and exactly
+ten tools.
+
+The run reached WorkGroup `471a4f65-5210-327f-ad5a-ba2897d022ab`, exact REVIEW
+admission, accepted owner responses, grant consumption, and exact projected
+producer publication. Agent A published snapshot
+`snap_3e7c0ee281c5190f43bcd2102a5853f7` and integrated the control checkout to
+`45fc60a`. The CP-0493 review-projection defect is fixed: the executable
+`review_validation` payload no longer contains rejected `workGroupId` or
+`targetParticipant` fields. The CP-0490 Python `__pycache__` snapshot defect is
+also fixed and covered.
+
+Agent B then received the corrected exact projection:
+`respond_coordination({kind: review_validation, grantId:
+2d616273-a235-3cec-b2fd-054a855fb8c6, snapshotId:
+snap_3e7c0ee281c5190f43bcd2102a5853f7, intentId:
+8e631b01-115b-35c6-8e4a-d9dd0e8a27c1, claimEpoch: 1, result: accepted|rejected})`.
+It selected unprojected `read_file("todo.py")` instead, which produced
+`workspace_stale`; no validation decision or closure occurred. This is
+agent-compliance evidence, not a new production defect. WorkGroup remained
+ACTIVE; Doctor remained DEGRADED with six warnings. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0494-review-projection-2026-08-24.md`.
+
+- Exact next action: run another fresh bounded diagnostic and capture whether
+  an ordinary reviewer executes the corrected projected validation action. If
+  it executes and a later transition fails, implement only that proven narrow
+  defect. If it ignores the projection again, preserve compliance evidence
+  without modifying production lifecycle code.
+- Do not run the second ordinary acceptance until this bounded diagnostic
+  completes. Do not push or create SYN-040.
+
 ## CP-0489 continuation
 
 The fresh CP-0489 diagnostic used project

@@ -1,5 +1,46 @@
 # State
 
+## SYN-039 CP-0494 post-fix review-projection diagnostic
+
+The fresh CP-0494 project `03dad00b-fbb4-4500-aa9a-22f91c7d7494` used the
+rebuilt current bundle and two independent GPT-5.6 Luna sessions. Both routes
+used the same pinned MCP executable, protocol `2025-06-18`, server version
+`0.1.0-SNAPSHOT`, and ten-tool catalog, and reached distinct ready/isolated
+sessions.
+
+The sessions reached WorkGroup `471a4f65-5210-327f-ad5a-ba2897d022ab`.
+Producer Agent A was participant
+`agt_11e6b518-98a2-318e-a663-ae7ef7beab69`, intent
+`8e631b01-115b-35c6-8e4a-d9dd0e8a27c1`, claim `todo.py`, epoch 1. Reviewer
+Agent B was participant `agt_c938232e-73c6-363d-98be-c8103a68e6e1`.
+Requests `970731a8-6e01-43bb-a976-2294b6c977ce` and
+`47980751-2ccc-4d06-a115-78611afa098c` were accepted. Grant
+`2d616273-a235-3cec-b2fd-054a855fb8c6` was consumed; grant
+`e6500955-750e-380f-8266-928ceef42109` remained available.
+
+CP-0493 established the concrete projection mismatch
+`COORDINATION_RESPONSE_FIELD_NOT_ALLOWED:workGroupId`. The executable review
+payload now contains only the fields accepted by strict
+`respond_coordination`; the deterministic MCP regression executes the ACCEPT
+branch from that projection. The CP-0490 `__pycache__` artifact policy fix is
+also covered and bundled.
+
+Agent A executed the exact projected `finish_lane` action and published
+snapshot `snap_3e7c0ee281c5190f43bcd2102a5853f7` (commit
+`67542ea641379d5eaef7a6b2b73d97541efd161d`, changed path `todo.py`). The
+control checkout integrated to clean commit `45fc60a`. Agent B then received
+the post-fix exact `review_validation` projection but chose unprojected
+`read_file("todo.py")`, which produced `workspace_stale`; it did not submit a
+decision. No exact projected action failed after the fix. WorkGroup remained
+ACTIVE and Doctor remained DEGRADED with six warnings. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0494-review-projection-2026-08-24.md`.
+
+Focused workspace/MCP tests and the rebuilt platform bundle pass. The ordinary
+second acceptance was not run because this bounded diagnostic did not complete.
+The next action is another fresh bounded diagnostic to observe ordinary
+reviewer compliance with the now-executable validation projection. Do not
+create SYN-040 or push.
+
 ## SYN-039 CP-0489 role-order diagnostic
 
 The fresh CP-0489 fixture used the current bundled MCP

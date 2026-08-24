@@ -12,6 +12,36 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0494 post-fix review-projection diagnostic
+
+The fresh CP-0494 fixture used the rebuilt current bundle, two independent
+GPT-5.6 Luna sessions, the same project root, and distinct ready/isolated
+sessions. Project `03dad00b-fbb4-4500-aa9a-22f91c7d7494` reached one shared
+WorkGroup `471a4f65-5210-327f-ad5a-ba2897d022ab` with producer claim `todo.py`
+at epoch 1. The MCP route was the current bundled executable, protocol
+`2025-06-18`, server `0.1.0-SNAPSHOT`, and exactly ten tools.
+
+CP-0493 proved that the reviewer validation projection was not executable:
+the exact projected payload included `workGroupId` and
+`targetParticipant`, while strict `respond_coordination` correctly rejected
+them with `COORDINATION_RESPONSE_FIELD_NOT_ALLOWED:workGroupId`. The smallest
+fix now keeps those identifiers in surrounding review context and emits only
+the accepted validation fields in the executable payload. Deterministic MCP
+coverage executes the projected ACCEPT branch successfully. The same slice
+also fixes the CP-0490 Python `__pycache__` artifact-policy failure.
+
+In the post-fix diagnostic, Agent B consumed grant
+`2d616273-a235-3cec-b2fd-054a855fb8c6`; Agent A executed the exact projected
+`finish_lane` action, publishing snapshot
+`snap_3e7c0ee281c5190f43bcd2102a5853f7` and integrating commit
+`67542ea641379d5eaef7a6b2b73d97541efd161d` into clean control commit `45fc60a`.
+Agent B then received the now-executable exact `review_validation` projection
+but chose an unprojected `read_file("todo.py")`, which produced
+`workspace_stale`. No validation decision or WorkGroup closure was reached;
+this is agent-compliance evidence, not a new production defect.
+
+Evidence: `docs/evidence/syn039-unattended-todo-cp0494-review-projection-2026-08-24.md`.
+
 ## CP-0489 role-order diagnostic
 
 The fresh CP-0489 fixture used the current bundled MCP and two independent
@@ -114,41 +144,36 @@ Evidence:
 ## Work completed
 
 The reviewer-first snapshot-admission projection fix is committed as
-`5fe613f`. The CP-0485 stale-recovery trace confirmed that the existing
-`WORKSPACE_STALE_DIRTY` path fails closed when an unprojected owner transition
-advances control while the reviewer's worktree is dirty. The smallest
-agent-facing contract clarification is implemented in
-`ProviderManualService` and generated `AGENTS.md`, with deterministic tests
-covering the distinction between ordinary `IMPLEMENT` and a concrete
-projected lifecycle action. Focused workspace/MCP regression coverage,
-Javadocs, bundle rebuild, validators, and `git diff --check` pass. CP-0486
-verified that Agent A obeyed the clarified contract and did not call
-unprojected `finish_lane`.
+`5fe613f`. This slice adds the narrow CP-0490 Python bytecode-cache artifact
+policy fix and the CP-0493 reviewer-validation projection fix. The strict
+review response remains fail-closed, while its executable projection now
+matches the accepted `respond_coordination` payload contract. Deterministic
+workspace/MCP regressions, focused Javadocs, bundle rebuild, and diff checks
+pass. CP-0494 proves exact admission, grant consumption, exact producer
+publication, immutable snapshot creation, and guarded integration on the
+rebuilt bundle.
 
 ## Current failures
 
-CP-0487 reached exact REVIEW admission and grant consumption, but the test
-agent established the WorkGroup first. The implementation agent therefore
-became the reviewer and correctly waited for a snapshot from the test-agent
-producer. The producer's last `get_next_action` occurred before grant
-consumption and returned ordinary `IMPLEMENT`; it did not poll again after the
-reviewer consumed the grant. No exact projected action failed, and no new
-production defect is proven. The duplicate retry-safe review requests/grants
-are recorded for later idempotency/cleanup review. The recurring Git
-subprocess stall, bootstrap migration failures, and six CP-0487 fixture Doctor
-warnings remain separately classified.
+CP-0494 stopped after the reviewer received an executable exact
+`review_validation` projection and chose an unprojected `read_file`, which
+returned `workspace_stale`. No exact post-fix projected action failed, so no
+new production change is authorized from that agent choice. The WorkGroup
+remains ACTIVE with accepted requests and REVIEW grants; validation, closure,
+cleanup, and final Doctor health remain unproven. The recurring Git subprocess
+stall, bootstrap migration failures, and six fixture Doctor warnings remain
+separate.
 
 ## Immediate next action
 
-Run a fresh bounded two-agent diagnostic using the current bundle, with the
-implementation agent launched first so it establishes the producer WorkGroup.
-After both sessions are ready, do not relay or trigger transitions. Capture
-every projection/action pair through producer snapshot publication and
-reviewer validation. If an exact projected action fails, implement only that
-proven narrow protocol defect; if the agents fail to poll or choose an
-unprojected action, preserve it as compliance evidence. Only after this
-diagnostic completes may the second ordinary unattended acceptance run. Do not
-push or create SYN-040.
+Run another fresh bounded two-agent diagnostic with the current bundle and
+capture whether an ordinary reviewer executes the now-executable projected
+`respond_coordination(review_validation)` action. Do not relay or trigger
+transitions. If that exact action executes and a later lifecycle transition
+fails, implement only that proven narrow defect; if the reviewer ignores it
+again, preserve agent-compliance evidence and do not change production code.
+Only after the bounded diagnostic completes may the second ordinary unattended
+acceptance run. Do not push or create SYN-040.
 
 ## CP-0480 convergence projection slice
 

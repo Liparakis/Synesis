@@ -1,5 +1,38 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0494 post-fix review-projection diagnostic
+
+- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0494-001`
+  used external harness `harness-cp0494-001`, the rebuilt current bundled MCP,
+  and two independent GPT-5.6 Luna sessions. The project ID was
+  `03dad00b-fbb4-4500-aa9a-22f91c7d7494`; both agents used the same pinned
+  executable, protocol `2025-06-18`, server `0.1.0-SNAPSHOT`, and ten tools,
+  with distinct ready/isolated sessions.
+- WorkGroup `471a4f65-5210-327f-ad5a-ba2897d022ab` reached one producer claim
+  on `todo.py` at epoch 1. Participants were
+  `agt_11e6b518-98a2-318e-a663-ae7ef7beab69` and
+  `agt_c938232e-73c6-363d-98be-c8103a68e6e1`. Requests
+  `970731a8-6e01-43bb-a976-2294b6c977ce` and
+  `47980751-2ccc-4d06-a115-78611afa098c` were accepted; grant
+  `2d616273-a235-3cec-b2fd-054a855fb8c6` was consumed.
+- CP-0493 proved the executable reviewer validation projection contained
+  fields rejected by strict `respond_coordination`. The projection now emits
+  only accepted `review_validation` fields; focused workspace/MCP tests and a
+  forced platform bundle rebuild pass. The related CP-0490 Python
+  `__pycache__` artifact-policy failure is also fixed and covered.
+- Agent A executed exact projected `finish_lane`, published
+  `snap_3e7c0ee281c5190f43bcd2102a5853f7`, and integrated control commit
+  `45fc60a`. Agent B received the corrected exact validation projection but
+  chose unprojected `read_file("todo.py")`, received `workspace_stale`, and
+  did not record ACCEPT/REJECT. WorkGroup remained ACTIVE and Doctor was
+  DEGRADED with six warnings. This is agent-compliance evidence, not a new
+  production defect. No ordinary second acceptance was run.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0494-review-projection-2026-08-24.md`.
+  Exact next action: run another fresh bounded diagnostic to observe ordinary
+  reviewer execution of the corrected projected validation action. Do not
+  push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0489 role-order diagnostic
 
 - Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0489-001`
