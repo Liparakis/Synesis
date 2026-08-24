@@ -360,7 +360,7 @@ public final class McpToolCatalog {
                         "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600,
                                 "description", "Execution timeout in seconds; default 120")), List.of("argv")),
                 commandResult, "run-command", "MUTATING", List.of("SESSION_BINDING"), 4));
-        result.add(descriptor(GET_NEXT_ACTION, "Retrieves the highest-priority actionable coordination item.",
+        result.add(descriptor(GET_NEXT_ACTION, "Retrieves the highest-priority actionable coordination item. If the response is workflow IMPLEMENT without a concrete recommendedTool and arguments, continue ordinary coding in the assigned worktree and do not inspect protected .synesis/** metadata. If a recommendedTool and arguments are present, execute that exact tool with those exact arguments before another lifecycle action.",
                 objectSchema(Map.of("integrationCheck", Map.of("type", "object", "description", "Explicit pre-merge candidate facts")), List.of()),
                 "get-next-action", "READ_ONLY", List.of("SESSION_BINDING"), 5));
         Map<String, Object> contractSchema = objectSchema(Map.of(

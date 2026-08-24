@@ -26,6 +26,7 @@ public final class ProviderManualService {
     private static final String MANUAL_FILE = "SKILL.md";
     private static final String MANIFEST_FILE = "manifest.json";
     private static final String CONTENT_PREFIX = "---\nname: synesis-manual\ndescription: Follow Synesis lane coordination, claim, inbox, mutation, recovery, and safe-stopping rules.\n---\n\n# Synesis Manual\n\nUse the durable Synesis coordination state as authoritative. Establish the exact session before mutation, announce intent, acquire only non-overlapping repository-relative claims, and keep every mutation inside the assigned isolated lane.\n\nTreat `get_next_action` as a durable at-least-once inbox. Read it at session start and after blocked or completed actions. Follow its recommended tool and typed arguments; do not guess identifiers, busy-poll, or blindly retry failed mutations.\n\nPublish capability implementations only when the inbox supplies the exact capability request handle. Ordinary lane completion uses `finish_lane`, which validates, publishes, integrates, and closes the lane. Do not invent legacy tool names or call capability publication as a substitute for lane completion.\n\nIf the lane is suspended, cancelled, revoked, or stale, preserve its work and wait for an authorized recovery or handoff. Never edit another lane or the control checkout.\n\nClose or cancel your own lane when finished, and report actionable failures without bypassing Synesis.\n\n";
+    private static final String IMPLEMENT_GUIDANCE = "When `get_next_action` reports workflow `IMPLEMENT` without a concrete `recommendedTool` and typed `arguments`, continue the assigned coding task normally in the visible assigned worktree using the permitted repository operations. Do not inspect `.synesis/**` internal metadata through workspace file tools; those paths are protected. Return to `get_next_action` after coding progress, a blocked result, or when collaboration is required. When a concrete `recommendedTool` and `arguments` are projected, execute that exact tool with those exact arguments before choosing another Synesis lifecycle action.\n\n";
     private static final Object INSTALL_LOCK = new Object();
 
     /** Result of a manual ownership and content attestation.
@@ -158,7 +159,7 @@ public final class ProviderManualService {
     }
 
     private static String content(String provider) {
-        return CONTENT_PREFIX
+        return CONTENT_PREFIX + IMPLEMENT_GUIDANCE
                 + "MCP wire compatibility digest: `" + McpToolCatalog.wireCompatibilityDigest() + "`\n"
                 + "MCP catalog content digest: `" + McpToolCatalog.catalogContentDigest() + "`\n"
                 + "Provider guidance renderer: `" + provider + "`\n";

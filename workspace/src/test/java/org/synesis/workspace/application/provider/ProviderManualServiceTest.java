@@ -20,6 +20,11 @@ class ProviderManualServiceTest {
             assertFalse(service.attest("codex").valid());
             assertTrue(service.install("codex").valid());
             Path manual = service.skillDirectory("codex").resolve("SKILL.md");
+            String content = Files.readString(manual);
+            assertTrue(content.contains("workflow `IMPLEMENT`"));
+            assertTrue(content.contains("visible assigned worktree"));
+            assertTrue(content.contains("Do not inspect `.synesis/**`"));
+            assertTrue(content.contains("exact tool with those exact arguments"));
             Files.writeString(manual, Files.readString(manual) + "tampered\n");
             assertFalse(service.attest("codex").valid());
             assertTrue(service.install("codex").valid());

@@ -28,6 +28,31 @@
   private exclusions; exclusion never proves provider ownership; and SYN-039
   must not add a daemon, UI, Fleet system, central orchestrator, or launcher.
 
+## CP-0479 continuation
+
+The agent-facing clarification is implemented and verified in the managed
+manual and `get_next_action` description. `IMPLEMENT` without a concrete
+`recommendedTool`/`arguments` now explicitly means ordinary coding in the
+visible assigned worktree; `.synesis/**` remains protected. Evidence and both
+acceptance outcomes are in
+`docs/evidence/syn039-unattended-todo-cp0479-contract-and-ordinary-acceptance-2026-08-24.md`.
+
+The bounded diagnostic reached shared WorkGroup review admission, grants,
+snapshot publication, and integrated control checkout commit `24ed805`, but
+the owner once chose unprojected `finish_lane` and had to retry; no structured
+review validation decision was captured and three worktrees remained.
+
+The second ordinary acceptance did not converge the agents into one shared
+WorkGroup. Both published separate snapshots and hit `integration_blocked`; a
+non-projected integration-check payload also returned `TESTS_FAILED` despite
+green pytest. Treat this as acceptance evidence, not a speculative production
+fix.
+
+Immediate next action: inspect the existing ordinary peer/WorkGroup discovery
+contract and identify the smallest evidence-backed discoverability/convergence
+slice. Preserve the separate Git stall, bootstrap migration failures, and
+Doctor warnings. Do not push or create SYN-040.
+
 ## CP-0478 continuation
 
 Evidence is recorded in

@@ -48,6 +48,18 @@ class McpToolCatalogTest {
     }
 
     @Test
+    void getNextActionExplainsOrdinaryImplementationWhenNoLifecycleActionExists() {
+        McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
+                .filter(candidate -> candidate.wireName().equals(McpToolCatalog.GET_NEXT_ACTION))
+                .findFirst().orElseThrow();
+        assertTrue(descriptor.description().contains("workflow IMPLEMENT"));
+        assertTrue(descriptor.description().contains("recommendedTool and arguments"));
+        assertTrue(descriptor.description().contains("ordinary coding"));
+        assertTrue(descriptor.description().contains(".synesis/**"));
+        assertTrue(descriptor.description().contains("exact tool with those exact arguments"));
+    }
+
+    @Test
     void identitiesAreDeterministicAndGuidanceDoesNotRecurse() {
         McpToolCatalog.Identity first = McpToolCatalog.identities(McpToolCatalog.descriptors());
         McpToolCatalog.Identity second = McpToolCatalog.identities(McpToolCatalog.descriptors());

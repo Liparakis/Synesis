@@ -1,5 +1,39 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0479 contract clarification and acceptance reruns
+
+- Audited root `AGENTS.md`, `docs/providers/codex.md`, the managed
+  `synesis-manual`, `McpToolCatalog`, `get_next_action`, and protected-path
+  tests. The distinction between ordinary `IMPLEMENT` work and a concrete
+  lifecycle action was ambiguous; `.synesis/**` protection was already
+  correct.
+- Added the smallest agent-facing clarification to `ProviderManualService`
+  and the `get_next_action` catalog description, with deterministic
+  manual/catalog tests. Rebuilt the bundled MCP successfully; no lifecycle
+  semantics or hidden-path protection changed.
+- CP-0479 diagnostic fixture
+  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-001` reached
+  WorkGroup `6e69d6f1-75b7-352b-a582-13a2a0a011cb`, review requests and grants,
+  snapshot `snap_701ed39a6a23b972bc5d723a4cbd630a`, and integrated control
+  commit `24ed805`. The owner first chose unprojected `finish_lane` and got
+  `task_not_ready / retry`; a later retry integrated. No structured reviewer
+  ACCEPT/REJECT decision was captured, and three worktrees remained.
+- The required ordinary second run used fresh fixture
+  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-002` without
+  diagnostic lifecycle instructions. The agents did not form one shared
+  WorkGroup. They published separate snapshots
+  `snap_694e9a6456a6a9469c65fa7ab817b7d4` and
+  `snap_8e9d2df7bbc472abefe455b9e2131cec`; both finish attempts reached
+  `integration_blocked`. A non-projected integration-check payload reported
+  pytest 4/4 but returned `integration_conflict / TESTS_FAILED`.
+- Both fixtures ended with coordination sequence zero, no tasks, no
+  ownerships, and three retained worktrees; Doctor was `DEGRADED` with six
+  warnings. Focused tests, validators, and diff check passed. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0479-contract-and-ordinary-acceptance-2026-08-24.md`.
+- Classification: contract clarification verified; next blocker is ordinary
+  peer/WorkGroup discoverability and convergence. Do not change integration
+  or lifecycle behavior speculatively, push, or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0478 exact-action protocol diagnostic
 
 - Created fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0478-001`

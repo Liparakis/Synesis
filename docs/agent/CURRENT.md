@@ -309,6 +309,42 @@ route itself, then reconcile that route with the passing control invocation.
 Keep the Git subprocess stall, bootstrap migration failures, and Doctor
 warnings separate. Do not push or create SYN-040.
 
+## CP-0479 agent contract clarification and acceptance reruns
+
+The CP-0478 audit found an ambiguous agent-facing gap: `IMPLEMENT` with no
+concrete `recommendedTool` and `arguments` did not explicitly mean continue
+ordinary coding in the visible assigned worktree. The managed provider manual
+and `get_next_action` MCP description now state that behavior, explicitly
+forbid `.synesis/**` inspection through workspace file tools, and require exact
+execution only when a concrete tool and arguments are projected. Deterministic
+catalog/manual tests pass; path protection and lifecycle semantics are
+unchanged.
+
+The bounded CP-0479 diagnostic reached one shared WorkGroup, review admission,
+review grants, a passing four-test implementation, snapshot publication, and
+integrated control checkout commit `24ed805`. The owner still selected
+unprojected `finish_lane` once and received `task_not_ready / retry` before a
+later retry succeeded. No structured reviewer ACCEPT/REJECT decision was
+captured, and three managed worktrees remained. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0479-contract-and-ordinary-acceptance-2026-08-24.md`.
+
+The required second ordinary acceptance did not form a shared WorkGroup. Both
+agents independently published snapshots, each reached `integration_blocked`,
+and the control checkout stayed at its managed baseline. One agent's
+non-projected integration-check facts reported pytest green but received
+`integration_conflict / TESTS_FAILED`; this is preserved as an observation,
+not a production-fix authorization. The next concrete blocker is ordinary
+agent coordination discoverability/compliance, with integration classification
+still secondary.
+
+Both fixtures reported coordination sequence zero, zero tasks, and zero
+ownerships after the runs. Doctor remained `DEGRADED` with six warnings. The
+Git subprocess stall and bootstrap migration failures remain separate.
+
+Exact next action: preserve CP-0479 and design the smallest evidence-led slice
+for ordinary peer/WorkGroup discovery and convergence, without changing
+hidden-path protection or adding orchestration. Do not push or create SYN-040.
+
 ## CP-0478 exact-action protocol diagnostic
 
 The fresh CP-0478 fixture used the current bundled MCP, explicit project pin,
