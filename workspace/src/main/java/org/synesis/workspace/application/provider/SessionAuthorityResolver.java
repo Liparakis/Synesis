@@ -64,4 +64,35 @@ public final class SessionAuthorityResolver {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
     }
+
+    /**
+     * Resolves an exact binding for review-only coordination authority.
+     *
+     * <p>A completed lane may still act on a grant targeted to its stable
+     * participant so it can review a sibling lane in the same WorkGroup.  This
+     * method does not reopen the lane for workspace reads or mutations; the
+     * consuming operation must still enforce the grant participant, intent,
+     * and epoch.</p>
+     *
+     * @param location initialized project
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection evidence
+     * @return exact bound or completed binding
+     * @throws Exception when no exact review authority exists
+     */
+    public ProviderSessionBindingService.Binding resolveReview(ProjectApplicationService.ProjectLocation location,
+            String provider, String connectionInstanceId) throws Exception {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(provider, "provider");
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        return bindingService.list(location, provider).stream()
+                .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
+                        || connectionInstanceId.equals(candidate.sessionId()))
+                .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status())
+                        || "COMPLETED".equalsIgnoreCase(candidate.status()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
+    }
 }

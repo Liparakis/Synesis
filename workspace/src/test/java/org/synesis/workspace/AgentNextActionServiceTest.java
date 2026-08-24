@@ -286,4 +286,77 @@ class AgentNextActionServiceTest {
         assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
         assertEquals(ownerClaim.intent().intentId().toString(), payload.get("intentId"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void completedParticipantProjectsReviewOnlyAdmissionForActiveSiblingGroup() throws Exception {
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+
+        AgentSessionService sessionService = new AgentSessionService();
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "completed-reviewer", null, false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                controlRoot, "codex", "active-owner", null, false));
+
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var completedBinding = bindings.find(location, "codex", "completed-reviewer").orElseThrow();
+        var ownerBinding = bindings.find(location, "codex", "active-owner").orElseThrow();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var completedClaim = collaboration.announce(controlRoot, "codex", "completed-reviewer",
+                "Review the sibling implementation", "Review the immutable sibling snapshot",
+                List.of(ResourceSelector.pathExact("tests/completed_review.py")));
+        var ownerClaim = collaboration.announce(controlRoot, "codex", "active-owner",
+                "Implement the sibling source", "Publish the completed source",
+                List.of(ResourceSelector.pathExact("src/sibling.py")), completedClaim.intent().workGroupId());
+
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        SnapshotProvenance provenance = new SnapshotProvenance(completedClaim.intent().workGroupId(),
+                completedClaim.intent().intentId(),
+                WorkspaceCollaborationService.participantHandle(completedBinding.sessionId()),
+                completedBinding.sessionId(), 1, List.of(), List.of(),
+                List.of("PATH_EXACT:tests/completed_review.py"),
+                "refs/synesis/snapshots/snap_completed_review", "completed-review-integrity");
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(
+                UUID.nameUUIDFromBytes("syn039-completed-review-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                "snap_completed_review", identity.nodeId(), "supervisor", "worker", completedBinding.sessionId(),
+                completedBinding.baseCommit(), completedBinding.baseCommit(),
+                List.of("tests/completed_review.py"), List.of(), "Completed review lane", provenance);
+        store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED,
+                identity.nodeId(), snapshot.encode(), identity);
+        collaboration.release(controlRoot, "codex", "completed-reviewer");
+        assertTrue(bindings.complete(location, "codex", "completed-reviewer"));
+
+        AgentResponse response = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "completed-reviewer"));
+
+        assertEquals(AgentStatus.READY, response.status());
+        assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());
+        assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
+        Map<String, Object> result = (Map<String, Object>) response.result();
+        assertEquals(Boolean.TRUE, result.get("reviewOnly"));
+        List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) result.get("reviewActions");
+        assertEquals(1, reviewActions.size());
+        assertEquals("REVIEW_ADMISSION_REQUIRED", reviewActions.getFirst().get("state"));
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        assertEquals("request_coordination", workflow.get("recommendedTool"));
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        assertEquals("work_group_join", arguments.get("kind"));
+        Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
+        assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
+        assertEquals(ownerClaim.intent().intentId().toString(), payload.get("intentId"));
+
+        var request = collaboration.request(controlRoot, "codex", "completed-reviewer",
+                ownerClaim.intent().intentId(), org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.REVIEW,
+                "Review the sibling immutable snapshot");
+        assertEquals(WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()), request.target());
+
+        AgentResponse mutation = new org.synesis.workspace.application.workspace.WorkspacePatchService().applyPatch(
+                new org.synesis.workspace.application.workspace.WorkspacePatchService.PatchRequest(
+                        controlRoot, "codex", "completed-reviewer", "src/forbidden.py", true,
+                        "print('must not mutate')\n", null, List.of()));
+        assertEquals(AgentStatus.RETRY_REQUIRED, mutation.status());
+        assertEquals(AgentReason.WORKSPACE_STALE, mutation.reason());
+    }
 }

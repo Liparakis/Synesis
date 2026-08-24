@@ -9,10 +9,13 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -114,13 +117,16 @@ public final class AgentNextActionService {
         WorkspaceReadinessService.ReadinessResult readiness;
         try {
             location = projectService.locate(root);
-            // A completed lane is a durable terminal state.  Do not send its
-            // caller back through workspace freshness checks after integration
-            // has advanced the control head; the immutable snapshot remains
-            // available for audit and recovery, but this authority is closed.
             var exactBinding = new ProviderSessionBindingService().find(
                     location, request.provider(), request.connectionInstanceId());
             if (exactBinding.isPresent() && "COMPLETED".equals(exactBinding.get().status())) {
+                AgentResponse reviewResponse = completedReviewAction(location, exactBinding.get().sessionId());
+                if (reviewResponse != null) {
+                    return reviewResponse;
+                }
+                // A completed lane remains terminal when no review action is
+                // available.  It never re-enters workspace readiness or write
+                // ownership merely because a sibling lane is still active.
                 return new AgentResponse(AgentStatus.COMPLETED, null, null,
                         Map.of("state", "COMPLETED", "lane", exactBinding.get().sessionId()));
             }
@@ -423,6 +429,57 @@ public final class AgentNextActionService {
         };
     }
 
+    private AgentResponse completedReviewAction(
+            ProjectApplicationService.ProjectLocation location, String sessionId) {
+        try {
+            Path coordination = location.root().resolve(".synesis/coordination");
+            if (!Files.exists(coordination.resolve("events"))) {
+                return null;
+            }
+            org.synesis.coordination.persistence.PredictionEventStore store =
+                    new org.synesis.coordination.persistence.PredictionEventStore(
+                            coordination, location.projectId());
+            String participant = WorkspaceCollaborationService.participantHandle(sessionId);
+            Set<UUID> completedGroups = completedParticipantWorkGroups(store, participant);
+            if (completedGroups.isEmpty()) {
+                return null;
+            }
+            Map<String, Object> collaboration = collaborationDetails(store, sessionId, completedGroups);
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> reviewActions =
+                    (List<Map<String, Object>>) collaboration.get("reviewActions");
+            if (reviewActions.isEmpty()) {
+                return null;
+            }
+            Map<String, Object> review = reviewActions.getFirst();
+            String protocolAction = String.valueOf(review.get("nextProtocolAction"));
+            AgentNextAction next = "respond_coordination".equals(protocolAction)
+                    ? AgentNextAction.RESPOND_COORDINATION
+                    : "wait".equals(protocolAction) ? AgentNextAction.WAIT
+                    : AgentNextAction.REQUEST_COORDINATION;
+            Map<String, Object> projection = new LinkedHashMap<>(collaboration);
+            projection.put("reviewOnly", true);
+            projection.put("nextProtocolAction", review.get("nextProtocolAction"));
+            projection.put("nextProtocolKind", review.get("nextProtocolKind"));
+            projection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
+            return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
+                    next, projection);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static Set<UUID> completedParticipantWorkGroups(
+            org.synesis.coordination.persistence.PredictionEventStore store, String participant) {
+        Set<UUID> groups = new LinkedHashSet<>();
+        for (TaskSnapshotRecord snapshot : store.taskCompletionProjection().allSnapshots()) {
+            if (participant.equals(snapshot.provenance().participant())) {
+                groups.add(snapshot.provenance().workGroupId());
+            }
+        }
+        return Set.copyOf(groups);
+    }
+
     /** Builds a JSON-safe collaboration discovery and pending-request projection. */
     private Map<String, Object> collaborationDetailsForRequest(ProjectApplicationService.ProjectLocation location,
             NextActionRequest request) {
@@ -449,6 +506,12 @@ public final class AgentNextActionService {
     /** Converts collaboration records to a provider-safe next-action payload. */
     private Map<String, Object> collaborationDetails(
             org.synesis.coordination.persistence.PredictionEventStore store, String sessionId) {
+        return collaborationDetails(store, sessionId, null);
+    }
+
+    private Map<String, Object> collaborationDetails(
+            org.synesis.coordination.persistence.PredictionEventStore store, String sessionId,
+            Set<UUID> reviewGroupFilter) {
         String participantId = sessionId == null || sessionId.isBlank()
                 ? "" : WorkspaceCollaborationService.participantHandle(sessionId);
         List<Map<String, Object>> intents = store.collaborationProjection().activeIntents().stream()
@@ -482,7 +545,7 @@ public final class AgentNextActionService {
         result.put("currentParticipant", participantId);
         result.put("currentIntent", currentIntent);
         result.put("pendingCoordination", enrichedPending);
-        result.put("reviewActions", reviewActions(store, participantId));
+        result.put("reviewActions", reviewActions(store, participantId, reviewGroupFilter));
         result.put("claimConflicts", List.of());
         return result;
     }
@@ -538,10 +601,17 @@ public final class AgentNextActionService {
 
     private static List<Map<String, Object>> reviewActions(
             org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+        return reviewActions(store, participantId, null);
+    }
+
+    private static List<Map<String, Object>> reviewActions(
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+            Set<UUID> reviewGroupFilter) {
         List<Map<String, Object>> actions = new ArrayList<>();
         var projection = store.workGroupProjection();
         for (LaneGrant grant : projection.grants()) {
             if (!grant.targetParticipant().equals(participantId)) continue;
+            if (reviewGroupFilter != null && !reviewGroupFilter.contains(grant.workGroupId())) continue;
             TaskSnapshotRecord snapshot = store.taskCompletionProjection().allSnapshots().stream()
                     .filter(value -> value.provenance().workGroupId().equals(grant.workGroupId()))
                     .filter(value -> value.provenance().laneId().equals(grant.targetIntentId()))
@@ -588,6 +658,7 @@ public final class AgentNextActionService {
                     .anyMatch(intent -> intent.participant().equals(participantId));
             for (WorkGroup group : projection.groups()) {
                 if (group.status() != WorkGroup.Status.ACTIVE) continue;
+                if (reviewGroupFilter != null && !reviewGroupFilter.contains(group.workGroupId())) continue;
                 if (callerHasActiveIntent && activeIntents.stream()
                         .noneMatch(intent -> intent.participant().equals(participantId)
                                 && intent.workGroupId().equals(group.workGroupId()))) continue;

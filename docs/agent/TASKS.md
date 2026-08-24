@@ -1998,3 +1998,26 @@ the response reflects the durable group status. Broader grant deduplication,
 cleanup, and closure remain unimplemented. Doctor is still DEGRADED; the
 known Git subprocess stall and three bootstrap migration failures remain
 separate verification issues. Do not create SYN-040 or push.
+
+## SYN-039 CP-0498 update
+
+The fresh CP-0498 diagnostic used the current bundled MCP and two independent
+ready/isolated GPT-5.6 Luna sessions on project
+`ff3603f4-67bd-4972-99d0-c075b7c10c5f`. One WorkGroup
+`1d24011b-99a6-37bd-b56b-ca09eab8edef` reached exact REVIEW admission, grant
+consumption, projected `finish_lane`, immutable snapshot publication,
+integration, reviewer recovery, and exact ACCEPT decisions. The status fix
+made ACCEPT report the durable group status (`ACTIVE`) instead of an
+unconditional `COMPLETED`. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0498-completed-review-continuity-diagnostic-2026-08-24.md`.
+
+The first remaining concrete defect is completed-participant continuity: B's
+binding became `COMPLETED` after its own lane integrated while A's sibling
+implementation intent remained active. The early terminal next-action path
+prevented B from seeing the existing same-WorkGroup REVIEW admission action;
+therefore A never received a review grant and never published its snapshot.
+The next implementation slice is restricted to review-only projection and
+authority for that completed participant. Completed write mutation and
+ownership must remain closed. The recurring Git stall, bootstrap migration
+failures, and Doctor warnings remain separately classified. Do not create
+SYN-040 or push.

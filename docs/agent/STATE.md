@@ -1,5 +1,26 @@
 # State
 
+## SYN-039 CP-0498 completed-review continuity diagnostic
+
+CP-0498 used fresh project `ff3603f4-67bd-4972-99d0-c075b7c10c5f`, the current
+bundled MCP, and two independent ready/isolated GPT-5.6 Luna sessions. The
+sessions reached one WorkGroup
+`1d24011b-99a6-37bd-b56b-ca09eab8edef`, exact REVIEW admission, grant
+consumption, projected `finish_lane`, immutable snapshot publication,
+integration, reviewer recovery, and exact ACCEPT decisions. The ACCEPT status
+correction now matches the durable `ACTIVE` group state.
+
+The first remaining defect is completed-participant continuity: B's binding
+became terminal `COMPLETED` after its own snapshot integrated while A's sibling
+implementation intent remained active. The early next-action terminal path
+prevented B from discovering the same-WorkGroup REVIEW admission action, so A
+could not receive a grant and publish its snapshot. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0498-completed-review-continuity-diagnostic-2026-08-24.md`.
+
+The next slice is limited to review-only projection and authority for a
+completed participant. Completed write mutation, ownership, cleanup, Doctor,
+and unrelated verification failures remain unchanged.
+
 ## SYN-039 CP-0497 reviewer-continuity diagnostic
 
 The fresh project `4d0fa215-d2e4-4a72-9a1c-0e7b858a3b1e` used the rebuilt

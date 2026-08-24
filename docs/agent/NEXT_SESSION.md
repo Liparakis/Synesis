@@ -1,5 +1,30 @@
 # Next Session
 
+## CP-0498 continuation
+
+The fresh CP-0498 diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0498-001`, the current
+bundled MCP, and two independent GPT-5.6 Luna sessions. Both sessions reached
+the same pinned project, ten tools, and ready/isolated bindings. WorkGroup
+`1d24011b-99a6-37bd-b56b-ca09eab8edef` reached exact admission, grant
+consumption, projected `finish_lane`, snapshot publication, integration,
+reviewer recovery, and exact ACCEPT decisions. ACCEPT now reports the durable
+group status (`ACTIVE`) correctly. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0498-completed-review-continuity-diagnostic-2026-08-24.md`.
+
+The first remaining production blocker is that B's completed binding becomes a
+terminal `COMPLETED` response while A's sibling implementation lane remains
+active. B therefore cannot discover/request review admission for A, and A
+cannot receive the review grant needed to publish its snapshot. The next code
+slice is restricted to same-WorkGroup review-only continuity: project the
+existing admission/grant/validation actions for a completed participant and
+allow only the existing exact review authority checks; completed write
+mutation must remain closed.
+
+Run focused workspace/MCP tests, rebuild the bundled MCP, then run one fresh
+bounded diagnostic and (only if it reaches clean closure) the ordinary
+unattended acceptance. Do not push or create SYN-040.
+
 ## CP-0497 continuation
 
 The fresh CP-0497 diagnostic used project

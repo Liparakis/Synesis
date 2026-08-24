@@ -1,5 +1,25 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0498 completed-review continuity diagnostic
+
+- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0498-001`
+  used the current bundled MCP and two independent GPT-5.6 Luna sessions.
+  Both agents reached the same pinned project, ten tools, and distinct
+  ready/isolated bindings. WorkGroup
+  `1d24011b-99a6-37bd-b56b-ca09eab8edef` reached exact REVIEW admission, grant
+  consumption, projected `finish_lane`, immutable snapshot publication,
+  integration, reviewer recovery, and exact ACCEPT decisions.
+- The CP-0497 status contradiction was fixed and verified: ACCEPT returned the
+  durable `ACTIVE` status while a sibling intent or grant remained live.
+- The first remaining production blocker is completed-participant continuity:
+  B became terminal `COMPLETED` after its own lane integrated while A's
+  sibling implementation lane remained active, so B could not discover/request
+  review admission for A. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0498-completed-review-continuity-diagnostic-2026-08-24.md`.
+- The next slice is restricted to same-WorkGroup review-only projection and
+  authority for completed participants. Completed write mutation, cleanup,
+  Doctor, and unrelated verification issues remain separate.
+
 # 2026-08-24 — SYN-039 CP-0494 post-fix review-projection diagnostic
 
 - Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0494-001`

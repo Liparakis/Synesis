@@ -298,6 +298,37 @@ final class McpSyn039SliceTest {
         assertTrue(validationResult.containsKey("nextProtocolPayload"), validation.toString());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void acceptedReviewReportsActiveStatusWhileOwnerIntentRemainsLive(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                currentParticipant(fixture.project, "syn039-owner-publication"));
+
+        Map<String, Object> next = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> result = (Map<String, Object>) next.get("result");
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        Map<String, Object> payload = new LinkedHashMap<>((Map<String, Object>) arguments.get("payload"));
+        payload.put("result", "accepted");
+        Map<String, Object> acceptedArguments = new LinkedHashMap<>(arguments);
+        acceptedArguments.put("payload", payload);
+
+        String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(acceptedArguments)));
+        Map<String, Object> acceptedResult = (Map<String, Object>) innerResult(accepted).get("result");
+        assertEquals("ACCEPTED", acceptedResult.get("result"), accepted);
+        assertEquals("ACTIVE", acceptedResult.get("workGroupStatus"), accepted);
+
+        Map<String, Object> status = (Map<String, Object>) innerResult(fixture.reviewer.handleMessage(
+                toolCall("request_coordination", "{\"kind\":\"collaboration_status\",\"payload\":{}}")))
+                .get("result");
+        List<Map<String, Object>> groups = (List<Map<String, Object>>) status.get("groups");
+        assertEquals("ACTIVE", groups.stream()
+                .filter(group -> fixture.groupId.toString().equals(group.get("workGroupId")))
+                .findFirst().orElseThrow().get("status"));
+    }
+
     @SuppressWarnings("unchecked")
     private static ReviewFixture prepareReviewFixture(Path temp) throws Exception {
         Path project = temp.resolve("review-publication-project");
@@ -360,6 +391,13 @@ final class McpSyn039SliceTest {
     private static String toolCall(String name, String arguments) {
         return "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
                 + "\"params\":{\"name\":\"" + name + "\",\"arguments\":" + arguments + "}}";
+    }
+
+    private static String currentParticipant(Path project, String connectionInstanceId) throws Exception {
+        var location = new ProjectApplicationService().locate(project);
+        return WorkspaceCollaborationService.participantHandle(
+                new ProviderSessionBindingService().find(location, "codex", connectionInstanceId)
+                        .orElseThrow().sessionId());
     }
 
     @SuppressWarnings("unchecked")

@@ -12,6 +12,26 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0498 completed-review continuity diagnostic
+
+The fresh CP-0498 diagnostic used project
+`ff3603f4-67bd-4972-99d0-c075b7c10c5f`, the current bundled MCP, and two
+independent GPT-5.6 Luna sessions with distinct ready/isolated bindings and
+disjoint `todo.py` / `test_todo.py` claims. WorkGroup
+`1d24011b-99a6-37bd-b56b-ca09eab8edef` reached exact REVIEW admission, grant
+consumption, projected `finish_lane`, snapshot publication, integration, stale
+reviewer recovery, and exact ACCEPT decisions. The status correction now
+reports `workGroupStatus=ACTIVE` when the durable group remains active.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0498-completed-review-continuity-diagnostic-2026-08-24.md`.
+
+The first concrete post-fix defect is completed-participant continuity. B's
+lane became `COMPLETED` after its snapshot integrated while A's sibling
+implementation lane remained `ACTIVE`. The early terminal return prevented B
+from discovering the existing same-WorkGroup REVIEW admission projection, so
+A's lane could not receive a grant and publish its snapshot. This is a
+protocol defect, not agent non-compliance.
+
 ## CP-0497 reviewer-continuity diagnostic
 
 The fresh current-bundle diagnostic used project
@@ -183,25 +203,21 @@ on the rebuilt bundle.
 
 ## Current failures
 
-CP-0497 followed every concrete projection through two ACCEPT decisions, but
-the response reported `workGroupStatus=COMPLETED` while the durable projection
-reported WorkGroup `7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771` as `ACTIVE` with a
-live second intent and duplicate grants. Clean closure is therefore still
-unproven. The next implementation slice is limited to making review response
-status truthful and regression-tested; broader grant deduplication, cleanup,
-and closure behavior remain deferred until a single-producer/reviewer run
-isolates them. The recurring Git subprocess stall, bootstrap migration
-failures, and six fixture Doctor warnings remain separate.
+CP-0498 verified the truthful ACCEPT status but ended with B terminally
+`COMPLETED` while A's sibling lane remained active and unpublished. The next
+implementation slice is limited to same-WorkGroup review-only continuity for
+completed participants: project the existing REVIEW action, permit only the
+existing targeted grant/review operations, and keep completed write mutation
+closed. The recurring Git subprocess stall, bootstrap migration failures, and
+six fixture Doctor warnings remain separate.
 
 ## Immediate next action
 
-Add a deterministic `ReviewValidationService` regression for an ACCEPT where
-active intents or available grants prevent durable WorkGroup closure, then
-return the actual projected group status instead of unconditional
-`COMPLETED`; run the focused coordination/MCP tests and a fresh bounded
-single-producer/reviewer diagnostic. Do not broaden cleanup or ownership,
-do not run the ordinary acceptance until that diagnostic is terminal, and do
-not push or create SYN-040.
+Run focused workspace/MCP coordination tests for completed-participant
+review-only projection and authority, rebuild the bundled MCP, then run a fresh
+bounded two-agent diagnostic followed by the ordinary acceptance only if the
+diagnostic reaches clean closure. Do not reopen completed write claims, broaden
+cleanup, push, or create SYN-040.
 
 ## CP-0480 convergence projection slice
 

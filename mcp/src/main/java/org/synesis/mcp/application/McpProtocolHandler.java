@@ -941,7 +941,7 @@ public final class McpProtocolHandler {
                             }
                             case "lane_grant_consume" -> {
                                 UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
-                                var callerBinding = authorityResolver.resolve(
+                                var callerBinding = authorityResolver.resolveReview(
                                         new ProjectApplicationService().locate(activeProjectRoot), provider, connectionInstanceId);
                                 String callerParticipant = WorkspaceCollaborationService.participantHandle(callerBinding.sessionId());
                                 collaborationService.consumeLaneGrant(activeProjectRoot, grantId,

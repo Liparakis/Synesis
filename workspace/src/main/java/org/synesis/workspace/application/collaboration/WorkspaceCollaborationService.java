@@ -239,9 +239,25 @@ public final class WorkspaceCollaborationService {
     public CoordinationRequest request(Path projectRoot, String provider, String connectionInstanceId,
             UUID conflictingIntentId, CoordinationRequest.Kind kind, String proposal) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        ProviderSessionBindingService.Binding binding = kind == CoordinationRequest.Kind.REVIEW
+                ? reviewBinding(location, provider, connectionInstanceId)
+                : binding(location, provider, connectionInstanceId);
         NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        if (kind == CoordinationRequest.Kind.REVIEW && "COMPLETED".equalsIgnoreCase(binding.status())) {
+            String participant = participantHandle(binding.sessionId());
+            WorkIntent target = store.collaborationProjection().intent(conflictingIntentId)
+                    .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+            boolean sameCompletedGroup = store.taskCompletionProjection().allSnapshots().stream()
+                    .anyMatch(snapshot -> snapshot.provenance().participant().equals(participant)
+                            && snapshot.provenance().workGroupId().equals(target.workGroupId()));
+            boolean activeTarget = store.collaborationProjection().activeIntents().stream()
+                    .anyMatch(intent -> intent.intentId().equals(target.intentId())
+                            && !intent.participant().equals(participant));
+            if (!sameCompletedGroup || !activeTarget) {
+                throw new IOException("COMPLETED_REVIEW_SCOPE_MISMATCH");
+            }
+        }
         return new WorkIntentService(store, identity).request(participantHandle(binding.sessionId()), conflictingIntentId, kind, proposal);
     }
 
@@ -618,5 +634,10 @@ public final class WorkspaceCollaborationService {
     private ProviderSessionBindingService.Binding binding(ProjectApplicationService.ProjectLocation location,
                                                            String provider, String connectionId) throws Exception {
         return authorityResolver.resolve(location, provider, connectionId);
+    }
+
+    private ProviderSessionBindingService.Binding reviewBinding(ProjectApplicationService.ProjectLocation location,
+                                                                String provider, String connectionId) throws Exception {
+        return authorityResolver.resolveReview(location, provider, connectionId);
     }
 }

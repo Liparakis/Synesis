@@ -102,8 +102,8 @@ public final class AgentWorkflowReducer {
 
     private static LaneAction actionFor(AgentResponse response, Map<String, Object> result) {
         String laneState = laneState(result);
-        if ("COMPLETED".equals(laneState) || "CANCELLED".equals(laneState)
-                || "DETACHED".equals(laneState) || "REVOKED".equals(laneState)) {
+        if (response.nextAction() == null && ("COMPLETED".equals(laneState) || "CANCELLED".equals(laneState)
+                || "DETACHED".equals(laneState) || "REVOKED".equals(laneState))) {
             return new LaneAction("CLOSE", List.of("lane_" + laneState.toLowerCase(java.util.Locale.ROOT)),
                     List.of("get_next_action", "ensure_session"), true);
         }

@@ -80,7 +80,7 @@ public final class ReviewValidationService {
                 return blocked("WORKSPACE_NOT_READY", AgentNextAction.ENSURE_SESSION);
             }
             ProjectApplicationService.ProjectLocation location = projectService.locate(root);
-            ProviderSessionBindingService.Binding binding = authorityResolver.resolve(
+            ProviderSessionBindingService.Binding binding = authorityResolver.resolveReview(
                     location, request.provider(), request.connectionInstanceId());
             NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
             String reviewer = WorkspaceCollaborationService.participantHandle(binding.sessionId());
@@ -150,7 +150,7 @@ public final class ReviewValidationService {
                 result.put("snapshotId", snapshot.snapshotId());
                 result.put("workGroupId", group.workGroupId().toString());
                 result.put("result", normalizedResult);
-                result.put("workGroupStatus", normalizedResult.equals("ACCEPTED") ? "COMPLETED" : group.status().name());
+                result.put("workGroupStatus", group.status().name());
                 if (normalizedResult.equals("REJECTED")) {
                     result.put("route", Map.of("targetParticipant", snapshot.provenance().participant(),
                             "targetIntentId", snapshot.provenance().laneId().toString(),
