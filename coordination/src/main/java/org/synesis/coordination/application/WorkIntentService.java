@@ -265,16 +265,16 @@ public final class WorkIntentService {
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) throw new IOException("event append lock unavailable");
             PredictionEventStore current = freshStore();
-            WorkIntent conflict = current.collaborationProjection().intent(conflictingIntentId)
-                    .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
             if (kind == CoordinationRequest.Kind.REVIEW) {
                 // A review admission is one authority negotiation between a
                 // reviewer and a target lane. The response projection may
                 // replace the request proposal, so proposal text is not part
-                // of this replay identity.
+                // of this replay identity. Check this durable replay before
+                // resolving the target: normal completion releases the lane
+                // claim, but an already-issued request remains the authority
+                // record that a retry must return unchanged.
                 CoordinationRequest existing = current.collaborationProjection().requests().stream()
                         .filter(candidate -> candidate.requester().equals(requester))
-                        .filter(candidate -> candidate.target().equals(conflict.participant()))
                         .filter(candidate -> candidate.conflictingIntentId().equals(conflictingIntentId))
                         .filter(candidate -> candidate.kind() == kind)
                         .findFirst().orElse(null);
@@ -282,6 +282,8 @@ public final class WorkIntentService {
                     return existing;
                 }
             }
+            WorkIntent conflict = current.collaborationProjection().intent(conflictingIntentId)
+                    .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
             CoordinationRequest request = new CoordinationRequest(UUID.randomUUID(), current.projectId(), requester,
                     conflict.participant(), conflictingIntentId, kind, proposal, CoordinationRequest.Status.PENDING);
             current.append(request.requestId(), PredictionEventType.COORDINATION_REQUESTED, signer.nodeId(),

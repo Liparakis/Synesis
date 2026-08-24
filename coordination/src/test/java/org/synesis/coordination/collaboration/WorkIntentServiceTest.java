@@ -192,6 +192,28 @@ final class WorkIntentServiceTest {
     }
 
     @Test
+    void reviewRequestReplayRemainsIdempotentAfterTargetLaneReleases(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+
+        CoordinationRequest request = service.request("agt-reviewer", owner.intentId(),
+                CoordinationRequest.Kind.REVIEW, "Review the published snapshot");
+        service.release(owner.intentId(), owner.participant());
+
+        CoordinationRequest replayed = service.request("agt-reviewer", owner.intentId(),
+                CoordinationRequest.Kind.REVIEW, "Review the published snapshot");
+
+        assertEquals(request.requestId(), replayed.requestId());
+        assertEquals(1, service.requests().size());
+        assertThrows(java.io.IOException.class, () -> service.request("agt-other", owner.intentId(),
+                CoordinationRequest.Kind.REVIEW, "A new request cannot target a released lane"));
+    }
+
+    @Test
     void handoffRetainsOwnerUntilAcceptedThenFencesSourceEpoch(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         NodeIdentity identity = NodeIdentity.generate();

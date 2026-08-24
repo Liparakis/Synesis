@@ -211,6 +211,10 @@ final class McpSyn039SliceTest {
         assertTrue(ownerPublication.contains("claimEpoch"), ownerPublication);
 
         collaboration.release(project, "codex", "syn039-owner");
+        String replayedAdmission = reviewer.handleMessage(toolCall("request_coordination",
+                ProviderJson.write(admissionArguments)));
+        assertFalse(replayedAdmission.contains("INTENT_NOT_FOUND"), replayedAdmission);
+        assertEquals(requestId, nestedField(replayedAdmission, "request", "requestId"));
         appendReviewableSnapshot(project, ids, claim.intent().participant());
         String next = reviewer.handleMessage(toolCall("get_next_action", "{}"));
         assertTrue(next.contains("review_validation"), next);
