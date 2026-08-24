@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.task.TaskSnapshotService;
+import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -150,6 +151,71 @@ class TaskIntegrationServiceTest {
         assertEquals(List.of("README.md"), record.changedPaths());
         assertNotEquals("UNRECORDED", record.provenance().artifactManifestDigest());
         assertEquals("", gitOutput(root, "ls-tree", "-r", "--name-only", record.commitSha(), ".codex"));
+    }
+
+    @Test
+    void generatedPythonBytecodeDoesNotConflictWhenDisjointSnapshotsIntegrate(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.email", "test@example.invalid");
+        git(root, "config", "user.name", "Test");
+        Files.writeString(root.resolve("README.md"), "base\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "base");
+        String base = gitOutput(root, "rev-parse", "HEAD");
+        String fixtureId = UUID.randomUUID().toString();
+        Path laneA = root.resolveSibling(root.getFileName() + "-" + fixtureId + "-lane-a");
+        Path laneB = root.resolveSibling(root.getFileName() + "-" + fixtureId + "-lane-b");
+        git(root, "worktree", "add", "--detach", laneA.toString(), base);
+        git(root, "worktree", "add", "--detach", laneB.toString(), base);
+        try {
+            Files.createDirectories(laneA.resolve("src"));
+            Files.writeString(laneA.resolve("src/a.py"), "lane-a\n");
+            Files.createDirectories(laneA.resolve("__pycache__"));
+            Files.write(laneA.resolve("__pycache__/a.cpython-313.pyc"), new byte[] {1, 2, 3});
+
+            Files.createDirectories(laneB.resolve("src/__pycache__"));
+            Files.writeString(laneB.resolve("src/b.py"), "lane-b\n");
+            Files.write(laneB.resolve("src/__pycache__/b.cpython-313.pyc"), new byte[] {4, 5, 6});
+
+            TaskSnapshotService snapshots = new TaskSnapshotService();
+            UUID group = UUID.randomUUID();
+            TaskSnapshotRecord snapshotA = snapshots.createSnapshot(
+                    UUID.randomUUID(), "node-a", "sup-a", "worker-a", "lane-a", laneA, root,
+                    "lane A", java.util.Optional.empty(), List.of(),
+                    List.of(ResourceSelector.pathExact("src/a.py")), group, UUID.randomUUID(),
+                    "participant-a", "binding-a", 1, List.of());
+            TaskSnapshotRecord snapshotB = snapshots.createSnapshot(
+                    UUID.randomUUID(), "node-b", "sup-b", "worker-b", "lane-b", laneB, root,
+                    "lane B", java.util.Optional.empty(), List.of(),
+                    List.of(ResourceSelector.pathExact("src/b.py")), group, UUID.randomUUID(),
+                    "participant-b", "binding-b", 1, List.of());
+
+            assertEquals(List.of("src/a.py"), snapshotA.changedPaths());
+            assertEquals(List.of("src/b.py"), snapshotB.changedPaths());
+            assertFalse(gitOutput(laneA, "ls-tree", "-r", "--name-only", snapshotA.commitSha())
+                    .contains("__pycache__"));
+            assertFalse(gitOutput(laneB, "ls-tree", "-r", "--name-only", snapshotB.commitSha())
+                    .contains("__pycache__"));
+
+            IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
+            IntegrationWorkspaceService.IntegrationWorktreeResult result =
+                    integration.prepareIntegrationWorktree(root, "pycache-artifact-" + UUID.randomUUID(), base,
+                            List.of(snapshotA, snapshotB));
+            try {
+                assertTrue(result.success(), result.failureReason());
+                assertEquals("lane-a\n", Files.readString(result.worktreePath().resolve("src/a.py"))
+                        .replace("\r\n", "\n"));
+                assertEquals("lane-b\n", Files.readString(result.worktreePath().resolve("src/b.py"))
+                        .replace("\r\n", "\n"));
+                assertFalse(Files.exists(result.worktreePath().resolve("__pycache__")));
+                assertFalse(Files.exists(result.worktreePath().resolve("src/__pycache__")));
+            } finally {
+                integration.removeIntegrationWorktree(result.worktreePath());
+            }
+        } finally {
+            git(root, "worktree", "remove", "--force", laneA.toString());
+            git(root, "worktree", "remove", "--force", laneB.toString());
+        }
     }
 
     @Test
