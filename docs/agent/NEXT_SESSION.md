@@ -1,5 +1,28 @@
 # Next Session
 
+## CP-0522 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-ordinary-2026-08-24.md` and
+`docs/evidence/syn039-unattended-todo-cp0522-exact-rule-diagnostic-2026-08-24.md`.
+
+CP-0521 ordinary acceptance reached one shared WorkGroup, A's snapshot
+`snap_e426d4bc75881c0ef58ad2a0d7bdad08`, integration, and B's structured
+ACCEPT, then stopped because A ended before consuming the reciprocal grant
+`d72045c7-3761-3d92-8a84-71b9ab1dfba5`. CP-0522 exact-action diagnostic
+stopped earlier because B changed the projected intent ID and received the
+fail-closed `INTENT_NOT_FOUND`; no exact projected action failed.
+
+- Exact next action: run a fresh bounded exact-action two-agent diagnostic and
+  preserve every projection beside the unchanged actual arguments until the
+  first real protocol failure or missing usable action.
+- Exact next code action: none; do not modify production code for CP-0521 or
+  CP-0522 agent-compliance evidence.
+- Do not relay IDs, manually transition lifecycle state, push, broaden
+  SYN-039, or create SYN-040.
+
+## CP-0520 continuation
+
 ## CP-0520 continuation
 
 Evidence:

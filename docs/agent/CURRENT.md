@@ -1,5 +1,48 @@
 # Current Task
 
+## SYN-039 CP-0522 exact-action diagnostic
+
+CP-0521's ordinary acceptance reached one shared WorkGroup, REVIEW admission,
+grant consumption, immutable snapshot publication, integration, and one
+structured ACCEPT. It stopped because Agent A ended before polling the
+reciprocal grant targeted to its already-completed lane; Agent B remained in a
+durable WAIT with no executable action. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-ordinary-2026-08-24.md`.
+
+The follow-up CP-0522 exact-action diagnostic proved no new production defect.
+B changed the projected REVIEW-admission intent ID and received fail-closed
+`INTENT_NOT_FOUND`; the unchanged valid request was re-projected. A completed
+its visible implementation and tests, but no lifecycle state advanced beyond
+the admission failure. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-exact-rule-diagnostic-2026-08-24.md`.
+
+## Work completed
+
+Both fresh runs used the current bundled MCP and correct project pins. CP-0521
+proved the already-implemented review, grant, snapshot, validation, and
+integration path in an ordinary run. CP-0522 proved the fail-closed behavior
+for an altered projected identifier. No production code changed in either
+acceptance.
+
+## Current failures
+
+The current blocker is agent engagement/compliance, not a proven Synesis
+protocol failure: ordinary A stopped before polling a peer-created grant, and
+diagnostic B altered a projected identifier before calling the exact tool.
+Both WorkGroups remain ACTIVE. Doctor remains DEGRADED with six separately
+classified warnings; the root Git subprocess stall and bootstrap migration
+failures remain independent verification issues.
+
+## Immediate next action
+
+Run one fresh bounded exact-action diagnostic whose harness records the
+projected action and actual arguments side by side and requires no manual
+relay. Preserve the first unchanged projected action failure or missing usable
+action; do not modify production code for another agent-compliance deviation,
+push, broaden SYN-039, or create SYN-040.
+
+## SYN-039 CP-0520 post-fix exact-rule diagnostic
+
 ## SYN-039 CP-0520 post-fix exact-rule diagnostic
 
 The CP-0519 stale-dirty continuation slice is implemented in the existing

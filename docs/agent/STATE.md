@@ -1,5 +1,25 @@
 # State
 
+## SYN-039 CP-0522 exact-action diagnostic
+
+The fresh ordinary CP-0521 run reached one WorkGroup, exact REVIEW admission,
+grant consumption, A's immutable snapshot and integration, and structured
+ACCEPT. Its first missing continuation was B's reciprocal `WAIT` while the
+grant targeted A's already-completed lane; A had stopped before polling again.
+The follow-up CP-0522 exact-action run then stopped at an agent argument
+mutation: B changed the projected REVIEW intent ID and received fail-closed
+`INTENT_NOT_FOUND`. No exact projected action failed and no production code
+changed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-ordinary-2026-08-24.md` and
+`docs/evidence/syn039-unattended-todo-cp0522-exact-rule-diagnostic-2026-08-24.md`.
+
+Immediate next action: run a fresh bounded exact-action diagnostic and preserve
+the first unchanged projected-action failure or missing usable action. Do not
+modify production code for agent-compliance evidence, push, or create
+SYN-040.
+
+## SYN-039 CP-0520 post-fix exact-rule diagnostic
+
 ## SYN-039 CP-0520 post-fix exact-rule diagnostic
 
 The stale-dirty continuation projection is implemented and its deterministic

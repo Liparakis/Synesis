@@ -23,6 +23,26 @@
 
 # Session Log
 
+## 2026-08-24 — SYN-039 CP-0521 ordinary acceptance and CP-0522 diagnostic
+
+- Fresh ordinary project `syn039-ordinary-cp0521-001` used two independent
+  GPT-5.6 Luna High Codex sessions, the current bundled MCP, and complementary
+  `todo.py`/`test_todo.py` prompts. It reached one WorkGroup, exact REVIEW
+  admission, grant consumption, A's snapshot publication and integration, and
+  structured ACCEPT. B remained in reciprocal grant WAIT after A ended before
+  polling the later grant targeted to A. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0521-ordinary-2026-08-24.md`.
+- Fresh CP-0522 exact-action project used the same MCP and explicit exact-call
+  rule. B changed the projected REVIEW intent ID; the exact re-projection was
+  valid but the altered call returned `INTENT_NOT_FOUND` twice. No production
+  code changed and no exact projected action failed. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0522-exact-rule-diagnostic-2026-08-24.md`.
+- Doctor remained DEGRADED with six separately classified warnings. The root
+  Git subprocess stall and bootstrap migration failures remain independent.
+- Exact next action: run a fresh bounded exact-action diagnostic with no
+  manual relay and preserve the first unchanged projected-action failure or
+  missing usable action. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0519 exact-rule diagnostic
 
 - Fresh Git + Synesis Todo fixture used the current bundled MCP and two

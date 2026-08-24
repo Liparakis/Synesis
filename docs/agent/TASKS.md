@@ -1,5 +1,26 @@
 # Tasks
 
+## SYN-039 CP-0522 update
+
+CP-0521 ordinary acceptance reached review, grant consumption, immutable
+snapshot publication, integration, and one structured ACCEPT, then stopped
+with Agent B in reciprocal grant WAIT after Agent A ended. CP-0522 exact-rule
+diagnostic showed Agent B changed a projected REVIEW intent ID and Synesis
+correctly rejected it with `INTENT_NOT_FOUND`. These are agent-engagement and
+agent-compliance evidence; no new production defect is authorized.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-ordinary-2026-08-24.md` and
+`docs/evidence/syn039-unattended-todo-cp0522-exact-rule-diagnostic-2026-08-24.md`.
+
+The next narrow action is another bounded exact-action diagnostic with
+projection/argument comparison. Only an unchanged projected action that fails,
+or a state that requires progress while projecting no usable action after both
+agents remain engaged, authorizes production work. Do not broaden SYN-039,
+push, or create SYN-040.
+
+## SYN-039 CP-0520 update
+
 ## SYN-039 CP-0520 update
 
 The CP-0519 post-ACCEPT dirty-lane defect is fixed narrowly. When a bound
