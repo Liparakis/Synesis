@@ -490,7 +490,7 @@ public final class ProviderSessionBindingService {
                             throw new BindingException("WORKSPACE_STALE_DIRTY",
                                     "Stored provider workspace contains uncommitted work");
                         }
-                        if (controlAdvancedWithoutWorkerAdvance(location, binding)) {
+                        if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding)) {
                             Binding rebound = reallocatePreservingSession(location, binding).touch();
                             write(bindingPath, rebound);
                             return new BindingResult(rebound,
@@ -577,7 +577,7 @@ public final class ProviderSessionBindingService {
         }
     }
 
-    private static boolean controlAdvancedWithoutWorkerAdvance(ProjectApplicationService.ProjectLocation location,
+    private static boolean controlAdvancedWithoutUnintegratedWorkerWork(ProjectApplicationService.ProjectLocation location,
             Binding binding) {
         if (binding == null || binding.worktreePath() == null || !validCommit(binding.baseCommit())) {
             return false;
@@ -585,9 +585,14 @@ public final class ProviderSessionBindingService {
         try {
             String controlHead = currentCommit(location.root());
             String workerHead = currentCommit(Path.of(binding.worktreePath()));
+            // A clean worker that already contains the control head has no
+            // private committed delta to discard. Preserve its session
+            // identity just as for an untouched worker; replacing the
+            // binding would strand any durable collaboration intent on the
+            // previous participant.
             return validCommit(controlHead) && validCommit(workerHead)
                     && !binding.baseCommit().equals(controlHead)
-                    && binding.baseCommit().equals(workerHead);
+                    && (binding.baseCommit().equals(workerHead) || controlHead.equals(workerHead));
         } catch (Exception failure) {
             return false;
         }

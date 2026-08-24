@@ -169,6 +169,35 @@ final class ProviderSessionBindingServiceTest {
         assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath())).verified());
     }
 
+    @Test
+    void preservesSessionIdentityWhenACleanWorkerAlreadyContainsTheAdvancedControlHead() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-advanced-clean-worker-");
+        git(root, "init");
+        git(root, "config", "user.email", "advanced-worker@example.invalid");
+        git(root, "config", "user.name", "Advanced Worker Test");
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "baseline");
+        var location = new ProjectApplicationService().init(root).location();
+
+        var service = new ProviderSessionBindingService();
+        var first = service.ensure(location, "codex", "advanced-clean-worker").binding();
+        String originalSession = first.sessionId();
+        String originalWorktree = first.worktreePath();
+
+        Files.writeString(root.resolve("README.md"), "control advanced\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "advance control");
+        git(Path.of(originalWorktree), "merge", "--ff-only", "master");
+
+        var recovered = service.ensure(location, "codex", "advanced-clean-worker").binding();
+
+        assertEquals(originalSession, recovered.sessionId());
+        assertNotEquals(originalWorktree, recovered.worktreePath());
+        assertEquals(gitHead(root), recovered.baseCommit());
+        assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath())).verified());
+    }
+
     private static String gitHead(Path root) throws Exception {
         Process process = new ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD")
                 .redirectErrorStream(true).start();
