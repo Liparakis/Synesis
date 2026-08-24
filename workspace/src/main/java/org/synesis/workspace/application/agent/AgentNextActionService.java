@@ -172,6 +172,9 @@ public final class AgentNextActionService {
                     reviewProjection.put("nextProtocolAction", review.get("nextProtocolAction"));
                     reviewProjection.put("nextProtocolKind", review.get("nextProtocolKind"));
                     reviewProjection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
+                    if (review.containsKey("reviewDecision")) {
+                        reviewProjection.put("reviewDecision", review.get("reviewDecision"));
+                    }
                     return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, reviewProjection);
                 }
                 String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
@@ -474,6 +477,9 @@ public final class AgentNextActionService {
             projection.put("nextProtocolAction", review.get("nextProtocolAction"));
             projection.put("nextProtocolKind", review.get("nextProtocolKind"));
             projection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
+            if (review.containsKey("reviewDecision")) {
+                projection.put("reviewDecision", review.get("reviewDecision"));
+            }
             return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
                     next, projection);
         } catch (Exception ignored) {
@@ -656,7 +662,11 @@ public final class AgentNextActionService {
                 payload.put("targetParticipant", grant.targetParticipant());
             } else {
                 payload.put("snapshotId", snapshot.snapshotId());
-                payload.put("result", "accepted|rejected");
+                action.put("reviewDecision", Map.of(
+                        "required", true,
+                        "field", "result",
+                        "allowedResults", List.of("accepted", "rejected"),
+                        "rejectionReasonRequired", true));
             }
             action.put("nextProtocolPayload", payload);
             action.put("grant", laneGrantMap(grant));

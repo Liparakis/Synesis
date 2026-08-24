@@ -66,6 +66,9 @@ public final class AgentWorkflowReducer {
             workflow.put("recommendedTool", executable.get("tool"));
             workflow.put("arguments", executable.get("arguments"));
         }
+        if (result.get("reviewDecision") instanceof Map<?, ?> decision) {
+            workflow.put("decision", decision);
+        }
         result.put("workflow", workflow);
         result.put("actionId", actionId);
         result.put("delivery", "AT_LEAST_ONCE");
@@ -183,6 +186,10 @@ public final class AgentWorkflowReducer {
                 Object kind = result.get("nextProtocolKind");
                 Object payload = result.get("nextProtocolPayload");
                 if (kind instanceof String && payload instanceof Map<?, ?>) {
+                    if ("review_validation".equals(kind)
+                            && !isExecutableReviewValidationPayload((Map<?, ?>) payload)) {
+                        return null;
+                    }
                     return Map.of("tool", "respond_coordination", "arguments", Map.of(
                             "kind", kind, "payload", payload));
                 }
@@ -215,6 +222,13 @@ public final class AgentWorkflowReducer {
                 return null;
             }
         }
+    }
+
+    private static boolean isExecutableReviewValidationPayload(Map<?, ?> payload) {
+        Object result = payload.get("result");
+        return result instanceof String value
+                && ("accept".equalsIgnoreCase(value) || "accepted".equalsIgnoreCase(value)
+                || "reject".equalsIgnoreCase(value) || "rejected".equalsIgnoreCase(value));
     }
 
     private static String laneState(Map<String, Object> result) {

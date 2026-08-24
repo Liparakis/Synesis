@@ -220,17 +220,22 @@ final class McpSyn039SliceTest {
         Map<String, Object> validationEnvelope = innerResult(validationNext);
         Map<String, Object> validationResult = (Map<String, Object>) validationEnvelope.get("result");
         Map<String, Object> validationWorkflow = (Map<String, Object>) validationResult.get("workflow");
-        assertEquals("respond_coordination", validationWorkflow.get("recommendedTool"));
-        Map<String, Object> projectedValidationArguments =
-                (Map<String, Object>) validationWorkflow.get("arguments");
+        assertFalse(validationWorkflow.containsKey("recommendedTool"), validationWorkflow.toString());
+        assertFalse(validationWorkflow.containsKey("arguments"), validationWorkflow.toString());
         Map<String, Object> projectedValidationPayload =
-                (Map<String, Object>) projectedValidationArguments.get("payload");
-        assertEquals("review_validation", projectedValidationArguments.get("kind"));
+                (Map<String, Object>) validationResult.get("nextProtocolPayload");
+        assertEquals("review_validation", validationResult.get("nextProtocolKind"));
         assertEquals(grant.get("grantId"), projectedValidationPayload.get("grantId"));
         assertEquals("snap_reviewable", projectedValidationPayload.get("snapshotId"));
         assertEquals(grant.get("targetIntentId"), projectedValidationPayload.get("intentId"));
         assertEquals(grant.get("claimEpoch"), projectedValidationPayload.get("claimEpoch"));
-        assertEquals("accepted|rejected", projectedValidationPayload.get("result"));
+        assertFalse(projectedValidationPayload.containsKey("result"));
+        Map<String, Object> reviewDecision = (Map<String, Object>) validationResult.get("reviewDecision");
+        assertEquals(Boolean.TRUE, reviewDecision.get("required"));
+        assertEquals("result", reviewDecision.get("field"));
+        assertEquals(List.of("accepted", "rejected"), reviewDecision.get("allowedResults"));
+        assertEquals(Boolean.TRUE, reviewDecision.get("rejectionReasonRequired"));
+        assertEquals(reviewDecision, validationWorkflow.get("decision"));
         assertFalse(projectedValidationPayload.containsKey("workGroupId"));
         assertFalse(projectedValidationPayload.containsKey("targetParticipant"));
         String wrongSnapshot = reviewer.handleMessage(toolCall("respond_coordination",
@@ -243,7 +248,8 @@ final class McpSyn039SliceTest {
         assertTrue(wrongSnapshot.contains("REVIEW_SNAPSHOT"), wrongSnapshot);
         Map<String, Object> acceptedValidationPayload = new LinkedHashMap<>(projectedValidationPayload);
         acceptedValidationPayload.put("result", "accepted");
-        Map<String, Object> acceptedValidationArguments = new LinkedHashMap<>(projectedValidationArguments);
+        Map<String, Object> acceptedValidationArguments = new LinkedHashMap<>();
+        acceptedValidationArguments.put("kind", "review_validation");
         acceptedValidationArguments.put("payload", acceptedValidationPayload);
         String validated = reviewer.handleMessage(toolCall("respond_coordination",
                 ProviderJson.write(acceptedValidationArguments)));
@@ -360,11 +366,10 @@ final class McpSyn039SliceTest {
 
         Map<String, Object> next = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
         Map<String, Object> result = (Map<String, Object>) next.get("result");
-        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
-        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
-        Map<String, Object> payload = new LinkedHashMap<>((Map<String, Object>) arguments.get("payload"));
+        Map<String, Object> payload = new LinkedHashMap<>((Map<String, Object>) result.get("nextProtocolPayload"));
         payload.put("result", "accepted");
-        Map<String, Object> acceptedArguments = new LinkedHashMap<>(arguments);
+        Map<String, Object> acceptedArguments = new LinkedHashMap<>();
+        acceptedArguments.put("kind", result.get("nextProtocolKind"));
         acceptedArguments.put("payload", payload);
 
         String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
@@ -380,6 +385,91 @@ final class McpSyn039SliceTest {
         assertEquals("ACTIVE", groups.stream()
                 .filter(group -> fixture.groupId.toString().equals(group.get("workGroupId")))
                 .findFirst().orElseThrow().get("status"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rejectedReviewRoutesActionableWorkToTheImplementer(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                currentParticipant(fixture.project, "syn039-owner-publication"));
+
+        Map<String, Object> next = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> result = (Map<String, Object>) next.get("result");
+        Map<String, Object> payload = new LinkedHashMap<>((Map<String, Object>) result.get("nextProtocolPayload"));
+        payload.put("result", "rejected");
+        payload.put("reason", "The implementation is missing the required completion behavior.");
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        arguments.put("kind", result.get("nextProtocolKind"));
+        arguments.put("payload", payload);
+
+        String rejected = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(arguments)));
+        Map<String, Object> rejectedResult = (Map<String, Object>) innerResult(rejected).get("result");
+        assertEquals("REJECTED", rejectedResult.get("result"), rejected);
+        Map<String, Object> route = (Map<String, Object>) rejectedResult.get("route");
+        assertEquals("ensure_session", route.get("nextAction"), rejected);
+        assertEquals(fixture.intentId.toString(), route.get("targetIntentId"), rejected);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void reviewValidationRejectsWrongParticipantStaleEpochSnapshotInvalidResultAndConflictingReplay(
+            @TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                currentParticipant(fixture.project, "syn039-owner-publication"));
+        Map<String, Object> next = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> result = (Map<String, Object>) next.get("result");
+        Map<String, Object> basePayload = new LinkedHashMap<>((Map<String, Object>) result.get("nextProtocolPayload"));
+
+        AgentSessionService sessions = new AgentSessionService();
+        sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+                fixture.project, "codex", "syn039-wrong-reviewer", null, false));
+        McpProtocolHandler wrongReviewer = new McpProtocolHandler(
+                sessions, fixture.project, "codex", "syn039-wrong-reviewer");
+        String wrongParticipant = wrongReviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(reviewArguments(basePayload, "accepted", null))));
+        assertTrue(wrongParticipant.contains("REVIEW_GRANT_TARGET_MISMATCH"), wrongParticipant);
+
+        Map<String, Object> staleEpoch = new LinkedHashMap<>(basePayload);
+        staleEpoch.put("claimEpoch", 2);
+        String stale = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(reviewArguments(staleEpoch, "accepted", null))));
+        assertTrue(stale.contains("REVIEW_GRANT_BINDING_MISMATCH"), stale);
+
+        Map<String, Object> wrongSnapshot = new LinkedHashMap<>(basePayload);
+        wrongSnapshot.put("snapshotId", "snap_wrong");
+        String snapshotMismatch = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(reviewArguments(wrongSnapshot, "accepted", null))));
+        assertTrue(snapshotMismatch.contains("REVIEW_SNAPSHOT"), snapshotMismatch);
+
+        String invalid = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(reviewArguments(basePayload, "accepted|rejected", null))));
+        assertTrue(invalid.contains("COORDINATION_RESPONSE_INVALID_RESULT"), invalid);
+
+        String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(reviewArguments(basePayload, "accepted", null))));
+        assertTrue(accepted.contains("ACCEPTED"), accepted);
+        String replayed = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(reviewArguments(basePayload, "accepted", null))));
+        assertTrue(replayed.contains("ACCEPTED"), replayed);
+
+        String conflictingReplay = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(reviewArguments(basePayload, "rejected",
+                        "A conflicting replay must not replace the recorded decision."))));
+        assertTrue(conflictingReplay.contains("REVIEW_DECISION_CONFLICT"), conflictingReplay);
+    }
+
+    private static Map<String, Object> reviewArguments(Map<String, Object> basePayload,
+            String result, String reason) {
+        Map<String, Object> payload = new LinkedHashMap<>(basePayload);
+        payload.put("result", result);
+        if (reason != null) payload.put("reason", reason);
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        arguments.put("kind", "review_validation");
+        arguments.put("payload", payload);
+        return arguments;
     }
 
     @SuppressWarnings("unchecked")

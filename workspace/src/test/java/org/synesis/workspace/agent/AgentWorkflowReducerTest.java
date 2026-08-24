@@ -1,6 +1,7 @@
 package org.synesis.workspace.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -91,5 +92,29 @@ final class AgentWorkflowReducerTest {
         assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("finish_lane"));
         assertEquals("finish_lane", workflow.get("recommendedTool"));
         assertEquals("Publish the completed immutable snapshot", arguments.get("summary"));
+    }
+
+    /** A review decision remains an explicit reviewer choice, not a guessed command. */
+    @Test
+    void reviewValidationExposesChoicesWithoutProjectingAnInvalidCommand() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+                Path.of("."), "codex", "connection-1");
+        Map<String, Object> decision = Map.of("required", true, "field", "result",
+                "allowedResults", java.util.List.of("accepted", "rejected"),
+                "rejectionReasonRequired", true);
+        AgentResponse review = reducer.decorate(request,
+                new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
+                        AgentNextAction.RESPOND_COORDINATION,
+                        Map.of("nextProtocolKind", "review_validation",
+                                "nextProtocolPayload", Map.of("grantId", "grant-1", "snapshotId", "snap-1",
+                                        "intentId", "intent-1", "claimEpoch", 1),
+                                "reviewDecision", decision)));
+
+        Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) review.result()).get("workflow");
+        assertEquals(decision, workflow.get("decision"));
+        assertFalse(workflow.containsKey("recommendedTool"));
+        assertFalse(workflow.containsKey("arguments"));
+        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
     }
 }
