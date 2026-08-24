@@ -1,5 +1,27 @@
 # State
 
+## SYN-039 CP-0520 post-fix exact-rule diagnostic
+
+The stale-dirty continuation projection is implemented and its deterministic
+MCP regression passes. The fresh CP-0520 diagnostic used the rebuilt bundle,
+two independent ready/isolated Codex sessions, disjoint epoch-1 claims, and
+one WorkGroup. It reached exact REVIEW admission, both grants, both snapshot
+publications, both integrations, and structured ACCEPT for A's snapshot.
+
+The diagnostic stopped before reciprocal validation and WorkGroup closure:
+Agent A ended after repeated exact `WAIT -> get_next_action({})` polls before
+observing B's later snapshot. A malformed response/grant argument was
+fail-closed and later exact projected arguments succeeded. This is
+agent-compliance evidence, not a new production failure. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-stale-projection-diagnostic-2026-08-24.md`.
+
+Immediate next action: run a fresh ordinary two-agent acceptance without the
+exact-action diagnostic rule. Preserve the first concrete projected-action
+failure or missing continuation. Do not relay, manually transition, push, or
+create SYN-040.
+
+# State
+
 ## SYN-039 CP-0519 exact-rule diagnostic
 
 CP-0519 reached ready/isolated peers, disjoint epoch-1 claims, one WorkGroup,

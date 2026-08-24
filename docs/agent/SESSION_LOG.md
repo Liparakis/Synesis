@@ -1,3 +1,26 @@
+# 2026-08-24 — SYN-039 CP-0520 post-fix exact-rule diagnostic
+
+- Implemented the smallest stale-dirty continuation projection in
+  `AgentNextActionService`; the deterministic pending-owner-response regression
+  is green and preserves the dirty binding/worktree.
+- Focused MCP/workspace tests, Javadocs, validators, bundle rebuild, Go vet,
+  and diff checks passed. Bootstrap Go tests still reproduce the three known
+  migration failures.
+- Fresh project `syn039-diagnostic-cp0520-001` used the rebuilt current MCP and
+  two independent GPT-5.6 Luna High Codex processes. Both reached ready/
+  isolated, disjoint claims, one WorkGroup, exact REVIEW admission, both
+  single-use grants, both snapshots, both integrations, and one structured
+  ACCEPT. Control ended clean at `2fb8168`.
+- The first run stop was agent engagement after exact WAIT polling: A ended
+  before observing B's later snapshot, so reciprocal validation and WorkGroup
+  closure were not reached. Malformed arguments were fail-closed compliance
+  evidence; no exact projected action failed.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0520-stale-projection-diagnostic-2026-08-24.md`.
+- Exact next action: run a fresh ordinary two-agent acceptance without the
+  diagnostic lifecycle rule and preserve the first closure or compliance
+  boundary. Do not relay, push, broaden SYN-039, or create SYN-040.
+
 # Session Log
 
 # 2026-08-24 — SYN-039 CP-0519 exact-rule diagnostic

@@ -1,5 +1,27 @@
 # Tasks
 
+## SYN-039 CP-0520 update
+
+The CP-0519 post-ACCEPT dirty-lane defect is fixed narrowly. When a bound
+session's control base advances while its assigned worktree contains confirmed
+legitimate changes, `get_next_action` reuses existing authorized coordination
+projections instead of exposing an unusable `workspace_stale -> ensure_session`
+recovery. Claims, ownership, epochs, grants, snapshots, and fail-closed
+readiness checks remain unchanged. Deterministic MCP coverage passes.
+
+The fresh CP-0520 diagnostic reached both immutable snapshots and integrations
+and one structured ACCEPT, but stopped before closure because Agent A ended
+after exact WAIT polling before observing B's second snapshot. This remains
+agent-engagement/compliance evidence; no new production defect is authorized.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-stale-projection-diagnostic-2026-08-24.md`.
+
+The next narrow action is a fresh ordinary two-agent acceptance. Preserve the
+first actual closure, cleanup, or agent-compliance boundary. Do not broaden
+SYN-039, push, or create SYN-040.
+
+# Tasks
+
 ## SYN-039 CP-0519 update
 
 The CP-0519 exact-rule diagnostic proves the next concrete blocker. Exact

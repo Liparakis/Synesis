@@ -1,5 +1,29 @@
 # Next Session
 
+## CP-0520 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-stale-projection-diagnostic-2026-08-24.md`.
+
+The stale-dirty continuation projection is implemented and regression-covered.
+Focused MCP/workspace tests, Javadocs, validators, bundle rebuild, Go vet, and
+diff checks pass. A fresh exact-rule diagnostic reached one shared WorkGroup,
+both REVIEW admissions and grants, both immutable snapshot integrations, and
+one structured ACCEPT. It stopped before closure because A ended after exact
+WAIT polling before observing B's second snapshot; malformed arguments were
+agent-compliance evidence and later exact actions succeeded.
+
+- Exact next action: run a fresh ordinary unattended two-agent Todo acceptance
+  with no protocol-conformance instruction; preserve the first concrete
+  projected-action failure or missing continuation.
+- Exact next code action: run that fresh ordinary acceptance and preserve the
+  first concrete projected-action failure or missing continuation; do not
+  change production code for agent-compliance evidence.
+- Do not relay IDs, manually accept requests, trigger transitions, push,
+  broaden SYN-039, or create SYN-040.
+
+# Next Session
+
 ## CP-0519 continuation
 
 Evidence:

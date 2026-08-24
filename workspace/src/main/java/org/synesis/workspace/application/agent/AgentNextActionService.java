@@ -151,9 +151,9 @@ public final class AgentNextActionService {
                     && "BOUND".equals(exactBinding.get().status())
                     && "CONTROL_BASE_ADVANCED".equals(readiness.internalReason())
                     && bindingService.hasConfirmedUncommittedWork(exactBinding.get())) {
-                AgentResponse reviewResponse = staleReviewAction(location, exactBinding.get().sessionId());
-                if (reviewResponse != null) {
-                    return reviewResponse;
+                AgentResponse staleAction = staleCoordinationAction(location, exactBinding.get());
+                if (staleAction != null) {
+                    return staleAction;
                 }
             }
             return readiness.response();
@@ -470,8 +470,9 @@ public final class AgentNextActionService {
         }
     }
 
-    private AgentResponse staleReviewAction(
-            ProjectApplicationService.ProjectLocation location, String sessionId) {
+    private AgentResponse staleCoordinationAction(
+            ProjectApplicationService.ProjectLocation location,
+            ProviderSessionBindingService.Binding binding) {
         try {
             Path coordination = location.root().resolve(".synesis/coordination");
             if (!Files.exists(coordination.resolve("events"))) {
@@ -480,7 +481,41 @@ public final class AgentNextActionService {
             org.synesis.coordination.persistence.PredictionEventStore store =
                     new org.synesis.coordination.persistence.PredictionEventStore(
                             coordination, location.projectId());
-            return reviewActionResponse(collaborationDetails(store, sessionId), true);
+            Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
+            AgentResponse reviewResponse = reviewActionResponse(collaboration, true);
+            if (reviewResponse != null) {
+                return reviewResponse;
+            }
+
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            Path assignedWorktree = binding.worktreePath() == null
+                    ? null : Path.of(binding.worktreePath());
+            Map<String, Object> publicationAction = snapshotPublicationAction(
+                    store, participant, assignedWorktree, snapshotService);
+            if (publicationAction != null) {
+                return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                        AgentNextAction.FINISH_LANE, publicationAction);
+            }
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> pendingCoordination =
+                    (List<Map<String, Object>>) collaboration.get("pendingCoordination");
+            Map<String, Object> reviewAcceptance = reviewAcceptanceAction(pendingCoordination);
+            if (reviewAcceptance != null) {
+                Map<String, Object> ownerAction = new LinkedHashMap<>(collaboration);
+                ownerAction.putAll(reviewAcceptance);
+                return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
+                        AgentNextAction.RESPOND_COORDINATION, ownerAction);
+            }
+
+            Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(store, participant);
+            if (pendingReviewGrant != null) {
+                Map<String, Object> ownerWait = new LinkedHashMap<>(collaboration);
+                ownerWait.putAll(pendingReviewGrant);
+                return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
+                        AgentNextAction.WAIT, ownerWait);
+            }
+            return null;
         } catch (Exception ignored) {
             return null;
         }

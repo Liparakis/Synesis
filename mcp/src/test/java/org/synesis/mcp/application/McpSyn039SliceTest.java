@@ -403,6 +403,67 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void dirtyParticipantReceivesPendingReviewAcceptanceAfterControlCheckoutAdvances(
+            @TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        var location = new ProjectApplicationService().locate(fixture.project);
+        var bindings = new ProviderSessionBindingService();
+        var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                currentParticipant(fixture.project, "syn039-owner-publication"));
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.release(fixture.project, "codex", "syn039-owner-publication");
+        Map<String, Object> validation = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
+        Map<String, Object> validationPayload = new LinkedHashMap<>(
+                (Map<String, Object>) validationResult.get("nextProtocolPayload"));
+        validationPayload.put("result", "accepted");
+        Map<String, Object> validationArguments = new LinkedHashMap<>();
+        validationArguments.put("kind", validationResult.get("nextProtocolKind"));
+        validationArguments.put("payload", validationPayload);
+        String accepted = fixture.reviewer.handleMessage(toolCall(
+                "respond_coordination", ProviderJson.write(validationArguments)));
+        assertTrue(accepted.contains("ACCEPTED"), accepted);
+
+        var reviewerClaim = collaboration.announce(fixture.project, "codex",
+                "syn039-reviewer-publication", "Add reviewer regression coverage",
+                "Publish the reviewer test snapshot after owner admission",
+                List.of(ResourceSelector.pathExact("reviewer-notes.txt")));
+        assertEquals(fixture.groupId, reviewerClaim.intent().workGroupId());
+
+        String reviewRequest = fixture.owner.handleMessage(toolCall("request_coordination",
+                "{\"kind\":\"work_group_join\",\"payload\":{"
+                        + "\"workGroupId\":\"" + fixture.groupId + "\","
+                        + "\"intentId\":\"" + reviewerClaim.intent().intentId() + "\","
+                        + "\"proposal\":\"Review the reviewer snapshot\"}}"));
+        String requestId = nestedField(reviewRequest, "request", "requestId");
+        assertTrue(requestId != null, reviewRequest);
+
+        Files.writeString(reviewerWorktree.resolve("reviewer-notes.txt"),
+                "legitimate reviewer work\n");
+        Files.writeString(fixture.project.resolve("README.md"), "integrated control state\n");
+        git(fixture.project, "add", "README.md");
+        git(fixture.project, "commit", "-m", "integrated snapshot");
+
+        Map<String, Object> next = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("owner_request_pending", next.get("reason"), next.toString());
+        assertEquals("respond_coordination", next.get("nextAction"), next.toString());
+        Map<String, Object> result = (Map<String, Object>) next.get("result");
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        assertEquals("respond_coordination", workflow.get("recommendedTool"), workflow.toString());
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
+        assertEquals(requestId, payload.get("coordinationRequest"), next.toString());
+        assertEquals("ACCEPTED", payload.get("coordinationStatus"), next.toString());
+        assertTrue(Files.exists(reviewerWorktree.resolve("reviewer-notes.txt")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void acceptedReviewReportsActiveStatusWhileOwnerIntentRemainsLive(@TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);
         appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),

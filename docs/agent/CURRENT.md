@@ -1,5 +1,56 @@
 # Current Task
 
+## SYN-039 CP-0520 post-fix exact-rule diagnostic
+
+The CP-0519 stale-dirty continuation slice is implemented in the existing
+`AgentNextActionService` projection path and covered by a deterministic MCP
+regression. A stale bound session with confirmed legitimate dirty work can now
+discover an already-authorized review, publication, owner-response, or grant
+wait continuation without replacing or mutating its worktree. Focused tests,
+Javadocs, validators, bundle rebuild, and diff checks pass.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-stale-projection-diagnostic-2026-08-24.md`.
+
+The fresh two-agent exact-rule diagnostic reached one shared WorkGroup, exact
+REVIEW admission, both single-use grants, both immutable snapshots, both
+integrations, and one structured ACCEPT. It stopped before closure because
+Agent A ended after its exact WAIT polling cycle and did not poll again after
+Agent B published the second snapshot. Malformed arguments attempted before
+the later exact calls are agent-compliance evidence; no exact projected action
+failed. WorkGroup `1fea1dc1-607e-3168-99df-8e896bf68295` remains ACTIVE and
+Doctor remains DEGRADED with the documented six warnings.
+
+## Work completed
+
+The CP-0519 dirty-lane continuation defect is fixed narrowly in the existing
+next-action projection path. The deterministic MCP regression passes without
+replacing the dirty worktree. Focused MCP/workspace tests, Javadocs, deferred
+and fixture validators, bundle rebuild, Go vet, and diff checks pass. The
+fresh CP-0520 diagnostic reached both immutable snapshots and integrations and
+one structured ACCEPT.
+
+## Current failures
+
+CP-0520 stopped before reciprocal validation and WorkGroup closure because
+Agent A ended after exact WAIT polling before observing B's later snapshot.
+Malformed arguments were fail-closed agent-compliance evidence; no exact
+projected action failed. WorkGroup `1fea1dc1-607e-3168-99df-8e896bf68295`
+remains ACTIVE. Doctor is DEGRADED with six warnings; the root Git stall,
+bootstrap migration failures, and document-format findings remain separate.
+
+## Immediate next action
+
+Run a fresh ordinary unattended two-agent Todo acceptance with no
+protocol-conformance instruction beyond the repository contract. Observe
+whether ordinary agents remain engaged after the exact WAIT projection and
+peer snapshot publication. If a concrete projected action executes and fails,
+fix only that proven defect; otherwise preserve the first closure or cleanup
+blocker. Do not relay, manually transition, push, broaden SYN-039, or create
+SYN-040.
+
+# Current Task
+
 ## SYN-039 CP-0519 exact-rule diagnostic
 
 The fresh bounded diagnostic used two independent GPT-5.6 Luna High Codex
