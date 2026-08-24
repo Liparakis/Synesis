@@ -1,5 +1,27 @@
 # State
 
+## SYN-039 CP-0524 clean-recovery identity fix diagnostic
+
+CP-0523's recovery trace showed a clean worker at the advanced control HEAD
+losing its durable session identity; the active intent and review grant then
+remained attached to the old participant. Commit `dd9f0eb` fixes only the
+existing provider-binding rebind predicate and adds a deterministic regression
+for session preservation, refreshed isolated worktree, and trust verification.
+
+CP-0524 used the rebuilt current MCP and two independent ready/isolated
+Codex sessions. It reached disjoint claims, one WorkGroup, exact REVIEW
+admission, owner acceptance, and a single-use grant. Both agents stopped
+during subsequent polling before implementation/snapshot/validation; no exact
+projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0524-recovery-fix-diagnostic-2026-08-24.md`.
+
+Immediate next action: run a fresh ordinary unattended two-agent Todo
+acceptance and preserve the first real lifecycle, cleanup, or compliance
+boundary. No further production change is authorized without a new concrete
+protocol defect. Do not push or create SYN-040.
+
+# State
+
 ## SYN-039 CP-0522 exact-action diagnostic
 
 The fresh ordinary CP-0521 run reached one WorkGroup, exact REVIEW admission,

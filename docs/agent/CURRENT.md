@@ -1,5 +1,39 @@
 # Current Task
 
+## SYN-039 CP-0524 clean-recovery identity fix diagnostic
+
+CP-0523 proved that a clean recovered worker already at the advanced control
+HEAD could be rebound to a new session/participant, stranding its active
+intent and review grant. Commit `dd9f0eb` extends the existing safe
+session-preserving rebind predicate to that exact state. The deterministic
+workspace regression passes and preserves the existing fail-closed behavior
+for dirty or divergent worker state.
+
+The fresh CP-0524 exact-action diagnostic used the rebuilt MCP, two
+ready/isolated sessions, disjoint claims, and one shared WorkGroup. Exact
+REVIEW admission, owner response, and grant issuance succeeded. Both agents
+then stopped during continued polling before implementation/snapshot work;
+no exact projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0524-recovery-fix-diagnostic-2026-08-24.md`.
+
+## Work completed
+
+Focused SYN-039/MCP/workspace/coordination tests, Javadocs, validators, bundle
+rebuild, bootstrap `go vet`, and `git diff --check` pass. Doctor remains
+DEGRADED with six separately classified warnings. The known root Git
+subprocess stall and bootstrap migration failures remain independent.
+
+## Immediate next action
+
+Run one fresh ordinary unattended two-agent Todo acceptance with only the
+agents' complementary coding prompts. Do not relay, manually transition,
+repair, push, broaden SYN-039, or create SYN-040. Preserve the first exact
+projected-action failure, missing usable action, closure/cleanup blocker, or
+agent-engagement stop; do not change production code for another compliance
+deviation without a new protocol defect.
+
+# Current Task
+
 ## SYN-039 CP-0522 exact-action diagnostic
 
 CP-0521's ordinary acceptance reached one shared WorkGroup, REVIEW admission,

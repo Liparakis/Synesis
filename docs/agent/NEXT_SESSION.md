@@ -1,5 +1,27 @@
 # Next Session
 
+## CP-0524 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0524-recovery-fix-diagnostic-2026-08-24.md`.
+
+Commit `dd9f0eb` preserves the exact provider session identity when a clean
+worker already contains the advanced control HEAD; the deterministic
+`ProviderSessionBindingServiceTest` regression and focused verification pass.
+The fresh exact-action run reached one WorkGroup, exact REVIEW admission,
+owner acceptance, and grant issuance, then both agents stopped while polling;
+no exact projected action failed and no snapshot or validation state exists.
+
+- Exact next action: run a fresh ordinary unattended two-agent Todo acceptance
+  with no lifecycle-conformance prompt beyond the repository contract.
+- Exact code action: none unless that run proves an unchanged projected action
+  failure or a required state with no usable projection.
+- Keep the Git stall, bootstrap migration failures, Doctor warnings, and
+  agent-engagement stop separately classified. Do not relay, push, broaden
+  SYN-039, or create SYN-040.
+
+# Next Session
+
 ## CP-0522 continuation
 
 Evidence:

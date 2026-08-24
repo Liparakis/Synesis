@@ -1,5 +1,26 @@
 # Tasks
 
+## SYN-039 CP-0524 update
+
+The clean-recovery identity defect is fixed narrowly in commit `dd9f0eb`.
+When the assigned worker is clean and already contains the advanced control
+HEAD, the existing session identity is preserved while a fresh isolated
+worktree is allocated. Dirty and divergent worker state remains governed by
+the prior fail-closed checks.
+
+The CP-0524 exact-action diagnostic reached ready/isolated peers, one shared
+WorkGroup, exact REVIEW admission, owner acceptance, and grant issuance, then
+stopped during agent polling before implementation or snapshots. No exact
+projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0524-recovery-fix-diagnostic-2026-08-24.md`.
+
+The next narrow action is a fresh ordinary unattended Todo acceptance. Only an
+unchanged projected action that fails, or an engaged run that reaches a state
+with no usable action, authorizes another production slice. Do not broaden
+SYN-039, push, or create SYN-040.
+
+# Tasks
+
 ## SYN-039 CP-0522 update
 
 CP-0521 ordinary acceptance reached review, grant consumption, immutable

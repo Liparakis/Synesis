@@ -1,3 +1,24 @@
+# 2026-08-24 — SYN-039 CP-0524 clean-recovery identity fix diagnostic
+
+- CP-0523's concrete recovery trace showed a clean worker already at the
+  advanced control HEAD being rebound to a new provider session, which
+  stranded its durable active intent and review grant on the old participant.
+- Added the narrow existing-model fix in `dd9f0eb`: preserve session identity
+  when the clean worker already contains the control HEAD, while continuing to
+  allocate a fresh isolated worktree. The deterministic workspace regression
+  and focused coordination/MCP tests pass.
+- Rebuilt the current bundled MCP. Fresh CP-0524 exact-action diagnostic
+  reached two ready/isolated peers, disjoint claims, one WorkGroup, exact
+  REVIEW admission, owner acceptance, and grant issuance. Both agents then
+  stopped during continued polling before implementation/snapshot work; no
+  exact projected action failed. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0524-recovery-fix-diagnostic-2026-08-24.md`.
+- Doctor remains DEGRADED with six warnings. The Git subprocess stall,
+  bootstrap migration failures, and agent-engagement boundary remain separate.
+- Exact next action: run one fresh ordinary unattended two-agent Todo
+  acceptance with no manual relay or lifecycle prompting. Do not push or create
+  SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0520 post-fix exact-rule diagnostic
 
 - Implemented the smallest stale-dirty continuation projection in
