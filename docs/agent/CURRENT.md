@@ -17,11 +17,12 @@ engagement evidence, not a proven production defect.
 
 ## Immediate next action
 
-Run focused SYN-039 coordination/MCP tests, validators, Javadocs, Go vet,
-Doctor, and `git diff --check`; attempt the full repository `check` and retain
-the known Git subprocess stall and bootstrap migration failures separately.
-Create CP-0525 after recording the exact verification results. Keep
-production code unchanged; do not push or create SYN-040.
+Audit the preserved CP-0525 ordinary JSONL at the final `WAIT` boundary and
+the corresponding Codex process termination. Confirm whether Synesis emitted a
+usable continuation and whether the provider session ended without executing
+it. Do not repeat the same acceptance or change production lifecycle code
+without new evidence of an unchanged projected action failure. Do not push or
+create SYN-040.
 
 ## Work completed
 

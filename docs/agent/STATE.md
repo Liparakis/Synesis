@@ -22,9 +22,10 @@ coding lanes; snapshots `snap_de38379e858662f72b2a5de69db6d983` and
 because the ordinary Codex session stopped while a valid reviewer continuation
 was still projected. This is agent/session evidence, not a production defect.
 
-Immediate next action: run focused SYN-039 verification and diagnostics,
-record exact results, and create CP-0525. Do not modify production code, push,
-or create SYN-040.
+Immediate next action: audit the preserved ordinary CP-0525 JSONL and Codex
+process termination at the final `WAIT` projection. Keep production unchanged
+unless a concrete unchanged projected-action failure is found. Do not push or
+create SYN-040.
 
 ## SYN-039 CP-0522 third ordinary acceptance
 

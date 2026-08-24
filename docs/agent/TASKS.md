@@ -13,8 +13,10 @@ production change is justified.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
 
-Next narrow action: focused SYN-039 verification, repository validators, and
-checkpoint CP-0525. Keep the known infrastructure failures separate.
+Next narrow action: audit the preserved ordinary CP-0525 provider-session
+termination at the final valid `WAIT` projection. Do not repeat the same
+acceptance or change production without a concrete unchanged projected-action
+failure; keep the known infrastructure failures separate.
 
 ## SYN-039 CP-0522 third ordinary acceptance update
 
