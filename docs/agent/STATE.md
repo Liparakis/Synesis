@@ -1,5 +1,23 @@
 # State
 
+## SYN-039 CP-0519 exact-rule diagnostic
+
+CP-0519 reached ready/isolated peers, disjoint epoch-1 claims, one WorkGroup,
+exact REVIEW admission, owner acceptance, grant consumption, immutable
+snapshot publication, integration, and structured ACCEPT. The first exact
+projected action that failed was B's `ensure_session({})` after
+`get_next_action` reported `workspace_stale`; it returned
+`internal_failure / request_human_help`. B's `test_todo.py` worktree was still
+legitimately dirty, while A's accepted snapshot had advanced control. The
+WorkGroup remains ACTIVE with B's intent and no B snapshot. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-exact-rule-diagnostic-2026-08-24.md`.
+
+Immediate next action: reproduce this post-ACCEPT dirty-lane transition in a
+deterministic MCP fixture and make the smallest existing-model projection
+expose publication or authorized review continuation without replacing dirty
+work. Keep claims, ownership, grant, participant, epoch, snapshot, and
+fail-closed readiness checks unchanged. Do not push or create SYN-040.
+
 ## SYN-039 CP-0517 dirty-review continuation and exact-action diagnostic
 
 The stale dirty-reviewer boundary is fixed narrowly in

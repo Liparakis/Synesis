@@ -1,5 +1,32 @@
 # Next Session
 
+## CP-0519 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-exact-rule-diagnostic-2026-08-24.md`.
+
+The fresh exact-rule run used project
+`00eecdcd-865a-4071-8df4-afc810839519`, WorkGroup
+`663cee3b-cdf3-3bf8-91cb-7e8ddcc575bf`, request
+`d001fa9b-efb3-431e-aca5-b0559513291e`, consumed grant
+`fed1c3f6-f8e0-3d73-bce9-9fe9f03439cb`, snapshot
+`snap_48423ea02f57776f0064595b971197ab`, and integrated control commit
+`2563b0c`. A's implementation lane completed and integrated. B accepted the
+snapshot but still owns dirty `test_todo.py` work. Its exact projected
+`ensure_session({})` after `workspace_stale` failed with
+`internal_failure / request_human_help`; the WorkGroup is ACTIVE and B's
+reciprocal snapshot has not been published.
+
+- Exact next code action: reproduce this post-ACCEPT dirty-lane state in a
+  deterministic fixture, then implement the smallest existing-model
+  continuation projection for publication or authorized review. Preserve all
+  fail-closed checks and do not discard dirty work.
+- Exact next verification action: focused MCP/workspace regression, bundle
+  rebuild, validators, then the same exact diagnostic. Only after that passes
+  should the ordinary unattended acceptance be rerun.
+- Do not relay IDs, manually accept requests, trigger transitions, push, or
+  create SYN-040.
+
 ## CP-0517 continuation
 
 The stale-reviewer fix is implemented in

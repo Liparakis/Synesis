@@ -1,5 +1,23 @@
 # Tasks
 
+## SYN-039 CP-0519 update
+
+The CP-0519 exact-rule diagnostic proves the next concrete blocker. Exact
+REVIEW admission, owner response, single-use grant consumption, producer
+publication, snapshot integration, and structured ACCEPT all executed
+successfully. After A advanced the control checkout, B's own dirty
+`test_todo.py` lane received `workspace_stale -> ensure_session({})`; the
+exact projected call returned `internal_failure / request_human_help`.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-exact-rule-diagnostic-2026-08-24.md`.
+
+The active implementation slice is only the post-ACCEPT dirty-lane
+continuation boundary: preserve B's work and expose the existing authorized
+publication/review path when control is stale. Add deterministic regression
+coverage for the exact projection and failure. Do not weaken workspace trust,
+ownership, claims, grants, epochs, or snapshot fencing; do not broaden cleanup,
+Doctor, orchestration, or closure behavior; do not push or create SYN-040.
+
 ## SYN-039 CP-0517 update
 
 The stale-reviewer continuation slice is implemented and regression-covered.

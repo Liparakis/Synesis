@@ -1,5 +1,32 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0519 exact-rule diagnostic
+
+- Fresh Git + Synesis Todo fixture used the current bundled MCP and two
+  independent GPT-5.6 Luna High Codex processes with complementary
+  `todo.py`/`test_todo.py` claims. Both reached ready/isolated and one shared
+  WorkGroup without relay.
+- Exact REVIEW admission, owner acceptance, single-use grant consumption,
+  producer `finish_lane`, immutable snapshot publication, integration, and
+  structured ACCEPT passed. A's snapshot
+  `snap_48423ea02f57776f0064595b971197ab` integrated at control commit
+  `2563b0c`.
+- First genuine blocker: after ACCEPT, B's exact projected
+  `ensure_session({})` for `workspace_stale` returned
+  `internal_failure / request_human_help` while B's assigned
+  `test_todo.py` worktree remained dirty. The WorkGroup remained ACTIVE and B
+  could not publish its own work. This is a concrete stale-dirty continuation
+  gap, not an ignored projection.
+- Focused MCP/workspace tests, deferred/fixture validators, and
+  `git diff --check` passed. Doctor remains DEGRADED with six unrelated
+  warnings; root Git stall, bootstrap migrations, and document format
+  findings remain separate.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0519-exact-rule-diagnostic-2026-08-24.md`.
+- Exact next action: reproduce and fix only the post-ACCEPT dirty-lane
+  continuation projection, then rebuild and rerun the diagnostic. Do not
+  relay, push, or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0517 dirty-review continuation and diagnostic
 
 - Implemented the smallest stale-reviewer continuation slice. A dirty bound

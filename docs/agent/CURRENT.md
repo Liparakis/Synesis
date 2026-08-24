@@ -1,5 +1,34 @@
 # Current Task
 
+## SYN-039 CP-0519 exact-rule diagnostic
+
+The fresh bounded diagnostic used two independent GPT-5.6 Luna High Codex
+sessions, the current bundled MCP, a fresh Git + Synesis project, disjoint
+claims, and one shared WorkGroup. Both agents executed the concrete projected
+REVIEW admission, owner acceptance, single-use grant consumption, producer
+publication, snapshot integration, and structured ACCEPT without harness
+intervention. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-exact-rule-diagnostic-2026-08-24.md`.
+
+The first genuine protocol failure is post-ACCEPT stale-dirty continuation:
+B's exact projected `ensure_session({})` after A advanced the control checkout
+returned `internal_failure / request_human_help`. B still has legitimate
+uncommitted `test_todo.py` work, so the fail-closed dirty-worktree protection
+is correct but no usable continuation is projected. WorkGroup
+`663cee3b-cdf3-3bf8-91cb-7e8ddcc575bf` remains ACTIVE; A's snapshot
+`snap_48423ea02f57776f0064595b971197ab` integrated at control commit
+`2563b0c`; B has no snapshot; reciprocal request
+`a705dde9-eab2-40ec-bd4a-b30fb45a9122` remains pending.
+
+## Immediate next action
+
+Implement and deterministically test only the post-ACCEPT dirty-lane
+continuation projection. Preserve dirty work and all existing claim, grant,
+epoch, snapshot, ownership, and fail-closed checks. Do not broaden cleanup,
+Doctor, orchestration, or later closure behavior. Then rebuild the bundle and
+rerun the exact diagnostic. Do not relay, manually transition, push, or create
+SYN-040.
+
 ## SYN-039 CP-0517 dirty-review continuation and exact-action diagnostic
 
 The stale-reviewer continuation slice is implemented. A bound reviewer whose

@@ -1,5 +1,8 @@
 # SYN-039 latest acceptance evidence
 
+| Exact REVIEW through validation and first post-ACCEPT continuation | fresh two-agent exact-rule diagnostic | `syn039-diagnostic-cp0519-001` | exact projected actions remain executable through snapshot, integration, and structured ACCEPT; dirty peer lane continues safely | PARTIAL; WorkGroup `663cee3b...` reached exact admission, grant `fed1c3f6...`, snapshot `snap_48423...`, integration, and ACCEPT, then B's exact projected `ensure_session({})` returned `internal_failure / request_human_help` after `workspace_stale`; WorkGroup ACTIVE and B snapshot absent | SYN-039 / CP-0519 |
+| Post-ACCEPT dirty-lane continuation preserves legitimate work | deterministic MCP/workspace regression plus fresh diagnostic | next slice | B can continue its own dirty `test_todo.py` lane after sibling control integration without replacement or manual intervention | FAIL; concrete blocker reproduced in CP-0519 | SYN-039 / CP-0519 |
+
 | Dirty reviewer durable validation after sibling integration | deterministic MCP/workspace fixture | `McpSyn039SliceTest.dirtyReviewerReceivesDurableReviewDecisionAfterControlCheckoutAdvances` | dirty reviewer sees exact review decision and validates without unsafe worktree replacement | PASS; ACCEPT recorded, dirty file and binding preserved; clean recovery and stale-dirty refusal also pass | SYN-039 / CP-0517 |
 | Post-fix exact REVIEW admission diagnostic | fresh two-agent exact-action acceptance | `syn039-cp0517-001` | request admission, owner accepts, grant/snapshot/validation/integration continue | NOT REACHED; B executed exact request `41f48a24...`, then A's pre-request Codex turn ended; WorkGroup ACTIVE with no grant/snapshot/closure; agent-engagement evidence | SYN-039 / CP-0517 |
 
