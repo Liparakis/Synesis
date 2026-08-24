@@ -20,10 +20,12 @@ agent-compliance evidence, not a new production defect.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
 
-The next narrow action is focused/full verification and local commit of this
-guard, its regressions, and the durable evidence/state updates. Preserve
-fail-closed ownership, grant, epoch, snapshot, validation, integration, and
-cleanup semantics. Do not push or create SYN-040.
+The next narrow action is one fresh ordinary unattended acceptance with the
+harness retaining both independent Codex sessions across durable
+WAIT/projection continuations. Preserve fail-closed ownership, grant, epoch,
+snapshot, validation, integration, and cleanup semantics; do not relay,
+trigger transitions, change production code for agent-compliance evidence,
+push, or create SYN-040.
 
 ## SYN-039 CP-0534 update
 

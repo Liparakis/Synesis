@@ -16,6 +16,14 @@
   `docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
 - No push, remote mutation, or SYN-040 creation.
 
+## 2026-08-24 — SYN-039 CP-0518 checkpoint
+
+- Committed the verified slice as `c18073d` locally; no remote push was made.
+- Created clean checkpoint `CP-0518`. The next action is a fresh ordinary
+  acceptance with both independent sessions retained across durable WAIT and
+  projected-action continuations; no production change is justified by the
+  CP-0536 compliance stop.
+
 # 2026-08-24 — SYN-039 CP-0534 reviewer snapshot access
 
 - Commit `a03abe0` fixed the concrete reviewer snapshot-access defect by

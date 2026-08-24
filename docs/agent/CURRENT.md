@@ -20,10 +20,11 @@ reciprocal grant unresolved. No additional production defect is proven.
 
 ## Immediate next action
 
-Stage and commit the verified terminal-WorkGroup guard, deterministic
-regressions, MCP fixture correction, and CP-0536 evidence/state updates
-locally, then run `scripts/agent-checkpoint.ps1`; do not push or create
-SYN-040.
+Run one fresh ordinary unattended two-agent Todo acceptance with the harness
+retaining both independent Codex sessions across durable WAIT/projection
+continuations; do not relay or trigger transitions, and do not change
+production code unless an unchanged projected action fails. Do not push or
+create SYN-040.
 
 ## Work completed
 

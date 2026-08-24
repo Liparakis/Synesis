@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0518 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-bounded-and-ordinary-2026-08-24.md`.
+
+Commit `c18073d` records the terminal-WorkGroup guard, deterministic
+coordination/workspace regressions, the corrected MCP continuation fixture, and
+the CP-0536 acceptance/state evidence. CP-0518 is the clean local checkpoint.
+The bounded diagnostic closed WorkGroup
+`62241cb0-1e0d-3030-a945-e7f2dc5c37fb`; the ordinary run remains agent
+compliance evidence with WorkGroup
+`1c9fd0e2-eda4-3505-a20e-db86de14ec8a` ACTIVE and grant
+`4ba34d35-976a-3d55-bc40-0d7c9656f46b` unresolved.
+
+- Exact next action: run one fresh ordinary unattended Todo acceptance with the
+  harness retaining both independent Codex sessions across durable WAIT and
+  projected-action continuations.
+- Preserve the no-relay/no-manual-transition rule. Do not change production
+  code unless an unchanged projected action fails or Synesis projects no
+  usable action for required progress. Do not push or create SYN-040.
+
 ## CP-0536 continuation
 
 Evidence:

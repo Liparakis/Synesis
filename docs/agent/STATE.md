@@ -20,10 +20,11 @@ and passed control pytest 5/5. The fresh ordinary run reached WorkGroup
 projected coordination action and ended; the reciprocal grant remained
 pending. No new production defect is proven by that run.
 
-Immediate next action: stage and commit the verified terminal-WorkGroup guard,
-deterministic regressions, MCP fixture correction, and CP-0536 evidence/state
-updates locally, then create the next checkpoint; do not push or create
-SYN-040.
+Immediate next action: run one fresh ordinary unattended two-agent Todo
+acceptance with the harness retaining both independent Codex sessions across
+durable WAIT/projection continuations; do not relay or trigger transitions,
+and do not change production code unless an unchanged projected action fails.
+Do not push or create SYN-040.
 
 ## SYN-039 CP-0534 reviewer snapshot access
 
