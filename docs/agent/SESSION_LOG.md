@@ -2505,3 +2505,27 @@ ownership. No push and no SYN-040.
   warnings remain separate. Next action: run a fresh bounded diagnostic that
   forbids unprojected integration checks, then run the ordinary acceptance only
   if the diagnostic completes. No push and no SYN-040.
+
+# 2026-08-24 — SYN-039 CP-0487 role-order diagnostic
+
+- Created fresh project `94e7b869-4b26-4669-bbd2-5de2e344d018` with current
+  bundled MCP and two independent GPT-5.6 Luna sessions. Both reached
+  `ready / isolated` with exact disjoint claims.
+- Agent B established WorkGroup `a273e5df-a157-3ec7-ae93-211828d0acc2` first,
+  so B's test intent was the producer and A's implementation intent was the
+  reviewer. Exact REVIEW admission, two exact owner responses, grants
+  `5ba56aa7-3887-3ee1-8973-919669144888` and
+  `7907440e-cc5d-39a2-a4b6-b228290ff381`, and consumption of the first grant
+  all succeeded.
+- A correctly received `SNAPSHOT_PENDING` → `wait`. B's last
+  `get_next_action` occurred before grant consumption and returned ordinary
+  `IMPLEMENT`; B did not poll after the later reviewer action. No exact
+  projected producer action failed and no snapshot, validation, integration,
+  or closure occurred. This is role-order/agent-compliance evidence, not a
+  new production defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0487-role-order-diagnostic-2026-08-24.md`.
+- Duplicate retry-safe requests/grants are recorded for later idempotency and
+  cleanup review. Exact next action: launch the implementation agent first in
+  a fresh bounded diagnostic and capture producer publication through reviewer
+  validation without relay or manual transition. No push and no SYN-040.

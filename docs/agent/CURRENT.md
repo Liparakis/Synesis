@@ -12,6 +12,20 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0487 role-order diagnostic
+
+The fresh CP-0487 fixture reached one shared WorkGroup, exact REVIEW admission,
+two exact owner `respond_coordination` acceptances, and exact single-use grant
+consumption. Agent B established the WorkGroup first, so its test intent was
+the producer/owner and Agent A's implementation intent became the reviewer.
+After A consumed the grant, A correctly received `SNAPSHOT_PENDING` → `wait`;
+the producer had not yet been queried after grant consumption. No projected
+producer publication action failed or was missing when requested. This is
+role-order/agent-compliance evidence, not a new production defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0487-role-order-diagnostic-2026-08-24.md`.
+
 ## CP-0486 exact-rule diagnostic
 
 The agent-facing contract clarification is now present in the generated
@@ -82,26 +96,28 @@ unprojected `finish_lane`.
 
 ## Current failures
 
-CP-0486 stopped before review grant creation because Agent B chose an
-unprojected `integrationCheck` while its isolated test worktree correctly
-lacked Agent A's unintegrated implementation. The resulting
-`integration_conflict` / `TESTS_FAILED` state was not an accepted-snapshot
-integration result and is classified as agent-compliance evidence. No exact
-projected action failed. No second ordinary acceptance was run because the
-diagnostic did not complete. The recurring Git subprocess stall, bootstrap
-migration failures, and six CP-0486 fixture Doctor warnings remain separately
-classified.
+CP-0487 reached exact REVIEW admission and grant consumption, but the test
+agent established the WorkGroup first. The implementation agent therefore
+became the reviewer and correctly waited for a snapshot from the test-agent
+producer. The producer's last `get_next_action` occurred before grant
+consumption and returned ordinary `IMPLEMENT`; it did not poll again after the
+reviewer consumed the grant. No exact projected action failed, and no new
+production defect is proven. The duplicate retry-safe review requests/grants
+are recorded for later idempotency/cleanup review. The recurring Git
+subprocess stall, bootstrap migration failures, and six CP-0487 fixture Doctor
+warnings remain separately classified.
 
 ## Immediate next action
 
-Run the next fresh bounded two-agent diagnostic with the current bundle and
-the exact rule that ordinary `IMPLEMENT` may not start an unprojected
-integration check or lifecycle transition. Capture the first projected
-coordination action and the immediately following agent action. If an exact
-projected action fails, implement only that proven narrow protocol defect; if
-the agents again choose an unprojected action, preserve it as compliance
-evidence. Only after the diagnostic completes may the second ordinary
-unattended acceptance run. Do not push or create SYN-040.
+Run a fresh bounded two-agent diagnostic using the current bundle, with the
+implementation agent launched first so it establishes the producer WorkGroup.
+After both sessions are ready, do not relay or trigger transitions. Capture
+every projection/action pair through producer snapshot publication and
+reviewer validation. If an exact projected action fails, implement only that
+proven narrow protocol defect; if the agents fail to poll or choose an
+unprojected action, preserve it as compliance evidence. Only after this
+diagnostic completes may the second ordinary unattended acceptance run. Do not
+push or create SYN-040.
 
 ## CP-0480 convergence projection slice
 

@@ -885,6 +885,22 @@ agent-compliance evidence, not a new lifecycle defect.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0486-exact-rule-diagnostic-2026-08-24.md`.
 
+## SYN-039 CP-0487 role-order diagnostic
+
+The CP-0487 fresh fixture used the current bundled MCP and two distinct
+`ready / isolated` sessions. Agent B's test intent established WorkGroup
+`a273e5df-a157-3ec7-ae93-211828d0acc2` first, so B was the producer and Agent
+A became the reviewer. Exact REVIEW admission, owner responses, single-use
+grants, and consumption of grant
+`5ba56aa7-3887-3ee1-8973-919669144888` all succeeded. A then correctly saw
+`SNAPSHOT_PENDING` → `wait`. B's last `get_next_action` was before the grant
+was consumed and returned ordinary `IMPLEMENT`; B did not poll after the
+reviewer action. No exact projected producer action failed, and no new
+production defect is proven.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0487-role-order-diagnostic-2026-08-24.md`.
+
 ## SYN-039 CP-0471 owner acceptance projection
 
 The owner-side `respond_coordination` gap is fixed. A pending REVIEW request

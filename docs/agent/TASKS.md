@@ -1908,3 +1908,21 @@ migration failures, and unrelated Doctor warnings remain separately
 classified. Exact next action: rerun a bounded diagnostic forbidding
 unprojected integration checks, then run the ordinary acceptance only if the
 diagnostic completes. Do not create SYN-040 or push.
+
+## SYN-039 CP-0487 update
+
+The fresh role-order diagnostic reached one shared WorkGroup,
+`REVIEW_ADMISSION_REQUIRED`, exact `request_coordination`, exact owner
+responses, and single-use REVIEW grant consumption. The test agent established
+the WorkGroup first, making its intent the producer and the implementation
+agent the reviewer. The reviewer correctly received `SNAPSHOT_PENDING` and
+waited; the producer's last projection was ordinary `IMPLEMENT` before grant
+consumption and it did not poll afterward. No exact projected producer action
+failed, so no new production defect is claimed.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0487-role-order-diagnostic-2026-08-24.md`.
+Duplicate retry-safe requests/grants are recorded for later idempotency and
+cleanup review. Exact next action: launch the implementation agent first in a
+fresh bounded diagnostic and observe producer publication through reviewer
+validation without relay or manual transition. Do not create SYN-040 or push.

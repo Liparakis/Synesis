@@ -1,5 +1,36 @@
 # Next Session
 
+## CP-0487 continuation
+
+The CP-0487 role-order diagnostic used fresh project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0487-001` and the
+current bundled MCP. Both sessions reached distinct `ready / isolated`
+bindings. Agent B established WorkGroup
+`a273e5df-a157-3ec7-ae93-211828d0acc2` first, so B's test intent was the
+producer and Agent A's implementation intent became the reviewer.
+
+The exact path reached REVIEW admission, owner acceptance, grants
+`5ba56aa7-3887-3ee1-8973-919669144888` and
+`7907440e-cc5d-39a2-a4b6-b228290ff381`, and exact consumption of the first
+grant. A correctly received `SNAPSHOT_PENDING` → `wait`. B's last
+`get_next_action` was before grant consumption and ordinary `IMPLEMENT`; it
+did not poll after the later reviewer action. No projected producer action
+failed, and no grant, snapshot, validation, integration, or closure completed.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0487-role-order-diagnostic-2026-08-24.md`.
+
+- Exact next code action: run a fresh bounded diagnostic with the
+  implementation agent launched first, then capture every projection/action
+  pair through producer publication and reviewer validation without relaying
+  or manually triggering transitions.
+- Do not modify production code unless an exact projected action fails. Keep
+  duplicate retry-safe requests/grants separately classified for later
+  idempotency/cleanup review.
+- Run the ordinary unattended acceptance only after the bounded diagnostic
+  reaches its terminal result. Keep Git stalls, bootstrap migration failures,
+  and Doctor warnings separate.
+- Do not push or create SYN-040.
+
 ## CP-0486 continuation
 
 The CP-0486 exact-rule diagnostic used fresh project
