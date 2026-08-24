@@ -1,3 +1,32 @@
+# 2026-08-24 — SYN-039 CP-0534 reviewer snapshot access
+
+- Commit `a03abe0` fixed the concrete reviewer snapshot-access defect by
+  routing authorized review reads and commands to a disposable immutable
+  snapshot workspace through the existing ten-tool MCP surface. The reviewer
+  retains its own dirty lane and cannot write to the review workspace.
+- Deterministic MCP tests passed for authorized access after control advances,
+  wrong participants, and mismatched snapshot references. Javadocs, focused
+  tests, validators, Doctor, bundle rebuild, and `git diff --check` passed.
+- Fresh project `syn039-review-access-cp0534-001` used two independent
+  GPT-5.6 Luna High sessions, distinct ready/isolated bindings, disjoint
+  claims, and one shared WorkGroup. It reached exact REVIEW admission, grant
+  consumption, snapshot publication, integration, and B's structured ACCEPT
+  after immutable-snapshot pytest passed 3/3.
+- Agent A ended before consuming the reciprocal REVIEW grant targeted at A;
+  Agent B correctly remained in exact WAIT. WorkGroup
+  `895e9681-8d66-37c0-b3b7-6eb88aa57838` remains ACTIVE. This is
+  agent-engagement evidence, not a new production defect. No ordinary second
+  acceptance was run.
+- The root `check` remains separately blocked by the known Git subprocess
+  startup stall; bootstrap Go tests retain the three known migration failures;
+  Doctor remains DEGRADED with the previously recorded warnings.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0534-review-snapshot-access-2026-08-24.md`.
+- Exact next action: run a fresh bounded diagnostic with both agents retained
+  through reciprocal grant consumption, the second snapshot, validation,
+  integration, cleanup, and terminal WorkGroup state. Do not push or create
+  SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0533 engaged diagnostic
 
 - Fresh project `syn039-diagnostic-cp0533-001` used the rebuilt bundled MCP,

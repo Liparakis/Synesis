@@ -1,5 +1,33 @@
 # State
 
+## SYN-039 CP-0534 reviewer snapshot access
+
+CP-0534 used fresh Git + Synesis state, the current bundled ten-tool MCP, and
+two independent GPT-5.6 Luna High Codex sessions with distinct ready/isolated
+bindings and disjoint claims. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-review-snapshot-access-2026-08-24.md`.
+
+The production fix is commit `a03abe0`. It resolves the exact reviewer
+snapshot-read failure after control advancement by exposing an authorized
+immutable snapshot workspace through the existing read tools. The reviewer
+preserves its own dirty lane and cannot write to the review workspace.
+Deterministic success, wrong-participant, and mismatched-reference tests pass.
+
+The diagnostic reached WorkGroup
+`895e9681-8d66-37c0-b3b7-6eb88aa57838`, exact REVIEW admission, owner response,
+single-use grant consumption, snapshot publication, integration, and a
+structured ACCEPT after snapshot pytest passed 3/3. A then ended before
+consuming the reciprocal REVIEW grant targeted at A; B followed exact WAIT.
+The WorkGroup remains ACTIVE. This is agent-engagement evidence, not a proven
+backend defect.
+
+Immediate next action: run a fresh bounded diagnostic that keeps both agents
+engaged through the reciprocal grant, second snapshot publication, reviewer
+validation, accepted integration, cleanup, and terminal WorkGroup state. Do
+not change production lifecycle code unless an unchanged projected action
+fails or progress is required without a usable projection. Keep the known Git
+stall, bootstrap migration failures, and Doctor warnings separate.
+
 ## SYN-039 CP-0533 engaged diagnostic
 
 CP-0533 used fresh Git + Synesis state, the rebuilt current MCP, two

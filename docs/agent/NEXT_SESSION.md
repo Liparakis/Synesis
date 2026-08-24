@@ -1,5 +1,32 @@
 # Next Session
 
+## CP-0534 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-review-snapshot-access-2026-08-24.md`.
+
+Commit `a03abe0` fixes authorized reviewer access to an immutable snapshot
+after the control checkout advances. The reviewer can use the existing
+`read_file` and `run_command` tools in a disposable read-only review workspace
+without rebinding or discarding its own dirty lane. Wrong participant and
+mismatched snapshot references remain fail-closed.
+
+The fresh diagnostic reached shared WorkGroup convergence, exact REVIEW
+admission, owner response, grant consumption, snapshot publication,
+integration, and structured ACCEPT after actual snapshot inspection. Agent A
+then ended before consuming the reciprocal REVIEW grant; B remained in exact
+WAIT. WorkGroup `895e9681-8d66-37c0-b3b7-6eb88aa57838` is ACTIVE, so no clean
+ordinary acceptance was run.
+
+- Exact next action: run a fresh bounded diagnostic with both independent
+  agents retained through reciprocal grant consumption, the second snapshot,
+  validation, integration, cleanup, and terminal WorkGroup state.
+- Exact code action: none unless an engaged participant executes an unchanged
+  projected action that fails or a required state has no usable projection.
+- Keep the Git subprocess stall, bootstrap migration failures, and Doctor
+  warnings separately classified. Do not relay, repair state, push, or create
+  SYN-040.
+
 ## CP-0533 continuation
 
 Evidence:

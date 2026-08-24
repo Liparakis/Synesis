@@ -1,5 +1,55 @@
 # Current Task
 
+## SYN-039 CP-0534 reviewer snapshot access
+
+CP-0534 is recorded in
+`docs/evidence/syn039-unattended-todo-cp0534-review-snapshot-access-2026-08-24.md`.
+Commit `a03abe0` fixes the concrete reviewer snapshot-access defect: an
+authorized reviewer can use the existing `read_file` and `run_command` tools
+against a disposable immutable snapshot workspace after the control checkout
+advances, without rebinding, discarding its own dirty lane, or acquiring write
+ownership. The projection and provider/catalog guidance expose the exact
+snapshot, grant, commit, and read-only boundary. Deterministic focused tests
+cover successful access and fail-closed wrong-participant and mismatched-ref
+cases.
+
+The fresh two-agent diagnostic reached one shared WorkGroup, exact REVIEW
+admission, owner acceptance, grant consumption, snapshot publication and
+integration, and a structured ACCEPT after the reviewer inspected and tested
+the immutable snapshot. Agent A then ended before consuming the reciprocal
+REVIEW grant targeted at A; Agent B correctly remained in WAIT. The WorkGroup
+`895e9681-8d66-37c0-b3b7-6eb88aa57838` remains ACTIVE. This is agent
+engagement/compliance evidence, not a new production defect.
+
+## Immediate next action
+
+Run one fresh bounded diagnostic with both agents kept engaged through the
+reciprocal grant, second snapshot publication, reviewer validation, accepted
+integration, cleanup, and terminal WorkGroup state; do not change production
+lifecycle code unless an engaged agent executes an unchanged projection that
+fails or Synesis requires progress while projecting no usable action.
+
+## Work completed
+
+The CP-0534 reviewer-access slice is implemented and verified. Focused MCP,
+workspace, provider guidance, catalog, Javadocs, validators, Doctor, bundle,
+and diff checks pass. The root `check` remains separately blocked by the known
+Git subprocess startup stall, and bootstrap Go tests retain the three known
+migration failures. Doctor remains DEGRADED with the previously recorded
+warnings; neither issue is causal to the CP-0534 reviewer-access fix.
+
+## Current failures
+
+The CP-0534 diagnostic did not reach terminal completion because Agent A's
+session ended before consuming its exact reciprocal REVIEW grant. Agent B
+correctly remained in WAIT; no unchanged projected Synesis action failed and
+no new production lifecycle defect is proven. The WorkGroup remains ACTIVE.
+The root `check` still reproduces the bounded Git subprocess startup stall at
+`WorkspaceCliTest.setUp:74` through `ManagedBaselineTransactionService` and
+`GitProcessRunner`. Bootstrap `go test ./...` still has the three known
+migration failures. Doctor remains DEGRADED with six previously classified
+warnings.
+
 ## SYN-039 CP-0533 engaged diagnostic
 
 CP-0533 used a fresh Git + Synesis project and two independent GPT-5.6 Luna

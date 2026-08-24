@@ -1,5 +1,29 @@
 # Tasks
 
+## SYN-039 CP-0534 update
+
+The reviewer snapshot-access slice is implemented in commit `a03abe0` and
+recorded in
+`docs/evidence/syn039-unattended-todo-cp0534-review-snapshot-access-2026-08-24.md`.
+The existing grant, participant, snapshot, and epoch authority model now
+projects immutable review access and routes authorized reads and commands to a
+disposable snapshot workspace. Deterministic tests prove successful access
+after control advancement and fail-closed wrong-participant and mismatched-ref
+behavior.
+
+The fresh diagnostic reached one shared WorkGroup, exact REVIEW admission,
+owner response, grant consumption, snapshot publication, integration, and a
+structured ACCEPT based on actual immutable-snapshot inspection. Agent A then
+ended before consuming the reciprocal grant targeted at A, while B correctly
+remained in WAIT. No unchanged projected action failed, so this is not a new
+production lifecycle defect.
+
+The next narrow action is a fresh bounded diagnostic that keeps both agents
+engaged through reciprocal grant consumption, second snapshot publication,
+validation, integration, cleanup, and terminal WorkGroup state. Preserve
+fail-closed claims, ownership, epochs, grants, workspace isolation, and the
+ten-tool MCP contract. Do not push or create SYN-040.
+
 ## SYN-039 CP-0533 update
 
 The fresh engaged diagnostic is recorded in
