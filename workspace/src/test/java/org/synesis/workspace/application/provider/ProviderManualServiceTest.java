@@ -24,6 +24,8 @@ class ProviderManualServiceTest {
             assertTrue(content.contains("workflow `IMPLEMENT`"));
             assertTrue(content.contains("visible assigned worktree"));
             assertTrue(content.contains("Do not inspect `.synesis/**`"));
+            assertTrue(content.contains("Do not call `finish_lane` or another lifecycle tool"));
+            assertTrue(content.contains("Execute `finish_lane` only when `get_next_action` projects it"));
             assertTrue(content.contains("exact tool with those exact arguments"));
             Files.writeString(manual, Files.readString(manual) + "tampered\n");
             assertFalse(service.attest("codex").valid());

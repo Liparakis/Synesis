@@ -2471,3 +2471,37 @@ ownership. No push and no SYN-040.
   fixture validators, Go vet, and `git diff --check` passed. Doctor remains
   `DEGRADED` with five warnings. The recurring root Git stall and bootstrap
   migration-test failures remain separate.
+
+# 2026-08-24 — SYN-039 CP-0486 exact-rule diagnostic
+
+- Completed the CP-0485 stale-recovery trace. The reviewer worktree was dirty
+  and based on the pre-integration control revision while the owner had
+  advanced control through an unprojected `finish_lane`; the existing binding
+  path correctly failed closed with `WORKSPACE_STALE_DIRTY`. Lease/process
+  evidence did not prove a Synesis process-loss defect.
+- Implemented the smallest agent-facing contract clarification in
+  `ProviderManualService` and generated `AGENTS.md`: ordinary `IMPLEMENT`
+  without a concrete projected tool is not permission to call `finish_lane` or
+  another lifecycle action. Added deterministic manual/generated-contract
+  assertions.
+- Ran fresh external-harness project
+  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0486-001` with two
+  current-bundle GPT-5.6 Luna sessions. Both reached `ready / isolated`, held
+  disjoint claims, and converged on WorkGroup
+  `9527b8ec-0971-3f33-995c-ac0833d506c7`.
+- Agent A executed the exact projected
+  `request_coordination(work_group_join)` action and implemented `todo.py`
+  without calling unprojected `finish_lane`. Agent B made an unprojected
+  `integrationCheck` request while its isolated worktree correctly lacked A's
+  unintegrated implementation; Synesis returned `integration_conflict` /
+  `TESTS_FAILED` and `request_human_help`. No exact projected lifecycle action
+  failed, and no grant, snapshot, validation, integration, or closure was
+  reached. This is agent-compliance evidence, not a new production defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0486-exact-rule-diagnostic-2026-08-24.md`.
+- Focused workspace/MCP tests, `:workspace:javadoc`, fixture/deferred
+  validators, Doctor structural checks, and `git diff --check` passed. The
+  root Git subprocess stall, bootstrap migration failures, and fixture Doctor
+  warnings remain separate. Next action: run a fresh bounded diagnostic that
+  forbids unprojected integration checks, then run the ordinary acceptance only
+  if the diagnostic completes. No push and no SYN-040.

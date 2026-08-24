@@ -36,6 +36,8 @@ final class ProjectApplicationServiceTest {
         assertTrue(agents.contains("This repository uses Synesis."));
         assertTrue(agents.contains("use Synesis MCP for all reads, writes, and commands"));
         assertTrue(agents.contains("Native provider hooks are optional"));
+        assertTrue(agents.contains("do not call finish_lane or another lifecycle tool merely because the coding appears complete"));
+        assertTrue(agents.contains("Execute lifecycle actions only when get_next_action projects the exact tool and arguments"));
         String metadata = Files.readString(root.resolve(".synesis/project.json"));
         assertTrue(metadata.contains("\"schemaVersion\": 2"));
         assertFalse(metadata.contains("identity.bin"));

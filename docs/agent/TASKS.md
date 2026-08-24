@@ -1882,3 +1882,29 @@ connection, lease, heartbeat, binding, worktree, process-anchor, and provider
 process evidence. Implement only a proven fail-closed readiness defect; keep
 the root Git subprocess stall, bootstrap migration failures, and unrelated
 Doctor warnings separate. Do not create SYN-040.
+
+## SYN-039 CP-0486 update
+
+The agent-facing lifecycle contract was clarified and verified in a fresh
+external-harness diagnostic. Both current-bundle MCP sessions reached
+`ready / isolated`, held disjoint exact claims, and converged on WorkGroup
+`9527b8ec-0971-3f33-995c-ac0833d506c7`. Agent A executed the exact projected
+`request_coordination(work_group_join)` action and did not call unprojected
+`finish_lane`. Agent B instead made an unprojected `integrationCheck` request
+while its own isolated worktree lacked A's unintegrated implementation;
+Synesis correctly returned `integration_conflict` / `TESTS_FAILED` and
+`request_human_help`.
+
+No exact projected lifecycle action failed, and the run reached no grant,
+snapshot, validation, integration, or closure. The result is agent-compliance
+evidence rather than a new production defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0486-exact-rule-diagnostic-2026-08-24.md`.
+
+Focused workspace/MCP tests, Javadocs, fixture/deferred validators, Doctor
+structural checks, and `git diff --check` pass. Doctor reports its existing
+personal-absolute-path documentation warning; the fixture Doctor is
+`DEGRADED` with six warnings. The root Git subprocess stall, bootstrap
+migration failures, and unrelated Doctor warnings remain separately
+classified. Exact next action: rerun a bounded diagnostic forbidding
+unprojected integration checks, then run the ordinary acceptance only if the
+diagnostic completes. Do not create SYN-040 or push.

@@ -861,6 +861,30 @@ provider/admin metadata (`AGENTS.md`, `.synesis`, `.codex`, `.claude`, `.agents`
   the old claim was already released, and lifecycle STATUS failed closed with
   `lifecycle_claim_not_acquired` rather than guessing continuation authority.
 
+## SYN-039 CP-0486 exact-rule diagnostic
+
+The CP-0485 stale-recovery trace showed a correct fail-closed
+`WORKSPACE_STALE_DIRTY` result: the reviewer worktree was dirty and based on
+the old control revision after the owner selected unprojected `finish_lane`.
+Lease and process evidence did not prove a Synesis process-loss defect. The
+smallest response was an agent-facing contract clarification in
+`ProviderManualService` and generated `AGENTS.md`, covered by deterministic
+contract tests.
+
+A fresh CP-0486 fixture used the current bundled MCP and two independent
+`ready / isolated` sessions with disjoint exact claims. They converged on
+WorkGroup `9527b8ec-0971-3f33-995c-ac0833d506c7`. Agent A executed the exact
+projected `request_coordination(work_group_join)` action and did not call
+unprojected `finish_lane`. Agent B instead supplied an unprojected
+`integrationCheck` while its isolated worktree lacked A's unintegrated
+implementation. The server returned `integration_conflict` / `TESTS_FAILED`
+and `request_human_help`; no exact projected action failed and no grant,
+snapshot, validation, integration, or closure occurred. This is
+agent-compliance evidence, not a new lifecycle defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0486-exact-rule-diagnostic-2026-08-24.md`.
+
 ## SYN-039 CP-0471 owner acceptance projection
 
 The owner-side `respond_coordination` gap is fixed. A pending REVIEW request

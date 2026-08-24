@@ -12,6 +12,28 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0486 exact-rule diagnostic
+
+The agent-facing contract clarification is now present in the generated
+`AGENTS.md` and provider manual. A fresh external-harness fixture used the
+current bundled MCP, the same initialized project, and two distinct
+`ready / isolated` sessions with disjoint `todo.py` / `test_todo.py` claims.
+The sessions converged on WorkGroup
+`9527b8ec-0971-3f33-995c-ac0833d506c7`.
+
+Agent A received and executed the exact projected
+`request_coordination(work_group_join)` action, then implemented `todo.py`
+without calling unprojected `finish_lane`. Agent B instead supplied an
+unprojected `integrationCheck` request while its own isolated worktree lacked
+A's unintegrated implementation. Synesis correctly returned
+`integration_conflict` / `TESTS_FAILED` and `request_human_help`. No exact
+projected lifecycle action failed, and no grant, snapshot, validation,
+integration, or closure state was reached. This is agent-compliance evidence,
+not a new production lifecycle defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0486-exact-rule-diagnostic-2026-08-24.md`.
+
 ## CP-0485 clean-harness exact-rule diagnostic
 
 The clean-harness rerun used a fresh Git + Synesis project and the rebuilt
@@ -47,33 +69,39 @@ Evidence:
 ## Work completed
 
 The reviewer-first snapshot-admission projection fix is committed as
-`5fe613f`. Focused workspace/MCP regression coverage, Javadocs, bundle rebuild,
-validators, and `git diff --check` pass. The CP-0485 clean-harness run proves
-exact REVIEW admission and owner acceptance, but does not prove grant
-consumption, validation, rejection routing, closure, or final Doctor health.
+`5fe613f`. The CP-0485 stale-recovery trace confirmed that the existing
+`WORKSPACE_STALE_DIRTY` path fails closed when an unprojected owner transition
+advances control while the reviewer's worktree is dirty. The smallest
+agent-facing contract clarification is implemented in
+`ProviderManualService` and generated `AGENTS.md`, with deterministic tests
+covering the distinction between ordinary `IMPLEMENT` and a concrete
+projected lifecycle action. Focused workspace/MCP regression coverage,
+Javadocs, bundle rebuild, validators, and `git diff --check` pass. CP-0486
+verified that Agent A obeyed the clarified contract and did not call
+unprojected `finish_lane`.
 
 ## Current failures
 
-The first exact projected action failure in the valid clean-harness run is the
-reviewer session recovery path: after both REVIEW requests were accepted, the
-reviewer became `workspace_stale`; its projected `ensure_session({})` failed
-twice with `internal_failure`. This is directly associated with the existing
-`stale_session_lease` Doctor warning, but the lease/heartbeat/process evidence
-has not yet been traced to a production root cause. The recurring Git
-subprocess stall, bootstrap migration failures, and other Doctor warnings
-remain separately classified. No second ordinary acceptance was run because
-the diagnostic did not complete and the owner violated the exact-action rule.
+CP-0486 stopped before review grant creation because Agent B chose an
+unprojected `integrationCheck` while its isolated test worktree correctly
+lacked Agent A's unintegrated implementation. The resulting
+`integration_conflict` / `TESTS_FAILED` state was not an accepted-snapshot
+integration result and is classified as agent-compliance evidence. No exact
+projected action failed. No second ordinary acceptance was run because the
+diagnostic did not complete. The recurring Git subprocess stall, bootstrap
+migration failures, and six CP-0486 fixture Doctor warnings remain separately
+classified.
 
 ## Immediate next action
 
-Reproduce the live reviewer `workspace_stale` → `ensure_session` failure in a
-deterministic two-session MCP fixture. Capture connection IDs, lease/session/
-binding/worktree identities, heartbeat timestamps, process-anchor evidence,
-provider process lifetime, and the exact exception path. Only if that trace
-proves a Synesis lease/readiness defect, implement the smallest fail-closed
-fix and regression; otherwise preserve it as harness/provider evidence. Do
-not change review, snapshot, validation, integration, cleanup, Doctor, or
-ownership behavior speculatively. Do not push or create SYN-040.
+Run the next fresh bounded two-agent diagnostic with the current bundle and
+the exact rule that ordinary `IMPLEMENT` may not start an unprojected
+integration check or lifecycle transition. Capture the first projected
+coordination action and the immediately following agent action. If an exact
+projected action fails, implement only that proven narrow protocol defect; if
+the agents again choose an unprojected action, preserve it as compliance
+evidence. Only after the diagnostic completes may the second ordinary
+unattended acceptance run. Do not push or create SYN-040.
 
 ## CP-0480 convergence projection slice
 

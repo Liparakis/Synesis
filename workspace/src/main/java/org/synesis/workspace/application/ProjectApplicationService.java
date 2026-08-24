@@ -56,6 +56,7 @@ public final class ProjectApplicationService {
             - Do not modify the control checkout or another worker's files directly.
             - When Synesis reports an identity, ownership, freshness, or workspace failure, stop mutation and inspect read-only state.
             - The MCP surface currently contains exactly 10 tools; follow get_next_action's recommended tool and typed arguments.
+            - When get_next_action reports IMPLEMENT without a concrete recommendedTool and typed arguments, continue the visible assigned coding work normally; do not call finish_lane or another lifecycle tool merely because the coding appears complete. Execute lifecycle actions only when get_next_action projects the exact tool and arguments, then return to get_next_action after coding progress.
             """;
     private final ManagedBaselineTransactionService baselineService;
 

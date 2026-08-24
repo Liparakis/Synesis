@@ -1,5 +1,38 @@
 # Next Session
 
+## CP-0486 continuation
+
+The CP-0486 exact-rule diagnostic used fresh project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0486-001`, an
+external harness, and the current bundled MCP (SHA-256
+`8F17CF71691F407093D607C0BB947924BDAC05951CA3A84BB98EBFAEFE6704C7`). Both
+independent GPT-5.6 Luna sessions reached distinct `ready / isolated`
+bindings, held exact disjoint `todo.py` / `test_todo.py` claims, and converged
+on WorkGroup `9527b8ec-0971-3f33-995c-ac0833d506c7`.
+
+Agent A executed the exact projected `request_coordination(work_group_join)`
+action and completed its visible `todo.py` implementation without calling
+unprojected `finish_lane`. Agent B independently supplied an unprojected
+`integrationCheck` while its isolated worktree correctly lacked A's
+unintegrated implementation. Synesis returned `integration_conflict` /
+`TESTS_FAILED` and `request_human_help`; no grant, snapshot, validation,
+integration, or closure was reached. This is agent-compliance evidence, not a
+new production lifecycle defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0486-exact-rule-diagnostic-2026-08-24.md`.
+
+- Exact next code action: run a fresh bounded two-agent diagnostic with the
+  current bundle and a rule forbidding unprojected integration checks or
+  lifecycle transitions during ordinary `IMPLEMENT`; capture every
+  `get_next_action` projection and following action.
+- Do not modify production code unless an exact projected action fails. If the
+  agents choose another unprojected action, preserve it as compliance
+  evidence. Run the second ordinary unattended acceptance only after the
+  diagnostic completes.
+- Run focused SYN-039 tests, validators, Javadocs, Doctor, and
+  `git diff --check`; keep the root Git stall, bootstrap migration failures,
+  and unrelated Doctor warnings separate.
+- Do not push or create SYN-040.
+
 ## CP-0485 continuation
 
 The clean-harness exact-rule diagnostic used fresh project
