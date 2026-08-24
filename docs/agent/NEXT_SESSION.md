@@ -1,5 +1,33 @@
 # Next Session
 
+## CP-0501 continuation
+
+The fresh diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0501-002`, the current
+bundled MCP, and two independent GPT-5.6 Luna sessions. Both reached ten
+tools, `ready / isolated`, and one WorkGroup
+`1f8bc962-fbb5-376b-9f72-1e0b4135a495` with disjoint claims. Exact REVIEW
+admission, owner acceptance, and grant consumption all succeeded.
+
+The producer stopped after a normal `IMPLEMENT` response with no executable
+action while grant `e6b09aa2-0cf8-35de-b80c-1e4180ccb6a7` was still pending.
+The reviewer later consumed it and received exact `WAIT` →
+`get_next_action`, but the producer was no longer alive to receive the
+post-consumption `finish_lane` projection. No projected action failed and no
+production change is justified. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0501-producer-polling-diagnostic-2026-08-24.md`.
+
+- Exact next action: run a fresh bounded two-agent diagnostic with both agents
+  explicitly continuing after ordinary no-action/WAIT states and after every
+  peer-side progress event, then capture the owner `finish_lane` projection
+  after grant consumption. Do not manually trigger lifecycle actions or relay
+  messages.
+- If an exact projected action fails, preserve that as the next defect. If an
+  agent stops again without a projected action failure, record compliance
+  evidence and do not change production code.
+- Do not push or create SYN-040. Keep the Git stall, bootstrap migration
+  failures, and Doctor warnings separate unless directly causal.
+
 ## CP-0500 continuation
 
 The fresh post-fix diagnostic used project

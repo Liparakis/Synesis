@@ -12,6 +12,33 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0501 producer-polling diagnostic
+
+The fresh project
+`1a67c646-9725-48ba-b6ec-63618ef2cd89` used the current bundled MCP and two
+independent GPT-5.6 Luna sessions. Both reached ten tools and distinct
+`ready / isolated` sessions, held disjoint `todo.py` / `test_todo.py` claims,
+and converged on WorkGroup
+`1f8bc962-fbb5-376b-9f72-1e0b4135a495`.
+
+The diagnostic executed exact REVIEW admission, owner acceptance, and
+single-use grant consumption successfully. A then stopped after a normal
+`IMPLEMENT` projection with no executable action while B's grant was still
+unconsumed. B later consumed grant
+`e6b09aa2-0cf8-35de-b80c-1e4180ccb6a7` and received the exact `WAIT` →
+`get_next_action` projection, but A was no longer polling to receive
+`finish_lane`. No exact projected action failed; no production code changed.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0501-producer-polling-diagnostic-2026-08-24.md`.
+
+The source contract is internally consistent: the owner cannot publish until
+the targeted REVIEW grant is consumed, and the reviewer had the next
+authorized action. The first stop is therefore agent-compliance evidence, not
+a new backend defect. Exact next action: run one fresh bounded diagnostic with
+both agents remaining alive through peer-side state changes and collecting the
+post-consumption owner projection. Do not broaden lifecycle code or create
+SYN-040.
+
 ## CP-0500 REVIEW admission idempotency diagnostic
 
 The fresh post-fix diagnostic used project

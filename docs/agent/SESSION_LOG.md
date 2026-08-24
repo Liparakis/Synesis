@@ -1,5 +1,26 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0501 producer-polling diagnostic
+
+- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0501-002`
+  used the current bundled MCP (`0.1.0-SNAPSHOT`, protocol `2025-06-18`,
+  commit `bc334ac`, ten tools) and two independent GPT-5.6 Luna sessions.
+  Both reached distinct `ready / isolated` bindings and converged on
+  WorkGroup `1f8bc962-fbb5-376b-9f72-1e0b4135a495` with disjoint claims.
+- Exact REVIEW admission, owner `respond_coordination` acceptance, and
+  single-use grant consumption succeeded. No exact projected action failed.
+- The producer then stopped at ordinary `IMPLEMENT` with no executable action
+  before the reviewer consumed grant
+  `e6b09aa2-0cf8-35de-b80c-1e4180ccb6a7`. The reviewer consumed it and received
+  exact `WAIT` → `get_next_action`, but the producer no longer polled for the
+  post-consumption `finish_lane` projection. WorkGroup remained ACTIVE with no
+  snapshot, validation, or integration.
+- This is agent-compliance evidence, not a proven production defect. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0501-producer-polling-diagnostic-2026-08-24.md`.
+- Next action: run a fresh bounded diagnostic that keeps both agents alive
+  through peer-side progress and captures the post-consumption owner action.
+  Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0500 REVIEW admission idempotency diagnostic
 
 - Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0500-002`

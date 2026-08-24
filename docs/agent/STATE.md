@@ -1,5 +1,34 @@
 # State
 
+## SYN-039 CP-0501 producer-polling diagnostic
+
+The fresh project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0501-002` used the
+current bundled MCP and two independent GPT-5.6 Luna sessions. Both reached
+ten-tool `ready / isolated` sessions with disjoint claims and one WorkGroup
+`1f8bc962-fbb5-376b-9f72-1e0b4135a495`.
+
+The run reached exact REVIEW admission, owner `respond_coordination`
+acceptance, and consumption of single-use grant
+`e6b09aa2-0cf8-35de-b80c-1e4180ccb6a7`. Every concrete projected mutation
+succeeded. Before grant consumption, the producer received ordinary
+`IMPLEMENT` with no executable lifecycle action and stopped. The reviewer
+then consumed the grant and received `SNAPSHOT_PENDING` → `WAIT` with exact
+`get_next_action` arguments, but the producer no longer polled to receive the
+now-available `finish_lane` projection.
+
+No exact projected action failed, no snapshot or validation was produced, and
+the WorkGroup remained ACTIVE. This is agent-compliance evidence, not a proven
+production defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0501-producer-polling-diagnostic-2026-08-24.md`.
+
+Final fixture Doctor was DEGRADED with six warnings and no errors or critical
+findings. The recurring root Git subprocess stall, bootstrap migration
+failures, and Doctor warnings remain separate. The exact next action is a
+fresh bounded diagnostic that keeps both agents alive and returning to
+`get_next_action` after peer-side progress; do not change production lifecycle
+code from CP-0501 alone, push, or create SYN-040.
+
 ## SYN-039 CP-0500 REVIEW admission idempotency diagnostic
 
 The fresh project

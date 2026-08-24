@@ -2052,6 +2052,27 @@ Do not broaden cleanup, detached-agent retention, ownership, Doctor, or
 orchestration. The second ordinary acceptance remains deferred until this
 bounded diagnostic blocker is resolved. Do not create SYN-040 or push.
 
+## SYN-039 CP-0501 update
+
+The fresh bounded producer-first diagnostic used the current bundled MCP and
+two independent ten-tool `ready / isolated` sessions on project
+`1a67c646-9725-48ba-b6ec-63618ef2cd89`. Both agents held disjoint claims and
+converged on WorkGroup `1f8bc962-fbb5-376b-9f72-1e0b4135a495`.
+
+Exact REVIEW admission, owner acceptance, and consumption of grant
+`e6b09aa2-0cf8-35de-b80c-1e4180ccb6a7` succeeded. Before consumption, the
+producer's normal `IMPLEMENT` projection had no executable lifecycle action;
+the producer stopped. The reviewer then consumed the grant and received exact
+`WAIT` → `get_next_action`, but the producer was no longer polling for the
+post-consumption `finish_lane` projection. No exact projected action failed;
+the WorkGroup remained ACTIVE with no snapshot, validation, or integration.
+This is agent-compliance evidence, not a proven production defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0501-producer-polling-diagnostic-2026-08-24.md`.
+
+Exact next action: run another bounded diagnostic with both agents remaining
+alive through ordinary no-action/WAIT states and peer-side progress. Do not
+change production lifecycle code, push, or create SYN-040 from CP-0501 alone.
+
 ## SYN-039 CP-0500 update
 
 The fresh post-fix bounded diagnostic used the rebuilt current bundled MCP,
