@@ -1,5 +1,41 @@
 # Current Task
 
+## SYN-039 CP-0521 continuation diagnostic seed correction
+
+The bounded continuation diagnostic used a fresh project, but its seed already
+implemented `TodoList.complete`. Agent A correctly made no artificial edit,
+remained in `IMPLEMENT`, and never reached snapshot publication. Agent B
+correctly waited at `SNAPSHOT_PENDING`, later added its test, and passed 4/4;
+no snapshot, validation, integration, or closure occurred. This is invalid
+fixture/agent evidence, not a Synesis defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-invalid-seed-continuation-2026-08-24.md`.
+
+## Immediate next action
+
+Run a fresh bounded two-agent diagnostic with a genuinely missing
+`TodoList.complete` implementation, current bundled MCP, and the existing
+no-code completed-lane continuation harness. Preserve the first unchanged
+projected-action failure or missing usable action. If the diagnostic closes,
+run the ordinary acceptance with only the two coding prompts. Do not change
+production code, push, or create SYN-040 unless a concrete Synesis defect is
+reproduced.
+
+## Work completed
+
+CP-0521 invalid-seed evidence is recorded. No production code changed. The
+current MCP bundle, focused SYN-039 tests, validators, Go vet, and prior
+CP-0520 acceptance evidence remain preserved.
+
+## Current failures
+
+The overall ordinary acceptance remains incomplete. CP-0520 stopped because
+Agent A ended before reciprocal REVIEW-grant consumption; CP-0521 did not
+exercise that phase because its seed was already complete. No production
+protocol failure is currently proven. Doctor warnings, the root Git stall,
+and bootstrap migration failures remain separately classified.
+
 ## SYN-039 CP-0520 ordinary completed-lane acceptance
 
 The fresh ordinary acceptance used the current bundled MCP, two independent

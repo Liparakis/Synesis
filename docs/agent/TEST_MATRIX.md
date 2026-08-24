@@ -1,5 +1,7 @@
 # SYN-039 latest acceptance evidence
 
+| CP-0521 continuation diagnostic seed validity | fresh bounded continuation diagnostic | `syn039-continuation-cp0521-001`; evidence file above | the fixture presents genuinely incomplete coding work before lifecycle testing | FAIL/INVALID FIXTURE; `todo.py` already satisfied `complete()`, so A correctly made no change and WorkGroup `bb378922-3385-3c36-b8ac-98760163e56a` remained ACTIVE at SNAPSHOT_PENDING | SYN-039 / CP-0521 |
+
 | CP-0520 ordinary completed-lane acceptance | fresh ordinary two-agent acceptance | `syn039-ordinary-cp0520-001`; evidence file above | ordinary agents remain engaged through reciprocal review without a replacement coding intent | PARTIAL; A integrated `snap_41f8664537c23fe67293f8e08f740fa6`, B consumed the grant and ACCEPTed, but A ended before consuming reciprocal grant `22bc7d10-0337-31c9-9155-6de7f0130b73`; WorkGroup `5c1609bd-f88d-36e5-845b-0f07677e9ffe` remains ACTIVE | SYN-039 / CP-0520 |
 | CP-0520 final control and diagnostics | control checkout plus fixture Doctor | same evidence | integrated project is clean, tests pass, and final Doctor is healthy or explicitly accepted | CONTROL PASS: `b0db566`, pytest 3/3, diff check pass; SEPARATE: Doctor DEGRADED with 6 warnings, 0 errors, 0 critical findings | SYN-039 / CP-0520 |
 

@@ -1,5 +1,24 @@
 # State
 
+## SYN-039 CP-0521 continuation diagnostic seed correction
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-invalid-seed-continuation-2026-08-24.md`.
+
+The fresh bounded continuation diagnostic was invalid as a lifecycle test:
+the seed already implemented `TodoList.complete`, so Agent A correctly made no
+change and remained in `IMPLEMENT`. Agent B correctly waited at
+`SNAPSHOT_PENDING`, added its regression test after the snapshot gate became
+readable, and passed 4/4. WorkGroup
+`bb378922-3385-3c36-b8ac-98760163e56a` remained `ACTIVE`; no production defect
+or unchanged projected-action failure was proven.
+
+Immediate next action: rerun the bounded diagnostic with a genuinely missing
+no-op `TodoList.complete` seed, then exercise existing-session continuation
+only after a lane is actually `COMPLETED`. If it closes, run the ordinary
+acceptance without lifecycle coaching. Do not change production behavior for
+the invalid seed.
+
 ## SYN-039 CP-0520 ordinary completed-lane acceptance
 
 Evidence:

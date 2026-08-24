@@ -1,5 +1,22 @@
 # Failed Attempts
 
+## 2026-08-24 — SYN-039 CP-0521 invalid continuation seed
+
+- Attempted approach: Run the bounded completed-lane continuation diagnostic
+  with a fresh Git + Synesis Todo project and two independent agents.
+- Observed result: The seed already implemented `TodoList.complete`; A
+  correctly made no edit and stayed in `IMPLEMENT`. B waited at
+  `SNAPSHOT_PENDING`, later added its test and passed 4/4. No snapshot or
+  closure occurred in WorkGroup
+  `bb378922-3385-3c36-b8ac-98760163e56a`.
+- Root cause/classification: invalid acceptance fixture, not a Synesis
+  protocol defect. No unchanged projected action failed.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0521-invalid-seed-continuation-2026-08-24.md`.
+- Retry prohibition: Do not change production code. Rerun only with a
+  genuinely missing no-op `complete()` implementation so lifecycle evidence
+  is meaningful.
+
 ## 2026-08-24 — SYN-039 CP-0520 ordinary completed-lane engagement stop
 
 - Attempted approach: Run a fresh ordinary two-agent Todo acceptance with

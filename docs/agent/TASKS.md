@@ -1,5 +1,21 @@
 # Tasks
 
+## SYN-039 CP-0521 continuation diagnostic seed correction
+
+The bounded continuation diagnostic did not reach completed-lane continuation
+because its fresh seed already satisfied `TodoList.complete`. Agent A correctly
+refused an artificial edit and remained in `IMPLEMENT`; B waited at
+`SNAPSHOT_PENDING` and later passed its 4-test regression suite. No snapshot,
+validation, integration, or closure occurred.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-invalid-seed-continuation-2026-08-24.md`.
+
+No production defect is proven. The next narrow action is a bounded diagnostic
+with a genuinely missing no-op implementation, followed by the existing
+completed-lane continuation behavior. Do not modify production code for this
+fixture issue, push, or create SYN-040.
+
 ## SYN-039 CP-0520 ordinary completed-lane update
 
 The fresh ordinary acceptance reached the existing review path without a

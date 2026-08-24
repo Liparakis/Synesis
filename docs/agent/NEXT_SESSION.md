@@ -1,5 +1,22 @@
 # Next Session
 
+## CP-0521 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0521-invalid-seed-continuation-2026-08-24.md`.
+
+The continuation diagnostic used an invalid seed: `todo.py` already
+implemented `TodoList.complete`. A correctly made no edit and remained in
+`IMPLEMENT`; B waited at `SNAPSHOT_PENDING`, later passed 4/4, and no snapshot
+or closure occurred.
+
+- Exact next action: create a fresh bounded diagnostic with a genuinely missing
+  no-op `TodoList.complete` implementation, then retain completed sessions only
+  for already projected REVIEW actions. If it closes, run ordinary acceptance
+  with only the actual coding prompts.
+- Do not change production code, push, or create SYN-040 for this fixture
+  issue.
+
 ## CP-0520 continuation
 
 Evidence:

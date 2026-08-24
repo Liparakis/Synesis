@@ -1,3 +1,15 @@
+## 2026-08-24 — SYN-039 CP-0521 invalid continuation seed
+
+- Ran a fresh bounded continuation diagnostic with current bundled MCP and two
+  independent Codex sessions.
+- The seed already satisfied `TodoList.complete`; A correctly made no edit and
+  never reached `finish_lane`. B waited at `SNAPSHOT_PENDING`, later added its
+  regression test, and passed 4/4.
+- WorkGroup `bb378922-3385-3c36-b8ac-98760163e56a` remained ACTIVE. No
+  production code changed and no Synesis defect was proven.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0521-invalid-seed-continuation-2026-08-24.md`.
+
 ## 2026-08-24 — SYN-039 CP-0520 ordinary completed-lane acceptance
 
 - Ran a fresh Git + Synesis Todo project with the current bundled ten-tool MCP
