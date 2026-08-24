@@ -21,8 +21,10 @@ pytest `1 failed, 2 passed`; WorkGroup remains ACTIVE and grant
 No unchanged projected lifecycle action failed. This is agent/session
 projection compliance evidence; do not modify production lifecycle code.
 
-Immediate next action: run focused SYN-039 tests, validators, Doctor, and
-`git diff --check`, then create CP-0523. Keep the known Git stall, bootstrap
+Immediate next action: run a bounded provider-session continuity diagnostic at
+a fresh durable `WAIT → get_next_action({})` boundary, without lifecycle
+coaching. Implement only an unchanged projected-action failure; otherwise
+preserve the agent/session limitation. Keep the known Git stall, bootstrap
 migration failures, and Doctor warnings separate.
 
 ## SYN-039 CP-0522 valid diagnostic and ordinary acceptance

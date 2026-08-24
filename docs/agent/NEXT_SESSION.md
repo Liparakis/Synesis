@@ -1,5 +1,21 @@
 # Next Session
 
+## CP-0523 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0522-third-ordinary-2026-08-24.md`.
+
+The third ordinary acceptance remains partial at the agent/session boundary:
+A ignored a durable `WAIT → get_next_action({})` projection and selected
+unprojected reads/recovery, while B's exact snapshot publication succeeded.
+No unchanged projected lifecycle action failed; WorkGroup
+`e769b143-f9b0-337f-b06a-9eb1603c8cc9` remains ACTIVE.
+
+- Exact next action: run a bounded provider-session continuity diagnostic at a
+  fresh durable WAIT boundary without lifecycle coaching. Implement only an
+  unchanged projected-action failure; otherwise preserve the external
+  agent/session limitation. Do not push or create SYN-040.
+
 ## CP-0522 third ordinary acceptance
 
 Evidence:

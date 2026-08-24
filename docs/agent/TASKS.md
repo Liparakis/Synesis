@@ -19,8 +19,10 @@ No unchanged projected action failed. Preserve this as ordinary
 agent/session compliance evidence; do not change production code without a
 concrete Synesis protocol failure.
 
-The immediate bookkeeping action is focused verification followed by
-CP-0523. No push or SYN-040.
+The next narrow action is a bounded provider-session continuity diagnostic at
+a fresh durable `WAIT → get_next_action({})` boundary, without lifecycle
+coaching. No production change is justified unless an unchanged projected
+action fails. No push or SYN-040.
 
 ## SYN-039 CP-0522 valid diagnostic and ordinary acceptance update
 

@@ -24,10 +24,12 @@ agent executes the projected action despite its local failing test.
 
 ## Immediate next action
 
-Do not change production code for CP-0522. First run focused SYN-039 tests,
-validators, Doctor, and `git diff --check`, then create CP-0523. Preserve the
-exact ordinary blocker; any production slice requires an unchanged projected
-action to fail or a valid active lane to have no usable projected action.
+Keep production code unchanged. Run a bounded provider-session continuity
+diagnostic at a fresh durable `WAIT → get_next_action({})` boundary, recording
+whether the ordinary Codex session can execute the unchanged projection and
+continue to the next action without lifecycle coaching. Implement only a
+concrete unchanged projected-action failure; otherwise preserve the
+agent/session limitation. Do not push or create SYN-040.
 
 ## Work completed
 
