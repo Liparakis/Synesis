@@ -1,5 +1,31 @@
 # State
 
+## SYN-039 CP-0505 exact-projection diagnostic
+
+The fresh CP-0505 project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0505-001` used the
+current bundled MCP (`0.1.0-SNAPSHOT`, protocol `2025-06-18`, commit
+`bc334ac`, ten tools) and two independent GPT-5.6 Luna sessions. Both reached
+distinct `ready / isolated` bindings and one WorkGroup
+`35aa138a-a6bf-389a-a4b5-e7bbe66024ec` with disjoint claims at epoch 1.
+
+The run reached exact REVIEW admission, idempotent request replay, owner
+acceptance, and exact single-use REVIEW grant consumption. Grant
+`a92067d7-7d0f-365b-b514-7b3efb314428` was consumed once. Every concrete
+projected action succeeded. The agents then stopped after exact `WAIT` →
+`get_next_action({})` continuations while the producer had not yet polled
+after grant consumption. No snapshot, validation, integration, or closure was
+reached; WorkGroup remained `ACTIVE`. This is agent-compliance evidence, not
+a proven production defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0505-exact-rule-diagnostic-2026-08-24.md`.
+
+Fixture Doctor was `DEGRADED` with six warnings and no errors or critical
+findings. The known root Git subprocess stall, bootstrap migration failures,
+and Doctor warnings remain separately classified. No production code changed.
+The exact next action is another fresh bounded diagnostic keeping both agents
+alive through post-consumption polling and peer snapshot publication. Do not
+push or create SYN-040.
+
 ## SYN-039 CP-0503 post-fix producer-polling diagnostic
 
 CP-0502 established and fixed the missing owner-side continuation projection.

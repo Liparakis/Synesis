@@ -2,6 +2,9 @@
 
 | Invariant | Automated check | Fixture | Expected result | Latest result | Evidence |
 |---|---|---|---|---|---|
+| Exact projected lifecycle actions are executable and grant replay remains idempotent | fresh two-agent exact-projection diagnostic | `syn039-cp0505-001` | REVIEW admission → acceptance → grant consumption succeeds; agents continue to publication | PASS through grant consumption; agents stopped during exact WAIT continuation; no projected mutation failed | SYN-039 / CP-0505 |
+| Post-grant producer polling reaches snapshot publication, validation, integration, and closure | fresh two-agent exact-projection diagnostic | `syn039-cp0505-001` | both agents remain alive through peer-side grant consumption and publication | NOT REACHED; WorkGroup remained ACTIVE with no snapshot or validation | SYN-039 / CP-0505 |
+| Final Doctor is healthy or explicitly accepted non-blocking warnings remain | fixture Doctor | `syn039-cp0505-001` | healthy or accepted warnings only | FAIL; DEGRADED with six warnings, zero errors, zero critical findings | SYN-039 / CP-0505 |
 | Owner with an issued current-epoch REVIEW grant remains discoverably active without extra authority | `McpSyn039SliceTest.missingGrantRequestBecomesOwnerAuthorizedReviewAdmission` | deterministic MCP review fixture | `WAIT` with exact grant context and `get_next_action({})` | PASS | CP-0502 / CP-0503 |
 | Existing grant, participant, intent, epoch, snapshot, and WorkGroup fencing remains fail-closed | focused MCP/workspace tests | REVIEW grant and publication fixtures | no ownership or grant bypass | PASS | CP-0503 |
 | Post-fix producer publication remains executable | `McpSyn039SliceTest.projectedFinishLanePublishesImmutableSnapshotVisibleToReviewerDespitePythonCache` | deterministic MCP review fixture | exact `finish_lane` publishes immutable snapshot | PASS | CP-0503 |

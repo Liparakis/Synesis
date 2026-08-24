@@ -1,5 +1,32 @@
 # Next Session
 
+## CP-0505 continuation
+
+The fresh CP-0505 diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0505-001`, the current
+bundled MCP, and two independent GPT-5.6 Luna sessions. Both reached
+ten-tool `ready / isolated` sessions and one WorkGroup
+`35aa138a-a6bf-389a-a4b5-e7bbe66024ec` with disjoint claims at epoch 1.
+
+Exact REVIEW admission, idempotent request replay, owner acceptance, and
+single-use grant consumption all succeeded. Grant
+`a92067d7-7d0f-365b-b514-7b3efb314428` was consumed exactly once. Both agents
+then stopped after executing the exact `WAIT` → `get_next_action({})`
+continuation; the producer did not poll again after grant consumption, so no
+snapshot, validation, integration, or closure was reached. No exact projected
+action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0505-exact-rule-diagnostic-2026-08-24.md`.
+
+- Exact next action: run one fresh bounded diagnostic with both agents kept
+  alive after grant consumption and after peer-side snapshot publication;
+  capture the first later projection and immediately following action.
+- If an exact projected tool fails, preserve its complete arguments and state
+  as the next production blocker. If an agent stops while an exact
+  `get_next_action` continuation remains, record agent-compliance evidence and
+  do not change lifecycle code.
+- Do not push or create SYN-040. Keep Doctor warnings, the Git subprocess
+  stall, and bootstrap migration failures separate unless directly causal.
+
 ## CP-0503 continuation
 
 The CP-0502 owner-side projection defect is fixed and covered. CP-0503 proves

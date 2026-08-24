@@ -12,6 +12,32 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0505 exact-projection diagnostic
+
+The fresh project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0505-001` used the
+current bundled MCP and two independent GPT-5.6 Luna sessions. Both sessions
+used the same project, exactly ten tools, and distinct `ready / isolated`
+bindings. They converged on WorkGroup
+`35aa138a-a6bf-389a-a4b5-e7bbe66024ec` with disjoint `todo.py` and
+`test_todo.py` claims at epoch 1.
+
+The diagnostic reached exact REVIEW admission, idempotent replay of the same
+request projection, owner `respond_coordination` acceptance, and consumption
+of single-use grant
+`a92067d7-7d0f-365b-b514-7b3efb314428`. Every concrete projected lifecycle
+action succeeded. Both agents then stopped while `get_next_action({})` was
+the exact executable `WAIT` continuation: the reviewer had not yet seen the
+post-consumption snapshot-publication projection, and no snapshot, validation,
+integration, or closure was reached. This is agent-compliance evidence, not a
+new production defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0505-exact-rule-diagnostic-2026-08-24.md`.
+
+No production code changed for CP-0505. The next action is a fresh bounded
+diagnostic that keeps both sessions alive through grant consumption and peer
+snapshot publication, capturing the first later projected action or failure.
+Do not push or create SYN-040.
+
 ## CP-0503 post-fix producer-polling diagnostic
 
 The CP-0502 reproduction proved a concrete owner-side projection gap: an

@@ -2,6 +2,21 @@
 
 Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
+## SYN-039 CP-0505 update
+
+CP-0505 reached exact REVIEW admission, idempotent admission replay, owner
+acceptance, and single-use grant consumption with two independent agents. No
+projected lifecycle action failed. Both agents stopped after executing the
+projected `WAIT` → `get_next_action({})` continuation before the producer
+polled after grant consumption, leaving the WorkGroup `ACTIVE` with no
+snapshot, validation, integration, or closure. This is agent-compliance
+evidence, not a proven production defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0505-exact-rule-diagnostic-2026-08-24.md`.
+
+The active task remains SYN-039. The next slice is a bounded continuation
+diagnostic through post-consumption polling and peer snapshot publication; do
+not broaden lifecycle code, push, or create SYN-040.
+
 ## SYN-039 CP-0503 update
 
 The CP-0502 owner-side continuation defect is implemented narrowly. An active
