@@ -2021,3 +2021,33 @@ authority for that completed participant. Completed write mutation and
 ownership must remain closed. The recurring Git stall, bootstrap migration
 failures, and Doctor warnings remain separately classified. Do not create
 SYN-040 or push.
+
+## SYN-039 CP-0499 update
+
+The fresh CP-0499 post-fix bounded diagnostic used the current bundled MCP,
+two independent GPT-5.6 Luna sessions, and fresh project
+`ac5d791a-9f5f-419c-8252-5261c090931b`. Both agents preflighted exactly ten
+tools and `ready / isolated` sessions with disjoint `todo.py` and
+`test_todo.py` claims. WorkGroup
+`3621a4f6-6b2b-3379-9174-9cdcb45b8186` reached exact REVIEW admission, owner
+acceptance, grant consumption, projected `finish_lane`, immutable snapshot
+publication, integration, and structured ACCEPT validation. No exact
+projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0499-postfix-diagnostic-2026-08-24.md`.
+
+The first remaining lifecycle blocker is a missing completion projection for
+the active reviewer lane. Agent B's `test_todo.py` intent remains
+`ANNOUNCED`/ACTIVE after its visible work and the accepted review, but final
+`get_next_action` returns ordinary IMPLEMENT with no executable lifecycle
+action. The WorkGroup remains ACTIVE, B's test snapshot is not published, and
+clean closure does not occur. The same exact admission projection also
+created three duplicate REVIEW requests and three single-use grants when the
+agent followed the still-actionable request projection; no grant replay or
+authorization bypass occurred.
+
+The next narrow slice is to reproduce the post-ACCEPT active-reviewer
+no-action state, trace the existing publication/finish projection, and add
+deterministic coverage for the repeated admission projection/idempotency.
+Do not broaden cleanup, detached-agent retention, ownership, Doctor, or
+orchestration. The second ordinary acceptance remains deferred until this
+bounded diagnostic blocker is resolved. Do not create SYN-040 or push.

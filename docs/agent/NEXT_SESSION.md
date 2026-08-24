@@ -1,5 +1,32 @@
 # Next Session
 
+## CP-0499 continuation
+
+The fresh CP-0499 post-fix diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0499-003`, the current
+bundled MCP, and two independent GPT-5.6 Luna sessions. Both agents used the
+same project pin, exactly ten tools, and distinct `ready / isolated` sessions.
+They converged on WorkGroup
+`3621a4f6-6b2b-3379-9174-9cdcb45b8186` and executed exact projected REVIEW
+admission, owner acceptance, grant consumption, producer snapshot
+publication, integration, and structured ACCEPT validation. No exact
+projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0499-postfix-diagnostic-2026-08-24.md`.
+
+The first unresolved state is that Agent B's own active `test_todo.py` intent
+remains live after ACCEPT, but its final `get_next_action` returns ordinary
+`IMPLEMENT` with no executable lifecycle action. The WorkGroup remains
+`ACTIVE`; B's test snapshot was never published and clean closure did not
+occur. The same run also generated three requests and three single-use grants
+for repeated identical REVIEW admission projections.
+
+- Exact next code action: reproduce this post-ACCEPT active-reviewer no-action
+  state, trace why the existing model does not project B's publication/finish
+  or a terminal closure action, and cover the repeated-admission projection in
+  the same focused regression. Do not modify cleanup, ownership, Doctor, or
+  broad orchestration. Do not run the ordinary second acceptance until this
+  bounded slice is understood. Do not push or create SYN-040.
+
 ## CP-0498 continuation
 
 The fresh CP-0498 diagnostic used project

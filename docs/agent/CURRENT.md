@@ -12,6 +12,35 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0499 post-fix bounded diagnostic
+
+The fresh CP-0499 diagnostic used project
+`ac5d791a-9f5f-419c-8252-5261c090931b`, the current bundled MCP, and two
+independent GPT-5.6 Luna sessions. Both agents preflighted exactly ten tools,
+reached `ready / isolated`, held disjoint `todo.py` / `test_todo.py` claims,
+and converged on WorkGroup
+`3621a4f6-6b2b-3379-9174-9cdcb45b8186`.
+
+The post-fix diagnostic reached exact REVIEW admission, owner acceptance,
+grant consumption, projected producer `finish_lane`, immutable snapshot
+publication, integration, and structured ACCEPT validation. No exact
+projected action failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0499-postfix-diagnostic-2026-08-24.md`.
+
+The first remaining protocol blocker is after ACCEPT: Agent B's own active
+intent remains `ANNOUNCED`, the WorkGroup remains `ACTIVE`, and its final
+`get_next_action` returns ordinary `IMPLEMENT` with no executable lifecycle
+action, so the reviewer lane cannot publish/finish and the WorkGroup cannot
+close. The same run also produced three duplicate REVIEW requests and grants
+because the same successful admission projection remained actionable; this is
+related idempotency/projection evidence, not a grant replay bypass.
+
+The exact next action is to reproduce the post-ACCEPT active-reviewer
+no-action state and trace the existing completion/publication projection, with
+duplicate REVIEW admission handled in the same narrow trace. Do not broaden
+into cleanup, detached-agent retention, ownership redesign, or a new
+orchestrator. Do not push or create SYN-040.
+
 ## CP-0498 completed-review continuity diagnostic
 
 The fresh CP-0498 diagnostic used project
@@ -199,25 +228,31 @@ fresh isolated worktree. Deterministic workspace/MCP regressions, focused
 Javadocs, bundle rebuild, validators, and diff checks pass. CP-0497 proves
 exact admission, grant consumption, exact producer publication, immutable
 snapshot creation, integration, reviewer recovery, and exact ACCEPT decisions
-on the rebuilt bundle.
+on the rebuilt bundle. CP-0498 completed-participant continuity is committed
+in `ca6d644`; its deterministic review-only projection and authority tests
+pass. CP-0499 then proved the next active-reviewer no-action blocker after
+ACCEPT. The bounded evidence is recorded in
+`docs/evidence/syn039-unattended-todo-cp0499-postfix-diagnostic-2026-08-24.md`.
 
 ## Current failures
 
-CP-0498 verified the truthful ACCEPT status but ended with B terminally
-`COMPLETED` while A's sibling lane remained active and unpublished. The next
-implementation slice is limited to same-WorkGroup review-only continuity for
-completed participants: project the existing REVIEW action, permit only the
-existing targeted grant/review operations, and keep completed write mutation
-closed. The recurring Git subprocess stall, bootstrap migration failures, and
-six fixture Doctor warnings remain separate.
+CP-0499 verified the truthful ACCEPT status and completed-participant review
+continuity, but ended with B's active reviewer intent still live while its
+final `get_next_action` returned ordinary IMPLEMENT with no executable
+lifecycle action. The WorkGroup remained ACTIVE and B's visible test work had
+no snapshot. The same run produced three duplicate REVIEW requests/grants
+from a still-actionable identical admission projection. The recurring Git
+subprocess stall, bootstrap migration failures, and six fixture Doctor
+warnings remain separate.
 
 ## Immediate next action
 
-Run focused workspace/MCP coordination tests for completed-participant
-review-only projection and authority, rebuild the bundled MCP, then run a fresh
-bounded two-agent diagnostic followed by the ordinary acceptance only if the
-diagnostic reaches clean closure. Do not reopen completed write claims, broaden
-cleanup, push, or create SYN-040.
+Reproduce the CP-0499 post-ACCEPT active-reviewer no-action state with a
+deterministic coordination/MCP fixture, trace why the existing model does not
+project the reviewer's publication/finish or a terminal closure action, and
+cover the repeated identical REVIEW admission projection. Implement only that
+narrow production fix if the fixture confirms it. Do not broaden cleanup,
+ownership, Doctor, push, or create SYN-040.
 
 ## CP-0480 convergence projection slice
 

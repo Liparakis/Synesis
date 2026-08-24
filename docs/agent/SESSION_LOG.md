@@ -1,5 +1,29 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0499 post-fix bounded diagnostic
+
+- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0499-003`
+  used the current bundled MCP and two independent GPT-5.6 Luna sessions.
+  Both agents preflighted exactly ten tools and distinct `ready / isolated`
+  bindings on the same project root, with disjoint `todo.py` and
+  `test_todo.py` claims.
+- WorkGroup `3621a4f6-6b2b-3379-9174-9cdcb45b8186` reached exact REVIEW
+  admission, owner acceptance, grant consumption, projected producer
+  `finish_lane`, immutable snapshot publication
+  `snap_d03b1424511d73cbf6d1e13ed23937de`, integration, and structured ACCEPT.
+  No exact projected action failed.
+- The first remaining blocker is a missing post-ACCEPT completion projection:
+  Agent B's active intent remains live, but final `get_next_action` returns
+  ordinary IMPLEMENT with no executable lifecycle action. The WorkGroup is
+  ACTIVE, B's test snapshot is unpublished, and clean closure does not occur.
+  The same admission projection also produced three duplicate requests and
+  three single-use grants; no grant replay bypass occurred.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0499-postfix-diagnostic-2026-08-24.md`.
+  The next action is a narrow trace/regression of the active-reviewer
+  post-ACCEPT projection and repeated admission idempotency. Do not push or
+  create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0498 completed-review continuity diagnostic
 
 - Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0498-001`
