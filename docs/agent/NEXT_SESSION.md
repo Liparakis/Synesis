@@ -1,5 +1,25 @@
 # Next Session
 
+## CP-0512 continuation
+
+CP-0512 exact-action diagnostic reached two reciprocal REVIEW admissions,
+grant consumption, both `finish_lane` snapshot publications/integrations,
+and one structured ACCEPT. The WorkGroup remained ACTIVE because Agent A
+stopped after repeated `WAIT -> get_next_action` projections before polling
+again after B's second snapshot. CP-0511 ordinary acceptance separately
+shows A using `get_next_action({integrationCheck:{...}})` after coding and
+stopping before lifecycle progress. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0512-exact-action-diagnostic-2026-08-24.md`
+and `docs/evidence/syn039-unattended-todo-cp0511-ordinary-2026-08-24.md`.
+
+Exact next action: inspect the current `get_next_action` catalog schema,
+generated `AGENTS.md`, and provider manual wording for the legal timing of
+`integrationCheck` and the required continuation semantics for projected
+`WAIT -> get_next_action`. If ambiguity is proven, make only that narrow
+agent-facing clarification and deterministic contract coverage; otherwise
+record CP-0511/CP-0512 as agent-compliance evidence and run the next fresh
+ordinary acceptance. Do not modify lifecycle code, push, or create SYN-040.
+
 ## CP-0510 continuation
 
 CP-0509 proved and fixed a projection defect where review validation was

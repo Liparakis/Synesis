@@ -1,5 +1,24 @@
 # State
 
+## SYN-039 CP-0512 exact-action diagnostic
+
+CP-0512 proved that the existing protocol can execute reciprocal REVIEW
+admission, exact owner responses, single-use grants, two immutable snapshot
+publications, two integrations, and one structured ACCEPT without harness
+intervention. WorkGroup `1bc03f52-15e9-332e-ab08-1d4ffb8c88ab` remained
+`ACTIVE` because Agent A stopped during the second review's projected
+`WAIT -> get_next_action` continuation before observing the sibling snapshot.
+No exact projected call failed and no production lifecycle defect is proven.
+CP-0511 additionally records an ordinary agent using the optional
+`integrationCheck` overload after coding, which returned accepted with no
+actions and caused an early stop. Evidence is in the two CP-0511/CP-0512
+files under `docs/evidence/`.
+
+Immediate state: preserve lifecycle code; inspect only the catalog, generated
+AGENTS guidance, and provider manual for whether these two agent choices are
+contract ambiguities. Doctor remains DEGRADED with six warnings; root Git
+stall and bootstrap migration failures remain separate.
+
 ## SYN-039 CP-0510 review-decision postfix verification
 
 CP-0509 demonstrated that a review-validation projection labeled

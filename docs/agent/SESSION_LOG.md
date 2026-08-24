@@ -1,5 +1,27 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0511/CP-0512 acceptance evidence
+
+- CP-0511 ordinary acceptance used only complementary visible coding prompts.
+  A implemented `todo.py` and then used the optional `integrationCheck`
+  argument on `get_next_action`, which returned accepted with no actions; B
+  reached the exact owner response and a REVIEW grant but stopped at WAIT.
+  No accepted snapshot was falsely classified as `TESTS_FAILED`.
+- CP-0512 exact-action diagnostic used the current bundled MCP and the exact
+  projected-action rule. Reciprocal REVIEW admissions, grants, snapshots,
+  integrations, and one structured ACCEPT passed. Agent A stopped during the
+  second review's projected WAIT continuation before reciprocal validation.
+  No exact projected action failed; WorkGroup remained ACTIVE.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0511-ordinary-2026-08-24.md` and
+  `docs/evidence/syn039-unattended-todo-cp0512-exact-action-diagnostic-2026-08-24.md`.
+- Doctor for both fixtures: DEGRADED with six warnings, zero errors and zero
+  critical findings. Known root Git subprocess stall and bootstrap migration
+  failures remain separate.
+- Exact next action: inspect whether `integrationCheck` timing and WAIT
+  continuation are unambiguous in the catalog and generated/provider
+  guidance; change only an evidenced contract ambiguity.
+
 # 2026-08-24 — SYN-039 CP-0510 review-decision postfix verification
 
 - CP-0509 proved that review validation was projected as executable

@@ -1,6 +1,23 @@
 # Current Task
 
-## SYN-039 CP-0510 review-decision postfix verification
+## SYN-039 CP-0512 exact-action diagnostic
+
+CP-0512 used a fresh project and the current bundled MCP with two independent
+GPT-5.6 Luna sessions, disjoint epoch-1 claims, and one shared WorkGroup.
+Both reciprocal REVIEW admissions, exact owner responses, single-use grant
+consumption, both immutable snapshot publications, both integrations, and
+one exact structured ACCEPT completed. The first remaining stop was Agent A
+ending after repeated `WAIT -> get_next_action` projections before polling
+again after the sibling's second snapshot publication. No exact projected
+action failed and no new production defect is proven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0512-exact-action-diagnostic-2026-08-24.md`.
+
+CP-0511's ordinary acceptance is separately recorded: Agent A used the
+optional `get_next_action({integrationCheck:{...}})` overload after coding and
+stopped before the durable review flow; B reached a valid grant but stopped
+at WAIT. This is agent-facing contract/compliance evidence, not a false
+accepted-snapshot integration result. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0511-ordinary-2026-08-24.md`.
 
 CP-0509 proved a production projection defect: review validation was exposed
 as executable `respond_coordination` while its projected payload omitted the
@@ -19,23 +36,33 @@ snapshot publication, and integration reached the corrected review projection.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0510-review-decision-postfix-2026-08-24.md`.
 
+CP-0512 also proves reciprocal exact-action publication/integration and one
+structured ACCEPT; the durable evidence is recorded in the CP-0512 evidence
+file above. No production code changed for that diagnostic.
+
 ## Current failures
 
-The corrected reviewer projection reached Agent A as
-`nextAction=review_decision` with exact grant/snapshot/intent/epoch context,
-explicit `accepted`/`rejected` choices, and no executable tool recommendation.
-The first later deviation was Agent B changing the exact projected A-intent
-ID in a `work_group_join` call; Synesis returned fail-closed
-`INTENT_NOT_FOUND`. The WorkGroup remains `ACTIVE`; no new production defect
-is proven. Reciprocal validation, A's snapshot, final integration, cleanup,
-and closure remain unproven. Doctor is `DEGRADED` with six separate warnings.
+The exact-action diagnostic now proves the reciprocal path through two
+published/integrated snapshots and one structured ACCEPT, but it still does
+not prove reciprocal validation or clean WorkGroup closure. Agent A stopped
+while Synesis was projecting the safe continuation `WAIT -> get_next_action`
+before the second snapshot became visible. The ordinary CP-0511 run also
+shows that the optional `integrationCheck` overload can look terminal to an
+ordinary agent even though no lifecycle action was projected. These are the
+next agent-facing continuation/contract questions; no lifecycle redesign is
+justified. Doctor remains `DEGRADED` with six unrelated warnings.
 
 ## Immediate next action
 
-Run a fresh completely ordinary unattended two-agent acceptance using only
-the complementary coding prompts and the current bundled MCP. Do not add
-lifecycle coaching, relay messages, trigger transitions, or modify production
-code for the CP-0510 argument typo.
+Inspect and classify the two remaining agent-facing stops from CP-0511 and
+CP-0512: the optional `integrationCheck` overload after ordinary coding and
+premature termination during projected `WAIT -> get_next_action`. Verify the
+catalog, generated `AGENTS.md`, and provider manual contract before making
+any change. If the contract is already unambiguous, preserve these as
+agent-compliance evidence; otherwise make only the smallest agent-facing
+clarification, add deterministic contract coverage, rebuild the bundle, and
+rerun a fresh ordinary acceptance. Do not change lifecycle semantics, push,
+or create SYN-040.
 
 ## SYN-039 CP-0508 review-decision postfix diagnostic
 

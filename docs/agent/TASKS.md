@@ -1,5 +1,22 @@
 # Tasks
 
+## SYN-039 CP-0512 update
+
+CP-0512 exact-action diagnostic used the current bundled MCP, two independent
+GPT-5.6 Luna sessions, one shared WorkGroup, and disjoint epoch-1 claims.
+Exact REVIEW admission, owner responses, both single-use grants, both
+immutable snapshot publications/integrations, and one structured ACCEPT
+passed. Agent A then stopped after repeated projected WAIT continuations
+before reciprocal validation; no exact projected action failed. CP-0511's
+ordinary run separately stopped when Agent A used the optional
+`integrationCheck` overload as a terminal-looking pre-merge check. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0512-exact-action-diagnostic-2026-08-24.md`
+and `docs/evidence/syn039-unattended-todo-cp0511-ordinary-2026-08-24.md`.
+
+No production lifecycle change is justified yet. Inspect the agent-facing
+catalog/manual/guidance contract for those two choices and change only an
+ambiguous contract, if proven. The active task remains SYN-039.
+
 ## SYN-039 CP-0510 update
 
 The CP-0509 production projection defect is fixed narrowly. Review validation
