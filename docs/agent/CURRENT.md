@@ -12,6 +12,63 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0507 exact-projection diagnostic
+
+The fresh project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0507-001` used the
+rebuilt current bundled MCP and two independent GPT-5.6 Luna sessions. Both
+passed the ten-tool, same-project, distinct `ready / isolated` preflight and
+converged on WorkGroup `9b605c00-d45c-34e6-a9dd-f0ad4d31be3b` with disjoint
+epoch-1 claims.
+
+The CP-0506 publication guard worked: Agent A implemented `todo.py`, executed
+the exact projected `finish_lane`, published snapshot
+`snap_760b1bf37251e2c2f64e92e73ece42a9`, and integrated commit
+`804fe64f18b3f261d6f25750aef9f64ab4333b33` into control commit `c6af41d`.
+No false empty-lane `finish_lane` projection occurred.
+
+The first later blocker is a concrete validation projection defect. After
+Agent B consumed REVIEW grant `4c3eae33-35d4-3015-bdcf-bf84895f6aad`,
+`get_next_action` projected exact `respond_coordination` / `review_validation`
+arguments with `result: "accepted|rejected"`. Agent B executed those exact
+arguments; the server correctly rejected the invalid enum with
+`COORDINATION_RESPONSE_INVALID_RESULT`. No validation decision or WorkGroup
+closure was recorded. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0507-review-result-projection-2026-08-24.md`.
+
+## Work completed
+
+The CP-0506 publication projection now checks the snapshot service's
+read-only changed-path and artifact-policy precondition before recommending
+`finish_lane`. Deterministic MCP coverage proves an empty lane does not
+receive an unexecutable publication action and a changed lane still publishes
+an immutable snapshot visible to the reviewer. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0506-premature-finish-projection-2026-08-24.md`.
+
+Focused MCP and workspace tests pass, the current platform bundle was rebuilt,
+and the CP-0507 exact diagnostic reached publication and integration. No
+review-validation production change has been made for the new blocker.
+
+## Current failures
+
+The review-validation projection exposes the documentation placeholder
+`accepted|rejected` as if it were an executable decision. The exact projected
+tool fails closed with `policy_denied` / `COORDINATION_RESPONSE_INVALID_RESULT`.
+The WorkGroup remains ACTIVE with Agent A completed/integrated and Agent B's
+review unresolved. Doctor remains DEGRADED with six warnings. The known Git
+subprocess stall, bootstrap migration failures, and Doctor warnings remain
+separately classified unless the next focused reproduction connects them to
+validation projection.
+
+## Immediate next action
+
+Trace the review-validation projection from `reviewActions` through
+`AgentWorkflowReducer` and the MCP response contract; make the smallest fix
+that exposes a valid structured ACCEPT/REJECT decision contract without
+auto-selecting a result, then add deterministic valid-ACCEPT, valid-REJECT,
+invalid, stale, and replay coverage. Do not broaden cleanup, ownership,
+orchestration, Doctor, or create SYN-040.
+
 ## CP-0505 exact-projection diagnostic
 
 The fresh project

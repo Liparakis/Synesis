@@ -90,6 +90,8 @@ final class McpSyn039SliceTest {
                 bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), Path.of(binding.worktreePath()));
             }
         }
+        Path ownerWorktree = Path.of(bindings.find(location, "codex", "syn039-owner")
+                .orElseThrow().worktreePath());
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var claim = collaboration.announce(project, "codex", "syn039-owner",
                 "Implement Todo", "Review the completed Todo snapshot",
@@ -199,6 +201,8 @@ final class McpSyn039SliceTest {
                         + "\"targetParticipant\":\"" + grant.get("targetParticipant") + "\"}}"));
         assertTrue(consumed.contains("\\\"status\\\":\\\"completed\\\""), consumed);
 
+        Files.writeString(ownerWorktree.resolve("todo.py"),
+                "def add_todo(items, item):\n    return [*items, item]\n\n\ndef complete_todo(items, item):\n    return [value for value in items if value != item]\n");
         String ownerPublication = owner.handleMessage(toolCall("get_next_action", "{}"));
         assertTrue(ownerPublication.contains("snapshot_publication_required"), ownerPublication);
         assertTrue(ownerPublication.contains("finish_lane"), ownerPublication);
@@ -259,9 +263,36 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void emptyLaneDoesNotProjectUnexecutableFinishLaneAfterReviewGrantConsumption(
+            @TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+
+        String rejected = fixture.owner.handleMessage(toolCall("finish_lane",
+                "{\"summary\":\"Publish the completed immutable snapshot\"}"));
+        assertTrue(rejected.contains("\\\"task_not_ready\\\""), rejected);
+
+        Map<String, Object> projection = innerResult(
+                fixture.owner.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("ready", projection.get("status"), projection.toString());
+        assertFalse("snapshot_publication_required".equals(projection.get("reason")), projection.toString());
+        Map<String, Object> result = (Map<String, Object>) projection.get("result");
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        assertEquals("IMPLEMENT", workflow.get("type"), projection.toString());
+        assertFalse(workflow.containsKey("recommendedTool"), workflow.toString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void projectedFinishLanePublishesImmutableSnapshotVisibleToReviewerDespitePythonCache(
             @TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);
+
+        Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
+                "def add_todo(items, item):\n    return [*items, item]\n\n\ndef remove_todo(items, item):\n    return [value for value in items if value != item]\n");
+        Files.createDirectories(fixture.ownerWorktree.resolve("__pycache__"));
+        Files.write(fixture.ownerWorktree.resolve("__pycache__/todo.cpython-313.pyc"),
+                new byte[] {0x42, 0x43, 0x48});
+
         String ownerPublication = fixture.owner.handleMessage(toolCall("get_next_action", "{}"));
         Map<String, Object> projection = innerResult(ownerPublication);
         assertEquals("snapshot_publication_required", projection.get("reason"));
@@ -275,11 +306,6 @@ final class McpSyn039SliceTest {
         Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
         assertEquals(Map.of("summary", "Publish the completed immutable snapshot"), arguments);
 
-        Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
-                "def add_todo(items, item):\n    return [*items, item]\n\n\ndef remove_todo(items, item):\n    return [value for value in items if value != item]\n");
-        Files.createDirectories(fixture.ownerWorktree.resolve("__pycache__"));
-        Files.write(fixture.ownerWorktree.resolve("__pycache__/todo.cpython-313.pyc"),
-                new byte[] {0x42, 0x43, 0x48});
         String published = fixture.owner.handleMessage(toolCall("finish_lane", ProviderJson.write(arguments)));
         Map<String, Object> publishedResult = (Map<String, Object>) innerResult(published).get("result");
         assertEquals("PUBLISHED", publishedResult.get("snapshotState"), published);

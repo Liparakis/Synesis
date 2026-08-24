@@ -58,6 +58,37 @@ public final class TaskSnapshotService {
     }
 
     /**
+     * Checks whether the worker worktree currently contains at least one
+     * publishable source change.
+     *
+     * <p>This is the read-only precondition used by next-action projection
+     * before recommending {@code finish_lane}. It deliberately mirrors the
+     * changed-path and artifact-policy portion of {@link #createSnapshot} so
+     * a projected publication action cannot be emitted for an empty or
+     * rejected snapshot.
+     *
+     * @param workerWorktreePath absolute worker worktree path
+     * @return {@code true} when snapshot creation can observe a valid source
+     *         change; {@code false} for an empty, artifact-only, or rejected
+     *         change set
+     * @throws IOException if Git inspection fails
+     */
+    public boolean hasPublishableChanges(Path workerWorktreePath) throws IOException {
+        Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
+        boolean dirty = !runGitOutput(workerWorktreePath,
+                "status", "--porcelain", "--untracked-files=all").isBlank();
+        String headCommit = gitRevParse(workerWorktreePath, "HEAD");
+        String baseCommit = dirty ? headCommit : deriveBaseCommit(workerWorktreePath);
+        List<String> allChangedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
+        SnapshotArtifactPolicy.Manifest manifest = artifactPolicy.classify(allChangedPaths);
+        if (!manifest.valid()) {
+            return false;
+        }
+        return allChangedPaths.stream()
+                .anyMatch(path -> !manifest.allowedArtifacts().contains(path));
+    }
+
+    /**
      * Creates or recovers an immutable task snapshot record for a worker's task.
      *
      * @param taskId               task UUID

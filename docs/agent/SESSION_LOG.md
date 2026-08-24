@@ -1,5 +1,29 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0507 validation-result projection diagnostic
+
+- Fresh project `syn039-cp0507-001` used the rebuilt current bundled MCP and
+  two independent GPT-5.6 Luna sessions. Both reached ten-tool
+  `ready / isolated` sessions, distinct worktrees, disjoint claims, and one
+  WorkGroup `9b605c00-d45c-34e6-a9dd-f0ad4d31be3b`.
+- Agent A followed ordinary `IMPLEMENT`, implemented `todo.py`, passed the
+  visible pytest suite, executed the exact projected `finish_lane`, published
+  `snap_760b1bf37251e2c2f64e92e73ece42a9`, and integrated it.
+- Agent B consumed REVIEW grant
+  `4c3eae33-35d4-3015-bdcf-bf84895f6aad`. Synesis projected exact validation
+  arguments containing literal `result: "accepted|rejected"`; B executed them
+  unchanged and received `policy_denied` /
+  `COORDINATION_RESPONSE_INVALID_RESULT`.
+- WorkGroup stayed ACTIVE with no validation decision or closure. This is a
+  concrete production projection defect. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0507-review-result-projection-2026-08-24.md`.
+- Focused MCP/workspace tests, validators, and the bundle build were already
+  green for the CP-0506 slice. Doctor remains DEGRADED with six warnings; the
+  Git subprocess stall and bootstrap migration failures remain separate.
+- Exact next action: trace and minimally fix review-validation projection,
+  add valid ACCEPT/REJECT plus invalid/stale/replay coverage, then rerun the
+  exact-projection diagnostic. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0505 exact-projection diagnostic
 
 - Fresh Git + Synesis project `syn039-cp0505-001` used the current bundled

@@ -30,6 +30,7 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 
@@ -44,6 +45,7 @@ public final class AgentNextActionService {
     private final ProjectApplicationService projectService;
     private final WorkspaceReadinessService readinessService;
     private final AgentWorkflowReducer workflowReducer;
+    private final TaskSnapshotService snapshotService;
 
     /**
      * Creates a next-action retrieval application service.
@@ -52,6 +54,7 @@ public final class AgentNextActionService {
         this.projectService = new ProjectApplicationService();
         this.readinessService = new WorkspaceReadinessService();
         this.workflowReducer = new AgentWorkflowReducer();
+        this.snapshotService = new TaskSnapshotService();
     }
 
     /**
@@ -172,7 +175,8 @@ public final class AgentNextActionService {
                     return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, reviewProjection);
                 }
                 String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-                Map<String, Object> publicationAction = snapshotPublicationAction(store, callerParticipant);
+                Map<String, Object> publicationAction = snapshotPublicationAction(
+                        store, callerParticipant, assignedWorktree, snapshotService);
                 if (publicationAction != null) {
                     return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
                             AgentNextAction.FINISH_LANE, publicationAction);
@@ -700,11 +704,24 @@ public final class AgentNextActionService {
     }
 
     private static Map<String, Object> snapshotPublicationAction(
-            org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+            Path assignedWorktree, TaskSnapshotService snapshotService) {
         var collaboration = store.collaborationProjection();
         var completion = store.taskCompletionProjection();
         for (var intent : collaboration.activeIntents()) {
             if (!intent.participant().equals(participantId)) continue;
+            // REVIEW grant consumption authorizes publication but does not
+            // manufacture implementation work.  Keep the projection
+            // executable by applying the same read-only source/artifact gate
+            // that finish_lane applies while creating the snapshot.
+            if (assignedWorktree == null || snapshotService == null) continue;
+            try {
+                if (!snapshotService.hasPublishableChanges(assignedWorktree)) continue;
+            } catch (Exception ignored) {
+                // A failed inspection must not turn into a false publication
+                // permission.  The normal IMPLEMENT path remains available.
+                continue;
+            }
             boolean reviewGrantConsumed = store.workGroupProjection().grants().stream()
                     .anyMatch(grant -> grant.workGroupId().equals(intent.workGroupId())
                             && grant.targetIntentId().equals(intent.intentId())

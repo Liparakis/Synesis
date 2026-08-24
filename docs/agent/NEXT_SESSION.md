@@ -1,5 +1,35 @@
 # Next Session
 
+## CP-0507 continuation
+
+The fresh CP-0507 diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0507-001`, the rebuilt
+current bundled MCP (`0.1.0-SNAPSHOT`, protocol `2025-06-18`, commit
+`bc334ac`, ten tools), and two independent GPT-5.6 Luna sessions. Both
+reached distinct `ready / isolated` sessions and one WorkGroup
+`9b605c00-d45c-34e6-a9dd-f0ad4d31be3b` with disjoint claims.
+
+The CP-0506 guard is verified: Agent A's exact projected `finish_lane`
+published and integrated snapshot
+`snap_760b1bf37251e2c2f64e92e73ece42a9`. The first later blocker is the
+reviewer validation projection: it exposed literal `result: "accepted|rejected"`.
+Agent B executed the exact projected `respond_coordination` arguments and
+received `policy_denied` / `COORDINATION_RESPONSE_INVALID_RESULT`. The
+WorkGroup remains ACTIVE; no validation decision or closure was reached.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0507-review-result-projection-2026-08-24.md`.
+
+- Exact next code action: trace `reviewActions`, `AgentWorkflowReducer`, and
+  the MCP response contract, then make the smallest projection fix that
+  exposes valid structured ACCEPT/REJECT choices without choosing for the
+  reviewer.
+- Add deterministic coverage for valid ACCEPT, valid REJECT, invalid result,
+  stale grant/snapshot/epoch, wrong participant, and replay behavior before
+  rerunning the exact-projection acceptance.
+- Do not push, create SYN-040, or broaden cleanup, ownership, Doctor, or
+  orchestration. Keep the Git stall, bootstrap migration failures, and
+  unrelated Doctor warnings separate unless proven causal.
+
 ## CP-0505 continuation
 
 The fresh CP-0505 diagnostic used project

@@ -2,6 +2,25 @@
 
 Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
+## SYN-039 CP-0507 update
+
+The CP-0506 publication-projection defect is fixed narrowly: next-action
+projection now applies the same read-only source/artifact precondition used by
+`finish_lane`. CP-0507 proves the exact projected publication action succeeds
+and integrates Agent A's immutable `todo.py` snapshot.
+
+CP-0507 then reached the first later production blocker. Reviewer B consumed
+single-use REVIEW grant `4c3eae33-35d4-3015-bdcf-bf84895f6aad`, and
+`get_next_action` projected `review_validation` with the literal placeholder
+`result: "accepted|rejected"`. Executing the exact projected payload failed
+closed with `COORDINATION_RESPONSE_INVALID_RESULT`. The validation decision,
+rejection routing, cleanup, and WorkGroup closure remain unproven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0507-review-result-projection-2026-08-24.md`.
+
+The active task remains SYN-039. The next slice is limited to an executable
+structured ACCEPT/REJECT validation projection and deterministic fencing/replay
+coverage. Do not broaden lifecycle scope, push, or create SYN-040.
+
 ## SYN-039 CP-0505 update
 
 CP-0505 reached exact REVIEW admission, idempotent admission replay, owner

@@ -1,5 +1,29 @@
 # State
 
+## SYN-039 CP-0507 validation-projection blocker
+
+The fresh CP-0507 exact-projection diagnostic used the rebuilt current bundled
+MCP and two independent GPT-5.6 Luna sessions. Both reached distinct
+`ready / isolated` bindings, exactly ten tools, and WorkGroup
+`9b605c00-d45c-34e6-a9dd-f0ad4d31be3b` with disjoint epoch-1 claims.
+
+Agent A implemented `todo.py`, ran the visible tests, executed the exact
+projected `finish_lane`, published snapshot
+`snap_760b1bf37251e2c2f64e92e73ece42a9`, and integrated its commit. This
+confirms the CP-0506 empty-lane publication guard.
+
+Agent B consumed single-use REVIEW grant
+`4c3eae33-35d4-3015-bdcf-bf84895f6aad` and received exact validation
+arguments with `result: "accepted|rejected"`. It executed them unchanged and
+received `policy_denied` / `COORDINATION_RESPONSE_INVALID_RESULT`. No
+validation decision was recorded; the WorkGroup remains ACTIVE. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0507-review-result-projection-2026-08-24.md`.
+
+The next implementation slice is limited to making the review-validation
+projection executable while retaining explicit reviewer choice and fail-closed
+validation. Doctor is DEGRADED with six unrelated warnings; the root Git
+subprocess stall and bootstrap migration failures remain separate.
+
 ## SYN-039 CP-0505 exact-projection diagnostic
 
 The fresh CP-0505 project
