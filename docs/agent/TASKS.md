@@ -1,5 +1,26 @@
 # Tasks
 
+## SYN-039 CP-0530 update
+
+CP-0530 reached the current executable protocol boundary with the exact-action
+rule: one shared WorkGroup, exact REVIEW admission, owner response, grant
+consumption, immutable snapshot publication, integration, and structured
+ACCEPT. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+
+The first stop is agent compliance. Agent A ended after a repeated exact
+`request_coordination` projection for the reciprocal REVIEW request instead
+of executing that unchanged action and continuing to its grant. Agent B
+continued the exact projected wait. The malformed grant arguments and the
+unprojected stale read were fail-closed and are not production defects. No
+production code changed.
+
+The next narrow action is to classify this provider turn-ending boundary and
+confirm it with a fresh ordinary acceptance if necessary. Only an unchanged
+projected action that fails, or an engaged run that requires progress while
+projecting no usable action, authorizes a production slice. Do not broaden
+SYN-039, push, or create SYN-040.
+
 ## SYN-039 CP-0528 update
 
 CP-0528 proves that exact REVIEW admission works with separate live session

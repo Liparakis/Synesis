@@ -1,5 +1,43 @@
 # Current Task
 
+## SYN-039 CP-0530 exact-rule diagnostic
+
+The fresh CP-0530 diagnostic used two independent GPT-5.6 Luna High Codex
+sessions, the current bundled MCP, one fresh project, disjoint epoch-1 claims,
+and one shared WorkGroup. It reached exact REVIEW admission, owner response,
+grant consumption, `finish_lane`, immutable snapshot publication, integration,
+and structured ACCEPT. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+
+The first stop was agent compliance, not a production failure. After Agent A
+created the reciprocal REVIEW request, its next `get_next_action` again
+projected the exact executable `request_coordination` action, but A ended its
+turn without executing it or continuing to the reciprocal grant. Agent B
+remained engaged and repeatedly executed the projected `WAIT ->
+get_next_action({})` continuation for the grant targeted at A. No unchanged
+concrete Synesis action failed, and production code remains unchanged for this
+run. The separate ordinary precheck is recorded at
+`docs/evidence/syn039-unattended-todo-cp0529-ordinary-precheck-2026-08-24.md`.
+
+## Immediate next action
+
+Do not change production lifecycle behavior from CP-0530. First classify the
+Codex turn-ending boundary that ignores a final unchanged executable
+projection, then run one fresh ordinary acceptance only if that observation
+needs confirmation. If an engaged run later executes an unchanged projection
+that fails or reaches a required state with no usable action, implement only
+that narrow defect. Preserve fail-closed review, workspace, ownership, epoch,
+cleanup, and Doctor behavior; do not push or create SYN-040.
+
+## Work completed
+
+CP-0530 proves the current review, grant, publication, integration, and
+structured ACCEPT transitions remain executable under the exact-action rule.
+The control checkout in the disposable fixture passed its visible Todo tests
+(`2 passed`) at `3843a47`. Doctor remains DEGRADED with six separately
+classified warnings; the Git subprocess stall and bootstrap migration failures
+remain independent verification issues.
+
 ## SYN-039 CP-0528 post-fix exact-action diagnostic
 
 The fresh CP-0528 diagnostic used the current bundled MCP, two independent

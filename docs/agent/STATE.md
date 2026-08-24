@@ -1,5 +1,26 @@
 # State
 
+## SYN-039 CP-0530 exact-rule diagnostic
+
+CP-0530 used fresh Git + Synesis state, the current bundled MCP, two distinct
+ready/isolated Codex sessions, disjoint epoch-1 claims, and one shared
+WorkGroup. It reached exact REVIEW admission, owner acceptance, single-use
+grant consumption, immutable snapshot publication, integration, and
+structured ACCEPT. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+
+Agent A then ended after `get_next_action` re-projected the exact reciprocal
+`request_coordination` action. Agent B remained in exact `WAIT ->
+get_next_action({})` polling for the grant targeted at A. The WorkGroup is
+ACTIVE; A is COMPLETED, B is ACTIVE, A's snapshot is integrated, B's snapshot
+is unpublished, and closure is not reached. The two malformed grant calls and
+the unprojected stale read were correctly fail-closed and remain agent-
+compliance evidence. No unchanged projected action failed.
+
+Immediate next action: classify the provider turn-ending behavior that stops
+after an unchanged executable projection, then run a fresh ordinary acceptance
+only if needed to confirm it. Do not change production code for CP-0530 alone.
+
 ## SYN-039 CP-0528 post-fix exact-action diagnostic
 
 CP-0528 used the current bundled MCP and two separate live Codex sessions in

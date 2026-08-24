@@ -1,5 +1,27 @@
 # Next Session
 
+## CP-0530 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+
+The fresh exact-action diagnostic reached one shared WorkGroup, exact REVIEW
+admission, owner response, grant consumption, snapshot publication,
+integration, and structured ACCEPT. Agent A then ended after an unchanged
+reciprocal `request_coordination` projection; Agent B remained in exact
+`WAIT -> get_next_action({})` polling for A's unresolved reciprocal grant.
+The WorkGroup stayed ACTIVE. No unchanged projected Synesis action failed and
+no production code changed. A separate ordinary precheck is recorded at
+`docs/evidence/syn039-unattended-todo-cp0529-ordinary-precheck-2026-08-24.md`.
+
+- Exact next action: classify the Codex turn-ending boundary and run one fresh
+  ordinary acceptance only if confirmation is needed.
+- Exact code action: none from CP-0530; preserve fail-closed lifecycle,
+  workspace, ownership, epoch, and cleanup behavior.
+- Keep Doctor warnings, the Git subprocess stall, bootstrap migration failures,
+  and agent-compliance evidence separately classified. Do not push or create
+  SYN-040.
+
 ## CP-0528 continuation
 
 Evidence:

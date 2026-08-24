@@ -1,3 +1,21 @@
+# 2026-08-24 — SYN-039 CP-0530 exact-rule diagnostic
+
+- Fresh project `syn039-diagnostic-cp0530-001` used the current bundled MCP,
+  two independent GPT-5.6 Luna High Codex sessions, the explicit exact-action
+  rule, disjoint epoch-1 claims, and one shared WorkGroup.
+- The run reached exact REVIEW admission, owner acceptance, grant consumption,
+  A's immutable snapshot publication/integration, and B's structured ACCEPT.
+- A then ended after `get_next_action` re-projected the exact reciprocal
+  `request_coordination` action. B continued exact `WAIT ->
+  get_next_action({})` polling for the grant targeted at A. WorkGroup closure
+  and B's snapshot were not reached. No unchanged projected action failed;
+  no production code changed.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0530-exact-rule-diagnostic-2026-08-24.md`.
+- Exact next action: classify the provider turn-ending boundary, then run an
+  ordinary acceptance only if confirmation is needed. Do not push or create
+  SYN-040.
+
 ## 2026-08-24 — SYN-039 CP-0526 fix and CP-0527 projection diagnostic
 
 - CP-0526 reproduced an unchanged projected `finish_lane` that returned
