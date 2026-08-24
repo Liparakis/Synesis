@@ -38,6 +38,17 @@ The control checkout in the disposable fixture passed its visible Todo tests
 classified warnings; the Git subprocess stall and bootstrap migration failures
 remain independent verification issues.
 
+## Current failures
+
+The CP-0530 WorkGroup `58c39d35-7835-3efe-b9ed-731e53e87465` remains ACTIVE.
+Agent A is COMPLETED after publishing and integrating snapshot
+`snap_2d49b85428978b46934f2a308975ae73`; Agent B remains ACTIVE with the
+epoch-1 `test_todo.py` claim. Reciprocal grant
+`99fe5115-716b-32ea-aa12-171e22a918c4` targets A and remains unresolved because
+A ended after the unchanged executable reciprocal request projection. B's
+snapshot and WorkGroup closure are not reached. This is agent-compliance
+evidence, not a production failure.
+
 ## SYN-039 CP-0528 post-fix exact-action diagnostic
 
 The fresh CP-0528 diagnostic used the current bundled MCP, two independent
