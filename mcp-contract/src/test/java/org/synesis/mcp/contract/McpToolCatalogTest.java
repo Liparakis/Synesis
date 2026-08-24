@@ -57,6 +57,14 @@ class McpToolCatalogTest {
         assertTrue(descriptor.description().contains("ordinary coding"));
         assertTrue(descriptor.description().contains(".synesis/**"));
         assertTrue(descriptor.description().contains("exact tool with those exact arguments"));
+        assertTrue(descriptor.description().contains("integrationCheck"));
+        assertTrue(descriptor.description().contains("never advances a lane or WorkGroup"));
+        assertTrue(descriptor.description().contains("When WAIT projects get_next_action"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> properties = (Map<String, Object>) descriptor.inputSchema().get("properties");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> integrationCheck = (Map<String, Object>) properties.get("integrationCheck");
+        assertTrue(String.valueOf(integrationCheck.get("description")).contains("never advances lifecycle"));
     }
 
     @Test
