@@ -12,6 +12,37 @@
   cleanup, Doctor, and provider-boundary decisions; no new ADR is created by
   activation alone
 
+## CP-0489 role-order diagnostic
+
+The fresh CP-0489 fixture used the current bundled MCP and two independent
+GPT-5.6 Luna sessions on project `bceaf899-f1a3-4a65-8538-4f303a072e5d`.
+Both sessions reached `ready / isolated` with disjoint exact claims and one
+shared WorkGroup `2176bfbd-6199-303f-805c-a91c382b92ff`.
+
+The diagnostic reached exact REVIEW admission, exact owner acceptance for
+both requests, grants `215ba3af-5cf9-352a-ac5e-5685438a7d12` and
+`d831734a-d597-3457-b817-ae5b3f7e6e70`, and exact consumption of the first
+grant. The reviewer correctly received `SNAPSHOT_PENDING` → `wait`. The
+producer's last `get_next_action` occurred before that consumption and
+returned ordinary `IMPLEMENT` with no executable action; it did not poll
+again after the later reviewer action. No projected producer action failed,
+so no production defect is proven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0489-role-order-diagnostic-2026-08-24.md`.
+
+Focused SYN-039 tests, affected Javadocs, validators, `go vet`, and
+`git diff --check` pass. Bootstrap Go tests retain the three known migration
+failures. Full `check` now passes its format/compile/Javadoc/static-analysis
+stages and reproduces the known `McpServerTest.setUp` Git subprocess stall at
+`ProcessCommandRunner.execute:81`; exact thread evidence is in the evidence
+file. Fixture Doctor remains DEGRADED with six warnings, separately
+classified.
+
+Exact next action: run a fresh bounded diagnostic that keeps both agents
+returning to `get_next_action` after a wait or peer-side state change, then
+capture producer snapshot publication and reviewer validation without relay
+or manual lifecycle transitions. Do not modify production code unless an
+exact projected action fails. Do not push or create SYN-040.
+
 ## CP-0487 role-order diagnostic
 
 The fresh CP-0487 fixture reached one shared WorkGroup, exact REVIEW admission,

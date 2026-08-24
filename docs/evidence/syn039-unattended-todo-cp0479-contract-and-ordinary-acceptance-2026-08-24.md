@@ -1,7 +1,7 @@
 # SYN-039 CP-0479 — Agent contract clarification and two acceptance runs
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
 Production changes: agent-facing guidance only; no lifecycle semantics changed
 
 ## Contract audit and bounded change
@@ -54,8 +54,8 @@ Bundled MCP identity after rebuild:
 
 ## Run 1 — bounded diagnostic with contract guidance
 
-Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-001`  
-Project: `c3a799c0-3eee-480c-acc1-60d52ee9f883`  
+Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-001`
+Project: `c3a799c0-3eee-480c-acc1-60d52ee9f883`
 Baseline: `aa1a164`; managed baseline: `0ca19d6`
 
 Agent B became the owner with participant
@@ -93,8 +93,8 @@ is agent compliance evidence, not a lifecycle projection defect.
 
 ## Run 2 — ordinary acceptance without diagnostic guidance
 
-Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-002`  
-Project: `981c2b2c-e0b5-47ae-a2ff-d1e69fc01b28`  
+Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-002`
+Project: `981c2b2c-e0b5-47ae-a2ff-d1e69fc01b28`
 Baseline: `f9a8568`; managed baseline: `ad9e666`
 
 The two prompts contained only complementary Todo coding responsibilities and

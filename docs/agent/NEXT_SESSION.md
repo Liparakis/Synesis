@@ -1,5 +1,32 @@
 # Next Session
 
+## CP-0489 continuation
+
+The fresh CP-0489 diagnostic used project
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0489-001`, an
+external harness, and the current bundled MCP (`0.1.0-SNAPSHOT`, SHA-256
+`8F17CF71691F407093D607C0BB947924BDAC05951CA3A84BB98EBFAEFE6704C7`). Both
+independent Luna sessions reached `ready / isolated`, held disjoint exact
+claims, and converged on WorkGroup
+`2176bfbd-6199-303f-805c-a91c382b92ff`.
+
+The run reached exact REVIEW admission, exact owner acceptance, grants
+`215ba3af-5cf9-352a-ac5e-5685438a7d12` and
+`d831734a-d597-3457-b817-ae5b3f7e6e70`, and exact consumption of the first
+grant. The reviewer correctly waited for the absent producer snapshot. The
+producer's last `get_next_action` was before grant consumption and ordinary
+`IMPLEMENT` with no concrete action; it did not poll again afterward. No
+projected producer action failed and no production defect is proven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0489-role-order-diagnostic-2026-08-24.md`.
+
+- Exact next action: launch a fresh bounded diagnostic with both agents
+  required to return to `get_next_action` after a wait or peer-side state
+  change, then capture producer `snapshot_publication_required` → exact
+  `finish_lane` → reviewer validation without relay or manual transition.
+- Do not modify production code unless an exact projected action fails. Do
+  not run the ordinary unattended acceptance until this diagnostic reaches a
+  terminal result. Do not push or create SYN-040.
+
 ## CP-0487 continuation
 
 The CP-0487 role-order diagnostic used fresh project

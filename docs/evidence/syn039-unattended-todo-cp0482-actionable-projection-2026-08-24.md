@@ -1,6 +1,6 @@
 # SYN-039 CP-0482 — Actionable lifecycle projection diagnostic
 
-Date: 2026-08-24  
+Date: 2026-08-24
 Task: SYN-039 — Autonomous Workgroup Completion
 
 ## Result
@@ -19,14 +19,14 @@ protocol action was available. This is the first concrete CP-0482 blocker.
 
 Raw traces are retained at:
 
-`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0481-001\logs\agent-a.jsonl`  
+`C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0481-001\logs\agent-a.jsonl`
 `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0481-001\logs\agent-b.jsonl`
 
 ## Preflight and shared state
 
-Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0481-001`  
-Project ID: `bca62af3-e1c9-482d-b69b-f9ba2197d4b1`  
-Baseline commit: `7444637d5f68ba3d5799117c6535b2bd5d01f6e9`  
+Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0481-001`
+Project ID: `bca62af3-e1c9-482d-b69b-f9ba2197d4b1`
+Baseline commit: `7444637d5f68ba3d5799117c6535b2bd5d01f6e9`
 WorkGroup: `ffd58516-2313-3ccc-a402-b20c921d2f8f`
 
 Both sessions used the current bundled MCP through explicit per-agent

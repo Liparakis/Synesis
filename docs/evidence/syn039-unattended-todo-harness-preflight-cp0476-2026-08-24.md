@@ -1,9 +1,9 @@
 # SYN-039 CP-0476 — Fresh unattended Todo harness preflight
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
-Checkpoint: CP-0476  
-Repository commit: `194ef16` (`Implement SYN-039 snapshot publication action`)  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
+Checkpoint: CP-0476
+Repository commit: `194ef16` (`Implement SYN-039 snapshot publication action`)
 
 ## Purpose
 

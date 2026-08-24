@@ -1,8 +1,8 @@
 # SYN-039 CP-0478 — Exact next-action protocol diagnostic
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
-Checkpoint: CP-0478  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
+Checkpoint: CP-0478
 Production code changed: none
 
 ## Purpose

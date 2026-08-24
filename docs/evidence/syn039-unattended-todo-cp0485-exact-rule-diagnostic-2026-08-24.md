@@ -1,7 +1,7 @@
 # SYN-039 unattended Todo CP-0485 exact-rule diagnostic
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
 Scope: bounded diagnostic only; no production change from this run
 
 ## Purpose and controls

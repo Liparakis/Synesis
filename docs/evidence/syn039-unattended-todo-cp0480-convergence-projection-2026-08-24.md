@@ -1,6 +1,6 @@
 # SYN-039 CP-0480 — WorkGroup convergence projection evidence
 
-Date: 2026-08-24  
+Date: 2026-08-24
 Task: SYN-039 — Autonomous Workgroup Completion
 
 ## Classification
@@ -17,8 +17,8 @@ agent to infer the nested payload instead of receiving the exact action.
 
 ## Diagnostic run
 
-Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0480-003`  
-Project: `62e195d5-c21f-4d4c-a959-5b688aeb9270`  
+Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0480-003`
+Project: `62e195d5-c21f-4d4c-a959-5b688aeb9270`
 WorkGroup: `82223437-5c6b-38a3-bf18-c0216df46d5e`
 
 Both GPT-5.6 Luna agents used the current bundled MCP and independently called
@@ -31,8 +31,8 @@ that remains agent-compliance evidence, not a WorkGroup discovery defect.
 
 ## Ordinary run
 
-Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0480-004`  
-Project: `9af18337-dfc9-46b0-adad-384b0cfb0bc8`  
+Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0480-004`
+Project: `9af18337-dfc9-46b0-adad-384b0cfb0bc8`
 WorkGroup: `019b6e0a-b1da-3e8f-9e44-bbd5496f031b`
 
 With only complementary coding prompts, the agents also converged on one

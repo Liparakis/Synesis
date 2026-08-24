@@ -1,9 +1,9 @@
 # SYN-039 CP-0477 — Explicit harness preflight and unattended lifecycle rerun
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
-Checkpoint: CP-0477  
-Repository commit before evidence: `c7b822f`  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
+Checkpoint: CP-0477
+Repository commit before evidence: `c7b822f`
 
 ## Harness divergence and configuration correction
 

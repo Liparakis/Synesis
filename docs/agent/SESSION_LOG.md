@@ -1,5 +1,40 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0489 role-order diagnostic
+
+- Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0489-001`
+  used an external harness and the current bundled MCP (`0.1.0-SNAPSHOT`,
+  SHA-256 `8F17CF71691F407093D607C0BB947924BDAC05951CA3A84BB98EBFAEFE6704C7`).
+  Project ID was `bceaf899-f1a3-4a65-8538-4f303a072e5d`; the control checkout
+  was clean at `f27bbec` before and after the run. Both independent
+  GPT-5.6 Luna sessions reached `ready / isolated` with disjoint exact claims.
+- The test intent established WorkGroup
+  `2176bfbd-6199-303f-805c-a91c382b92ff`, making that agent the producer and
+  the implementation intent the reviewer. The reviewer executed exact
+  `request_coordination(work_group_join)` admission. The producer executed
+  exact `respond_coordination` acceptance for both requests, issuing grants
+  `215ba3af-5cf9-352a-ac5e-5685438a7d12` and
+  `d831734a-d597-3457-b817-ae5b3f7e6e70`. The reviewer consumed the first
+  grant exactly and correctly received `SNAPSHOT_PENDING` → `wait`.
+- The producer's last `get_next_action` occurred before grant consumption and
+  returned ordinary `IMPLEMENT` with no executable lifecycle action. It did
+  not poll after the reviewer action, so no producer publication projection
+  was requested. No exact projected action failed; this is agent-side
+  lifecycle polling evidence, not a production defect. No second ordinary
+  acceptance was run.
+- Focused SYN-039 tests, Javadocs, validators, Go vet, and diff check passed.
+  Bootstrap Go tests retained three migration failures. Full root check passed
+  format and build gates, then reproduced the known `McpServerTest.setUp` Git
+  subprocess stall; a thread dump showed `ProcessCommandRunner.execute:81`
+  through `GitProcessRunner` and `McpServerTest.setUp:38`. The fixture Doctor
+  remained DEGRADED with six warnings.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0489-role-order-diagnostic-2026-08-24.md`.
+  Exact next action: rerun a bounded diagnostic that keeps both agents polling
+  after waits/peer-side state changes and captures publication through
+  validation without relay or manual transitions. Do not push or create
+  SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0485 clean-harness exact-rule diagnostic
 
 - Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0485-001`

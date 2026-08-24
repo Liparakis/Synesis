@@ -1,5 +1,42 @@
 # State
 
+## SYN-039 CP-0489 role-order diagnostic
+
+The fresh CP-0489 fixture used the current bundled MCP
+(`0.1.0-SNAPSHOT`, SHA-256
+`8F17CF71691F407093D607C0BB947924BDAC05951CA3A84BB98EBFAEFE6704C7`) with
+an external harness and fresh Git + Synesis state. Both independent Luna
+sessions reached `ready / isolated` on project
+`bceaf899-f1a3-4a65-8538-4f303a072e5d`, held disjoint `todo.py` and
+`test_todo.py` claims at epoch 1, and converged on WorkGroup
+`2176bfbd-6199-303f-805c-a91c382b92ff`.
+
+The test intent established the WorkGroup first. The implementation intent
+therefore became reviewer. Exact REVIEW admission, both owner
+`respond_coordination` acceptances, grants
+`215ba3af-5cf9-352a-ac5e-5685438a7d12` and
+`d831734a-d597-3457-b817-ae5b3f7e6e70`, and exact consumption of the first
+grant all succeeded. The reviewer then correctly received
+`SNAPSHOT_PENDING` → `wait`. The producer's last projection was ordinary
+`IMPLEMENT` before grant consumption and it did not poll after the later
+reviewer action. No exact projected producer action failed and no new
+production defect is claimed.
+
+The WorkGroup remained ACTIVE with no snapshot, validation, integration, or
+closure. Fixture Doctor was DEGRADED with six warnings. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0489-role-order-diagnostic-2026-08-24.md`.
+
+Focused SYN-039 tests, affected Javadocs, validators, Go vet, and diff checks
+pass. Bootstrap Go tests retain three `update migrations not prepared`
+failures. The full root check reached `:mcp:test` and reproduced the Git
+subprocess stall; the worker was in `McpServerTest.setUp` through
+`GitProcessRunner` and `ProcessCommandRunner`, with output/wait helper
+threads active. No timeout or behavior change was made.
+
+Exact next action: run a fresh bounded diagnostic that keeps both agents
+polling after wait/peer-side state changes and captures producer publication
+through reviewer validation. Do not push or create SYN-040.
+
 ## SYN-039 CP-0485 clean-harness diagnostic
 
 The clean-harness diagnostic used the current bundled MCP

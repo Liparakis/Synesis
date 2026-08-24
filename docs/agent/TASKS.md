@@ -1926,3 +1926,28 @@ Duplicate retry-safe requests/grants are recorded for later idempotency and
 cleanup review. Exact next action: launch the implementation agent first in a
 fresh bounded diagnostic and observe producer publication through reviewer
 validation without relay or manual transition. Do not create SYN-040 or push.
+
+## SYN-039 CP-0489 update
+
+The fresh CP-0489 diagnostic used the current bundled MCP, two independent
+ready/isolated sessions, disjoint `todo.py` / `test_todo.py` claims, and one
+shared WorkGroup. It reached exact REVIEW admission, exact owner acceptance,
+two REVIEW grants, and exact consumption of one grant. The test intent was
+the producer because it established the WorkGroup first; the implementation
+intent became reviewer and correctly received `SNAPSHOT_PENDING` → `wait`.
+
+The producer's last `get_next_action` occurred before grant consumption and
+returned ordinary `IMPLEMENT` with no executable lifecycle action. It did not
+poll again after the reviewer action, so producer publication was never
+projected. No exact projected action failed and no production defect is
+proven. WorkGroup remained ACTIVE with no snapshot, validation, integration,
+or closure. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0489-role-order-diagnostic-2026-08-24.md`.
+
+Focused SYN-039 tests, Javadocs, validators, Go vet, and diff checks pass.
+Bootstrap Go tests retain the three known migration failures. Full root check
+reproduces the known Git subprocess stall after format/build gates; Doctor
+remains DEGRADED with six fixture warnings. Exact next action: run a fresh
+bounded diagnostic that keeps both agents polling after wait/peer-side state
+changes, then capture producer publication through reviewer validation
+without relay or manual transition. Do not create SYN-040 or push.

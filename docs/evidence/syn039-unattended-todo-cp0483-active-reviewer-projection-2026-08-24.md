@@ -1,6 +1,6 @@
 # SYN-039 CP-0483 — Active reviewer projection diagnostic
 
-Date: 2026-08-24  
+Date: 2026-08-24
 Task: SYN-039 — Autonomous Workgroup Completion
 
 ## Scope and fixture

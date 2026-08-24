@@ -1,6 +1,6 @@
 # SYN-039 CP-0481 — Post-fix diagnostic acceptance
 
-Date: 2026-08-24  
+Date: 2026-08-24
 Task: SYN-039 — Autonomous Workgroup Completion
 
 ## Scope
@@ -20,9 +20,9 @@ Those logs are preserved, but are not product acceptance evidence.
 
 ## Post-fix diagnostic fixture
 
-Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0480-006`  
-Project ID: `df45ded4-0b90-4f6e-8cc5-f810d714942f`  
-Baseline commit: `96f4ec7b19451eedf449e483baee10a3d4c8a500`  
+Fixture: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0480-006`
+Project ID: `df45ded4-0b90-4f6e-8cc5-f810d714942f`
+Baseline commit: `96f4ec7b19451eedf449e483baee10a3d4c8a500`
 WorkGroup: `f0666aa0-31db-3025-a7e7-2e46f3fad1de`
 
 Both agents used the same explicit current bundled MCP wrapper:
