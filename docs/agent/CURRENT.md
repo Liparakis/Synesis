@@ -1,5 +1,53 @@
 # Current Task
 
+## SYN-039 command-scope recovery and post-fix acceptance
+
+The CP-0519 ordinary acceptance proved a concrete MCP command-scope defect:
+after successful clean recovery moved a participant to a new verified
+worktree, `run_command` retained the old physical `ProjectCommandProcessAnchor`
+and returned `command_admission_stale / MCP_PROCESS_SCOPE_CHANGED`. The narrow
+fix is implemented in `McpProtocolHandler`; successful `ensure_session` now
+re-arms the anchor only when a separately verified worktree locator changed.
+The deterministic regression and full `McpSyn039SliceTest` pass.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-command-scope-recovery-2026-08-24.md`.
+
+The post-fix exact-action diagnostic reached both reciprocal review paths,
+single-use grant consumption, snapshot publication, a structured REJECT and
+ACCEPT, integration, clean control `pytest` 3/3, and WorkGroup
+`89fea014-9f5b-326b-8521-5d2218cc55fc` `COMPLETED`. The second ordinary run
+reached the same core lifecycle but retained an extra continuation participant
+after the harness resumed a completed lane; its WorkGroup
+`dfc93a1a-de2e-3db4-859e-c0eb7d60eaab` remains `ACTIVE`. That remainder is
+agent/session engagement evidence, not a new production defect.
+
+## Immediate next action
+
+Run one fresh ordinary unattended two-agent Todo acceptance with retained
+sessions, but do not resume a completed lane as a new coding intent. Preserve
+the first unchanged projected-action failure or missing usable action. Do not
+change production lifecycle behavior, push, or create SYN-040 without that
+evidence.
+
+## Work completed
+
+Focused MCP regression, full SYN-039 MCP slice, MCP Javadocs, bundled MCP
+rebuild, deferred and fixture validators, Doctor structural checks, Go vet,
+and `git diff --check` pass. Fixture Doctor remains DEGRADED with six
+separately classified warnings. The known root Git subprocess stall,
+bootstrap migration failures, and documentation format findings remain
+independent verification issues.
+
+## Current failures
+
+The clean exact-action diagnostic is complete, but ordinary product acceptance
+is not yet clean: the retained Codex harness continued after A's original lane
+was integrated, created a new active `todo.py` participant, and stopped with
+an ACTIVE WorkGroup. This must be resolved as harness/session engagement
+behavior or reproduced in a clean ordinary run before any further production
+change.
+
 ## SYN-039 CP-0536 terminal-WorkGroup guard and acceptance evidence
 
 CP-0535 proved a concrete lifecycle defect: a late disjoint intent could be

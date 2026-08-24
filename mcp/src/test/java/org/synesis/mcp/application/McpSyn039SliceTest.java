@@ -456,6 +456,55 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void recoveredSessionRearmsCommandScopeForItsNewVerifiedWorktree(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+
+        String anchoredCommand = fixture.reviewer.handleMessage(toolCall("run_command",
+                "{\"argv\":[\"git\",\"status\",\"--porcelain\"]}"));
+        assertEquals("completed", innerResult(anchoredCommand).get("status"), anchoredCommand);
+
+        var location = new ProjectApplicationService().locate(fixture.project);
+        var bindings = new ProviderSessionBindingService();
+        var ownerBinding = bindings.find(location, "codex", "syn039-owner-publication").orElseThrow();
+        var reviewerBefore = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()));
+
+        Files.writeString(fixture.project.resolve("README.md"), "integrated control state\n");
+        git(fixture.project, "add", "README.md");
+        git(fixture.project, "commit", "-m", "integrated snapshot");
+
+        Map<String, Object> stale = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("workspace_stale", stale.get("reason"), stale.toString());
+        Map<String, Object> ensured = innerResult(fixture.reviewer.handleMessage(toolCall("ensure_session", "{}")));
+        assertEquals("ready", ensured.get("status"), ensured.toString());
+
+        var reviewerAfter = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        assertEquals(reviewerBefore.sessionId(), reviewerAfter.sessionId());
+        assertFalse(reviewerBefore.worktreePath().equals(reviewerAfter.worktreePath()), reviewerAfter.toString());
+
+        Map<String, Object> validation = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
+        Map<String, Object> payload = new LinkedHashMap<>(
+                (Map<String, Object>) validationResult.get("nextProtocolPayload"));
+        payload.put("result", "accepted");
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        arguments.put("kind", validationResult.get("nextProtocolKind"));
+        arguments.put("payload", payload);
+        String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(arguments)));
+        assertTrue(accepted.contains("ACCEPTED"), accepted);
+
+        String resumedCommand = fixture.reviewer.handleMessage(toolCall("run_command",
+                "{\"argv\":[\"git\",\"status\",\"--porcelain\"]}"));
+        Map<String, Object> resumedResult = innerResult(resumedCommand);
+        assertEquals("completed", resumedResult.get("status"), resumedCommand);
+        assertFalse(resumedCommand.contains("MCP_PROCESS_SCOPE_CHANGED"), resumedCommand);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void dirtyReviewerReceivesDurableReviewDecisionAfterControlCheckoutAdvances(
             @TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);

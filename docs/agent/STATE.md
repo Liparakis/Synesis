@@ -1,5 +1,31 @@
 # State
 
+## SYN-039 command-scope recovery and post-fix acceptance
+
+The fresh CP-0519 ordinary run proved that a successful clean session
+recovery could move a connection to a new isolated worktree while leaving its
+MCP command anchor tied to the old physical scope. `run_command` then failed
+closed with `MCP_PROCESS_SCOPE_CHANGED`. `McpProtocolHandler` now re-verifies
+the worktree after successful `ensure_session` and clears the old anchor only
+when the verified physical locator changes. The deterministic regression and
+full `McpSyn039SliceTest` pass.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-command-scope-recovery-2026-08-24.md`.
+
+The post-fix exact-action diagnostic completed WorkGroup
+`89fea014-9f5b-326b-8521-5d2218cc55fc`, including review admission, both
+grants, snapshots, structured REJECT/ACCEPT, integration, and control pytest
+3/3. The second ordinary run reached the same lifecycle boundary but the
+retained harness resumed a completed lane as a new participant; WorkGroup
+`dfc93a1a-de2e-3db4-859e-c0eb7d60eaab` remains ACTIVE. That continuation is
+agent/session evidence, not a new production defect.
+
+Immediate next action: run one ordinary acceptance with the retained-session
+harness prevented from creating a new coding intent after a completed lane.
+Preserve the first clean projected-action failure or missing usable action;
+do not broaden production lifecycle behavior, push, or create SYN-040.
+
 ## SYN-039 CP-0536 terminal-WorkGroup guard and acceptance evidence
 
 The CP-0535 late-intent reproduction showed that an intent could be appended

@@ -595,6 +595,35 @@ public final class McpProtocolHandler {
                 () -> renewLeaseForCommand(worktree));
     }
 
+    /**
+     * Re-arms command admission only after a successful session resolution has
+     * verified a different isolated worktree. A provider connection may move
+     * from a stale clean worktree to a recovery worktree, while the immutable
+     * MCP process identity remains attached to the same connection.
+     */
+    private void refreshCommandProcessAnchorForVerifiedSession() {
+        if (commandProcessAnchor == null) {
+            return;
+        }
+        try {
+            ProjectApplicationService.ProjectLocation location =
+                    new ProjectApplicationService().locate(activeProjectRoot);
+            WorkspaceReadinessService.ReadinessResult readiness =
+                    new WorkspaceReadinessService().assess(location, provider, connectionInstanceId);
+            if (!readiness.ready()) {
+                return;
+            }
+            PhysicalWorktreeIdentity worktree = PhysicalWorktreeIdentity.capture(activeProjectRoot,
+                    readiness.worktree(), new LifecyclePathVerifier());
+            if (!commandProcessAnchor.scopeLocator().equals(worktree.locator())) {
+                commandProcessAnchor = null;
+            }
+        } catch (Exception ignored) {
+            // Preserve fail-closed command admission when the new scope cannot
+            // be independently verified after session resolution.
+        }
+    }
+
     private ProjectCommandAuthoritySnapshot renewLeaseForCommand(PhysicalWorktreeIdentity worktree) throws Exception {
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
         var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
@@ -662,6 +691,7 @@ public final class McpProtocolHandler {
                 agentResponse = sessionService.ensureSession(resolutionRequest);
                 if (agentResponse.status() == AgentStatus.READY) {
                     isSessionBound = true;
+                    refreshCommandProcessAnchorForVerifiedSession();
                     // The first verified ensure_session is activity too. Establish the lease
                     // before any claim is announced so an abruptly deleted chat remains
                     // recoverable even when it sends no follow-up MCP request.

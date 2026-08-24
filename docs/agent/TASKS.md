@@ -1,5 +1,28 @@
 # Tasks
 
+## SYN-039 CP-0519 command-scope recovery update
+
+The CP-0519 ordinary acceptance proved that a successful clean session
+recovery could move a connection to a new isolated worktree while leaving its
+MCP command anchor tied to the old physical scope. `run_command` then failed
+closed with `MCP_PROCESS_SCOPE_CHANGED`. The narrow re-arm in
+`McpProtocolHandler` is implemented and covered by
+`McpSyn039SliceTest.recoveredSessionRearmsCommandScopeForItsNewVerifiedWorktree`.
+
+The post-fix exact-action diagnostic completed the existing review, snapshot,
+validation, integration, and WorkGroup closure path. The required second
+ordinary acceptance reached both integrated snapshots but the retained Codex
+harness created an extra continuation participant after the original lane
+completed and stopped with an ACTIVE WorkGroup. Keep that evidence separate
+from protocol correctness; do not add lifecycle machinery for it.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-command-scope-recovery-2026-08-24.md`.
+
+Next narrow action: run a fresh ordinary acceptance with completed-lane
+resumption suppressed in the harness, then preserve the first genuine
+unattended lifecycle blocker. No push or SYN-040.
+
 ## SYN-039 CP-0536 update
 
 CP-0535 proved a concrete lifecycle defect: a late disjoint intent could be

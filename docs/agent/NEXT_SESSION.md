@@ -1,5 +1,24 @@
 # Next Session
 
+## CP-0519 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0519-command-scope-recovery-2026-08-24.md`.
+
+The narrow MCP command-scope recovery fix is present and verified. The exact
+post-fix diagnostic closed WorkGroup
+`89fea014-9f5b-326b-8521-5d2218cc55fc`; the required ordinary acceptance
+reached integration and review but retained an extra active continuation lane
+in WorkGroup `dfc93a1a-de2e-3db4-859e-c0eb7d60eaab`.
+
+- Exact next action: run one fresh ordinary unattended Todo acceptance while
+  retaining both sessions but suppressing continuation of an already
+  completed coding lane as a new intent.
+- Preserve no-relay/no-manual-transition behavior. Do not modify production
+  lifecycle code unless a clean run executes an unchanged projection that
+  fails or Synesis exposes no usable action for a valid active lane.
+- Run `scripts/agent-resume.ps1` first. Do not push or create SYN-040.
+
 ## CP-0518 continuation
 
 Evidence:

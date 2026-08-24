@@ -1,5 +1,25 @@
 # Failed Attempts
 
+## 2026-08-24 — SYN-039 CP-0519 ordinary continuation after command-scope fix
+
+- Attempted approach: Run the required second ordinary two-agent acceptance
+  after the command-scope fix, with only complementary coding prompts and
+  retained Codex sessions.
+- Expected result: Both ordinary lanes would remain engaged through reciprocal
+  review, snapshots, validation, integration, and WorkGroup closure.
+- Observed result: Both original lanes integrated and validated. The retained
+  harness resumed A after its lane had completed, creating a new active
+  `todo.py` participant. A ignored one projected admission argument, then
+  exact recovery returned `internal_failure`; B remained in WAIT. WorkGroup
+  `dfc93a1a-de2e-3db4-859e-c0eb7d60eaab` remained ACTIVE.
+- Root cause/classification: contaminated agent/session continuation and
+  projection compliance; no clean unchanged projected action failure is
+  attributed to production by this run.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0519-command-scope-recovery-2026-08-24.md`.
+- Retry prohibition: Do not add lifecycle behavior for this run. Correct the
+  disposable harness continuation policy before the next ordinary acceptance.
+
 ## 2026-08-24 — SYN-039 CP-0536 ordinary acceptance compliance stop
 
 - Attempted approach: Run a fresh ordinary two-agent Todo acceptance after the

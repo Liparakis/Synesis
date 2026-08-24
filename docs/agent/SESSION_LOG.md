@@ -1,3 +1,23 @@
+## 2026-08-24 — SYN-039 CP-0519 command-scope recovery and acceptance
+
+- The CP-0519 ordinary run reproduced `command_admission_stale /
+  MCP_PROCESS_SCOPE_CHANGED` after clean `ensure_session` recovery moved a
+  connection to a new verified worktree. The fix re-arms the command anchor
+  only after independently verifying the new physical scope.
+- The deterministic regression and full `McpSyn039SliceTest` passed; MCP
+  Javadocs, bundle rebuild, deferred/fixture validators, Doctor structural
+  checks, Go vet, and `git diff --check` passed.
+- The post-fix exact-action diagnostic completed WorkGroup
+  `89fea014-9f5b-326b-8521-5d2218cc55fc`, including structured REJECT/ACCEPT,
+  both snapshot integrations, and control pytest 3/3.
+- The second ordinary acceptance reached integration but the retained harness
+  created an extra participant after A's original lane completed and left
+  WorkGroup `dfc93a1a-de2e-3db4-859e-c0eb7d60eaab` ACTIVE. This remains
+  agent/session evidence, not a new production change.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0519-command-scope-recovery-2026-08-24.md`.
+- No push, remote mutation, or SYN-040 creation.
+
 ## 2026-08-24 — SYN-039 CP-0536 bounded and ordinary acceptance
 
 - Reproduced the CP-0535 late-intent defect: an active intent could enter a
