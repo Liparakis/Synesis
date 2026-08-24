@@ -1,5 +1,21 @@
 # Tasks
 
+## SYN-039 CP-0525 acceptance update
+
+The bounded exact-projection diagnostic completed WorkGroup
+`52ceb172-4e63-332b-ac6a-a5d932acd03d` through review, publication,
+validation, integration, and closure. The ordinary follow-up reached shared
+WorkGroup `5e0a82d7-635d-3e47-9e3e-5a4c37d83822`, integrated both snapshots,
+and passed control pytest 3/3, but ended with the WorkGroup ACTIVE at a valid
+projected continuation boundary. No unchanged projected action failed and no
+production change is justified.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
+
+Next narrow action: focused SYN-039 verification, repository validators, and
+checkpoint CP-0525. Keep the known infrastructure failures separate.
+
 ## SYN-039 CP-0522 third ordinary acceptance update
 
 The third fresh ordinary acceptance used one shared WorkGroup and current

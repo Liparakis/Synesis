@@ -1,5 +1,27 @@
 # Failed Attempts
 
+## 2026-08-24 — SYN-039 CP-0525 ordinary completion boundary
+
+- Attempted approach: Run the required second fresh ordinary two-agent Todo
+  acceptance after a bounded exact-projection diagnostic completed end to end.
+- Expected result: ordinary agents would continue from visible coding through
+  reciprocal review, validation, integration, and WorkGroup closure without
+  lifecycle coaching.
+- Observed result: both agents reached one shared WorkGroup. A integrated
+  `snap_de38379e858662f72b2a5de69db6d983`; B accepted it, published and
+  integrated `snap_b78e80fc552f8df1a890812d587b2e72`, and control pytest passed
+  3/3. A's session stopped while the valid reviewer continuation remained
+  projected; WorkGroup `5e0a82d7-635d-3e47-9e3e-5a4c37d83822` remained ACTIVE.
+- Root cause/classification: ordinary Codex session engagement/projection
+  compliance. No unchanged projected Synesis action failed and no valid
+  lifecycle action was absent. Do not change production lifecycle, cleanup,
+  integration, or orchestration behavior from this run.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
+- The bounded companion diagnostic completed WorkGroup
+  `52ceb172-4e63-332b-ac6a-a5d932acd03d`; its invalid payload attempts were
+  fail-closed and its exact retries succeeded.
+
 ## 2026-08-24 — SYN-039 CP-0522 third ordinary projection-compliance stop
 
 - Attempted approach: Run a third fresh ordinary two-agent Todo acceptance

@@ -1,5 +1,42 @@
 # Current Task
 
+## SYN-039 CP-0525 bounded and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
+
+The fresh bounded exact-projection diagnostic completed one shared WorkGroup
+through REVIEW admission, exact grant consumption, immutable snapshot
+publication, structured REJECT/ACCEPT, integration, and terminal WorkGroup
+completion. No unchanged projected action failed. The required second ordinary
+acceptance reached one shared WorkGroup, integrated both complementary
+snapshots, and passed control pytest 3/3, but stopped with WorkGroup
+`5e0a82d7-635d-3e47-9e3e-5a4c37d83822` ACTIVE while the agent session did not
+continue the valid projected reviewer continuation. This remains agent/session
+engagement evidence, not a proven production defect.
+
+## Immediate next action
+
+Run focused SYN-039 coordination/MCP tests, validators, Javadocs, Go vet,
+Doctor, and `git diff --check`; attempt the full repository `check` and retain
+the known Git subprocess stall and bootstrap migration failures separately.
+Create CP-0525 after recording the exact verification results. Keep
+production code unchanged; do not push or create SYN-040.
+
+## Work completed
+
+The bounded and ordinary acceptance traces and terminal states are recorded in
+the evidence file above. No production code changed in this slice.
+
+## Current failures
+
+The ordinary product acceptance remains incomplete only at the Codex
+session-engagement boundary. The ordinary control checkout passed 3/3 but
+contains a disposable untracked `__pycache__/` artifact; this is not evidence
+for changing integration behavior. Doctor remains DEGRADED with six warnings.
+The root Git subprocess stall and bootstrap migration failures remain
+separately classified.
+
 ## SYN-039 CP-0522 third ordinary acceptance
 
 The third fresh ordinary run used current bundled MCP sessions and the same

@@ -3334,3 +3334,17 @@ ownership. No push and no SYN-040.
   failures. The full root check reproduced the known `McpServerTest` Git
   subprocess failure/stall and was bounded/interrupted after process evidence
   capture. Doctor remains DEGRADED with six fixture warnings.
+## 2026-08-24 — SYN-039 CP-0525 bounded and ordinary acceptance
+
+- Ran a fresh bounded exact-projection diagnostic with two independent
+  GPT-5.6 Luna High Codex processes, current bundled MCP, and explicit
+  unchanged-argument guidance. One WorkGroup completed through REVIEW,
+  immutable snapshots, structured REJECT/ACCEPT, integration, and closure.
+- Ran the required second ordinary acceptance with only complementary coding
+  prompts. Both agents reached one WorkGroup, integrated both snapshots, and
+  control pytest passed 3/3. The WorkGroup remained ACTIVE because a Codex
+  session stopped while a valid continuation was projected.
+- No production code changed. No unchanged projected action failed. Doctor
+  remains DEGRADED with six warnings; the root Git stall and bootstrap
+  migration failures remain independent. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.

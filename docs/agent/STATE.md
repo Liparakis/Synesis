@@ -1,5 +1,31 @@
 # State
 
+## SYN-039 CP-0525 bounded and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
+
+Fresh project `87a708f7-6462-48fd-a9f2-661c91911501` and WorkGroup
+`52ceb172-4e63-332b-ac6a-a5d932acd03d` completed the bounded exact-action
+diagnostic with two epoch-1 disjoint claims, exact REVIEW admission, consumed
+grants `6458691e-3129-3951-b2fa-ad76e5eb2424` and
+`c87c2bbe-b13c-3697-9ce3-0a6dfb40a573`, immutable snapshots, structured
+REJECT/ACCEPT, integration, and control pytest 2/2. Invalid review payloads
+were rejected fail-closed; no unchanged projection failed.
+
+The conditional ordinary run used project
+`4b46f176-3697-4c24-83ef-1cf13e6ab95f` and WorkGroup
+`5e0a82d7-635d-3e47-9e3e-5a4c37d83822`. Both participants completed their
+coding lanes; snapshots `snap_de38379e858662f72b2a5de69db6d983` and
+`snap_b78e80fc552f8df1a890812d587b2e72` integrated into control commits
+`a625698` and `9913709`; pytest passed 3/3. The WorkGroup remained ACTIVE
+because the ordinary Codex session stopped while a valid reviewer continuation
+was still projected. This is agent/session evidence, not a production defect.
+
+Immediate next action: run focused SYN-039 verification and diagnostics,
+record exact results, and create CP-0525. Do not modify production code, push,
+or create SYN-040.
+
 ## SYN-039 CP-0522 third ordinary acceptance
 
 Evidence:
