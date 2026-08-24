@@ -1,5 +1,21 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0515 exact-action continuation diagnostic
+
+- Fresh exact-action diagnostic reached one shared WorkGroup
+  `ed155087-41fd-39e6-8380-d2c5663aae64`, exact REVIEW admission, owner
+  acceptance, and single-use grant consumption. Both agents executed the
+  observed concrete actions and repeated `WAIT -> get_next_action({})` polls.
+- The producer stopped before polling after grant consumption; the reviewer
+  stopped at `SNAPSHOT_PENDING`. No snapshot, validation, integration, or
+  closure was reached, and no exact projected call failed. This remains
+  agent-compliance/order evidence, not a production defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+- Exact next action: run one fresh bounded diagnostic with the implementation
+  producer establishing the WorkGroup first, then preserve the first post-
+  grant lifecycle result without relay or manual transition.
+
 # 2026-08-24 — SYN-039 CP-0513/CP-0514 claim contract and ordinary acceptance
 
 - CP-0513 showed both ordinary agents calling `ensure_session` with only

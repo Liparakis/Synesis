@@ -1,5 +1,45 @@
 # Current Task
 
+## SYN-039 CP-0515 exact-action diagnostic
+
+The fresh exact-action diagnostic used the current bundled MCP, two independent
+GPT-5.6 Luna agents, and disjoint claim-bearing sessions. It reached one
+WorkGroup `ed155087-41fd-39e6-8380-d2c5663aae64`, exact REVIEW admission,
+owner acceptance, and single-use grant consumption
+`d401e6d4-fc52-3055-9355-ef083aeb48ad`. Both agents executed every observed
+concrete lifecycle projection, including repeated `WAIT -> get_next_action({})`
+continuations. The producer stopped before observing post-consumption
+publication, while the reviewer stopped in `SNAPSHOT_PENDING` WAIT. No exact
+projected action failed; no snapshot, validation, integration, or closure was
+reached. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+
+## Work completed
+
+The CP-0514 claim-announcement contract remains verified: ordinary agents now
+send disjoint `ensure_session.task.claims`, converge on one WorkGroup, and
+reach REVIEW admission without harness relay. Focused contract/MCP/workspace
+tests, bundle rebuild, deferred validation, and `git diff --check` remain
+green. No production lifecycle code changed for CP-0515.
+
+## Current failures
+
+The first post-grant stop remains agent continuation/order, not a proven
+protocol defect. The grant was consumed, but the producer did not poll again
+after that event; the reviewer only saw `SNAPSHOT_PENDING` and no immutable
+snapshot. The WorkGroup remains ACTIVE. Doctor is DEGRADED with six warnings;
+the known Git subprocess stall and bootstrap migration failures remain
+separate.
+
+## Immediate next action
+
+Run one fresh bounded exact-action diagnostic with the implementation producer
+establishing its claim/WorkGroup before the complementary reviewer session,
+then let both agents execute exact projections and remain engaged until the
+producer observes grant consumption. Preserve the first exact failure or
+missing usable action; do not relay, manually transition, change lifecycle
+code, push, or create SYN-040.
+
 ## SYN-039 CP-0514 ordinary acceptance
 
 CP-0513 exposed a concrete agent-facing contract ambiguity: ordinary agents

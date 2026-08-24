@@ -1,5 +1,8 @@
 # SYN-039 latest acceptance evidence
 
+| Exact post-grant continuation | fresh exact-action two-agent diagnostic | `syn039-cp0515-001` | producer observes grant consumption, publishes, reviewer validates, integrates, and closes | NOT REACHED; producer stopped before post-consumption poll and reviewer stopped at `SNAPSHOT_PENDING` WAIT; no exact projected call failed | SYN-039 / CP-0515 |
+| REVIEW admission and single-use grant remain executable after claim-contract fix | fresh exact-action two-agent diagnostic | `syn039-cp0515-001` | exact request, owner response, and grant consumption | PASS; WorkGroup `ed155087...`, request `beafd523...`, grant `d401e6d4...` | SYN-039 / CP-0515 |
+
 | Claim-bearing session announcement | fresh ordinary two-agent acceptance | `syn039-ordinary-cp0514-001` | both agents use `ensure_session.task.claims` for disjoint intent/ownership and converge on one WorkGroup | PASS; both intents and claims formed one WorkGroup; REVIEW admission and grant consumption reached | SYN-039 / CP-0514 |
 | Exact post-grant continuation through publication | fresh ordinary two-agent acceptance | `syn039-ordinary-cp0514-001` | producer observes grant consumption and publishes; reviewer continues from `SNAPSHOT_PENDING` | NOT REACHED; both agents stopped during projected WAIT continuation; no exact projected call failed | SYN-039 / CP-0514 |
 | Agent-facing claim contract is explicit | catalog, generated guidance, provider manual tests | CP-0513 / CP-0514 | `task.claims` announces intent; `likelyScopes` does not | PASS; deterministic contract tests and rebuilt bundle pass | SYN-039 / CP-0514 |

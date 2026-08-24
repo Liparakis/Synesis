@@ -1,5 +1,20 @@
 # Tasks
 
+## SYN-039 CP-0515 update
+
+The exact-action diagnostic reached REVIEW admission, owner acceptance, and
+single-use grant consumption in one shared WorkGroup. Both agents executed the
+observed concrete projections, including repeated WAIT continuations, but the
+producer stopped before observing post-consumption publication and the
+reviewer stopped in SNAPSHOT_PENDING. No exact projected action failed; no
+production change is justified. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+
+The active task remains SYN-039. Next work is one fresh bounded diagnostic with
+the implementation producer establishing the WorkGroup first, then exact
+projection execution through snapshot, validation, integration, and closure.
+Do not broaden lifecycle code, push, or create SYN-040.
+
 ## SYN-039 CP-0514 update
 
 The agent-facing claim contract is clarified narrowly. The ten-tool MCP now

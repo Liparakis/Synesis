@@ -1,5 +1,24 @@
 # Next Session
 
+## CP-0515 continuation
+
+CP-0515 exact-action evidence reached WorkGroup
+`ed155087-41fd-39e6-8380-d2c5663aae64`, exact REVIEW admission, owner
+acceptance, and consumed grant
+`d401e6d4-fc52-3055-9355-ef083aeb48ad`. Both agents executed observed
+`WAIT -> get_next_action({})` projections, but the producer stopped before
+polling after grant consumption and the reviewer stopped at
+`SNAPSHOT_PENDING`. No snapshot, validation, integration, or closure was
+reached; no exact projected call failed. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+
+Exact next action: run one fresh bounded exact-action diagnostic with the
+implementation producer launched/established first and the complementary
+reviewer second. Keep both agents unattended, execute concrete projections
+unchanged, and preserve the first lifecycle failure or missing usable action.
+Do not relay, manually transition, change lifecycle code, push, or create
+SYN-040.
+
 ## CP-0514 continuation
 
 The post-contract ordinary acceptance used the current bundled MCP and two

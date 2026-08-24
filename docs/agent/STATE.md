@@ -1,5 +1,20 @@
 # State
 
+## SYN-039 CP-0515 exact-action diagnostic
+
+CP-0515 reached one shared WorkGroup, exact REVIEW admission, owner response,
+and single-use grant consumption with both agents executing all observed
+concrete projections. The producer stopped before polling after the reviewer
+consumed the grant; the reviewer stopped at `SNAPSHOT_PENDING ->
+get_next_action({})`. No snapshot, validation, integration, or terminal
+WorkGroup state was reached. No exact projected lifecycle call failed, so this
+remains agent continuation/order evidence. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0515-exact-action-diagnostic-2026-08-24.md`.
+
+Immediate next action: repeat one bounded exact-action diagnostic with the
+implementation producer establishing the WorkGroup first, preserving the
+existing fail-closed protocol and no-relay rule.
+
 ## SYN-039 CP-0514 ordinary acceptance
 
 The claim-announcement contract is now explicit. `ensure_session.task.claims`
