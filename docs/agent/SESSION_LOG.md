@@ -1,3 +1,27 @@
+## 2026-08-24 — SYN-039 CP-0526 fix and CP-0527 projection diagnostic
+
+- CP-0526 reproduced an unchanged projected `finish_lane` that returned
+  `task_not_ready` because an inherited sibling source change was mistaken for
+  the current lane's publishable delta. The claim-aware existing
+  `TaskSnapshotService` gate was implemented and covered by deterministic
+  regression tests; focused workspace/MCP tests and the rebuilt bundle passed.
+- Fresh CP-0527 project `syn039-diagnostic-cp0527-001` used two independent
+  GPT-5.6 Luna High Codex sessions, the current bundled MCP, ready/isolated
+  sessions, disjoint claims, and one shared WorkGroup. B executed the exact
+  projected REVIEW admission request for A's intent, but received
+  `policy_denied / INTENT_NOT_FOUND`. A second poll re-projected the same
+  action. The diagnostic stopped at that first exact projected-action failure;
+  no grant, snapshot, validation, integration, or closure state was reached.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0526-projection-diagnostic-2026-08-24.md`
+  and
+  `docs/evidence/syn039-unattended-todo-cp0527-projection-diagnostic-2026-08-24.md`.
+- Doctor remains DEGRADED with the fixture's five warnings. The known Git
+  subprocess stall and bootstrap migration failures remain separately
+  classified. Exact next action: reproduce the projection-to-admission
+  transition with durable timing and participant/intent state before changing
+  production behavior.
+
 # 2026-08-24 — SYN-039 CP-0524 clean-recovery identity fix diagnostic
 
 - Fresh ordinary CP-0525 acceptance used only complementary visible coding

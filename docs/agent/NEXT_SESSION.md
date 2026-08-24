@@ -1,23 +1,24 @@
 # Next Session
 
-## CP-0525 continuation
+## CP-0527 continuation
 
 Evidence:
-`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`.
+`docs/evidence/syn039-unattended-todo-cp0526-projection-diagnostic-2026-08-24.md`
+and
+`docs/evidence/syn039-unattended-todo-cp0527-projection-diagnostic-2026-08-24.md`.
 
-The ordinary acceptance reached one WorkGroup, exact REVIEW admission, grant
-consumption, snapshot publication/integration, and structured ACCEPT. The
-first concrete blocker is B's active `test_todo.py` lane after ACCEPT:
-repeated `get_next_action` returned bare `IMPLEMENT` with no executable
-lifecycle action, leaving the WorkGroup ACTIVE and B's change unpublished.
-Control is clean at `09c0d52`; no production code changed in this run.
+CP-0526's claim-aware publication fix is present and focused tests pass. The
+fresh CP-0527 diagnostic reached one WorkGroup, exact REVIEW admission
+projection, and then the unchanged projected request returned
+`policy_denied / INTENT_NOT_FOUND`. No grant, snapshot, validation,
+integration, or closure state exists.
 
-- Exact next action: reproduce the active-reviewer bare-`IMPLEMENT` state in a
-  deterministic fixture and trace the existing completion/publication and
-  review predicates.
-- Exact code action: implement only the smallest fail-closed projection that
-  gives that active lane an existing-model completion/review path; preserve
-  claims, epochs, grants, snapshots, and ownership.
+- Exact next action: reproduce the projection-to-admission transition with
+  durable per-call timing and participant/intent state, distinguishing a
+  stale projection from wrong admission-state resolution.
+- Exact code action: add or change production behavior only after that trace
+  proves the narrow root cause; preserve fail-closed participant, intent,
+  epoch, ownership, and WorkGroup checks.
 - Keep Doctor warnings, the Git subprocess stall, bootstrap migration failures,
   cleanup, detached-agent retention, and orchestration separately classified.
   Do not push, relay, broaden SYN-039, or create SYN-040.

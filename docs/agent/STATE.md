@@ -1,27 +1,27 @@
 # State
 
-## SYN-039 CP-0525 ordinary acceptance
+## SYN-039 CP-0527 post-fix projection diagnostic
 
-Fresh ordinary two-agent evidence is recorded in
-`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`. Current
-MCP preflight/control probe was protocol `2025-06-18`, server version
-`0.1.0-SNAPSHOT`, bundle commit `bc334ac`, and exactly ten tools. Both agents
-reached ready/isolated sessions with disjoint claims and one WorkGroup.
+CP-0526 established and fixed a concrete projection mismatch: a recovered lane
+inherited a sibling's integrated source change, so generic changed-path
+inspection projected `finish_lane` even though the current claim could not
+publish it. The fix passes the deterministic claim-boundary regression and
+focused tests. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0526-projection-diagnostic-2026-08-24.md`.
 
-The run reached exact REVIEW admission, owner acceptance, single-use grant
-consumption, immutable A snapshot publication, integration, and B's structured
-ACCEPT. It then reproduced the first concrete remaining blocker: B's active
-intent and dirty `test_todo.py` claim remained after ACCEPT, but repeated
-`get_next_action` returned bare `IMPLEMENT` without an executable lifecycle
-action. The WorkGroup stayed ACTIVE; B's test change remained outside the
-clean control checkout. No exact projected action failed and no manual repair
-was performed.
+CP-0527 used a fresh project and current rebuilt MCP. Both agents reached
+ready/isolated sessions, disjoint epoch-1 claims, and one WorkGroup. B's exact
+`get_next_action` projection was `request_coordination(work_group_join)` for
+A's intent `7def130b-5a95-3ff2-8750-c1f3d8811c8a`; B executed the unchanged
+arguments and received `policy_denied / INTENT_NOT_FOUND`. The second poll
+re-projected the same request. No request, grant, snapshot, validation,
+integration, or closure state was reached. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0527-projection-diagnostic-2026-08-24.md`.
 
-Immediate next action: reproduce this post-ACCEPT active-reviewer no-action
-state deterministically, trace the existing completion/publication and review
-authorization predicates, and implement only the smallest fail-closed
-completion projection. Do not broaden cleanup, Doctor, detached-agent,
-ownership, or orchestration work; do not push or create SYN-040.
+Immediate next action: reproduce this exact projection-to-admission transition
+with durable timing and participant/intent state, then classify stale
+projection versus wrong admission-state lookup before changing production
+behavior. Do not weaken fail-closed authorization or broaden SYN-039.
 
 ## SYN-039 CP-0524 clean-recovery identity fix diagnostic
 

@@ -1,24 +1,28 @@
 # Tasks
 
-## SYN-039 CP-0525 update
+## SYN-039 CP-0527 update
 
-The fresh ordinary acceptance is recorded in
-`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`. It
-reached one shared WorkGroup, exact REVIEW admission, owner acceptance,
-single-use grant consumption, immutable snapshot publication, integration, and
-structured ACCEPT. The first concrete remaining blocker is the active
-reviewer's completion path: B's `test_todo.py` intent stayed ACTIVE after its
-visible work and the accepted sibling snapshot, while repeated
-`get_next_action` returned bare `IMPLEMENT` with no executable lifecycle action.
-The WorkGroup remained ACTIVE and B's change was not integrated.
+CP-0526 proved and fixed a narrow claim/publication projection defect. The
+existing `hasPublishableChanges` gate now applies the current lane claims, so
+an inherited sibling source change cannot authorize another lane's
+`finish_lane`. Deterministic workspace/MCP regressions and focused tests pass.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0526-projection-diagnostic-2026-08-24.md`.
 
-This authorizes only the next narrow slice: deterministically reproduce the
-post-ACCEPT active-reviewer no-action state, trace the existing completion /
-publication and review authorization predicates, and project the smallest
-existing-model fail-closed action for that lane. Preserve ownership, claims,
-epochs, grants, snapshot validation, and rejection/acceptance semantics. Do
-not broaden cleanup, detached-agent retention, Doctor, or orchestration, push,
-or create SYN-040.
+The fresh CP-0527 diagnostic reached one shared WorkGroup and an exact REVIEW
+admission projection. Agent B executed the unchanged projected
+`request_coordination(work_group_join)` for Agent A's active intent, but the
+admission path returned fail-closed `INTENT_NOT_FOUND`; the next poll
+re-projected the same action. This is the next concrete SYN-039 blocker, with
+the projection-to-admission race/state transition still to be traced. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0527-projection-diagnostic-2026-08-24.md`.
+
+The next narrow slice is only to capture durable timing/state around that exact
+projection and determine whether the projection is stale or admission resolves
+the wrong current state. Preserve participant, intent, claim, epoch, WorkGroup,
+and fail-closed ownership checks. Do not broaden cleanup, Doctor, detached
+agent, orchestration, snapshot, validation, or integration behavior; do not
+push or create SYN-040.
 
 ## SYN-039 CP-0524 update
 

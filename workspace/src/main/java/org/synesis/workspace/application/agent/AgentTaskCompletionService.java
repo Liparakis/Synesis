@@ -59,6 +59,7 @@ public final class AgentTaskCompletionService {
     private final WorkspaceCollaborationService collaborationService;
     private final ProviderManualService manualService;
     private final ProjectProcessExecutor processExecutor;
+    private final AgentNextActionService nextActionService;
 
     /**
      * Creates an agent task completion service.
@@ -72,6 +73,7 @@ public final class AgentTaskCompletionService {
         this.collaborationService = new WorkspaceCollaborationService();
         this.manualService = new ProviderManualService();
         this.processExecutor = new ProjectProcessExecutor();
+        this.nextActionService = new AgentNextActionService();
     }
 
     /**
@@ -320,6 +322,16 @@ public final class AgentTaskCompletionService {
                 // binding terminal (and retaining its worktree) prevents the
                 // next inbox read from attempting to reuse a stale lane.
                 bindingService.complete(location, request.provider(), request.connectionInstanceId());
+                // A completed lane may still be the only participant able to
+                // review an active sibling.  Project that existing review
+                // protocol before returning a terminal result, so the
+                // provider remains engaged without retaining write ownership.
+                AgentResponse continuation = nextActionService.getNextAction(
+                        new AgentNextActionService.NextActionRequest(
+                                location.root(), request.provider(), request.connectionInstanceId()));
+                if (continuation.nextAction() != null) {
+                    return continuationWithCompletion(result, continuation);
+                }
             }
             return result;
 
@@ -330,6 +342,19 @@ public final class AgentTaskCompletionService {
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
                     AgentNextAction.REQUEST_HUMAN_HELP, failure);
         }
+    }
+
+    private static AgentResponse continuationWithCompletion(
+            AgentResponse completion, AgentResponse continuation) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("completion", completion.result());
+        if (continuation.result() instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> result.put(String.valueOf(key), value));
+        } else if (continuation.result() != null) {
+            result.put("continuation", continuation.result());
+        }
+        return new AgentResponse(continuation.status(), continuation.reason(),
+                continuation.nextAction(), result);
     }
 
     private static AgentResponse completionResult(PredictionEventStore store, TaskSnapshotRecord snapshot,

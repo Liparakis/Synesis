@@ -326,6 +326,48 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void completedLaneProjectsReciprocalReviewAdmissionWhileSiblingRemainsActive(
+            @TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var reviewerClaim = collaboration.announce(fixture.project, "codex",
+                "syn039-reviewer-publication", "Add Todo coverage",
+                "Publish and validate the reviewer snapshot",
+                List.of(ResourceSelector.pathExact("test_todo.py")));
+        assertEquals(fixture.groupId, reviewerClaim.intent().workGroupId());
+
+        Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
+                "def add_todo(items, item):\n    return [*items, item]\n\n"
+                        + "\ndef remove_todo(items, item):\n"
+                        + "    return [value for value in items if value != item]\n");
+
+        Map<String, Object> projection = innerResult(
+                fixture.owner.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("snapshot_publication_required", projection.get("reason"), projection.toString());
+        assertEquals("finish_lane", projection.get("nextAction"), projection.toString());
+        Map<String, Object> projectedResult = (Map<String, Object>) projection.get("result");
+        Map<String, Object> workflow = (Map<String, Object>) projectedResult.get("workflow");
+        Map<String, Object> finishArguments = (Map<String, Object>) workflow.get("arguments");
+
+        Map<String, Object> completion = innerResult(
+                fixture.owner.handleMessage(toolCall("finish_lane", ProviderJson.write(finishArguments))));
+        assertEquals("ready", completion.get("status"), completion.toString());
+        assertEquals("request_coordination", completion.get("nextAction"), completion.toString());
+        Map<String, Object> result = (Map<String, Object>) completion.get("result");
+        assertEquals("work_group_join", result.get("nextProtocolKind"), completion.toString());
+        Map<String, Object> payload = (Map<String, Object>) result.get("nextProtocolPayload");
+        assertEquals(fixture.groupId.toString(), payload.get("workGroupId"), completion.toString());
+        assertEquals(reviewerClaim.intent().intentId().toString(), payload.get("intentId"), completion.toString());
+        Map<String, Object> continuationWorkflow = (Map<String, Object>) result.get("workflow");
+        assertEquals("request_coordination", continuationWorkflow.get("recommendedTool"), completion.toString());
+        Map<String, Object> continuationArguments =
+                (Map<String, Object>) continuationWorkflow.get("arguments");
+        assertEquals("work_group_join", continuationArguments.get("kind"), completion.toString());
+        assertEquals(payload, continuationArguments.get("payload"), completion.toString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void reviewerRecoveryPreservesConsumedGrantAfterControlCheckoutAdvances(@TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);
         var location = new ProjectApplicationService().locate(fixture.project);

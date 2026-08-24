@@ -1,47 +1,48 @@
 # Current Task
 
-## SYN-039 CP-0525 ordinary acceptance
+## SYN-039 CP-0527 post-fix projection diagnostic
 
-The fresh ordinary two-agent acceptance used only complementary visible coding
-prompts and the current bundled MCP. It reached one shared WorkGroup, exact
-REVIEW admission, owner acceptance, single-use grant consumption, immutable
-snapshot publication, snapshot integration, and structured ACCEPT validation.
-Evidence:
-`docs/evidence/syn039-unattended-todo-cp0525-ordinary-2026-08-24.md`.
+The CP-0526 diagnostic proved a concrete publication-projection defect: an
+inherited sibling source change authorized `finish_lane` for the wrong lane.
+The existing claim-aware publication gate is implemented in the working tree
+and its deterministic regression plus focused SYN-039 tests pass. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0526-projection-diagnostic-2026-08-24.md`.
 
-The first concrete remaining blocker is the active reviewer's completion
-projection. After ACCEPT, Agent B's `test_todo.py` intent and claim remained
-ACTIVE with a legitimate dirty recovery worktree, while repeated
-`get_next_action` returned bare `IMPLEMENT` with no executable lifecycle action.
-The WorkGroup remained ACTIVE and B's test change was not integrated. This is a
-protocol/product gap, not an agent-compliance deviation; B did not invent an
-unprojected `finish_lane`.
+The fresh CP-0527 diagnostic used the rebuilt current MCP, two ready/isolated
+Codex sessions, disjoint claims, and one shared WorkGroup. Agent B executed
+the exact projected REVIEW admission request, but Synesis returned fail-closed
+`policy_denied / INTENT_NOT_FOUND`. The projection listed the target intent in
+the same response. No grant, snapshot, validation, integration, or closure
+state was created. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0527-projection-diagnostic-2026-08-24.md`.
 
 ## Work completed
 
-The accepted A snapshot is present in the clean control checkout at `09c0d52`,
-and control `python -B -m pytest` passes 2/2. Focused SYN-039 MCP tests,
-deferred/fixture validators, and `git diff --check` pass. Doctor remains
-DEGRADED with six separately classified warnings. The known Git subprocess
-stall and bootstrap migration failures remain independent.
+Focused workspace and MCP tests pass. The bundled MCP was rebuilt with the
+claim-aware publication fix. CP-0527 made no visible repository changes and
+was stopped at the first exact projected-action failure. Doctor remains
+DEGRADED with five fixture warnings; the known Git subprocess stall and
+bootstrap migration failures remain independent.
 
 ## Current failures
 
-WorkGroup `d34f88e2-83f2-34af-a84c-c2bb351f65cc` is ACTIVE. A is COMPLETED with
-snapshot `snap_1b7221059ac7a398520b7efdb220bfbb` integrated; B is ACTIVE with
-intent `f63dee3c-0822-3852-916b-767882eb3b64`, claim `PATH_EXACT test_todo.py`,
-and an unpublished visible change. No exact projected action failed. The
-missing behavior is a usable existing-model completion/review projection for
-an active reviewer lane after sibling ACCEPT.
+WorkGroup `39e79e24-f414-3e69-9000-da49f7983e3f` remains ACTIVE. Participants
+are `agt_d08a4cdc-de4e-34c9-ac1e-769ff533921f` and
+`agt_7623f50b-5e1e-36ef-baa2-b5fb5225feb3`; their epoch-1 claims are
+`todo.py` and `test_todo.py`. The exact projected request targeted intent
+`7def130b-5a95-3ff2-8750-c1f3d8811c8a` and returned `INTENT_NOT_FOUND`.
+The projection-to-admission liveness/state transition is not yet explained;
+the final read-only state showed Agent A detached and Agent B active, but the
+raw agent logs do not timestamp the request relative to that transition.
 
 ## Immediate next action
 
-Reproduce the post-ACCEPT active-reviewer bare-`IMPLEMENT` state in a
-deterministic MCP fixture, trace the existing publication/finish and review
-authorization predicates, and implement only the smallest fail-closed
-completion projection needed for that active lane. Preserve claims, epochs,
-grant fencing, snapshot validation, and ownership; do not broaden cleanup,
-Doctor, detached-agent, or orchestration behavior, push, or create SYN-040.
+Reproduce CP-0527 with durable per-call timing and participant/intent state
+around the exact projected REVIEW admission. Trace whether the projection is
+stale or the admission path resolves the wrong current state, then add only a
+fail-closed regression and the smallest fix for the proven cause. Do not
+modify snapshot, validation, integration, cleanup, Doctor, ownership, or
+orchestration behavior speculatively; do not push or create SYN-040.
 
 ## SYN-039 CP-0524 clean-recovery identity fix diagnostic
 

@@ -74,7 +74,28 @@ public final class TaskSnapshotService {
      * @throws IOException if Git inspection fails
      */
     public boolean hasPublishableChanges(Path workerWorktreePath) throws IOException {
+        return hasPublishableChanges(workerWorktreePath, List.of());
+    }
+
+    /**
+     * Checks whether the worker worktree contains source changes covered by
+     * the current lane claims.
+     *
+     * <p>A recovered worktree may be based on a sibling's integrated commit.
+     * Those inherited source changes are not publication authority for this
+     * lane.  Applying the same claim boundary used by snapshot creation keeps
+     * a projected {@code finish_lane} executable without expanding ownership.
+     *
+     * @param workerWorktreePath absolute worker worktree path
+     * @param claims             current lane resource claims
+     * @return {@code true} when at least one source change is covered and no
+     *         source change falls outside the supplied claims
+     * @throws IOException if Git inspection fails
+     */
+    public boolean hasPublishableChanges(Path workerWorktreePath,
+                                         List<ResourceSelector> claims) throws IOException {
         Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
+        Objects.requireNonNull(claims, "claims");
         boolean dirty = !runGitOutput(workerWorktreePath,
                 "status", "--porcelain", "--untracked-files=all").isBlank();
         String headCommit = gitRevParse(workerWorktreePath, "HEAD");
@@ -84,8 +105,14 @@ public final class TaskSnapshotService {
         if (!manifest.valid()) {
             return false;
         }
-        return allChangedPaths.stream()
-                .anyMatch(path -> !manifest.allowedArtifacts().contains(path));
+        List<String> sourceChanges = allChangedPaths.stream()
+                .filter(path -> !manifest.allowedArtifacts().contains(path))
+                .toList();
+        if (!claims.isEmpty() && sourceChanges.stream().anyMatch(path -> claims.stream()
+                .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
+            return false;
+        }
+        return !sourceChanges.isEmpty();
     }
 
     /**

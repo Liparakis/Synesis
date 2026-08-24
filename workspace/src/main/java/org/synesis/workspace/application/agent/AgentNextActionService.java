@@ -794,7 +794,7 @@ public final class AgentNextActionService {
             // that finish_lane applies while creating the snapshot.
             if (assignedWorktree == null || snapshotService == null) continue;
             try {
-                if (!snapshotService.hasPublishableChanges(assignedWorktree)) continue;
+                if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors())) continue;
             } catch (Exception ignored) {
                 // A failed inspection must not turn into a false publication
                 // permission.  The normal IMPLEMENT path remains available.

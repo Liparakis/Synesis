@@ -11,6 +11,7 @@ import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -64,6 +65,27 @@ class TaskIntegrationServiceTest {
         assertEquals(List.of("README.md", "new.txt"), record.changedPaths());
         assertEquals("refs/synesis/snapshots/" + record.snapshotId(),
                 record.provenance().snapshotRef());
+    }
+
+    @Test
+    void inheritedSiblingSourceChangeCannotAuthorizeAnotherLanePublication(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.email", "test@example.invalid");
+        git(root, "config", "user.name", "Test");
+        Files.writeString(root.resolve("todo.py"), "pass\n");
+        Files.writeString(root.resolve("test_todo.py"), "def test_todo(): pass\n");
+        git(root, "add", ".");
+        git(root, "commit", "-m", "base");
+
+        Files.writeString(root.resolve("test_todo.py"), "def test_todo(): assert True\n");
+        git(root, "add", "test_todo.py");
+        git(root, "commit", "-m", "integrated sibling snapshot");
+
+        TaskSnapshotService service = new TaskSnapshotService();
+        assertFalse(service.hasPublishableChanges(root,
+                List.of(ResourceSelector.pathExact("todo.py"))));
+        assertTrue(service.hasPublishableChanges(root,
+                List.of(ResourceSelector.pathExact("test_todo.py"))));
     }
 
     @Test
