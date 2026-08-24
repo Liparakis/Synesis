@@ -1,5 +1,30 @@
 # State
 
+## SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-and-ordinary-2026-08-25.md`.
+
+The bounded diagnostic project `52ffa2e5-8752-489c-a6cb-270c32730af2` closed
+WorkGroup `f0c02558-ab10-3bf6-b369-1d21011ffe64` through exact REVIEW
+admission, both epoch-1 single-use grant consumptions, snapshot publication,
+structured ACCEPT, integration, control pytest 4/4, and terminal completion.
+No unchanged projected action failed.
+
+The ordinary project `610ccc81-8e8b-4021-bebb-2dfb57b116e7` reached shared
+WorkGroup `b319999f-7060-360b-a26b-0a0891e23be1`, integrated
+`snap_3596291c5018036277f7a780da877dea`, and recorded reviewer ACCEPT. The
+reciprocal grant `abacded1-ee9c-354f-9271-dabcd00bffa5` targeted the
+implementer, whose Codex turn ended before consumption. WorkGroup remains
+ACTIVE; control pytest is 3/3. This is agent/session engagement evidence, not
+a production protocol defect.
+
+Immediate next action: run a fresh supported non-ephemeral Codex
+provider-session continuity probe from this ordinary pending-grant WAIT
+boundary, with no manual lifecycle action or production change. If the same
+provider turn boundary repeats, preserve the classification and do not add
+orchestration.
+
 ## SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
 
 Evidence:

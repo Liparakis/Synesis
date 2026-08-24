@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0528 bounded diagnostic and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-and-ordinary-2026-08-25.md`.
+
+The bounded diagnostic closed WorkGroup
+`f0c02558-ab10-3bf6-b369-1d21011ffe64` after exact REVIEW admission, both
+grants, snapshots, structured ACCEPT, integration, control pytest 4/4, and
+terminal completion. The ordinary run reached WorkGroup
+`b319999f-7060-360b-a26b-0a0891e23be1`, integrated the implementation
+snapshot, and accepted it, but ended with reciprocal grant
+`abacded1-ee9c-354f-9271-dabcd00bffa5` targeted at the ended implementer.
+No unchanged projected action failed; WorkGroup remains ACTIVE.
+
+- Exact next action: run one fresh supported non-ephemeral Codex
+  provider-session continuity probe across this ordinary pending-grant
+  `WAIT -> get_next_action({})` boundary, retaining both sessions and making
+  no manual lifecycle transition. If the provider ends again, preserve the
+  external agent/session classification and leave production unchanged. Do
+  not push or create SYN-040.
+
 ## CP-0527 REVIEW replay fix and post-fix diagnostic
 
 Evidence:

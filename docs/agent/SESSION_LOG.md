@@ -1,3 +1,22 @@
+## 2026-08-25 — SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
+
+- Ran a fresh bounded diagnostic with two independent GPT-5.6 Luna High
+  sessions, the current bundled MCP, disjoint `todo.py` / `test_todo.py`
+  claims, and one shared WorkGroup. Both exact REVIEW admission paths,
+  single-use grant consumption, immutable snapshot publication, structured
+  ACCEPT, integration, control pytest 4/4, and WorkGroup terminal completion
+  succeeded without manual relay. No unchanged projected action failed.
+- Ran the required second ordinary acceptance with only the two coding
+  prompts. It integrated the implementation snapshot and recorded reviewer
+  ACCEPT, but the implementer session ended after the reciprocal REVIEW
+  request; grant `abacded1-ee9c-354f-9271-dabcd00bffa5` remained targeted at
+  that ended participant and WorkGroup remained ACTIVE. Control pytest passed
+  3/3. This is agent/session evidence, not a production defect.
+- No production code changed, nothing was pushed, and no SYN-040 was created.
+  Doctor remains DEGRADED with six warnings; the root Git subprocess stall and
+  bootstrap migration failures remain independent. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0528-diagnostic-and-ordinary-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
 
 - Reproduced the first concrete post-CP-0526 defect: an unchanged projected

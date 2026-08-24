@@ -1,5 +1,30 @@
 # Tasks
 
+## SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
+
+The fresh bounded exact-projection diagnostic completed the existing protocol
+without production changes: WorkGroup
+`f0c02558-ab10-3bf6-b369-1d21011ffe64` reached terminal `COMPLETED`, both
+snapshots integrated, structured ACCEPT decisions were recorded, and control
+pytest passed 4/4. No unchanged projected lifecycle action failed.
+
+The required ordinary follow-up used only the complementary coding prompts.
+It reached WorkGroup `b319999f-7060-360b-a26b-0a0891e23be1`, integrated the
+implementation snapshot, and accepted it from the reviewer. The implementer
+session ended with reciprocal single-use grant
+`abacded1-ee9c-354f-9271-dabcd00bffa5` still targeted at that participant;
+the WorkGroup remains ACTIVE. This is agent/session engagement evidence, not
+a proven Synesis defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-and-ordinary-2026-08-25.md`.
+
+Next narrow action: run one supported non-ephemeral provider-session
+continuity probe across the preserved ordinary WAIT/grant boundary. Keep
+production unchanged unless an unchanged projected Synesis action fails or a
+state requiring progress exposes no usable action. Do not push or create
+SYN-040.
+
 ## SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
 
 The prior ordinary acceptance supplied the first concrete post-CP-0526

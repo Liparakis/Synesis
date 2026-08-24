@@ -2,7 +2,55 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0527
+- Checkpoint: CP-0528
+
+## SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0528-diagnostic-and-ordinary-2026-08-25.md`.
+
+The fresh bounded exact-projection diagnostic used the current bundled MCP,
+two independent GPT-5.6 Luna High sessions, disjoint epoch-1 claims, and one
+WorkGroup `f0c02558-ab10-3bf6-b369-1d21011ffe64`. Exact REVIEW admission,
+owner responses, both single-use grant consumptions, both immutable snapshot
+publications, structured ACCEPT decisions, integration, control pytest 4/4,
+and terminal WorkGroup `COMPLETED` all succeeded. No unchanged projected
+lifecycle action failed.
+
+The required second ordinary acceptance used only the complementary coding
+prompts. It reached WorkGroup `b319999f-7060-360b-a26b-0a0891e23be1`,
+integrated implementation snapshot `snap_3596291c5018036277f7a780da877dea`,
+and recorded reviewer ACCEPT. The implementer session ended after submitting
+the reciprocal REVIEW request; grant `abacded1-ee9c-354f-9271-dabcd00bffa5`
+targeted that ended participant and remained unresolved. The WorkGroup stayed
+ACTIVE; control pytest passed 3/3 and contains the implementation but not the
+test-lane snapshot. This is agent/session engagement evidence, not a proven
+protocol defect.
+
+## Immediate next action
+
+Run one fresh supported non-ephemeral Codex provider-session continuity probe
+across the ordinary pending-grant `WAIT -> get_next_action({})` boundary,
+preserving both independent sessions and without lifecycle coaching, relay,
+manual transitions, replacement intents, or production changes. If the
+provider still ends before consuming the exact projected grant, classify the
+boundary as external agent/session behavior and keep Synesis production code
+unchanged. Do not push or create SYN-040.
+
+## Work completed
+
+Recorded CP-0528 evidence for both the successful exact-projection diagnostic
+and the incomplete ordinary acceptance. No production code changed and no
+remote state was modified.
+
+## Current failures
+
+The remaining SYN-039 acceptance gap is ordinary provider/session engagement:
+the ordinary run leaves WorkGroup `b319999f-7060-360b-a26b-0a0891e23be1`
+ACTIVE with a valid single-use grant targeted at the ended implementer. No
+exact projected lifecycle action failed. Doctor remains DEGRADED with six
+warnings; the root Git subprocess stall and bootstrap migration failures are
+separately classified.
 
 ## SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
 

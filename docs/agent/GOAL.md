@@ -5,20 +5,9 @@
 - Current phase: SYN-039 is ACTIVE. SYN-038 is DONE at CP-0458, with its Codex App Server lifecycle phase preserved at CP-0447/CP-0448 and its durable project-command extension completed in implementation commit `ad9fdd8`. SYN-037 completed at CP-0415. SYN-036 remains DONE at CP-0407; SYN-014E remains paused; older verification tasks retain their recorded status.
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope; SYN-038 is the explicitly tasked Codex-only lifecycle slice
-- Goal revision: 23
+- Goal revision: 24
 - Status: active
-- Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 must preserve independent Codex/Claude Code sessions underneath Synesis and must not add a central orchestrator, UI, daemon, Fleet system, or centralized launcher. The prior unattended Todo smoke failure supplied for this activation is the primary failure evidence; its raw run artifact is not present in the checkout and must be captured before implementation claims.
-  CP-0527 records the first concrete post-CP-0526 production defect and its
-  narrow fix: released-lane REVIEW request replay now returns the existing
-  durable request instead of failing on the already-released live intent.
-  The fresh post-fix diagnostic reached admission, grant consumption,
-  publication, integration, and structured rejection; the provider session
-  ended before the reciprocal grant was consumed. No unchanged projected
-  action failed in that post-fix run, so provider/session engagement remains
-  the active SYN-039 acceptance boundary. SYN-038 evidence and its
-  `turn_interrupted_command_remained_active` limitation remain unchanged. SYN-010A's
-  required license decision is recorded as AGPL-3.0-only; publication remains
-  unperformed pending explicit push authorization and remaining review gates.
+- Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 must preserve independent Codex/Claude Code sessions underneath Synesis and must not add a central orchestrator, UI, daemon, Fleet system, or centralized launcher. CP-0528 proves the existing protocol can complete the bounded exact-projection diagnostic end to end; the remaining ordinary acceptance gap is provider/session engagement after a reciprocal grant is projected, not a proven lifecycle defect. SYN-038 evidence and its `turn_interrupted_command_remained_active` limitation remain unchanged. SYN-010A's required license decision is recorded as AGPL-3.0-only; publication remains unperformed pending explicit push authorization and remaining review gates.
 - Completion target: Synesis Link v1 criteria in `docs/agent/CONTRACT.md`
 - Evidence: SYN-009C release evidence is complete at CP-0110; SYN-010A
   publication audit, current/reachable-history scan, documentation preparation,
