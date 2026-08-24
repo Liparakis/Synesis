@@ -11,8 +11,7 @@ intent/ownership announcement, while `likelyScopes` is descriptive only. The
 change is contract/guidance-only; lifecycle authorization and fail-closed
 ownership behavior are unchanged. Deterministic catalog, generated guidance,
 and provider-manual tests pass. Evidence of the pre-fix run is retained in the
-CP-0513 harness; the contract slice is in commit `c176626` plus the current
-uncommitted reconciliation.
+CP-0513 harness; the contract slice is in commit `5c1496c`.
 
 The fresh post-fix ordinary run used two independent GPT-5.6 Luna agents and
 the current bundled MCP. Both independently sent disjoint claim-bearing
@@ -24,6 +23,26 @@ stopped. No snapshot, validation, integration, or closure was reached. B's
 first omitted `targetParticipant` was rejected fail-closed and corrected; no
 exact projected action failed. Evidence:
 `docs/evidence/syn039-unattended-todo-cp0514-ordinary-claims-contract-2026-08-24.md`.
+
+## Work completed
+
+The claim-announcement contract is clarified in commit `5c1496c`: the MCP
+catalog, generated `AGENTS.md`, provider manual, and provider documentation
+now identify `ensure_session.task.claims` as the existing intent/ownership
+announcement and `likelyScopes` as descriptive only. Deterministic catalog,
+generated-guidance, provider-manual, focused MCP/workspace tests, bundle
+rebuild, deferred validation, and `git diff --check` pass.
+
+## Current failures
+
+The post-fix ordinary run reached one shared WorkGroup, REVIEW admission,
+owner acceptance, and single-use grant consumption. It stopped at agent
+continuation: the producer stopped before polling after grant consumption and
+the reviewer stopped at `SNAPSHOT_PENDING -> get_next_action`. No snapshot,
+validation, integration, or closure was reached. No exact projected action
+failed; this remains agent-compliance evidence. Doctor remains DEGRADED with
+six warnings, and the known Git subprocess stall and bootstrap migration
+failures remain separate.
 
 ## Immediate next action
 
