@@ -1,5 +1,54 @@
 # Current Task
 
+- Task ID: SYN-039
+- Status: ACTIVE
+- Checkpoint: CP-0527
+
+## SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0527-review-replay-fix-2026-08-25.md`.
+
+The prior ordinary acceptance exposed a real unchanged projected REVIEW
+admission failure: replay after the target lane released its live intent
+returned `INTENT_NOT_FOUND`. Commit `81aa2f6` now checks the durable exact
+REVIEW request before resolving the released live intent. Deterministic
+coordination and MCP regressions pass, including idempotent replay and
+fail-closed new requests.
+
+The fresh post-fix diagnostic reached one WorkGroup, exact REVIEW admission,
+owner responses, grant consumption, immutable snapshot publication,
+integration, and structured REJECT. The provider turn ended before the
+reciprocal REVIEW grant was consumed, so the WorkGroup remains ACTIVE. No
+unchanged projected action failed in the post-fix run.
+
+## Immediate next action
+
+Run one fresh completely ordinary unattended two-agent Todo acceptance using
+only the complementary coding prompts and the current bundled MCP. Do not
+provide protocol-conformance instructions, relay messages, trigger lifecycle
+actions, or repair state manually. Stop at the first unchanged projected
+action failure or state requiring progress with no usable projection. If it
+reaches clean WorkGroup completion, inspect the remaining Doctor warnings.
+Do not push or create SYN-040.
+
+## Work completed
+
+The released-lane REVIEW replay defect is fixed in `81aa2f6`; the exact
+pre-fix failure, red/green regression evidence, post-fix IDs and action trace,
+and independent verification classifications are recorded in the evidence
+file above. No remote state was changed.
+
+## Current failures
+
+The required ordinary end-to-end acceptance is still incomplete at the
+provider/session continuation boundary: WorkGroup
+`ff42da2a-719f-34cb-8851-de17edb9aba8` is ACTIVE with reciprocal grant
+`6eb5cd9c-f949-3080-9bc1-5391a6db17cd` pending after the Codex turn ended.
+Doctor remains DEGRADED with six separately classified warnings. The root Git
+subprocess stall and bootstrap migration failures remain independent
+verification issues.
+
 ## SYN-039 CP-0525-003 bounded and ordinary acceptance
 
 Evidence:

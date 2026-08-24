@@ -1,5 +1,32 @@
 # State
 
+## SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0527-review-replay-fix-2026-08-25.md`.
+
+The pre-fix ordinary run proved that an unchanged projected REVIEW admission
+could return `INTENT_NOT_FOUND` after the target lane released its live
+intent. `WorkIntentService.request` now replays an existing exact durable
+REVIEW request before resolving the live target intent. Commit `81aa2f6` and
+the coordination/MCP regressions are green; new requests against released
+intents still fail closed.
+
+The post-fix project `0d3ffa5c-0279-4966-b926-45aedcc4b2ac` reached shared
+WorkGroup `ff42da2a-719f-34cb-8851-de17edb9aba8`, exact admission, accepted
+owner responses, grant `775737fa-a930-32ab-b682-2e05cd39f600` consumption,
+snapshot `snap_dfdbaefcb233814fed3eead8972c7fe2`, integration, and structured
+REJECT. Reciprocal grant `6eb5cd9c-f949-3080-9bc1-5391a6db17cd` remained
+pending when the provider turn ended; WorkGroup remains ACTIVE. No unchanged
+projected action failed in this run.
+
+Immediate next action: run one fresh completely ordinary unattended two-agent
+Todo acceptance with only the complementary coding prompts and no protocol
+conformance coaching or manual intervention. Preserve the first unchanged
+projected-action failure or missing usable action; otherwise inspect closure
+and Doctor. Keep the Git stall, bootstrap migration failures, and six Doctor
+warnings separately classified.
+
 ## SYN-039 CP-0525-003 bounded and ordinary acceptance
 
 Evidence:

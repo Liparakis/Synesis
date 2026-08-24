@@ -1,5 +1,29 @@
 # Tasks
 
+## SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
+
+The prior ordinary acceptance supplied the first concrete post-CP-0526
+protocol defect: an unchanged projected REVIEW admission replay returned
+`INTENT_NOT_FOUND` after the target lane released its live intent. Commit
+`81aa2f6` now replays the exact durable REVIEW request before resolving the
+released live intent; new requests remain fail-closed. Coordination and MCP
+regressions are green.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0527-review-replay-fix-2026-08-25.md`.
+
+The fresh post-fix diagnostic reached shared WorkGroup admission, exact owner
+responses, grant consumption, immutable snapshot publication, integration,
+and structured REJECT. The provider turn ended before the reciprocal REVIEW
+grant was consumed, leaving the WorkGroup ACTIVE. No unchanged projected
+action failed after the fix.
+
+Next narrow action: run one fresh completely ordinary unattended two-agent
+Todo acceptance with only complementary coding prompts and no protocol
+conformance coaching or manual intervention. Preserve the first unchanged
+projected-action failure or missing usable action. Do not push or create
+SYN-040.
+
 ## SYN-039 CP-0525-003 acceptance update
 
 The bounded exact-projection diagnostic completed WorkGroup
@@ -2326,23 +2350,22 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   rejection-to-implementer handoff; (4) connect accepted work to guarded
   integration and complete WorkGroup cleanup/Doctor closure; (5) rerun the
   unattended Todo experiment with no babysitting and record all evidence.
-- Current state: The reviewer-validation and producer-publication slices are
-  implemented. Deterministic tests prove typed reviewer admission, exact
-  reviewer/grant projections, single-use and epoch fencing, structured
-  ACCEPT/REJECT payloads, and the existing `finish_lane` publication action
-  after grant consumption. Evidence is
-  `docs/evidence/syn039-unattended-todo-snapshot-publication-2026-08-22.md`.
-  Three fresh unattended reruns stopped earlier: Agent B submitted a durable
-  REVIEW request, while Agent A did not execute the projected
-  `respond_coordination` acceptance action. The final request is
-  `4998d76b-fe4b-4d08-b627-103ed21d4122`; no grant or snapshot was reached.
-  This is the current provider-side blocker, not a reason to broaden the
-  production slice. The focused MCP `McpServerTest` reproduced the recurring
-  Git subprocess stall at `McpServerTest.java:181` with worker `24912` blocked
-  through `AgentNextActionService` and `ProcessCommandRunner`; the root check
-  is incomplete. Doctor remains DEGRADED. Exact next action: rerun with the
-  owner following the projected acceptance, then verify `finish_lane` and
-  preserve any later lifecycle failure. Do not create SYN-040.
+- Current state: The reviewer-validation, producer-publication, exact action
+  projection, snapshot access, and guarded integration slices are implemented.
+  CP-0526 exposed a real unchanged projected REVIEW replay failure after the
+  target lane released its live intent. Commit `81aa2f6` fixes that narrow
+  ordering defect; deterministic coordination and MCP regressions are green.
+  The fresh post-fix diagnostic reached admission, owner responses, grant
+  consumption, immutable snapshot publication, integration, and structured
+  REJECT, then stopped when the provider turn ended before the reciprocal
+  grant was consumed. WorkGroup remains ACTIVE and no unchanged projected
+  action failed after the fix. Evidence is
+  `docs/evidence/syn039-unattended-todo-cp0527-review-replay-fix-2026-08-25.md`.
+  The root Git subprocess stall, bootstrap migration failures, and Doctor
+  warnings remain separately classified. Exact next action: run one fresh
+  completely ordinary unattended Todo acceptance with only complementary
+  coding prompts and no lifecycle coaching; preserve the first concrete
+  protocol failure or missing usable action. Do not create SYN-040.
 
 ## SYN-039 CP-0471 update
 

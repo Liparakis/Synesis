@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0527 REVIEW replay fix and post-fix diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0527-review-replay-fix-2026-08-25.md`.
+
+Commit `81aa2f6` fixes the proven released-lane REVIEW replay defect. The
+fresh post-fix diagnostic reached shared WorkGroup admission, exact owner
+responses, grant consumption, immutable snapshot publication, integration,
+and structured rejection. WorkGroup
+`ff42da2a-719f-34cb-8851-de17edb9aba8` remained ACTIVE only because the Codex
+provider turn ended before reciprocal grant
+`6eb5cd9c-f949-3080-9bc1-5391a6db17cd` was consumed. No unchanged projected
+action failed after the fix.
+
+- Exact next action: run one fresh completely ordinary unattended two-agent
+  Todo acceptance with only the real complementary coding prompts and the
+  current bundled MCP. Do not provide lifecycle coaching, relay messages,
+  trigger transitions, or repair state. Stop at the first unchanged
+  projected-action failure or missing usable action. If it completes, inspect
+  WorkGroup cleanup and Doctor. Do not push or create SYN-040.
+
 ## CP-0526 provider-session continuity boundary
 
 Evidence:

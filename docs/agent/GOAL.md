@@ -5,14 +5,17 @@
 - Current phase: SYN-039 is ACTIVE. SYN-038 is DONE at CP-0458, with its Codex App Server lifecycle phase preserved at CP-0447/CP-0448 and its durable project-command extension completed in implementation commit `ad9fdd8`. SYN-037 completed at CP-0415. SYN-036 remains DONE at CP-0407; SYN-014E remains paused; older verification tasks retain their recorded status.
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope; SYN-038 is the explicitly tasked Codex-only lifecycle slice
-- Goal revision: 22
+- Goal revision: 23
 - Status: active
 - Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 must preserve independent Codex/Claude Code sessions underneath Synesis and must not add a central orchestrator, UI, daemon, Fleet system, or centralized launcher. The prior unattended Todo smoke failure supplied for this activation is the primary failure evidence; its raw run artifact is not present in the checkout and must be captured before implementation claims.
-  CP-0525-003 now records a fresh bounded diagnostic that completed the
-  existing protocol and a fresh ordinary run that again stopped only when a
-  Codex provider session ended before a reciprocal projected continuation.
-  No unchanged projected action failed; the provider/session boundary remains
-  the active SYN-039 blocker. SYN-038 evidence and its
+  CP-0527 records the first concrete post-CP-0526 production defect and its
+  narrow fix: released-lane REVIEW request replay now returns the existing
+  durable request instead of failing on the already-released live intent.
+  The fresh post-fix diagnostic reached admission, grant consumption,
+  publication, integration, and structured rejection; the provider session
+  ended before the reciprocal grant was consumed. No unchanged projected
+  action failed in that post-fix run, so provider/session engagement remains
+  the active SYN-039 acceptance boundary. SYN-038 evidence and its
   `turn_interrupted_command_remained_active` limitation remain unchanged. SYN-010A's
   required license decision is recorded as AGPL-3.0-only; publication remains
   unperformed pending explicit push authorization and remaining review gates.
@@ -28,10 +31,9 @@
   `docs/evidence/syn038-real-codex-app-server-acceptance-2026-08-03.md`, and
   ADR-0043.
 - Exact continuation: run `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`, then run one supported non-ephemeral Codex
-  provider-session continuity probe in a fresh disposable project across a
-  durable `WAIT -> get_next_action({})` boundary. A fresh production change
-  requires a concrete unchanged projected-action failure or a missing usable
-  action; repeated provider turn termination alone remains agent/session
-  evidence. Keep `SYN-014E` paused and do not create SYN-040 or add
-  prerelease compatibility aliases.
+  scripts/agent-resume.ps1`, then run one fresh completely ordinary unattended
+  two-agent Todo acceptance with only complementary coding prompts and the
+  current bundled MCP. A fresh production change requires a concrete unchanged
+  projected-action failure or a missing usable action; provider turn
+  termination alone remains agent/session evidence. Keep `SYN-014E` paused and
+  do not create SYN-040 or add prerelease compatibility aliases.

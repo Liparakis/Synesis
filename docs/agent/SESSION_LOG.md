@@ -1,3 +1,23 @@
+## 2026-08-25 — SYN-039 CP-0527 REVIEW replay fix and post-fix diagnostic
+
+- Reproduced the first concrete post-CP-0526 defect: an unchanged projected
+  `request_coordination(work_group_join)` replay returned `INTENT_NOT_FOUND`
+  after the target lane released its live intent, even though the durable
+  REVIEW request still existed.
+- Implemented the smallest fail-closed fix in commit `81aa2f6`: exact durable
+  REVIEW replay is resolved before live intent lookup; new requests still
+  require a current valid intent. Added coordination and MCP regressions.
+- Ran a fresh post-fix two-agent diagnostic with the current bundled MCP. It
+  reached one WorkGroup, exact REVIEW admission, owner responses, grant
+  consumption, immutable snapshot publication, integration, and structured
+  REJECT. The provider turn ended before the reciprocal grant was consumed;
+  WorkGroup remained ACTIVE. No unchanged projected action failed.
+- Focused tests, validators, Javadocs, bundle rebuild, Go vet, and
+  `git diff --check` passed. The known root Git subprocess stall, three
+  bootstrap migration test failures, and six Doctor warnings remain separate.
+- Nothing was pushed and no SYN-040 was created. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0527-review-replay-fix-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0525-003 bounded and ordinary acceptance
 
 - Ran a fresh bounded exact-projection diagnostic with two independent
