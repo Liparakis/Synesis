@@ -1,5 +1,46 @@
 # Current Task
 
+## SYN-039 CP-0517 dirty-review continuation and exact-action diagnostic
+
+The stale-reviewer continuation slice is implemented. A bound reviewer whose
+control checkout advanced but whose assigned worktree contains confirmed
+legitimate changes can now receive the existing grant-backed durable review
+projection and execute structured validation without reopening, replacing, or
+mutating that worktree. Clean stale worktrees retain the existing
+`ensure_session` recovery path, and unknown dirtiness remains fail-closed.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0517-dirty-review-fix-diagnostic-2026-08-24.md`.
+
+## Work completed
+
+Deterministic MCP coverage proves dirty reviewer ACCEPT, preserved worktree,
+same binding, existing review authority, and continued clean stale recovery.
+Focused MCP/workspace tests, Javadocs, validators, bundle rebuild, and diff
+checks pass. A fresh exact-action run reached ready/isolated sessions,
+disjoint claims, one shared WorkGroup, and exact REVIEW admission request
+execution. Agent B's request remained pending after Agent A's last ordinary
+`IMPLEMENT` poll; no projected owner response was ignored and no later
+lifecycle transition was reached.
+
+## Current failures
+
+The fresh diagnostic stopped as agent-engagement/compliance evidence: Agent A's
+Codex turn ended after a pre-request ordinary `IMPLEMENT` projection instead of
+polling again after Agent B asynchronously created the REVIEW request. The
+WorkGroup is ACTIVE with no grant, snapshot, validation, integration, or
+closure. Doctor remains DEGRADED with six warnings. The root Git subprocess
+stall, bootstrap migration test failures, and pre-existing documentation
+trailing-whitespace failures remain independent verification issues.
+
+## Immediate next action
+
+Run a fresh completely ordinary two-agent Todo acceptance with no lifecycle
+instruction beyond the repository contract, and capture whether both normal
+sessions remain engaged after a peer creates the pending REVIEW request. If a
+concrete projected action is ignored, preserve it as agent-compliance evidence;
+if it executes and fails, fix only that proven protocol defect. Do not relay,
+manually transition, broaden SYN-039, push, or create SYN-040.
+
 ## SYN-039 CP-0516 producer-first exact-action diagnostic
 
 The fresh producer-first diagnostic used the current bundled MCP, two

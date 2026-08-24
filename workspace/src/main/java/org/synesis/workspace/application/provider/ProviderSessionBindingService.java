@@ -626,6 +626,30 @@ public final class ProviderSessionBindingService {
     }
 
     /**
+     * Reports whether the assigned worktree has confirmed user changes that
+     * must not be discarded by stale-workspace recovery.
+     *
+     * @param binding exact provider binding whose worktree is inspected
+     * @return {@code true} only when a non-managed uncommitted change is observed
+     */
+    public boolean hasConfirmedUncommittedWork(Binding binding) {
+        if (binding == null || binding.worktreePath() == null) {
+            return false;
+        }
+        try {
+            String status = git(Path.of(binding.worktreePath()),
+                    "status", "--porcelain", "--untracked-files=all");
+            return status.lines().map(String::trim)
+                    .filter(line -> !line.isBlank())
+                    .anyMatch(line -> !(line.endsWith(".synesis") || line.contains(".synesis/")
+                            || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
+                            || line.contains(".codex/hooks.json")));
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    /**
      * Loads all valid bindings for one provider.
      *
      * @param location initialized project location

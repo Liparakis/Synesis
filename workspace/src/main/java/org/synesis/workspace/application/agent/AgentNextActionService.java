@@ -118,9 +118,11 @@ public final class AgentNextActionService {
 
         ProjectApplicationService.ProjectLocation location;
         WorkspaceReadinessService.ReadinessResult readiness;
+        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
+        java.util.Optional<ProviderSessionBindingService.Binding> exactBinding;
         try {
             location = projectService.locate(root);
-            var exactBinding = new ProviderSessionBindingService().find(
+            exactBinding = bindingService.find(
                     location, request.provider(), request.connectionInstanceId());
             if (exactBinding.isPresent() && "COMPLETED".equals(exactBinding.get().status())) {
                 AgentResponse reviewResponse = completedReviewAction(location, exactBinding.get().sessionId());
@@ -138,6 +140,22 @@ public final class AgentNextActionService {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
         if (!readiness.ready()) {
+            // A sibling integration may advance the control checkout while a
+            // reviewer has legitimate uncommitted work in its assigned
+            // worktree.  Keep the stale-dirty workspace fail-closed for all
+            // workspace operations, but allow the durable review protocol to
+            // continue because review_validation is authorized by the exact
+            // session, grant, epoch, and immutable snapshot rather than by a
+            // replacement worktree.
+            if (exactBinding.isPresent()
+                    && "BOUND".equals(exactBinding.get().status())
+                    && "CONTROL_BASE_ADVANCED".equals(readiness.internalReason())
+                    && bindingService.hasConfirmedUncommittedWork(exactBinding.get())) {
+                AgentResponse reviewResponse = staleReviewAction(location, exactBinding.get().sessionId());
+                if (reviewResponse != null) {
+                    return reviewResponse;
+                }
+            }
             return readiness.response();
         }
         ProviderSessionBindingService.Binding binding = readiness.binding();
@@ -159,20 +177,9 @@ public final class AgentNextActionService {
                         .orchestrateIntegration(root, store, callerIdentity);
                 org.synesis.coordination.domain.capability.CapabilityRequestProjection capProj = store.capabilityRequestProjection();
                 Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) collaboration.get("reviewActions");
-                if (!reviewActions.isEmpty()) {
-                    Map<String, Object> review = reviewActions.getFirst();
-                    String protocolAction = String.valueOf(review.get("nextProtocolAction"));
-                    AgentNextAction next = protocolNextAction(protocolAction);
-                    Map<String, Object> reviewProjection = new LinkedHashMap<>(collaboration);
-                    reviewProjection.put("nextProtocolAction", review.get("nextProtocolAction"));
-                    reviewProjection.put("nextProtocolKind", review.get("nextProtocolKind"));
-                    reviewProjection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
-                    if (review.containsKey("reviewDecision")) {
-                        reviewProjection.put("reviewDecision", review.get("reviewDecision"));
-                    }
-                    return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, reviewProjection);
+                AgentResponse reviewResponse = reviewActionResponse(collaboration, false);
+                if (reviewResponse != null) {
+                    return reviewResponse;
                 }
                 String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
                 Map<String, Object> publicationAction = snapshotPublicationAction(
@@ -457,28 +464,51 @@ public final class AgentNextActionService {
                 return null;
             }
             Map<String, Object> collaboration = collaborationDetails(store, sessionId, completedGroups);
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> reviewActions =
-                    (List<Map<String, Object>>) collaboration.get("reviewActions");
-            if (reviewActions.isEmpty()) {
-                return null;
-            }
-            Map<String, Object> review = reviewActions.getFirst();
-            String protocolAction = String.valueOf(review.get("nextProtocolAction"));
-            AgentNextAction next = protocolNextAction(protocolAction);
-            Map<String, Object> projection = new LinkedHashMap<>(collaboration);
-            projection.put("reviewOnly", true);
-            projection.put("nextProtocolAction", review.get("nextProtocolAction"));
-            projection.put("nextProtocolKind", review.get("nextProtocolKind"));
-            projection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
-            if (review.containsKey("reviewDecision")) {
-                projection.put("reviewDecision", review.get("reviewDecision"));
-            }
-            return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
-                    next, projection);
+            return reviewActionResponse(collaboration, true);
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private AgentResponse staleReviewAction(
+            ProjectApplicationService.ProjectLocation location, String sessionId) {
+        try {
+            Path coordination = location.root().resolve(".synesis/coordination");
+            if (!Files.exists(coordination.resolve("events"))) {
+                return null;
+            }
+            org.synesis.coordination.persistence.PredictionEventStore store =
+                    new org.synesis.coordination.persistence.PredictionEventStore(
+                            coordination, location.projectId());
+            return reviewActionResponse(collaborationDetails(store, sessionId), true);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static AgentResponse reviewActionResponse(
+            Map<String, Object> collaboration, boolean reviewOnly) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> reviewActions =
+                (List<Map<String, Object>>) collaboration.get("reviewActions");
+        if (reviewActions == null || reviewActions.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> review = reviewActions.getFirst();
+        String protocolAction = String.valueOf(review.get("nextProtocolAction"));
+        AgentNextAction next = protocolNextAction(protocolAction);
+        Map<String, Object> projection = new LinkedHashMap<>(collaboration);
+        if (reviewOnly) {
+            projection.put("reviewOnly", true);
+        }
+        projection.put("nextProtocolAction", review.get("nextProtocolAction"));
+        projection.put("nextProtocolKind", review.get("nextProtocolKind"));
+        projection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
+        if (review.containsKey("reviewDecision")) {
+            projection.put("reviewDecision", review.get("reviewDecision"));
+        }
+        return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
+                next, projection);
     }
 
     private static Set<UUID> completedParticipantWorkGroups(

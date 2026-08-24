@@ -1,5 +1,24 @@
 # Tasks
 
+## SYN-039 CP-0517 update
+
+The stale-reviewer continuation slice is implemented and regression-covered.
+When sibling integration advances control while a reviewer retains legitimate
+uncommitted work, the existing grant/epoch/snapshot authority can now project
+the structured review decision without discarding or replacing the dirty
+worktree. Clean stale recovery and dirty-worktree refusal remain unchanged.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0517-dirty-review-fix-diagnostic-2026-08-24.md`.
+
+A fresh exact-action diagnostic reached ready/isolated sessions, disjoint
+claims, one shared WorkGroup, and exact REVIEW admission request execution.
+The run stopped with B's request pending because A's Codex turn ended after a
+pre-request ordinary `IMPLEMENT` poll; no concrete projected owner response
+was ignored and no production defect was demonstrated by that run. The next
+narrow SYN-039 action is a completely ordinary fresh acceptance focused on
+continued polling/engagement after asynchronous REVIEW creation. Do not
+broaden lifecycle code, push, or create SYN-040.
+
 ## SYN-039 CP-0516 update
 
 The producer-first exact-action diagnostic reached one shared WorkGroup, exact

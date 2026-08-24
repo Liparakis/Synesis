@@ -1,5 +1,22 @@
 # State
 
+## SYN-039 CP-0517 dirty-review continuation and exact-action diagnostic
+
+The stale dirty-reviewer boundary is fixed narrowly in
+`AgentNextActionService`: only a `BOUND` session with
+`CONTROL_BASE_ADVANCED`, confirmed non-managed worktree changes, and durable
+grant-backed review state receives the review-only projection. It does not
+weaken workspace readiness for reads or mutation, and clean recovery behavior
+still passes. Fresh exact-action evidence reached one shared WorkGroup and
+executed exact REVIEW admission, then stopped because Agent A's Codex turn
+ended before polling the request created by B. No concrete owner projection
+was ignored and no later lifecycle state was reached.
+
+Immediate next action: run one fresh ordinary two-agent acceptance with no
+diagnostic lifecycle instruction and preserve the first post-admission result.
+Keep Git stalls, bootstrap migration failures, Doctor warnings, and document
+format findings separate unless the acceptance proves causality.
+
 ## SYN-039 CP-0516 producer-first exact-action diagnostic
 
 CP-0516 reached one shared WorkGroup, exact REVIEW admission, owner response,

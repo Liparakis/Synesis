@@ -1,5 +1,8 @@
 # SYN-039 latest acceptance evidence
 
+| Dirty reviewer durable validation after sibling integration | deterministic MCP/workspace fixture | `McpSyn039SliceTest.dirtyReviewerReceivesDurableReviewDecisionAfterControlCheckoutAdvances` | dirty reviewer sees exact review decision and validates without unsafe worktree replacement | PASS; ACCEPT recorded, dirty file and binding preserved; clean recovery and stale-dirty refusal also pass | SYN-039 / CP-0517 |
+| Post-fix exact REVIEW admission diagnostic | fresh two-agent exact-action acceptance | `syn039-cp0517-001` | request admission, owner accepts, grant/snapshot/validation/integration continue | NOT REACHED; B executed exact request `41f48a24...`, then A's pre-request Codex turn ended; WorkGroup ACTIVE with no grant/snapshot/closure; agent-engagement evidence | SYN-039 / CP-0517 |
+
 | Dirty reviewer recovery after sibling integration | fresh producer-first exact-action diagnostic | `syn039-cp0516-001` | reviewer preserves its own dirty claim, sees the immutable snapshot, validates, and continues without unsafe workspace replacement | FAIL; B executed exact `ensure_session({})` after `workspace_stale`, but `WORKSPACE_STALE_DIRTY` became `internal_failure / request_human_help`; WorkGroup ACTIVE, no validation/closure | SYN-039 / CP-0516 |
 | Producer-first publication after exact REVIEW flow | fresh producer-first exact-action diagnostic | `syn039-cp0516-001` | exact admission, owner response, grant consumption, projected `finish_lane`, publication, and integration | PASS; WorkGroup `f4bba8b9...`, grant `9bab2075...`, snapshot `snap_171a6f...` | SYN-039 / CP-0516 |
 

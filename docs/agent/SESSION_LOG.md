@@ -1,5 +1,30 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0517 dirty-review continuation and diagnostic
+
+- Implemented the smallest stale-reviewer continuation slice. A dirty bound
+  reviewer whose control checkout advanced can receive only the existing
+  grant-backed durable review projection; review validation remains fenced by
+  exact participant, grant, intent, epoch, and immutable snapshot authority.
+  Clean stale recovery and dirty-worktree refusal remain fail-closed.
+- Added and passed deterministic coverage for dirty reviewer ACCEPT, preserved
+  worktree/binding, and existing clean recovery. Focused tests, Javadocs,
+  validators, bundle rebuild, and diff checks passed.
+- Fresh exact-action diagnostic used two independent GPT-5.6 Luna sessions,
+  current bundled MCP, one project, disjoint claims, and one WorkGroup. B
+  executed the exact projected REVIEW admission request. A's last poll was
+  before that request existed and its Codex turn ended; no later concrete
+  owner action was ignored. WorkGroup remained ACTIVE with no grant, snapshot,
+  validation, integration, or closure.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0517-dirty-review-fix-diagnostic-2026-08-24.md`.
+- Full root check separately reproduced the Git subprocess startup stall;
+  bootstrap migration failures, Doctor warnings, and existing document
+  trailing-whitespace findings remain separate.
+- Exact next action: run a fresh completely ordinary two-agent acceptance
+  without lifecycle-conformance instructions and preserve the first concrete
+  post-admission result. Do not relay, push, or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0516 producer-first exact-action diagnostic
 
 - Fresh producer-first diagnostic used the current bundled MCP and two

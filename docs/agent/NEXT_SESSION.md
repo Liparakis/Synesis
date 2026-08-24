@@ -1,5 +1,33 @@
 # Next Session
 
+## CP-0517 continuation
+
+The stale-reviewer fix is implemented in
+`workspace/src/main/java/org/synesis/workspace/application/agent/AgentNextActionService.java`
+and
+`workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java`,
+with deterministic coverage in
+`mcp/src/test/java/org/synesis/mcp/application/McpSyn039SliceTest.java`.
+Focused tests, Javadocs, validators, bundle rebuild, and diff checks pass.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0517-dirty-review-fix-diagnostic-2026-08-24.md`.
+
+The fresh exact-action CP-0517 diagnostic used project
+`d670cb0d-c17d-4d33-9c3a-afe37d5bb138`, WorkGroup
+`fde62e9a-5f84-370a-84db-36a21117d1f7`, and REVIEW request
+`41f48a24-8ff1-4638-bcd2-ce25f90ce369`. B executed the exact projected
+`request_coordination(work_group_join)`; A's previous ordinary `IMPLEMENT`
+poll predated that request and its Codex turn ended. No grant, snapshot,
+validation, integration, or closure was reached.
+
+- Exact next code action: none; do not modify production code for this agent-
+  engagement result.
+- Exact next acceptance action: run a fresh ordinary two-agent Todo test with
+  no lifecycle-conformance instruction, then preserve the first concrete
+  projection/action or missing-action boundary.
+- Do not relay IDs, manually accept requests, trigger lifecycle transitions,
+  push, or create SYN-040.
+
 ## CP-0516 continuation
 
 CP-0516 producer-first exact-action evidence reached WorkGroup

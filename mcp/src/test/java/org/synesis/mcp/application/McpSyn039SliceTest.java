@@ -360,6 +360,49 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void dirtyReviewerReceivesDurableReviewDecisionAfterControlCheckoutAdvances(
+            @TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        var location = new ProjectApplicationService().locate(fixture.project);
+        var bindings = new ProviderSessionBindingService();
+        var ownerBinding = bindings.find(location, "codex", "syn039-owner-publication").orElseThrow();
+        var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+        Path legitimateReviewerChange = reviewerWorktree.resolve("reviewer-notes.txt");
+        Files.writeString(legitimateReviewerChange, "review before integration\n");
+
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()));
+        Files.writeString(fixture.project.resolve("README.md"), "integrated control state\n");
+        git(fixture.project, "add", "README.md");
+        git(fixture.project, "commit", "-m", "integrated snapshot");
+
+        Map<String, Object> validation = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("ready", validation.get("status"), validation.toString());
+        assertEquals("validation_required", validation.get("reason"), validation.toString());
+        assertEquals("review_decision", validation.get("nextAction"), validation.toString());
+        Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
+        assertEquals(Boolean.TRUE, validationResult.get("reviewOnly"), validation.toString());
+        assertEquals("review_validation", validationResult.get("nextProtocolKind"), validation.toString());
+        Map<String, Object> payload = new LinkedHashMap<>(
+                (Map<String, Object>) validationResult.get("nextProtocolPayload"));
+        payload.put("result", "accepted");
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        arguments.put("kind", validationResult.get("nextProtocolKind"));
+        arguments.put("payload", payload);
+
+        String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(arguments)));
+        assertTrue(accepted.contains("ACCEPTED"), accepted);
+        assertTrue(Files.exists(legitimateReviewerChange), "reviewer work must not be discarded");
+        var after = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
+        assertEquals(reviewerBinding.worktreePath(), after.worktreePath(),
+                "review-only continuation must not replace a dirty worktree");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void acceptedReviewReportsActiveStatusWhileOwnerIntentRemainsLive(@TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);
         appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
