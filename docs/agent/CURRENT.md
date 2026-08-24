@@ -171,6 +171,13 @@ projected and Agent B never reached admission. This is agent-compliance
 evidence, not a production defect. Evidence:
 `docs/evidence/syn039-unattended-todo-cp0481-postfix-review-admission-2026-08-24.md`.
 
+The CP-0482 diagnostic then required exact execution of every concrete
+projection. Both agents completed visible work and repeatedly received
+ordinary `IMPLEMENT` with no executable tool or arguments. No REVIEW,
+publication, grant, validation, or integration action was exposed. This is a
+confirmed projection defect, not agent noncompliance. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0482-actionable-projection-2026-08-24.md`.
+
 ## Implementation order
 
 1. Reproduce and capture the supplied unattended Todo failure.
@@ -184,9 +191,11 @@ evidence, not a production defect. Evidence:
 
 ## Immediate next action
 
-Run a fresh bounded diagnostic with disjoint claims and exact execution of
-every concrete `get_next_action` projection. Preserve the first
-post-publication projection/action mismatch or exact projected failure. Keep
+Trace the completion-state projection in `AgentNextActionService` and its
+coordination projections. Implement only the smallest fix that exposes the
+existing REVIEW admission or snapshot-publication action with exact arguments
+after visible implementation completes. Add deterministic regression coverage
+and preserve fail-closed ownership, epoch, grant, and snapshot behavior. Keep
 the Git stall, bootstrap migration failures, and Doctor warnings separate.
 Do not push or create SYN-040.
 
@@ -384,6 +393,17 @@ This is agent action/compliance evidence, not a production integration defect.
 The next bounded diagnostic must execute every concrete projected action
 exactly and preserve the first post-publication result. Do not push or create
 SYN-040.
+
+## CP-0482 actionable-projection defect
+
+The fresh bounded diagnostic `syn039-cp0481-001` used the current bundled MCP,
+two ready/isolated sessions, and disjoint claims. Both agents converged on
+WorkGroup `ffd58516-2313-3ccc-a402-b20c921d2f8f`, completed visible work, and
+obeyed the exact-action rule. Repeated `get_next_action` calls still exposed
+ordinary `IMPLEMENT` with no concrete tool or arguments, while no REVIEW,
+publication, grant, validation, or other progress action was projected. This
+is the first confirmed CP-0482 production projection defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0482-actionable-projection-2026-08-24.md`.
 
 ## CP-0478 exact-action protocol diagnostic
 

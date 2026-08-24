@@ -1,5 +1,23 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0482 actionable projection defect
+
+- Fresh fixture `syn039-cp0481-001` used the current bundled MCP, project
+  `bca62af3-e1c9-482d-b69b-f9ba2197d4b1`, and two independent ready/isolated
+  sessions with disjoint claims.
+- Both agents converged on WorkGroup
+  `ffd58516-2313-3ccc-a402-b20c921d2f8f`, completed visible changes, and
+  followed the exact projected-action rule. Repeated projections stayed at
+  ordinary `IMPLEMENT` with no tool or arguments. No REVIEW admission,
+  publication, grant, validation, or integration action was exposed.
+- Coordination remained sequence zero with no tasks or ownerships in the CLI
+  control view. Doctor was `DEGRADED` with six existing warnings. This is now
+  classified as a concrete projection defect, not agent noncompliance.
+- Evidence: `docs/evidence/syn039-unattended-todo-cp0482-actionable-projection-2026-08-24.md`.
+- Exact next action: trace and minimally fix the completion-state projection in
+  `AgentNextActionService` and coordination projections, then add deterministic
+  coverage. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0481 post-fix diagnostic
 
 - The first fresh launch (`syn039-cp0480-005`) was invalid as a product

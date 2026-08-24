@@ -1,5 +1,24 @@
 # Next Session
 
+## CP-0482 continuation
+
+The fresh bounded diagnostic `syn039-cp0481-001` proved the first concrete
+post-implementation projection defect. Both agents used the current bundled
+MCP, reached distinct ready/isolated sessions, converged on WorkGroup
+`ffd58516-2313-3ccc-a402-b20c921d2f8f`, and completed disjoint visible work.
+They obeyed the exact-action rule. Repeated `get_next_action` calls still
+projected ordinary `IMPLEMENT` with no executable tool or arguments; no REVIEW,
+publication, grant, validation, or integration action was exposed.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0482-actionable-projection-2026-08-24.md`.
+
+- Exact next action: trace and minimally fix the completion-state projection in
+  `AgentNextActionService`/coordination projections, with deterministic coverage
+  for the existing REVIEW or publication action and exact arguments.
+- Preserve fail-closed ownership/epoch/grant/snapshot behavior. Do not push or
+  create SYN-040.
+
 ## CP-0481 continuation
 
 The corrected post-fix fixture `syn039-cp0480-006` used the current bundled
