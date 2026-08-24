@@ -1,5 +1,35 @@
 # Next Session
 
+## CP-0508 continuation
+
+The CP-0507 review-result projection fix is committed as `ca9a2f3`. The fresh
+CP-0508 diagnostic used the rebuilt bundle, exactly ten MCP tools, two
+independent GPT-5.6 Luna agents, one shared WorkGroup
+`e0ef5af5-844c-3f77-b4ad-29767b4b13c3`, and disjoint epoch-1 claims.
+
+Agent A published and integrated snapshot
+`snap_806145a00668f970adaaf4af734a9d81`. Agent B consumed its REVIEW grant,
+passed four tests, saw the corrected non-executable review decision contract,
+and submitted `accepted`; Synesis returned `ACCEPTED`. B first omitted the
+projected `targetParticipant` during grant consumption and received the
+expected fail-closed error before correcting it. A later stopped before
+polling to consume reciprocal grant
+`f879b4ff-047c-3dc8-8b70-2568a5d4a4a3`, so the WorkGroup stayed ACTIVE and no
+second snapshot or closure was reached. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0508-review-decision-postfix-2026-08-24.md`.
+
+Exact next action: run a fresh bounded diagnostic with the same current
+bundle and exact-projection rule, but preserve both agent sessions after
+reciprocal REVIEW acceptance until the targeted grant is consumed and the
+second lane reaches publication, validation, integration, and closure. If an
+exact complete projected action fails, capture it as the next production
+blocker. If an agent omits or ignores a projected action again, record agent
+compliance evidence without changing production code. Do not push or create
+SYN-040.
+
+- Exact next code action: run the fresh bounded exact-projection diagnostic;
+  do not change production code unless a complete projected action fails.
+
 ## CP-0507 continuation
 
 The fresh CP-0507 diagnostic used project

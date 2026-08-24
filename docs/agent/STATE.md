@@ -1,5 +1,39 @@
 # State
 
+## SYN-039 CP-0508 validation-projection postfix
+
+Commit `ca9a2f3` replaces the invalid review-validation projection value
+`accepted|rejected` with a non-executable decision contract. The projection
+now exposes the exact grant, snapshot, reviewed intent, and claim epoch plus
+`reviewDecision={required:true, field:result, allowedResults:[accepted,rejected],
+rejectionReasonRequired:true}`. The workflow reducer does not recommend
+`respond_coordination` until a valid result is present, while MCP strict
+validation remains fail-closed. Deterministic coverage passes for ACCEPT,
+REJECT routing, wrong participant, stale epoch, wrong snapshot, invalid
+result, idempotent replay, and conflicting replay.
+
+Fresh CP-0508 evidence proves Agent B selected `accepted` from that contract
+and Synesis recorded `ACCEPTED` for snapshot
+`snap_806145a00668f970adaaf4af734a9d81`. Agent A's snapshot integrated. The
+first observed deviation was B omitting `targetParticipant` from an otherwise
+projected grant-consumption call; the server returned
+`COORDINATION_FIELD_REQUIRED:targetParticipant`, then B corrected it. A later
+stop before polling a reciprocal grant left WorkGroup
+`e0ef5af5-844c-3f77-b4ad-29767b4b13c3` `ACTIVE` with grant
+`f879b4ff-047c-3dc8-8b70-2568a5d4a4a3` available for A. No new production
+defect is proven. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0508-review-decision-postfix-2026-08-24.md`.
+
+Verification: focused coordination/workspace/MCP tests, Javadocs, rebuilt
+platform bundle, fixture/deferred validators, `go vet`, Doctor, and
+`git diff --check` pass. Doctor is still `DEGRADED` with six warnings; root
+Git subprocess stall and bootstrap migration failures remain separate.
+
+Immediate next action: run another fresh bounded exact-projection diagnostic
+that keeps both agents alive through reciprocal grant consumption and the
+second snapshot/validation/integration transition. Do not code from CP-0508
+agent-compliance evidence.
+
 ## SYN-039 CP-0507 validation-projection blocker
 
 The fresh CP-0507 exact-projection diagnostic used the rebuilt current bundled

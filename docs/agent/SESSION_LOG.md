@@ -1,5 +1,34 @@
 # Session Log
 
+# 2026-08-24 — SYN-039 CP-0508 review-decision postfix diagnostic
+
+- Fresh project `syn039-cp0508-001` used the rebuilt current bundled MCP
+  (`49D0FFB4696EABE62F3C54BF98ED0011FDC7F4CDD63B842DC2E23BF7511E36B8`),
+  two independent GPT-5.6 Luna sessions, exactly ten tools, ready/isolated
+  bindings, disjoint `todo.py` / `test_todo.py` claims, and one WorkGroup
+  `e0ef5af5-844c-3f77-b4ad-29767b4b13c3`.
+- Agent A implemented the visible Todo behavior, passed three tests, obeyed
+  the exact publication projection, and integrated
+  `snap_806145a00668f970adaaf4af734a9d81`.
+- Agent B consumed the single-use REVIEW grant, recovered from the expected
+  workspace-stale response, added a meaningful test, passed four tests, and
+  saw the corrected `reviewDecision` projection with valid `accepted` /
+  `rejected` choices and no fabricated executable result. B submitted
+  structured `accepted`; Synesis returned `ACCEPTED`.
+- First deviation: B omitted projected `targetParticipant` while consuming
+  the grant and received `COORDINATION_FIELD_REQUIRED:targetParticipant`,
+  then corrected the call. Later A stopped before polling after B accepted
+  the reciprocal REVIEW request, leaving the reciprocal grant available and
+  the WorkGroup ACTIVE. No exact complete projected server action failed;
+  this is agent-compliance evidence, not a new production defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0508-review-decision-postfix-2026-08-24.md`.
+- Focused tests, Javadocs, bundle rebuild, validators, `go vet`, Doctor, and
+  `git diff --check` passed. Doctor remains DEGRADED with six warnings; the
+  Git subprocess stall and bootstrap migration failures remain separate.
+- Exact next action: fresh bounded diagnostic through reciprocal grant
+  consumption and second-lane closure. Do not push or create SYN-040.
+
 # 2026-08-24 — SYN-039 CP-0507 validation-result projection diagnostic
 
 - Fresh project `syn039-cp0507-001` used the rebuilt current bundled MCP and

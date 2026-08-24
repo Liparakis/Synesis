@@ -1,5 +1,29 @@
 # Tasks
 
+## SYN-039 CP-0508 update
+
+Commit `ca9a2f3` fixes the CP-0507 review-validation projection. A reviewer
+now receives a valid structured decision contract with the exact grant,
+snapshot, intent, and epoch context, explicit `accepted`/`rejected` choices,
+and no guessed executable result. The reducer suppresses the executable
+recommendation until the reviewer chooses a valid result; strict MCP
+validation remains unchanged and fail-closed. Deterministic tests cover
+ACCEPT, REJECT routing, wrong participant, stale epoch, wrong snapshot,
+invalid result, idempotent replay, and conflicting replay.
+
+CP-0508 fresh-agent evidence proves publication, integration, grant
+consumption, and structured ACCEPT. It does not prove clean closure: B first
+omitted a projected grant field and corrected the fail-closed error; A later
+stopped before consuming the reciprocal grant targeting it. The WorkGroup
+remains ACTIVE. This is agent-compliance evidence, not a new production
+defect. Evidence:
+`docs/evidence/syn039-unattended-todo-cp0508-review-decision-postfix-2026-08-24.md`.
+
+The active task remains SYN-039. Next work is a fresh bounded diagnostic that
+keeps both agents alive through reciprocal grant consumption, second snapshot,
+validation, integration, and closure. Do not broaden lifecycle code, push, or
+create SYN-040 without a new exact protocol failure.
+
 Allowed statuses: `BLOCKED`, `READY`, `ACTIVE`, `VERIFYING`, `DONE`, `DEFERRED`.
 
 ## SYN-039 CP-0507 update

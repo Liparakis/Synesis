@@ -1,5 +1,67 @@
 # Current Task
 
+## SYN-039 CP-0508 review-decision postfix diagnostic
+
+The CP-0507 review-result projection fix is committed as `ca9a2f3` and
+verified in a fresh two-agent diagnostic. Both GPT-5.6 Luna agents used the
+rebuilt current bundle, exactly ten MCP tools, the same project, distinct
+isolated sessions, disjoint epoch-1 claims, and one WorkGroup
+`e0ef5af5-844c-3f77-b4ad-29767b4b13c3`.
+
+Agent A implemented `todo.py`, passed three tests, followed the exact
+publication projection, and integrated snapshot
+`snap_806145a00668f970adaaf4af734a9d81` (snapshot commit
+`24702bb2b8f1287e14f05da7f88f2c0b925e2b7b`). Agent B consumed the targeted
+single-use grant, recovered after the expected workspace-stale response,
+passed four tests, and received the corrected review-validation projection:
+the exact grant/snapshot/intent/epoch context plus explicit
+`accepted`/`rejected` choices, with no fabricated `recommendedTool` or
+arguments. B selected `accepted`; Synesis returned structured `ACCEPTED`.
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0508-review-decision-postfix-2026-08-24.md`.
+
+## Work completed
+
+The CP-0507 review-result projection fix is committed as `ca9a2f3`. The
+reviewer now receives exact review context and explicit structured
+`accepted`/`rejected` choices without a fabricated executable result. The
+workflow reducer suppresses `respond_coordination` recommendation until a
+valid result is supplied. Deterministic tests cover ACCEPT, REJECT routing,
+wrong participant, stale epoch, wrong snapshot, invalid result, idempotent
+replay, and conflicting replay.
+
+Agent A's publication and integration, Agent B's grant consumption and
+structured ACCEPT, focused SYN-039/workspace/coordination tests, Javadocs,
+bundle rebuild, fixture/deferred validators, `go vet`, Doctor, and
+`git diff --check` pass.
+
+## Current failures
+
+The first deviation was B omitting the projected `targetParticipant` while
+consuming a grant; Synesis failed closed with
+`COORDINATION_FIELD_REQUIRED:targetParticipant`, and B then corrected the
+request. Later A stopped before polling again after B accepted the reciprocal
+REVIEW request, leaving grant `f879b4ff-047c-3dc8-8b70-2568a5d4a4a3`
+available for A. The WorkGroup remains `ACTIVE`; B's second snapshot,
+reciprocal validation, cleanup, and closure are unproven. This is
+agent-compliance evidence, not a new production defect. No ordinary second
+acceptance was started because the diagnostic did not reach end-to-end
+completion.
+
+Focused SYN-039/workspace/coordination tests, Javadocs, bundle rebuild,
+fixture/deferred validators, `go vet`, Doctor, and `git diff --check` pass.
+Doctor remains `DEGRADED` with six unrelated warnings; the known root Git
+subprocess stall and bootstrap migration failures remain separate.
+
+## Immediate next action
+
+Run a fresh bounded two-agent diagnostic from the rebuilt bundle, preserving
+the exact-projection rule, and keep both agents alive after reciprocal REVIEW
+acceptance until the targeted grant is consumed, the second lane publishes,
+validation/integration complete, and the WorkGroup either closes or exposes a
+new exact projected failure. Do not modify production code for CP-0508 agent
+deviations, push, or create SYN-040.
+
 ## Identity
 
 - Task ID: SYN-039
