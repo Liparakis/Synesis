@@ -1,5 +1,24 @@
 # Tasks
 
+## SYN-039 CP-0525-003 acceptance update
+
+The bounded exact-projection diagnostic completed WorkGroup
+`18f226ad-d28b-3fd6-b8aa-3afb83429f4b` through review, snapshot publication,
+structured ACCEPT, integration, and closure. The ordinary follow-up reached
+one shared WorkGroup, integrated A's implementation snapshot, and accepted it
+from B, but A's Codex session ended before its reciprocal REVIEW grant was
+consumed. No unchanged projected action failed and no production change is
+justified.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-003-bounded-and-ordinary-2026-08-25.md`.
+
+Next narrow action: run one supported non-ephemeral provider-session
+continuity probe across a durable `WAIT -> get_next_action({})` boundary. Do
+not manually drive lifecycle state, create a replacement intent, relay
+coordination, change production code, push, or create SYN-040 unless a
+concrete unchanged projected Synesis action fails.
+
 ## SYN-039 CP-0525 acceptance update
 
 The bounded exact-projection diagnostic completed WorkGroup

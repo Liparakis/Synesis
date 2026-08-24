@@ -1,5 +1,46 @@
 # Current Task
 
+## SYN-039 CP-0525-003 bounded and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-003-bounded-and-ordinary-2026-08-25.md`.
+
+The fresh bounded exact-projection diagnostic completed WorkGroup
+`18f226ad-d28b-3fd6-b8aa-3afb83429f4b` through REVIEW admission, exact grant
+consumption, immutable snapshot publication, structured ACCEPT, integration,
+and terminal completion. No unchanged projected action failed. The required
+ordinary acceptance reached WorkGroup `0d6e6301-e6d1-3084-b0be-abbca3cdaa10`,
+integrated A's implementation snapshot, and accepted it from B, but A's
+Codex session ended before the reciprocal grant targeted at A was consumed.
+This remains provider/session engagement evidence, not a proven production
+defect.
+
+## Immediate next action
+
+Run one supported non-ephemeral Codex provider-session continuity probe in a
+fresh disposable project, preserving both independent sessions across a
+durable `WAIT -> get_next_action({})` boundary. Do not manually invoke a
+Synesis lifecycle action, create a new intent to repair the old run, relay
+coordination, or modify production code. If the provider still ends without
+executing the unchanged projection, classify the limitation at the provider
+session boundary and keep Synesis lifecycle code unchanged. Do not push or
+create SYN-040.
+
+## Work completed
+
+The CP-0525-003 bounded and ordinary traces, exact IDs, terminal states, and
+Doctor output are recorded in the evidence file above. No production code
+changed in this slice.
+
+## Current failures
+
+The ordinary product acceptance remains incomplete only at provider/session
+continuation: WorkGroup `0d6e6301-e6d1-3084-b0be-abbca3cdaa10` is ACTIVE with
+the reciprocal grant targeted at the ended A session. The bounded protocol
+diagnostic completed cleanly. Doctor remains DEGRADED with six warnings. The
+root Git subprocess stall and bootstrap migration failures remain separately
+classified.
+
 ## SYN-039 CP-0525 bounded and ordinary acceptance
 
 Evidence:

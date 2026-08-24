@@ -1,3 +1,23 @@
+## 2026-08-25 — SYN-039 CP-0525-003 bounded and ordinary acceptance
+
+- Ran a fresh bounded exact-projection diagnostic with two independent
+  GPT-5.6 Luna High Codex agents on the current bundled ten-tool MCP. The
+  agents reached one WorkGroup, consumed both REVIEW grants, published and
+  integrated both immutable snapshots, recorded structured ACCEPT, and closed
+  WorkGroup `18f226ad-d28b-3fd6-b8aa-3afb83429f4b`; control pytest passed 3/3.
+- Ran the required second ordinary acceptance with only complementary coding
+  prompts. It reached WorkGroup `0d6e6301-e6d1-3084-b0be-abbca3cdaa10`,
+  integrated A's implementation snapshot, and accepted it from B. A's Codex
+  turn ended before the reciprocal REVIEW grant targeted at A was consumed;
+  B correctly remained in exact WAIT. The WorkGroup remained ACTIVE and
+  control pytest was 2/2 because B's test snapshot was not published.
+- No unchanged projected action failed and no production code changed. Doctor
+  remains DEGRADED with six warnings; the known Git subprocess stall and
+  bootstrap migration failures remain separate. Nothing was pushed and no
+  SYN-040 was created.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0525-003-bounded-and-ordinary-2026-08-25.md`.
+
 ## 2026-08-24 — SYN-039 CP-0522 third ordinary acceptance
 
 - Ran a fresh ordinary acceptance from a clean seed with current bundled MCP,

@@ -1,5 +1,24 @@
 # Next Session
 
+## CP-0526 provider-session continuity boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-003-bounded-and-ordinary-2026-08-25.md`.
+
+The bounded diagnostic completed WorkGroup
+`18f226ad-d28b-3fd6-b8aa-3afb83429f4b`. The ordinary run reached WorkGroup
+`0d6e6301-e6d1-3084-b0be-abbca3cdaa10`, integrated A's snapshot, and accepted
+it from B, but A's ephemeral provider turn ended before the reciprocal grant
+targeted at A was consumed. B remained in exact WAIT; no unchanged projected
+action failed.
+
+- Exact next action: run one supported non-ephemeral Codex provider-session
+  continuity probe in a fresh disposable project, preserving both sessions
+  across a durable `WAIT -> get_next_action({})` boundary. Do not manually
+  invoke lifecycle actions, create a replacement intent, relay coordination,
+  modify production code, push, or create SYN-040. If the provider ends again,
+  classify the external session boundary and leave production unchanged.
+
 ## CP-0525 continuation
 
 Evidence:

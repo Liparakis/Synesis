@@ -1,5 +1,29 @@
 # State
 
+## SYN-039 CP-0525-003 bounded and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0525-003-bounded-and-ordinary-2026-08-25.md`.
+
+Project `83318ef3-f435-4122-bd7c-a40a29c80e79` and WorkGroup
+`18f226ad-d28b-3fd6-b8aa-3afb83429f4b` completed the bounded exact-action
+diagnostic with two epoch-1 disjoint claims, accepted REVIEW requests,
+consumed single-use grants, immutable snapshots, structured ACCEPT, control
+pytest 3/3, and terminal WorkGroup state. No unchanged projected action
+failed.
+
+The ordinary project `bebad616-240b-4b06-8b02-9b6f01e01f2d` reached one shared
+WorkGroup `0d6e6301-e6d1-3084-b0be-abbca3cdaa10`, integrated A's snapshot, and
+accepted it from B. A's provider turn then ended while the reciprocal grant
+targeted at A remained pending; B correctly stayed in projected WAIT. The
+WorkGroup is ACTIVE and control pytest is 2/2 because B's test snapshot was
+not published. This is provider/session evidence, not an unchanged action
+failure.
+
+Immediate next action: run one supported non-ephemeral provider-session
+continuity probe across a durable WAIT boundary. Keep production unchanged
+unless the exact unchanged projection fails.
+
 ## SYN-039 CP-0525 bounded and ordinary acceptance
 
 Evidence:
