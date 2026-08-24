@@ -1,5 +1,24 @@
 # Tasks
 
+## SYN-039 CP-0520 ordinary completed-lane update
+
+The fresh ordinary acceptance reached the existing review path without a
+replacement coding lane. Agent A published and integrated its immutable
+snapshot; Agent B consumed the REVIEW grant, inspected the snapshot, and
+submitted ACCEPT. A ended after the projected admission request and did not
+poll the reciprocal REVIEW grant targeted to A. B correctly executed its
+projected WAIT continuation until the bounded harness stopped. WorkGroup
+`5c1609bd-f88d-36e5-845b-0f07677e9ffe` remains `ACTIVE`.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-ordinary-completed-lane-2026-08-24.md`.
+
+No unchanged projected action failed and no production defect is proven.
+The next narrow action is a bounded no-code continuation diagnostic that
+retains a completed participant only for an existing REVIEW projection,
+without announcing a new intent or relaying coordination. Do not change
+production code, push, or create SYN-040 for this evidence.
+
 ## SYN-039 CP-0519 command-scope recovery update
 
 The CP-0519 ordinary acceptance proved that a successful clean session

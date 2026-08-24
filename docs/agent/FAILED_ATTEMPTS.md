@@ -1,5 +1,30 @@
 # Failed Attempts
 
+## 2026-08-24 — SYN-039 CP-0520 ordinary completed-lane engagement stop
+
+- Attempted approach: Run a fresh ordinary two-agent Todo acceptance with
+  only complementary coding prompts; retain unfinished sessions, but do not
+  resume a completed coding lane as a new intent.
+- Expected result: Both agents would remain engaged through reciprocal
+  REVIEW, second snapshot publication, validation, integration, and terminal
+  WorkGroup closure.
+- Observed result: A's exact `finish_lane` published and integrated
+  `snap_41f8664537c23fe67293f8e08f740fa6`. B consumed that REVIEW grant,
+  inspected the immutable snapshot, and submitted ACCEPT. A then ended before
+  polling the reciprocal grant
+  `22bc7d10-0337-31c9-9155-6de7f0130b73`; B correctly remained in exact WAIT.
+  The WorkGroup `5c1609bd-f88d-36e5-845b-0f07677e9ffe` remained `ACTIVE`.
+- Root cause/classification: ordinary agent/session engagement and
+  projection compliance. The corrected harness did not create a new intent,
+  and no unchanged projected action failed. No production change is
+  justified.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0520-ordinary-completed-lane-2026-08-24.md`.
+- Retry prohibition: Do not modify lifecycle semantics for this run. The
+  next bounded diagnostic may retain the existing session only to execute an
+  already projected REVIEW action; it must not announce a new coding intent
+  or relay coordination.
+
 ## 2026-08-24 — SYN-039 CP-0519 ordinary continuation after command-scope fix
 
 - Attempted approach: Run the required second ordinary two-agent acceptance

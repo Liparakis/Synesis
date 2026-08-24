@@ -1,5 +1,24 @@
 # Next Session
 
+## CP-0520 continuation
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-ordinary-completed-lane-2026-08-24.md`.
+
+The fresh ordinary run reached one shared WorkGroup, exact REVIEW admission,
+snapshot publication/integration, and B's structured ACCEPT. The corrected
+harness did not create a new intent after A's lane completed, but A ended
+before polling its reciprocal REVIEW grant. B correctly remained in exact
+`WAIT` with `get_next_action({})`; WorkGroup
+`5c1609bd-f88d-36e5-845b-0f07677e9ffe` is still `ACTIVE`.
+
+- Exact next action: run one bounded no-code continuation diagnostic in a fresh
+  project; retain the existing completed participant only to execute an
+  already projected REVIEW action, without announcing a new intent or relaying
+  coordination. If it closes cleanly, rerun ordinary acceptance.
+- No unchanged projected action failed, so do not modify production lifecycle
+  behavior, push, or create SYN-040 for this evidence.
+
 ## CP-0519 continuation
 
 Evidence:

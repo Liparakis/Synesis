@@ -1,5 +1,25 @@
 # State
 
+## SYN-039 CP-0520 ordinary completed-lane acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-ordinary-completed-lane-2026-08-24.md`.
+
+The fresh ordinary run used project `befa0cd2-374c-4e6a-83e8-efc3e895a9f9`,
+one WorkGroup `5c1609bd-f88d-36e5-845b-0f07677e9ffe`, and distinct current
+bundled-MCP sessions. A's exact projected `finish_lane` succeeded and
+integrated `snap_41f8664537c23fe67293f8e08f740fa6`; B consumed A's REVIEW
+grant and submitted structured ACCEPT. A then ended before polling the
+reciprocal grant targeted to A. The harness correctly did not resume A as a
+new coding intent, while B correctly remained in projected WAIT. Final
+WorkGroup state was `ACTIVE`; no unchanged projected action failed.
+
+Immediate next action: run one bounded no-code continuation diagnostic that
+keeps a completed participant engaged only for an already projected REVIEW
+action, without creating a new intent or relaying coordination. If that
+closes cleanly, rerun ordinary acceptance. Keep this classified as
+agent/session engagement unless an unchanged projected action fails.
+
 ## SYN-039 command-scope recovery and post-fix acceptance
 
 The fresh CP-0519 ordinary run proved that a successful clean session

@@ -1,3 +1,18 @@
+## 2026-08-24 — SYN-039 CP-0520 ordinary completed-lane acceptance
+
+- Ran a fresh Git + Synesis Todo project with the current bundled ten-tool MCP
+  and two independent GPT-5.6 Luna High Codex sessions.
+- A completed and integrated `todo.py`; B consumed the REVIEW grant, inspected
+  the immutable snapshot, and submitted ACCEPT. A ended before consuming the
+  reciprocal REVIEW grant targeted at A; B remained in the exact projected
+  WAIT action. The corrected harness did not create a replacement intent.
+- WorkGroup `5c1609bd-f88d-36e5-845b-0f07677e9ffe` remained `ACTIVE`.
+- Control checkout was clean at `b0db566`; pytest passed 3/3. Focused MCP
+  tests, deferred/fixture validators, Go vet, and `git diff --check` passed.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0520-ordinary-completed-lane-2026-08-24.md`.
+- No production code changed, nothing was pushed, and no SYN-040 was created.
+
 ## 2026-08-24 — SYN-039 CP-0519 command-scope recovery and acceptance
 
 - The CP-0519 ordinary run reproduced `command_admission_stale /

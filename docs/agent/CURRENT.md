@@ -1,5 +1,51 @@
 # Current Task
 
+## SYN-039 CP-0520 ordinary completed-lane acceptance
+
+The fresh ordinary acceptance used the current bundled MCP, two independent
+ready/isolated Codex sessions, disjoint claims, and one shared WorkGroup
+`5c1609bd-f88d-36e5-845b-0f07677e9ffe`. Agent A published and integrated
+snapshot `snap_41f8664537c23fe67293f8e08f740fa6`; Agent B consumed the REVIEW
+grant, inspected the immutable snapshot, and submitted ACCEPT. The corrected
+harness stopped resuming A after its original lane became `COMPLETED`, so it
+did not create a replacement intent.
+
+Agent A then ended without polling its already projected reciprocal REVIEW
+grant. Agent B correctly remained in `WAIT` with
+`recommendedTool=get_next_action` and `{}` while grant
+`22bc7d10-0337-31c9-9155-6de7f0130b73` targeted A. WorkGroup state remained
+`ACTIVE`; no unchanged projected action failed. This is ordinary agent/session
+engagement evidence, not a production protocol defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0520-ordinary-completed-lane-2026-08-24.md`.
+
+## Immediate next action
+
+Run one bounded no-code continuation diagnostic in a fresh disposable project:
+retain a completed participant only long enough to execute any already
+projected REVIEW action, without announcing a new coding intent or relaying
+coordination; if it closes cleanly, rerun the ordinary two-agent acceptance.
+Do not change production lifecycle code, push, or create SYN-040 unless an
+unchanged projected action fails.
+
+## Work completed
+
+Fresh ordinary acceptance evidence is recorded. The current MCP bundle,
+focused `McpSyn039SliceTest`, deferred/fixture validators, Go vet, control
+pytest 3/3, and `git diff --check` pass. No production code changed in this
+slice.
+
+## Current failures
+
+Ordinary acceptance is still partial: Agent A ended after publishing its
+integrated snapshot and exact REVIEW admission request, before polling the
+reciprocal REVIEW grant targeted at A. Agent B correctly remained in exact
+WAIT, so WorkGroup `5c1609bd-f88d-36e5-845b-0f07677e9ffe` remains `ACTIVE`.
+This is agent/session engagement evidence; no unchanged projected action
+failed and no production defect is proven. Doctor remains DEGRADED with six
+separately classified warnings.
+
 ## SYN-039 command-scope recovery and post-fix acceptance
 
 The CP-0519 ordinary acceptance proved a concrete MCP command-scope defect:
