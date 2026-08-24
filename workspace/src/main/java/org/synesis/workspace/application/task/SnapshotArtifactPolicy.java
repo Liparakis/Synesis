@@ -90,13 +90,21 @@ public final class SnapshotArtifactPolicy {
         if (normalized.equals(".mcp.json") || normalized.startsWith(".codex/")
                 || normalized.startsWith(".claude/") || normalized.startsWith(".agents/")
                 || normalized.startsWith(".synesis/local/") || normalized.startsWith(".synesis/shared/")
-                || normalized.startsWith(".synesis/coordination/")) {
+                || normalized.startsWith(".synesis/coordination/")
+                || isPythonBytecodeCache(normalized)) {
             return Classification.ALLOWED_RUNTIME_ARTIFACT;
         }
         if (normalized.equals(".synesis") || normalized.startsWith(".synesis/")) {
             return Classification.UNSUPPORTED_ARTIFACT;
         }
         return Classification.SOURCE;
+    }
+
+    private static boolean isPythonBytecodeCache(String normalized) {
+        return normalized.equals("__pycache__")
+                || normalized.startsWith("__pycache__/")
+                || normalized.endsWith("/__pycache__")
+                || normalized.contains("/__pycache__/");
     }
 
     private static String normalize(String path) {

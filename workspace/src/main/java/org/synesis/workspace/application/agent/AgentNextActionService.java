@@ -566,12 +566,13 @@ public final class AgentNextActionService {
             action.put("nextProtocolKind", projection.grantAvailable(grant.grantId())
                     ? "work_group_join" : "review_validation");
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("workGroupId", grant.workGroupId().toString());
             payload.put("grantId", grant.grantId().toString());
             payload.put("intentId", grant.targetIntentId().toString());
             payload.put("claimEpoch", grant.claimEpoch());
-            payload.put("targetParticipant", grant.targetParticipant());
-            if (!projection.grantAvailable(grant.grantId())) {
+            if (projection.grantAvailable(grant.grantId())) {
+                payload.put("workGroupId", grant.workGroupId().toString());
+                payload.put("targetParticipant", grant.targetParticipant());
+            } else {
                 payload.put("snapshotId", snapshot.snapshotId());
                 payload.put("result", "accepted|rejected");
             }

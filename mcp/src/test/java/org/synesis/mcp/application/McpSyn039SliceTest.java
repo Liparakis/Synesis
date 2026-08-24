@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -180,6 +181,22 @@ final class McpSyn039SliceTest {
 
         String validationNext = reviewer.handleMessage(toolCall("get_next_action", "{}"));
         assertTrue(validationNext.contains("review_validation"), validationNext);
+        Map<String, Object> validationEnvelope = innerResult(validationNext);
+        Map<String, Object> validationResult = (Map<String, Object>) validationEnvelope.get("result");
+        Map<String, Object> validationWorkflow = (Map<String, Object>) validationResult.get("workflow");
+        assertEquals("respond_coordination", validationWorkflow.get("recommendedTool"));
+        Map<String, Object> projectedValidationArguments =
+                (Map<String, Object>) validationWorkflow.get("arguments");
+        Map<String, Object> projectedValidationPayload =
+                (Map<String, Object>) projectedValidationArguments.get("payload");
+        assertEquals("review_validation", projectedValidationArguments.get("kind"));
+        assertEquals(grant.get("grantId"), projectedValidationPayload.get("grantId"));
+        assertEquals("snap_reviewable", projectedValidationPayload.get("snapshotId"));
+        assertEquals(grant.get("targetIntentId"), projectedValidationPayload.get("intentId"));
+        assertEquals(grant.get("claimEpoch"), projectedValidationPayload.get("claimEpoch"));
+        assertEquals("accepted|rejected", projectedValidationPayload.get("result"));
+        assertFalse(projectedValidationPayload.containsKey("workGroupId"));
+        assertFalse(projectedValidationPayload.containsKey("targetParticipant"));
         String wrongSnapshot = reviewer.handleMessage(toolCall("respond_coordination",
                 "{\"kind\":\"review_validation\",\"payload\":{"
                         + "\"grantId\":\"" + grant.get("grantId") + "\","
@@ -188,13 +205,12 @@ final class McpSyn039SliceTest {
                         + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
                         + "\"result\":\"accepted\"}}"));
         assertTrue(wrongSnapshot.contains("REVIEW_SNAPSHOT"), wrongSnapshot);
+        Map<String, Object> acceptedValidationPayload = new LinkedHashMap<>(projectedValidationPayload);
+        acceptedValidationPayload.put("result", "accepted");
+        Map<String, Object> acceptedValidationArguments = new LinkedHashMap<>(projectedValidationArguments);
+        acceptedValidationArguments.put("payload", acceptedValidationPayload);
         String validated = reviewer.handleMessage(toolCall("respond_coordination",
-                "{\"kind\":\"review_validation\",\"payload\":{"
-                        + "\"grantId\":\"" + grant.get("grantId") + "\","
-                        + "\"snapshotId\":\"snap_reviewable\","
-                        + "\"intentId\":\"" + grant.get("targetIntentId") + "\","
-                        + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
-                        + "\"result\":\"accepted\"}}"));
+                ProviderJson.write(acceptedValidationArguments)));
         assertTrue(validated.contains("ACCEPTED"), validated);
         String replayed = reviewer.handleMessage(toolCall("request_coordination",
                 "{\"kind\":\"work_group_join\",\"payload\":{"
@@ -211,7 +227,8 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void projectedFinishLanePublishesImmutableSnapshotVisibleToReviewer(@TempDir Path temp) throws Exception {
+    void projectedFinishLanePublishesImmutableSnapshotVisibleToReviewerDespitePythonCache(
+            @TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);
         String ownerPublication = fixture.owner.handleMessage(toolCall("get_next_action", "{}"));
         Map<String, Object> projection = innerResult(ownerPublication);
@@ -228,6 +245,9 @@ final class McpSyn039SliceTest {
 
         Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
                 "def add_todo(items, item):\n    return [*items, item]\n\n\ndef remove_todo(items, item):\n    return [value for value in items if value != item]\n");
+        Files.createDirectories(fixture.ownerWorktree.resolve("__pycache__"));
+        Files.write(fixture.ownerWorktree.resolve("__pycache__/todo.cpython-313.pyc"),
+                new byte[] {0x42, 0x43, 0x48});
         String published = fixture.owner.handleMessage(toolCall("finish_lane", ProviderJson.write(arguments)));
         Map<String, Object> publishedResult = (Map<String, Object>) innerResult(published).get("result");
         assertEquals("PUBLISHED", publishedResult.get("snapshotState"), published);
