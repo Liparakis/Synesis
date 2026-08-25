@@ -1,5 +1,44 @@
 # Current Task
 
+## SYN-039 CP-0543 ordinary grant-continuation boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0544-ordinary-grant-continuation-2026-08-25.md`.
+
+The fresh ordinary run reached WorkGroup
+`f82161ed-39f9-3662-851d-d90f07245a46`, reciprocal REVIEW, grant
+`964ea299-c1fb-3298-a61b-d448522fb33d` consumption, immutable snapshot
+`snap_0bd17b0b5256e6a3cc6a5a9c79487085`, structured ACCEPT, and integration.
+Agent A once omitted a projected grant field and was correctly rejected
+fail-closed before retrying unchanged. Agent B changed only the projected
+informational finish summary; publication still succeeded.
+
+Both sessions ended at valid `WAIT -> get_next_action({})` continuations
+before grant `c7d4b141-32fd-3547-9928-c8cf191cc1b8` consumption and the
+implementation snapshot. No unchanged projected action failed and no new
+production defect is proven.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts. Preserve the first unchanged projected
+action failure or required state with no usable projection. Do not alter
+review/wait semantics, push, or create SYN-040 from CP-0543 alone.
+
+## Work completed
+
+Recorded CP-0543 with complete WorkGroup, participant, claim/epoch,
+request/grant, projection/action, snapshot, validation, integration, control
+test, Doctor, and fail-closed retry evidence. No production code changed.
+
+## Current failures
+
+WorkGroup `f82161ed-39f9-3662-851d-d90f07245a46` remains ACTIVE. Agent A's
+`todo.py` claim remains active and grant
+`c7d4b141-32fd-3547-9928-c8cf191cc1b8` remains pending. Control pytest is
+1 passed / 2 failed because only the test snapshot integrated. Doctor remains
+DEGRADED with six warnings; Git/bootstrap issues remain separate.
+
 ## SYN-039 CP-0542 ordinary reciprocal-review boundary
 
 Evidence:

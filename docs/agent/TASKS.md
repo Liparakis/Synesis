@@ -1,5 +1,24 @@
 # Tasks
 
+## SYN-039 CP-0543 ordinary grant-continuation boundary
+
+The fresh ordinary acceptance reached reciprocal REVIEW, grant consumption,
+immutable test-snapshot publication, structured ACCEPT, and integration. One
+grant call omitted a projected field and was rejected fail-closed before the
+exact retry; another action changed an informational summary. The sessions
+then stopped at valid wait continuations before the reciprocal grant and
+implementation snapshot. No unchanged projected action failed and no new
+production slice is justified.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0544-ordinary-grant-continuation-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run another fresh ordinary unattended two-agent Todo
+acceptance with only complementary visible coding prompts. Do not create
+SYN-040, push, relay, or change wait/review semantics from this evidence.
+
 ## SYN-039 CP-0542 ordinary reciprocal-review boundary
 
 The fresh ordinary acceptance reached reciprocal REVIEW admission, exact

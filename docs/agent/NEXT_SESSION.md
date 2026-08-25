@@ -1,5 +1,21 @@
 # Next Session
 
+## CP-0543 ordinary grant-continuation boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0544-ordinary-grant-continuation-2026-08-25.md`.
+
+The fresh ordinary run reached reciprocal REVIEW, grant
+`964ea299-c1fb-3298-a61b-d448522fb33d` consumption, snapshot
+`snap_0bd17b0b5256e6a3cc6a5a9c79487085`, structured ACCEPT, and integration
+commit `872b689`. A malformed grant retry was rejected fail-closed and then
+the exact retry succeeded. The reciprocal grant remained pending after valid
+wait polling ended. No unchanged projection failed.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts. Do not relay,
+  manually transition, modify wait/review semantics, push, or create SYN-040.
+
 ## CP-0542 ordinary reciprocal-review boundary
 
 Evidence:

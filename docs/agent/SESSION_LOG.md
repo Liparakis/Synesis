@@ -1,3 +1,24 @@
+## 2026-08-25 — SYN-039 CP-0543 ordinary grant-continuation boundary
+
+- Ran a fresh ordinary unattended Todo acceptance with only complementary
+  coding prompts and current bundled MCP. WorkGroup
+  `f82161ed-39f9-3662-851d-d90f07245a46` reached reciprocal REVIEW, grant
+  `964ea299-c1fb-3298-a61b-d448522fb33d` consumption, snapshot
+  `snap_0bd17b0b5256e6a3cc6a5a9c79487085`, structured ACCEPT, and integration
+  `872b689`.
+- Agent A omitted the projected `targetParticipant` once and received the
+  expected fail-closed error before exact retry. Agent B changed the
+  informational finish summary; the snapshot still integrated. No unchanged
+  projected action failed.
+- Both sessions ended at valid `WAIT -> get_next_action({})` continuations
+  before the reciprocal grant and implementation snapshot. Control pytest was
+  1 passed / 2 failed; Doctor remained DEGRADED with six warnings.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0544-ordinary-grant-continuation-2026-08-25.md`.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts.
+
 ## 2026-08-25 — SYN-039 CP-0542 ordinary reciprocal-review boundary
 
 - Ran a fresh ordinary unattended Todo acceptance with only complementary

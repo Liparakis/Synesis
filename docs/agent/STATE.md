@@ -1,5 +1,25 @@
 # State
 
+## SYN-039 CP-0543 ordinary grant-continuation boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0544-ordinary-grant-continuation-2026-08-25.md`.
+
+Project `292c8905-aca7-4b1e-8f5e-e8494a90e8ce` reached WorkGroup
+`f82161ed-39f9-3662-851d-d90f07245a46`, reciprocal REVIEW, grant
+`964ea299-c1fb-3298-a61b-d448522fb33d` consumption, snapshot
+`snap_0bd17b0b5256e6a3cc6a5a9c79487085`, structured ACCEPT, and integration
+`872b689`. Grant `c7d4b141-32fd-3547-9928-c8cf191cc1b8` remained pending
+after valid wait continuations. The omitted grant field was correctly rejected
+and then retried exactly. No unchanged projected action failed and no
+production code changed.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts; preserve the first unchanged action
+failure or missing usable projection.
+
 ## SYN-039 CP-0542 ordinary reciprocal-review boundary
 
 Evidence:
