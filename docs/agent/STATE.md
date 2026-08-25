@@ -1,5 +1,31 @@
 # State
 
+## SYN-039 CP-0536 review projection fix and post-fix acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-review-gate-2026-08-25.md`.
+
+The narrow `AgentNextActionService` fix prevents an already validated REVIEW
+grant from re-entering the fallback admission projection. The deterministic
+MCP regression passes. The rebuilt bundle is current and the focused suite,
+validators, Javadocs, Go vet, and diff check pass.
+
+The fresh bounded diagnostic used two ready/isolated participants in shared
+WorkGroup `ee0bc4df-04ba-3f09-b151-b3baa8416231`. It executed exact REVIEW
+admission, grant `36add1f0-6d26-3ba5-8964-507944076278`, snapshot
+`snap_3a535abb5fdf569431c3413929f5257f`, reviewer inspection, and structured
+ACCEPT. The reciprocal grant `549697bd-394e-3a9c-9438-244b12a93a69` remained
+pending because the provider session ended; the WorkGroup remains ACTIVE.
+No unchanged projection failed, so no further production lifecycle slice is
+proven.
+
+## Immediate next action
+
+Run one fresh ordinary unattended two-agent Todo acceptance with only
+complementary coding prompts and current bundled MCP. Preserve the first
+unchanged projection failure or missing usable action. Do not push or create
+SYN-040.
+
 ## SYN-039 CP-0535 continuation diagnostic and ordinary acceptance boundary
 
 Evidence:

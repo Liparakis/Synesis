@@ -1,5 +1,28 @@
 # Tasks
 
+## SYN-039 CP-0536 review projection fix and post-fix acceptance boundary
+
+The recorded CP-0535 state proved a concrete stale-review fallback defect:
+completed REVIEW validation did not exclude its target intent from the
+fallback `REVIEW_ADMISSION_REQUIRED` projection. The smallest filter and
+deterministic regression are implemented.
+
+The fresh post-fix bounded diagnostic reached shared REVIEW, exact grant
+consumption, immutable snapshot publication, snapshot inspection, and
+structured ACCEPT. It stopped with the reciprocal grant pending after the
+provider session disengaged. The post-fix ordinary probe stopped earlier at
+the same provider/session boundary. No unchanged projected action failed.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-review-gate-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run one fresh ordinary unattended two-agent Todo
+acceptance with only complementary coding prompts and the rebuilt bundled
+MCP. Do not create SYN-040, push, relay, or add provider-session orchestration
+from this evidence alone.
+
 ## SYN-039 CP-0535 continuation diagnostic and ordinary acceptance boundary
 
 The bounded diagnostic with exact execution of projections and mutating-tool

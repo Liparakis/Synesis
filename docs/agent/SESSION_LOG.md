@@ -3578,3 +3578,31 @@ ownership. No push and no SYN-040.
 
 - Exact next action: run a bounded same-session continuity diagnostic across a
   delayed peer REVIEW request without relay or manual lifecycle intervention.
+## 2026-08-25 — SYN-039 CP-0536 review projection fix and post-fix acceptance
+
+- Reproduced and fixed the stale-review fallback projection: a validated
+  single-use REVIEW grant could be followed by a repeated
+  `REVIEW_ADMISSION_REQUIRED` projection for the same intent. Added the
+  deterministic `McpSyn039SliceTest.acceptedReviewDoesNotReprojectAdmissionForActiveReviewerLane` regression.
+- Added the smallest agent-facing continuation guidance: execute concrete
+  mutation continuations exactly and poll `get_next_action` after every
+  completed mutation.
+- Rebuilt the current local platform bundle successfully.
+- Ran a fresh post-fix bounded diagnostic. Shared WorkGroup
+  `ee0bc4df-04ba-3f09-b151-b3baa8416231` reached exact REVIEW admission,
+  grant consumption, snapshot `snap_3a535abb5fdf569431c3413929f5257f`,
+  reviewer inspection, and structured ACCEPT. The reciprocal grant remained
+  pending after the provider session disengaged; no unchanged projected
+  action failed.
+- The post-fix ordinary probe reached one shared WorkGroup and exact grant
+  consumption but stopped before snapshot publication for the same
+  provider/session engagement reason. No new production blocker was proven.
+- Focused tests, validators, Javadocs, Go vet, and `git diff --check` pass.
+  Bootstrap migration failures, root Git startup stall, historical format
+  whitespace, and Doctor warnings remain separately classified.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0536-review-gate-2026-08-25.md`.
+
+- Exact next action: run one fresh ordinary unattended two-agent Todo
+  acceptance with only complementary coding prompts using the rebuilt bundle.
+  Do not relay, manually transition, push, or create SYN-040.

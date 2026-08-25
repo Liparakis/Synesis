@@ -1,5 +1,22 @@
 # Next Session
 
+## CP-0536 review projection fix and post-fix acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-review-gate-2026-08-25.md`.
+
+The stale-review fallback projection defect is fixed and regression-covered.
+After a validated REVIEW grant, its target intent is no longer re-emitted as
+`REVIEW_ADMISSION_REQUIRED`. The fresh post-fix diagnostic reached shared
+REVIEW, exact grant consumption, immutable snapshot publication, and
+structured ACCEPT, then stopped because the provider did not remain engaged
+for the reciprocal grant. No unchanged projected action failed.
+
+- Exact next action: run one fresh ordinary unattended two-agent Todo
+  acceptance with only complementary coding prompts against the rebuilt
+  bundled MCP. Do not relay messages or trigger lifecycle transitions. Keep
+  the known Doctor, Git subprocess, and bootstrap migration issues separate.
+
 ## CP-0535 continuation diagnostic and ordinary acceptance boundary
 
 Evidence:

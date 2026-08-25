@@ -2,7 +2,34 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0535
+- Checkpoint: CP-0536
+
+## SYN-039 CP-0536 review projection fix and post-fix acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0536-review-gate-2026-08-25.md`.
+
+The recorded CP-0535 state exposed a concrete stale-review projection defect:
+after a REVIEW grant had a completed validation, the fallback branch could
+re-project `REVIEW_ADMISSION_REQUIRED` for that already-reviewed intent. The
+narrow `AgentNextActionService` filter and deterministic MCP regression are
+implemented. Provider guidance also now requires executing concrete mutation
+continuations and polling `get_next_action` after every completed mutation.
+
+The fresh post-fix bounded diagnostic reached one shared WorkGroup, exact
+REVIEW admission, grant consumption, immutable snapshot publication, snapshot
+inspection, and structured ACCEPT. It stopped with a reciprocal grant pending
+because the provider session did not remain engaged; no unchanged projected
+action failed. The ordinary post-fix probe stopped at the same provider/session
+engagement boundary before the second snapshot. This remains agent/session
+compliance evidence, not a new production lifecycle defect.
+
+## Immediate next action
+
+Run one fresh ordinary unattended two-agent Todo acceptance using only
+complementary visible coding prompts and the rebuilt bundled MCP. Preserve the
+first unchanged projection failure or missing usable action. Do not relay,
+manually transition, push, or create SYN-040.
 
 ## SYN-039 CP-0535 continuation diagnostic and ordinary acceptance boundary
 
