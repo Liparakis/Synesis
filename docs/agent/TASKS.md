@@ -1,5 +1,30 @@
 # Tasks
 
+## SYN-039 CP-0540 bounded exact-action diagnostic
+
+The fresh exact-action diagnostic used the current bundled MCP and two
+independent ready/isolated sessions in WorkGroup
+`5608d46f-ba9a-3d88-8d8c-ceac20a4f8db`. It reached exact REVIEW admission,
+owner response, single-use grant consumption, immutable snapshot publication,
+structured ACCEPT, and integration for the test lane. The reviewer decision
+contract was usable as an explicit choice and the strict response path
+accepted the valid decision.
+
+The provider sessions stopped at valid `WAIT -> get_next_action({})`
+continuations before reciprocal grant consumption and implementation
+publication. No unchanged concrete action failed and no required state lacked
+a usable projection. This is agent/session compliance evidence, not a new
+production slice.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0540-review-contract-diagnostic-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run another fresh ordinary unattended two-agent Todo
+acceptance with only complementary visible coding prompts. Do not create
+SYN-040 or push.
+
 ## SYN-039 CP-0539 ordinary acceptance compliance boundary
 
 The CP-0537 pending outgoing REVIEW projection and CP-0538 completed-lane

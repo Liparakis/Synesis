@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0540 bounded exact-action diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0540-review-contract-diagnostic-2026-08-25.md`.
+
+The fresh exact-action diagnostic used two independent ready/isolated sessions
+and one shared WorkGroup. Exact REVIEW admission, owner acceptance, grant
+consumption, immutable test-snapshot publication, structured ACCEPT, and
+integration succeeded. The review-decision projection was an explicit
+ACCEPT/REJECT choice with exact grant/snapshot/intent/epoch context; the
+reviewer executed the existing strict response successfully.
+
+The run stopped with the implementation lane repeatedly receiving the exact
+`WAIT -> get_next_action({})` continuation while the reciprocal grant remained
+pending. WorkGroup `5608d46f-ba9a-3d88-8d8c-ceac20a4f8db` is ACTIVE. No
+unchanged projected action failed and no production change is justified.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts. Do not push or
+  create SYN-040.
+
 ## CP-0539 ordinary acceptance compliance boundary
 
 Evidence:

@@ -1,5 +1,51 @@
 # Current Task
 
+## SYN-039 CP-0540 bounded exact-action diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0540-review-contract-diagnostic-2026-08-25.md`.
+
+The fresh bounded diagnostic used two independent ready/isolated sessions in
+one shared WorkGroup. Exact REVIEW admission, owner responses, grant
+consumption, immutable snapshot publication, structured ACCEPT, and one-lane
+integration all succeeded. The review decision projection intentionally
+exposed an explicit ACCEPT/REJECT choice rather than an incomplete command;
+the reviewer submitted the valid existing response and Synesis accepted it.
+
+The run stopped at repeated valid `WAIT -> get_next_action({})` continuations
+before reciprocal grant consumption and implementation publication. One grant
+call changed the projected informational target participant but was still
+authorized by the bound caller and consumed; this is agent-compliance evidence.
+No unchanged concrete projection failed and no new production defect is
+proven.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts. Do not change the review-decision
+contract, push, or create SYN-040 from this evidence alone.
+
+## Work completed
+
+Recorded the fresh CP-0540 exact-action diagnostic with complete WorkGroup,
+participant, claim/epoch, request, grant, snapshot, validation, integration,
+projection, and Doctor evidence. No production code changed; existing
+fail-closed review and grant behavior remains intact.
+
+## Current failures
+
+The diagnostic WorkGroup remains ACTIVE because provider sessions stopped at
+valid polling continuations before the reciprocal grant and implementation
+snapshot. The control checkout contains the test snapshot but not the
+implementation snapshot, so control pytest is 1 passed / 3 failed. Doctor is
+DEGRADED with six warnings; the focused MCP test reproduced the known Git
+subprocess stall, and bootstrap migration failures remain separate
+verification issues.
+
+- Task ID: SYN-039
+- Status: ACTIVE
+- Checkpoint: CP-0540
+
 ## SYN-039 CP-0539 ordinary acceptance compliance boundary
 
 Evidence:

@@ -1,5 +1,31 @@
 # State
 
+## SYN-039 CP-0540 bounded exact-action diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0540-review-contract-diagnostic-2026-08-25.md`.
+
+Fresh project `39e40dec-25a2-4cf8-a9cf-4b93727383bc` reached one shared
+WorkGroup `5608d46f-ba9a-3d88-8d8c-ceac20a4f8db`, exact REVIEW admission,
+grant consumption, snapshot `snap_8c27ac8760b9ef947df1c4aae8d47bd4`,
+structured ACCEPT, and integration. The review-decision projection exposed
+the exact immutable snapshot context and explicit allowed results; it did not
+invent an incomplete response command, and the reviewer successfully used the
+existing strict response tool.
+
+The remaining boundary was repeated valid `WAIT -> get_next_action({})`
+polling before the reciprocal grant was consumed. The altered informational
+target participant in one agent call is recorded as provider compliance
+evidence; caller binding and grant/epoch/single-use authorization remained
+fail-closed. No production code changed.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts. Preserve the provider/session
+continuation as the current blocker and do not change review projection
+semantics without a new unchanged-action failure.
+
 ## SYN-039 CP-0539 ordinary acceptance compliance boundary
 
 Evidence:

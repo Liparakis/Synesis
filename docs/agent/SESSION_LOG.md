@@ -1,3 +1,30 @@
+## 2026-08-25 — SYN-039 CP-0540 bounded exact-action diagnostic
+
+- Ran a fresh bounded diagnostic with two independent GPT-5.6 Luna sessions,
+  the current bundled MCP, and the single rule to execute every concrete
+  projected Synesis action with unchanged arguments. Both sessions reached
+  `ready / isolated` in the same project and converged on WorkGroup
+  `5608d46f-ba9a-3d88-8d8c-ceac20a4f8db`.
+- Exact REVIEW admission, owner acceptance, single-use grant consumption,
+  immutable snapshot publication, structured ACCEPT, and integration of
+  `snap_8c27ac8760b9ef947df1c4aae8d47bd4` succeeded. The reviewer decision
+  projection was an explicit choice contract, not an incomplete command, and
+  the existing strict response accepted the valid decision.
+- The sessions stopped at repeated valid `WAIT -> get_next_action({})`
+  continuations before reciprocal grant consumption and implementation
+  publication. One agent changed the projected informational target
+  participant but caller-bound authorization still consumed the grant. No
+  unchanged concrete projection failed, no production code changed, and no
+  SYN-040 was created.
+- Control pytest was `1 passed, 3 failed` because only the test snapshot was
+  integrated. Doctor was `DEGRADED` with six warnings; the Git subprocess stall
+  and bootstrap migration failures remain independent.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0540-review-contract-diagnostic-2026-08-25.md`.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts.
+
 ## 2026-08-25 — SYN-039 CP-0535 continuation diagnostic and ordinary acceptance
 
 - Ran a fresh bounded diagnostic with two independent GPT-5.6 Luna High
