@@ -25,11 +25,11 @@ not a new production protocol defect. No second ordinary acceptance was run.
 
 ## Immediate next action
 
-Record CP-0534 and run one bounded diagnostic that applies the exact-projected
-action rule to continuation actions returned by mutating tools as well as
-`get_next_action`. Do not modify lifecycle code, relay messages, or trigger
-transitions unless an unchanged executable action fails or the same state
-still has no usable projection after all preceding continuations are obeyed.
+Run one bounded diagnostic applying the exact-projected action rule to
+continuation actions returned by mutating tools as well as `get_next_action`.
+Do not modify lifecycle code, relay messages, or trigger transitions unless an
+unchanged executable action fails or the same state still has no usable
+projection after all preceding continuations are obeyed.
 
 ## SYN-039 CP-0533 ordinary acceptance boundary
 
