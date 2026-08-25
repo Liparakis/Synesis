@@ -2,7 +2,50 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0532
+- Checkpoint: CP-0533
+
+## SYN-039 CP-0533 ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0533-ordinary-2026-08-25.md`.
+
+The fresh ordinary acceptance used the current bundled MCP, the same project,
+distinct ready/isolated sessions, and disjoint epoch-1 claims. Both agents
+converged on WorkGroup `62e57bbc-897e-3946-a5d2-5082d1e1a2c1`. Agent B
+executed the exact projected `request_coordination(work_group_join)` and
+created pending REVIEW request `574c290b-36bd-417e-9286-dce2d9a57cc6`.
+Agent A had already ended its ordinary coding turn while its last projection
+was `IMPLEMENT` without a lifecycle action, so it never received the later
+owner-acceptance projection. No grant, snapshot, validation, integration, or
+terminal WorkGroup state was created. Control pytest was `4 failed, 1 passed`.
+
+No unchanged projected Synesis action failed. The first blocker is ordinary
+provider/session engagement, not a proven production protocol defect.
+
+## Immediate next action
+
+Run one bounded continuity diagnostic with the same two independent provider
+sessions and no manual relay: preserve the owner session across the delayed
+peer REVIEW request, then verify whether Synesis projects and the owner
+executes the exact acceptance action. Do not add retries, orchestration,
+cleanup, or argument repair unless an unchanged projected action fails.
+
+## Work completed
+
+Recorded the CP-0533 fresh ordinary acceptance and exact provider traces. The
+run proved shared WorkGroup convergence and successful exact REVIEW admission
+request creation, but not owner acceptance or later lifecycle stages. No
+production code changed, no remote state was modified, no lifecycle transition
+was manually triggered, and no SYN-040 was created.
+
+## Current failures
+
+The remaining SYN-039 acceptance gap is ordinary provider/session engagement:
+the owner session ended after ordinary implementation work before a later peer
+REVIEW request existed, leaving that request pending. No unchanged projected
+Synesis action failed. Control pytest is `4 failed, 1 passed`; fixture Doctor
+is DEGRADED with six warnings and no errors or critical findings. The root Git
+subprocess stall and bootstrap migration failures remain independent.
 
 ## SYN-039 CP-0532 exact diagnostic closure and ordinary acceptance boundary
 

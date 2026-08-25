@@ -3509,3 +3509,24 @@ ownership. No push and no SYN-040.
   migration failures remain independent. Evidence:
   `docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
 ## 2026-08-25 — SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
+## 2026-08-25 — SYN-039 CP-0533 ordinary acceptance boundary
+
+- Ran a fresh ordinary two-agent Todo acceptance using only complementary
+  coding prompts, the current bundled MCP, and two distinct ready/isolated
+  sessions. Both agents converged on WorkGroup
+  `62e57bbc-897e-3946-a5d2-5082d1e1a2c1` with disjoint epoch-1 claims.
+- Agent B executed the exact projected REVIEW admission request
+  `574c290b-36bd-417e-9286-dce2d9a57cc6`. Agent A had already ended its
+  ordinary coding turn while its last projection was `IMPLEMENT` without a
+  lifecycle action; it therefore never received the later owner acceptance
+  projection. The request remains pending and no grant, snapshot, validation,
+  integration, or closure state exists.
+- No unchanged projected action failed. This is provider/session engagement
+  evidence, not a production protocol defect. Control pytest is `4 failed, 1
+  passed`; Doctor is `DEGRADED` with six warnings and no errors/critical.
+  Focused workspace/catalog tests, validators, and `git diff --check` pass.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0533-ordinary-2026-08-25.md`.
+
+- Exact next action: run a bounded same-session continuity diagnostic across a
+  delayed peer REVIEW request without relay or manual lifecycle intervention.

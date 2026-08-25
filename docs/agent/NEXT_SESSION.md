@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0533 ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0533-ordinary-2026-08-25.md`.
+
+The fresh ordinary run used current bundled MCP, two distinct ready/isolated
+Codex sessions, one shared WorkGroup, and disjoint epoch-1 claims. Agent B
+executed the exact projected `request_coordination(work_group_join)` and
+created pending REVIEW request `574c290b-36bd-417e-9286-dce2d9a57cc6`.
+Agent A had already ended its ordinary coding turn before the request was
+created, so the owner acceptance was never projected or executed. No grant,
+snapshot, validation, integration, or closure state exists. This is provider
+turn/session engagement evidence; no production defect was proven.
+
+- Exact next action: run one bounded continuity diagnostic that keeps the same
+  owner session alive across a delayed peer REVIEW request, with no relay,
+  manual transition, retry machinery, or orchestration. Verify the owner
+  receives and executes the exact projected acceptance action. Do not modify
+  production code unless an unchanged projection fails or a required state has
+  no usable projection.
+
 ## CP-0532 exact diagnostic closure and ordinary acceptance boundary
 
 Evidence:

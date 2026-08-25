@@ -1,5 +1,35 @@
 # State
 
+## SYN-039 CP-0533 ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0533-ordinary-2026-08-25.md`.
+
+Fresh ordinary two-agent state used project
+`046bf533-7bf7-43c0-83b5-d1a318608ac9`, current bundled MCP
+`0.1.0-SNAPSHOT`/`bc334ac`, and exactly ten tools. Participants
+`agt_764f50c4-8670-3904-a69b-a3d264f4b925` and
+`agt_103d0dd5-cc45-3ca0-9367-526c4b3617b4` held disjoint `todo.py` and
+`test_todo.py` claims at epoch 1 in WorkGroup
+`62e57bbc-897e-3946-a5d2-5082d1e1a2c1`.
+
+Agent B executed the exact projected REVIEW admission request, creating
+`574c290b-36bd-417e-9286-dce2d9a57cc6`. Agent A's provider turn had already
+ended after ordinary `IMPLEMENT` work and before that request existed. The
+request remained pending; no grants, snapshots, validation, integration, or
+closure were produced. No unchanged projected action failed. This remains
+provider/session engagement evidence, not a production protocol defect.
+
+Doctor was `DEGRADED` with six warnings, zero errors, and zero critical
+findings. Focused workspace/catalog tests, validators, and `git diff --check`
+passed. The root Git stall and bootstrap migration failures remain separate.
+
+## Immediate next action
+
+Run a bounded same-session continuity diagnostic across a delayed peer REVIEW
+request, without manually relaying or triggering lifecycle actions. Preserve
+the first unchanged projection failure if one occurs.
+
 ## SYN-039 CP-0532 exact diagnostic closure and ordinary acceptance boundary
 
 Evidence:
