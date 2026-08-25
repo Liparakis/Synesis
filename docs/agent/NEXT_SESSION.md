@@ -1,5 +1,22 @@
 # Next Session
 
+## CP-0542 ordinary reciprocal-review boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0543-ordinary-reciprocal-review-2026-08-25.md`.
+
+The fresh ordinary run reached one shared WorkGroup, reciprocal REVIEW
+requests, grant `f2e6b918-06f3-317c-9c3a-15b3b6cdc723` consumption, snapshot
+`snap_a787bc5da5e0e7ca279b6f199625e1ed`, structured ACCEPT, and integration
+commit `50651bd`. The implementation lane then executed its owner response but
+both sessions ended at valid wait continuations before grant
+`939017b6-16be-377e-9ff2-915dc002ffc6` consumption and implementation
+publication. No unchanged projected action failed.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts. Do not relay,
+  manually transition, modify wait/review semantics, push, or create SYN-040.
+
 ## CP-0541 ordinary continuation diagnostic
 
 Evidence:

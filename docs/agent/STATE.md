@@ -1,5 +1,24 @@
 # State
 
+## SYN-039 CP-0542 ordinary reciprocal-review boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0543-ordinary-reciprocal-review-2026-08-25.md`.
+
+Project `e2153f80-9aa1-4dc5-8c95-06c2cf2f9d48` reached WorkGroup
+`0b1f5704-1c63-3373-b5ea-7e16ea6c8b79`, reciprocal REVIEW admission, grant
+`f2e6b918-06f3-317c-9c3a-15b3b6cdc723` consumption, snapshot
+`snap_a787bc5da5e0e7ca279b6f199625e1ed`, structured ACCEPT, and test-snapshot
+integration `50651bd`. Grant `939017b6-16be-377e-9ff2-915dc002ffc6` remained
+pending. The sessions ended after valid wait continuations. No unchanged
+projected action failed and no production code changed.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts; preserve the first unchanged action
+failure or missing usable projection.
+
 ## SYN-039 CP-0541 ordinary continuation diagnostic
 
 Evidence:

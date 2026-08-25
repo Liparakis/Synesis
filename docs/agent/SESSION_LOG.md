@@ -1,3 +1,27 @@
+## 2026-08-25 — SYN-039 CP-0542 ordinary reciprocal-review boundary
+
+- Ran a fresh ordinary unattended Todo acceptance with only complementary
+  coding prompts, current bundled MCP, and two ready/isolated sessions in
+  WorkGroup `0b1f5704-1c63-3373-b5ea-7e16ea6c8b79`.
+- Reciprocal REVIEW admission, grant
+  `f2e6b918-06f3-317c-9c3a-15b3b6cdc723` consumption, immutable snapshot
+  `snap_a787bc5da5e0e7ca279b6f199625e1ed`, structured ACCEPT, and test-snapshot
+  integration `50651bd` succeeded. The reviewer command returned 1 passed / 2
+  failed against the test-only snapshot; the reviewer submitted the valid
+  explicit ACCEPT choice.
+- The implementation lane executed its reciprocal owner response, but the
+  provider sessions ended at valid `WAIT -> get_next_action({})` continuations
+  before grant `939017b6-16be-377e-9ff2-915dc002ffc6` consumption and the
+  implementation snapshot. No unchanged projected action failed; no
+  production code changed.
+- Control pytest was 1 passed / 2 failed and Doctor remained DEGRADED with six
+  warnings. Existing Git/bootstrap issues remain separate.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0543-ordinary-reciprocal-review-2026-08-25.md`.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts.
+
 ## 2026-08-25 — SYN-039 CP-0541 ordinary continuation diagnostic
 
 - Ran a fresh ordinary unattended two-agent Todo acceptance using only

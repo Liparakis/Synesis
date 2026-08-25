@@ -1,5 +1,24 @@
 # Tasks
 
+## SYN-039 CP-0542 ordinary reciprocal-review boundary
+
+The fresh ordinary acceptance reached reciprocal REVIEW admission, exact
+grant consumption, immutable test-snapshot publication, structured ACCEPT,
+and integration. The implementation lane executed its reciprocal owner
+response, then both provider sessions ended at valid polling continuations
+before the second grant and snapshot. The generated agent contract already
+requires continued polling. No unchanged projected action failed and no new
+production slice is justified.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0543-ordinary-reciprocal-review-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run another fresh ordinary unattended two-agent Todo
+acceptance with only complementary visible coding prompts. Do not create
+SYN-040, push, relay, or change wait/review semantics from this evidence.
+
 ## SYN-039 CP-0541 ordinary continuation diagnostic
 
 The fresh ordinary acceptance used the current bundled MCP and two

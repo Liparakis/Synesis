@@ -1,5 +1,46 @@
 # Current Task
 
+## SYN-039 CP-0542 ordinary reciprocal-review boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0543-ordinary-reciprocal-review-2026-08-25.md`.
+
+The fresh ordinary acceptance used the current bundled MCP and two
+ready/isolated sessions in one shared WorkGroup
+`0b1f5704-1c63-3373-b5ea-7e16ea6c8b79`. Reciprocal REVIEW admission, exact
+grant consumption for the test snapshot, immutable publication, structured
+ACCEPT, and test-snapshot integration succeeded. The reviewer command
+returned 1 passed / 2 failed because the sibling implementation was not yet
+integrated; the agent chose the valid structured ACCEPT decision. This is not
+an unchanged tool failure.
+
+The implementation lane then received and executed its reciprocal owner
+response, but the provider sessions ended at valid `WAIT -> get_next_action({})`
+continuations before the second grant and implementation snapshot. No new
+production defect is proven; generated `AGENTS.md` already requires continued
+polling while unresolved WorkGroup state remains.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts. Preserve the first unchanged projected
+action failure or required state with no usable projection. Do not alter
+review/wait semantics, push, or create SYN-040 from CP-0542 alone.
+
+## Work completed
+
+Recorded CP-0542 with complete WorkGroup, participant, claim/epoch,
+request/grant, projection/action, snapshot, validation, integration, control
+test, and Doctor evidence. No production code changed.
+
+## Current failures
+
+WorkGroup `0b1f5704-1c63-3373-b5ea-7e16ea6c8b79` remains ACTIVE. Agent A's
+`todo.py` claim remains active and reciprocal grant
+`939017b6-16be-377e-9ff2-915dc002ffc6` remains pending. Control pytest is
+1 passed / 2 failed because only the test snapshot integrated. Doctor is
+DEGRADED with six warnings; Git/bootstrap issues remain separate.
+
 ## SYN-039 CP-0541 ordinary continuation diagnostic
 
 Evidence:
