@@ -748,6 +748,13 @@ public final class AgentNextActionService {
         if (actions.isEmpty() && !participantId.isBlank()) {
             List<WorkIntent> activeIntents = store.collaborationProjection().activeIntents();
             List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().allSnapshots();
+            Set<UUID> completedReviewIntents = new LinkedHashSet<>();
+            for (LaneGrant grant : projection.grants()) {
+                if (grant.targetParticipant().equals(participantId)
+                        && projection.reviewValidationForGrant(grant.grantId()).isPresent()) {
+                    completedReviewIntents.add(grant.targetIntentId());
+                }
+            }
             boolean callerHasActiveIntent = activeIntents.stream()
                     .anyMatch(intent -> intent.participant().equals(participantId));
             for (WorkGroup group : projection.groups()) {
@@ -759,6 +766,7 @@ public final class AgentNextActionService {
                 WorkIntent owner = activeIntents.stream()
                         .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
                         .filter(intent -> !intent.participant().equals(participantId))
+                        .filter(intent -> !completedReviewIntents.contains(intent.intentId()))
                         .filter(intent -> snapshots.stream().anyMatch(snapshot ->
                                 snapshot.provenance().workGroupId().equals(group.workGroupId())
                                         && snapshot.provenance().laneId().equals(intent.intentId())
@@ -767,6 +775,7 @@ public final class AgentNextActionService {
                 if (owner == null) {
                     owner = activeIntents.stream()
                             .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
+                            .filter(intent -> !completedReviewIntents.contains(intent.intentId()))
                             .findFirst().orElse(null);
                 }
                 if (owner == null || owner.participant().equals(participantId)) continue;

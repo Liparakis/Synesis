@@ -869,6 +869,40 @@ final class McpSyn039SliceTest {
         assertTrue(conflictingReplay.contains("REVIEW_DECISION_CONFLICT"), conflictingReplay);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void acceptedReviewDoesNotReprojectAdmissionForActiveReviewerLane(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.announce(fixture.project, "codex", "syn039-reviewer-publication",
+                "Add the review regression", "Publish the reviewer test snapshot",
+                List.of(ResourceSelector.pathExact("test_todo.py")), fixture.groupId);
+
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                currentParticipant(fixture.project, "syn039-owner-publication"));
+        Map<String, Object> validation = innerResult(fixture.reviewer.handleMessage(
+                toolCall("get_next_action", "{}")));
+        Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
+        Map<String, Object> payload = new LinkedHashMap<>(
+                (Map<String, Object>) validationResult.get("nextProtocolPayload"));
+        payload.put("result", "accepted");
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        arguments.put("kind", "review_validation");
+        arguments.put("payload", payload);
+
+        String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+                ProviderJson.write(arguments)));
+        assertTrue(accepted.contains("ACCEPTED"), accepted);
+
+        Map<String, Object> afterAcceptance = innerResult(fixture.reviewer.handleMessage(
+                toolCall("get_next_action", "{}")));
+        assertEquals("ready", afterAcceptance.get("status"), afterAcceptance.toString());
+        Map<String, Object> afterResult = (Map<String, Object>) afterAcceptance.get("result");
+        assertTrue(afterResult.toString().contains("IMPLEMENT"), afterResult.toString());
+        assertFalse(afterResult.toString().contains("REVIEW_ADMISSION_REQUIRED"), afterResult.toString());
+        assertTrue(((List<?>) afterResult.get("reviewActions")).isEmpty(), afterResult.toString());
+    }
+
     private static Map<String, Object> reviewArguments(Map<String, Object> basePayload,
             String result, String reason) {
         Map<String, Object> payload = new LinkedHashMap<>(basePayload);
