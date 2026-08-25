@@ -1,5 +1,22 @@
 # Tasks
 
+## SYN-039 CP-0545 exact-projection diagnostic boundary
+
+The exact-rule diagnostic reached one shared WorkGroup, exact REVIEW
+admission, owner acceptance, single-use grant consumption, and fail-closed
+retry. It stopped at valid polling continuations before snapshot publication;
+the reviewer selected a non-projected test command while no snapshot existed.
+No unchanged projected action failed and no new production slice is justified.
+
+Evidence:
+`docs/evidence/syn039-diagnostic-cp0548-exact-rule-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: preserve the diagnostic and collect new provider-session
+termination evidence before changing lifecycle semantics. Do not create
+SYN-040 or push.
+
 ## SYN-039 CP-0544 ordinary review-continuation boundary
 
 The fresh ordinary acceptance reached one shared WorkGroup, exact REVIEW

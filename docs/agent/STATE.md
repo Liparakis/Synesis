@@ -1,5 +1,26 @@
 # State
 
+## SYN-039 CP-0545 exact-projection diagnostic boundary
+
+Evidence:
+`docs/evidence/syn039-diagnostic-cp0548-exact-rule-2026-08-25.md`.
+
+Project `fd51d8d9-619b-4238-bcf6-2011a8a9e398` reached WorkGroup
+`7dad9076-f0be-3117-9667-b5260ce1ca1e` with disjoint epoch-1 claims for
+`todo.py` and `test_todo.py`. REVIEW request
+`ff8c05b8-cbe6-41a0-8d1b-d9867723a87e` was accepted. Grant
+`4fe63ef0-418d-3abc-a442-c768a3b73f6a` was consumed once after Synesis rejected
+the first incomplete payload. No snapshot or validation followed because the
+implementation participant ended at a valid polling continuation.
+
+No unchanged projected action failed. This is provider/agent engagement
+evidence, not a production slice.
+
+## Immediate next action
+
+Preserve the diagnostic and collect new provider-session termination evidence
+before considering any production change.
+
 ## SYN-039 CP-0544 ordinary review-continuation boundary
 
 Evidence:

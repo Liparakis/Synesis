@@ -1,5 +1,23 @@
 # Next Session
 
+## CP-0545 exact-projection diagnostic boundary
+
+Evidence:
+`docs/evidence/syn039-diagnostic-cp0548-exact-rule-2026-08-25.md`.
+
+The exact-rule diagnostic reached WorkGroup
+`7dad9076-f0be-3117-9667-b5260ce1ca1e`, exact REVIEW request
+`ff8c05b8-cbe6-41a0-8d1b-d9867723a87e`, owner acceptance, and grant
+`4fe63ef0-418d-3abc-a442-c768a3b73f6a` consumption. The incomplete grant
+payload was rejected fail-closed and the exact retry succeeded. The
+implementation participant then ended at `WAIT -> get_next_action({})` before
+snapshot publication; the reviewer had no snapshot to validate. No unchanged
+projected action failed.
+
+- Exact next action: preserve this as provider/agent engagement evidence and
+  collect new provider-session termination evidence before changing lifecycle
+  semantics. Do not push or create SYN-040.
+
 ## CP-0544 ordinary review-continuation boundary
 
 Evidence:

@@ -1,5 +1,44 @@
 # Current Task
 
+## SYN-039 CP-0545 exact-projection diagnostic boundary
+
+Evidence:
+`docs/evidence/syn039-diagnostic-cp0548-exact-rule-2026-08-25.md`.
+
+The exact-rule diagnostic used a fresh project, current bundled MCP, and two
+ready/isolated independent sessions. They converged on WorkGroup
+`7dad9076-f0be-3117-9667-b5260ce1ca1e`, executed exact REVIEW admission and
+owner response projections, and consumed grant
+`4fe63ef0-418d-3abc-a442-c768a3b73f6a` after one fail-closed malformed retry.
+
+The run stopped before snapshot publication. The implementation participant
+ended at a valid `WAIT -> get_next_action({})` continuation; the reviewer then
+received `review_validation` polling with no snapshot available and chose a
+non-projected pytest action. No unchanged projected action failed and no new
+production defect is proven.
+
+## Immediate next action
+
+Preserve CP-0545 as agent-compliance evidence and do not change lifecycle
+semantics. Run another fresh two-agent acceptance only with new provider-session
+termination evidence; stop at the first unchanged projected action failure or
+state with no usable projection.
+
+## Work completed
+
+Recorded CP-0545 with exact diagnostic rule, project and bundled executable,
+participants, claims/epochs, request/grant, projections and arguments,
+fail-closed retry, final WorkGroup, control tests, and Doctor state. No
+production code changed.
+
+## Current failures
+
+WorkGroup `7dad9076-f0be-3117-9667-b5260ce1ca1e` remains ACTIVE. Grant
+`4fe63ef0-418d-3abc-a442-c768a3b73f6a` was consumed, but no snapshot,
+validation, integration, or closure occurred. Control pytest is 1 passed / 1
+failed because `todo.py` was not published. Doctor remains DEGRADED with six
+warnings; Git/bootstrap issues remain separate.
+
 ## SYN-039 CP-0544 ordinary review-continuation boundary
 
 Evidence:

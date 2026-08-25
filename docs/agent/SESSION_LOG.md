@@ -1,3 +1,25 @@
+## 2026-08-25 — SYN-039 CP-0545 exact-projection diagnostic boundary
+
+- Ran a fresh two-agent diagnostic with the exact rule to execute every
+  concrete `get_next_action` projection unchanged.
+- Agents converged on WorkGroup `7dad9076-f0be-3117-9667-b5260ce1ca1e`.
+  REVIEW request `ff8c05b8-cbe6-41a0-8d1b-d9867723a87e` was accepted and grant
+  `4fe63ef0-418d-3abc-a442-c768a3b73f6a` was consumed once. An incomplete grant
+  payload was rejected as `COORDINATION_FIELD_REQUIRED:targetParticipant`
+  before the exact retry.
+- The implementation participant ended at a valid polling continuation before
+  snapshot publication. The reviewer had no immutable snapshot and chose a
+  non-projected pytest action. No unchanged projected action failed and no
+  production code changed.
+- Control pytest was 1 passed / 1 failed; WorkGroup remained ACTIVE and Doctor
+  remained DEGRADED with six warnings. Git/bootstrap issues remain separate.
+- Evidence:
+  `docs/evidence/syn039-diagnostic-cp0548-exact-rule-2026-08-25.md`.
+
+- Exact next action: preserve the diagnostic as provider/agent engagement
+  evidence and collect new provider-session termination evidence before
+  changing lifecycle semantics.
+
 ## 2026-08-25 — SYN-039 CP-0544 ordinary review-continuation boundary
 
 - Ran a fresh ordinary unattended Todo acceptance with only complementary
