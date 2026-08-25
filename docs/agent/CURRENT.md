@@ -2,7 +2,58 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0528
+- Checkpoint: CP-0529
+
+## SYN-039 CP-0529 continuity probe and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0529-continuity-and-ordinary-2026-08-25.md`.
+
+The supported non-ephemeral continuity probe preserved the same participant
+and session identities across the durable WAIT boundary. The implementer
+received and executed the exact projected `finish_lane` action, publishing
+immutable snapshot `snap_3e21542358dd37d57cb6963d6f128557`. The reviewer then
+reached a projected `ensure_session`, but its ordinary pytest-generated
+`__pycache__` files made the review worktree dirty under the existing
+fail-closed cleanliness rule; `ensure_session` returned
+`failed / internal_failure / request_human_help`. No unchanged projected
+Synesis action failed and no production defect was proven.
+
+The fresh ordinary acceptance reached shared WorkGroup
+`c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a`, integrated test-only snapshot
+`snap_d678f31fc5591c897c7a648c41d4322d`, and recorded a structured ACCEPT.
+The reviewer then received the exact executable `request_coordination`
+projection for the reciprocal REVIEW admission but chose another
+`get_next_action` call and its turn ended. The implementation snapshot was
+not published; the control checkout therefore remained at `2 failed, 2
+passed`. This is agent/session engagement evidence, not a proven protocol
+defect.
+
+## Immediate next action
+
+Run one fresh ordinary unattended two-agent Todo acceptance with only
+complementary coding prompts and the current bundled MCP. Do not provide
+lifecycle coaching, relay messages, trigger transitions, or repair state
+manually. Keep the known root Git subprocess stall, bootstrap migration
+failures, and six Doctor warnings separately classified. Do not change
+production code, push, or create SYN-040 unless an unchanged projected action
+fails or required progress has no usable projection.
+
+## Work completed
+
+Recorded the CP-0529 continuity and ordinary acceptance evidence. No
+production code changed, no remote state was modified, and no manual
+coordination transition, relay, ownership repair, merge, or control-checkout
+mutation was performed.
+
+## Current failures
+
+The remaining SYN-039 gap is ordinary provider/session engagement: WorkGroup
+`c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a` is ACTIVE with B COMPLETED and A
+ACTIVE after B ignored the exact projected reciprocal REVIEW admission.
+Doctor is DEGRADED with six warnings and no errors or critical findings.
+The root Git subprocess stall and bootstrap migration failures remain
+independent verification issues.
 
 ## SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
 

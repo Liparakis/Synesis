@@ -1,3 +1,25 @@
+## 2026-08-25 — SYN-039 CP-0529 continuity probe and ordinary acceptance
+
+- Ran a supported non-ephemeral continuity probe across the ordinary pending
+  grant boundary. The implementer executed projected `finish_lane` and
+  published `snap_3e21542358dd37d57cb6963d6f128557`; reviewer recovery failed
+  closed because ordinary pytest-generated `__pycache__` files made its
+  worktree dirty under the existing cleanliness rule. No unchanged projected
+  action failed and no production defect was proven.
+- Ran a fresh ordinary two-agent acceptance with only complementary Todo
+  coding prompts. The agents reached WorkGroup
+  `c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a`; B published and integrated
+  `snap_d678f31fc5591c897c7a648c41d4322d`, and A recorded ACCEPT. B then
+  ignored the exact projected reciprocal `request_coordination` action and
+  its turn ended. WorkGroup remains ACTIVE and control pytest is `2 failed,
+  2 passed`.
+- Classified both boundaries as provider/session engagement evidence, not a
+  production protocol defect. No production code changed, nothing was
+  pushed, and no SYN-040 was created. Doctor remains DEGRADED with six
+  warnings; the root Git subprocess stall and bootstrap migration failures
+  remain independent. Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0529-continuity-and-ordinary-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
 
 - Ran a fresh bounded diagnostic with two independent GPT-5.6 Luna High
@@ -3407,3 +3429,4 @@ ownership. No push and no SYN-040.
   remains DEGRADED with six warnings; the root Git stall and bootstrap
   migration failures remain independent. Evidence:
   `docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
+## 2026-08-25 — SYN-039 CP-0528 bounded diagnostic and ordinary acceptance

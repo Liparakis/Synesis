@@ -1,5 +1,27 @@
 # Next Session
 
+## CP-0529 continuity probe and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0529-continuity-and-ordinary-2026-08-25.md`.
+
+The continuity probe preserved both non-ephemeral sessions and executed the
+projected `finish_lane`, publishing
+`snap_3e21542358dd37d57cb6963d6f128557`. Reviewer recovery then failed closed
+on ordinary pytest-generated `__pycache__` files under the existing dirty
+worktree rule. The fresh ordinary run reached shared WorkGroup
+`c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a`, integrated
+`snap_d678f31fc5591c897c7a648c41d4322d`, and recorded ACCEPT, but B ignored
+the exact projected reciprocal `request_coordination` action and its turn
+ended. No unchanged projected action failed; no production change is
+justified.
+
+- Exact next action: run one fresh ordinary unattended two-agent Todo
+  acceptance with only complementary coding prompts and the current bundled
+  MCP. Do not provide lifecycle coaching, relay messages, trigger transitions,
+  or repair state manually. Keep the Git stall, bootstrap migration failures,
+  and Doctor warnings separate. Do not push or create SYN-040.
+
 ## CP-0528 bounded diagnostic and ordinary acceptance
 
 Evidence:

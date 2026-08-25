@@ -1,5 +1,38 @@
 # State
 
+## SYN-039 CP-0529 continuity probe and ordinary acceptance
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0529-continuity-and-ordinary-2026-08-25.md`.
+
+The continuity probe preserved the same non-ephemeral sessions across WAIT,
+executed the projected `finish_lane`, and published
+`snap_3e21542358dd37d57cb6963d6f128557`. Reviewer recovery then failed closed
+because pytest-generated `__pycache__` files made its worktree dirty under
+the existing cleanliness rule; the generic `ensure_session` mapping returned
+`failed / internal_failure / request_human_help`. This did not prove a new
+Synesis defect.
+
+The fresh ordinary acceptance reached shared WorkGroup
+`c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a`, integrated
+`snap_d678f31fc5591c897c7a648c41d4322d`, and recorded ACCEPT. B then received
+the exact executable reciprocal `request_coordination(work_group_join)`
+projection but ended after choosing another `get_next_action` call. The
+implementation snapshot was not published; control pytest was `2 failed,
+2 passed`. This is agent/session engagement evidence, not a protocol defect.
+
+Focused coordination/workspace tests, Javadocs, bootstrap Go vet, both
+validators, Doctor, and `git diff --check` pass. The focused MCP slice still
+reproduces the known Git subprocess stall in `ProcessCommandRunner` through
+`GitProcessRunner`/`SemanticIndexFingerprint`; it remains separate
+infrastructure work.
+
+Immediate next action: run one fresh ordinary unattended two-agent Todo
+acceptance with only complementary coding prompts and the current bundled
+MCP. Do not change production code, push, or create SYN-040 unless an
+unchanged projected action fails or required progress has no usable
+projection.
+
 ## SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
 
 Evidence:

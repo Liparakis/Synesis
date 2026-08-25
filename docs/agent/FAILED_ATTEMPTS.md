@@ -1,5 +1,31 @@
 # Failed Attempts
 
+## 2026-08-25 — SYN-039 CP-0529 ordinary reciprocal-review projection stop
+
+- Attempted approach: Run a fresh ordinary two-agent Todo acceptance with
+  only complementary coding prompts after the CP-0528 continuity probe.
+- Expected result: the agents would execute the projected reciprocal REVIEW
+  admission, publish the implementation snapshot, validate it, integrate it,
+  and close the WorkGroup without relay or lifecycle coaching.
+- Observed result: the agents reached shared WorkGroup
+  `c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a`, B published and integrated
+  test-only snapshot `snap_d678f31fc5591c897c7a648c41d4322d`, and A recorded
+  ACCEPT. B then received the exact executable `request_coordination`
+  projection for the reciprocal REVIEW admission but chose another
+  `get_next_action` call and its turn ended. The implementation snapshot was
+  not published; control pytest reported `2 failed, 2 passed`; WorkGroup
+  remains ACTIVE.
+- Root cause/classification: ordinary provider/session engagement and
+  projection compliance. No unchanged projected action failed and no usable
+  projected action was absent. Do not change production lifecycle, cleanup,
+  integration, or orchestration behavior from this run.
+- The continuity companion reached projected `finish_lane` successfully, but
+  reviewer `ensure_session` failed closed on pytest-generated `__pycache__`
+  files considered untrusted by the existing cleanliness rule. This is the
+  existing dirty-worktree boundary, not a proven SYN-039 production defect.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0529-continuity-and-ordinary-2026-08-25.md`.
+
 ## 2026-08-24 — SYN-039 CP-0525 ordinary completion boundary
 
 - Attempted approach: Run the required second fresh ordinary two-agent Todo

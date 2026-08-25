@@ -1,5 +1,34 @@
 # Tasks
 
+## SYN-039 CP-0529 continuity probe and ordinary acceptance
+
+The continuity probe preserved the same non-ephemeral provider sessions,
+executed the projected `finish_lane`, and published
+`snap_3e21542358dd37d57cb6963d6f128557`. Reviewer recovery then failed closed
+on ordinary pytest-generated `__pycache__` files because the existing
+worktree-cleanliness rule treats them as untrusted changes; no unchanged
+projected action failed and no production defect was proven.
+
+The fresh ordinary acceptance reached shared WorkGroup
+`c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a`, integrated
+`snap_d678f31fc5591c897c7a648c41d4322d`, and recorded ACCEPT. The reviewer
+then ignored the exact projected reciprocal `request_coordination` action
+and its turn ended. The WorkGroup remains ACTIVE and the control checkout
+reports `2 failed, 2 passed` because the implementation snapshot was not
+published. This remains agent/session engagement evidence, not a proven
+Synesis protocol defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0529-continuity-and-ordinary-2026-08-25.md`.
+
+Status remains ACTIVE. Focused coordination/workspace tests, Javadocs,
+bootstrap Go vet, both validators, Doctor, and `git diff --check` pass. The
+focused MCP slice reproduces the known Git subprocess stall and remains
+separate infrastructure work. Immediate next action: run one fresh ordinary
+unattended two-agent Todo acceptance with only complementary coding prompts
+and the current bundled MCP. Keep the root Git stall, bootstrap migration
+failures, and Doctor warnings separate; do not create SYN-040.
+
 ## SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
 
 The fresh bounded exact-projection diagnostic completed the existing protocol
