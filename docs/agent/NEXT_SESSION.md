@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0534 ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-ordinary-2026-08-25.md`.
+
+The fresh ordinary run used the current bundled MCP, two distinct
+ready/isolated Codex sessions, one shared WorkGroup, and disjoint epoch-1
+claims. It reached REVIEW admission, owner acceptance, grant consumption,
+snapshot publication, integration, and structured ACCEPT. Agent A's
+`finish_lane` result projected the exact reciprocal REVIEW admission for B's
+intent, but A ended its provider turn before executing that continuation. B
+then corrected one invalid review identity and repeatedly received bare
+`IMPLEMENT` with no executable lifecycle action. The WorkGroup remains
+`ACTIVE`; no terminal state was reached.
+
+- Exact next action: run one bounded diagnostic with the rule “execute every
+  exact projected continuation returned by a mutating tool before ending the
+  turn,” in addition to the existing `get_next_action` rule. Do not change
+  production lifecycle code from this run alone; keep the Git stall, bootstrap
+  migration failures, and Doctor warnings separate.
+
 ## CP-0533 ordinary acceptance boundary
 
 Evidence:

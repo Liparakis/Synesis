@@ -460,6 +460,28 @@
 
 # Session Log
 
+## 2026-08-25 — SYN-039 CP-0534 ordinary acceptance
+
+- Ran a fresh ordinary two-agent Todo acceptance with the rebuilt bundled MCP,
+  two independent ready/isolated sessions, disjoint claims, and no lifecycle
+  coaching or manual relay.
+- The run reached one shared WorkGroup, exact REVIEW admission, owner
+  acceptance, single-use grant consumption, immutable snapshot publication,
+  integration, and structured ACCEPT. Snapshot
+  `snap_50878d9fe890bbb31384069dc76af94e` integrated successfully.
+- `finish_lane` returned a concrete reciprocal
+  `request_coordination(work_group_join)` for B's intent. Agent A's provider
+  turn ended before executing it. B corrected one invalid review identity,
+  then followed bounded polling while bare `IMPLEMENT` with no action was
+  repeatedly projected. WorkGroup `d35cd7e5-6310-3d8e-be69-90d9a11c617a`
+  remains ACTIVE.
+- No unchanged `get_next_action` projection failed. This is agent/session
+  compliance evidence, not a new production lifecycle defect. Doctor remains
+  DEGRADED with six separately classified warnings; the Git stall and
+  bootstrap migration failures remain independent.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0534-ordinary-2026-08-25.md`.
+
 ## 2026-08-24 — SYN-039 CP-0528 post-fix exact-action diagnostic
 
 - Fresh project `syn039-diagnostic-cp0528-001` used the current bundled MCP,

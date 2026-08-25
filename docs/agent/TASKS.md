@@ -1,5 +1,29 @@
 # Tasks
 
+## SYN-039 CP-0534 ordinary acceptance boundary
+
+The fresh ordinary acceptance used the rebuilt bundled MCP and two
+independent GPT-5.6 Luna sessions with complementary visible coding prompts.
+One WorkGroup reached exact REVIEW admission, owner acceptance, grant
+consumption, immutable snapshot publication, integration, and structured
+ACCEPT. The `finish_lane` result then exposed the exact reciprocal
+`request_coordination(work_group_join)` for the still-active test intent, but
+Agent A's provider turn ended without executing that continuation. Agent B
+later corrected one invalid review identity and followed repeated bare
+`IMPLEMENT` projections with no executable action. WorkGroup closure was not
+reached.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-ordinary-2026-08-25.md`.
+
+- Status: ACTIVE
+
+This run is classified as agent/session compliance evidence; no unchanged
+`get_next_action` action failed. Next narrow action: rerun a bounded
+diagnostic requiring exact execution of continuations returned by mutating
+tools as well as `get_next_action`. Do not create SYN-040, push, or broaden
+the lifecycle from this evidence alone.
+
 ## SYN-039 CP-0532 exact diagnostic closure and ordinary acceptance boundary
 
 The CP-0532 exact-projection diagnostic closed a fresh shared WorkGroup after

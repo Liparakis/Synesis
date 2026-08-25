@@ -2,7 +2,34 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0533
+- Checkpoint: CP-0534
+
+## SYN-039 CP-0534 ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-ordinary-2026-08-25.md`.
+
+The fresh ordinary acceptance used the rebuilt bundled MCP, two independent
+ready/isolated sessions, one shared WorkGroup, and disjoint epoch-1 claims.
+The run reached exact REVIEW admission, owner acceptance, single-use grant
+consumption, immutable snapshot publication, integration, and structured
+ACCEPT. A's `finish_lane` result then projected the exact reciprocal
+`request_coordination(work_group_join)` for B's intent, but A's provider turn
+ended without executing it. B later corrected one invalid review identity and
+then followed bounded polling; `get_next_action` repeatedly returned ordinary
+`IMPLEMENT` with no executable lifecycle action while B remained ACTIVE.
+
+No unchanged `get_next_action` projection failed. The first concrete boundary
+is agent/session compliance with a continuation returned by a mutating tool,
+not a new production protocol defect. No second ordinary acceptance was run.
+
+## Immediate next action
+
+Record CP-0534 and run one bounded diagnostic that applies the exact-projected
+action rule to continuation actions returned by mutating tools as well as
+`get_next_action`. Do not modify lifecycle code, relay messages, or trigger
+transitions unless an unchanged executable action fails or the same state
+still has no usable projection after all preceding continuations are obeyed.
 
 ## SYN-039 CP-0533 ordinary acceptance boundary
 
