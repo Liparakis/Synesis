@@ -7,7 +7,7 @@
 - Wider Synesis capabilities: out of scope; SYN-038 is the explicitly tasked Codex-only lifecycle slice
 - Goal revision: 26
 - Status: active
-- Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 must preserve independent Codex/Claude Code sessions underneath Synesis and must not add a central orchestrator, UI, daemon, Fleet system, or centralized launcher. CP-0531 proves and fixes the narrow reciprocal-review gating defect: an active lane with no claim-covered changes remains ordinary `IMPLEMENT`, while publishable changes remain behind exact grant, epoch, participant, and immutable-snapshot checks. The CP-0539 exact-projection diagnostic still stops on provider/session engagement before closure; no unchanged projected action failed. SYN-038 evidence and its `turn_interrupted_command_remained_active` limitation remain unchanged. SYN-010A's required license decision is recorded as AGPL-3.0-only; publication remains unperformed pending explicit push authorization and remaining review gates.
+- Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 must preserve independent Codex/Claude Code sessions underneath Synesis and must not add a central orchestrator, UI, daemon, Fleet system, or centralized launcher. CP-0532 exact-projection evidence proves the existing protocol can complete one shared coding WorkGroup end to end with both grants, immutable snapshots, structured validation, integration, passing control tests, and terminal WorkGroup completion. The required ordinary follow-up still stops at provider/session engagement after fail-closed rejection of wrong review arguments; no unchanged projected action failed. SYN-038 evidence and its `turn_interrupted_command_remained_active` limitation remain unchanged. SYN-010A's required license decision is recorded as AGPL-3.0-only; publication remains unperformed pending explicit push authorization and remaining review gates.
 - Completion target: Synesis Link v1 criteria in `docs/agent/CONTRACT.md`
 - Evidence: SYN-009C release evidence is complete at CP-0110; SYN-010A
   publication audit, current/reachable-history scan, documentation preparation,
@@ -23,6 +23,6 @@
   scripts/agent-resume.ps1`, then run one fresh ordinary unattended two-agent
   Todo acceptance with only complementary coding prompts and the current
   bundled MCP. Preserve the first unchanged projected-action failure or
-  missing usable action; classify provider-turn termination separately. Keep
-  `SYN-014E` paused and do not create SYN-040, push, or add prerelease
-  compatibility aliases.
+  missing usable action; classify wrong agent arguments and provider-turn
+  termination separately. Keep `SYN-014E` paused and do not create SYN-040,
+  push, or add prerelease compatibility aliases.

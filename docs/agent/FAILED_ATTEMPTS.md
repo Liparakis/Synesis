@@ -1,5 +1,29 @@
 # Failed Attempts
 
+## 2026-08-25 — SYN-039 CP-0532 exact diagnostic and ordinary follow-up
+
+- The exact-projection diagnostic used fresh project
+  `e9cff886-feee-496c-933d-fbe939402ae9` and WorkGroup
+  `35931e39-9eb1-3693-b03e-b89fc7088b72`. Both independent agents executed
+  every concrete projected lifecycle action, including reciprocal REVIEW
+  admission, grant consumption, `ensure_session({})` recovery, snapshot
+  publication, immutable validation, and integration. Synesis returned
+  `workGroupStatus=COMPLETED`; control pytest was 5/5.
+- The required ordinary follow-up used fresh project
+  `9af5f848-6bc9-45be-b48b-2e26d3d128bb` and WorkGroup
+  `4646b6ba-66bc-3760-8fda-fc04b9db1b66`. The reviewer first added unsupported
+  `failedAcceptanceTests` and received fail-closed
+  `COORDINATION_RESPONSE_FIELD_NOT_ALLOWED`, then used a wrong intent and
+  received `REVIEW_GRANT_BINDING_MISMATCH`; the later correctly bound REJECT
+  succeeded. The provider sessions ended before the reciprocal grant was
+  consumed and the implementation snapshot was published; control pytest was
+  1 failed, 4 passed.
+- Classification: exact protocol correctness is proven; the ordinary failure
+  is agent argument compliance and provider/session engagement. Do not add
+  argument repair, retry orchestration, cleanup, or a daemon from this run.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0532-exact-diagnostic-and-ordinary-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0531 reciprocal-review session stop
 
 - Attempted approach: run a fresh exact-projection two-agent diagnostic after

@@ -2,62 +2,60 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0531
+- Checkpoint: CP-0532
 
-## SYN-039 CP-0531 reciprocal-review gating fix and exact-projection diagnostic
+## SYN-039 CP-0532 exact diagnostic closure and ordinary acceptance boundary
 
 Evidence:
-`docs/evidence/syn039-unattended-todo-cp0531-exact-rule-diagnostic-2026-08-25.md`.
+`docs/evidence/syn039-unattended-todo-cp0532-exact-diagnostic-and-ordinary-2026-08-25.md`.
 
-The reciprocal-review regression proved that a pending REVIEW grant targeted
-at a peer could fence an active lane before that lane had produced any
-claim-covered source changes. `AgentNextActionService` now checks the assigned
-worktree and claim selectors before returning that wait: an unchanged lane
-continues through ordinary `IMPLEMENT`, while publishable changes remain
-gated on the consumed grant, claim epoch, participant, and immutable snapshot
-protocol. The deterministic MCP regression was red before the fix and green
-after it.
+The fresh exact-projection diagnostic used two independent GPT-5.6 Luna High
+sessions and the current bundled MCP. WorkGroup
+`35931e39-9eb1-3693-b03e-b89fc7088b72` reached exact REVIEW admission, both
+single-use grants, immutable snapshot inspection, structured ACCEPT decisions,
+both snapshot integrations, and `workGroupStatus=COMPLETED`. The control
+checkout was clean at `04c2720` and reported `5 passed`. Every concrete
+projected lifecycle action in the retained trace was executed exactly; no
+unchanged projection failed.
 
-The CP-0538 ordinary post-fix run reached shared WorkGroup
-`66643206-d05a-32e7-8ff4-8d650f2419e5`, both snapshot publications and
-integration, and structured rejection, but did not prove terminal closure.
-The CP-0539 exact-projection diagnostic reached shared WorkGroup
-`4fe4dcb2-e4db-3974-b55f-3502d93ddfc9`, exact admission, grant consumption,
-immutable snapshot inspection, structured ACCEPT, and test-snapshot
-integration. It stopped with reciprocal request/grant state pending when the
-provider sessions ended. Every concrete projection observed in the retained
-trace was executed with exact arguments; no unchanged projected action failed.
+The required second ordinary acceptance used only complementary coding
+prompts. WorkGroup `4646b6ba-66bc-3760-8fda-fc04b9db1b66` integrated the test
+snapshot and exercised structured REJECT routing, but an ordinary reviewer
+first sent unsupported review fields, then a wrong intent, and the provider
+sessions stopped before reciprocal grant consumption and implementation
+publication. Control reported `1 failed, 4 passed`. These are agent
+compliance/session-engagement findings, not a proven production defect.
 
 The full root `check` still reproduces the known Git subprocess startup stall
 in `ProcessCommandRunner.execute` during `:cli:test`; bootstrap migration
-failures and six Doctor warnings remain separately classified.
+failures and Doctor warnings remain separately classified.
 
 ## Immediate next action
 
 Run one fresh ordinary unattended two-agent Todo acceptance with only the
 complementary coding prompts and the current bundled MCP. Do not relay,
 trigger, repair, or coach lifecycle actions. Preserve the first unchanged
-projection failure or missing usable action; if sessions simply end while
-valid WAIT/request/grant continuations remain, classify it as provider/session
-engagement evidence rather than changing production code.
+projection failure or missing usable action; classify wrong agent arguments and
+provider-turn termination separately unless an exact projected action fails.
 
 ## Work completed
 
-Implemented and verified the reciprocal-review gating fix, added deterministic
-regression coverage, rebuilt the current Windows MCP bundle, recorded CP-0538
-and CP-0539 acceptance evidence, and preserved the known root-check stall. No
-remote state was modified, no lifecycle transition was manually triggered,
-and no SYN-040 was created.
+Recorded the CP-0532 exact diagnostic and ordinary acceptance evidence. The
+exact-rule run proved end-to-end protocol correctness and terminal WorkGroup
+completion; the ordinary run preserved fail-closed rejection and exposed only
+agent/session engagement gaps. No production code changed, no remote state was
+modified, no lifecycle transition was manually triggered, and no SYN-040 was
+created.
 
 ## Current failures
 
-The remaining SYN-039 blocker is ordinary provider/session engagement: CP-0539
-WorkGroup `4fe4dcb2-e4db-3974-b55f-3502d93ddfc9` remains ACTIVE at a reciprocal
-request/grant boundary after the sessions ended. The control checkout reports
-`2 failed, 2 passed` because the implementation snapshot was not published.
-This run proved no Synesis projection defect. Fixture Doctor remains DEGRADED
-with six warnings; the root Git subprocess stall and three bootstrap migration
-test failures remain independent verification issues.
+The remaining SYN-039 product acceptance gap is ordinary provider/session
+engagement: the CP-0542 ordinary run stopped with reciprocal review state still
+active after invalid agent-selected review payloads were rejected fail-closed.
+The exact CP-0541 diagnostic completed the same lifecycle, so no new Synesis
+protocol defect is proven. Fixture Doctor remains DEGRADED with six warnings;
+the root Git subprocess stall and three bootstrap migration test failures remain
+independent verification issues.
 
 ## SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
 

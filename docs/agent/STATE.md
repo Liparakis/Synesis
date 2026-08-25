@@ -1,5 +1,35 @@
 # State
 
+## SYN-039 CP-0532 exact diagnostic closure and ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0532-exact-diagnostic-and-ordinary-2026-08-25.md`.
+
+The CP-0541 exact-action diagnostic used current bundled MCP and two
+independent ready/isolated GPT-5.6 Luna sessions. WorkGroup
+`35931e39-9eb1-3693-b03e-b89fc7088b72` completed after exact REVIEW admission,
+single-use grants `9ec041fb-bf01-375b-a6dc-8c8c855469b8` and
+`14d3b3d1-3eb3-3f7c-881d-3734e5c629fc`, snapshots
+`snap_1d7312a7776983949d6be2e0d2c17d48` and
+`snap_e7eb33ecffdcbe279df5677d81ae4a9a`, structured ACCEPT, and integration.
+Control pytest was `5 passed`; no unchanged projection failed.
+
+The CP-0542 ordinary follow-up reached shared WorkGroup
+`4646b6ba-66bc-3760-8fda-fc04b9db1b66`, integrated test snapshot
+`snap_40f972d9d2cf16cd8d76b747d8715267`, and successfully exercised
+fail-closed wrong-field/wrong-intent rejection followed by valid REJECT
+routing. The provider sessions then ended at a reciprocal continuation before
+the implementation snapshot was published; control pytest was `1 failed, 4
+passed`. This is agent/session evidence, not a proven production defect.
+
+Focused SYN-039 verification remains required after this documentation slice.
+The full root Git subprocess stall, bootstrap migration failures, and six
+Doctor warnings remain independent unless a later run proves causality.
+
+Immediate next action: run one fresh ordinary unattended two-agent Todo
+acceptance with only complementary coding prompts and the current bundled MCP;
+preserve the first exact projected-action failure or missing usable projection.
+
 ## SYN-039 CP-0531 reciprocal-review gating fix and exact-projection diagnostic
 
 Evidence:

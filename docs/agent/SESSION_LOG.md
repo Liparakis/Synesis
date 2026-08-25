@@ -1,3 +1,22 @@
+## 2026-08-25 — SYN-039 CP-0532 exact diagnostic closure and ordinary follow-up
+
+- Ran the required fresh exact-projection diagnostic with the current bundled
+  MCP and two independent GPT-5.6 Luna High agents. WorkGroup
+  `35931e39-9eb1-3693-b03e-b89fc7088b72` completed through exact admission,
+  grants, snapshots, validation, integration, and control pytest 5/5.
+- Ran the required second ordinary unattended acceptance with only
+  complementary coding prompts. WorkGroup
+  `4646b6ba-66bc-3760-8fda-fc04b9db1b66` reached snapshot integration and valid
+  rejection routing, but invalid agent-selected review arguments were rejected
+  fail-closed and provider sessions ended before reciprocal grant consumption
+  and implementation publication. Control pytest was 1 failed, 4 passed.
+- No unchanged projected action failed in the exact diagnostic. No production
+  code changed, nothing was pushed, and no SYN-040 was created. Doctor remained
+  DEGRADED with six warnings; the Git stall and bootstrap migration failures
+  remain separate.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0532-exact-diagnostic-and-ordinary-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0531 reciprocal-review gating fix and diagnostic
 
 - Reproduced the ordinary CP-0537/CP-0538 boundary where a pending reciprocal

@@ -1,5 +1,26 @@
 # Tasks
 
+## SYN-039 CP-0532 exact diagnostic closure and ordinary acceptance boundary
+
+The CP-0532 exact-projection diagnostic closed a fresh shared WorkGroup after
+exact REVIEW admission, both single-use grants, immutable snapshot inspection,
+structured validation, integration, and control pytest 5/5. The required
+ordinary follow-up reached valid rejection routing but stopped at provider
+session engagement before reciprocal grant consumption and implementation
+publication. No unchanged projected action failed and no new production defect
+is proven.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0532-exact-diagnostic-and-ordinary-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run one fresh ordinary unattended two-agent Todo
+acceptance with only complementary coding prompts. Preserve the first exact
+projected-action failure or missing usable projection. Do not create SYN-040,
+push, or add argument-repair, retry-orchestration, cleanup, or daemon behavior
+from provider/session evidence.
+
 ## SYN-039 CP-0531 reciprocal-review gating fix and exact-projection diagnostic
 
 The previous ordinary run proved a concrete reciprocal-review gating defect:

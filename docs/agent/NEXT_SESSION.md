@@ -1,5 +1,25 @@
 # Next Session
 
+## CP-0532 exact diagnostic closure and ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0532-exact-diagnostic-and-ordinary-2026-08-25.md`.
+
+The exact-projection diagnostic closed WorkGroup
+`35931e39-9eb1-3693-b03e-b89fc7088b72` after exact admission, grants, both
+immutable snapshots, structured validation, integration, and control pytest
+`5 passed`. The ordinary follow-up reached WorkGroup
+`4646b6ba-66bc-3760-8fda-fc04b9db1b66`, but invalid agent-selected review
+arguments were rejected fail-closed and the provider sessions ended before
+reciprocal grant consumption and implementation publication; control pytest was
+`1 failed, 4 passed`. No production defect was proven.
+
+- Exact next code action: run one fresh ordinary unattended two-agent Todo
+  acceptance with only complementary coding prompts and the current bundled
+  MCP. Do not relay, repair, trigger lifecycle transitions, or add production
+  behavior for wrong agent arguments or provider-turn termination. Preserve the
+  first unchanged projected-action failure or missing usable projection.
+
 ## CP-0531 reciprocal-review gating fix and exact-projection diagnostic
 
 Evidence:
