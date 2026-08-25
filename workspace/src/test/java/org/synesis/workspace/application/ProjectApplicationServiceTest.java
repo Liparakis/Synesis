@@ -38,6 +38,9 @@ final class ProjectApplicationServiceTest {
         assertTrue(agents.contains("Native provider hooks are optional"));
         assertTrue(agents.contains("do not call finish_lane or another lifecycle tool merely because the coding appears complete"));
         assertTrue(agents.contains("Execute lifecycle actions only when get_next_action projects the exact tool and arguments"));
+        assertTrue(agents.contains("A mutating Synesis tool may return a required continuation"));
+        assertTrue(agents.contains("the continuation is part of the durable protocol, not an optional suggestion"));
+        assertTrue(agents.contains("After any completed Synesis mutation, call get_next_action again before ending the turn"));
         assertTrue(agents.contains("do not end the session when IMPLEMENT has no concrete action"));
         assertTrue(agents.contains("Perform a bounded wait and call get_next_action again"));
         assertTrue(agents.contains("integrationCheck input only evaluates explicitly supplied compatibility facts"));
