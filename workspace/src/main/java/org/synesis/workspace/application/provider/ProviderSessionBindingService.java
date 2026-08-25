@@ -622,9 +622,7 @@ public final class ProviderSessionBindingService {
             String status = git(Path.of(binding.worktreePath()), "status", "--porcelain", "--untracked-files=all");
             return status.lines().map(String::trim)
                     .filter(line -> !line.isBlank())
-                    .noneMatch(line -> !(line.endsWith(".synesis") || line.contains(".synesis/")
-                            || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
-                            || line.contains(".codex/hooks.json")));
+                    .noneMatch(line -> !isSafeWorkspaceStatusLine(line));
         } catch (Exception failure) {
             return false;
         }
@@ -646,12 +644,23 @@ public final class ProviderSessionBindingService {
                     "status", "--porcelain", "--untracked-files=all");
             return status.lines().map(String::trim)
                     .filter(line -> !line.isBlank())
-                    .anyMatch(line -> !(line.endsWith(".synesis") || line.contains(".synesis/")
-                            || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
-                            || line.contains(".codex/hooks.json")));
+                    .anyMatch(line -> !isSafeWorkspaceStatusLine(line));
         } catch (Exception failure) {
             return false;
         }
+    }
+
+    private static boolean isSafeWorkspaceStatusLine(String line) {
+        String path = line.length() > 3 ? line.substring(3).trim() : line.trim();
+        String normalized = path.replace('\\', '/');
+        return line.endsWith(".synesis") || line.contains(".synesis/")
+                || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
+                || line.contains(".codex/hooks.json") || isPythonBytecodeCache(normalized);
+    }
+
+    private static boolean isPythonBytecodeCache(String path) {
+        return path.equals("__pycache__") || path.startsWith("__pycache__/")
+                || path.endsWith("/__pycache__") || path.contains("/__pycache__/");
     }
 
     /**

@@ -1,5 +1,29 @@
 # Tasks
 
+## SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
+
+The CP-0530 baseline proved a production recovery defect: standard pytest
+`__pycache__/` output was treated as user work, so projected
+`ensure_session({})` failed closed at a stale reviewer boundary. The narrow
+fix in `ProviderSessionBindingService` aligns stale-workspace classification
+with `SnapshotArtifactPolicy` while retaining fail-closed behavior for real
+untracked content. Regression coverage proves both paths.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-bytecode-recovery-2026-08-25.md`.
+
+Status remains ACTIVE. The fresh post-fix diagnostic verified ready/isolated
+recovery, review admission, grant consumption, snapshot publication,
+structured ACCEPT, integration, and 4/4 control tests. It stopped later when
+an agent changed a projected REVIEW intent ID, then ended before the remaining
+reciprocal validation. That is agent/session compliance evidence; no further
+production change is justified by it. Doctor, Git-stall, and bootstrap
+migration issues remain separately classified.
+
+Next narrow action: run one fresh bounded exact-projection diagnostic with the
+current rebuilt MCP and preserve the first unchanged projection failure or
+agent/session stop. Do not create SYN-040 or push.
+
 ## SYN-039 CP-0529 continuity probe and ordinary acceptance
 
 The continuity probe preserved the same non-ephemeral provider sessions,

@@ -1,5 +1,44 @@
 # State
 
+## SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-bytecode-recovery-2026-08-25.md`.
+
+The baseline project `3811f56c-9c88-400f-b66c-d20f8b2fe3b0` reached a real
+WorkGroup and exact review flow, then B executed the unchanged projected
+`ensure_session({})` after control advancement. Because ordinary pytest had
+left only `__pycache__/*.pyc`, recovery incorrectly failed with
+`WORKSPACE_STALE_DIRTY`, surfaced as `internal_failure / request_human_help`.
+
+The minimal production fix is in
+`ProviderSessionBindingService`: `__pycache__/` is now the only additional
+ephemeral path accepted by both stale-cleanliness and confirmed-user-change
+checks. Real untracked user content remains blocking. Deterministic workspace
+tests pass; the Windows platform bundle was rebuilt.
+
+The post-fix project `57ef6420-b8a5-4535-bc8d-bf8fb6e7dc1c` proved exact
+recovery: B received `workspace_stale`, executed projected `ensure_session({})`,
+and received `ready / isolated` on a preserved-session recovery worktree. It
+then accepted A's snapshot. A later sent one malformed reciprocal REVIEW
+intent and got fail-closed `UUID string too large`; after a correct retry, the
+agents reached both snapshot publications and 4/4 control tests, but A's
+provider turn ended before reciprocal validation/closure. This remains agent
+compliance/session evidence, not a new production lifecycle defect.
+
+Focused coordination/workspace tests, Javadocs, bundle rebuild, validators,
+Go vet, and `git diff --check` pass. The focused MCP slice again reproduces
+the known Git subprocess stall in `McpSyn039SliceTest` at
+`ProcessCommandRunner.execute` through `GitProcessRunner` and
+`ManagedBaselineTransactionService`; it was stopped after thread evidence.
+Bootstrap `go test ./...` still has the three known migration failures; `go
+vet ./...` passes. Fixture Doctor remains DEGRADED with six warnings.
+
+Immediate next action: run one fresh bounded exact-projection two-agent
+diagnostic and stop at the first agent-compliance or unchanged-projection
+boundary. Do not add lifecycle, cleanup, or orchestration behavior from the
+wrong-argument/provider-turn evidence.
+
 ## SYN-039 CP-0529 continuity probe and ordinary acceptance
 
 Evidence:

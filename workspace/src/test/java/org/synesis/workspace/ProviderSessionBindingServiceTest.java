@@ -170,6 +170,60 @@ final class ProviderSessionBindingServiceTest {
     }
 
     @Test
+    void treatsPythonBytecodeCacheAsEphemeralDuringStaleSessionRecovery() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-python-cache-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "python-cache@example.invalid");
+        git(root, "config", "user.name", "Python Cache Test");
+        git(root, "commit", "-m", "baseline");
+
+        var service = new ProviderSessionBindingService();
+        var first = service.ensure(location, "codex", "python-cache-recovery").binding();
+        Files.createDirectories(Path.of(first.worktreePath()).resolve("__pycache__"));
+        Files.write(Path.of(first.worktreePath()).resolve("__pycache__/test_todo.cpython-313.pyc"),
+                new byte[] {0x42, 0x43, 0x48});
+
+        Files.writeString(root.resolve("README.md"), "integrated control state\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "integrated snapshot");
+
+        var recovered = service.ensure(location, "codex", "python-cache-recovery").binding();
+
+        assertEquals(first.sessionId(), recovered.sessionId());
+        assertNotEquals(first.worktreePath(), recovered.worktreePath());
+        assertEquals(gitHead(root), recovered.baseCommit());
+        assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath())).verified());
+    }
+
+    @Test
+    void staleRecoveryStillBlocksRealUntrackedUserContent() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-untracked-user-content-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "untracked-content@example.invalid");
+        git(root, "config", "user.name", "Untracked Content Test");
+        git(root, "commit", "-m", "baseline");
+
+        var service = new ProviderSessionBindingService();
+        var first = service.ensure(location, "codex", "untracked-content-recovery").binding();
+        Path worker = Path.of(first.worktreePath());
+        Files.writeString(worker.resolve("reviewer-notes.txt"), "legitimate user content\n");
+
+        Files.writeString(root.resolve("README.md"), "integrated control state\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "integrated snapshot");
+
+        assertThrows(ProviderSessionBindingService.BindingException.class,
+                () -> service.ensure(location, "codex", "untracked-content-recovery"));
+        assertTrue(Files.exists(worker.resolve("reviewer-notes.txt")));
+    }
+
+    @Test
     void preservesSessionIdentityWhenACleanWorkerAlreadyContainsTheAdvancedControlHead() throws Exception {
         Path root = Files.createTempDirectory("synesis-session-advanced-clean-worker-");
         git(root, "init");

@@ -1,3 +1,37 @@
+## 2026-08-25 — SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
+
+- Reproduced the unchanged projected `workspace_stale -> ensure_session({})`
+  failure in a fresh Todo project. Ordinary pytest left only
+  `__pycache__/test_todo.cpython-313-pytest-9.1.1.pyc` and
+  `__pycache__/todo.cpython-313.pyc`; recovery classified them as dirty and
+  returned `internal_failure / request_human_help`.
+- Traced the path through `ProviderSessionBindingService.isWorktreeClean`,
+  `WORKSPACE_STALE_DIRTY`, and `AgentSessionService.ensureSession`. The
+  existing `SnapshotArtifactPolicy` already allowed `__pycache__/`, proving a
+  narrow classifier inconsistency.
+- Added the minimal `__pycache__/` recovery classification and deterministic
+  tests for successful recovery plus fail-closed real untracked content.
+  The new test was red before the change and green after it. The bundled
+  Windows MCP was rebuilt.
+- Ran a fresh exact-projection diagnostic with current bundled MCP and two
+  independent GPT-5.6 Luna High agents. The reviewer executed the exact
+  recovery action and reached `ready / isolated`; review admission, grant
+  consumption, immutable snapshots, structured ACCEPT, integration, and
+  control pytest 4/4 followed.
+- The first post-fix stop was agent compliance: A supplied malformed intent
+  `242ab48e-bd24-3481-9e15-acb7-4535-bc8d-bf3065206772` instead of projected
+  `242ab48e-bd24-3481-9e15-ac7cb3dcf4d5`, receiving fail-closed
+  `UUID string too large`. A later valid request succeeded, but its provider
+  turn ended before reciprocal validation/closure. No unchanged projection
+  failed; no ordinary conditional second run was started.
+- Focused workspace/coordination tests, Javadocs, bundle rebuild, validators,
+  Go vet, and diff checks passed. The focused MCP test again reproduced the
+  known Git subprocess stall; bootstrap Go tests retain three migration
+  failures; fixture Doctor remains DEGRADED with six warnings. Nothing was
+  pushed and no SYN-040 was created.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0530-bytecode-recovery-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0529 continuity probe and ordinary acceptance
 
 - Ran a supported non-ephemeral continuity probe across the ordinary pending

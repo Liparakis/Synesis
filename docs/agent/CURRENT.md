@@ -2,7 +2,60 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0529
+- Checkpoint: CP-0530
+
+## SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-bytecode-recovery-2026-08-25.md`.
+
+The CP-0530 baseline proved a concrete readiness/recovery defect: normal
+pytest-generated `__pycache__/` files made a reviewer worktree appear dirty,
+so the unchanged projected `ensure_session({})` action returned
+`failed / internal_failure / request_human_help`. The stale workspace
+classifier was inconsistent with the existing `SnapshotArtifactPolicy`,
+which already treats `__pycache__/` as an allowed runtime artifact.
+
+`ProviderSessionBindingService` now recognizes only `__pycache__/` as the
+additional ephemeral category for stale-workspace cleanliness and confirmed
+user-change checks. Unknown untracked content remains fail-closed. The new
+workspace regressions were red before the change and green after it.
+
+The post-fix diagnostic used a fresh project, current bundled MCP, two
+independent GPT-5.6 Luna High sessions, disjoint epoch-1 claims, and one
+shared WorkGroup. B executed the exact projected recovery action and was
+rebound successfully; the recovery defect is therefore fixed. The run later
+stopped on agent compliance when A supplied a malformed `intentId` instead of
+the exact projected REVIEW admission payload, then ended while A still had a
+valid projected continuation. No unchanged projected action failed. The
+conditional second ordinary acceptance was not run.
+
+## Immediate next action
+
+Run one fresh bounded two-agent exact-projection diagnostic with the current
+rebuilt MCP and the same complementary Todo responsibilities. Capture whether
+both agents execute every unchanged projection, especially the reciprocal
+REVIEW request and subsequent `WAIT -> get_next_action({})`, without any relay
+or manual transition. Do not change production code from agent-selected wrong
+arguments or a provider turn ending; only a concrete unchanged projected
+action failure or missing usable action can justify another SYN-039 slice.
+
+## Work completed
+
+Implemented and verified the narrow pytest-artifact recovery fix, added
+fail-closed regression coverage for real untracked user content, rebuilt the
+Windows platform bundle, and recorded the fresh post-fix diagnostic. No remote
+state was modified, no lifecycle transition was manually triggered, and no
+SYN-040 was created.
+
+## Current failures
+
+The remaining SYN-039 blocker is ordinary agent/session engagement: CP-0530
+WorkGroup `ab7d068e-f6cb-3c88-84e7-be59bf3e2c20` did not reach terminal closure
+because A first changed the projected intent ID and later ended while its
+reciprocal review continuation remained unresolved. Fixture Doctor remains
+DEGRADED with six warnings. The known root Git subprocess stall and three
+bootstrap migration test failures remain independent verification issues.
 
 ## SYN-039 CP-0529 continuity probe and ordinary acceptance
 

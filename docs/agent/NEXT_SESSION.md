@@ -1,5 +1,31 @@
 # Next Session
 
+## CP-0530 pytest-artifact recovery fix and post-fix diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0530-bytecode-recovery-2026-08-25.md`.
+
+The production recovery defect is fixed and verified. A normal pytest run's
+`__pycache__/` files no longer prevent an exact projected
+`ensure_session({})` from preserving the session and reallocating a stale
+clean worker. Real untracked user content still blocks recovery.
+
+The post-fix diagnostic used current bundled MCP and two independent
+ready/isolated GPT-5.6 Luna sessions. It reached one shared WorkGroup,
+REVIEW admission, grant consumption, snapshot publication, structured ACCEPT,
+integration, and 4/4 tests. A then sent a malformed reciprocal REVIEW
+`intentId`, which Synesis rejected with `UUID string too large`; after a valid
+retry, the provider turn ended while the reciprocal continuation remained
+pending. No unchanged projected action failed, and no ordinary second run was
+started because the bounded diagnostic did not complete.
+
+- Exact next action: run one fresh bounded exact-projection two-agent Todo
+  diagnostic with only the current complementary prompts plus the exact
+  projection rule. Capture every projection/action pair. Do not relay, repair,
+  or modify production code for agent-selected arguments or turn termination.
+  A new production slice requires an unchanged projected action to fail or a
+  necessary state to have no usable projected action.
+
 ## CP-0529 continuity probe and ordinary acceptance
 
 Evidence:
