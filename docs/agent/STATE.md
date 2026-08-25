@@ -1,5 +1,35 @@
 # State
 
+## SYN-039 CP-0535 continuation diagnostic and ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-continuation-2026-08-25.md`.
+
+The fresh exact-action diagnostic used the current bundled ten-tool MCP and
+two independent ready/isolated sessions. WorkGroup
+`fd42d9b3-5333-3a72-8cf0-20603ddda286` completed after exact REVIEW admission,
+single-use grants `ac63417d-5bb7-3d0a-950c-0ab774c29b26` and
+`283d8f43-92cc-333a-8ac6-5544a90340ae`, immutable snapshots
+`snap_62c871c6e74a3e7da6fe6ff51e9a932e` and
+`snap_0f181e97e99a35b1d952bd76eb9e0b67`, structured ACCEPT, integration, and
+control pytest `4 passed`. No unchanged projected action failed.
+
+The required ordinary follow-up used only complementary coding prompts and
+reached WorkGroup `d1815a35-a4d5-3f9c-aa89-9531ea5652f9`, grant consumption,
+snapshot `snap_9b589858cc39f99d4a70d057c4bf1aab`, integration, and structured
+ACCEPT. Agent A then ignored the exact reciprocal `request_coordination`
+continuation returned by `finish_lane`; the WorkGroup remained ACTIVE and no
+terminal state was produced. This is provider/session compliance evidence,
+not a proven production protocol defect. Doctor remained DEGRADED with six
+warnings and no errors or critical findings.
+
+## Immediate next action
+
+Preserve CP-0535 evidence and checkpoint state. Do not modify lifecycle code,
+push, or create SYN-040. A future implementation slice requires an unchanged
+executable continuation to fail or a required state to lack a usable
+projection after all prior projections are executed.
+
 ## SYN-039 CP-0533 ordinary acceptance boundary
 
 Evidence:

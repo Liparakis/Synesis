@@ -1,5 +1,29 @@
 # Next Session
 
+## CP-0535 continuation diagnostic and ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-continuation-2026-08-25.md`.
+
+The exact-action diagnostic completed WorkGroup
+`fd42d9b3-5333-3a72-8cf0-20603ddda286` through both REVIEW grants, immutable
+snapshots, structured ACCEPT, integration, and `COMPLETED` state. Every
+concrete projection, including continuations returned by `finish_lane`, was
+executed with unchanged arguments.
+
+The second, ordinary acceptance reached WorkGroup
+`d1815a35-a4d5-3f9c-aa89-9531ea5652f9`, integrated Agent A's snapshot, and
+recorded structured ACCEPT. Agent A then ignored the exact
+`request_coordination(work_group_join)` continuation returned by
+`finish_lane`; no projected action failed and closure was not reached. This
+remains provider/session compliance evidence, not a production defect.
+
+- Exact next action: preserve the evidence and checkpoint locally. Do not
+  change lifecycle code, push, or create SYN-040. Only investigate a new
+  implementation slice if an unchanged executable continuation fails or a
+  required state has no usable projection after all prior projections are
+  obeyed.
+
 ## CP-0534 ordinary acceptance boundary
 
 Evidence:

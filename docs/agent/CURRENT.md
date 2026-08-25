@@ -2,7 +2,36 @@
 
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0534
+- Checkpoint: CP-0535
+
+## SYN-039 CP-0535 continuation diagnostic and ordinary acceptance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-continuation-2026-08-25.md`.
+
+The fresh bounded diagnostic applied the exact-action rule to both
+`get_next_action` projections and concrete continuations returned by mutating
+tools. It completed one shared WorkGroup through REVIEW admission, both
+single-use grants, immutable snapshots, structured ACCEPT decisions,
+integration, and terminal `COMPLETED` state. No unchanged projected action
+failed.
+
+The required second run used only ordinary complementary coding prompts. It
+reached one shared WorkGroup, exact admission, grant consumption, immutable
+snapshot publication, integration, and structured ACCEPT for Agent A. Agent
+A then ended its provider turn after `finish_lane` returned the exact
+reciprocal `request_coordination(work_group_join)` continuation for Agent B's
+intent. Agent B remained active and later received only ordinary `IMPLEMENT`
+projections with no executable lifecycle action. This is provider/session
+compliance evidence, not a proven production lifecycle defect. No production
+code changed.
+
+## Immediate next action
+
+Preserve CP-0535 evidence and checkpoint state. Do not modify lifecycle code,
+push, or create SYN-040. A future SYN-039 slice is not justified unless an
+unchanged executable continuation fails or a required state still has no
+usable projection after all preceding projections are executed.
 
 ## SYN-039 CP-0534 ordinary acceptance boundary
 

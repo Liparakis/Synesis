@@ -1,5 +1,25 @@
 # Tasks
 
+## SYN-039 CP-0535 continuation diagnostic and ordinary acceptance boundary
+
+The bounded diagnostic with exact execution of projections and mutating-tool
+continuations completed the full shared Todo WorkGroup lifecycle. The second
+ordinary acceptance reached review, grant consumption, snapshot publication,
+integration, and structured ACCEPT for the implementation lane, then stopped
+because the provider ignored the exact reciprocal admission continuation
+returned by `finish_lane`.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0534-continuation-2026-08-25.md`.
+
+- Status: ACTIVE
+
+This is agent/session compliance evidence. No unchanged projected action
+failed, no production code changed, and no new lifecycle slice is justified.
+Do not create SYN-040 or push. The next action is to preserve the checkpoint;
+future implementation requires a concrete unchanged-action failure or a
+required state with no usable projection after prior actions are executed.
+
 ## SYN-039 CP-0534 ordinary acceptance boundary
 
 The fresh ordinary acceptance used the rebuilt bundled MCP and two

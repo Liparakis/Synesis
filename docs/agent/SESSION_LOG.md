@@ -1,3 +1,29 @@
+## 2026-08-25 — SYN-039 CP-0535 continuation diagnostic and ordinary acceptance
+
+- Ran a fresh bounded diagnostic with two independent GPT-5.6 Luna High
+  sessions, the current bundled MCP, and the rule to execute every exact
+  projected action, including continuations returned by mutating tools.
+  WorkGroup `fd42d9b3-5333-3a72-8cf0-20603ddda286` completed through REVIEW,
+  both grants, immutable snapshots, structured ACCEPT, integration, and
+  terminal `COMPLETED` state. Control pytest was `4 passed`.
+- Ran the required second ordinary unattended acceptance with only
+  complementary visible coding prompts. WorkGroup
+  `d1815a35-a4d5-3f9c-aa89-9531ea5652f9` reached grant consumption, snapshot
+  `snap_9b589858cc39f99d4a70d057c4bf1aab` integration, and structured ACCEPT.
+  Agent A then ignored the exact reciprocal `request_coordination` continuation
+  returned by `finish_lane`; the WorkGroup remained ACTIVE. No unchanged
+  projected action failed.
+- No production code changed, nothing was pushed, and no SYN-040 was created.
+  Doctor remained DEGRADED with six warnings; the Git subprocess stall and
+  bootstrap migration failures remain separately classified.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0534-continuation-2026-08-25.md`.
+
+- Exact next action: preserve this evidence and create CP-0535. Do not modify
+  lifecycle code unless an unchanged executable continuation fails or a
+  required state has no usable projection after all prior projections are
+  executed.
+
 ## 2026-08-25 — SYN-039 CP-0532 exact diagnostic closure and ordinary follow-up
 
 - Ran the required fresh exact-projection diagnostic with the current bundled
