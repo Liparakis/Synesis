@@ -1,3 +1,24 @@
+## 2026-08-25 — SYN-039 CP-0544 ordinary review-continuation boundary
+
+- Ran a fresh ordinary unattended Todo acceptance with only complementary
+  coding prompts, current bundled MCP, and two ready/isolated sessions.
+- Agents converged on WorkGroup `31941d9a-11dd-3b49-98ab-86042f5b6faa`.
+  REVIEW request `e2ac6ec7-e860-42f3-8dfb-c3acbc8816ae` was accepted and grant
+  `bd3d274c-e4e6-3c63-930d-8ba19b783c5d` was consumed once by the correct
+  participant. An incomplete grant payload was rejected as
+  `COORDINATION_FIELD_REQUIRED:targetParticipant` before exact retry.
+- Both sessions ended at valid `WAIT -> get_next_action({})` continuations
+  before snapshot publication. No unchanged projected action failed and no
+  production code changed.
+- Control pytest was 1 passed / 1 failed; WorkGroup remained ACTIVE and Doctor
+  remained DEGRADED with six warnings. The known MCP Git subprocess stall and
+  bootstrap migration failures remain separate.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0547-ordinary-review-continuation-2026-08-25.md`.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts.
+
 ## 2026-08-25 — SYN-039 CP-0543 ordinary grant-continuation boundary
 
 - Ran a fresh ordinary unattended Todo acceptance with only complementary

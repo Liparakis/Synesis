@@ -1,5 +1,22 @@
 # Next Session
 
+## CP-0544 ordinary review-continuation boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0547-ordinary-review-continuation-2026-08-25.md`.
+
+The fresh ordinary run reached one shared WorkGroup
+`31941d9a-11dd-3b49-98ab-86042f5b6faa`, exact REVIEW request
+`e2ac6ec7-e860-42f3-8dfb-c3acbc8816ae`, owner acceptance, and grant
+`bd3d274c-e4e6-3c63-930d-8ba19b783c5d` consumption. The first incomplete grant
+payload was rejected fail-closed and the exact retry succeeded. Both provider
+sessions then ended at valid `WAIT -> get_next_action({})` continuations before
+snapshot publication. No unchanged projected action failed.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts. Do not relay,
+  manually transition, modify wait/review semantics, push, or create SYN-040.
+
 ## CP-0543 ordinary grant-continuation boundary
 
 Evidence:

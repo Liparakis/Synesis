@@ -1,5 +1,28 @@
 # State
 
+## SYN-039 CP-0544 ordinary review-continuation boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0547-ordinary-review-continuation-2026-08-25.md`.
+
+Project `12683cce-8f72-4d1f-8aaa-8ffd07c0c5cd` reached WorkGroup
+`31941d9a-11dd-3b49-98ab-86042f5b6faa` with disjoint epoch-1 claims for
+`todo.py` and `test_todo.py`. REVIEW request
+`e2ac6ec7-e860-42f3-8dfb-c3acbc8816ae` was accepted. Grant
+`bd3d274c-e4e6-3c63-930d-8ba19b783c5d` was consumed once by the correct
+participant after Synesis rejected the first incomplete payload. No snapshot,
+validation, integration, or terminal WorkGroup state followed.
+
+No unchanged projected action failed. Both sessions ended while valid polling
+continuations remained projected, so this is agent-engagement evidence, not a
+new production slice.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts; preserve the first unchanged action
+failure or missing usable projection.
+
 ## SYN-039 CP-0543 ordinary grant-continuation boundary
 
 Evidence:

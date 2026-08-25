@@ -1,5 +1,23 @@
 # Tasks
 
+## SYN-039 CP-0544 ordinary review-continuation boundary
+
+The fresh ordinary acceptance reached one shared WorkGroup, exact REVIEW
+admission, owner acceptance, and single-use grant consumption. Synesis rejected
+one incomplete grant payload fail-closed and the exact retry succeeded. The
+provider sessions then stopped at valid polling continuations before snapshot
+publication. No unchanged projected action failed and no new production slice
+is justified.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0547-ordinary-review-continuation-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run another fresh ordinary unattended two-agent Todo
+acceptance with only complementary visible coding prompts. Do not create
+SYN-040, push, relay, or change wait/review semantics from this evidence.
+
 ## SYN-039 CP-0543 ordinary grant-continuation boundary
 
 The fresh ordinary acceptance reached reciprocal REVIEW, grant consumption,

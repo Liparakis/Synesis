@@ -1,5 +1,44 @@
 # Current Task
 
+## SYN-039 CP-0544 ordinary review-continuation boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0547-ordinary-review-continuation-2026-08-25.md`.
+
+The fresh ordinary run used the current bundled MCP and two independent
+ready/isolated sessions. Agents converged on WorkGroup
+`31941d9a-11dd-3b49-98ab-86042f5b6faa`, created and accepted REVIEW request
+`e2ac6ec7-e860-42f3-8dfb-c3acbc8816ae`, and consumed REVIEW grant
+`bd3d274c-e4e6-3c63-930d-8ba19b783c5d` after one correctly rejected malformed
+retry. Ownership, participant, epoch, and fail-closed checks remained intact.
+
+Both sessions then ended at valid `WAIT -> get_next_action({})`
+continuations. No snapshot, validation, integration, or WorkGroup closure was
+reached. No unchanged projected action failed and no production defect is
+proven; the first blocker remains ordinary provider engagement.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts. Preserve the first unchanged projected
+action failure or required state with no usable projection. Do not alter
+review/wait semantics, push, or create SYN-040 from CP-0544 alone.
+
+## Work completed
+
+Recorded CP-0544 with exact project, bundled executable, participant and claim
+identities, request/grant, projection/action, fail-closed retry, final
+WorkGroup, control test, Doctor, and independent Git-stall evidence. No
+production code changed.
+
+## Current failures
+
+WorkGroup `31941d9a-11dd-3b49-98ab-86042f5b6faa` remains ACTIVE. Both claims
+remain active; grant `bd3d274c-e4e6-3c63-930d-8ba19b783c5d` was consumed by A,
+but no snapshot was published. Control pytest is 1 passed / 1 failed because
+the implementation snapshot was not published. Doctor remains DEGRADED with
+six warnings; Git/bootstrap issues remain separate.
+
 ## SYN-039 CP-0543 ordinary grant-continuation boundary
 
 Evidence:
