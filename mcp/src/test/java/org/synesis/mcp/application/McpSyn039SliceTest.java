@@ -158,6 +158,13 @@ final class McpSyn039SliceTest {
         String accepted = owner.handleMessage(toolCall("respond_coordination", ProviderJson.write(responseArguments)));
         assertTrue(accepted.contains("completed"), accepted);
 
+        // A pending reciprocal grant must not fence an empty implementation
+        // lane.  Create the claimed source change before asserting the
+        // validation wait projection.
+        Files.writeString(ownerWorktree.resolve("todo.py"),
+                "def add_todo(items, item):\n    return [*items, item]\n\n"
+                        + "def complete_todo(items, item):\n"
+                        + "    return [value for value in items if value != item]\n");
         Map<String, Object> ownerGrantPending = innerResult(owner.handleMessage(toolCall("get_next_action", "{}")));
         assertEquals("validation_required", ownerGrantPending.get("reason"), ownerGrantPending.toString());
         assertEquals("wait", ownerGrantPending.get("nextAction"), ownerGrantPending.toString());

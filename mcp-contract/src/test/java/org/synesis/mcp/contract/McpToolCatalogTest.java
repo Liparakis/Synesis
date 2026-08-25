@@ -55,6 +55,8 @@ class McpToolCatalogTest {
         assertTrue(descriptor.description().contains("workflow IMPLEMENT"));
         assertTrue(descriptor.description().contains("recommendedTool and arguments"));
         assertTrue(descriptor.description().contains("ordinary coding"));
+        assertTrue(descriptor.description().contains("do not end the session"));
+        assertTrue(descriptor.description().contains("bounded wait"));
         assertTrue(descriptor.description().contains(".synesis/**"));
         assertTrue(descriptor.description().contains("exact tool with those exact arguments"));
         assertTrue(descriptor.description().contains("integrationCheck"));

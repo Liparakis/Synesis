@@ -38,6 +38,8 @@ final class ProjectApplicationServiceTest {
         assertTrue(agents.contains("Native provider hooks are optional"));
         assertTrue(agents.contains("do not call finish_lane or another lifecycle tool merely because the coding appears complete"));
         assertTrue(agents.contains("Execute lifecycle actions only when get_next_action projects the exact tool and arguments"));
+        assertTrue(agents.contains("do not end the session when IMPLEMENT has no concrete action"));
+        assertTrue(agents.contains("Perform a bounded wait and call get_next_action again"));
         assertTrue(agents.contains("integrationCheck input only evaluates explicitly supplied compatibility facts"));
         assertTrue(agents.contains("When get_next_action projects WAIT"));
         assertTrue(agents.contains("Do not report success or stop merely because your own lane is complete"));
