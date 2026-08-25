@@ -1,3 +1,22 @@
+## 2026-08-25 — SYN-039 CP-0546 external provider-session boundary
+
+- Audited the full SYN-039 requirement set against CP-0535 and CP-0541–CP-0545
+  acceptance evidence, source projections, generated/provider instructions, and
+  deterministic tests.
+- Synesis correctly projects exact REVIEW, grant, snapshot, validation, and
+  polling actions; ownership, epoch, hidden-path, and fail-closed behavior are
+  intact. CP-0535 completed when agents stayed engaged.
+- Ordinary Codex sessions repeatedly terminated at valid
+  `WAIT -> get_next_action({})` continuations before the next participant-driven
+  state change. No unchanged projected action failed.
+- Recorded the external provider-session boundary. No production code changed;
+  SYN-039 remains active but externally blocked, not DONE.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+
+- Exact next action: resume only after provider/runtime behavior changes or a
+  new exact projected-action failure is reproduced.
+
 ## 2026-08-25 — SYN-039 CP-0545 exact-projection diagnostic boundary
 
 - Ran a fresh two-agent diagnostic with the exact rule to execute every

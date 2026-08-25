@@ -1,5 +1,20 @@
 # Next Session
 
+## CP-0546 external provider-session boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+
+The completion audit found no remaining reproducible Synesis projection or
+authorization defect. CP-0535 completed with engaged agents; CP-0541–CP-0545
+repeatedly stopped ordinary Codex sessions at valid polling continuations while
+the WorkGroup remained ACTIVE. Ordinary unattended SYN-039 completion is
+externally blocked by provider-session termination.
+
+- Exact next action: resume only after provider/runtime engagement behavior
+  changes or a new unchanged projected-action failure is reproduced. Do not
+  add a launcher/daemon/orchestrator, push, or create SYN-040.
+
 ## CP-0545 exact-projection diagnostic boundary
 
 Evidence:

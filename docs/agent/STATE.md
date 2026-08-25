@@ -1,5 +1,25 @@
 # State
 
+## SYN-039 CP-0546 external provider-session boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+
+Source and repeated acceptance evidence prove that Synesis projects valid
+polling actions and preserves ownership, epochs, grants, snapshots, and
+fail-closed authorization. Normal Codex sessions nevertheless terminate while
+the WorkGroup remains ACTIVE. CP-0535 completed with engaged agents; CP-0541–
+CP-0545 did not complete ordinary unattended acceptance.
+
+No safe production change remains within SYN-039's no-launcher/no-daemon
+boundary. The task is externally blocked pending provider-session engagement
+behavior; it is not marked DONE.
+
+## Immediate next action
+
+Resume only after provider/runtime state changes or a new exact projected-action
+failure is reproduced.
+
 ## SYN-039 CP-0545 exact-projection diagnostic boundary
 
 Evidence:

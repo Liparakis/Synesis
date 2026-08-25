@@ -1,5 +1,37 @@
 # Current Task
 
+## SYN-039 CP-0546 external provider-session boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+
+The completion audit confirms the lifecycle projections and fail-closed
+authority are correct, but ordinary Codex sessions repeatedly terminate while
+Synesis still projects `WAIT -> get_next_action({})` for an active WorkGroup.
+CP-0535 proves the existing lifecycle completes when agents remain engaged;
+CP-0541 through CP-0545 prove ordinary provider turns do not reliably remain
+engaged. No production defect or safe in-scope fix is proven.
+
+## Immediate next action
+
+Keep SYN-039 externally blocked. Resume only if the provider/runtime can keep a
+normal agent session engaged through unresolved `WAIT` continuations or new
+evidence proves an unchanged Synesis projection/action failure. Do not add a
+launcher, daemon, orchestrator, or SYN-040.
+
+## Work completed
+
+Recorded the final requirement-by-requirement audit, source proof for the
+continued-engagement contract, repeated ordinary acceptance evidence, and the
+external limitation boundary. No production code changed.
+
+## Current failures
+
+Ordinary unattended completion, clean WorkGroup closure, final cleanup, and
+healthy Doctor remain unproven because provider sessions stop before the next
+participant-driven action. The repository remains clean; known Git/bootstrap
+issues and Doctor warnings remain separate.
+
 ## SYN-039 CP-0545 exact-projection diagnostic boundary
 
 Evidence:

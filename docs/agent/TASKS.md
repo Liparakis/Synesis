@@ -1,5 +1,23 @@
 # Tasks
 
+## SYN-039 CP-0546 external provider-session boundary
+
+The final audit found no remaining reproducible Synesis projection or
+authorization defect. CP-0535 completed the exact lifecycle with engaged
+agents, while CP-0541–CP-0545 repeatedly stopped ordinary Codex sessions at
+valid `WAIT -> get_next_action({})` continuations before participant-driven
+progress. Resolving that condition requires provider/runtime engagement or an
+excluded launcher/daemon/orchestrator.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+
+- Status: ACTIVE — externally blocked; not DONE
+
+Next narrow action: resume only after provider/runtime behavior changes or a
+new exact projected-action failure is reproduced. Do not create SYN-040, push,
+or add a central driver.
+
 ## SYN-039 CP-0545 exact-projection diagnostic boundary
 
 The exact-rule diagnostic reached one shared WorkGroup, exact REVIEW
