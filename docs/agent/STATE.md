@@ -1,5 +1,25 @@
 # State
 
+## SYN-039 CP-0539 ordinary acceptance compliance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0539-ordinary-compliance-2026-08-25.md`.
+
+The pending outgoing REVIEW request is now projected as a durable wait state
+for both active and completed bindings. CP-0539 reached WorkGroup
+`53906f49-5d99-3726-ac2d-b155af973a7e`, accepted reciprocal requests, grant
+consumption, snapshot `snap_686a822915f6f230c059ddb5040fab32`, structured
+ACCEPT, and integration. The remaining failure was provider compliance with
+valid projections; no unchanged projected action failed and no required state
+lacked a usable action.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance using only
+complementary coding prompts and the current bundled MCP. Preserve the first
+unchanged projection failure or missing usable action. Do not push or create
+SYN-040.
+
 ## SYN-039 CP-0536 review projection fix and post-fix acceptance boundary
 
 Evidence:

@@ -1,8 +1,48 @@
 # Current Task
 
+## SYN-039 CP-0539 ordinary acceptance compliance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0539-ordinary-compliance-2026-08-25.md`.
+
+The CP-0537 pending outgoing REVIEW projection defect and the CP-0538
+completed-lane terminal projection defect are fixed and regression-covered.
+Fresh ordinary CP-0539 reached one shared WorkGroup, reciprocal REVIEW
+requests, accepted grants, immutable snapshot publication, integration, and
+structured ACCEPT. Every unchanged projection remained executable. One agent
+omitted a projected `targetParticipant` once and received the expected
+fail-closed error before correcting the call; later it stopped despite a
+projected `WAIT -> get_next_action({})`. These are provider/session
+compliance boundaries, not new production defects.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts and the rebuilt bundled MCP. Preserve
+the first unchanged projected-action failure or required state with no usable
+projection. Do not relay, manually transition, push, or create SYN-040.
+
+## Work completed
+
+Fixed and regression-covered the pending outgoing REVIEW re-projection and
+the completed-lane terminal projection defects. CP-0539 exercised both fixes
+through accepted reciprocal REVIEW, grant consumption, immutable snapshot
+publication, snapshot validation, structured ACCEPT, and integration. No
+unchanged projected action failed. Nothing was pushed and no SYN-040 was
+created.
+
+## Current failures
+
+The ordinary acceptance remains incomplete because provider sessions stopped
+despite usable `WAIT -> get_next_action({})` continuations; one earlier grant
+call also omitted a projected `targetParticipant` and was correctly rejected
+fail-closed before correction. Fixture Doctor remains DEGRADED with six
+warnings, while the Git subprocess stall and bootstrap migration failures are
+separate verification issues.
+
 - Task ID: SYN-039
 - Status: ACTIVE
-- Checkpoint: CP-0536
+- Checkpoint: CP-0537
 
 ## SYN-039 CP-0536 review projection fix and post-fix acceptance boundary
 

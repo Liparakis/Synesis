@@ -3606,3 +3606,26 @@ ownership. No push and no SYN-040.
 - Exact next action: run one fresh ordinary unattended two-agent Todo
   acceptance with only complementary coding prompts using the rebuilt bundle.
   Do not relay, manually transition, push, or create SYN-040.
+# 2026-08-25 — SYN-039 CP-0539 ordinary acceptance compliance boundary
+
+- Ran a fresh ordinary unattended two-agent Todo acceptance with the rebuilt
+  bundled MCP, one initialized project, two distinct ready/isolated sessions,
+  and only complementary visible coding prompts.
+- WorkGroup `53906f49-5d99-3726-ac2d-b155af973a7e` reached reciprocal REVIEW
+  requests, accepted grants, immutable snapshot
+  `snap_686a822915f6f230c059ddb5040fab32`, snapshot inspection, structured
+  ACCEPT, and integration.
+- The completed-lane pending-request fix was exercised successfully. One
+  agent omitted projected `targetParticipant` and received the expected
+  `COORDINATION_FIELD_REQUIRED:targetParticipant`, then consumed the grant
+  with unchanged projected arguments. Later it stopped despite repeated
+  `WAIT -> get_next_action({})`; no unchanged projected action failed.
+- Fixture Doctor was DEGRADED with six warnings and no errors or critical
+  findings. The Git subprocess stall and bootstrap migration failures remain
+  separate verification issues. Nothing was pushed and no SYN-040 was created.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0539-ordinary-compliance-2026-08-25.md`.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary coding prompts; preserve the first
+  unchanged projected-action failure or missing usable projection.

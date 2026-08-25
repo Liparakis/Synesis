@@ -1,5 +1,27 @@
 # Tasks
 
+## SYN-039 CP-0539 ordinary acceptance compliance boundary
+
+The CP-0537 pending outgoing REVIEW projection and CP-0538 completed-lane
+terminal projection defects are fixed with deterministic workspace
+regressions. CP-0539 reached accepted reciprocal REVIEW requests, grants,
+snapshot `snap_686a822915f6f230c059ddb5040fab32`, structured ACCEPT, and
+integration in WorkGroup `53906f49-5d99-3726-ac2d-b155af973a7e`.
+
+One agent omitted a projected grant field and was correctly rejected
+fail-closed before retrying with the exact arguments. It later stopped despite
+`WAIT -> get_next_action({})`; this is agent/session compliance evidence, not
+a proven production defect.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0539-ordinary-compliance-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run another fresh ordinary unattended two-agent Todo
+acceptance with only complementary coding prompts. Do not create SYN-040,
+push, relay, or add orchestration from this evidence alone.
+
 ## SYN-039 CP-0536 review projection fix and post-fix acceptance boundary
 
 The recorded CP-0535 state proved a concrete stale-review fallback defect:

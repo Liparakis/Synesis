@@ -23,6 +23,7 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
@@ -230,6 +231,62 @@ class AgentNextActionServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void pendingReviewAdmissionProjectsWaitInsteadOfReplayingRequest() throws Exception {
+        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+        prepareSessionAndTrust("codex", "pending-review-owner");
+        prepareSessionAndTrust("codex", "pending-review-reviewer");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var ownerClaim = collaboration.announce(controlRoot, "codex", "pending-review-owner",
+                "Implement source", "Review the completed source snapshot",
+                List.of(ResourceSelector.pathExact("src/Product.java")));
+        var reviewerClaim = collaboration.announce(controlRoot, "codex", "pending-review-reviewer",
+                "Review source", "Validate the completed source snapshot",
+                List.of(ResourceSelector.pathExact("tests/ProductTest.java")));
+        assertEquals(ownerClaim.intent().workGroupId(), reviewerClaim.intent().workGroupId());
+
+        AgentNextActionService service = new AgentNextActionService();
+        AgentResponse initial = service.getNextAction(new AgentNextActionService.NextActionRequest(
+                controlRoot, "codex", "pending-review-reviewer"));
+        assertEquals(AgentNextAction.REQUEST_COORDINATION, initial.nextAction());
+        assertTrue(initial.toJson().contains("REVIEW_ADMISSION_REQUIRED"), initial.toJson());
+
+        CoordinationRequest request = collaboration.request(controlRoot, "codex", "pending-review-reviewer",
+                ownerClaim.intent().intentId(), CoordinationRequest.Kind.REVIEW,
+                "Review the completed source snapshot");
+
+        AgentResponse pending = service.getNextAction(new AgentNextActionService.NextActionRequest(
+                controlRoot, "codex", "pending-review-reviewer"));
+        assertEquals(AgentStatus.WAITING, pending.status());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, pending.reason());
+        assertEquals(AgentNextAction.WAIT, pending.nextAction());
+        Map<String, Object> result = (Map<String, Object>) pending.result();
+        assertEquals(Boolean.TRUE, result.get("reviewRequestPending"));
+        Map<String, Object> reviewRequest = (Map<String, Object>) result.get("reviewRequest");
+        assertEquals(request.requestId().toString(), reviewRequest.get("requestId"));
+        assertEquals(ownerClaim.intent().intentId().toString(), reviewRequest.get("intentId"));
+        assertEquals("wait", result.get("nextProtocolAction"));
+        assertEquals("review_admission", result.get("nextProtocolKind"));
+        Map<String, Object> payload = (Map<String, Object>) result.get("nextProtocolPayload");
+        assertEquals(request.requestId().toString(), payload.get("requestId"));
+        assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        assertEquals("WAIT", workflow.get("type"));
+        assertEquals("get_next_action", workflow.get("recommendedTool"));
+        assertEquals(Map.of(), workflow.get("arguments"));
+        assertFalse(pending.toJson().contains("REVIEW_ADMISSION_REQUIRED"), pending.toJson());
+        assertTrue(((List<?>) result.get("reviewActions")).isEmpty(), pending.toJson());
+
+        AgentResponse repeated = service.getNextAction(new AgentNextActionService.NextActionRequest(
+                controlRoot, "codex", "pending-review-reviewer"));
+        Map<String, Object> repeatedResult = (Map<String, Object>) repeated.result();
+        Map<String, Object> repeatedRequest = (Map<String, Object>) repeatedResult.get("reviewRequest");
+        assertEquals(request.requestId().toString(), repeatedRequest.get("requestId"));
+        assertEquals(AgentNextAction.WAIT, repeated.nextAction());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void reviewerFirstIntentTargetsThePublishedPeerSnapshot() throws Exception {
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
@@ -351,6 +408,18 @@ class AgentNextActionServiceTest {
                 ownerClaim.intent().intentId(), org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.REVIEW,
                 "Review the sibling immutable snapshot");
         assertEquals(WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()), request.target());
+
+        AgentResponse pending = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "completed-reviewer"));
+        assertEquals(AgentStatus.WAITING, pending.status());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, pending.reason());
+        assertEquals(AgentNextAction.WAIT, pending.nextAction());
+        Map<String, Object> pendingResult = (Map<String, Object>) pending.result();
+        assertEquals(Boolean.TRUE, pendingResult.get("reviewRequestPending"));
+        Map<String, Object> pendingRequest = (Map<String, Object>) pendingResult.get("reviewRequest");
+        assertEquals(request.requestId().toString(), pendingRequest.get("requestId"));
+        assertEquals("get_next_action",
+                ((Map<String, Object>) pendingResult.get("workflow")).get("recommendedTool"));
 
         AgentResponse mutation = new org.synesis.workspace.application.workspace.WorkspacePatchService().applyPatch(
                 new org.synesis.workspace.application.workspace.WorkspacePatchService.PatchRequest(

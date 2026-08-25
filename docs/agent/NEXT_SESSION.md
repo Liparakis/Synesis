@@ -1,5 +1,27 @@
 # Next Session
 
+## CP-0539 ordinary acceptance compliance boundary
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0539-ordinary-compliance-2026-08-25.md`.
+
+The latest fresh ordinary run used the current bundled ten-tool MCP and two
+ready/isolated Codex sessions. WorkGroup
+`53906f49-5d99-3726-ac2d-b155af973a7e` reached accepted reciprocal REVIEW
+requests, grant consumption, snapshot
+`snap_686a822915f6f230c059ddb5040fab32`, immutable review, structured ACCEPT,
+and integration. The completed-lane pending-request projection fix is
+verified. The remaining boundary was agent compliance: one omitted a
+projected `targetParticipant` and was rejected fail-closed, then corrected;
+later an agent stopped instead of following a valid `WAIT -> get_next_action`
+continuation. No unchanged projection failed and no state lacked a usable
+action.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary coding prompts. Do not relay, manually
+  transition, push, or create SYN-040. Keep the known Git stall, bootstrap
+  migration failures, and Doctor warnings separate.
+
 ## CP-0536 review projection fix and post-fix acceptance boundary
 
 Evidence:

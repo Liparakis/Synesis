@@ -177,11 +177,16 @@ public final class AgentNextActionService {
                         .orchestrateIntegration(root, store, callerIdentity);
                 org.synesis.coordination.domain.capability.CapabilityRequestProjection capProj = store.capabilityRequestProjection();
                 Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
+                String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+                AgentResponse pendingReviewResponse = pendingReviewRequestResponse(
+                        collaboration, store, callerParticipant);
+                if (pendingReviewResponse != null) {
+                    return pendingReviewResponse;
+                }
                 AgentResponse reviewResponse = reviewActionResponse(collaboration, false);
                 if (reviewResponse != null) {
                     return reviewResponse;
                 }
-                String callerParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
                 Map<String, Object> publicationAction = snapshotPublicationAction(
                         store, callerParticipant, assignedWorktree, snapshotService);
                 if (publicationAction != null) {
@@ -460,6 +465,12 @@ public final class AgentNextActionService {
                     new org.synesis.coordination.persistence.PredictionEventStore(
                             coordination, location.projectId());
             String participant = WorkspaceCollaborationService.participantHandle(sessionId);
+            Map<String, Object> baseCollaboration = collaborationDetails(store, sessionId);
+            AgentResponse pendingReviewResponse = pendingReviewRequestResponse(
+                    baseCollaboration, store, participant);
+            if (pendingReviewResponse != null) {
+                return pendingReviewResponse;
+            }
             Set<UUID> completedGroups = completedParticipantWorkGroups(store, participant);
             if (completedGroups.isEmpty()) {
                 return null;
@@ -483,12 +494,17 @@ public final class AgentNextActionService {
                     new org.synesis.coordination.persistence.PredictionEventStore(
                             coordination, location.projectId());
             Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            AgentResponse pendingReviewResponse = pendingReviewRequestResponse(
+                    collaboration, store, participant);
+            if (pendingReviewResponse != null) {
+                return pendingReviewResponse;
+            }
             AgentResponse reviewResponse = reviewActionResponse(collaboration, true);
             if (reviewResponse != null) {
                 return reviewResponse;
             }
 
-            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
             Path assignedWorktree = binding.worktreePath() == null
                     ? null : Path.of(binding.worktreePath());
             Map<String, Object> publicationAction = snapshotPublicationAction(
@@ -550,6 +566,45 @@ public final class AgentNextActionService {
         }
         return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
                 next, projection);
+    }
+
+    private static AgentResponse pendingReviewRequestResponse(
+            Map<String, Object> collaboration,
+            org.synesis.coordination.persistence.PredictionEventStore store,
+            String participantId) {
+        if (participantId == null || participantId.isBlank()) {
+            return null;
+        }
+        for (CoordinationRequest request : store.collaborationProjection().requests()) {
+            if (request.status() != CoordinationRequest.Status.PENDING
+                    || request.kind() != CoordinationRequest.Kind.REVIEW
+                    || !request.requester().equals(participantId)) {
+                continue;
+            }
+            Map<String, Object> requestProjection = enrichPendingRequest(requestMap(request), store);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("requestId", request.requestId().toString());
+            payload.put("intentId", request.conflictingIntentId().toString());
+            payload.put("target", request.target());
+            payload.put("status", request.status().name());
+            if (requestProjection.get("workGroupId") != null) {
+                payload.put("workGroupId", requestProjection.get("workGroupId"));
+            }
+            if (requestProjection.get("claimEpoch") != null) {
+                payload.put("claimEpoch", requestProjection.get("claimEpoch"));
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>(collaboration);
+            result.put("reviewRequestPending", true);
+            result.put("reviewRequest", requestProjection);
+            result.put("nextProtocolAction", "wait");
+            result.put("nextProtocolKind", "review_admission");
+            result.put("nextProtocolPayload", payload);
+            result.put("instruction", "Poll get_next_action for the owner response; do not resubmit this request.");
+            return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING,
+                    AgentNextAction.WAIT, result);
+        }
+        return null;
     }
 
     private static Set<UUID> completedParticipantWorkGroups(
@@ -749,10 +804,18 @@ public final class AgentNextActionService {
             List<WorkIntent> activeIntents = store.collaborationProjection().activeIntents();
             List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().allSnapshots();
             Set<UUID> completedReviewIntents = new LinkedHashSet<>();
+            Set<UUID> pendingReviewIntents = new LinkedHashSet<>();
             for (LaneGrant grant : projection.grants()) {
                 if (grant.targetParticipant().equals(participantId)
                         && projection.reviewValidationForGrant(grant.grantId()).isPresent()) {
                     completedReviewIntents.add(grant.targetIntentId());
+                }
+            }
+            for (CoordinationRequest request : store.collaborationProjection().requests()) {
+                if (request.status() == CoordinationRequest.Status.PENDING
+                        && request.kind() == CoordinationRequest.Kind.REVIEW
+                        && request.requester().equals(participantId)) {
+                    pendingReviewIntents.add(request.conflictingIntentId());
                 }
             }
             boolean callerHasActiveIntent = activeIntents.stream()
@@ -767,6 +830,7 @@ public final class AgentNextActionService {
                         .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
                         .filter(intent -> !intent.participant().equals(participantId))
                         .filter(intent -> !completedReviewIntents.contains(intent.intentId()))
+                        .filter(intent -> !pendingReviewIntents.contains(intent.intentId()))
                         .filter(intent -> snapshots.stream().anyMatch(snapshot ->
                                 snapshot.provenance().workGroupId().equals(group.workGroupId())
                                         && snapshot.provenance().laneId().equals(intent.intentId())
@@ -776,6 +840,7 @@ public final class AgentNextActionService {
                     owner = activeIntents.stream()
                             .filter(intent -> intent.workGroupId().equals(group.workGroupId()))
                             .filter(intent -> !completedReviewIntents.contains(intent.intentId()))
+                            .filter(intent -> !pendingReviewIntents.contains(intent.intentId()))
                             .findFirst().orElse(null);
                 }
                 if (owner == null || owner.participant().equals(participantId)) continue;
