@@ -693,6 +693,73 @@ final class McpSyn039SliceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void activeImplementerCanContinueBeforeReciprocalReviewerConsumesGrant(
+            @TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var reviewerClaim = collaboration.announce(fixture.project, "codex",
+                "syn039-reviewer-publication", "Add reviewer regression coverage",
+                "Publish the reviewer test snapshot after owner admission",
+                List.of(ResourceSelector.pathExact("reviewer-notes.txt")));
+        assertEquals(fixture.groupId, reviewerClaim.intent().workGroupId());
+
+        appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
+                currentParticipant(fixture.project, "syn039-owner-publication"));
+        collaboration.release(fixture.project, "codex", "syn039-owner-publication");
+
+        Map<String, Object> validation = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
+        Map<String, Object> validationPayload = new LinkedHashMap<>(
+                (Map<String, Object>) validationResult.get("nextProtocolPayload"));
+        validationPayload.put("result", "accepted");
+        Map<String, Object> validationArguments = new LinkedHashMap<>();
+        validationArguments.put("kind", validationResult.get("nextProtocolKind"));
+        validationArguments.put("payload", validationPayload);
+        String accepted = fixture.reviewer.handleMessage(toolCall(
+                "respond_coordination", ProviderJson.write(validationArguments)));
+        assertTrue(accepted.contains("ACCEPTED"), accepted);
+
+        String reviewRequest = fixture.owner.handleMessage(toolCall("request_coordination",
+                "{\"kind\":\"work_group_join\",\"payload\":{"
+                        + "\"workGroupId\":\"" + fixture.groupId + "\","
+                        + "\"intentId\":\"" + reviewerClaim.intent().intentId() + "\","
+                        + "\"proposal\":\"Review the reviewer snapshot\"}}"));
+        assertTrue(nestedField(reviewRequest, "request", "requestId") != null, reviewRequest);
+
+        Map<String, Object> ownerRequest = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> ownerRequestResult = (Map<String, Object>) ownerRequest.get("result");
+        Map<String, Object> ownerRequestWorkflow =
+                (Map<String, Object>) ownerRequestResult.get("workflow");
+        Map<String, Object> responseArguments =
+                (Map<String, Object>) ownerRequestWorkflow.get("arguments");
+        assertEquals("respond_coordination", ownerRequestWorkflow.get("recommendedTool"),
+                ownerRequestWorkflow.toString());
+        String ownerAccepted = fixture.reviewer.handleMessage(toolCall(
+                "respond_coordination", ProviderJson.write(responseArguments)));
+        assertTrue(ownerAccepted.contains("ACCEPTED"), ownerAccepted);
+
+        Map<String, Object> continuation = innerResult(
+                fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("ready", continuation.get("status"), continuation.toString());
+        assertFalse(continuation.containsKey("nextAction"), continuation.toString());
+        assertFalse(continuation.containsKey("reason"), continuation.toString());
+        Map<String, Object> continuationResult = (Map<String, Object>) continuation.get("result");
+        Map<String, Object> currentIntent =
+                (Map<String, Object>) continuationResult.get("currentIntent");
+        assertEquals(reviewerClaim.intent().intentId().toString(), currentIntent.get("intentId"),
+                continuation.toString());
+        assertFalse(continuationResult.containsKey("reviewGrantPending"), continuation.toString());
+        Map<String, Object> workflow = (Map<String, Object>) continuationResult.get("workflow");
+        assertEquals("IMPLEMENT", workflow.get("type"), workflow.toString());
+        assertTrue(((List<String>) workflow.get("permittedOperations")).contains("apply_patch"),
+                workflow.toString());
+        assertFalse(workflow.containsKey("recommendedTool"), workflow.toString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void acceptedReviewReportsActiveStatusWhileOwnerIntentRemainsLive(@TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);
         appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),

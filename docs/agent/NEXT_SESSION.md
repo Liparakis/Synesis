@@ -1,5 +1,26 @@
 # Next Session
 
+## CP-0531 reciprocal-review gating fix and exact-projection diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0531-exact-rule-diagnostic-2026-08-25.md`.
+
+The reciprocal-review gating defect is fixed and verified. An active lane with
+no claim-covered changes now remains ordinary `IMPLEMENT` instead of being
+fenced by a pending peer grant; once publishable changes exist, publication
+still requires exact grant/epoch/participant authorization.
+
+The CP-0539 exact-projection diagnostic used current bundled MCP and two
+independent ready/isolated GPT-5.6 Luna sessions. It reached one shared
+WorkGroup, exact REVIEW admission, grant consumption, immutable snapshot
+inspection, structured ACCEPT, and integration. The sessions ended with a
+reciprocal request/grant unresolved; no unchanged projected action failed.
+The conditional second ordinary run was not started.
+
+- Exact next code action: run one fresh ordinary unattended two-agent Todo
+  acceptance with only the complementary coding prompts and current bundled
+  MCP. Do not relay, repair, trigger transitions, or coach lifecycle steps.
+
 ## CP-0530 pytest-artifact recovery fix and post-fix diagnostic
 
 Evidence:

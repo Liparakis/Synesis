@@ -200,7 +200,8 @@ public final class AgentNextActionService {
                             AgentNextAction.RESPOND_COORDINATION, ownerAction);
                 }
 
-                Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(store, callerParticipant);
+                Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(
+                        store, callerParticipant, assignedWorktree, snapshotService);
                 if (pendingReviewGrant != null) {
                     Map<String, Object> ownerWait = new LinkedHashMap<>(collaboration);
                     ownerWait.putAll(pendingReviewGrant);
@@ -508,7 +509,9 @@ public final class AgentNextActionService {
                         AgentNextAction.RESPOND_COORDINATION, ownerAction);
             }
 
-            Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(store, participant);
+            Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(
+                    store, participant,
+                    binding.worktreePath() == null ? null : Path.of(binding.worktreePath()), snapshotService);
             if (pendingReviewGrant != null) {
                 Map<String, Object> ownerWait = new LinkedHashMap<>(collaboration);
                 ownerWait.putAll(pendingReviewGrant);
@@ -836,7 +839,8 @@ public final class AgentNextActionService {
     }
 
     private static Map<String, Object> pendingReviewGrantAction(
-            org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+            Path assignedWorktree, TaskSnapshotService snapshotService) {
         var collaboration = store.collaborationProjection();
         var workGroups = store.workGroupProjection();
         var completion = store.taskCompletionProjection();
@@ -857,6 +861,22 @@ public final class AgentNextActionService {
                         || !workGroups.grantAvailable(grant.grantId())
                         || workGroups.reviewValidationForGrant(grant.grantId()).isPresent()) {
                     continue;
+                }
+                // A reciprocal reviewer grant must not fence an active lane
+                // before that lane has produced any claim-covered source
+                // changes.  The participant still needs the ordinary
+                // IMPLEMENT envelope to perform its assigned work.  Once
+                // publishable changes exist, keep the wait so publication
+                // remains gated on reviewer admission and consumption.
+                if (assignedWorktree != null) {
+                    try {
+                        if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors())) {
+                            continue;
+                        }
+                    } catch (Exception ignored) {
+                        // Inspection failure is fail-closed: retain the wait
+                        // rather than projecting an unverified continuation.
+                    }
                 }
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("grantId", grant.grantId().toString());

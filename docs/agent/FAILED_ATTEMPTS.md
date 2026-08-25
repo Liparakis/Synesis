@@ -1,5 +1,25 @@
 # Failed Attempts
 
+## 2026-08-25 — SYN-039 CP-0531 reciprocal-review session stop
+
+- Attempted approach: run a fresh exact-projection two-agent diagnostic after
+  fixing the reciprocal-review grant gate.
+- Confirmed protocol result: one shared WorkGroup reached exact admission,
+  owner acceptance, single-use grant consumption, immutable snapshot access,
+  structured validation response, and snapshot integration. Replayed exact
+  request/grant actions remained idempotent and fail-closed authorization was
+  preserved.
+- Observed stop: the sessions ended while reciprocal request
+  `016aa0ca-48a3-4d78-91de-e48b10e33969` and grant
+  `42bf4474-67a1-3efa-984c-0a571be83c49` remained unresolved. No unchanged
+  projected action failed; the provider sessions did not remain engaged long
+  enough to observe the next projected continuation.
+- Classification: provider/session engagement evidence, not a Synesis
+  projection defect. Do not add retry orchestration, argument repair, or
+  cleanup machinery from this run.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0531-exact-rule-diagnostic-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0530 post-fix exact-argument/session stop
 
 - Attempted approach: Run a fresh bounded exact-projection diagnostic after

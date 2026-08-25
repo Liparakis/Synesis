@@ -1,3 +1,29 @@
+## 2026-08-25 — SYN-039 CP-0531 reciprocal-review gating fix and diagnostic
+
+- Reproduced the ordinary CP-0537/CP-0538 boundary where a pending reciprocal
+  REVIEW grant fenced an active lane before that lane had claim-covered source
+  changes. Added the smallest `AgentNextActionService` worktree/artifact gate
+  and deterministic MCP regression; it was red before the fix and green after
+  it.
+- Ran CP-0538 ordinary post-fix acceptance. One shared WorkGroup reached both
+  snapshot publications, integration, and structured rejection, but terminal
+  closure was not observed.
+- Ran fresh CP-0539 exact-projection diagnostic with current bundled MCP and
+  two independent GPT-5.6 Luna High sessions. Shared WorkGroup
+  `4fe4dcb2-e4db-3974-b55f-3502d93ddfc9` reached exact REVIEW admission, grant
+  `cbf28d67-8c9e-35e3-a84d-4cbf650628a7` consumption, immutable snapshot
+  `snap_daac2ca31851e9bba05ff87245d69baf` inspection, structured ACCEPT, and
+  integration. Reciprocal request `016aa0ca-48a3-4d78-91de-e48b10e33969` and
+  grant `42bf4474-67a1-3efa-984c-0a571be83c49` remained unresolved when
+  provider turns ended. No unchanged projected action failed.
+- Focused tests, Javadocs, validators, Go vet, Doctor, and `git diff --check`
+  passed. Full `check` again reproduced the Git subprocess stall at
+  `ProcessCommandRunner.execute:81` through
+  `AdministrativeStateLocator.resolveGitCommonDirectory:67`; it was stopped
+  after thread evidence. No push and no SYN-040.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0531-exact-rule-diagnostic-2026-08-25.md`.
+
 ## 2026-08-25 — SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
 
 - Reproduced the unchanged projected `workspace_stale -> ensure_session({})`

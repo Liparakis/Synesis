@@ -1,5 +1,32 @@
 # Tasks
 
+## SYN-039 CP-0531 reciprocal-review gating fix and exact-projection diagnostic
+
+The previous ordinary run proved a concrete reciprocal-review gating defect:
+an active lane with no claim-covered changes was fenced by a pending peer
+REVIEW grant before it could perform its ordinary visible task. The narrow
+`AgentNextActionService` fix exposes ordinary `IMPLEMENT` until
+claim-covered publishable changes exist, while retaining claims, ownership,
+grant, epoch, and immutable-snapshot safety gates.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0531-exact-rule-diagnostic-2026-08-25.md`.
+
+- Status: ACTIVE
+
+CP-0538 reached both snapshot publications and integration but not terminal
+closure. CP-0539 exact projections reached review admission, grant
+consumption, immutable snapshot inspection, structured ACCEPT, and integration;
+the sessions ended with reciprocal request/grant state still active. No
+unchanged projected action failed and no further production change is
+justified. Doctor, Git-stall, and bootstrap migration issues remain separately
+classified.
+
+Next narrow action: run one fresh ordinary unattended two-agent Todo
+acceptance with only complementary coding prompts. Preserve the first
+unchanged projection failure or missing usable action. Do not create SYN-040,
+push, or add provider-session retry/orchestration behavior from this evidence.
+
 ## SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
 
 The CP-0530 baseline proved a production recovery defect: standard pytest
@@ -12,7 +39,7 @@ untracked content. Regression coverage proves both paths.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0530-bytecode-recovery-2026-08-25.md`.
 
-Status remains ACTIVE. The fresh post-fix diagnostic verified ready/isolated
+Status is historical; SYN-039 remains ACTIVE at CP-0531. The fresh post-fix diagnostic verified ready/isolated
 recovery, review admission, grant consumption, snapshot publication,
 structured ACCEPT, integration, and 4/4 control tests. It stopped later when
 an agent changed a projected REVIEW intent ID, then ended before the remaining

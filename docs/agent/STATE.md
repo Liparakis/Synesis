@@ -1,5 +1,39 @@
 # State
 
+## SYN-039 CP-0531 reciprocal-review gating fix and exact-projection diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0531-exact-rule-diagnostic-2026-08-25.md`.
+
+The previous ordinary run proved a concrete reciprocal-review gating defect:
+an active lane with no claim-covered changes was fenced by a pending peer
+REVIEW grant before it could perform its ordinary visible task. The narrow
+`AgentNextActionService` fix now exposes ordinary `IMPLEMENT` until
+claim-covered publishable changes exist, while retaining grant, ownership,
+epoch, and immutable-snapshot safety gates. The deterministic regression was
+red before the change and green after it.
+
+The fresh CP-0539 diagnostic used two independent GPT-5.6 Luna High sessions,
+disjoint epoch-1 claims, and one WorkGroup
+`4fe4dcb2-e4db-3974-b55f-3502d93ddfc9`. Exact REVIEW admission, grant
+consumption, immutable snapshot access, structured ACCEPT, and test-snapshot
+integration succeeded. The provider sessions ended while reciprocal request
+`016aa0ca-48a3-4d78-91de-e48b10e33969` and grant
+`42bf4474-67a1-3efa-984c-0a571be83c49` remained unresolved. No unchanged
+projected action failed, so no further production change is justified.
+
+Focused workspace/MCP tests, Javadocs, deferred/fixture validators, Go vet,
+Doctor checks, and `git diff --check` pass. The full root `check` again
+stalled in `:cli:test` with test worker PID `7820` sleeping in
+`ProcessCommandRunner.execute:81` through Git and administrative state
+initialization. Bootstrap `go test ./...` retains the three known migration
+failures; fixture Doctor remains DEGRADED with six warnings.
+
+Immediate next action: run one fresh ordinary unattended two-agent Todo
+acceptance with only complementary coding prompts. Do not add lifecycle,
+cleanup, orchestration, retry, or argument-repair behavior from provider-turn
+termination evidence.
+
 ## SYN-039 CP-0530 pytest-artifact recovery fix and post-fix diagnostic
 
 Evidence:
