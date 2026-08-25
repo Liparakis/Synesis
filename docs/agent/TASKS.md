@@ -1,5 +1,25 @@
 # Tasks
 
+## SYN-039 CP-0541 ordinary continuation diagnostic
+
+The fresh ordinary acceptance used the current bundled MCP and two
+independent ready/isolated sessions in WorkGroup
+`94a259df-c1b3-3b0f-8bd9-3c481745c87c`. It reached exact REVIEW admission,
+owner response, single-use grant consumption, immutable snapshot publication,
+structured ACCEPT, and implementation-lane integration. The sessions then
+stopped at valid `WAIT -> get_next_action({})` continuations before the
+reciprocal grant and test snapshot were consumed/published. No unchanged
+projected action failed and no new production slice is justified.
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0541-ordinary-continuation-2026-08-25.md`.
+
+- Status: ACTIVE
+
+Next narrow action: run another fresh ordinary unattended two-agent Todo
+acceptance with only complementary visible coding prompts. Do not create
+SYN-040, push, relay, or change wait/review semantics from this evidence.
+
 ## SYN-039 CP-0540 bounded exact-action diagnostic
 
 The fresh exact-action diagnostic used the current bundled MCP and two

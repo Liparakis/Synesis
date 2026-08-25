@@ -1,5 +1,23 @@
 # Next Session
 
+## CP-0541 ordinary continuation diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0541-ordinary-continuation-2026-08-25.md`.
+
+The fresh ordinary acceptance reached one shared WorkGroup, exact REVIEW
+admission, owner acceptance, grant `d7d42eeb-45fb-35c1-9386-f9bfd435176d`
+consumption, immutable snapshot `snap_c46638443d433f95564066fc20dce6e7`,
+structured ACCEPT, and integration commit `69059ad`. The reciprocal grant
+`976388e2-d7f2-373e-83a1-9f36df6045ca` remained pending after Agent A's
+provider session ended at repeated valid `WAIT -> get_next_action({})` owner
+polling. No unchanged projected action failed and no production defect is
+proven.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts. Do not relay,
+  manually transition, modify wait/review semantics, push, or create SYN-040.
+
 ## CP-0540 bounded exact-action diagnostic
 
 Evidence:

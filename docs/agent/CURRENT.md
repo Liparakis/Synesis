@@ -1,5 +1,48 @@
 # Current Task
 
+## SYN-039 CP-0541 ordinary continuation diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0541-ordinary-continuation-2026-08-25.md`.
+
+The fresh ordinary two-agent run used the current bundled MCP and two
+independent ready/isolated sessions in one shared WorkGroup
+`94a259df-c1b3-3b0f-8bd9-3c481745c87c`. Exact REVIEW admission, owner
+responses, single-use grant consumption, immutable snapshot publication,
+structured ACCEPT, and implementation-lane integration succeeded. Every
+unchanged concrete projection that was executed succeeded.
+
+The run stopped at valid polling continuations. Agent A ended after polling
+`WAIT -> get_next_action({})` for the reciprocal owner response; Agent B later
+accepted that response and remained at `WAIT -> get_next_action({})` while the
+reciprocal grant targeted at A remained pending. Source inspection confirms
+these are intentional wait states, so this is provider/session compliance
+evidence, not a new production defect. No production code changed.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts. Preserve the first unchanged projected
+action failure or required state with no usable projection. Do not alter
+review/wait semantics, push, or create SYN-040 from CP-0541 alone.
+
+## Work completed
+
+Recorded CP-0541 with complete WorkGroup, participant, claim/epoch,
+request/grant, projection/action, snapshot, validation, integration, control
+test, Doctor, and Git-stall evidence. Focused workspace tests and validators
+pass; no production code changed.
+
+## Current failures
+
+WorkGroup `94a259df-c1b3-3b0f-8bd9-3c481745c87c` remains ACTIVE. A is
+COMPLETED, B remains ACTIVE with `test_todo.py`, and reciprocal grant
+`976388e2-d7f2-373e-83a1-9f36df6045ca` remains pending because A's provider
+session ended before consumption. Control pytest is 2/2 because only the
+implementation snapshot integrated. Doctor is DEGRADED with six warnings;
+the focused MCP Git subprocess stall and bootstrap migration failures remain
+separate verification issues.
+
 ## SYN-039 CP-0540 bounded exact-action diagnostic
 
 Evidence:

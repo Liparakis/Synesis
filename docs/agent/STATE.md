@@ -1,5 +1,26 @@
 # State
 
+## SYN-039 CP-0541 ordinary continuation diagnostic
+
+Evidence:
+`docs/evidence/syn039-unattended-todo-cp0541-ordinary-continuation-2026-08-25.md`.
+
+Project `4ca2ea73-3d75-4895-ab76-a0a84749feb9` reached WorkGroup
+`94a259df-c1b3-3b0f-8bd9-3c481745c87c`, exact reciprocal REVIEW requests,
+grant `d7d42eeb-45fb-35c1-9386-f9bfd435176d` consumption, snapshot
+`snap_c46638443d433f95564066fc20dce6e7`, structured ACCEPT, and integrated
+implementation commit `69059ad`. The reciprocal grant
+`976388e2-d7f2-373e-83a1-9f36df6045ca` remained pending. Agent A ended after
+valid owner-response polling; Agent B later accepted the request and polled
+valid wait continuations. No unchanged projected action failed, no production
+code changed, and the boundary is provider/session engagement.
+
+## Immediate next action
+
+Run another fresh ordinary unattended two-agent Todo acceptance with only
+complementary visible coding prompts; preserve the first unchanged action
+failure or missing usable projection.
+
 ## SYN-039 CP-0540 bounded exact-action diagnostic
 
 Evidence:

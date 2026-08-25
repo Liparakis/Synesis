@@ -1,3 +1,28 @@
+## 2026-08-25 — SYN-039 CP-0541 ordinary continuation diagnostic
+
+- Ran a fresh ordinary unattended two-agent Todo acceptance using only
+  complementary visible coding prompts and the current bundled MCP. Both
+  sessions reached ready/isolated and one shared WorkGroup
+  `94a259df-c1b3-3b0f-8bd9-3c481745c87c`.
+- Exact REVIEW admission, owner responses, grant consumption, immutable
+  snapshot `snap_c46638443d433f95564066fc20dce6e7`, structured ACCEPT, and
+  implementation integration `69059ad` succeeded. The reviewer test command
+  exited 0 with 2 passed.
+- Agent A ended after valid owner-response polling; Agent B later accepted the
+  reciprocal request and remained at valid wait polling while A's grant stayed
+  pending. No unchanged projected action failed and no production code
+  changed. This is provider/session compliance evidence.
+- Control pytest passed 2/2. Doctor remained DEGRADED with six warnings. The
+  focused MCP suite reproduced the known Git subprocess stall with the test
+  worker blocked in `ProcessCommandRunner.startProcess` during
+  `TaskSnapshotService.hasPublishableChanges`; the run was interrupted without
+  increasing the timeout. Bootstrap migration failures remain separate.
+- Evidence:
+  `docs/evidence/syn039-unattended-todo-cp0541-ordinary-continuation-2026-08-25.md`.
+
+- Exact next action: run another fresh ordinary unattended two-agent Todo
+  acceptance with only complementary visible coding prompts.
+
 ## 2026-08-25 — SYN-039 CP-0540 bounded exact-action diagnostic
 
 - Ran a fresh bounded diagnostic with two independent GPT-5.6 Luna sessions,
