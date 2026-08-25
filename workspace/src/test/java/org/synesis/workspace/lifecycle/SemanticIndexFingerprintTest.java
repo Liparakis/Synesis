@@ -65,6 +65,23 @@ class SemanticIndexFingerprintTest {
                 == SemanticIndexFingerprint.Comparison.NONSEMANTIC_REFRESH);
     }
 
+    @Test
+    void largeIndexInspectionIsNotTruncated(@TempDir Path temp) throws Exception {
+        Path root = init(temp.resolve("repo"));
+        int fileCount = 3_000;
+        Path source = root.resolve("src");
+        Files.createDirectories(source);
+        for (int index = 0; index < fileCount; index++) {
+            Files.writeString(source.resolve("fixture-" + String.format("%04d", index) + ".txt"), "fixture\n");
+        }
+        git(root, "add", "--", "src");
+
+        SemanticIndexFingerprint.Fingerprint fingerprint = SemanticIndexFingerprint.capture(root);
+
+        assertEquals(fileCount + 1, fingerprint.stagedEntryPaths().size());
+        assertTrue(fingerprint.stagedEntryPaths().contains("src/fixture-2999.txt"));
+    }
+
     private static Path init(Path root) throws Exception {
         Files.createDirectories(root);
         git(root, "init");

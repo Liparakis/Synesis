@@ -18,6 +18,9 @@ import java.util.Objects;
  */
 public final class SemanticIndexFingerprint {
 
+    /** Bounded output retained for complete structured index inspections. */
+    private static final int INDEX_INSPECTION_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+
     private SemanticIndexFingerprint() {
     }
 
@@ -87,7 +90,7 @@ public final class SemanticIndexFingerprint {
     }
 
     private static List<Entry> parseEntries(Path root) throws IOException {
-        String output = runBytes(root, "ls-files", "--stage", "-z");
+        String output = runIndexInspection(root, "ls-files", "--stage", "-z");
         List<Entry> entries = new ArrayList<>();
         List<String> intentPaths = intentToAddPaths(root);
         for (String item : output.split("\\u0000")) {
@@ -110,7 +113,7 @@ public final class SemanticIndexFingerprint {
     }
 
     private static List<String> intentToAddPaths(Path root) throws IOException {
-        String output = runBytes(root, "diff", "--diff-filter=A", "--name-only", "-z");
+        String output = runIndexInspection(root, "diff", "--diff-filter=A", "--name-only", "-z");
         List<String> paths = new ArrayList<>();
         for (String path : output.split("\\u0000")) {
             if (!path.isBlank()) paths.add(path);
@@ -119,7 +122,7 @@ public final class SemanticIndexFingerprint {
     }
 
     private static List<String> flagPaths(Path root, char... markers) throws IOException {
-        String output = runBytes(root, "ls-files", "-v", "-z");
+        String output = runIndexInspection(root, "ls-files", "-v", "-z");
         List<String> paths = new ArrayList<>();
         for (String item : output.split("\\u0000")) {
             if (item.length() < 3) continue;
@@ -167,8 +170,13 @@ public final class SemanticIndexFingerprint {
         return result.output().trim();
     }
 
-    private static String runBytes(Path root, String... args) throws IOException {
-        return run(root, args);
+    private static String runIndexInspection(Path root, String... args) throws IOException {
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root,
+                INDEX_INSPECTION_MAX_OUTPUT_BYTES, args);
+        if (result.exitCode() != 0) {
+            throw new IOException(result.output().isBlank() ? "GIT_COMMAND_FAILED" : result.output());
+        }
+        return result.output().trim();
     }
 
     private static Result runResult(Path root, String... args) throws IOException {

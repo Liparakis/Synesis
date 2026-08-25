@@ -98,8 +98,30 @@ public final class GitProcessRunner {
         return runInternal(workdir, null, DEFAULT_TIMEOUT, false, arguments);
     }
 
+    /**
+     * Runs a Git inspection with a caller-selected bounded output limit.
+     *
+     * <p>Ordinary command evidence retains the default 65,536-byte bound. A
+     * structured inspection may require a larger bounded result when its
+     * complete projection is needed for correctness.</p>
+     *
+     * @param workdir Git working directory
+     * @param maxOutputBytes maximum output retained for this inspection
+     * @param arguments Git arguments after {@code git}
+     * @return bounded output and process exit code
+     * @throws IOException if Git fails to start or times out
+     */
+    static Result runResult(Path workdir, int maxOutputBytes, String... arguments) throws IOException {
+        return runInternal(workdir, null, DEFAULT_TIMEOUT, false, maxOutputBytes, arguments);
+    }
+
     private static Result runInternal(Path workdir, Path index, Duration timeout, boolean required,
                                       String... arguments) throws IOException {
+        return runInternal(workdir, index, timeout, required, DEFAULT_MAX_OUTPUT_BYTES, arguments);
+    }
+
+    private static Result runInternal(Path workdir, Path index, Duration timeout, boolean required,
+                                      int maxOutputBytes, String... arguments) throws IOException {
         Path hooks = Files.createTempDirectory("synesis-empty-hooks-");
         try {
             List<String> command = new ArrayList<>();
@@ -127,7 +149,7 @@ public final class GitProcessRunner {
             command.add(9, "-c"); command.add(10, "user.name=Synesis");
             command.add(11, "-c"); command.add(12, "user.email=synesis@localhost");
             ProcessCommandRunner.Result result = ProcessCommandRunner.execute(command, workdir,
-                    environment, timeout, GitProcessRunner.DEFAULT_MAX_OUTPUT_BYTES);
+                    environment, timeout, maxOutputBytes);
             if (required && result.exitCode() != 0) {
                 throw new IOException("Git command failed: command=" + command
                         + ", directory=" + workdir + ", exit=" + result.exitCode()
