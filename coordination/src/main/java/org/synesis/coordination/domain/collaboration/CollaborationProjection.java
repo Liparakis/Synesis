@@ -166,6 +166,10 @@ public final class CollaborationProjection {
     }
 
     private void announce(WorkIntent intent) throws IOException {
+        Participant existing = participantHistory.get(intent.participant());
+        if (existing != null && existing.state() == Participant.State.REVOKED) {
+            throw new IOException("SESSION_EPOCH_FENCED");
+        }
         if (intents.containsKey(intent.intentId()) || !conflicts(intent.selectors()).isEmpty()) {
             throw new IOException("OVERLAPPING_CLAIM");
         }
@@ -273,6 +277,9 @@ public final class CollaborationProjection {
     private void heartbeat(String participant, long timestamp) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        if (current.state() == Participant.State.REVOKED) {
+            throw new IOException("SESSION_EPOCH_FENCED");
+        }
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
                 Participant.State.ACTIVE, timestamp, current.claims()));
     }
