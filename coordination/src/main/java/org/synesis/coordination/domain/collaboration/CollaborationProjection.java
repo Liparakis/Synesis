@@ -306,6 +306,7 @@ public final class CollaborationProjection {
     private void suspended(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        rejectRevoked(current);
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
                 Participant.State.SUSPENDED, current.lastVerifiedActivity(), current.claims(),
                 current.recoverySnapshotReference()));
@@ -366,6 +367,7 @@ public final class CollaborationProjection {
     private void cancelled(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        rejectRevoked(current);
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
                 Participant.State.CANCELLED, current.lastVerifiedActivity(), List.of(), current.recoverySnapshotReference()));
         intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
@@ -374,9 +376,16 @@ public final class CollaborationProjection {
     private void detached(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        rejectRevoked(current);
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
                 Participant.State.DETACHED, current.lastVerifiedActivity(), List.of(),
                 current.recoverySnapshotReference()));
         intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
+    }
+
+    private static void rejectRevoked(Participant participant) throws IOException {
+        if (participant.state() == Participant.State.REVOKED) {
+            throw new IOException("SESSION_EPOCH_FENCED");
+        }
     }
 }

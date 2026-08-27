@@ -56,6 +56,22 @@ final class CollaborationProjectionTest {
                         CollaborationCodec.encodeIntent(replacement))));
         assertEquals(Participant.State.REVOKED,
                 projection.participantState(abandoned.participant()).orElseThrow());
+
+        for (PredictionEventType lifecycle : List.of(
+                PredictionEventType.PARTICIPANT_ABANDONED,
+                PredictionEventType.PARTICIPANT_SUSPENDED,
+                PredictionEventType.PARTICIPANT_CANCELLED,
+                PredictionEventType.PARTICIPANT_DETACHED)) {
+            PredictionEvent terminalLifecycle = event(identity, 6 + lifecycle.ordinal(), lifecycle,
+                    CollaborationCodec.encodeHeartbeat(abandoned.participant()));
+            assertEquals("SESSION_EPOCH_FENCED",
+                    assertThrows(java.io.IOException.class, () -> projection.validate(terminalLifecycle)).getMessage());
+            assertEquals("SESSION_EPOCH_FENCED",
+                    assertThrows(java.io.IOException.class, () -> projection.apply(terminalLifecycle)).getMessage());
+            assertEquals(Participant.State.REVOKED,
+                    projection.participantState(abandoned.participant()).orElseThrow());
+        }
+
         assertEquals(unrelatedBefore, projection.participants().stream()
                 .filter(candidate -> candidate.id().equals(unrelated.participant()))
                 .findFirst()
