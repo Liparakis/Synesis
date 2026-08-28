@@ -17,6 +17,7 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 public final class CollaborationProjection {
     private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
     private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
+    private final Map<UUID, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
     private final Map<String, Participant> participantHistory = new LinkedHashMap<>();
     private final Set<UUID> acknowledgedInboxItems = new HashSet<>();
     private boolean activated;
@@ -37,7 +38,13 @@ public final class CollaborationProjection {
                 activated = true;
                 announce(CollaborationCodec.decodeIntent(event.payload()));
             }
-            case WORK_INTENT_RELEASED -> release(CollaborationCodec.decodeRelease(event.payload()));
+            case WORK_INTENT_RELEASED -> {
+                if (CollaborationCodec.isNoChangeCompletion(event.payload())) {
+                    complete(CollaborationCodec.decodeNoChangeCompletion(event.payload()), event.sequence());
+                } else {
+                    release(CollaborationCodec.decodeRelease(event.payload()));
+                }
+            }
             case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
             case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
             case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
@@ -51,6 +58,7 @@ public final class CollaborationProjection {
             case PARTICIPANT_CANCELLED -> cancelled(CollaborationCodec.decodeHeartbeat(event.payload()));
             case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(event.payload()));
             case PARTICIPANT_DETACHED -> detached(CollaborationCodec.decodeHeartbeat(event.payload()));
+            case REVIEW_VALIDATION_RECORDED -> review(ReviewValidationPayload.decode(event.payload()));
             default -> {
             }
         }
@@ -65,6 +73,7 @@ public final class CollaborationProjection {
         CollaborationProjection candidate = new CollaborationProjection();
         candidate.intents.putAll(intents);
         candidate.requests.putAll(requests);
+        candidate.noChangeCompletions.putAll(noChangeCompletions);
         candidate.participantHistory.putAll(participantHistory);
         candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
         candidate.activated = activated;
@@ -107,6 +116,21 @@ public final class CollaborationProjection {
      */
     public synchronized List<CoordinationRequest> requests() {
         return List.copyOf(requests.values());
+    }
+
+    /** Returns durable no-change completion evidence for an intent, when present.
+     * @param intentId intent identifier
+     * @return completion evidence, if the intent was explicitly completed
+     */
+    public synchronized Optional<NoChangeCompletion> noChangeCompletion(UUID intentId) {
+        return Optional.ofNullable(noChangeCompletions.get(Objects.requireNonNull(intentId, "intent ID")));
+    }
+
+    /** Returns all durable no-change completion evidence.
+     * @return immutable completion evidence
+     */
+    public synchronized List<NoChangeCompletion> noChangeCompletions() {
+        return List.copyOf(noChangeCompletions.values());
     }
 
     /** Returns whether an inbox item has been acknowledged.
@@ -274,10 +298,47 @@ public final class CollaborationProjection {
                 response.proposal().isBlank() ? current.proposal() : response.proposal(), response.status()));
     }
 
+    private void review(ReviewValidationPayload validation) throws IOException {
+        if (!"REJECTED".equals(validation.result())) {
+            return;
+        }
+        WorkIntent current = intents.get(validation.targetIntentId());
+        // Keep historical review records replayable when an older event log
+        // already terminalized its lane before recording the decision. New
+        // reviewed completion rejects this condition at the service boundary;
+        // an active exact lane is the only state that creates a continuation.
+        if (current == null) {
+            return;
+        }
+        if (!current.workGroupId().equals(validation.workGroupId())
+                || !current.participant().equals(validation.sourceParticipant())
+                || !current.taskId().equals(validation.taskId())
+                || current.version() != validation.claimEpoch()
+                || current.status() != WorkIntent.Status.ANNOUNCED) {
+            throw new IOException("REVIEW_TARGET_STALE");
+        }
+        WorkIntent correction = new WorkIntent(current.intentId(), current.projectId(), current.participant(),
+                current.provider(), current.taskId(), current.goal(), current.acceptance(), current.baseCommit(),
+                current.selectors(), current.version() + 1L, current.workGroupId(),
+                current.authorityLineageId(), WorkIntent.Status.ANNOUNCED, current.completionMode(),
+                current.role(), current.reviewTargetSelectors());
+        intents.put(correction.intentId(), correction);
+        Participant participant = participantHistory.get(current.participant());
+        if (participant == null) {
+            throw new IOException("PARTICIPANT_NOT_FOUND");
+        }
+        participantHistory.put(current.participant(), new Participant(participant.id(), participant.provider(),
+                correction.goal(), Participant.State.ACTIVE, participant.lastVerifiedActivity(),
+                correction.selectors(), participant.recoverySnapshotReference()));
+    }
+
     private void heartbeat(String participant, long timestamp) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
-        if (current.state() == Participant.State.REVOKED) {
+        if (current.state() == Participant.State.REVOKED
+                || current.state() == Participant.State.COMPLETED
+                || current.state() == Participant.State.CANCELLED
+                || current.state() == Participant.State.DETACHED) {
             throw new IOException("SESSION_EPOCH_FENCED");
         }
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
@@ -292,7 +353,8 @@ public final class CollaborationProjection {
         if (target == null || target.state() != Participant.State.ACTIVE) throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
         WorkIntent transferred = new WorkIntent(current.intentId(), current.projectId(), handoff.target(), current.provider(),
                 current.taskId(), current.goal(), current.acceptance(), current.baseCommit(), current.selectors(),
-                current.version() + 1, current.workGroupId(), current.authorityLineageId(), current.status());
+                current.version() + 1, current.workGroupId(), current.authorityLineageId(), current.status(),
+                current.completionMode(), current.role(), current.reviewTargetSelectors());
         intents.put(current.intentId(), transferred);
         Participant previous = participantHistory.get(current.participant());
         if (previous != null) {
@@ -386,6 +448,41 @@ public final class CollaborationProjection {
     private static void rejectRevoked(Participant participant) throws IOException {
         if (participant.state() == Participant.State.REVOKED) {
             throw new IOException("SESSION_EPOCH_FENCED");
+        }
+    }
+
+    private void complete(NoChangeCompletion completion, long eventSequence) throws IOException {
+        NoChangeCompletion previous = noChangeCompletions.get(completion.intentId());
+        if (previous != null) {
+            if (!previous.equals(completion)) {
+                throw new IOException("NO_CHANGE_COMPLETION_CONFLICT");
+            }
+            return;
+        }
+        if (completion.expectedRevision() != eventSequence - 1L) {
+            throw new IOException("COMPLETION_REVISION_STALE");
+        }
+        WorkIntent current = intents.get(completion.intentId());
+        if (current == null) {
+            throw new IOException("INTENT_NOT_FOUND");
+        }
+        if (!current.workGroupId().equals(completion.workGroupId())
+                || !current.participant().equals(completion.participant())
+                || !current.provider().equals(completion.provider())
+                || !current.authorityLineageId().equals(completion.authorityLineageId())
+                || current.version() != completion.claimEpoch()
+                || current.completionMode() != WorkIntent.CompletionMode.NO_CHANGE_ALLOWED
+                || !current.baseCommit().equals(completion.workspaceCommit())) {
+            throw new IOException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
+        }
+        intents.remove(completion.intentId());
+        noChangeCompletions.put(completion.intentId(), completion);
+        Participant previousParticipant = participantHistory.get(current.participant());
+        if (previousParticipant != null) {
+            participantHistory.put(current.participant(), new Participant(previousParticipant.id(),
+                    previousParticipant.provider(), previousParticipant.goal(), Participant.State.COMPLETED,
+                    previousParticipant.lastVerifiedActivity(), List.of(),
+                    previousParticipant.recoverySnapshotReference()));
         }
     }
 }

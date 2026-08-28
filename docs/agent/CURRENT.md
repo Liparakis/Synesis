@@ -1,36 +1,43 @@
 # Current Task
 
-## SYN-039 CP-0546 external provider-session boundary
+## SYN-039 closure — final canonical acceptance
+
+- Task ID: SYN-039
+- Status: DONE / ACCEPTED
+- Checkpoint: CP-0547
 
 Evidence:
-`docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+`docs/evidence/syn039-final-canonical-acceptance-closure-2026-08-28.md`.
 
-The completion audit confirms the lifecycle projections and fail-closed
-authority are correct, but ordinary Codex sessions repeatedly terminate while
-Synesis still projects `WAIT -> get_next_action({})` for an active WorkGroup.
-CP-0535 proves the existing lifecycle completes when agents remain engaged;
-CP-0541 through CP-0545 prove ordinary provider turns do not reliably remain
-engaged. No production defect or safe in-scope fix is proven.
+The final canonical acceptance is green. Two independent ordinary Codex
+sessions established reviewer-first, order-independent producer/reviewer
+roles with disjoint exact claims; published immutable S1; rejected its
+objective invalid-index defect; continued the same producer lineage through
+claim epoch and intent version 2; published and accepted fresh S2; integrated
+only S2; explicitly completed the reviewer's no-change lane; and left zero
+active WorkGroups, intents, claims, requests, or current grants.
+
+The final control checkout was clean and the focused tests plus independent
+behavior probe passed. Doctor remained DEGRADED with six non-fatal stale-lease,
+command namespace/retention, and provider migration warnings. No SYN-039
+collaboration state remained active, and no hygiene repair was performed.
 
 ## Immediate next action
 
-Keep SYN-039 externally blocked. Resume only if the provider/runtime can keep a
-normal agent session engaged through unresolved `WAIT` continuations or new
-evidence proves an unchanged Synesis projection/action failure. Do not add a
-launcher, daemon, orchestrator, or SYN-040.
+Select and explicitly promote the next authorized task before beginning any
+implementation; do not reopen SYN-039 for its separately recorded Doctor
+warnings.
 
 ## Work completed
 
-Recorded the final requirement-by-requirement audit, source proof for the
-continued-engagement contract, repeated ordinary acceptance evidence, and the
-external limitation boundary. No production code changed.
+Recorded final acceptance closure, evidence references, Doctor caveat, dirty
+file classification, and the coherent local SYN-039 completion commit.
 
 ## Current failures
 
-Ordinary unattended completion, clean WorkGroup closure, final cleanup, and
-healthy Doctor remain unproven because provider sessions stop before the next
-participant-driven action. The repository remains clean; known Git/bootstrap
-issues and Doctor warnings remain separate.
+No SYN-039 semantic failure remains. Doctor/provider-session hygiene remains
+DEGRADED as separately classified non-causal warning state; do not repair it in
+this closure task.
 
 ## SYN-039 CP-0545 exact-projection diagnostic boundary
 

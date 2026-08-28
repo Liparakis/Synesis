@@ -30,6 +30,7 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
  * @param capabilityDependencies list of capability request handles
  * @param summary                task completion summary
  * @param provenance             immutable lane provenance
+ * @param reviewRequired         whether exact durable review acceptance gates integration
  * @since 1.0
  */
 public record TaskSnapshotPayload(
@@ -44,11 +45,12 @@ public record TaskSnapshotPayload(
         List<String> changedPaths,
         List<String> capabilityDependencies,
         String summary,
-        SnapshotProvenance provenance
+        SnapshotProvenance provenance,
+        boolean reviewRequired
 ) {
 
     private static final int MAGIC = 0x534E4150; // "SNAP"
-    private static final int VERSION = 4;
+    private static final int VERSION = 5;
     private static final int MAX_TEXT = 64 * 1024;
 
     /**
@@ -66,6 +68,7 @@ public record TaskSnapshotPayload(
      * @param capabilityDependencies list of capability dependencies
      * @param summary                task completion summary
      * @param provenance             immutable lane provenance
+     * @param reviewRequired         whether review acceptance gates integration
      */
     public TaskSnapshotPayload {
         Objects.requireNonNull(taskId, "taskId");
@@ -80,6 +83,33 @@ public record TaskSnapshotPayload(
         capabilityDependencies = List.copyOf(Objects.requireNonNull(capabilityDependencies, "capabilityDependencies"));
         Objects.requireNonNull(summary, "summary");
         Objects.requireNonNull(provenance, "provenance");
+    }
+
+    /** Constructs a payload with the pre-review-gate shape.
+     *
+     * <p>Historical and direct test callers default to an unreviewed snapshot;
+     * reviewed publication uses the canonical constructor with the explicit
+     * review flag.</p>
+     *
+     * @param taskId task ID
+     * @param snapshotId snapshot ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId session ID
+     * @param baseCommit base commit
+     * @param commitSha commit SHA
+     * @param changedPaths changed paths
+     * @param capabilityDependencies dependencies
+     * @param summary summary
+     * @param provenance immutable lane provenance
+     */
+    public TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId, String supervisorId,
+            String workerId, String providerSessionId, String baseCommit, String commitSha,
+            List<String> changedPaths, List<String> capabilityDependencies, String summary,
+            SnapshotProvenance provenance) {
+        this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
+                commitSha, changedPaths, capabilityDependencies, summary, provenance, false);
     }
 
     /** Constructs a payload with default provenance for a minimal snapshot record.
@@ -145,6 +175,7 @@ public record TaskSnapshotPayload(
             writeText(out, provenance.snapshotRef());
             writeText(out, provenance.integrityEvidence());
             writeText(out, provenance.artifactManifestDigest());
+            out.writeBoolean(reviewRequired);
             out.flush();
             return bytes.toByteArray();
         } catch (IOException impossible) {
@@ -207,8 +238,10 @@ public record TaskSnapshotPayload(
                 provenance = new SnapshotProvenance(group, lane, authorityLineage, participant, binding, epoch,
                         contracts, lineage, claims, snapshotRef, integrity, artifacts);
             }
+            boolean reviewRequired = version >= 5 && in.readBoolean();
             return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,
-                    providerSessionId, baseCommit, commitSha, changedPaths, deps, summary, provenance);
+                    providerSessionId, baseCommit, commitSha, changedPaths, deps, summary, provenance,
+                    reviewRequired);
         } catch (RuntimeException failure) {
             throw new IOException("Malformed task snapshot payload", failure);
         }

@@ -12,7 +12,8 @@ excluded launcher/daemon/orchestrator.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
 
-- Status: ACTIVE — externally blocked; not DONE
+- Status at CP-0546: ACTIVE — externally blocked; superseded by the final
+  canonical acceptance recorded below.
 
 Next narrow action: resume only after provider/runtime behavior changes or a
 new exact projected-action failure is reproduced. Do not create SYN-040, push,
@@ -2634,7 +2635,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
 - ID: SYN-039
 - Priority: P0
 - Title: Autonomous Workgroup Completion
-- Status: ACTIVE
+- Status: DONE / ACCEPTED
 - Purpose: Make two ordinary Synesis-aware coding agents complete one shared
   repository task unattended through the existing durable WorkGroup, isolated
   mutation lanes, review/validation, handoff, snapshot, integration, cleanup,
@@ -2695,6 +2696,15 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   any architecture ADR only if an actual boundary changes; updated
   CURRENT.md, GOAL.md, STATE.md, TASKS.md, TEST_MATRIX.md, SESSION_LOG.md,
   and NEXT_SESSION.md.
+- Completion evidence: `docs/evidence/syn039-final-canonical-acceptance-closure-2026-08-28.md`;
+  `docs/agent/checkpoints/CP-0547.md`; official bundle provenance and final
+  verification under `C:/t/syn039-final-harness-20260828-001`.
+- Closure: `SYN-039 ACCEPTED` on 2026-08-28. The final reviewer-first
+  two-agent run proved disjoint producer/reviewer roles, immutable rejected
+  S1, same-lineage correction, fresh G2 authority, accepted-only S2
+  integration, explicit no-change completion, and zero residual active
+  collaboration state. Doctor's six non-fatal hygiene warnings remain
+  separately recorded and are not a reason to reopen this task.
 - Implementation order: (1) reproduce and capture the supplied Todo failure;
   (2) define the smallest read-only reviewer/validator access and evidence
   contract; (3) implement autonomous validation, explicit decisions, and

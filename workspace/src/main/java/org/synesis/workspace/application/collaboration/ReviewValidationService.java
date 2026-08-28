@@ -108,6 +108,15 @@ public final class ReviewValidationService {
                         || snapshot.provenance().claimEpoch() != grant.claimEpoch()) {
                     return blocked("REVIEW_SNAPSHOT_MISMATCH", AgentNextAction.RETRY);
                 }
+                var targetIntent = store.collaborationProjection().intent(grant.targetIntentId());
+                if (targetIntent.isPresent()
+                        && (targetIntent.get().status() != org.synesis.coordination.domain.collaboration.WorkIntent.Status.ANNOUNCED
+                        || targetIntent.get().version() != grant.claimEpoch()
+                        || !targetIntent.get().taskId().equals(snapshot.taskId())
+                        || !targetIntent.get().participant().equals(snapshot.provenance().participant())
+                        || !targetIntent.get().authorityLineageId().equals(snapshot.provenance().authorityLineageId()))) {
+                    return blocked("REVIEW_GRANT_STALE", AgentNextAction.RETRY);
+                }
                 String normalizedResult = request.result().trim().toUpperCase(java.util.Locale.ROOT);
                 if (normalizedResult.equals("ACCEPT")) normalizedResult = "ACCEPTED";
                 if (normalizedResult.equals("REJECT")) normalizedResult = "REJECTED";
@@ -125,6 +134,14 @@ public final class ReviewValidationService {
                 if (existing.isPresent() && !existing.get().equals(decision)) {
                     return blocked("REVIEW_DECISION_CONFLICT", AgentNextAction.RETRY);
                 }
+                var snapshotState = store.taskCompletionProjection().snapshotState(snapshot.snapshotId());
+                if (snapshotState.isPresent()
+                        && (snapshotState.get() == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED
+                        || snapshotState.get() == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_ACCEPTED
+                        || snapshotState.get() == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_REJECTED)
+                        && existing.isEmpty()) {
+                    return blocked("REVIEW_SNAPSHOT_ALREADY_RESOLVED", AgentNextAction.RETRY);
+                }
                 if (existing.isEmpty()) {
                     UUID eventId = UUID.nameUUIDFromBytes(("review-validation:" + grant.grantId() + ":" + snapshot.snapshotId())
                             .getBytes(StandardCharsets.UTF_8));
@@ -133,19 +150,6 @@ public final class ReviewValidationService {
                 }
                 WorkGroup group = store.workGroupProjection().group(grant.workGroupId())
                         .orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));
-                UUID groupId = group.workGroupId();
-                if (normalizedResult.equals("ACCEPTED") && group.status() == WorkGroup.Status.ACTIVE
-                        && store.collaborationProjection().activeIntents().stream()
-                                .noneMatch(intent -> intent.workGroupId().equals(groupId))
-                        && store.workGroupProjection().grants().stream()
-                                .noneMatch(value -> value.workGroupId().equals(groupId)
-                                        && store.workGroupProjection().grantAvailable(value.grantId()))) {
-                    WorkGroup completed = new WorkGroup(groupId, group.projectId(), group.goal(),
-                            group.acceptance(), group.version() + 1, WorkGroup.Status.COMPLETED);
-                    store.append(groupId, PredictionEventType.WORK_GROUP_STATUS_CHANGED,
-                            identity.nodeId(), CollaborationCodec.encodeWorkGroup(completed), identity);
-                    group = completed;
-                }
                 reviewSnapshotAccessService.remove(root, grant.grantId());
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("grantId", grant.grantId().toString());
@@ -154,9 +158,19 @@ public final class ReviewValidationService {
                 result.put("result", normalizedResult);
                 result.put("workGroupStatus", group.status().name());
                 if (normalizedResult.equals("REJECTED")) {
-                    result.put("route", Map.of("targetParticipant", snapshot.provenance().participant(),
-                            "targetIntentId", snapshot.provenance().laneId().toString(),
-                            "snapshotId", snapshot.snapshotId(), "nextAction", "ensure_session"));
+                    Map<String, Object> route = new LinkedHashMap<>();
+                    route.put("targetParticipant", snapshot.provenance().participant());
+                    route.put("targetIntentId", snapshot.provenance().laneId().toString());
+                    route.put("snapshotId", snapshot.snapshotId());
+                    route.put("workGroupId", snapshot.provenance().workGroupId().toString());
+                    route.put("nextAction", "get_next_action");
+                    route.put("state", "REVISION_REQUIRED");
+                    route.put("claimEpoch", store.collaborationProjection()
+                            .intent(snapshot.provenance().laneId())
+                            .map(org.synesis.coordination.domain.collaboration.WorkIntent::version)
+                            .orElse(snapshot.provenance().claimEpoch()));
+                    route.put("authorityLineageId", snapshot.provenance().authorityLineageId().toString());
+                    result.put("route", route);
                 }
                 return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
             }

@@ -19,6 +19,7 @@ import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessServi
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
@@ -28,6 +29,21 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /** Locks the SYN-039 reviewer and integration evidence boundaries. */
 final class McpSyn039SliceTest {
+
+    @Test
+    void malformedReviewerTargetMetadataIsRejected(@TempDir Path temp) {
+        McpProtocolHandler handler = new McpProtocolHandler(
+                new AgentSessionService(), temp, "codex", "syn039-invalid-review-target");
+
+        String response = handler.handleMessage(toolCall("ensure_session",
+                "{\"task\":{\"role\":\"reviewer\",\"reviewTargets\":["
+                        + "{\"kind\":\"unknown\",\"path\":\"todo.py\"}]}}"));
+
+        Map<String, Object> projection = innerResult(response);
+        assertEquals("blocked", projection.get("status"), response);
+        assertEquals("policy_denied", projection.get("reason"), response);
+        assertEquals("INVALID_TASK_INTENT", ((Map<?, ?>) projection.get("result")).get("reason"), response);
+    }
 
     @Test
     void passingTodoEvidenceIsNotConvertedToTestsFailed(@TempDir Path temp) throws Exception {
@@ -96,6 +112,11 @@ final class McpSyn039SliceTest {
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var claim = collaboration.announce(project, "codex", "syn039-owner",
                 "Implement Todo", "Review the completed Todo snapshot",
+                List.of(ResourceSelector.pathExact("todo.py")));
+        collaboration.announce(project, "codex", "syn039-reviewer",
+                "Review Todo", "Review the completed Todo snapshot",
+                List.of(ResourceSelector.pathExact("test_todo.py")), claim.intent().workGroupId(),
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("todo.py")));
         UUIDs ids = new UUIDs(claim.intent().workGroupId(), claim.intent().intentId());
         McpProtocolHandler owner = new McpProtocolHandler(sessions, project, "codex", "syn039-owner");
@@ -315,6 +336,11 @@ final class McpSyn039SliceTest {
         var claim = new WorkspaceCollaborationService().announce(project, "codex", "separate-owner",
                 "Implement Todo", "Review the completed Todo snapshot",
                 List.of(ResourceSelector.pathExact("todo.py")));
+        new WorkspaceCollaborationService().announce(project, "codex", "separate-reviewer",
+                "Review Todo", "Review the completed Todo snapshot",
+                List.of(ResourceSelector.pathExact("test_todo.py")), claim.intent().workGroupId(),
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("todo.py")));
         McpProtocolHandler owner = new McpProtocolHandler(ownerSessions, project, "codex", "separate-owner");
         McpProtocolHandler reviewer = new McpProtocolHandler(reviewerSessions, project, "codex", "separate-reviewer");
 
@@ -380,7 +406,7 @@ final class McpSyn039SliceTest {
 
         String published = fixture.owner.handleMessage(toolCall("finish_lane", ProviderJson.write(arguments)));
         Map<String, Object> publishedResult = (Map<String, Object>) innerResult(published).get("result");
-        assertEquals("PUBLISHED", publishedResult.get("snapshotState"), published);
+        assertEquals("REVIEW_PENDING", publishedResult.get("snapshotState"), published);
         String snapshotId = String.valueOf(publishedResult.get("snapshotId"));
         assertTrue(snapshotId.startsWith("snap_"), published);
 
@@ -416,19 +442,12 @@ final class McpSyn039SliceTest {
 
         Map<String, Object> completion = innerResult(
                 fixture.owner.handleMessage(toolCall("finish_lane", ProviderJson.write(finishArguments))));
-        assertEquals("ready", completion.get("status"), completion.toString());
-        assertEquals("request_coordination", completion.get("nextAction"), completion.toString());
+        assertEquals("waiting", completion.get("status"), completion.toString());
+        assertEquals("wait", completion.get("nextAction"), completion.toString());
         Map<String, Object> result = (Map<String, Object>) completion.get("result");
-        assertEquals("work_group_join", result.get("nextProtocolKind"), completion.toString());
-        Map<String, Object> payload = (Map<String, Object>) result.get("nextProtocolPayload");
-        assertEquals(fixture.groupId.toString(), payload.get("workGroupId"), completion.toString());
-        assertEquals(reviewerClaim.intent().intentId().toString(), payload.get("intentId"), completion.toString());
-        Map<String, Object> continuationWorkflow = (Map<String, Object>) result.get("workflow");
-        assertEquals("request_coordination", continuationWorkflow.get("recommendedTool"), completion.toString());
-        Map<String, Object> continuationArguments =
-                (Map<String, Object>) continuationWorkflow.get("arguments");
-        assertEquals("work_group_join", continuationArguments.get("kind"), completion.toString());
-        assertEquals(payload, continuationArguments.get("payload"), completion.toString());
+        assertEquals("REVIEW_PENDING", result.get("snapshotState"), completion.toString());
+        assertEquals("review_pending", result.get("integrationState"), completion.toString());
+        assertEquals(Boolean.TRUE, result.get("reviewRequired"), completion.toString());
     }
 
     @Test
@@ -816,7 +835,7 @@ final class McpSyn039SliceTest {
         Map<String, Object> rejectedResult = (Map<String, Object>) innerResult(rejected).get("result");
         assertEquals("REJECTED", rejectedResult.get("result"), rejected);
         Map<String, Object> route = (Map<String, Object>) rejectedResult.get("route");
-        assertEquals("ensure_session", route.get("nextAction"), rejected);
+        assertEquals("get_next_action", route.get("nextAction"), rejected);
         assertEquals(fixture.intentId.toString(), route.get("targetIntentId"), rejected);
     }
 
@@ -1034,11 +1053,15 @@ final class McpSyn039SliceTest {
         var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         String commit = gitOutput(project, "rev-parse", "HEAD");
+        UUID taskId = store.collaborationProjection().intent(ids.intentId())
+                .map(intent -> intent.taskId())
+                .orElseGet(() -> UUID.nameUUIDFromBytes(
+                        "syn039-review-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         SnapshotProvenance provenance = new SnapshotProvenance(ids.groupId(), ids.intentId(),
                 ownerParticipant, "owner-session", 1, List.of(), List.of(), List.of("PATH_EXACT:todo.py"),
                 "refs/synesis/snapshots/snap_reviewable", "test-integrity");
         TaskSnapshotPayload snapshot = new TaskSnapshotPayload(
-                UUID.nameUUIDFromBytes("syn039-review-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                taskId,
                 "snap_reviewable", identity.nodeId(), "supervisor", "worker", "owner-session",
                 commit, commit, List.of("todo.py"), List.of(), "reviewable Todo", provenance);
         git(project, "update-ref", "refs/synesis/snapshots/snap_reviewable", commit);

@@ -1,24 +1,29 @@
 # State
 
-## SYN-039 CP-0546 external provider-session boundary
+## SYN-039 closure — final canonical acceptance
+
+- Status: DONE / ACCEPTED
+- Checkpoint: CP-0547
 
 Evidence:
-`docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+`docs/evidence/syn039-final-canonical-acceptance-closure-2026-08-28.md`.
 
-Source and repeated acceptance evidence prove that Synesis projects valid
-polling actions and preserves ownership, epochs, grants, snapshots, and
-fail-closed authorization. Normal Codex sessions nevertheless terminate while
-the WorkGroup remains ACTIVE. CP-0535 completed with engaged agents; CP-0541–
-CP-0545 did not complete ordinary unattended acceptance.
+The final canonical acceptance proved the complete ordinary two-agent
+producer/reviewer lifecycle, including reviewer-first admission,
+disjoint ownership, immutable rejected S1, same-lineage correction, fresh G2,
+accepted-only S2 integration, explicit no-change completion, and zero residual
+active collaboration state. The fixture control checkout is clean and focused
+verification passes.
 
-No safe production change remains within SYN-039's no-launcher/no-daemon
-boundary. The task is externally blocked pending provider-session engagement
-behavior; it is not marked DONE.
+Doctor remains DEGRADED with six non-fatal stale-lease, command
+namespace/retention, and provider migration warnings. No active SYN-039
+WorkGroup, intent, claim, review obligation, or unintegrated accepted snapshot
+remains. No repair or provider migration cleanup is authorized here.
 
 ## Immediate next action
 
-Resume only after provider/runtime state changes or a new exact projected-action
-failure is reproduced.
+Select and explicitly promote the next authorized task before implementation;
+keep SYN-039 closed and preserve `SYN-014E` as paused.
 
 ## SYN-039 CP-0545 exact-projection diagnostic boundary
 

@@ -142,15 +142,17 @@ public final class PredictionEvent {
 
     private static PredictionEventType decodeWireType(int wireCode, byte[] payload) throws IOException {
         if (wireCode == 42 && (hasMagic(payload, 0x53494e31) || hasMagic(payload, 0x53494e32)
-                || hasMagic(payload, 0x53494e33))) {
+                || hasMagic(payload, 0x53494e33) || hasMagic(payload, 0x53494e34)
+                || hasMagic(payload, 0x53494e35))) {
             return PredictionEventType.WORK_INTENT_ANNOUNCED;
         }
         if (wireCode == 42 || wireCode == 43 || wireCode == 44) {
             if (hasMagic(payload, 0x53494e31) || hasMagic(payload, 0x53494e32)
-                    || hasMagic(payload, 0x53494e33)) {
+                    || hasMagic(payload, 0x53494e33) || hasMagic(payload, 0x53494e34)
+                    || hasMagic(payload, 0x53494e35)) {
                 return PredictionEventType.WORK_INTENT_ANNOUNCED;
             }
-            if (hasMagic(payload, 0x53524c31)) {
+            if (hasMagic(payload, 0x53524c31) || hasMagic(payload, 0x534e4331)) {
                 return PredictionEventType.WORK_INTENT_RELEASED;
             }
             // Before stable collaboration codes, this slot represented the

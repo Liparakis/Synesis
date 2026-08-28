@@ -16,7 +16,10 @@ public final class CollaborationCodec {
     private static final int MAGIC_INTENT = 0x53494e31;
     private static final int MAGIC_INTENT_V2 = 0x53494e32;
     private static final int MAGIC_INTENT_V3 = 0x53494e33;
+    private static final int MAGIC_INTENT_V4 = 0x53494e34;
+    private static final int MAGIC_INTENT_V5 = 0x53494e35;
     private static final int MAGIC_RELEASE = 0x53524c31;
+    private static final int MAGIC_NO_CHANGE_COMPLETION = 0x534e4331;
     private static final int MAGIC_REQUEST = 0x53525131;
     private static final int MAGIC_RESPONSE = 0x53525331;
     private static final int MAGIC_HEARTBEAT = 0x53484231;
@@ -37,7 +40,7 @@ public final class CollaborationCodec {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC_INTENT_V3);
+            out.writeInt(MAGIC_INTENT_V5);
             uuid(out, intent.intentId());
             uuid(out, intent.projectId());
             uuid(out, intent.workGroupId());
@@ -51,6 +54,13 @@ public final class CollaborationCodec {
             out.writeLong(intent.version());
             out.writeInt(intent.selectors().size());
             for (ResourceSelector selector : intent.selectors()) {
+                out.writeByte(selector.kind().ordinal());
+                text(out, selector.value());
+            }
+            out.writeByte(intent.completionMode().wireCode());
+            out.writeByte(intent.role().wireCode());
+            out.writeInt(intent.reviewTargetSelectors().size());
+            for (ResourceSelector selector : intent.reviewTargetSelectors()) {
                 out.writeByte(selector.kind().ordinal());
                 text(out, selector.value());
             }
@@ -71,14 +81,16 @@ public final class CollaborationCodec {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
-            if (magic != MAGIC_INTENT && magic != MAGIC_INTENT_V2 && magic != MAGIC_INTENT_V3) {
+            if (magic != MAGIC_INTENT && magic != MAGIC_INTENT_V2 && magic != MAGIC_INTENT_V3
+                    && magic != MAGIC_INTENT_V4 && magic != MAGIC_INTENT_V5) {
                 throw new IOException("unsupported intent format");
             }
             UUID intentId = readUuid(in);
             UUID projectId = readUuid(in);
             UUID workGroupId = magic == MAGIC_INTENT || magic == MAGIC_INTENT_V2 ?
                     (magic == MAGIC_INTENT_V2 ? readUuid(in) : intentId) : readUuid(in);
-            UUID authorityLineageId = magic == MAGIC_INTENT_V3
+            UUID authorityLineageId = magic == MAGIC_INTENT_V3 || magic == MAGIC_INTENT_V4
+                    || magic == MAGIC_INTENT_V5
                     ? readUuid(in) : WorkIntent.defaultAuthorityLineage(intentId);
             String participant = readText(in);
             String provider = readText(in);
@@ -99,12 +111,32 @@ public final class CollaborationCodec {
                 }
                 selectors.add(new ResourceSelector(ResourceSelector.Kind.values()[kind], readText(in)));
             }
+            WorkIntent.CompletionMode completionMode = magic == MAGIC_INTENT_V4 || magic == MAGIC_INTENT_V5
+                    ? WorkIntent.CompletionMode.fromWireCode(in.readUnsignedByte())
+                    : WorkIntent.CompletionMode.SNAPSHOT_REQUIRED;
+            WorkIntent.Role role = WorkIntent.Role.PRODUCER;
+            List<ResourceSelector> reviewTargetSelectors = List.of();
+            if (magic == MAGIC_INTENT_V5) {
+                role = WorkIntent.Role.fromWireCode(in.readUnsignedByte());
+                int reviewTargetCount = in.readInt();
+                if (reviewTargetCount < 0 || reviewTargetCount > 128) {
+                    throw new IOException("review target selector bound");
+                }
+                reviewTargetSelectors = new ArrayList<>(reviewTargetCount);
+                for (int index = 0; index < reviewTargetCount; index++) {
+                    int kind = in.readUnsignedByte();
+                    if (kind >= ResourceSelector.Kind.values().length) {
+                        throw new IOException("review target selector kind");
+                    }
+                    reviewTargetSelectors.add(new ResourceSelector(ResourceSelector.Kind.values()[kind], readText(in)));
+                }
+            }
             if (in.available() != 0) {
                 throw new IOException("trailing intent bytes");
             }
             return new WorkIntent(intentId, projectId, participant, provider, taskId, goal, acceptance,
                     baseCommit, selectors, version, workGroupId, authorityLineageId,
-                    WorkIntent.Status.ANNOUNCED);
+                    WorkIntent.Status.ANNOUNCED, completionMode, role, reviewTargetSelectors);
         } catch (RuntimeException | java.io.EOFException failure) {
             throw new IOException("malformed intent", failure);
         }
@@ -144,6 +176,68 @@ public final class CollaborationCodec {
             throw new IOException("trailing release bytes");
         }
         return id;
+    }
+
+    /** Returns whether a release payload carries explicit no-change evidence.
+     * @param encoded release payload
+     * @return {@code true} for the no-change completion format
+     */
+    public static boolean isNoChangeCompletion(byte[] encoded) {
+        return encoded != null && encoded.length >= 4
+                && ((encoded[0] & 0xff) << 24 | (encoded[1] & 0xff) << 16
+                | (encoded[2] & 0xff) << 8 | (encoded[3] & 0xff))
+                == MAGIC_NO_CHANGE_COMPLETION;
+    }
+
+    /** Encodes explicit successful completion evidence for a clean intent.
+     * @param completion completion evidence
+     * @return canonical bytes
+     */
+    public static byte[] encodeNoChangeCompletion(NoChangeCompletion completion) {
+        Objects.requireNonNull(completion, "completion");
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC_NO_CHANGE_COMPLETION);
+            uuid(out, completion.intentId());
+            uuid(out, completion.workGroupId());
+            text(out, completion.participant());
+            text(out, completion.provider());
+            text(out, completion.bindingIdentity());
+            uuid(out, completion.authorityLineageId());
+            out.writeLong(completion.claimEpoch());
+            out.writeLong(completion.workGroupVersion());
+            out.writeLong(completion.expectedRevision());
+            text(out, completion.workspaceCommit());
+            text(out, completion.summary());
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    /** Decodes explicit successful completion evidence.
+     * @param encoded canonical bytes
+     * @return completion evidence
+     * @throws IOException malformed payload
+     */
+    public static NoChangeCompletion decodeNoChangeCompletion(byte[] encoded) throws IOException {
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_NO_CHANGE_COMPLETION) {
+                throw new IOException("unsupported no-change completion format");
+            }
+            NoChangeCompletion completion = new NoChangeCompletion(
+                    readUuid(in), readUuid(in), readText(in), readText(in), readText(in),
+                    readUuid(in), in.readLong(), in.readLong(), in.readLong(), readText(in), readText(in));
+            if (in.available() != 0) {
+                throw new IOException("trailing no-change completion bytes");
+            }
+            return completion;
+        } catch (RuntimeException | java.io.EOFException failure) {
+            throw new IOException("malformed no-change completion", failure);
+        }
     }
 
     /** Encodes a coordination request.

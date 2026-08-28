@@ -788,6 +788,57 @@ public final class ProviderSessionBindingService {
         }
     }
 
+    /** Marks one exact provider binding complete by its durable session ID.
+     *
+     * <p>This lookup is used after integration, when the immutable snapshot
+     * carries the session identity but the original transient connection
+     * evidence is no longer available. It never selects a latest or provider-
+     * wide binding.</p>
+     *
+     * @param location initialized control project
+     * @param provider stable provider identifier
+     * @param sessionId exact durable session identifier
+     * @return {@code true} when the binding was transitioned or already complete
+     * @throws BindingException when a matching binding is malformed or cannot be persisted
+     */
+    public synchronized boolean completeBySessionId(ProjectApplicationService.ProjectLocation location,
+            String provider, String sessionId) throws BindingException {
+        Objects.requireNonNull(location, "location");
+        requireText(provider, "provider");
+        requireText(sessionId, "sessionId");
+        try {
+            Binding binding = list(location, provider).stream()
+                    .filter(candidate -> sessionId.equals(candidate.sessionId()))
+                    .findFirst().orElse(null);
+            if (binding == null) {
+                return false;
+            }
+            if (!provider.equals(binding.provider())) {
+                throw new BindingException("SESSION_IDENTITY_MISMATCH",
+                        "Stored provider binding does not match the requested provider");
+            }
+            if ("COMPLETED".equals(binding.status())) {
+                return true;
+            }
+            if (!"BOUND".equals(binding.status()) && !"SUSPENDED".equals(binding.status())) {
+                return false;
+            }
+            Path bindingPath = location.synesisDirectory().resolve("local")
+                    .resolve(SESSIONS_DIRECTORY)
+                    .resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
+            if (!Files.isRegularFile(bindingPath)) {
+                return false;
+            }
+            write(bindingPath, binding.complete());
+            return true;
+        } catch (BindingException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BindingException("SESSION_COMPLETE_FAILED",
+                    "Could not complete provider connection binding", failure);
+        }
+    }
+
     /**
      * Revokes all sessions for a provider while preserving their audit records.
      *
@@ -852,6 +903,29 @@ public final class ProviderSessionBindingService {
      */
     public synchronized WorkspaceCheck verifyWorkspace(ProjectApplicationService.ProjectLocation location,
             Binding binding, Path cwd) {
+        return verifyWorkspace(location, binding, cwd, true);
+    }
+
+    /** Verifies a clean no-change lane without requiring the control checkout to remain at its base.
+     *
+     * <p>A no-change participant performs no repository mutation. Once another
+     * lane has integrated, its clean read-only worktree may therefore have a
+     * stale control base while its own binding, branch, generation, and Git
+     * ancestry remain verifiable. Ordinary mutation and command callers must
+     * continue using {@link #verifyWorkspace(ProjectApplicationService.ProjectLocation, Binding, Path)}.
+     *
+     * @param location project location
+     * @param binding session binding
+     * @param cwd provider event working directory
+     * @return workspace verification result
+     */
+    public synchronized WorkspaceCheck verifyNoChangeWorkspace(
+            ProjectApplicationService.ProjectLocation location, Binding binding, Path cwd) {
+        return verifyWorkspace(location, binding, cwd, false);
+    }
+
+    private WorkspaceCheck verifyWorkspace(ProjectApplicationService.ProjectLocation location,
+            Binding binding, Path cwd, boolean requireCurrentControlBase) {
         if (binding == null || binding.worktreePath() == null || binding.worktreePath()
                 .isBlank()) {
             return new WorkspaceCheck(false, binding == null ? "WORKSPACE_UNVERIFIED" : binding.lastSeenState());
@@ -892,7 +966,7 @@ public final class ProviderSessionBindingService {
             if (!binding.baseCommit().equals(git(assigned, "rev-parse", "HEAD"))) {
                 return new WorkspaceCheck(false, "WORKSPACE_GENERATION_MISMATCH");
             }
-            if (!binding.baseCommit().equals(git(root, "rev-parse", "HEAD"))) {
+            if (requireCurrentControlBase && !binding.baseCommit().equals(git(root, "rev-parse", "HEAD"))) {
                 return new WorkspaceCheck(false, "CONTROL_BASE_ADVANCED");
             }
             return new WorkspaceCheck(true, "WORKSPACE_VERIFIED");

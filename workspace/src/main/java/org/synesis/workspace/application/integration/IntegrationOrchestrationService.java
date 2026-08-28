@@ -1,5 +1,6 @@
 package org.synesis.workspace.application.integration;
 import org.synesis.workspace.application.control.ControlBranchAdvancementService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -58,6 +59,7 @@ public final class IntegrationOrchestrationService {
     private final ControlBranchAdvancementService advancementService;
     private final ProjectApplicationService projectService;
     private final ProjectProcessExecutor processExecutor;
+    private final ProviderSessionBindingService bindingService;
 
     /**
      * Creates an integration orchestration service.
@@ -67,6 +69,7 @@ public final class IntegrationOrchestrationService {
         this.advancementService = new ControlBranchAdvancementService();
         this.projectService = new ProjectApplicationService();
         this.processExecutor = new ProjectProcessExecutor();
+        this.bindingService = new ProviderSessionBindingService();
     }
 
     /**
@@ -87,18 +90,29 @@ public final class IntegrationOrchestrationService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
                         AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
             }
-            return orchestrateIntegrationLocked(controlRoot, store, identity);
+            return orchestrateIntegrationLocked(lock, controlRoot, store, identity);
         } catch (IOException failure) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
                     AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
         }
     }
 
-    private AgentResponse orchestrateIntegrationLocked(Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
+    private AgentResponse orchestrateIntegrationLocked(ProjectAppendLock appendLock,
+            Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
 
         synchronized (INTEGRATION_LOCK) {
             List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().eligibleSnapshots();
             if (snapshots.isEmpty()) {
+                List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();
+                if (!pendingReviews.isEmpty()) {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("state", TaskCompletionState.REVIEW_PENDING.value());
+                    result.put("reviewPending", true);
+                    result.put("snapshotIds", pendingReviews.stream()
+                            .map(TaskSnapshotRecord::snapshotId).toList());
+                    return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED,
+                            AgentNextAction.WAIT, result);
+                }
                 return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
             }
 
@@ -121,6 +135,7 @@ public final class IntegrationOrchestrationService {
                                         controlRoot, attempt.attemptId(), attempt.expectedControlHead(),
                                         attempt.integrationCommitSha(), recovered, store, identity);
                                 if (recoveredResult.advanced()) {
+                                    finalizeIntegratedLanes(appendLock, controlRoot, recovered, store, identity);
                                     return new AgentResponse(AgentStatus.COMPLETED, null, null,
                                             Map.of("recovered", true, "attemptId", attempt.attemptId()));
                                 }
@@ -168,9 +183,18 @@ public final class IntegrationOrchestrationService {
             // the same pump invocation.
             List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection().allSnapshots();
             List<TaskSnapshotRecord> eligible = store.taskCompletionProjection().eligibleSnapshots().stream()
+                    .filter(snapshot -> reviewAccepted(snapshot, store))
                     .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis)
                             .thenComparing(TaskSnapshotRecord::snapshotId))
                     .toList();
+            if (eligible.isEmpty()) {
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("state", "review_acceptance_required");
+                result.put("reviewAcceptanceRequired", true);
+                result.put("snapshotIds", snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList());
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                        AgentNextAction.REQUEST_HUMAN_HELP, result);
+            }
             TaskSnapshotRecord selected = null;
             boolean blockedCandidate = false;
             while (selected == null && !eligible.isEmpty()) {
@@ -208,6 +232,7 @@ public final class IntegrationOrchestrationService {
                 }
                 if (selected == null) {
                     eligible = store.taskCompletionProjection().eligibleSnapshots().stream()
+                            .filter(snapshot -> reviewAccepted(snapshot, store))
                             .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis)
                                     .thenComparing(TaskSnapshotRecord::snapshotId))
                             .toList();
@@ -367,6 +392,15 @@ public final class IntegrationOrchestrationService {
                 return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, result);
             }
 
+            try {
+                finalizeIntegratedLanes(appendLock, controlRoot, ordered, store, identity);
+            } catch (Exception failure) {
+                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                        AgentNextAction.REQUEST_HUMAN_HELP,
+                        Map.of("failure", "INTEGRATION_TERMINALIZATION_FAILED",
+                                "message", failure.getMessage() == null ? "unknown" : failure.getMessage()));
+            }
+
             // Success! Fully integrated
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("task", "integrated");
@@ -382,6 +416,41 @@ public final class IntegrationOrchestrationService {
         private CandidateResolution {
             dependencies = List.copyOf(dependencies);
             structuralFailures = List.copyOf(structuralFailures);
+        }
+    }
+
+    /** Returns whether one candidate has the exact durable authority required for integration. */
+    private static boolean reviewAccepted(TaskSnapshotRecord snapshot, PredictionEventStore store) {
+        if (!snapshot.reviewRequired()) {
+            return true;
+        }
+        if (store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE)
+                != TaskCompletionState.REVIEW_ACCEPTED) {
+            return false;
+        }
+        return store.workGroupProjection().reviewValidationForSnapshot(snapshot.snapshotId())
+                .filter(validation -> "ACCEPTED".equals(validation.result()))
+                .filter(validation -> validation.taskId().equals(snapshot.taskId()))
+                .filter(validation -> validation.workGroupId().equals(snapshot.provenance().workGroupId()))
+                .filter(validation -> validation.targetIntentId().equals(snapshot.provenance().laneId()))
+                .filter(validation -> validation.claimEpoch() == snapshot.provenance().claimEpoch())
+                .filter(validation -> validation.sourceParticipant().equals(snapshot.provenance().participant()))
+                .isPresent();
+    }
+
+    /** Finalizes only lanes whose exact immutable snapshots have integrated. */
+    private void finalizeIntegratedLanes(ProjectAppendLock appendLock, Path controlRoot,
+            List<TaskSnapshotRecord> snapshots, PredictionEventStore store, NodeIdentity identity)
+            throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(controlRoot);
+        WorkIntentService intentService = new WorkIntentService(store, identity);
+        for (TaskSnapshotRecord snapshot : snapshots) {
+            String provider = store.collaborationProjection().intent(snapshot.provenance().laneId())
+                    .map(WorkIntent::provider).orElse(null);
+            intentService.releaseAfterIntegration(appendLock, snapshot);
+            if (provider != null) {
+                bindingService.completeBySessionId(location, provider, snapshot.providerSessionId());
+            }
         }
     }
 
@@ -424,7 +493,8 @@ public final class IntegrationOrchestrationService {
                 // remains pending and will be reconsidered after publication.
                 continue;
             }
-            TaskCompletionState ownerState = completion.taskState(ownerSnapshot.taskId());
+            TaskCompletionState ownerState = completion.snapshotState(ownerSnapshot.snapshotId())
+                    .orElse(TaskCompletionState.ACTIVE);
             if (ownerState == TaskCompletionState.INTEGRATED) {
                 continue;
             }
@@ -589,7 +659,8 @@ public final class IntegrationOrchestrationService {
                 }
             }
             if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
-                var prepared = store.taskCompletionProjection().findPrepared(snapshot.taskId());
+                var prepared = store.taskCompletionProjection().findPrepared(snapshot.taskId(),
+                        snapshot.provenance().laneId(), snapshot.provenance().claimEpoch());
                 if (prepared.isEmpty()) {
                     failures.add("MISSING_PREPARED_OBJECT:" + snapshot.snapshotId());
                 } else {

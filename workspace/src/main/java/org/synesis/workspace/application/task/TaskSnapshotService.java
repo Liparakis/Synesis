@@ -115,6 +115,22 @@ public final class TaskSnapshotService {
         return !sourceChanges.isEmpty();
     }
 
+    /** Checks the complete worker worktree for uncommitted or untracked files.
+     *
+     * <p>No-change completion uses this stricter predicate than snapshot
+     * publication: even an artifact or untracked file is unpublished
+     * mutation and therefore keeps the lane on the snapshot path.</p>
+     *
+     * @param workerWorktreePath absolute worker worktree path
+     * @return {@code true} when Git reports no dirty or untracked paths
+     * @throws IOException if Git inspection fails
+     */
+    public boolean isCleanWorktree(Path workerWorktreePath) throws IOException {
+        Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
+        return runGitOutput(workerWorktreePath, "status", "--porcelain",
+                "--untracked-files=all").isBlank();
+    }
+
     /**
      * Creates or recovers an immutable task snapshot record for a worker's task.
      *
@@ -237,6 +253,43 @@ public final class TaskSnapshotService {
             String bindingIdentity, long claimEpoch, UUID authorityLineageId,
             List<String> handoffLineage
     ) throws IOException {
+        return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId,
+                workerWorktreePath, controlRoot, summary, existingOpt, activeCapabilities, claims,
+                workGroupId, laneId, participant, bindingIdentity, claimEpoch, authorityLineageId,
+                handoffLineage, false);
+    }
+
+    /** Creates a snapshot while recording whether review acceptance gates integration.
+     * @param taskId task ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId binding ID
+     * @param workerWorktreePath lane worktree
+     * @param controlRoot control root
+     * @param summary completion summary
+     * @param existingOpt existing immutable snapshot for the exact revision
+     * @param activeCapabilities capability records
+     * @param claims lane claims
+     * @param workGroupId work-group ID
+     * @param laneId lane ID
+     * @param participant participant
+     * @param bindingIdentity binding identity
+     * @param claimEpoch claim epoch
+     * @param authorityLineageId authority lineage
+     * @param handoffLineage handoff lineage
+     * @param reviewRequired whether durable review acceptance is required
+     * @return immutable snapshot
+     * @throws IOException Git failure
+     */
+    public TaskSnapshotRecord createSnapshot(
+            UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
+            Path workerWorktreePath, Path controlRoot, String summary,
+            Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
+            List<ResourceSelector> claims, UUID workGroupId, UUID laneId, String participant,
+            String bindingIdentity, long claimEpoch, UUID authorityLineageId,
+            List<String> handoffLineage, boolean reviewRequired
+    ) throws IOException {
         Objects.requireNonNull(taskId, "taskId");
         Objects.requireNonNull(nodeId, "nodeId");
         Objects.requireNonNull(supervisorId, "supervisorId");
@@ -302,7 +355,8 @@ public final class TaskSnapshotService {
         return new TaskSnapshotRecord(
                 taskId, snapshotId, nodeId, supervisorId, workerId,
                 providerSessionId, baseCommit, commitSha, changedPaths,
-                List.copyOf(capabilityDependencies), summary, System.currentTimeMillis(), provenance);
+                List.copyOf(capabilityDependencies), summary, System.currentTimeMillis(), provenance,
+                reviewRequired);
     }
 
     /** Pins an already materialized snapshot commit under a transaction-owned

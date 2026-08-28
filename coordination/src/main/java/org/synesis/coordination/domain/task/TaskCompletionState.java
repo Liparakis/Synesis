@@ -11,9 +11,14 @@ import java.util.Objects;
  *
  * <p>State machine for task completion &amp; integration:
  * {@code ACTIVE} &rarr; {@code COMPLETION_REQUESTED} &rarr; {@code COMPLETION_PREPARED} &rarr;
- * {@code SNAPSHOT_READY} &rarr;
- * {@code WAITING_FOR_DEPENDENCIES} &rarr; {@code READY_FOR_INTEGRATION} &rarr; {@code INTEGRATING} &rarr; {@code INTEGRATED}.
- * Failure/terminal states: {@code INTEGRATION_FAILED}, {@code CANCELLED}, {@code ABANDONED}.
+ * {@code SNAPSHOT_READY} &rarr; optional review states
+ * ({@code REVIEW_PENDING} &rarr; {@code REVIEW_ACCEPTED} or
+ * {@code REVIEW_REJECTED}) &rarr; {@code WAITING_FOR_DEPENDENCIES} &rarr;
+ * {@code READY_FOR_INTEGRATION} &rarr; {@code INTEGRATING} &rarr;
+ * {@code INTEGRATED}. A rejected snapshot is immutable history; a later
+ * same-lineage correction publishes a distinct snapshot for the next lane
+ * revision. Failure/terminal states: {@code INTEGRATION_FAILED},
+ * {@code CANCELLED}, {@code ABANDONED}.
  *
  * @since 1.0
  */
@@ -54,6 +59,15 @@ public enum TaskCompletionState {
 
     /** Published snapshot is eligible for integration. */
     INTEGRATION_PENDING("integration_pending"),
+
+    /** Immutable snapshot is published and awaits its exact review decision. */
+    REVIEW_PENDING("review_pending"),
+
+    /** Immutable snapshot was rejected and is permanently ineligible for integration. */
+    REVIEW_REJECTED("review_rejected"),
+
+    /** Immutable snapshot received the exact durable acceptance required for integration. */
+    REVIEW_ACCEPTED("review_accepted"),
 
     /** Immutable candidate is structurally invalid and awaits explicit recovery. */
     INTEGRATION_BLOCKED("integration_blocked"),

@@ -95,7 +95,8 @@ public final class AgentWorkflowReducer {
                 .append('|').append(response.reason() == null ? "" : response.reason().value())
                 .append('|').append(request.provider())
                 .append('|').append(request.connectionInstanceId());
-        for (String key : List.of("inboxItemId", "capabilityRequestHandle", "capability", "pending", "workGroupId", "laneId")) {
+        for (String key : List.of("inboxItemId", "capabilityRequestHandle", "capability", "pending", "workGroupId",
+                "laneId", "claimEpoch", "snapshotId", "latestRejectedSnapshotId")) {
             if (result.containsKey(key)) {
                 seed.append('|').append(key).append('=').append(ProviderJson.write(result.get(key)));
             }

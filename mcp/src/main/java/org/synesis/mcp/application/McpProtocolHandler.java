@@ -661,7 +661,18 @@ public final class McpProtocolHandler {
 
         AgentResponse agentResponse;
         boolean durableCommand = name.equals("synesis." + McpToolCatalog.RUN_COMMAND);
-        if (!durableCommand) {
+        boolean noChangeCompletion = name.equals("synesis." + McpToolCatalog.FINISH_LANE)
+                && arguments != null && arguments.get("outcome") instanceof String outcome
+                && ("no_change".equalsIgnoreCase(outcome)
+                || "no_change_allowed".equalsIgnoreCase(outcome));
+        boolean snapshotCompletion = name.equals("synesis." + McpToolCatalog.FINISH_LANE);
+        // finish_lane carries an optimistic event-log revision in its
+        // projected evidence.  The ordinary lease heartbeat appends a
+        // collaboration event, so doing it before completion would invalidate
+        // the exact server-issued finish envelope before the completion
+        // service can consume it.  Completion itself remains authoritative;
+        // all other non-command calls retain the normal activity heartbeat.
+        if (!durableCommand && !noChangeCompletion && !snapshotCompletion) {
             renewLease();
         }
 
@@ -676,7 +687,15 @@ public final class McpProtocolHandler {
 
         switch (name) {
             case "synesis." + McpToolCatalog.ENSURE_SESSION -> {
-                AgentSessionService.AgentTaskIntent taskIntent = parseTaskIntent(arguments);
+                AgentSessionService.AgentTaskIntent taskIntent;
+                try {
+                    taskIntent = parseTaskIntent(arguments);
+                } catch (IllegalArgumentException invalidTask) {
+                    agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP,
+                            Map.of("reason", "INVALID_TASK_INTENT"));
+                    break;
+                }
                 boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
 
                 if (!parseClaimSelectors(arguments).isEmpty()
@@ -748,7 +767,11 @@ public final class McpProtocolHandler {
                             ClaimResult claimResult = collaborationService.announce(activeProjectRoot, provider,
                                     connectionInstanceId, intent == null ? null : intent.goal(),
                                     intent == null ? null : intent.acceptance(), selectors,
-                                    intent == null ? null : intent.workGroupId());
+                                    intent == null ? null : intent.workGroupId(),
+                                    intent == null ? WorkIntent.CompletionMode.SNAPSHOT_REQUIRED
+                                            : intent.completionMode(),
+                                    intent == null ? WorkIntent.Role.PRODUCER : intent.role(),
+                                    intent == null ? List.of() : intent.reviewTargetSelectors());
                             if (!claimResult.acquired()) {
                                 Map<String, Object> details = new LinkedHashMap<>();
                                 details.put("conflicts", claimResult.conflicts().stream().map(conflict -> Map.of(
@@ -1111,10 +1134,30 @@ public final class McpProtocolHandler {
                 }
             }
             case "synesis." + McpToolCatalog.FINISH_LANE -> {
-                String summary = arguments != null ? (String) arguments.get("summary") : null;
-                AgentTaskCompletionService.CompleteTaskRequest completeReq = new AgentTaskCompletionService.CompleteTaskRequest(
-                        activeProjectRoot, provider, connectionInstanceId, summary);
-                agentResponse = taskCompletionService.completeTask(completeReq);
+                try {
+                    String summary = optionalStringArgument(arguments, "summary");
+                    AgentTaskCompletionService.CompletionOutcome outcome = arguments != null
+                            && arguments.containsKey("outcome")
+                            ? AgentTaskCompletionService.CompletionOutcome.fromWire(
+                                    requiredStringArgument(arguments, "outcome"))
+                            : AgentTaskCompletionService.CompletionOutcome.SNAPSHOT;
+                    UUID expectedIntentId = optionalUuidArgument(arguments, "intentId");
+                    UUID expectedWorkGroupId = optionalUuidArgument(arguments, "workGroupId");
+                    Long expectedClaimEpoch = optionalLongArgument(arguments, "claimEpoch", 1);
+                    Long expectedWorkGroupVersion = optionalLongArgument(arguments, "workGroupVersion", 1);
+                    Long expectedRevision = optionalLongArgument(arguments, "expectedRevision", 0);
+                    String expectedParticipant = optionalStringArgument(arguments, "participant");
+                    AgentTaskCompletionService.CompleteTaskRequest completeReq =
+                            new AgentTaskCompletionService.CompleteTaskRequest(
+                                    activeProjectRoot, provider, connectionInstanceId, summary, outcome,
+                                    expectedIntentId, expectedWorkGroupId, expectedClaimEpoch,
+                                    expectedWorkGroupVersion, expectedRevision, expectedParticipant);
+                    agentResponse = taskCompletionService.completeTask(completeReq);
+                } catch (IllegalArgumentException invalidFinish) {
+                    agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP,
+                            Map.of("reason", "INVALID_FINISH_LANE_ARGUMENTS"));
+                }
             }
             case "synesis." + McpToolCatalog.CANCEL_LANE -> {
                 String reason = arguments != null ? (String) arguments.get("reason") : null;
@@ -1181,7 +1224,9 @@ public final class McpProtocolHandler {
         return Map.of("grantId", grant.grantId().toString(),
                 "workGroupId", grant.workGroupId().toString(),
                 "targetIntentId", grant.targetIntentId().toString(),
+                "reviewedIntentId", grant.targetIntentId().toString(),
                 "targetParticipant", grant.targetParticipant(),
+                "reviewerParticipant", grant.targetParticipant(),
                 "claimEpoch", grant.claimEpoch(), "singleUse", grant.singleUse());
     }
 
@@ -1256,6 +1301,10 @@ public final class McpProtocolHandler {
         result.put("workGroupId", intent.workGroupId().toString());
         result.put("authorityLineageId", intent.authorityLineageId().toString());
         result.put("status", intent.status().name());
+        result.put("completionMode", intent.completionMode().wireValue());
+        result.put("role", intent.role().wireValue());
+        result.put("reviewTargets", intent.reviewTargetSelectors().stream()
+                .map(McpProtocolHandler::selectorMap).toList());
         return result;
     }
 
@@ -1280,6 +1329,9 @@ public final class McpProtocolHandler {
         result.put("requester", request.requester());
         result.put("target", request.target());
         result.put("conflictingIntentId", request.conflictingIntentId().toString());
+        result.put("reviewedIntentId", request.conflictingIntentId().toString());
+        result.put("reviewedParticipantId", request.target());
+        result.put("reviewerParticipant", request.requester());
         result.put("kind", request.kind().name());
         result.put("proposal", request.proposal());
         result.put("status", request.status().name());
@@ -1338,7 +1390,8 @@ public final class McpProtocolHandler {
         if (taskObj instanceof Map<?, ?> taskMap) {
             map = (Map<String, Object>) taskMap;
         } else if (arguments.containsKey("goal") || arguments.containsKey("acceptance")
-                || arguments.containsKey("claims")) {
+                || arguments.containsKey("claims") || arguments.containsKey("role")
+                || arguments.containsKey("reviewTargets")) {
             // A few provider renderers flatten the task object.  Normalize
             // that bounded shape without changing the advertised schema.
             map = arguments;
@@ -1353,7 +1406,65 @@ public final class McpProtocolHandler {
         if (map.get("workGroupId") instanceof String value && !value.isBlank()) {
             try { workGroupId = UUID.fromString(value); } catch (IllegalArgumentException ignored) { }
         }
-        return new AgentSessionService.AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies, workGroupId);
+        WorkIntent.CompletionMode completionMode = WorkIntent.CompletionMode.SNAPSHOT_REQUIRED;
+        Object rawCompletionMode = map.get("completionMode");
+        if (rawCompletionMode != null) {
+            if (!(rawCompletionMode instanceof String value)) {
+                throw new IllegalArgumentException("completion mode must be a string");
+            }
+            completionMode = WorkIntent.CompletionMode.fromWire(value);
+        }
+        WorkIntent.Role role = WorkIntent.Role.PRODUCER;
+        Object rawRole = map.get("role");
+        if (rawRole != null) {
+            if (!(rawRole instanceof String value)) {
+                throw new IllegalArgumentException("role must be a string");
+            }
+            role = WorkIntent.Role.fromWire(value);
+        }
+        if (map.containsKey("reviewTargets") && map.get("reviewTargets") == null) {
+            throw new IllegalArgumentException("reviewTargets must be an array");
+        }
+        List<ResourceSelector> reviewTargetSelectors = parseSelectorList(map.get("reviewTargets"));
+        return new AgentSessionService.AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies,
+                workGroupId, completionMode, role, reviewTargetSelectors);
+    }
+
+    /** Parses the bounded non-ownership selectors used to identify review targets. */
+    private List<ResourceSelector> parseSelectorList(Object rawSelectors) {
+        if (rawSelectors == null) {
+            return List.of();
+        }
+        if (!(rawSelectors instanceof List<?> entries)) {
+            throw new IllegalArgumentException("reviewTargets must be an array");
+        }
+        List<ResourceSelector> selectors = new java.util.ArrayList<>();
+        for (Object item : entries) {
+            if (!(item instanceof Map<?, ?> selector)) {
+                throw new IllegalArgumentException("review target selector must be an object");
+            }
+            Object path = selector.get("path");
+            if (!(path instanceof String)) {
+                path = selector.get("relativePath");
+            }
+            if (!(path instanceof String value) || value.isBlank()) {
+                throw new IllegalArgumentException("review target selector path is required");
+            }
+            Object rawKind = selector.get("kind");
+            String kind = rawKind == null
+                    ? "path_exact"
+                    : rawKind instanceof String kindValue
+                            ? kindValue.toLowerCase(java.util.Locale.ROOT) : null;
+            if (kind == null) {
+                throw new IllegalArgumentException("review target selector kind must be a string");
+            }
+            switch (kind) {
+                case "path_exact" -> selectors.add(ResourceSelector.pathExact(value));
+                case "path_subtree" -> selectors.add(ResourceSelector.pathSubtree(value));
+                default -> throw new IllegalArgumentException("unknown review target selector kind: " + rawKind);
+            }
+        }
+        return List.copyOf(selectors);
     }
 
     @SuppressWarnings("unchecked")
@@ -1397,6 +1508,53 @@ public final class McpProtocolHandler {
         if (arguments == null || !(arguments.get("task") instanceof Map<?, ?> taskMap)) return null;
         Object value = ((Map<String, Object>) taskMap).get(field);
         return value instanceof String text && !text.isBlank() ? text : null;
+    }
+
+    private static String requiredStringArgument(Map<String, Object> arguments, String key) {
+        if (arguments == null || !(arguments.get(key) instanceof String value) || value.isBlank()) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return value;
+    }
+
+    private static String optionalStringArgument(Map<String, Object> arguments, String key) {
+        if (arguments == null || !arguments.containsKey(key) || arguments.get(key) == null) {
+            return null;
+        }
+        if (!(arguments.get(key) instanceof String value)) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return value;
+    }
+
+    private static UUID optionalUuidArgument(Map<String, Object> arguments, String key) {
+        String value = optionalStringArgument(arguments, key);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("invalid " + key, invalid);
+        }
+    }
+
+    private static Long optionalLongArgument(Map<String, Object> arguments, String key, long minimum) {
+        if (arguments == null || !arguments.containsKey(key) || arguments.get(key) == null) {
+            return null;
+        }
+        Object raw = arguments.get(key);
+        if (!(raw instanceof Number number)) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        long value = number.longValue();
+        if ((raw instanceof Double || raw instanceof Float) && number.doubleValue() != value) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        if (value < minimum) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return value;
     }
 
     /**
@@ -1456,7 +1614,9 @@ public final class McpProtocolHandler {
             case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
             case "scope_revision" -> List.of("intentId", "selectors", "proposal");
             case "handoff" -> List.of("intentId", "targetParticipant", "proposal", "artifact");
-            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant", "proposal");
+            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch",
+                    "targetParticipant", "proposal", "reviewedIntentId", "reviewedParticipantId",
+                    "reviewerParticipant");
             case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
             default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_KIND");
         };
@@ -1480,6 +1640,12 @@ public final class McpProtocolHandler {
             if (!payload.containsKey(key) || payload.get(key) == null) {
                 throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:" + key);
             }
+        }
+        if ("work_group_join".equals(kind)) {
+            requireMatchingAlias(payload, "intentId", "reviewedIntentId");
+            requireMatchingAlias(payload, "targetParticipant", "reviewerParticipant");
+            requireOptionalText(payload, "reviewedParticipantId");
+            requireOptionalText(payload, "reviewerParticipant");
         }
         Map<String, Object> normalized = new LinkedHashMap<>(payload);
         normalized.remove("kind");
@@ -1544,7 +1710,8 @@ public final class McpProtocolHandler {
             case "inbox_resolve" -> List.of("inboxItemId", "resolution", "proposal");
             case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason",
                     "failedAcceptanceTests");
-            case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result", "reason");
+            case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result", "reason",
+                    "reviewedIntentId", "reviewedParticipantId", "reviewerParticipant");
             default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_RESPONSE_KIND");
         };
         for (String key : payload.keySet()) {
@@ -1565,6 +1732,11 @@ public final class McpProtocolHandler {
             if (!payload.containsKey(key)) {
                 throw new IllegalArgumentException("COORDINATION_RESPONSE_FIELD_REQUIRED:" + key);
             }
+        }
+        if ("review_validation".equals(kind)) {
+            requireMatchingAlias(payload, "intentId", "reviewedIntentId");
+            requireOptionalText(payload, "reviewedParticipantId");
+            requireOptionalText(payload, "reviewerParticipant");
         }
         if ("capability_response".equals(kind)) {
             Object response = payload.get("response");
@@ -1605,6 +1777,28 @@ public final class McpProtocolHandler {
         normalized.put("kind", kind);
         normalized.put("payload", payload);
         return normalized;
+    }
+
+    /** Requires a provider-facing alias to repeat the same canonical value. */
+    private static void requireMatchingAlias(Map<String, Object> payload, String canonical, String alias) {
+        if (!payload.containsKey(alias) || !payload.containsKey(canonical)) {
+            return;
+        }
+        Object canonicalValue = payload.get(canonical);
+        Object aliasValue = payload.get(alias);
+        if (!(canonicalValue instanceof String canonicalText) || canonicalText.isBlank()
+                || !(aliasValue instanceof String aliasText) || aliasText.isBlank()
+                || !canonicalText.equals(aliasText)) {
+            throw new IllegalArgumentException("COORDINATION_ALIAS_MISMATCH:" + alias);
+        }
+    }
+
+    /** Requires an optional provider-facing identity alias to be non-blank text. */
+    private static void requireOptionalText(Map<String, Object> payload, String key) {
+        if (payload.containsKey(key)
+                && (!(payload.get(key) instanceof String value) || value.isBlank())) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + key);
+        }
     }
 
     private static List<String> strings(Object value) {

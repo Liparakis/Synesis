@@ -25,6 +25,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
@@ -158,7 +159,7 @@ class AgentNextActionServiceTest {
     }
 
     @Test
-    void unclaimedSessionCannotServiceAnotherLanesCapabilityInbox() throws Exception {
+    void unclaimedSessionCannotReceiveReviewAdmissionWithoutExplicitRole() throws Exception {
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
@@ -176,11 +177,8 @@ class AgentNextActionServiceTest {
         AgentResponse response = service.getNextAction(new AgentNextActionService.NextActionRequest(
                 controlRoot, "antigravity", "claim-contender"));
 
-        assertEquals(AgentStatus.READY, response.status());
-        assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());
-        assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
-        assertTrue(response.toJson().contains("REVIEW_ADMISSION_REQUIRED"));
-        assertTrue(response.toJson().contains("work_group_join"));
+        assertEquals(AgentStatus.BLOCKED, response.status());
+        assertFalse(response.toJson().contains("REVIEW_ADMISSION_REQUIRED"), response.toJson());
     }
 
     @Test
@@ -201,7 +199,9 @@ class AgentNextActionServiceTest {
                 List.of(ResourceSelector.pathExact("src/task_tracker.py")));
         var reviewerClaim = collaboration.announce(controlRoot, "antigravity", "active-reviewer",
                 "Review source", "Validate the published source",
-                List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")));
+                List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")),
+                ownerClaim.intent().workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("src/task_tracker.py")));
         assertEquals(ownerClaim.intent().workGroupId(), reviewerClaim.intent().workGroupId());
 
         AgentNextActionService service = new AgentNextActionService();
@@ -242,7 +242,9 @@ class AgentNextActionServiceTest {
                 List.of(ResourceSelector.pathExact("src/Product.java")));
         var reviewerClaim = collaboration.announce(controlRoot, "codex", "pending-review-reviewer",
                 "Review source", "Validate the completed source snapshot",
-                List.of(ResourceSelector.pathExact("tests/ProductTest.java")));
+                List.of(ResourceSelector.pathExact("tests/ProductTest.java")),
+                ownerClaim.intent().workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("src/Product.java")));
         assertEquals(ownerClaim.intent().workGroupId(), reviewerClaim.intent().workGroupId());
 
         AgentNextActionService service = new AgentNextActionService();
@@ -304,7 +306,9 @@ class AgentNextActionServiceTest {
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var reviewerClaim = collaboration.announce(controlRoot, "antigravity", "reviewer-first",
                 "Review source", "Validate the published source",
-                List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")));
+                List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")), null,
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("src/task_tracker.py")));
         var ownerClaim = collaboration.announce(controlRoot, "codex", "owner-second",
                 "Implement source", "Publish the completed source",
                 List.of(ResourceSelector.pathExact("src/task_tracker.py")));
@@ -362,7 +366,9 @@ class AgentNextActionServiceTest {
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var completedClaim = collaboration.announce(controlRoot, "codex", "completed-reviewer",
                 "Review the sibling implementation", "Review the immutable sibling snapshot",
-                List.of(ResourceSelector.pathExact("tests/completed_review.py")));
+                List.of(ResourceSelector.pathExact("tests/completed_review.py")), null,
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("src/sibling.py")));
         var ownerClaim = collaboration.announce(controlRoot, "codex", "active-owner",
                 "Implement the sibling source", "Publish the completed source",
                 List.of(ResourceSelector.pathExact("src/sibling.py")), completedClaim.intent().workGroupId());

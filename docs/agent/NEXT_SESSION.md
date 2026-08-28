@@ -1,19 +1,23 @@
 # Next Session
 
-## CP-0546 external provider-session boundary
+## CP-0547 SYN-039 closure — final canonical acceptance
+
+SYN-039 is `DONE / ACCEPTED` as of 2026-08-28. The final canonical evidence
+proves reviewer-first order-independent admission, disjoint exact claims,
+immutable S1 rejection, same-lineage epoch/version advancement, fresh G2,
+accepted-only S2 integration, explicit reviewer no-change completion, and zero
+residual active collaboration state.
 
 Evidence:
-`docs/evidence/syn039-unattended-todo-cp0546-provider-session-termination-2026-08-25.md`.
+`docs/evidence/syn039-final-canonical-acceptance-closure-2026-08-28.md`.
 
-The completion audit found no remaining reproducible Synesis projection or
-authorization defect. CP-0535 completed with engaged agents; CP-0541–CP-0545
-repeatedly stopped ordinary Codex sessions at valid polling continuations while
-the WorkGroup remained ACTIVE. Ordinary unattended SYN-039 completion is
-externally blocked by provider-session termination.
+Doctor remains `DEGRADED` with six non-fatal stale-lease,
+command namespace/retention, and provider migration warnings. No SYN-039
+collaboration state remained active; no repair is part of this closure.
 
-- Exact next action: resume only after provider/runtime engagement behavior
-  changes or a new unchanged projected-action failure is reproduced. Do not
-  add a launcher/daemon/orchestrator, push, or create SYN-040.
+- Exact next action: select and explicitly promote the next authorized task
+  before beginning implementation. Do not reopen SYN-039 for Doctor warnings,
+  create a new SYN milestone for them, or change `SYN-014E`.
 
 ## CP-0545 exact-projection diagnostic boundary
 

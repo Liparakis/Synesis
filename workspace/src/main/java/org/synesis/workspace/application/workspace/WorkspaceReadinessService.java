@@ -50,6 +50,28 @@ public final class WorkspaceReadinessService {
      */
     public ReadinessResult assess(ProjectApplicationService.ProjectLocation location,
             String provider, String connectionInstanceId) {
+        return assess(location, provider, connectionInstanceId, false);
+    }
+
+    /** Resolves a no-change lane while allowing a clean control-base advance.
+     *
+     * <p>The ordinary readiness predicate remains fail-closed for mutation and
+     * command operations. A no-change completion does not mutate the
+     * repository, so a clean assigned worktree can remain usable after another
+     * lane advances the control checkout.</p>
+     *
+     * @param location initialized project location
+     * @param provider stable provider identifier
+     * @param connectionInstanceId provider connection identity
+     * @return readiness result containing the exact binding when ready
+     */
+    public ReadinessResult assessNoChange(ProjectApplicationService.ProjectLocation location,
+            String provider, String connectionInstanceId) {
+        return assess(location, provider, connectionInstanceId, true);
+    }
+
+    private ReadinessResult assess(ProjectApplicationService.ProjectLocation location,
+            String provider, String connectionInstanceId, boolean allowControlBaseAdvance) {
         try {
             var bindingOptional = bindingService.find(location, provider, connectionInstanceId);
             if (bindingOptional.isEmpty()) {
@@ -65,7 +87,9 @@ public final class WorkspaceReadinessService {
             }
             Path worktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
             ProviderSessionBindingService.WorkspaceCheck workspaceCheck =
-                    bindingService.verifyWorkspace(location, binding, worktree);
+                    allowControlBaseAdvance
+                            ? bindingService.verifyNoChangeWorkspace(location, binding, worktree)
+                            : bindingService.verifyWorkspace(location, binding, worktree);
             if (!workspaceCheck.verified()) {
                 return unavailable(AgentReason.WORKSPACE_STALE, workspaceCheck.code());
             }

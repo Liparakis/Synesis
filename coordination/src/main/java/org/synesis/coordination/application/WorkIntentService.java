@@ -10,11 +10,14 @@ import org.synesis.coordination.domain.collaboration.ClaimConflict;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.TaskCompletionState;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
@@ -139,6 +142,220 @@ public final class WorkIntentService {
             current.append(intentId, PredictionEventType.WORK_INTENT_RELEASED,
                     signer.nodeId(), CollaborationCodec.encodeRelease(intentId), signer);
         }
+    }
+
+    /** Releases an exactly integrated lane while the caller holds the project append lock.
+     *
+     * <p>The snapshot provenance is the optimistic authority proof. A stale
+     * revision, different participant, different lineage, or non-integrated
+     * snapshot fails closed. The event ordering is deliberately integration
+     * first, then intent release, so a rejected or pending snapshot cannot
+     * terminalize its lane.</p>
+     *
+     * @param lock already-held project append lock
+     * @param snapshot exact snapshot whose integration succeeded
+     * @return {@code true} when an active intent was released; {@code false}
+     *         when the lane was already released
+     * @throws IOException stale or unauthorized snapshot/lane
+     * @throws GeneralSecurityException signing failure
+     */
+    public synchronized boolean releaseAfterIntegration(ProjectAppendLock lock,
+            TaskSnapshotRecord snapshot) throws IOException, GeneralSecurityException {
+        Objects.requireNonNull(lock, "project append lock");
+        Objects.requireNonNull(snapshot, "snapshot");
+        if (!lock.isHeld()) {
+            throw new IOException("event append lock unavailable");
+        }
+        PredictionEventStore current = freshStore();
+        TaskCompletionState snapshotState = current.taskCompletionProjection()
+                .snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE);
+        if (snapshotState != TaskCompletionState.INTEGRATED) {
+            throw new IOException("INTEGRATED_SNAPSHOT_REQUIRED");
+        }
+        WorkIntent intent = current.collaborationProjection().intent(snapshot.provenance().laneId()).orElse(null);
+        if (intent == null) {
+            return false;
+        }
+        if (intent.status() != WorkIntent.Status.ANNOUNCED
+                || !intent.taskId().equals(snapshot.taskId())
+                || !intent.participant().equals(snapshot.provenance().participant())
+                || !intent.workGroupId().equals(snapshot.provenance().workGroupId())
+                || !intent.authorityLineageId().equals(snapshot.provenance().authorityLineageId())
+                || intent.version() != snapshot.provenance().claimEpoch()) {
+            throw new IOException("INTEGRATED_LANE_BINDING_MISMATCH");
+        }
+        current.append(intent.intentId(), PredictionEventType.WORK_INTENT_RELEASED,
+                signer.nodeId(), CollaborationCodec.encodeRelease(intent.intentId()), signer);
+        reevaluateNoChangeWorkGroup(current, intent.workGroupId());
+        return true;
+    }
+
+    /** Completes one explicitly no-change-allowed intent and reevaluates its group.
+     *
+     * <p>This is the only coordination transition that may release an intent
+     * without a snapshot. The caller supplies optimistic evidence, while this
+     * service verifies the durable intent, group, epoch, and event revision
+     * under the project append lock. A repeated identical completion is a
+     * read-only replay and never appends a second terminal event.</p>
+     *
+     * @param completion exact no-change completion evidence
+     * @return the durable completion evidence
+     * @throws IOException stale, unauthorized, or pending lifecycle state
+     * @throws GeneralSecurityException signing failure
+     */
+    public synchronized NoChangeCompletion completeNoChange(NoChangeCompletion completion)
+            throws IOException, GeneralSecurityException {
+        Objects.requireNonNull(completion, "completion");
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) {
+                throw new IOException("event append lock unavailable");
+            }
+            PredictionEventStore current = freshStore();
+            NoChangeCompletion previous = current.collaborationProjection()
+                    .noChangeCompletion(completion.intentId()).orElse(null);
+            if (previous != null) {
+                if (!previous.equals(completion)) {
+                    throw new IOException("NO_CHANGE_COMPLETION_CONFLICT");
+                }
+                reevaluateNoChangeWorkGroup(current, completion.workGroupId());
+                return previous;
+            }
+            if (completion.expectedRevision() != current.headSequence()) {
+                throw new IOException("COMPLETION_REVISION_STALE");
+            }
+            WorkIntent intent = current.collaborationProjection().intent(completion.intentId())
+                    .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+            if (!current.projectId().equals(intent.projectId())) {
+                throw new IOException("NO_CHANGE_PROJECT_MISMATCH");
+            }
+            if (intent.status() != WorkIntent.Status.ANNOUNCED) {
+                throw new IOException("INTENT_NOT_ACTIVE");
+            }
+            if (!intent.workGroupId().equals(completion.workGroupId())
+                    || !intent.participant().equals(completion.participant())
+                    || !intent.provider().equals(completion.provider())
+                    || !intent.authorityLineageId().equals(completion.authorityLineageId())
+                    || intent.version() != completion.claimEpoch()
+                    || !intent.baseCommit().equals(completion.workspaceCommit())) {
+                throw new IOException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
+            }
+            if (intent.completionMode() != WorkIntent.CompletionMode.NO_CHANGE_ALLOWED) {
+                throw new IOException("NO_CHANGE_NOT_AUTHORIZED");
+            }
+            WorkGroup group = current.workGroupProjection().group(intent.workGroupId())
+                    .orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));
+            if (group.status() != WorkGroup.Status.ACTIVE) {
+                throw new IOException("WORK_GROUP_NOT_ACTIVE");
+            }
+            if (group.version() != completion.workGroupVersion()) {
+                throw new IOException("WORK_GROUP_VERSION_STALE");
+            }
+            if (hasNoChangeObligation(current, intent)) {
+                throw new IOException("NO_CHANGE_REVIEW_OBLIGATION");
+            }
+            current.append(intent.intentId(), PredictionEventType.WORK_INTENT_RELEASED,
+                    signer.nodeId(), CollaborationCodec.encodeNoChangeCompletion(completion), signer);
+            reevaluateNoChangeWorkGroup(current, intent.workGroupId());
+            return completion;
+        }
+    }
+
+    private static boolean hasNoChangeObligation(PredictionEventStore current, WorkIntent intent) {
+        boolean snapshotPending = current.taskCompletionProjection().allSnapshots().stream()
+                .anyMatch(snapshot -> snapshot.provenance().laneId().equals(intent.intentId())
+                        && snapshot.provenance().claimEpoch() == intent.version());
+        boolean preparedPending = current.taskCompletionProjection().allPrepared().stream()
+                .anyMatch(prepared -> prepared.laneId().equals(intent.intentId())
+                        && prepared.claimEpoch() == intent.version());
+        if (snapshotPending || preparedPending) {
+            return true;
+        }
+        boolean grantPending = current.workGroupProjection().grants().stream()
+                .filter(grant -> grant.workGroupId().equals(intent.workGroupId()))
+                .filter(grant -> (grant.targetIntentId().equals(intent.intentId())
+                        && grant.claimEpoch() == intent.version())
+                        || grant.targetParticipant().equals(intent.participant()))
+                .anyMatch(grant -> current.workGroupProjection().grantAvailable(grant.grantId())
+                        || (current.workGroupProjection().grantConsumed(grant.grantId())
+                        && current.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()));
+        if (grantPending) {
+            return true;
+        }
+        String participant = intent.participant();
+        return current.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.status() == CoordinationRequest.Status.PENDING
+                        && (request.conflictingIntentId().equals(intent.intentId())
+                        || request.requester().equals(participant)
+                        || request.target().equals(participant)));
+    }
+
+    private void reevaluateNoChangeWorkGroup(PredictionEventStore current, UUID workGroupId)
+            throws IOException, GeneralSecurityException {
+        WorkGroup group = current.workGroupProjection().group(workGroupId).orElse(null);
+        if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
+            return;
+        }
+        if (current.collaborationProjection().activeIntents().stream()
+                .anyMatch(intent -> intent.workGroupId().equals(workGroupId))) {
+            return;
+        }
+        if (current.workGroupProjection().grants().stream()
+                .filter(grant -> grant.workGroupId().equals(workGroupId))
+                .anyMatch(grant -> current.workGroupProjection().grantAvailable(grant.grantId())
+                        || (current.workGroupProjection().grantConsumed(grant.grantId())
+                        && current.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()))) {
+            return;
+        }
+        if (current.collaborationProjection().requests().stream()
+                .filter(request -> request.status() == CoordinationRequest.Status.PENDING)
+                .anyMatch(request -> current.collaborationProjection().intent(request.conflictingIntentId())
+                        .map(intent -> intent.workGroupId().equals(workGroupId)).orElseGet(() ->
+                                current.collaborationProjection().noChangeCompletion(request.conflictingIntentId())
+                                        .map(completion -> completion.workGroupId().equals(workGroupId)).orElse(false)))) {
+            return;
+        }
+        for (var snapshot : current.taskCompletionProjection().allSnapshots()) {
+            if (!snapshot.provenance().workGroupId().equals(workGroupId)) {
+                continue;
+            }
+            TaskCompletionState state = current.taskCompletionProjection()
+                    .snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE);
+            if (state == TaskCompletionState.REVIEW_REJECTED) {
+                boolean corrected = current.taskCompletionProjection().allSnapshots().stream()
+                        .anyMatch(candidate -> candidate.provenance().laneId().equals(snapshot.provenance().laneId())
+                                && candidate.provenance().authorityLineageId()
+                                        .equals(snapshot.provenance().authorityLineageId())
+                                && candidate.provenance().claimEpoch() > snapshot.provenance().claimEpoch()
+                                && current.taskCompletionProjection().snapshotState(candidate.snapshotId())
+                                        .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.INTEGRATED);
+                if (!corrected) {
+                    return;
+                }
+                continue;
+            }
+            if (state != TaskCompletionState.INTEGRATED) {
+                return;
+            }
+        }
+        if (current.taskCompletionProjection().allPrepared().stream().anyMatch(prepared ->
+                current.collaborationProjection().intent(prepared.laneId())
+                        .map(intent -> intent.workGroupId().equals(workGroupId)
+                                && current.taskCompletionProjection()
+                                        .findSnapshotForTaskRevision(intent.taskId(), intent.intentId(),
+                                                prepared.claimEpoch())
+                                        .map(snapshot -> current.taskCompletionProjection()
+                                                .snapshotState(snapshot.snapshotId())
+                                                .orElse(TaskCompletionState.ACTIVE)
+                                                != TaskCompletionState.INTEGRATED)
+                                        .orElse(true))
+                        .orElseGet(() -> current.collaborationProjection().noChangeCompletion(prepared.laneId())
+                                .map(completion -> completion.workGroupId().equals(workGroupId)).orElse(false)))) {
+            return;
+        }
+        WorkGroup completed = new WorkGroup(group.workGroupId(), group.projectId(), group.goal(),
+                group.acceptance(), group.version() + 1L, WorkGroup.Status.COMPLETED);
+        current.append(group.workGroupId(), PredictionEventType.WORK_GROUP_STATUS_CHANGED,
+                signer.nodeId(), CollaborationCodec.encodeWorkGroup(completed), signer);
     }
 
     /** Atomically transfers reserved selectors into a new repair lane.
@@ -266,20 +483,38 @@ public final class WorkIntentService {
             if (!lock.isHeld()) throw new IOException("event append lock unavailable");
             PredictionEventStore current = freshStore();
             if (kind == CoordinationRequest.Kind.REVIEW) {
-                // A review admission is one authority negotiation between a
-                // reviewer and a target lane. The response projection may
-                // replace the request proposal, so proposal text is not part
-                // of this replay identity. Check this durable replay before
-                // resolving the target: normal completion releases the lane
-                // claim, but an already-issued request remains the authority
-                // record that a retry must return unchanged.
                 CoordinationRequest existing = current.collaborationProjection().requests().stream()
                         .filter(candidate -> candidate.requester().equals(requester))
                         .filter(candidate -> candidate.conflictingIntentId().equals(conflictingIntentId))
                         .filter(candidate -> candidate.kind() == kind)
                         .findFirst().orElse(null);
+                WorkIntent target = current.collaborationProjection().intent(conflictingIntentId).orElse(null);
+                if (target == null) {
+                    if (existing != null && (existing.status() == CoordinationRequest.Status.PENDING
+                            || existing.status() == CoordinationRequest.Status.ACCEPTED)) {
+                        return existing;
+                    }
+                    throw new IOException("INTENT_NOT_FOUND");
+                }
+                validateReviewDirection(current, requester, target);
+                // A review admission is one authority negotiation for one
+                // exact lane revision. Pending requests and grants for the
+                // current epoch are idempotent; an accepted request from a
+                // rejected older epoch is history and must not suppress a
+                // fresh request for the correction.
                 if (existing != null) {
-                    return existing;
+                    if (existing.status() == CoordinationRequest.Status.PENDING) {
+                        return existing;
+                    }
+                    UUID grantId = UUID.nameUUIDFromBytes(("synesis-review-grant:" + existing.requestId())
+                            .getBytes(StandardCharsets.UTF_8));
+                    boolean currentEpochGrant = current.workGroupProjection().grants().stream()
+                            .anyMatch(grant -> grant.grantId().equals(grantId)
+                                    && grant.targetIntentId().equals(target.intentId())
+                                    && grant.claimEpoch() == target.version());
+                    if (currentEpochGrant) {
+                        return existing;
+                    }
                 }
             }
             WorkIntent conflict = current.collaborationProjection().intent(conflictingIntentId)
@@ -365,6 +600,10 @@ public final class WorkIntentService {
             throws IOException, GeneralSecurityException {
         WorkIntent intent = current.collaborationProjection().intent(request.conflictingIntentId())
                 .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+        validateReviewDirection(current, request.requester(), intent);
+        if (!request.target().equals(intent.participant())) {
+            throw new IOException("REVIEW_TARGET_PARTICIPANT_MISMATCH");
+        }
         UUID grantId = UUID.nameUUIDFromBytes(("synesis-review-grant:" + request.requestId())
                 .getBytes(StandardCharsets.UTF_8));
         boolean exists = current.workGroupProjection().grants().stream()
@@ -375,6 +614,47 @@ public final class WorkIntentService {
             current.append(grantId, PredictionEventType.LANE_GRANT_ISSUED,
                     signer.nodeId(), CollaborationCodec.encodeLaneGrant(grant), signer);
         }
+    }
+
+    /** Validates the semantic direction of an explicit review request. */
+    private static void validateReviewDirection(PredictionEventStore current, String requester,
+            WorkIntent target) throws IOException {
+        if (target.role() != WorkIntent.Role.PRODUCER) {
+            throw new IOException("REVIEW_TARGET_NOT_PRODUCER");
+        }
+        if (requester.equals(target.participant())) {
+            throw new IOException("REVIEW_SELF_NOT_ALLOWED");
+        }
+        List<WorkIntent> requesterIntents = current.collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.participant().equals(requester))
+                .toList();
+        if (requesterIntents.isEmpty()) {
+            // Existing review callers may be unannounced, but the request's
+            // exact target still provides the required reviewed-intent identity.
+            return;
+        }
+        List<WorkIntent> sameGroupReviewers = requesterIntents.stream()
+                .filter(intent -> intent.workGroupId().equals(target.workGroupId()))
+                .filter(intent -> intent.role() == WorkIntent.Role.REVIEWER)
+                .toList();
+        if (sameGroupReviewers.isEmpty()) {
+            if (requesterIntents.stream().noneMatch(intent -> intent.workGroupId().equals(target.workGroupId()))) {
+                throw new IOException("REVIEW_WORK_GROUP_MISMATCH");
+            }
+            // An explicitly requested reciprocal review may be issued by an
+            // active producer lane. Automatic review admission remains
+            // restricted to explicit reviewer intents in the workspace
+            // projection, so this does not restore peer-order inference.
+            return;
+        }
+        if (sameGroupReviewers.stream().noneMatch(reviewer -> reviewTargetsMatch(reviewer, target))) {
+            throw new IOException("REVIEW_TARGET_MISMATCH");
+        }
+    }
+
+    private static boolean reviewTargetsMatch(WorkIntent reviewer, WorkIntent producer) {
+        return reviewer.reviewTargetSelectors().stream()
+                .allMatch(targetSelector -> producer.selectors().stream().anyMatch(targetSelector::overlaps));
     }
 
     /** Acknowledges a server-issued inbox item for the exact participant, idempotently.

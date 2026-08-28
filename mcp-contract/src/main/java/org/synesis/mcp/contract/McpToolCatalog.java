@@ -314,6 +314,14 @@ public final class McpToolCatalog {
                 "description", "Descriptive planning hints only; these do not announce intent or acquire ownership"));
         taskProperties.put("knownDependencies", Map.of("type", "array", "items", property("string")));
         taskProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+        taskProperties.put("role", Map.of("type", "string", "enum", List.of("producer", "reviewer"),
+                "description", "Semantic review-routing role; it does not change ownership claims"));
+        taskProperties.put("reviewTargets", Map.of("type", "array",
+                "description", "Non-ownership selectors identifying producer work this reviewer may review",
+                "items", claimSelector));
+        taskProperties.put("completionMode", Map.of("type", "string",
+                "enum", List.of("snapshot_required", "no_change_allowed"),
+                "description", "Explicit completion contract; no_change_allowed requires a verified clean worktree"));
         taskProperties.put("unwindCompletion", Map.of("type", "boolean",
                 "description", "Authorized unwind of this caller's prepared but unpublished completion"));
         taskProperties.put("repairIntentId", Map.of("type", "string", "format", "uuid"));
@@ -424,8 +432,24 @@ public final class McpToolCatalog {
                         "capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$", "description", "Server-issued capability request handle"),
                         "summary", Map.of("type", "string", "description", "Human-readable summary of this implementation")), List.of("capabilityRequestHandle")),
                 "publish-capability", "MUTATING", List.of("SESSION_BINDING", "CAPABILITY"), 8));
-        result.add(descriptor(FINISH_LANE, "Validates, publishes, integrates, and closes this isolated lane.",
-                objectSchema(Map.of("summary", Map.of("type", "string", "description", "Human-readable summary of completed task work")), List.of()),
+        Map<String, Object> finishProperties = new LinkedHashMap<>();
+        finishProperties.put("outcome", Map.of("type", "string", "enum", List.of("snapshot", "no_change"),
+                "description", "Explicit terminal outcome; no_change is valid only for a declared no_change_allowed intent"));
+        finishProperties.put("intentId", Map.of("type", "string", "format", "uuid",
+                "description", "Server-issued active intent identifier from get_next_action"));
+        finishProperties.put("workGroupId", Map.of("type", "string", "format", "uuid",
+                "description", "Server-issued work-group identifier from get_next_action"));
+        finishProperties.put("claimEpoch", Map.of("type", "integer", "minimum", 1,
+                "description", "Current intent claim epoch from get_next_action"));
+        finishProperties.put("workGroupVersion", Map.of("type", "integer", "minimum", 1,
+                "description", "Current work-group version from get_next_action"));
+        finishProperties.put("expectedRevision", Map.of("type", "integer", "minimum", 0,
+                "description", "Current project event revision from get_next_action"));
+        finishProperties.put("participant", Map.of("type", "string",
+                "description", "Exact participant handle from get_next_action"));
+        finishProperties.put("summary", Map.of("type", "string", "description", "Human-readable summary of completed task work"));
+        result.add(descriptor(FINISH_LANE, "Validates, publishes, integrates, and closes this isolated lane. A no_change outcome is an explicit, evidence-bound completion for a declared clean verification task; it is never inferred from provider exit.",
+                objectSchema(finishProperties, List.of()),
                 "finish-lane", "MUTATING", List.of("SESSION_BINDING", "CLAIM", "SNAPSHOT"), 9));
         result.add(descriptor(CANCEL_LANE, "Permanently fences and cancels this isolated lane.",
                 objectSchema(Map.of("reason", Map.of("type", "string", "description", "Cancellation reason string (1-1000 characters)")), List.of("reason")),

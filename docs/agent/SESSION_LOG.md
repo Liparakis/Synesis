@@ -3788,3 +3788,21 @@ ownership. No push and no SYN-040.
 - Exact next action: run another fresh ordinary unattended two-agent Todo
   acceptance with only complementary coding prompts; preserve the first
   unchanged projected-action failure or missing usable projection.
+## 2026-08-28 — SYN-039 closure — final canonical acceptance
+
+- Formally closed SYN-039 as `DONE / ACCEPTED` using the already-proven final
+  canonical acceptance from project `d8989767-9cdd-486a-ad0f-65779b0152a9` and
+  WorkGroup `9ab6bfc2-a552-3dd2-a098-986f4ca31f8a`.
+- Preserved the earlier failed and externally blocked acceptance records. The
+  final run proved reviewer-first admission, disjoint claims, immutable S1
+  rejection, same-lineage correction, fresh G2, accepted-only S2 integration,
+  explicit no-change completion, and zero residual active collaboration state.
+- Recorded Doctor as `DEGRADED` with six non-fatal stale-lease,
+  namespace/retention, and provider migration warnings. No SYN-039 state
+  remained active and no repair or provider migration cleanup was performed.
+- Added the closure evidence and checkpoint, classified the dirty tree, and
+  created one local coherent completion commit. Nothing was pushed, tagged, or
+  released.
+
+- Exact next action: select and explicitly promote the next authorized task
+  before beginning implementation.

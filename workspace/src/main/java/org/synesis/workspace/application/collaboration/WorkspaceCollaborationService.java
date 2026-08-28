@@ -30,10 +30,13 @@ import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
+import org.synesis.workspace.application.task.TaskSnapshotService;
+import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 /** Resolves authenticated workspace sessions into collaboration intents and claims. */
 public final class WorkspaceCollaborationService {
@@ -41,6 +44,7 @@ public final class WorkspaceCollaborationService {
     private final ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
     private final SessionAuthorityResolver authorityResolver = new SessionAuthorityResolver(bindingService);
     private final ProviderManualService manualService = new ProviderManualService();
+    private final WorkspaceReadinessService readinessService = new WorkspaceReadinessService(bindingService);
 
     /** Creates a workspace collaboration adapter. */
     public WorkspaceCollaborationService() {
@@ -76,6 +80,50 @@ public final class WorkspaceCollaborationService {
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
                                 String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId)
             throws Exception {
+        return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors,
+                workGroupId, WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                WorkIntent.Role.PRODUCER, List.of());
+    }
+
+    /** Announces an intent with an explicit completion contract.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId connection ID
+     * @param goal goal
+     * @param acceptance acceptance criteria
+     * @param selectors claims
+     * @param workGroupId group ID
+     * @param completionMode completion contract
+     * @return claim result
+     * @throws Exception resolution or append failure
+     */
+    public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
+                                String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
+                                WorkIntent.CompletionMode completionMode)
+            throws Exception {
+        return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, workGroupId,
+                completionMode, WorkIntent.Role.PRODUCER, List.of());
+    }
+
+    /** Announces an intent with explicit review-routing metadata.
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId connection ID
+     * @param goal goal
+     * @param acceptance acceptance criteria
+     * @param selectors ownership selectors for this intent
+     * @param workGroupId group ID
+     * @param completionMode completion contract
+     * @param role semantic producer or reviewer role
+     * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
+     * @return claim result
+     * @throws Exception resolution or append failure
+     */
+    public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
+                                String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
+                                WorkIntent.CompletionMode completionMode, WorkIntent.Role role,
+                                List<ResourceSelector> reviewTargetSelectors)
+            throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         manualService.requireAttested(provider);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
@@ -100,11 +148,16 @@ public final class WorkspaceCollaborationService {
                         .orElseGet(() -> store.workGroupProjection().group(defaultGroup).isEmpty()
                                 ? defaultGroup : UUID.randomUUID())
                 : workGroupId;
-        WorkIntent intent = new WorkIntent(UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId())
-                .getBytes(StandardCharsets.UTF_8)), location.projectId(), participant,
+        UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId())
+                .getBytes(StandardCharsets.UTF_8));
+        WorkIntent intent = new WorkIntent(intentId, location.projectId(), participant,
                 provider, taskId, goal == null ? "Unspecified work" : goal,
                 acceptance == null ? "Unspecified acceptance" : acceptance,
-                binding.baseCommit(), selectors, 1, group, WorkIntent.Status.ANNOUNCED);
+                binding.baseCommit(), selectors, 1, group, WorkIntent.defaultAuthorityLineage(intentId),
+                WorkIntent.Status.ANNOUNCED,
+                completionMode == null ? WorkIntent.CompletionMode.SNAPSHOT_REQUIRED : completionMode,
+                role == null ? WorkIntent.Role.PRODUCER : role,
+                reviewTargetSelectors == null ? List.of() : reviewTargetSelectors);
         return service.announce(intent);
     }
 
@@ -172,7 +225,8 @@ public final class WorkspaceCollaborationService {
             WorkIntent target = new WorkIntent(targetId, location.projectId(),
                     participantHandle(binding.sessionId()), provider, snapshot.taskId(), source.goal(),
                     source.acceptance(), binding.baseCommit(), source.selectors(), source.version() + 1,
-                    source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED);
+                    source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, source.role(), source.reviewTargetSelectors());
             integration.materializeRepairRepresentation(location.root(), Path.of(binding.worktreePath()),
                     expectedControlHead, snapshot);
             new WorkIntentService(store, identity).createRepairLane(appendLock, repairIntentId,
@@ -198,6 +252,88 @@ public final class WorkspaceCollaborationService {
                 .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
         service.release(intentId, participantHandle(binding.sessionId()),
                 WorkspaceWorkIntentMutationPrecondition.capture(current).coordinationPrecondition());
+    }
+
+    /** Completes the exact bound intent successfully without publishing a snapshot.
+     *
+     * <p>All caller-selected identifiers are treated as optimistic evidence.
+     * The participant, binding identity, authority lineage, and workspace
+     * commit are derived from the verified binding and current intent.</p>
+     *
+     * @param projectRoot project root
+     * @param provider provider ID
+     * @param connectionInstanceId exact connection ID
+     * @param expectedIntentId expected active intent
+     * @param expectedWorkGroupId expected work group
+     * @param expectedClaimEpoch expected claim epoch
+     * @param expectedWorkGroupVersion expected work-group version
+     * @param expectedRevision expected project event revision
+     * @param expectedParticipant expected participant handle
+     * @param summary completion explanation
+     * @return durable no-change completion evidence
+     * @throws Exception when authority, workspace, or lifecycle evidence is stale
+     */
+    public NoChangeCompletion completeNoChange(Path projectRoot, String provider,
+            String connectionInstanceId, UUID expectedIntentId, UUID expectedWorkGroupId,
+            long expectedClaimEpoch, long expectedWorkGroupVersion, long expectedRevision,
+            String expectedParticipant, String summary) throws Exception {
+        ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+        manualService.requireAttested(provider);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        WorkspaceReadinessService.ReadinessResult readiness = readinessService.assessNoChange(
+                location, provider, connectionInstanceId);
+        if (!readiness.ready()) {
+            throw new IOException(readiness.internalReason());
+        }
+        binding = readiness.binding();
+        ProviderSessionBindingService.Binding verifiedBinding = binding;
+        String participant = participantHandle(binding.sessionId());
+        if (expectedParticipant == null || !participant.equals(expectedParticipant)) {
+            throw new IOException("NO_CHANGE_PARTICIPANT_MISMATCH");
+        }
+        if (expectedIntentId == null || expectedWorkGroupId == null || expectedRevision < 0) {
+            throw new IOException("NO_CHANGE_COMPLETION_EVIDENCE_REQUIRED");
+        }
+        if (!new TaskSnapshotService().isCleanWorktree(readiness.worktree())) {
+            throw new IOException("NO_CHANGE_DIRTY_WORKSPACE");
+        }
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        WorkIntent intent = store.collaborationProjection().intent(expectedIntentId)
+                .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+        WorkGroup group = store.workGroupProjection().group(expectedWorkGroupId)
+                .orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));
+        if (!intent.workGroupId().equals(expectedWorkGroupId)
+                || intent.version() != expectedClaimEpoch
+                || group.version() != expectedWorkGroupVersion
+                || store.headSequence() != expectedRevision) {
+            throw new IOException("NO_CHANGE_COMPLETION_EVIDENCE_STALE");
+        }
+        boolean participantObligation = store.workGroupProjection().grants().stream()
+                .filter(grant -> grant.workGroupId().equals(expectedWorkGroupId))
+                .filter(grant -> grant.targetParticipant().equals(participant))
+                .anyMatch(grant -> store.workGroupProjection().grantAvailable(grant.grantId())
+                        || (store.workGroupProjection().grantConsumed(grant.grantId())
+                        && store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()));
+        if (participantObligation) {
+            throw new IOException("NO_CHANGE_REVIEW_OBLIGATION");
+        }
+        boolean pendingDependency = store.capabilityRequestProjection()
+                .findAllForRequester(identity.nodeId()).stream()
+                .filter(candidate -> candidate.matchesRequester(identity.nodeId(), verifiedBinding.supervisorId(),
+                        verifiedBinding.workerId()))
+                .anyMatch(candidate -> candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.AWAITING_OWNER
+                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.REVISION_REQUESTED
+                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTING
+                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE
+                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.VALIDATING);
+        if (pendingDependency || !store.capabilityRequestProjection().allValidationContexts().isEmpty()) {
+            throw new IOException("NO_CHANGE_DEPENDENCY_PENDING");
+        }
+        NoChangeCompletion completion = new NoChangeCompletion(expectedIntentId, expectedWorkGroupId,
+                participant, provider, binding.sessionId(), intent.authorityLineageId(),
+                expectedClaimEpoch, expectedWorkGroupVersion, expectedRevision, binding.baseCommit(), summary);
+        return new WorkIntentService(store, identity).completeNoChange(completion);
     }
 
     /** Detaches the exact session lane after a clean connection shutdown.
@@ -476,7 +612,8 @@ public final class WorkspaceCollaborationService {
         WorkIntent target = new WorkIntent(targetIntentId, source.projectId(), targetParticipant, provider,
                 UUID.nameUUIDFromBytes((connectionInstanceId + ":" + targetIntentId).getBytes(StandardCharsets.UTF_8)),
                 source.goal(), source.acceptance(), binding.baseCommit(), source.selectors(),
-                source.version() + 1, source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED);
+                source.version() + 1, source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+                source.completionMode(), source.role(), source.reviewTargetSelectors());
         CollaborationCodec.Continuation continuation = new CollaborationCodec.Continuation(
                 grantId, sourceIntentId, target, source.participant(), targetParticipant, claimEpoch, snapshotReference);
         new WorkIntentService(store, identity).continueFromRecovery(continuation);
@@ -612,7 +749,8 @@ public final class WorkspaceCollaborationService {
             fenced = fenced || store.taskCompletionProjection().allPrepared().stream()
                     .anyMatch(prepared -> service.activeIntents().stream()
                             .anyMatch(intent -> intent.intentId().equals(prepared.laneId())
-                                    && intent.participant().equals(participant)));
+                                    && intent.participant().equals(participant)
+                                    && intent.version() == prepared.claimEpoch()));
             if (fenced) return "coordination_intent_required";
             if (service.owns(participant, selector)) {
                 return "allowed";

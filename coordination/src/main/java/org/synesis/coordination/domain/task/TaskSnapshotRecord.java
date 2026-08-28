@@ -23,6 +23,7 @@ import java.util.UUID;
  * @param summary                human-readable task completion summary
  * @param createdAtMillis        creation timestamp
  * @param provenance             immutable lane provenance
+ * @param reviewRequired         whether exact durable review acceptance gates integration
  * @since 1.0
  */
 public record TaskSnapshotRecord(
@@ -38,7 +39,8 @@ public record TaskSnapshotRecord(
         List<String> capabilityDependencies,
         String summary,
         long createdAtMillis,
-        SnapshotProvenance provenance
+        SnapshotProvenance provenance,
+        boolean reviewRequired
 ) {
 
     /** Maximum number of changed paths per snapshot. */
@@ -63,6 +65,7 @@ public record TaskSnapshotRecord(
      * @param summary                human-readable summary
      * @param createdAtMillis        creation timestamp
      * @param provenance             immutable lane provenance
+     * @param reviewRequired         whether review acceptance gates integration
      */
     public TaskSnapshotRecord {
         Objects.requireNonNull(taskId, "taskId");
@@ -83,6 +86,35 @@ public record TaskSnapshotRecord(
         if (summary.isBlank() || summary.length() > MAX_SUMMARY_LENGTH) {
             throw new IllegalArgumentException("summary must be 1-" + MAX_SUMMARY_LENGTH + " characters");
         }
+    }
+
+    /** Constructs a record with the pre-review-gate shape.
+     *
+     * <p>Existing callers and historical payloads default to an unreviewed
+     * snapshot. New reviewed publication must use the canonical constructor
+     * with {@code reviewRequired=true}.</p>
+     *
+     * @param taskId task identifier
+     * @param snapshotId snapshot ID
+     * @param nodeId node ID
+     * @param supervisorId supervisor ID
+     * @param workerId worker ID
+     * @param providerSessionId provider session ID
+     * @param baseCommit base commit
+     * @param commitSha commit SHA
+     * @param changedPaths changed paths
+     * @param capabilityDependencies dependencies
+     * @param summary summary
+     * @param createdAtMillis creation timestamp
+     * @param provenance immutable lane provenance
+     */
+    public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
+            String workerId, String providerSessionId, String baseCommit, String commitSha,
+            List<String> changedPaths, List<String> capabilityDependencies, String summary,
+            long createdAtMillis, SnapshotProvenance provenance) {
+        this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
+                commitSha, changedPaths, capabilityDependencies, summary, createdAtMillis,
+                provenance, false);
     }
 
     /** Constructs a record with default provenance for a minimal snapshot payload.

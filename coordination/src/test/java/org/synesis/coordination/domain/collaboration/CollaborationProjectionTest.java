@@ -100,6 +100,27 @@ final class CollaborationProjectionTest {
         assertEquals(2L, participant.lastVerifiedActivity());
     }
 
+    @Test
+    void completedParticipantCannotBeRevivedByLateHeartbeat() throws Exception {
+        NodeIdentity identity = NodeIdentity.generate();
+        CollaborationProjection projection = new CollaborationProjection();
+        WorkIntent completed = intent("agt_completed", "src/completed.py");
+
+        projection.apply(event(identity, 1, PredictionEventType.WORK_INTENT_ANNOUNCED,
+                CollaborationCodec.encodeIntent(completed)));
+        projection.apply(event(identity, 2, PredictionEventType.WORK_INTENT_RELEASED,
+                CollaborationCodec.encodeRelease(completed.intentId())));
+
+        PredictionEvent lateHeartbeat = event(identity, 3, PredictionEventType.PARTICIPANT_HEARTBEAT,
+                CollaborationCodec.encodeHeartbeat(completed.participant()));
+        assertEquals("SESSION_EPOCH_FENCED",
+                assertThrows(java.io.IOException.class, () -> projection.validate(lateHeartbeat)).getMessage());
+        assertEquals("SESSION_EPOCH_FENCED",
+                assertThrows(java.io.IOException.class, () -> projection.apply(lateHeartbeat)).getMessage());
+        assertEquals(Participant.State.COMPLETED,
+                projection.participantState(completed.participant()).orElseThrow());
+    }
+
     private static WorkIntent intent(String participant, String path) {
         return new WorkIntent(
                 UUID.nameUUIDFromBytes((participant + ":" + path).getBytes(StandardCharsets.UTF_8)),

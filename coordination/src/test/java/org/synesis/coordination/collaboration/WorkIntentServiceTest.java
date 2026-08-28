@@ -192,6 +192,44 @@ final class WorkIntentServiceTest {
     }
 
     @Test
+    void reviewRoleRoundTripsAndBindsProducerIntentToReviewerParticipant(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent producer = intent(project, "agt-producer", ResourceSelector.pathExact("src/task_tracker.py"));
+        UUID reviewerId = UUID.randomUUID();
+        WorkIntent reviewer = new WorkIntent(reviewerId, project, "agt-reviewer", "codex", UUID.randomUUID(),
+                "Review task tracker", "Review the immutable producer snapshot", "base-commit",
+                List.of(ResourceSelector.pathExact("tests/task_tracker_test.py")), 1, producer.workGroupId(),
+                WorkIntent.defaultAuthorityLineage(reviewerId), WorkIntent.Status.ANNOUNCED,
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("src/task_tracker.py")));
+
+        assertTrue(service.announce(producer).acquired());
+        assertTrue(service.announce(reviewer).acquired());
+
+        WorkIntent replayedReviewer = new PredictionEventStore(temp, project).collaborationProjection()
+                .intent(reviewerId).orElseThrow();
+        assertEquals(WorkIntent.Role.REVIEWER, replayedReviewer.role());
+        assertEquals(List.of(ResourceSelector.pathExact("src/task_tracker.py")),
+                replayedReviewer.reviewTargetSelectors());
+
+        CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+                CoordinationRequest.Kind.REVIEW, "Review the producer snapshot");
+        service.respond(producer.participant(), request.requestId(), CoordinationRequest.Status.ACCEPTED,
+                "review admitted");
+        LaneGrant grant = new PredictionEventStore(temp, project).workGroupProjection().grants().getFirst();
+        assertEquals(producer.intentId(), grant.targetIntentId());
+        assertEquals(reviewer.participant(), grant.targetParticipant());
+
+        java.io.IOException wrongTarget = assertThrows(java.io.IOException.class,
+                () -> service.request(reviewer.participant(), reviewer.intentId(),
+                        CoordinationRequest.Kind.REVIEW, "A reviewer intent is not a producer target"));
+        assertEquals("REVIEW_TARGET_NOT_PRODUCER", wrongTarget.getMessage());
+    }
+
+    @Test
     void reviewRequestReplayRemainsIdempotentAfterTargetLaneReleases(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         NodeIdentity identity = NodeIdentity.generate();
