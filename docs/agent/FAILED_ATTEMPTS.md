@@ -1,5 +1,217 @@
 # Failed Attempts
 
+## 2026-08-29 — SYN-041 CP-0567 bounded verification boundary
+
+- The read-first trace proved there is no surviving Synesis observer for an
+  externally launched MCP Java process after hard termination. The old
+  connection-ID-only clean close also allowed a rejected probe to rewrite the
+  original terminal transport history.
+- The bounded fix wires Java-local stdio failure to the existing abnormal
+  finalizer and makes foreign PID clean close perform conservative persisted
+  runtime liveness classification before refusing clean close.
+- Fresh packaged acceptance passed: terminal seal, tracked Java termination,
+  `SESSION_TERMINAL` rebind rejection, probe clean EOF, and final durable
+  `TERMINAL_DISCONNECTED`. No Codex run was performed after the fix.
+- Full process-heavy MCP selections timed out without assertion output and
+  remain incomplete; they are not reported as passes.
+- Evidence: `docs/evidence/syn041-terminal-disconnect-trigger-cp0567-2026-08-29.md`.
+
+## 2026-08-29 — SYN-041 final real CP-0565 acceptance RESULT C
+
+- One real native Codex run completed the exact no-change terminal flow and
+  committed `PROVIDER_SESSION_TERMINALIZED` at sequence 7. The exact
+  same-session rebind returned `SESSION_TERMINAL`.
+- Native MCP/Java teardown occurred before Codex completed, but exact child
+  exit codes were not captured. The persisted lease remained
+  `TERMINAL_AUTHORITY_CONFIRMED`; `TERMINAL_DISCONNECTED` was only a derived
+  liveness result.
+- The rejected probe closed cleanly and rewrote the durable lease to
+  `CLOSED_CLEANLY`. This remains RESULT C and proves the remaining narrow
+  abnormal-transport persistence boundary; do not infer a partial MCP frame or
+  exact Codex caller.
+- No second provider run, speculative fix, Doctor change, SYN-039 change,
+  provider migration, generalized identity work, commit, or push occurred.
+- Evidence: `docs/evidence/syn041-final-real-codex-cp0565-2026-08-29.md`.
+
+## 2026-08-29 — SYN-041 CP-0563 bounded verification limits
+
+- The first Gradle attempts failed before test execution because the host could
+  not establish its default loopback/Unix-domain temporary connection. Setting
+  `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=C:\\tmp` allowed the bounded
+  suites to run.
+- The broader combined MCP selection, and individual process-heavy
+  `McpSyn039SliceTest` and `McpServerTest` attempts, produced no assertion
+  failure but exceeded the practical host timeout and were stopped. They are
+  incomplete, not passes; targeted replacements passed serialized.
+- A first disposable packaged fixture was discarded because its writer closed
+  cleanly and therefore did not model abnormal transport. The second fixture
+  forcibly ended the MCP process, recorded `TERMINAL_DISCONNECTED`, rejected
+  same-session rebind, and preserved the exact lease through probe cleanup.
+- Disposable fixtures initially contained read-only Git object files; after
+  stopping the stale test MCP process and clearing attributes on the exact
+  fixture paths, both fixtures and their workspace records were removed.
+
+## 2026-08-28 — SYN-041 final real Codex terminal-seal acceptance
+
+- Two controller launches were excluded preflight failures: Windows argument
+  quoting stopped Codex before MCP startup, with no Synesis process or state.
+- The one actual real Codex lifecycle used the rebuilt official bundle and
+  completed `ensure_session`, `read_file`, projected `get_next_action`, and
+  exact no-change `finish_lane` with `terminalSession=true`.
+- Durable `PROVIDER_SESSION_TERMINALIZED` committed at sequence 7 before
+  native Java/MCP exit 1; Codex exited 0. The exact-session rebind probe was
+  correctly fenced as `SESSION_TERMINAL`.
+- The probe then ended cleanly and `markClosedCleanly` rewrote the same lease
+  to `CLOSED_CLEANLY`, while the terminal event remained present. This proves
+  the narrow terminal-history rewrite defect. It is RESULT C, not evidence to
+  broaden identity or provider lifecycle architecture.
+- Evidence:
+  `docs/evidence/syn041-final-real-codex-terminal-seal-acceptance-2026-08-28.md`.
+- Stop rule: do not run another provider lifecycle. The next narrow causal
+  question is whether clean-close must refuse terminal-authority leases.
+
+## 2026-08-28 — SYN-041 first bounded terminal-session implementation
+
+- The first concurrent full-module verification attempt produced process-heavy
+  test timeouts. The affected cases passed individually and the authoritative
+  targeted suites passed serialized with `--max-workers=1`.
+- Strict Javadocs initially failed because the new record components lacked
+  `@param` tags; the documentation was corrected and relevant Javadocs passed.
+- A clean-EOF regression initially returned `workspace_generation_changed`.
+  The narrow fix treats only an existing `DETACHED` participant as a clean
+  rebind trigger; abnormal/stale states remain fail-closed.
+- Evidence: `docs/evidence/syn041-terminal-session-seal-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 terminal-disconnect semantics boundary
+
+- Design-only review completed; no provider run or production mutation was
+  performed.
+- Derived terminal classification from WorkGroup completion, participant or
+  binding completion, or zero active claims/intents is unsafe. Review-only
+  authority, pending non-claim obligations, wake/recovery, and same-connection
+  rebinding remain possible.
+- Primary result is RESULT C: explicit terminal intent and an atomic
+  exact-session authority seal are required before abnormal transport can be
+  treated as non-recoverable. Do not map it to `CLOSED_CLEANLY`.
+- Evidence: `docs/evidence/syn041-terminal-disconnect-semantics-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 exit-code causal analysis
+
+- Source tracing proves the native launcher waits for Java and mirrors Java’s
+  `ExitError.ExitCode()`; launcher-side failure is not the source of the
+  observed child code 1.
+- Clean EOF against the official bundle returned Java/MCP 0 and wrote
+  `CLOSED_CLEANLY`.
+- Partial EOF returned Java/MCP 1, logged `MCP_PARTIAL_FRAME_EOF`, skipped
+  `handler.close()`, and left the lease `ACTIVE`.
+- Closing the parent stdout reader did not reproduce code 1; the process
+  returned 0 and the lease closed cleanly, consistent with unchecked
+  `PrintStream` write errors.
+- Classification: RESULT B primary and RESULT D secondary. The exact
+  CP-0557 input condition remains unresolved because its stderr lacked the
+  reproduced fatal trace. Do not implement a workaround or run another real
+  provider experiment.
+
+## 2026-08-28 — SYN-041 final handle measurement result
+
+- Two controller preflights rejected malformed TOML array overrides before
+  MCP startup; they produced no provider lifecycle evidence and are excluded.
+- The one corrected valid run preserved direct Codex -> official MCP -> Java
+  topology and retained native handles for all three processes.
+- MCP and Java each returned exit code 1 and exited while Codex was still
+  alive; Codex later returned 0. This establishes the RESULT C child-failure
+  boundary but does not identify a crash, caller, or `TerminateProcess` path.
+- Doctor afterward was `UNHEALTHY` with one ambiguous durable-state error and
+  one stale-lease warning, with zero mutations. No production defect or lease
+  defect is proven.
+- Retry prohibition: do not run another equivalent provider measurement or
+  change lifecycle behavior from this evidence. Preserve the exact artifacts
+  in `docs/evidence/syn041-final-handle-native-measurement-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 observability design boundary
+
+- Completed a read-only design slice; no provider experiment was run.
+- The installed Codex help exposes JSONL (`codex exec --json`), final-message
+  output, and redacted Doctor JSON, but no documented MCP child lifecycle or
+  exit-code telemetry. Synesis traces startup and initial protocol events but
+  not EOF, handler close, or process exit.
+- Retained native process handles are the smallest reliable exit-code method.
+  Ordinary Windows telemetry still cannot prove the caller of a zero-code
+  termination or literal anonymous-pipe EOF.
+- Classification remains RESULT E. No production fix or broader architecture
+  is justified. Evidence:
+  `docs/evidence/syn041-native-observability-design-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 native teardown capture remains inconclusive
+
+- Direct Codex -> official `synesis-mcp.exe` -> packaged Java parentage was
+  captured with no wrapper or proxy; child termination timing was observed.
+- The polling harness failed to persist the Codex JSONL transcript and did not
+  capture usable native EOF or child exit-code evidence. The fresh lease stayed
+  ACTIVE and Doctor reported `stale_session_lease`.
+- Classification: RESULT E. Do not infer native teardown causality and do not
+  run another equivalent probe in SYN-041.
+- Evidence:
+  `docs/evidence/syn041-real-codex-native-teardown-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 instrumented provider/MCP teardown boundary
+
+- A temporary byte-forwarding observer verified and launched the official MCP
+  executable by exact SHA-256, and the real Codex task completed through exact
+  no-change `finish_lane`; Codex exited 0.
+- The observer directly saw no stdin EOF and no clean official MCP child exit
+  event. The lease remained ACTIVE and Doctor reported the fresh
+  `stale_session_lease` warning.
+- Classification: RESULT C, provider/MCP transport teardown boundary. No
+  Synesis lease persistence defect is proven; stop before implementation.
+- Evidence:
+  `docs/evidence/syn041-real-codex-teardown-measurement-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 final lease measurement remains inconclusive
+
+- Fresh authenticated real Codex used the official packaged MCP and completed
+  task-bearing `ensure_session`, `read_file`, exact `get_next_action({})`, and
+  exact no-change `finish_lane`; the WorkGroup reached `COMPLETED` and Codex
+  exited 0.
+- The official MCP and packaged Java processes disappeared, but no direct MCP
+  EOF or child exit-code evidence was captured. The final lease remained
+  `ACTIVE`, and Doctor reported `stale_session_lease`.
+- Classification: RESULT D. This does not prove a lease defect; keep SYN-041
+  ACTIVE and do not change lease or Doctor semantics.
+- Evidence:
+  `docs/evidence/syn041-real-codex-lease-measurement-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 prior engagement stall explained
+
+- The prior real JSONL showed task-bearing `ensure_session`, then no
+  `read_file`, followed by an outstanding `get_next_action({})`.
+- Current source and the packaged synthetic control return the expected
+  task-bearing participant/intent/claim/WorkGroup projection; zero-work
+  `get_next_action` has no server long-poll implementation.
+- A fresh authenticated real Codex run with an explicit numbered sequence
+  completed task-bearing `ensure_session`, `read_file`, `get_next_action`, and
+  exact `finish_lane`; the WorkGroup completed and Codex exited 0.
+- Classification: RESULT A; prior harness/provider invocation sequencing,
+  not a Synesis projection or lease defect. Do not add orchestration or
+  alter lifecycle semantics.
+- Evidence:
+  `docs/evidence/syn041-real-codex-engagement-2026-08-28.md`.
+
+## 2026-08-28 — SYN-041 real Codex lifecycle stall
+
+- Default ChatGPT authentication succeeded after reproducing the 401 as an
+  empty isolated `CODEX_HOME` with no credentials.
+- Fresh real Codex reached the official packaged MCP and completed
+  `ensure_session`, but the first `get_next_action({})` remained in progress;
+  no WorkGroup or explicit completion was created.
+- The verified disposable tree was then ended as the permitted active-session
+  crash control. The lease remained ACTIVE and Doctor reported the expected
+  fresh stale-lease warning.
+- Classification: RESULT D / provider-runtime inconclusive. No lease or
+  Doctor fix is justified.
+- Evidence:
+  `docs/evidence/syn041-real-codex-clean-exit-2026-08-28.md`.
+
 ## 2026-08-25 — SYN-039 CP-0532 exact diagnostic and ordinary follow-up
 
 - The exact-projection diagnostic used fresh project

@@ -1,5 +1,215 @@
 # State
 
+## SYN-041 final real Codex closure acceptance — 2026-08-29
+
+SYN-041 is formally DONE / ACCEPTED with RESULT A. One real native Codex
+lifecycle committed `PROVIDER_SESSION_TERMINALIZED` at sequence 7. The
+original Java PID was absent before the exact same-session rejected probe;
+the probe returned `SESSION_TERMINAL`, closed cleanly, and the final lease
+remained durably `TERMINAL_DISCONNECTED` with original identity metadata.
+
+Evidence: `docs/evidence/syn041-final-real-codex-closure-2026-08-29.md`.
+
+## Immediate next action
+
+Preserve the accepted closure; do not create SYN-042 or expand the scope.
+
+## SYN-041 terminal-disconnect trigger implementation — 2026-08-29
+
+Read-first tracing proved two independent boundaries: external Codex-launched
+MCP has no surviving Synesis process observer after Java dies, and the old
+connection-ID-only clean close let a later rejected process rewrite that
+history. RESULT C is addressed in the existing seams: Java-local transport
+failure calls the PID-gated abnormal finalizer; a foreign clean close checks
+the persisted runtime and durably records `TERMINAL_DISCONNECTED` when that
+runtime is gone before refusing the close.
+
+Fresh packaged acceptance passed terminal seal, exact Java termination,
+`SESSION_TERMINAL` rebind rejection, probe clean EOF, and final durable
+`TERMINAL_DISCONNECTED`. SYN-041 remains ACTIVE.
+
+Evidence: `docs/evidence/syn041-terminal-disconnect-trigger-cp0567-2026-08-29.md`.
+
+## Immediate next action
+
+Review CP-0567 and await separately authorized final provider confirmation; do
+not run Codex or close SYN-041.
+
+## SYN-041 CP-0563 terminal transport-history preservation — 2026-08-29
+
+The CP-0562 causal defect is fixed in the smallest existing persistence seam.
+`SessionLeaseService.markClosedCleanly` now serializes and fences cleanup by
+the durable finalized state, while abnormal provider exit records
+`TERMINAL_DISCONNECTED` only from a matching
+`TERMINAL_AUTHORITY_CONFIRMED` lease. Terminal-disconnected replay and later
+rejected same-session cleanup are no-ops, and abnormal transitions preserve
+the complete prior lease record.
+
+Focused source tests and the fresh official provider-independent package
+acceptance passed. The package run completed terminal no-change, forcibly
+ended the first MCP transport, recorded abnormal terminal history, rejected
+same-session rebind, and left the raw lease `TERMINAL_DISCONNECTED` after
+probe close; Doctor had 0 errors/critical findings and performed 0 mutations.
+No real Codex run was performed. Broader process-heavy MCP tests timed out and
+remain incomplete rather than being reported as passes.
+
+Evidence: `docs/evidence/syn041-terminal-transport-history-fix-2026-08-29.md`.
+
+## Immediate next action
+
+At the next session, run `powershell -ExecutionPolicy Bypass -File
+scripts/agent-resume.ps1` and inspect CP-0563 before any further provider or
+architecture action.
+
+## SYN-041 final real Codex terminal-seal acceptance — 2026-08-28
+
+The single actual real Codex lifecycle completed lawfully through the rebuilt
+official bundle. Fixture project `97722e6c-811e-4ad5-b6ec-80eb802f0b28` used
+connection `conn-instance-4ae3fa70-50e7-41f4-8108-8b8831bb9c9b`, session
+`session-9ea1e61e-ff51-49ab-81f5-cba6f8fd1db1`, participant
+`agt_863a2e00-c667-3751-8e48-0cf16f25c17d`, WorkIntent
+`7d90ff91-922d-3bc1-9a26-921e5c8fe95e`, and WorkGroup
+`014d55f4-e84c-3616-80bf-f6be38ba4eab`. `finish_lane` returned
+`NO_CHANGE`, claims released, WorkGroup completed, and
+`SESSION_TERMINATED` at fence sequence 7. Native handles recorded Java/MCP
+exit 1 before Codex exit 0. The exact rebind probe returned
+`SESSION_TERMINAL`, but its clean close rewrote the lease from terminal
+authority to `CLOSED_CLEANLY`; the durable terminal event remained at sequence
+7. This is a proven narrow lease-history defect, not a provider-auth or
+transport-causality inference.
+
+Evidence: `docs/evidence/syn041-final-real-codex-terminal-seal-acceptance-2026-08-28.md`.
+
+## Immediate next action
+
+Trace `SessionLeaseService.markClosedCleanly` and create the smallest
+regression test that preserves terminal lease state on a later rejected
+same-connection close; do not run another provider lifecycle or close the
+task.
+
+## SYN-041 terminal-session seal implementation checkpoint — 2026-08-28
+
+The first bounded implementation slice is complete and verified. Existing
+`finish_lane` accepts optional `terminalSession=true`; default calls remain
+lane completion only. The exact durable provider binding and participant are
+fenced by an append-locked `PROVIDER_SESSION_TERMINALIZED` event after the
+server checks represented mutable, resumable, review, coordination, command,
+dependency, and participant authority.
+
+The lease addition distinguishes proven terminal authority and later abnormal
+disconnect from clean EOF. Existing unsealed stale/recovery behavior remains
+unchanged. Evidence:
+`docs/evidence/syn041-terminal-session-seal-2026-08-28.md`.
+
+## Immediate next action
+
+Run `git status --short` and inspect the SYN-041 implementation/evidence diff;
+do not commit, push, tag, release, or run another real provider experiment.
+
+## SYN-041 terminal-disconnect semantics checkpoint — 2026-08-28
+
+Design-only source tracing is complete. Lane completion and binding
+completion do not prove provider-session finality: completed bindings remain
+eligible for bounded review coordination, and `ensure` can establish a new
+binding for the same connection evidence. No current projection atomically
+seals future wake, review, continuation, or rebind authority. WorkGroup
+completion and zero claims/intents are therefore insufficient inference.
+
+Primary result is RESULT C: a future explicit terminal-disconnect intent plus
+an exact-session, append-locked terminal-authority proof is required. Clean EOF
+remains `CLOSED_CLEANLY`; abnormal transport after a positive terminal proof
+should be non-recoverable but retain abnormal forensic history. No production,
+lease, Doctor, migration, identity, or provider behavior changed.
+
+Evidence: `docs/evidence/syn041-terminal-disconnect-semantics-2026-08-28.md`.
+
+Exact next action: stop SYN-041 here; do not implement, rerun a provider, or
+begin generalized identity work.
+
+## SYN-041 exit-code causal checkpoint — 2026-08-28
+
+Read-only source tracing and three disposable official-bundle controls are
+complete. `synesis-mcp.exe` starts packaged Java with inherited stdio, waits,
+and mirrors Java’s nonzero `ExitError` code. The Java exception path is
+`McpFrameReader.readFrame()` -> `McpStdioServer.run()` catch -> return 1 ->
+`SynesisCli.main()` -> launcher propagation. Clean EOF alone returns 0 and
+marks the lease `CLOSED_CLEANLY`; partial EOF returns 1 and leaves it `ACTIVE`.
+Closed stdout alone still returns 0. The exact CP-0557 low-level exception is
+not proven because its stderr had no matching fatal trace. Evidence:
+`docs/evidence/syn041-exit-code-causal-analysis-2026-08-28.md`.
+
+Exact next action: preserve RESULT B with secondary RESULT D and stop; no
+provider rerun or production behavior change is authorized.
+
+## SYN-041 final handle measurement checkpoint — 2026-08-28
+
+The single authorized real-provider measurement is complete. A disposable
+external observer retained native query/synchronize handles without touching
+stdio or Synesis state and recorded Codex PID 1576 -> official MCP PID 11416
+-> packaged Java PID 10192. MCP and Java each exited 1 before Codex exited 0.
+Codex JSONL proves `ensure_session`, `read_file`, projected `finish_lane`, and
+completed `NO_CHANGE`; the fixture remained clean. Fresh Doctor was
+`UNHEALTHY` with `durable_state_ambiguous` and `stale_session_lease`, with zero
+mutations. No lease/Doctor defect is proven. Evidence:
+`docs/evidence/syn041-final-handle-native-measurement-2026-08-28.md`.
+
+Exact next action: close this measurement slice at RESULT C and preserve the
+external run artifacts; no further provider lifecycle run is authorized.
+
+## SYN-041 measurement-design checkpoint boundary — 2026-08-28
+
+The requested design-only slice is complete at the evidence level; no real
+provider experiment or production change was performed. The design selects a
+disposable external observer using retained `OpenProcess` query/synchronize
+handles, `WaitForSingleObject`, and `GetExitCodeProcess`, with Codex output
+captured to regular files. It preserves native `Codex -> official MCP ->
+Java` parentage. It materially improves child exit/timing/crash evidence but
+does not provide ordinary user-mode caller attribution or a guaranteed
+anonymous-pipe EOF observation.
+
+Evidence: `docs/evidence/syn041-native-observability-design-2026-08-28.md`.
+SYN-041 remains ACTIVE / RESULT E. Exact blocker: Need native,
+non-interposing MCP/Java exit-code and transport-lifetime telemetry
+sufficient to classify the child termination observed ~24.5 seconds before
+Codex exit.
+
+## SYN-041 real Codex clean-exit provider lifecycle validation
+
+- Status: ACTIVE
+- Initial real-provider engagement and exact no-change completion are proven;
+  the final native-topology measurement is RESULT E because its polling
+  harness lost the Codex transcript and native EOF/child exit evidence. No
+  Synesis lease persistence defect is proven.
+- This is an explicitly promoted measurement task. SYN-039 and SYN-040 are
+  closed and remain unchanged.
+- Do not use an empty isolated `CODEX_HOME` for the real provider run; retain
+  authenticated default account state and isolate Synesis project/MCP routing
+  through command-line configuration only.
+
+## Immediate next action
+
+Use the recorded RESULT E measurement as the stopping boundary. Do not infer
+MCP EOF or child exit 0 from process disappearance; do not run another
+equivalent probe, change lifecycle semantics, repair the lease, or suppress
+Doctor. Keep SYN-039/SYN-040 closed and preserve all unrelated dirty files.
+
+## SYN-040 post-SYN-039 provider-session and Doctor hygiene
+
+- Status: DONE / VERIFIED
+- SYN-039 remains DONE / ACCEPTED at CP-0547; it is not reopened.
+- Scope is limited to warning causality, provider-session/lease finalization,
+  Doctor truthfulness, and the existing provider configuration migration path.
+- The five pre-existing lifecycle modifications remain preserved and excluded
+  until a direct causal dependency is proven.
+
+## Immediate next action
+
+No product action remains for SYN-040. Preserve the six-warning report and
+promote a future task explicitly before any implementation.
+
+Evidence:
+`docs/evidence/syn040-post-syn039-doctor-hygiene-2026-08-28.md`.
+
 ## SYN-039 closure — final canonical acceptance
 
 - Status: DONE / ACCEPTED
