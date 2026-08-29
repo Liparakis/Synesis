@@ -187,6 +187,10 @@ final class ProviderApplicationServiceTest {
                     service.status(location, "codex")
                             .values()
                             .get("TRUST_STATUS"));
+            assertEquals("UP_TO_DATE",
+                    service.status(location, "codex")
+                            .values()
+                            .get("MCP_CONFIG_STATUS"));
             assertEquals("SUCCESS",
                     service.uninstall(location, "codex")
                             .values()

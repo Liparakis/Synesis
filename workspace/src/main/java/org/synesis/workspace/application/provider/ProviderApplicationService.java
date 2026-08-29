@@ -791,7 +791,7 @@ public final class ProviderApplicationService {
             try {
                 Path path = resolvedProvider.mcpConfigurationPath(location.root());
                 CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(path,
-                        stableLauncher(isWindows() ? "synesis.cmd" : "synesis"));
+                        mcpLauncherPath(), location.root());
                 Map<String, String> values = new LinkedHashMap<>(result.values());
                 values.put("MCP_CONFIG_PATH", path.toString());
                 values.put("MCP_CONFIG_STATUS",
