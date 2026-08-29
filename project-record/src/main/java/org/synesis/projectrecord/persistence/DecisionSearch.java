@@ -138,8 +138,7 @@ public final class DecisionSearch {
             if (split.length > MAX_TERMS) {
                 throw new IllegalArgumentException("too many query terms");
             }
-            this.terms = List.of(split)
-                    .stream()
+            this.terms = java.util.stream.Stream.of(split)
                     .map(value -> value.toLowerCase(Locale.ROOT))
                     .toList();
             this.recordId = recordId;

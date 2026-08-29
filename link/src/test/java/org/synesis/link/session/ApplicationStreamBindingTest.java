@@ -47,6 +47,7 @@ final class ApplicationStreamBindingTest {
                         .join());
     }
 
+    @SuppressWarnings("ClassCanBeRecord")
     private static final class StubControl implements PeerSession.ControlBinding {
 
         private final boolean ready;

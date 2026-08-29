@@ -30,8 +30,8 @@ final class CandidateRacerTest {
         return new CandidatePair(local, remote);
     }
 
-    private static PeerSession usableSession(String remote) {
-        PeerSession session = new PeerSession("local", remote, new byte[]{1}, UUID.randomUUID(), 1, 1,
+    private static PeerSession usableSession() {
+        PeerSession session = new PeerSession("local", "remote", new byte[]{1}, UUID.randomUUID(), 1, 1,
                 org.synesis.link.protocol.ProtocolVersion.V1, Instant.now());
         session.attachControl(new PeerSession.ControlBinding() {
             private final CompletableFuture<Void> terminal = new CompletableFuture<>();
@@ -81,7 +81,7 @@ final class CandidateRacerTest {
 
     @Test
     void laterAuthenticatedAttemptWinsAfterEarlierFailure() throws Exception {
-        PeerSession winner = usableSession("remote");
+        PeerSession winner = usableSession();
         CandidatePair first = pair("192.0.2.1", 1);
         CandidatePair second = pair("192.0.2.2", 2);
         AtomicInteger cancelled = new AtomicInteger();

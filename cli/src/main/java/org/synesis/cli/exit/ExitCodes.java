@@ -16,6 +16,7 @@ public final class ExitCodes {
     /**
      * Doctor found a broken local component.
      */
+    @SuppressWarnings("unused")
     public static final int DOCTOR_BROKEN = 3;
     /**
      * Local identity or configuration failure.

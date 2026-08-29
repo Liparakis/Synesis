@@ -39,6 +39,7 @@ public record Candidate(CandidateType type, InetAddress address, int port, int p
      * @return type, port, and priority without the potentially sensitive address
      */
     @Override
+    @SuppressWarnings("NullableProblems")
     public String toString() {
         return "Candidate[type=" + type + ", port=" + port + ", priority=" + priority + "]";
     }

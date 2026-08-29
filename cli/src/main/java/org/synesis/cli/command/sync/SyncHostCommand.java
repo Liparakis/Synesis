@@ -14,6 +14,7 @@ import picocli.CommandLine.Option;
  * Hosts one bounded project synchronization invitation.
  */
 @Command(name = "host", description = "Host project synchronization.", mixinStandardHelpOptions = true)
+@SuppressWarnings("DuplicatedCode")
 public final class SyncHostCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

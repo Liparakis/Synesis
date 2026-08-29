@@ -15,6 +15,7 @@ public final class ProviderUninstallCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
     @Parameters(index = "0", description = "Provider identifier.")
+    @SuppressWarnings("unused")
     private String provider;
     @Option(names = "--project", description = "Project directory.")
     private String project;

@@ -40,6 +40,7 @@ final class DemoWorkBindingTest {
         assertEquals(DemoWorkStatus.OK, result.status());
     }
 
+    @SuppressWarnings("ClassCanBeRecord")
     private static final class StubWork implements PeerSession.ControlBinding {
 
         private final boolean ready;

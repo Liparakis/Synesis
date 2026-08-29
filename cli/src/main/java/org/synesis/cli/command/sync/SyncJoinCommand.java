@@ -15,6 +15,7 @@ import picocli.CommandLine.Parameters;
  * Joins one bounded project synchronization invitation.
  */
 @Command(name = "join", description = "Join project synchronization.", mixinStandardHelpOptions = true)
+@SuppressWarnings("DuplicatedCode")
 public final class SyncJoinCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
@@ -27,6 +28,7 @@ public final class SyncJoinCommand implements Callable<Integer> {
     @Option(names = "--profile", description = "Advanced local profile override.")
     private String profile;
     @Parameters(index = "0", description = "Signed project invitation link.")
+    @SuppressWarnings("unused")
     private String invitation;
 
     /**

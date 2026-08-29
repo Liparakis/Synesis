@@ -16,6 +16,7 @@ public final class JoinCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
     @Parameters(index = "0", description = "Exact signed invitation link.")
+    @SuppressWarnings("unused")
     private String link;
 
     /**

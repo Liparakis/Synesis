@@ -184,7 +184,7 @@ public final class HandshakeTranscript {
             long responderEpoch = input.readLong();
             byte[] initiatorNonce = readBytes(input, MAX_NONCE_BYTES);
             byte[] responderNonce = readBytes(input, MAX_NONCE_BYTES);
-            byte[] invitationCapability = readOptionalBytes(input, MAX_INVITATION_CAPABILITY_BYTES);
+            byte[] invitationCapability = readOptionalBytes(input);
             String initiatorNodeId = readString(input, MAX_NODE_ID_BYTES);
             byte[] initiatorPublicKey = readBytes(input, MAX_KEY_BYTES);
             String responderNodeId = readString(input, MAX_NODE_ID_BYTES);
@@ -256,9 +256,9 @@ public final class HandshakeTranscript {
         return input.readNBytes(length);
     }
 
-    private static byte[] readOptionalBytes(DataInputStream input, int max) throws IOException {
+    private static byte[] readOptionalBytes(DataInputStream input) throws IOException {
         int length = input.readUnsignedShort();
-        if (length > max || length > input.available()) {
+        if (length > MAX_INVITATION_CAPABILITY_BYTES || length > input.available()) {
             throw new IOException("invalid optional transcript field");
         }
         return input.readNBytes(length);

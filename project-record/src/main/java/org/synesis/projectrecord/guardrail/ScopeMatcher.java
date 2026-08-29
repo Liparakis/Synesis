@@ -24,6 +24,7 @@ public final class ScopeMatcher {
      * @return normalized repository-relative path
      * @throws IllegalArgumentException if path is null, absolute, or attempts traversal
      */
+    @SuppressWarnings("ExtractMethodRecommender")
     public static String normalizePath(String path) {
         Objects.requireNonNull(path, "path");
         if (path.indexOf('\u0000') >= 0) {

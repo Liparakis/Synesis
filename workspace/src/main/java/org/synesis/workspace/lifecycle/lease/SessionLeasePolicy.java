@@ -9,6 +9,7 @@ import java.util.Objects;
  *
  * @since 1.0
  */
+@SuppressWarnings("ClassCanBeRecord")
 public final class SessionLeasePolicy {
 
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
@@ -52,6 +53,7 @@ public final class SessionLeasePolicy {
      *
      * @return clock
      */
+    @SuppressWarnings("unused")
     public Clock clock() {
         return clock;
     }
@@ -70,6 +72,7 @@ public final class SessionLeasePolicy {
      *
      * @return duration
      */
+    @SuppressWarnings("unused")
     public Duration heartbeatInterval() {
         return heartbeatInterval;
     }

@@ -33,6 +33,7 @@ public record ReadinessReport(boolean javaReady, boolean profileReady, boolean i
      *
      * @return true when the report is ready
      */
+    @SuppressWarnings("unused")
     public boolean ready() {
         return javaReady && profileReady && identityReady && candidatesReady && quicReady;
     }
