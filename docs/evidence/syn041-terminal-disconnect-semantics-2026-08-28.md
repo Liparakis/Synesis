@@ -1,8 +1,8 @@
 # SYN-041 terminal-disconnect semantics investigation
 
-Date: 2026-08-28  
-Scope: design-only source and durable-state analysis  
-Provider experiments: none  
+Date: 2026-08-28
+Scope: design-only source and durable-state analysis
+Provider experiments: none
 Production changes: none
 
 ## Boundary and evidence

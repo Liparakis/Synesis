@@ -1,8 +1,8 @@
 # SYN-039 CP-0507 — Invalid Review Result Projection
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
-Diagnostic: fresh exact-projection two-agent Todo run after CP-0506 publication guard  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
+Diagnostic: fresh exact-projection two-agent Todo run after CP-0506 publication guard
 Result: the false `finish_lane` blocker is fixed; the first later lifecycle blocker is invalid review-result projection
 
 ## Fixture and preflight

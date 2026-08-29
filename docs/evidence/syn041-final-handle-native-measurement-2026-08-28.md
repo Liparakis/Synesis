@@ -1,8 +1,8 @@
 # SYN-041 final handle-based native measurement
 
-Date: 2026-08-28  
-Branch: `master`  
-Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`  
+Date: 2026-08-28
+Branch: `master`
+Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`
 Valid provider run: one; fixture `C:\t\syn041-real-codex-native-20260828-011`
 
 ## Scope and controller preflight

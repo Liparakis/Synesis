@@ -120,9 +120,9 @@ Fresh real project:
 
 `C:\t\syn041-real-codex-engagement-20260828-002`
 
-Project ID: `95b36225-805d-4377-ab89-b8586cbb23b8`  
-Connection: `syn041-real-codex-engagement-20260828-002`  
-Session: `session-7dc9613d-c098-410a-ae59-ef7cfc7c02cd`  
+Project ID: `95b36225-805d-4377-ab89-b8586cbb23b8`
+Connection: `syn041-real-codex-engagement-20260828-002`
+Session: `session-7dc9613d-c098-410a-ae59-ef7cfc7c02cd`
 Assigned worktree:
 `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\95b36225-805d-4377-ab89-b8586cbb23b8\worktrees\session-7dc9613d-c098-410a-ae59-ef7cfc7c02cd`
 

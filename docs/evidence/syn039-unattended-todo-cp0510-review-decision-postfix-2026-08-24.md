@@ -1,7 +1,7 @@
 # SYN-039 CP-0510 — Review-decision projection postfix diagnostic
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
 Result: the review-decision projection defect is fixed and verified; the
 post-fix diagnostic stopped at agent-compliance evidence before reciprocal
 validation or WorkGroup closure.

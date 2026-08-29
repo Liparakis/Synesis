@@ -1,7 +1,7 @@
 # SYN-039 CP-0508 — Review Decision Projection Postfix Diagnostic
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
 Result: the invalid review-result projection is fixed; the diagnostic later
 stopped on agent-compliance evidence before clean WorkGroup closure
 
@@ -72,9 +72,9 @@ stopped on agent-compliance evidence before clean WorkGroup closure
    integrationState: integrated
    ```
 
-   Snapshot: `snap_806145a00668f970adaaf4af734a9d81`  
-   Snapshot commit: `24702bb2b8f1287e14f05da7f88f2c0b925e2b7b`  
-   Base commit: `d6838ed1c9930e3cbace0c43ac1bb1e408c84b9a`  
+   Snapshot: `snap_806145a00668f970adaaf4af734a9d81`
+   Snapshot commit: `24702bb2b8f1287e14f05da7f88f2c0b925e2b7b`
+   Base commit: `d6838ed1c9930e3cbace0c43ac1bb1e408c84b9a`
    Changed path: `todo.py`
 
 5. After B consumed the grant and recovered its stale worktree, B received

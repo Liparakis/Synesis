@@ -1,7 +1,7 @@
 # SYN-041 real Codex clean-exit provider lifecycle validation
 
-Date: 2026-08-28  
-Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`  
+Date: 2026-08-28
+Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`
 Branch: `master`
 
 ## Authentication
@@ -47,8 +47,8 @@ Branch: `master`
 | Official `synesis-mcp.exe`               | 19784 |  17156 | 2026-08-28 15:05:55 UTC |
 | Packaged Java runtime                    | 11356 |  19784 | 2026-08-28 15:05:55 UTC |
 
-Connection ID: `syn041-real-codex-connection-20260828-007`  
-Session/binding ID: `session-d2915a2f-55f2-4fd0-8277-0d7cb89d643b`  
+Connection ID: `syn041-real-codex-connection-20260828-007`
+Session/binding ID: `session-d2915a2f-55f2-4fd0-8277-0d7cb89d643b`
 Lease file: external `admin/session-leases/syn041-real-codex-connection-20260828-007.json`
 
 The real Codex trace proves `ensure_session` completed with `status=ready`

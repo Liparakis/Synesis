@@ -47,9 +47,9 @@ public final class ProjectApplicationService {
     private static final String AGENTS_END = "<!-- SYNESIS-END -->";
     private static final String AGENTS_BODY = """
             ## Synesis
-            
+
             This repository uses Synesis.
-            
+
             - Use Synesis tools for project reads, file changes, and commands.
             - One persistent MCP connection owns one provider binding and one isolated worker context.
             - After synesis.ensure_session succeeds, keep the provider in the current project directory and use Synesis MCP for all reads, writes, and commands. Synesis applies those operations internally in the assigned worktree; do not switch branches, cd, or edit another worker's worktree manually. Native provider hooks are optional and may be unavailable in desktop harnesses, so never assume a native mutation was routed. If a native tool is used and Synesis reports workspace_mismatch, stop native mutations and verify state through synesis.read_file.

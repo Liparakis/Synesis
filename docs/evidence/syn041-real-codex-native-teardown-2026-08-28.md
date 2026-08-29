@@ -1,7 +1,7 @@
 # SYN-041 native Codex-to-MCP teardown validation
 
-Date: 2026-08-28  
-Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`  
+Date: 2026-08-28
+Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`
 Branch: `master`
 
 ## Scope and topology

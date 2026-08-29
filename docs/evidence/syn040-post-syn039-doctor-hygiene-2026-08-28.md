@@ -1,7 +1,7 @@
 # SYN-040 Post-SYN-039 Doctor hygiene investigation
 
-Date: 2026-08-28  
-Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001` (`feat: complete autonomous workgroup lifecycle`)  
+Date: 2026-08-28
+Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001` (`feat: complete autonomous workgroup lifecycle`)
 Scope: classify the six Doctor warnings observed after the accepted SYN-039 run. No repair, cleanup, migration
 execution, or source-product mutation was authorized.
 

@@ -1,7 +1,7 @@
 # SYN-039 post-fix review-projection diagnostic — CP-0494
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
 Classification: production projection defect fixed; fresh diagnostic then
 stopped on agent-compliance evidence.
 

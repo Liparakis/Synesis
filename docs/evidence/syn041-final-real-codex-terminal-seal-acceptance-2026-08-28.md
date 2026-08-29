@@ -1,8 +1,8 @@
 # SYN-041 final real Codex terminal-seal acceptance
 
-Date: 2026-08-28  
-Branch: `master`  
-Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`  
+Date: 2026-08-28
+Branch: `master`
+Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`
 Primary result: **RESULT C — terminal history rewrite after a correctly fenced rebind**
 
 ## Scope and provenance
@@ -40,14 +40,14 @@ tag, release, or publication was performed.
 
 ## Fixture and identifiers
 
-Fresh fixture: `C:\t\syn041-final-terminal-seal-20260828-001`  
-Project ID: `97722e6c-811e-4ad5-b6ec-80eb802f0b28`  
-Baseline commit: `3c70142797e43710cb090e355343d0d2bcf4fb9e`  
-Connection: `conn-instance-4ae3fa70-50e7-41f4-8108-8b8831bb9c9b`  
-Session/binding: `session-9ea1e61e-ff51-49ab-81f5-cba6f8fd1db1`  
-Participant: `agt_863a2e00-c667-3751-8e48-0cf16f25c17d`  
-WorkIntent: `7d90ff91-922d-3bc1-9a26-921e5c8fe95e`  
-WorkGroup: `014d55f4-e84c-3616-80bf-f6be38ba4eab`  
+Fresh fixture: `C:\t\syn041-final-terminal-seal-20260828-001`
+Project ID: `97722e6c-811e-4ad5-b6ec-80eb802f0b28`
+Baseline commit: `3c70142797e43710cb090e355343d0d2bcf4fb9e`
+Connection: `conn-instance-4ae3fa70-50e7-41f4-8108-8b8831bb9c9b`
+Session/binding: `session-9ea1e61e-ff51-49ab-81f5-cba6f8fd1db1`
+Participant: `agt_863a2e00-c667-3751-8e48-0cf16f25c17d`
+WorkIntent: `7d90ff91-922d-3bc1-9a26-921e5c8fe95e`
+WorkGroup: `014d55f4-e84c-3616-80bf-f6be38ba4eab`
 Claim: `path_exact:verification.txt`, epoch 1.
 
 ## Real provider protocol and completion

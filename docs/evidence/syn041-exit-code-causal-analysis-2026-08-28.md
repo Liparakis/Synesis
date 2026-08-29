@@ -1,8 +1,8 @@
 # SYN-041 read-only exit-code causal analysis
 
-Date: 2026-08-28  
-Branch: `master`  
-HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`  
+Date: 2026-08-28
+Branch: `master`
+HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`
 Latest prior checkpoint: `CP-0557`
 
 ## Scope

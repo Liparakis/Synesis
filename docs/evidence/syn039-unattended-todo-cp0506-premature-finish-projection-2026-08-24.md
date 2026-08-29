@@ -1,8 +1,8 @@
 # SYN-039 CP-0506 — Premature Finish Projection
 
-Date: 2026-08-24  
-Task: SYN-039 — Autonomous Workgroup Completion  
-Diagnostic: bounded exact-projection two-agent Todo run  
+Date: 2026-08-24
+Task: SYN-039 — Autonomous Workgroup Completion
+Diagnostic: bounded exact-projection two-agent Todo run
 Result: FAILED at the first unexecutable projected lifecycle action
 
 ## Fixture and preflight

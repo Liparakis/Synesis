@@ -1,9 +1,9 @@
 # SYN-041 native observability design
 
-Date: 2026-08-28  
-Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`  
-Branch: `master`  
-Task: SYN-041, measurement-design slice only  
+Date: 2026-08-28
+Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`
+Branch: `master`
+Task: SYN-041, measurement-design slice only
 Latest native checkpoint: CP-0555
 
 ## Boundary and current evidence

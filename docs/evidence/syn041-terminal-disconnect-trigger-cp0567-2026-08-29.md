@@ -1,6 +1,6 @@
 # SYN-041 terminal-disconnect trigger — CP-0567
 
-Date: 2026-08-29  
+Date: 2026-08-29
 Result: RESULT C — both missing abnormal finalization and insufficient
 clean-close ownership were causal
 
