@@ -18,6 +18,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class CleanupExecutionLock implements AutoCloseable {
 
     private final Path lockFilePath;
@@ -42,7 +43,8 @@ public final class CleanupExecutionLock implements AutoCloseable {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(planId, "planId");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
         Path adminDir = workspaceRoot.resolve("admin");
         Files.createDirectories(adminDir);
@@ -53,8 +55,10 @@ public final class CleanupExecutionLock implements AutoCloseable {
             throw new IOException("Cleanup execution is busy: lock file exists at " + lockFile);
         }
 
-        String nonce = UUID.randomUUID().toString();
-        long pid = ProcessHandle.current().pid();
+        String nonce = UUID.randomUUID()
+                .toString();
+        long pid = ProcessHandle.current()
+                .pid();
         long now = System.currentTimeMillis();
 
         Map<String, Object> lockData = new LinkedHashMap<>();
@@ -68,7 +72,11 @@ public final class CleanupExecutionLock implements AutoCloseable {
         String json = ProviderJson.write(lockData);
 
         try {
-            Files.writeString(lockFile, json, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            Files.writeString(lockFile,
+                    json,
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE);
         } catch (FileAlreadyExistsException ex) {
             throw new IOException("Cleanup execution is busy: concurrent lock acquisition detected.", ex);
         }

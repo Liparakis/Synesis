@@ -2,6 +2,7 @@ package org.synesis.workspace.application.project;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -12,7 +13,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.test.PortableTestCommand;
 
-/** Tests deterministic direct-process outcomes and bounded stream evidence. */
+/**
+ * Tests deterministic direct-process outcomes and bounded stream evidence.
+ */
 class ProjectProcessExecutorTest {
 
     private static ProjectProcessExecutor.ExecutionResult run(Path root, List<String> argv, int timeout) {
@@ -52,7 +55,8 @@ class ProjectProcessExecutorTest {
         assertTrue(result.stdoutBytesRead() >= 100000, result.toString());
         assertEquals(ProjectProcessExecutor.MAX_RETAINED_BYTES, result.stdoutBytesRetained());
         assertTrue(result.stdoutTruncated());
-        assertTrue(result.stdout().contains(ProjectProcessExecutor.TRUNCATION_MARKER));
+        assertTrue(result.stdout()
+                .contains(ProjectProcessExecutor.TRUNCATION_MARKER));
         assertFalse(result.stderrTruncated());
     }
 
@@ -64,7 +68,8 @@ class ProjectProcessExecutorTest {
         assertTrue(result.stderrBytesRead() >= 100000, result.toString());
         assertEquals(ProjectProcessExecutor.MAX_RETAINED_BYTES, result.stderrBytesRetained());
         assertTrue(result.stderrTruncated());
-        assertTrue(result.stderr().contains(ProjectProcessExecutor.TRUNCATION_MARKER));
+        assertTrue(result.stderr()
+                .contains(ProjectProcessExecutor.TRUNCATION_MARKER));
         assertFalse(result.stdoutTruncated());
     }
 
@@ -76,7 +81,8 @@ class ProjectProcessExecutorTest {
         assertEquals(65536, result.stdoutBytesRead());
         assertEquals(65536, result.stdoutBytesRetained());
         assertFalse(result.stdoutTruncated(), result.toString());
-        assertFalse(result.stdout().contains(ProjectProcessExecutor.TRUNCATION_MARKER));
+        assertFalse(result.stdout()
+                .contains(ProjectProcessExecutor.TRUNCATION_MARKER));
     }
 
     @Test
@@ -87,8 +93,10 @@ class ProjectProcessExecutorTest {
         assertEquals(65536, result.stdoutBytesRead());
         assertEquals(65536, result.stdoutBytesRetained());
         assertFalse(result.stdoutTruncated(), result.toString());
-        assertFalse(result.stdout().contains(ProjectProcessExecutor.TRUNCATION_MARKER));
-        assertFalse(result.stdout().contains("\uFFFD"), result.stdout());
+        assertFalse(result.stdout()
+                .contains(ProjectProcessExecutor.TRUNCATION_MARKER));
+        assertFalse(result.stdout()
+                .contains("\uFFFD"), result.stdout());
     }
 
     @Test
@@ -109,8 +117,10 @@ class ProjectProcessExecutorTest {
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome());
         assertTrue(result.stdoutTruncated());
         assertTrue(result.stdoutBytesRead() > result.stdoutBytesRetained());
-        assertTrue(result.stdout().contains(ProjectProcessExecutor.TRUNCATION_MARKER));
-        String aroundMarker = result.stdout().replace(ProjectProcessExecutor.TRUNCATION_MARKER, "");
+        assertTrue(result.stdout()
+                .contains(ProjectProcessExecutor.TRUNCATION_MARKER));
+        String aroundMarker = result.stdout()
+                .replace(ProjectProcessExecutor.TRUNCATION_MARKER, "");
         assertFalse(aroundMarker.contains("\uFFFD"), result.stdout());
     }
 
@@ -120,7 +130,8 @@ class ProjectProcessExecutorTest {
         var result = run(root, PortableTestCommand.fixture("fail", "failed", "7"), 10);
         assertEquals(ProjectProcessExecutor.Outcome.NON_ZERO_EXIT, result.outcome());
         assertEquals(7, result.exitCode());
-        assertTrue(result.stderr().contains("failed"));
+        assertTrue(result.stderr()
+                .contains("failed"));
         assertTrue(result.stderrBytesRead() >= 5);
         assertFalse(result.stderrTruncated());
     }
@@ -130,7 +141,8 @@ class ProjectProcessExecutorTest {
         Path root = Files.createTempDirectory("synesis-exec-timeout-");
         var result = run(root, PortableTestCommand.fixture("partial", "partial", "1", "5"), 1);
         assertEquals(ProjectProcessExecutor.Outcome.COMMAND_TIMED_OUT, result.outcome());
-        assertTrue(result.stdout().contains("partial"));
+        assertTrue(result.stdout()
+                .contains("partial"));
         assertTrue(result.stdoutBytesRead() >= 7);
     }
 
@@ -141,7 +153,8 @@ class ProjectProcessExecutorTest {
         assertEquals(ProjectProcessExecutor.Outcome.COMMAND_TIMED_OUT, result.outcome());
         assertTrue(result.stdoutBytesRead() >= 100000, result.toString());
         assertTrue(result.stdoutTruncated(), result.toString());
-        assertTrue(result.stdout().contains(ProjectProcessExecutor.TRUNCATION_MARKER));
+        assertTrue(result.stdout()
+                .contains(ProjectProcessExecutor.TRUNCATION_MARKER));
     }
 
     @Test
@@ -154,9 +167,13 @@ class ProjectProcessExecutorTest {
         Thread.sleep(250);
         caller.interrupt();
         caller.join(10_000);
-        assertTrue(reference.get() != null, "cancelled execution did not return");
-        assertEquals(ProjectProcessExecutor.Outcome.COMMAND_CANCELLED, reference.get().outcome());
-        assertTrue(reference.get().stdout().contains("partial"));
+        assertNotNull(reference.get(), "cancelled execution did not return");
+        assertEquals(ProjectProcessExecutor.Outcome.COMMAND_CANCELLED,
+                reference.get()
+                        .outcome());
+        assertTrue(reference.get()
+                .stdout()
+                .contains("partial"));
     }
 
     @Test

@@ -48,11 +48,11 @@ Fresh project and harness:
 
 Participants and claims:
 
-| participant | intent | session | claim / epoch |
-|---|---|---|---|
-| `agt_d3a9bdbe-24d9-3c7c-8941-9357de4e2436` | `44303e56-da3c-3c5c-ab6e-c535848e737e` | `session-a95656c7-8646-452d-8315-f5c0abc25fb1` | `todo.py`, epoch 1 |
-| `agt_42e52e67-c217-3c19-8c63-47f04df45f29` | `41907e80-441f-3192-b461-9d8ac7c0afd5` | `session-8aa0c3b9-f646-49ec-8682-a9f50b9c6eaf` | `test_todo.py`, epoch 1 |
-| `agt_972ebe4e-6adf-36e3-ae24-4741487fe0c1` | `403f62a4-3481-3038-b0cd-92994726dfb` | `session-5cac0f45-75f3-494e-a13a-91f25a58bfe0` | `test_todo.py`, epoch 1; later verification participant |
+| participant                                | intent                                 | session                                        | claim / epoch                                           |
+|--------------------------------------------|----------------------------------------|------------------------------------------------|---------------------------------------------------------|
+| `agt_d3a9bdbe-24d9-3c7c-8941-9357de4e2436` | `44303e56-da3c-3c5c-ab6e-c535848e737e` | `session-a95656c7-8646-452d-8315-f5c0abc25fb1` | `todo.py`, epoch 1                                      |
+| `agt_42e52e67-c217-3c19-8c63-47f04df45f29` | `41907e80-441f-3192-b461-9d8ac7c0afd5` | `session-8aa0c3b9-f646-49ec-8682-a9f50b9c6eaf` | `test_todo.py`, epoch 1                                 |
+| `agt_972ebe4e-6adf-36e3-ae24-4741487fe0c1` | `403f62a4-3481-3038-b0cd-92994726dfb`  | `session-5cac0f45-75f3-494e-a13a-91f25a58bfe0` | `test_todo.py`, epoch 1; later verification participant |
 
 All three intents converged on WorkGroup
 `62241cb0-1e0d-3030-a945-e7f2dc5c37fb`.
@@ -162,14 +162,21 @@ a reason to alter production lifecycle semantics.
 ## Verification after the run
 
 - `:coordination:test --tests org.synesis.coordination.collaboration.WorkIntentServiceTest`: PASS
-- `:workspace:test --tests org.synesis.workspace.MultiChatLogicalWorkspaceTest --tests org.synesis.workspace.AgentNextActionServiceTest`: PASS
-- `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest`: PASS, 15 tests; the known Git child-process wait was observed during fixture setup but the suite completed
+-
+`:workspace:test --tests org.synesis.workspace.MultiChatLogicalWorkspaceTest --tests org.synesis.workspace.AgentNextActionServiceTest`:
+PASS
+- `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest`: PASS, 15 tests; the known Git child-process wait
+  was observed during fixture setup but the suite completed
 - `:coordination:javadoc :workspace:javadoc :mcp:javadoc`: PASS
 - `:cli:platformBundle --rerun-tasks`: PASS; current bundle rebuilt
 - `scripts/agent-validate-fixtures.ps1`: PASS
 - `scripts/agent-resume.ps1`: PASS; exactly one active SYN-039 task
 - `scripts/agent-doctor.ps1`: structural checks PASS; one warning for documented external absolute paths
 - `go vet ./...` in `bootstrap`: PASS
-- `go test ./...` in `bootstrap`: FAIL with the three known migration failures in `main_test.go` lines 132, 201, and 288 (`update migrations not prepared`)
+- `go test ./...` in `bootstrap`: FAIL with the three known migration failures in `main_test.go` lines 132, 201, and
+  288 (`update migrations not prepared`)
 - `git diff --check`: PASS for the tracked working-tree diff
-- Full `.\gradlew.bat check --no-daemon`: FAIL at the pre-existing `:link:formatCheck` trailing-whitespace list. After removing this evidence file's Markdown hard-break spaces, `:link:formatCheck` still fails only on the previously recorded checkpoint/evidence files; CP-0536 is no longer in the list. The run also reproduced the known Git subprocess wait in `McpServerTest.setUp` through `ManagedBaselineTransactionService.synchronizeRealIndex` and `GitProcessRunner`.
+- Full `.\gradlew.bat check --no-daemon`: FAIL at the pre-existing `:link:formatCheck` trailing-whitespace list. After
+  removing this evidence file's Markdown hard-break spaces, `:link:formatCheck` still fails only on the previously
+  recorded checkpoint/evidence files; CP-0536 is no longer in the list. The run also reproduced the known Git subprocess
+  wait in `McpServerTest.setUp` through `ManagedBaselineTransactionService.synchronizeRealIndex` and `GitProcessRunner`.

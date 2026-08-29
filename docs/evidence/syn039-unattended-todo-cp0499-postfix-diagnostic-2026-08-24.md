@@ -32,10 +32,10 @@ manually.
 
 The agents used disjoint visible claims:
 
-| Agent | Participant | Session / provider binding | Claim | Epoch |
-|---|---|---|---|---|
-| A | `agt_308bf35e-34be-32ee-b6c0-08b3c04a6bbf` | `session-2d1dfc31-836e-4a1b-ac32-50bb2efed2c7` | `PATH_EXACT todo.py` | 1 |
-| B | `agt_93d9b57e-8c9c-380d-8577-429c3ff6b503` | `session-fa4e2094-b8f3-4c72-809d-1604457f7ff1` | `PATH_EXACT test_todo.py` | 1 |
+| Agent | Participant                                | Session / provider binding                     | Claim                     | Epoch |
+|-------|--------------------------------------------|------------------------------------------------|---------------------------|-------|
+| A     | `agt_308bf35e-34be-32ee-b6c0-08b3c04a6bbf` | `session-2d1dfc31-836e-4a1b-ac32-50bb2efed2c7` | `PATH_EXACT todo.py`      | 1     |
+| B     | `agt_93d9b57e-8c9c-380d-8577-429c3ff6b503` | `session-fa4e2094-b8f3-4c72-809d-1604457f7ff1` | `PATH_EXACT test_todo.py` | 1     |
 
 Both bindings were verified against the same project. Agent A's worktree
 was `...\worktrees\session-2d1dfc31-836e-4a1b-ac32-50bb2efed2c7`; Agent B

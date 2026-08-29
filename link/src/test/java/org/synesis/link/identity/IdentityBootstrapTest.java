@@ -1,6 +1,7 @@
 package org.synesis.link.identity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,7 +23,7 @@ final class IdentityBootstrapTest {
             IdentityBootstrap.Result first = bootstrap.loadOrCreate();
             IdentityBootstrap.Result second = bootstrap.loadOrCreate();
             assertTrue(first.created());
-            assertTrue(!second.created());
+            assertFalse(second.created());
             assertEquals(first.identity()
                             .nodeId(),
                     second.identity()

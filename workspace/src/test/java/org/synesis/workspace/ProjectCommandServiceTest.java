@@ -19,7 +19,9 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.test.PortableTestCommand;
 import org.synesis.workspace.test.TestGit;
 
-/** Verifies direct argv execution remains lane-bound and provider-neutral. */
+/**
+ * Verifies direct argv execution remains lane-bound and provider-neutral.
+ */
 class ProjectCommandServiceTest {
 
     private Path controlRoot;
@@ -67,7 +69,8 @@ class ProjectCommandServiceTest {
         AgentResponse response = new ProjectCommandService().runCommand(new ProjectCommandService.CommandRequest(
                 controlRoot, "codex", "conn-cmd-2", List.of("synesis-command-that-does-not-exist")));
         assertEquals(AgentStatus.BLOCKED, response.status(), response.toJson());
-        assertTrue(response.toJson().contains("command_executable_not_found"), response.toJson());
+        assertTrue(response.toJson()
+                .contains("command_executable_not_found"), response.toJson());
     }
 
     @Test
@@ -77,14 +80,16 @@ class ProjectCommandServiceTest {
                 controlRoot, "codex", "conn-cmd-3",
                 PortableTestCommand.stdout("hello world")));
         assertEquals(AgentStatus.COMPLETED, response.status(), response.toJson());
-        assertTrue(response.toJson().contains("hello world"), response.toJson());
+        assertTrue(response.toJson()
+                .contains("hello world"), response.toJson());
     }
 
     @Test
     void commandCannotMutateControlCheckout() throws Exception {
         ensureSession("conn-cmd-4");
         var location = new ProjectApplicationService().locate(controlRoot);
-        var binding = new ProviderSessionBindingService().list(location, "codex").getLast();
+        var binding = new ProviderSessionBindingService().list(location, "codex")
+                .getLast();
         Path lane = Path.of(binding.worktreePath());
         Files.writeString(lane.resolve("src/Product.java"), "public class Product { int v = 2; }\n");
 

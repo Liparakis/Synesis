@@ -9,7 +9,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 
-/** Holds an OS file lock while preserving the permanent lock object on disk. */
+/**
+ * Holds an OS file lock while preserving the permanent lock object on disk.
+ */
 public final class CommandPermanentLock implements AutoCloseable {
 
     private final Path path;
@@ -22,21 +24,24 @@ public final class CommandPermanentLock implements AutoCloseable {
         this.lock = lock;
     }
 
-    /** Creates or opens one permanent regular lock file and acquires it.
+    /**
+     * Creates or opens one permanent regular lock file and acquires it.
+     *
      * @param path permanent lock path
      * @return held lock handle
      * @throws IOException if the object is invalid or cannot be locked
      */
     public static CommandPermanentLock open(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
-        Path normalized = path.toAbsolutePath().normalize();
+        Path normalized = path.toAbsolutePath()
+                .normalize();
         Files.createDirectories(Objects.requireNonNull(normalized.getParent(), "lock parent"));
         if (Files.exists(normalized)
                 && (!Files.isRegularFile(normalized) || Files.isSymbolicLink(normalized))) {
             throw new IOException("COMMAND_LOCK_OBJECT_INVALID");
         }
         try {
-            Files.createFile(normalized, new java.nio.file.attribute.FileAttribute<?>[0]);
+            Files.createFile(normalized);
         } catch (java.nio.file.FileAlreadyExistsException exists) {
             // The object may have been published by another process between
             // the identity check and CREATE_FILE; the common bounded retry
@@ -64,33 +69,40 @@ public final class CommandPermanentLock implements AutoCloseable {
                 if (System.nanoTime() >= deadline) {
                     throw new IOException("COMMAND_LOCK_TIMEOUT");
                 }
-                Thread.sleep(10L);
+                java.util.concurrent.locks.LockSupport.parkNanos(
+                        java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10L));
+                if (Thread.interrupted()) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("COMMAND_LOCK_INTERRUPTED");
+                }
             }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            channel.close();
-            throw new IOException("COMMAND_LOCK_INTERRUPTED", interrupted);
         } catch (IOException failure) {
             channel.close();
             throw failure;
         }
     }
 
-    /** Returns the permanent lock object's normalized path.
+    /**
+     * Returns the permanent lock object's normalized path.
+     *
      * @return permanent lock path
      */
     public Path path() {
         return path;
     }
 
-    /** Returns whether this process still holds the lock.
+    /**
+     * Returns whether this process still holds the lock.
+     *
      * @return true while the OS lock is valid
      */
     public boolean isHeld() {
         return lock.isValid();
     }
 
-    /** Releases the OS lock but intentionally leaves the lock file in place. */
+    /**
+     * Releases the OS lock but intentionally leaves the lock file in place.
+     */
     @Override
     public void close() throws IOException {
         try {

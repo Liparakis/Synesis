@@ -1,6 +1,7 @@
 package org.synesis.link.onboarding;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -37,10 +38,10 @@ final class OnboardingTest {
         Path profile = Files.createTempDirectory("synesis-onboarding");
         String link = "synesis://join/not-a-valid-invitation";
         OnboardingFailure failure = org.junit.jupiter.api.Assertions.assertThrows(OnboardingFailure.class,
-                () -> new Onboarding(profile, event -> {
+                () -> new Onboarding(profile, _ -> {
                 }).join(link));
         assertEquals(OnboardingFailureCode.INVITE_INVALID, failure.code());
-        assertTrue(!failure.getMessage()
+        assertFalse(failure.getMessage()
                 .contains(link));
     }
 }

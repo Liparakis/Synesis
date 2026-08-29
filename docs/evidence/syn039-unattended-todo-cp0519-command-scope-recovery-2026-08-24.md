@@ -31,7 +31,8 @@ new verified worktree, complete review, and run a normal command without
 - Original intent: `823a00ed-8184-3470-9fdb-bfc95975538d`, epoch 1,
   `PATH_EXACT test_todo.py`
 - Original worktree: `...\worktrees\session-078eef62-a6b7-4a12-9276-e85f4afc74d4`
-- Recovery worktree: `...\worktrees\session-078eef62-a6b7-4a12-9276-e85f4afc74d4-recovery-8c0b0fcd-f2ac-4003-bdac-5d228d5c730a`
+- Recovery worktree:
+  `...\worktrees\session-078eef62-a6b7-4a12-9276-e85f4afc74d4-recovery-8c0b0fcd-f2ac-4003-bdac-5d228d5c730a`
 - A's integrated snapshot: `snap_3046c8fbf48f0556aa467a3b11433851`,
   commit `b355adbbba6682d04506b3aaa0d97337919f7400`
 - Evidence logs:
@@ -96,10 +97,10 @@ BUILD SUCCESSFUL
 
 Participants and claims:
 
-| Agent | Participant | Intent / epoch | Claim |
-|---|---|---|---|
-| A | `agt_6cad368b-7e75-371e-b820-a6cd67065105` | `f9534cb1-8d03-310a-aaa8-2be52503bb67` / 1 | `PATH_EXACT todo.py` |
-| B | `agt_b30a7488-0382-3663-b5b5-2c98bebef49f` | `8b210b5e-f0ff-3c6a-95ff-a709df512dc3` / 1 | `PATH_EXACT test_todo.py` |
+| Agent | Participant                                | Intent / epoch                             | Claim                     |
+|-------|--------------------------------------------|--------------------------------------------|---------------------------|
+| A     | `agt_6cad368b-7e75-371e-b820-a6cd67065105` | `f9534cb1-8d03-310a-aaa8-2be52503bb67` / 1 | `PATH_EXACT todo.py`      |
+| B     | `agt_b30a7488-0382-3663-b5b5-2c98bebef49f` | `8b210b5e-f0ff-3c6a-95ff-a709df512dc3` / 1 | `PATH_EXACT test_todo.py` |
 
 Shared WorkGroup: `89fea014-9f5b-326b-8521-5d2218cc55fc`, terminal
 `COMPLETED`, version 2.
@@ -112,12 +113,12 @@ The diagnostic reached and exercised:
    `ebe6c8a2-7b71-3c59-9ba2-d434b9e012f8`, both consumed with epoch 1 and the
    correct target participant.
 4. Immutable snapshots:
-   - `snap_e06aa78a05912ffa11153bbba8d6045d`, `test_todo.py`, snapshot commit
-     `9e7a2452c979e554a696d7d64b17598c2ee6f391`; structured REJECT was
-     returned with an actionable route.
-   - `snap_afc55fe525ce695509ece91089617f2a`, `todo.py`, snapshot commit
-     `ccea346a366167f1083ed388f5a1b74610795348`; reviewer read and pytest
-     validation completed, then structured ACCEPT was returned.
+    - `snap_e06aa78a05912ffa11153bbba8d6045d`, `test_todo.py`, snapshot commit
+      `9e7a2452c979e554a696d7d64b17598c2ee6f391`; structured REJECT was
+      returned with an actionable route.
+    - `snap_afc55fe525ce695509ece91089617f2a`, `todo.py`, snapshot commit
+      `ccea346a366167f1083ed388f5a1b74610795348`; reviewer read and pytest
+      validation completed, then structured ACCEPT was returned.
 5. Control checkout integration commits `b673c1d` for `test_todo.py` and
    `932c21a` for `todo.py`; final control checkout was clean and `pytest`
    passed `3/3`.
@@ -136,10 +137,10 @@ evidence, not additional production defects.
 - Project ID: `fc4bc78f-c9af-454a-ba80-69ec664befc3`
 - WorkGroup: `dfc93a1a-de2e-3db4-859e-c0eb7d60eaab`, terminal state `ACTIVE`
 - Original participants:
-  - `agt_0b734871-3a84-3ade-a845-dc803b9773a5`, intent
-    `853af37c-1a19-3959-9a05-18a977ed96c5`, `todo.py`, completed
-  - `agt_025c7ddc-dd2e-3e40-b920-13b8c4044bb1`, intent
-    `499f29de-8a62-36b9-be34-a77963fa7163`, `test_todo.py`, completed
+    - `agt_0b734871-3a84-3ade-a845-dc803b9773a5`, intent
+      `853af37c-1a19-3959-9a05-18a977ed96c5`, `todo.py`, completed
+    - `agt_025c7ddc-dd2e-3e40-b920-13b8c4044bb1`, intent
+      `499f29de-8a62-36b9-be34-a77963fa7163`, `test_todo.py`, completed
 - Retained-session continuation participant:
   `agt_dc780e6e-7cc6-3a4e-9a59-a28ff00984f5`, intent
   `6cbd2db3-d95c-3bfc-b703-051188571f26`, `todo.py`, still `ACTIVE`

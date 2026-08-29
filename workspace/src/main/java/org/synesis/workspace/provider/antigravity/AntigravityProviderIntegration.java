@@ -5,10 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
-
-import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
-import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 
 /**
@@ -115,9 +113,13 @@ public final class AntigravityProviderIntegration implements ProviderIntegration
     public java.util.Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
         java.util.Map<String, Object> server = new java.util.LinkedHashMap<>();
         String cmd = launcher != null && java.nio.file.Files.isRegularFile(launcher)
-                ? launcher.toAbsolutePath().normalize().toString()
-                : (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
-                        ? "synesis-mcp.exe" : "synesis-mcp");
+                ? launcher.toAbsolutePath()
+                  .normalize()
+                  .toString()
+                : (System.getProperty("os.name", "")
+                        .toLowerCase(Locale.ROOT)
+                        .contains("win")
+                   ? "synesis-mcp.exe" : "synesis-mcp");
         server.put("command", cmd);
         // Antigravity's registration is provider-global. Never embed the
         // project that happened to be installed most recently; the MCP

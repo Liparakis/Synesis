@@ -20,16 +20,13 @@ import picocli.CommandLine.Option;
 @Command(name = "mcp", description = "Launches the stdio Model Context Protocol (MCP) server")
 public final class McpCommand implements Callable<Integer> {
 
+    private final CliRuntime runtime;
     @Option(names = {"--provider"}, description = "Provider name (default: codex)", defaultValue = "codex")
     private String provider;
-
     @Option(names = {"--project"}, description = "Project root directory")
     private String project;
-
     @Option(names = {"--connection-instance-id"}, description = "Process connection instance ID")
     private String connectionInstanceId;
-
-    private final CliRuntime runtime;
 
     /**
      * Creates an MCP command instance.
@@ -41,6 +38,7 @@ public final class McpCommand implements Callable<Integer> {
     }
 
     @Override
+    @SuppressWarnings("ExtractMethodRecommender")
     public Integer call() {
         try {
             List<String> argsList = new ArrayList<>();

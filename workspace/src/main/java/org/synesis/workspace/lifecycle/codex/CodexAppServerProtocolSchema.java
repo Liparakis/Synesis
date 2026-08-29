@@ -20,7 +20,9 @@ import java.util.Set;
  */
 public final class CodexAppServerProtocolSchema {
 
-    /** Maximum method-name UTF-8 bytes accepted by the local schema. */
+    /**
+     * Maximum method-name UTF-8 bytes accepted by the local schema.
+     */
     public static final int MAX_METHOD_BYTES = 256;
 
     private static final Set<String> REQUEST_METHODS = Set.of(
@@ -128,7 +130,7 @@ public final class CodexAppServerProtocolSchema {
             if (rawId != null && (!(rawMethod instanceof String method) || !isServerRequest(method))) {
                 throw new IOException("codex_protocol_malformed_frame");
             }
-            if (rawId != null && !validRequestId(rawId)) {
+            if (rawId != null && invalidRequestId(rawId)) {
                 throw new IOException("codex_protocol_malformed_frame");
             }
             if (!(rawMethod instanceof String method) || method.isBlank()
@@ -141,7 +143,7 @@ public final class CodexAppServerProtocolSchema {
             }
             return;
         }
-        if (!validRequestId(rawId)) {
+        if (invalidRequestId(rawId)) {
             throw new IOException("codex_protocol_malformed_response");
         }
         if (!frame.containsKey("result") && !frame.containsKey("error")) {
@@ -153,16 +155,16 @@ public final class CodexAppServerProtocolSchema {
         }
     }
 
-    private static boolean validRequestId(Object value) {
+    private static boolean invalidRequestId(Object value) {
         if (value instanceof String text) {
-            return !text.isBlank();
+            return text.isBlank();
         }
         if (value instanceof Number number) {
             double numeric = number.doubleValue();
-            return Double.isFinite(numeric) && numeric == Math.rint(numeric)
-                    && numeric >= Long.MIN_VALUE && numeric <= Long.MAX_VALUE;
+            return !Double.isFinite(numeric) || numeric != Math.rint(numeric)
+                    || numeric < Long.MIN_VALUE || numeric > Long.MAX_VALUE;
         }
-        return false;
+        return true;
     }
 
     /**

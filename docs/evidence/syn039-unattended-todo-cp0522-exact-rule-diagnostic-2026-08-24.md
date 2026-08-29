@@ -36,7 +36,8 @@ changed.
 - Project ID: `5f89f37c-2313-48ff-a9a2-0339194b93fd`
 - Seed commit: `86df796`
 - Synesis-managed baseline: `4e8a430`
-- MCP executable: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
+- MCP executable:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
 - MCP SHA-256: `D7B8C0E533674C2BDA891FC60F2B013923A731838C1F0601EBC4E5AD3F11360C`
 - MCP startup version/commit: `0.1.0-SNAPSHOT` / `bc334ac`
 - Agent A connection: `conn-instance-e525b47b-eb00-4c49-9efe-fb806688e1cd`
@@ -44,10 +45,10 @@ changed.
 
 ## Participants and claims
 
-| Agent | Participant / intent | Claim and session worktree | Final state |
-|---|---|---|---|
-| A | `agt_5c7a3739-9757-302d-966d-2cc32c82193d` / `131672ac-5f3e-302a-b9aa-5ebf12bf1dc7` | epoch 1, `PATH_EXACT todo.py`, `session-891505da-586b-44ac-803a-d517c004642b` | ACTIVE |
-| B | `agt_28f6dfec-2ecd-310f-90a4-0cec04a8e54e` / `9b942ac3-16c3-3b47-871a-483ad9167d63` | epoch 1, `PATH_EXACT test_todo.py`, `session-1795466e-001b-48a5-b157-5adb54aa2ff8` | ACTIVE |
+| Agent | Participant / intent                                                                | Claim and session worktree                                                         | Final state |
+|-------|-------------------------------------------------------------------------------------|------------------------------------------------------------------------------------|-------------|
+| A     | `agt_5c7a3739-9757-302d-966d-2cc32c82193d` / `131672ac-5f3e-302a-b9aa-5ebf12bf1dc7` | epoch 1, `PATH_EXACT todo.py`, `session-891505da-586b-44ac-803a-d517c004642b`      | ACTIVE      |
+| B     | `agt_28f6dfec-2ecd-310f-90a4-0cec04a8e54e` / `9b942ac3-16c3-3b47-871a-483ad9167d63` | epoch 1, `PATH_EXACT test_todo.py`, `session-1795466e-001b-48a5-b157-5adb54aa2ff8` | ACTIVE      |
 
 WorkGroup: `8672f63b-e528-3b23-9fdc-5d4c0ac09841`, `ACTIVE`. No grant,
 snapshot, validation, integration, or closure state was created.

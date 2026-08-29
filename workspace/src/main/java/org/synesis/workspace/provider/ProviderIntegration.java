@@ -68,9 +68,13 @@ public interface ProviderIntegration {
     default Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
         Map<String, Object> server = new LinkedHashMap<>();
         String cmd = launcher != null && java.nio.file.Files.isRegularFile(launcher)
-                ? launcher.toAbsolutePath().normalize().toString()
-                : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
-                        ? "synesis-mcp.exe" : "synesis-mcp");
+                ? launcher.toAbsolutePath()
+                  .normalize()
+                  .toString()
+                : (System.getProperty("os.name", "")
+                        .toLowerCase(java.util.Locale.ROOT)
+                        .contains("win")
+                   ? "synesis-mcp.exe" : "synesis-mcp");
         server.put("command", cmd);
         server.put("args", List.of("mcp", "--provider", id()));
         server.put("version", 1);
@@ -85,7 +89,7 @@ public interface ProviderIntegration {
      * such providers pull-safe and must not infer autonomous support.
      *
      * @param worktree isolated lane worktree
-     * @param prompt initial provider task prompt
+     * @param prompt   initial provider task prompt
      * @return direct executable argv, or empty when unsupported/unverified
      */
     default java.util.Optional<List<String>> autonomousCommand(Path worktree, String prompt) {
@@ -135,7 +139,7 @@ public interface ProviderIntegration {
      * Returns an optional managed session-start hook.
      *
      * @param launcher generated Synesis launcher
-     * @param profile local provider profile
+     * @param profile  local provider profile
      * @return hook object, or {@code null} when unsupported
      */
     default Map<String, Object> managedSessionHook(Path launcher, Path profile) {

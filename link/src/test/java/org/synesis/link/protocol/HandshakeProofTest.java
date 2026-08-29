@@ -1,5 +1,6 @@
 package org.synesis.link.protocol;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,8 +32,8 @@ final class HandshakeProofTest {
 
     @Test
     void negotiationRejectsSilentDowngradeAndNoCommonVersion() {
-        assertTrue(ProtocolVersion.negotiate(List.of(ProtocolVersion.V1), List.of(ProtocolVersion.V1))
-                .equals(ProtocolVersion.V1));
+        assertEquals(ProtocolVersion.V1,
+                ProtocolVersion.negotiate(List.of(ProtocolVersion.V1), List.of(ProtocolVersion.V1)));
         assertThrows(IllegalArgumentException.class, () -> ProtocolVersion.negotiate(
                 List.of(ProtocolVersion.V1), List.of(new ProtocolVersion(2, 0))));
     }

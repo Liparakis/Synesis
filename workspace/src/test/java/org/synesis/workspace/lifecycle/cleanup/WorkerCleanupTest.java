@@ -1,7 +1,7 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,15 +9,16 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
 class WorkerCleanupTest {
 
     private static void runGit(Path root, String... args) throws Exception {
         org.synesis.workspace.test.TestGit.run(root, args);
+    }
+
+    private static String runGitOutput(Path root, String... args) throws Exception {
+        return org.synesis.workspace.test.TestGit.output(root, args);
     }
 
     @Test
@@ -46,10 +47,21 @@ class WorkerCleanupTest {
                 System.currentTimeMillis(),
                 1, 0, 0, 0, 0, 1, 0, 4096L, false,
                 List.of(new CleanupPlanEntry(
-                        LifecycleResourceType.WORKER_WORKTREE, "wt-clean", wtPath,
-                        CleanupClassification.CLEANUP_ELIGIBLE, true, List.of("finalized_and_clean"), 4096L, "Clean",
-                        List.of("session-clean"), "REGISTERED", false, "path_verified", ProcessEvidenceState.NOT_OBSERVED,
-                        new LifecycleResourceFingerprint("wt-clean", 1000L, head, commonDir, "clean", "h1"), "DELETE_WORKTREE_DIRECTORY"
+                        LifecycleResourceType.WORKER_WORKTREE,
+                        "wt-clean",
+                        wtPath,
+                        CleanupClassification.CLEANUP_ELIGIBLE,
+                        true,
+                        List.of("finalized_and_clean"),
+                        4096L,
+                        "Clean",
+                        List.of("session-clean"),
+                        "REGISTERED",
+                        false,
+                        "path_verified",
+                        ProcessEvidenceState.NOT_OBSERVED,
+                        new LifecycleResourceFingerprint("wt-clean", 1000L, head, commonDir, "clean", "h1"),
+                        "DELETE_WORKTREE_DIRECTORY"
                 ))
         );
 
@@ -62,9 +74,5 @@ class WorkerCleanupTest {
         assertEquals(1, summary.completedCount());
         assertEquals(0, summary.failedCount());
         assertFalse(Files.exists(wtPath));
-    }
-
-    private static String runGitOutput(Path root, String... args) throws Exception {
-        return org.synesis.workspace.test.TestGit.output(root, args);
     }
 }

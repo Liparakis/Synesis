@@ -66,10 +66,10 @@ harness directory listed below.
 
 ### Participants, intents, claims, and epochs
 
-| Agent | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---:|
-| A | `agt_1b960144-d9d4-3a48-949f-9e4a9be820e6` | `39c57c74-831b-333c-b8dd-bbf1ebdf57b5` | `PATH_EXACT todo.py` | 1 |
-| B | `agt_a5050c9b-4e52-3c79-be7b-4c9ae9b58345` | `85a0a63e-d897-3be7-880d-9743b1f6c94c` | `PATH_EXACT test_todo.py` | 1 |
+| Agent | Participant                                | Intent                                 | Claim                     | Epoch |
+|-------|--------------------------------------------|----------------------------------------|---------------------------|------:|
+| A     | `agt_1b960144-d9d4-3a48-949f-9e4a9be820e6` | `39c57c74-831b-333c-b8dd-bbf1ebdf57b5` | `PATH_EXACT todo.py`      |     1 |
+| B     | `agt_a5050c9b-4e52-3c79-be7b-4c9ae9b58345` | `85a0a63e-d897-3be7-880d-9743b1f6c94c` | `PATH_EXACT test_todo.py` |     1 |
 
 Shared WorkGroup: `fd42d9b3-5333-3a72-8cf0-20603ddda286`.
 
@@ -177,10 +177,10 @@ included here once with their stable identifiers.
 
 ### Snapshots and integration
 
-| Producer | Snapshot | Base | Snapshot commit | Changed path |
-|---|---|---|---|---|
-| B | `snap_62c871c6e74a3e7da6fe6ff51e9a932e` | `62a2952ff7633302caeb478360e647930f2f3540` | `80b2a4a95d7bd953e8159e3c210eb0e07e8ca134` | `test_todo.py` |
-| A | `snap_0f181e97e99a35b1d952bd76eb9e0b67` | `62a2952ff7633302caeb478360e647930f2f3540` | `a4616d30cb13098b07d365b4400a318fc4a7b991` | `todo.py` |
+| Producer | Snapshot                                | Base                                       | Snapshot commit                            | Changed path   |
+|----------|-----------------------------------------|--------------------------------------------|--------------------------------------------|----------------|
+| B        | `snap_62c871c6e74a3e7da6fe6ff51e9a932e` | `62a2952ff7633302caeb478360e647930f2f3540` | `80b2a4a95d7bd953e8159e3c210eb0e07e8ca134` | `test_todo.py` |
+| A        | `snap_0f181e97e99a35b1d952bd76eb9e0b67` | `62a2952ff7633302caeb478360e647930f2f3540` | `a4616d30cb13098b07d365b4400a318fc4a7b991` | `todo.py`      |
 
 Both snapshots were visible to the authorized reviewer and integrated. The
 final control checkout was clean at `7038143 Synesis immutable lane snapshot`;
@@ -219,10 +219,10 @@ known fixture warnings and did not block this run.
   `syn039-cp0534-followup-001-agent-a` and
   `syn039-cp0534-followup-001-agent-b`
 
-| Agent | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---:|
-| A | `agt_01ef0c68-5f33-346c-b7fe-cb80cda016c2` | `d67886af-a6a2-382b-ac17-5f59d7e81b7d` | `PATH_EXACT todo.py` | 1 |
-| B | `agt_eaf4274a-30f9-3381-a719-e5c9ed37c4cf` | `db2d65ca-4fae-3f21-be75-d647aab1849a` | `PATH_EXACT test_todo.py` | 1 |
+| Agent | Participant                                | Intent                                 | Claim                     | Epoch |
+|-------|--------------------------------------------|----------------------------------------|---------------------------|------:|
+| A     | `agt_01ef0c68-5f33-346c-b7fe-cb80cda016c2` | `d67886af-a6a2-382b-ac17-5f59d7e81b7d` | `PATH_EXACT todo.py`      |     1 |
+| B     | `agt_eaf4274a-30f9-3381-a719-e5c9ed37c4cf` | `db2d65ca-4fae-3f21-be75-d647aab1849a` | `PATH_EXACT test_todo.py` |     1 |
 
 Shared WorkGroup: `d1815a35-a4d5-3f9c-aa89-9531ea5652f9`.
 

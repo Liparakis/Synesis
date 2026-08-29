@@ -33,7 +33,8 @@ the structured ACCEPT successfully.
 - Managed baseline: `49f62b5`
 - Final control checkout: `09c0d52` (`Synesis immutable lane snapshot`)
 - Control checkout: clean on `master`
-- MCP executable: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
+- MCP executable:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
 - MCP SHA-256: `3EFCCEA02349D5AD5C5E6D14A362BB58645078A7591564069792F7338CBCCA6E`
 - MCP startup version/commit: `0.1.0-SNAPSHOT` / `bc334ac`
 - Agent A connection: `conn-instance-ccb08a61-2332-4d15-b7aa-86f5db71834a`
@@ -47,10 +48,10 @@ the structured ACCEPT successfully.
 
 ## Participants, claims, and WorkGroup
 
-| Agent | Participant / intent | Claim / epoch | Session worktree | Final state |
-|---|---|---|---|---|
-| A | `agt_cf3cd89f-9661-3bb3-b4c0-732a93b605f2` / `6dc6923d-e23d-300e-ba85-ff09ab3f6d51` | `PATH_EXACT todo.py`, epoch 1 | `session-15fd55ba-7513-466b-b69f-8460ea1aab98` | COMPLETED |
-| B | `agt_dc811ea4-0ecf-37d5-890f-c01e7739ef83` / `f63dee3c-0822-3852-916b-767882eb3b64` | `PATH_EXACT test_todo.py`, epoch 1 | `session-de476ffb-0fb1-45c6-9224-d975b79c6b15-recovery-01bbd304-1843-4ad7-b345-8be1701bfa5a` | ACTIVE |
+| Agent | Participant / intent                                                                | Claim / epoch                      | Session worktree                                                                             | Final state |
+|-------|-------------------------------------------------------------------------------------|------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| A     | `agt_cf3cd89f-9661-3bb3-b4c0-732a93b605f2` / `6dc6923d-e23d-300e-ba85-ff09ab3f6d51` | `PATH_EXACT todo.py`, epoch 1      | `session-15fd55ba-7513-466b-b69f-8460ea1aab98`                                               | COMPLETED   |
+| B     | `agt_dc811ea4-0ecf-37d5-890f-c01e7739ef83` / `f63dee3c-0822-3852-916b-767882eb3b64` | `PATH_EXACT test_todo.py`, epoch 1 | `session-de476ffb-0fb1-45c6-9224-d975b79c6b15-recovery-01bbd304-1843-4ad7-b345-8be1701bfa5a` | ACTIVE      |
 
 - Shared WorkGroup: `d34f88e2-83f2-34af-a84c-c2bb351f65cc`, `ACTIVE`
 - REVIEW request: `90573dbf-da4b-40e7-bf42-9a1a79ae6b1a`, A target,

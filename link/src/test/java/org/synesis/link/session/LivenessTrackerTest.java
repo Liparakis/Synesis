@@ -3,7 +3,6 @@ package org.synesis.link.session;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -53,7 +52,7 @@ final class LivenessTrackerTest {
         assertEquals(LivenessState.LIVE, tracker.state());
         assertEquals(1, events.size());
         assertEquals(LivenessState.LIVE,
-                events.get(0)
+                events.getFirst()
                         .to());
         assertEquals(1, scheduler.pending());
     }
@@ -126,8 +125,8 @@ final class LivenessTrackerTest {
                 events.stream()
                         .filter(event -> event.to() == LivenessState.CLOSED_GRACEFULLY)
                         .count());
-        assertTrue(tracker.metrics()
-                .terminalTransitionCount() == 1);
+        assertEquals(1, tracker.metrics()
+                .terminalTransitionCount());
     }
 
     private static final class ManualClock implements MonotonicClock {

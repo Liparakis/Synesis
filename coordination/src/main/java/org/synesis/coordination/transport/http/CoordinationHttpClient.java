@@ -89,6 +89,9 @@ public final class CoordinationHttpClient {
             }
         }
         if (response == null) {
+            if (last == null) {
+                throw new IOException("event replay failed without an I/O cause");
+            }
             throw last;
         }
         if (response.statusCode() != 200) {
@@ -134,7 +137,7 @@ public final class CoordinationHttpClient {
         Objects.requireNonNull(consumer, "consumer");
         URI uri = URI.create(endpoint + "events?after=" + after);
         Duration timeout =
-                durationSeconds > 0 ? Duration.ofSeconds(Math.max(1, durationSeconds) + 1L) : Duration.ofDays(1);
+                durationSeconds > 0 ? Duration.ofSeconds(durationSeconds + 1L) : Duration.ofDays(1);
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(timeout)
                 .GET()
@@ -170,6 +173,7 @@ public final class CoordinationHttpClient {
 
     private static final class EventStreamFailure extends RuntimeException {
 
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
         private final IOException cause;
 

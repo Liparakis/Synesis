@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.ownership;
 
 
-
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;

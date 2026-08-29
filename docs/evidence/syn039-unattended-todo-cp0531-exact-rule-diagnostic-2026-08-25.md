@@ -133,7 +133,8 @@ separate from the Synesis lifecycle result.
 Passed:
 
 - `:workspace:test --tests org.synesis.workspace.AgentNextActionServiceTest`;
-- `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest.activeImplementerCanContinueBeforeReciprocalReviewerConsumesGrant`;
+-
+`:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest.activeImplementerCanContinueBeforeReciprocalReviewerConsumesGrant`;
 - `:workspace:javadoc :mcp:javadoc`;
 - deferred-register and fixture validators;
 - `go vet ./...` in `bootstrap`;

@@ -31,6 +31,7 @@ public record SessionLeaseRecord(
         long lastHeartbeatEpochMillis,
         SessionLeaseState leaseState
 ) {
+
     /**
      * Invariant validation.
      */

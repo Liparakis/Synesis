@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -34,7 +32,8 @@ public record CapabilityRequestHandle(String value) {
         if (!isValid(trimmed)) {
             throw new IllegalArgumentException("Invalid capability request handle format: " + value);
         }
-        String token = trimmed.substring(4).toUpperCase(Locale.ROOT);
+        String token = trimmed.substring(4)
+                .toUpperCase(Locale.ROOT);
         value = "req_" + token;
     }
 
@@ -48,7 +47,8 @@ public record CapabilityRequestHandle(String value) {
         if (input == null || input.isBlank()) {
             return false;
         }
-        return HANDLE_PATTERN.matcher(input.trim()).matches();
+        return HANDLE_PATTERN.matcher(input.trim())
+                .matches();
     }
 
     /**

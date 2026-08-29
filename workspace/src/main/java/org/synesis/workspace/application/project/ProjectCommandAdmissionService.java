@@ -9,7 +9,6 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.lifecycle.command.CommandFormatException;
 import org.synesis.workspace.lifecycle.command.PhysicalWorktreeIdentity;
 import org.synesis.workspace.lifecycle.command.ProjectCommandAuthoritySnapshot;
 import org.synesis.workspace.lifecycle.command.ProjectCommandCanonicalizer;
@@ -21,10 +20,14 @@ import org.synesis.workspace.lifecycle.command.ProjectCommandRecord;
 import org.synesis.workspace.lifecycle.command.ProjectCommandStore;
 import org.synesis.workspace.lifecycle.command.ProjectCommandTerminalResolution;
 
-/** Implements typed-request replay and the durable release/reacquire admission protocol. */
+/**
+ * Implements typed-request replay and the durable release/reacquire admission protocol.
+ */
 public final class ProjectCommandAdmissionService {
 
-    /** Maximum request IDs retained by one live process anchor. */
+    /**
+     * Maximum request IDs retained by one live process anchor.
+     */
     public static final int MAX_REQUEST_IDS_PER_LIVE_ANCHOR = 8_192;
 
     private final ProjectCommandService commandService;
@@ -32,36 +35,51 @@ public final class ProjectCommandAdmissionService {
     private final ProjectCommandStore store;
     private final java.nio.file.Path namespaceRoot;
 
-    /** Creates an admission service for the supplied command collaborators.
+    /**
+     * Creates an admission service for the supplied command collaborators.
+     *
      * @param commandService direct command executor
-     * @param namespaceRoot host-wide command namespace root
+     * @param namespaceRoot  host-wide command namespace root
      */
     public ProjectCommandAdmissionService(ProjectCommandService commandService,
             java.nio.file.Path namespaceRoot) {
         this.commandService = Objects.requireNonNull(commandService, "commandService");
         this.namespaceRoot = Objects.requireNonNull(namespaceRoot, "namespaceRoot")
-                .toAbsolutePath().normalize();
+                .toAbsolutePath()
+                .normalize();
         this.protectionService = new ProjectCommandProtectionService(this.namespaceRoot);
         this.store = new ProjectCommandStore(this.namespaceRoot);
     }
 
-    /** Supplies the exact post-renewal authority snapshot for one new request. */
-    @FunctionalInterface
-    public interface LeaseRenewal {
-        /** Renews the existing lease and returns the post-renewal authority snapshot.
-         * @return post-renewal authority snapshot
-         * @throws Exception if renewal or authority capture fails
-         */
-        ProjectCommandAuthoritySnapshot renew() throws Exception;
+    private static AgentResponse resolveExisting(ProjectCommandRecord record,
+            String requestDigest, String semanticDigest) {
+        if (!record.requestDigest()
+                .equals(requestDigest) || !record.semanticDigest()
+                .equals(semanticDigest)) {
+            return blocked(AgentReason.COMMAND_IDEMPOTENCY_CONFLICT, "REQUEST_DIGEST_MISMATCH");
+        }
+        if (record.phase() == ProjectCommandPhase.TERMINAL) {
+            return AgentResponse.fromMap(record.response());
+        }
+        return blocked(AgentReason.COMMAND_AMBIGUOUS,
+                "COMMAND_PHASE_" + record.phase()
+                        .name());
     }
 
-    /** Executes or replays one bounded command request under durable admission.
-     * @param request direct command request
+    private static AgentResponse blocked(AgentReason reason, String diagnostic) {
+        return new AgentResponse(AgentStatus.BLOCKED, reason, AgentNextAction.REQUEST_HUMAN_HELP,
+                Map.of("error", diagnostic == null ? "COMMAND_ADMISSION_FAILED" : diagnostic));
+    }
+
+    /**
+     * Executes or replays one bounded command request under durable admission.
+     *
+     * @param request        direct command request
      * @param typedRequestId original typed JSON-RPC request ID
-     * @param anchor exact MCP process anchor
-     * @param worktree verified physical-worktree identity
-     * @param before pre-renewal authority snapshot
-     * @param renewal lease renewal and post-renewal snapshot callback
+     * @param anchor         exact MCP process anchor
+     * @param worktree       verified physical-worktree identity
+     * @param before         pre-renewal authority snapshot
+     * @param renewal        lease renewal and post-renewal snapshot callback
      * @return bounded agent response
      */
     public AgentResponse execute(ProjectCommandService.CommandRequest request, Object typedRequestId,
@@ -85,7 +103,8 @@ public final class ProjectCommandAdmissionService {
         } catch (RuntimeException failure) {
             return blocked(AgentReason.INVALID_PATH, "COMMAND_REQUEST_CANONICALIZATION_FAILED");
         }
-        if (!anchor.scopeLocator().equals(worktree.locator())) {
+        if (!anchor.scopeLocator()
+                .equals(worktree.locator())) {
             return blocked(AgentReason.COMMAND_ADMISSION_STALE, "WORKTREE_SCOPE_MISMATCH");
         }
 
@@ -94,8 +113,6 @@ public final class ProjectCommandAdmissionService {
             if (existing.isPresent()) {
                 return resolveExisting(existing.get(), requestDigest, semanticDigest);
             }
-        } catch (CommandFormatException formatFailure) {
-            return blocked(AgentReason.COMMAND_FORMAT_UNSUPPORTED, formatFailure.getMessage());
         } catch (IOException failure) {
             return blocked(AgentReason.COMMAND_FORMAT_UNSUPPORTED, failure.getMessage());
         }
@@ -109,8 +126,6 @@ public final class ProjectCommandAdmissionService {
             if (existing.isPresent()) {
                 return resolveExisting(existing.get(), requestDigest, semanticDigest);
             }
-        } catch (CommandFormatException formatFailure) {
-            return blocked(AgentReason.COMMAND_FORMAT_UNSUPPORTED, formatFailure.getMessage());
         } catch (IOException failure) {
             return blocked(AgentReason.COMMAND_FORMAT_UNSUPPORTED, failure.getMessage());
         }
@@ -142,8 +157,6 @@ public final class ProjectCommandAdmissionService {
                     requestDigest, semanticDigest, ProjectCommandPhase.STARTING, null, false, null,
                     false, false, null, 1L, now, now, Map.of(), Map.of());
             store.save(starting);
-        } catch (CommandFormatException formatFailure) {
-            return blocked(AgentReason.COMMAND_FORMAT_UNSUPPORTED, formatFailure.getMessage());
         } catch (IOException failure) {
             return blocked(AgentReason.COMMAND_FORMAT_UNSUPPORTED, failure.getMessage());
         }
@@ -161,8 +174,8 @@ public final class ProjectCommandAdmissionService {
                             starting.requestDigest(), starting.semanticDigest(), ProjectCommandPhase.RUNNING,
                             null, false, null, false, false, null, revision.incrementAndGet(),
                             starting.createdAtEpochMillis(), now, Map.of(), Map.of(
-                                    "pid", started.pid(), "executableIdentity", started.executableIdentity(),
-                                    "commandLine", started.commandLine(), "processStartTime", started.processStartTime()));
+                            "pid", started.pid(), "executableIdentity", started.executableIdentity(),
+                            "commandLine", started.commandLine(), "processStartTime", started.processStartTime()));
                     store.save(running);
                     revision.set(2L);
                 } catch (IOException failure) {
@@ -214,19 +227,18 @@ public final class ProjectCommandAdmissionService {
         }
     }
 
-    private static AgentResponse resolveExisting(ProjectCommandRecord record,
-            String requestDigest, String semanticDigest) {
-        if (!record.requestDigest().equals(requestDigest) || !record.semanticDigest().equals(semanticDigest)) {
-            return blocked(AgentReason.COMMAND_IDEMPOTENCY_CONFLICT, "REQUEST_DIGEST_MISMATCH");
-        }
-        if (record.phase() == ProjectCommandPhase.TERMINAL) {
-            return AgentResponse.fromMap(record.response());
-        }
-        return blocked(AgentReason.COMMAND_AMBIGUOUS, "COMMAND_PHASE_" + record.phase().name());
-    }
+    /**
+     * Supplies the exact post-renewal authority snapshot for one new request.
+     */
+    @FunctionalInterface
+    public interface LeaseRenewal {
 
-    private static AgentResponse blocked(AgentReason reason, String diagnostic) {
-        return new AgentResponse(AgentStatus.BLOCKED, reason, AgentNextAction.REQUEST_HUMAN_HELP,
-                Map.of("error", diagnostic == null ? "COMMAND_ADMISSION_FAILED" : diagnostic));
+        /**
+         * Renews the existing lease and returns the post-renewal authority snapshot.
+         *
+         * @return post-renewal authority snapshot
+         * @throws Exception if renewal or authority capture fails
+         */
+        ProjectCommandAuthoritySnapshot renew() throws Exception;
     }
 }

@@ -66,22 +66,7 @@ public final class AntigravityHookAdapter {
         Path targetPath = Path.of(rawTargetFile);
 
         if (workspacePaths != null && !workspacePaths.isEmpty()) {
-            Path bestRoot = null;
-            for (String ws : workspacePaths) {
-                try {
-                    Path root = Path.of(ws)
-                            .toAbsolutePath()
-                            .normalize();
-                    Path absoluteTarget = targetPath.isAbsolute() ? targetPath.normalize() : root.resolve(targetPath)
-                                                                                             .normalize();
-                    if (absoluteTarget.startsWith(root)) {
-                        if (bestRoot == null || root.getNameCount() > bestRoot.getNameCount()) {
-                            bestRoot = root;
-                        }
-                    }
-                } catch (Exception ignored) {
-                }
-            }
+            Path bestRoot = selectWorkspaceRoot(targetPath, workspacePaths);
             if (bestRoot != null) {
                 return bestRoot;
             }
@@ -92,6 +77,26 @@ public final class AntigravityHookAdapter {
 
         return fallbackProfile != null ? fallbackProfile.toAbsolutePath()
                                          .normalize() : null;
+    }
+
+    private static Path selectWorkspaceRoot(Path targetPath, List<String> workspacePaths) {
+        Path bestRoot = null;
+        for (String workspacePath : workspacePaths) {
+            try {
+                Path root = Path.of(workspacePath)
+                        .toAbsolutePath()
+                        .normalize();
+                Path absoluteTarget = targetPath.isAbsolute() ? targetPath.normalize() : root.resolve(targetPath)
+                                                                                         .normalize();
+                if (absoluteTarget.startsWith(root)
+                        && (bestRoot == null || root.getNameCount() > bestRoot.getNameCount())) {
+                    bestRoot = root;
+                }
+            } catch (Exception ignored) {
+                // One malformed workspace candidate must not reject the others.
+            }
+        }
+        return bestRoot;
     }
 
     /**
@@ -137,6 +142,7 @@ public final class AntigravityHookAdapter {
         return roots;
     }
 
+    @SuppressWarnings("DuplicatedCode")
     private static String extractJsonField(String json, String key) {
         String search = "\"" + key + "\":";
         int idx = json.indexOf(search);
@@ -181,12 +187,12 @@ public final class AntigravityHookAdapter {
                 }""".formatted(escapeJson(reason));
     }
 
-    private static String askJson(String reason) {
+    private static String askJson() {
         return """
                 {
                   "decision": "ask",
                   "reason": "%s"
-                }""".formatted(escapeJson(reason));
+                }""".formatted(escapeJson("Synesis found no blocking project constraint."));
     }
 
     private static String escapeJson(String text) {
@@ -205,20 +211,23 @@ public final class AntigravityHookAdapter {
      */
     public Result processStream(InputStream inputStream) {
         try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line)
-                        .append("\n");
-            }
-            return processJson(sb.toString()
-                    .trim());
+            return processJson(readStream(inputStream).trim());
         } catch (Exception e) {
             return new Result(Outcome.INVALID_INPUT,
                     denyJson("Synesis could not safely validate the target path."),
                     e.getMessage());
         }
+    }
+
+    private static String readStream(InputStream inputStream) throws java.io.IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+        StringBuilder content = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            content.append(line)
+                    .append("\n");
+        }
+        return content.toString();
     }
 
     /**
@@ -244,7 +253,7 @@ public final class AntigravityHookAdapter {
                     "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
                             + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
             return new Result(Outcome.UNSUPPORTED,
-                    askJson("Synesis found no blocking project constraint."),
+                    askJson(),
                     diagnostic);
         }
 
@@ -299,10 +308,10 @@ public final class AntigravityHookAdapter {
                     denyJson("Synesis could not safely validate the target path."),
                     resp.message());
             case UNSUPPORTED -> new Result(Outcome.UNSUPPORTED,
-                    askJson("Synesis found no blocking project constraint."),
+                    askJson(),
                     resp.message());
             case ALLOWED ->
-                    new Result(Outcome.ALLOWED, askJson("Synesis found no blocking project constraint."), "Allowed");
+                    new Result(Outcome.ALLOWED, askJson(), "Allowed");
         };
     }
 

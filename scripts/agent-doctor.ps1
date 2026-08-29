@@ -36,7 +36,14 @@ if (Test-Path 'docs/agent/TASKS.md')
 {
     $t = Get-Content -Raw 'docs/agent/TASKS.md'; $g = Get-Content -Raw 'docs/agent/GOAL.md'; $a = [regex]::Matches($t, '(?ms)^##\s+((?:SL|SYN)-[A-Z0-9-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*ACTIVE\s*$'); if ($a.Count -eq 1 -or ($a.Count -eq 0 -and $g -match '(?im)^- Status:\s*.*roadmap complete'))
     {
-        Result PASS $(if ($a.Count -eq 1) { 'exactly one active task' } else { 'roadmap complete with no active task' })
+        Result PASS $( if ($a.Count -eq 1)
+        {
+            'exactly one active task'
+        }
+        else
+        {
+            'roadmap complete with no active task'
+        } )
     }
     else
     {

@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,15 +31,25 @@ import java.util.concurrent.Executors;
  */
 public final class CodexEvidenceJournal implements AutoCloseable {
 
-    /** Maximum queued evidence events. */
+    /**
+     * Maximum queued evidence events.
+     */
     public static final int MAX_QUEUE_ENTRIES = 512;
-    /** Maximum persisted bytes for one connection-generation journal. */
+    /**
+     * Maximum persisted bytes for one connection-generation journal.
+     */
     public static final int MAX_JOURNAL_BYTES = 8 * 1024 * 1024;
-    /** Maximum retained bytes for one serialized evidence entry. */
+    /**
+     * Maximum retained bytes for one serialized evidence entry.
+     */
     public static final int MAX_ENTRY_BYTES = 64 * 1024;
-    /** Maximum closing summary bytes. */
+    /**
+     * Maximum closing summary bytes.
+     */
     public static final int MAX_CLOSING_SUMMARY_BYTES = 32 * 1024;
-    /** Reserved in-memory slots for terminal and correlation evidence. */
+    /**
+     * Reserved in-memory slots for terminal and correlation evidence.
+     */
     public static final int MAX_CRITICAL_QUEUE_ENTRIES = 64;
 
     private final Path journal;
@@ -63,7 +72,9 @@ public final class CodexEvidenceJournal implements AutoCloseable {
      * @param journal JSONL path
      */
     public CodexEvidenceJournal(Path journal) {
-        this.journal = Objects.requireNonNull(journal, "journal").toAbsolutePath().normalize();
+        this.journal = Objects.requireNonNull(journal, "journal")
+                .toAbsolutePath()
+                .normalize();
         try {
             if (Files.isRegularFile(this.journal)) {
                 long existing = Files.size(this.journal);
@@ -85,11 +96,55 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         writer.submit(this::drain);
     }
 
+    private static String digest(String value) {
+        try {
+            return java.util.HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError("SHA-256 is required", impossible);
+        }
+    }
+
+    private static Object boundedValue(Object value, int depth) {
+        if (value == null || value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof String text) {
+            byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+            if (bytes.length <= MAX_ENTRY_BYTES) {
+                return text;
+            }
+            return Map.of("truncated", true, "contentDigest", digest(text), "originalBytes", bytes.length);
+        }
+        if (depth >= 4) {
+            String text = String.valueOf(value);
+            return text.length() > 512 ? text.substring(0, 512) : text;
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> bounded = new LinkedHashMap<>();
+            map.entrySet()
+                    .stream()
+                    .limit(32)
+                    .forEach(entry -> bounded.put(String.valueOf(entry.getKey()),
+                            boundedValue(entry.getValue(), depth + 1)));
+            return bounded;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .limit(32)
+                    .map(item -> boundedValue(item, depth + 1))
+                    .toList();
+        }
+        String text = String.valueOf(value);
+        return text.length() > 512 ? text.substring(0, 512) : text;
+    }
+
     /**
      * Attempts to enqueue one event without blocking the protocol reader.
      *
      * @param category stable evidence category
-     * @param fields bounded semantic event fields
+     * @param fields   bounded semantic event fields
      * @param terminal whether the event is authoritative terminal/correlation evidence
      * @return {@code true} when queued or directly reserved
      */
@@ -103,7 +158,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         try {
             encoded = org.synesis.workspace.infrastructure.json.ProviderJson.write(value);
         } catch (RuntimeException failure) {
-            return omit(category, terminal);
+            return omit(category);
         }
         byte[] bytes = encoded.getBytes(StandardCharsets.UTF_8);
         if (persistedBytes >= MAX_JOURNAL_BYTES) {
@@ -117,18 +172,20 @@ public final class CodexEvidenceJournal implements AutoCloseable {
             summary.put("contentDigest", digest(encoded));
             summary.put("originalBytes", bytes.length);
             encoded = org.synesis.workspace.infrastructure.json.ProviderJson.write(summary);
-            bytes = encoded.getBytes(StandardCharsets.UTF_8);
         }
         Entry entry = new Entry(category, encoded + System.lineSeparator(), terminal);
         synchronized (queueLock) {
             if (closedRequested) {
-                return omit(category, terminal);
+                return omit(category);
             }
             if (terminal && criticalQueue.size() < MAX_CRITICAL_QUEUE_ENTRIES) {
                 if (queue.size() + criticalQueue.size() >= MAX_QUEUE_ENTRIES) {
-                    Entry low = queue.stream().filter(item -> !item.terminal()).findFirst().orElse(null);
+                    Entry low = queue.stream()
+                            .filter(item -> !item.terminal())
+                            .findFirst()
+                            .orElse(null);
                     if (low == null) {
-                        return omit(category, terminal);
+                        return omit(category);
                     }
                     queue.remove(low);
                     countDrop(low.category());
@@ -138,12 +195,15 @@ public final class CodexEvidenceJournal implements AutoCloseable {
                 return true;
             }
             if (queue.size() + criticalQueue.size() >= MAX_QUEUE_ENTRIES) {
-                Entry low = queue.stream().filter(item -> !item.terminal()).findFirst().orElse(null);
+                Entry low = queue.stream()
+                        .filter(item -> !item.terminal())
+                        .findFirst()
+                        .orElse(null);
                 if (low != null) {
                     queue.remove(low);
                     countDrop(low.category());
                 } else {
-                    return omit(category, terminal);
+                    return omit(category);
                 }
             }
             queue.addLast(entry);
@@ -177,6 +237,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
      *
      * @return immutable counts
      */
+    @SuppressWarnings("unused")
     public Map<String, Long> droppedCategories() {
         synchronized (accountingLock) {
             return Map.copyOf(dropped);
@@ -237,9 +298,12 @@ public final class CodexEvidenceJournal implements AutoCloseable {
             if (!writer.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
                 writer.shutdownNow();
             }
-            closed.await(2, java.util.concurrent.TimeUnit.SECONDS);
+            if (!closed.await(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                markIncomplete();
+            }
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
         }
         writeManifest();
     }
@@ -257,17 +321,19 @@ public final class CodexEvidenceJournal implements AutoCloseable {
                     }
                     entry = criticalQueue.isEmpty() ? queue.pollFirst() : criticalQueue.pollFirst();
                 }
-                persist(entry);
+                persist(Objects.requireNonNull(entry, "journal entry"));
             }
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
         } finally {
             closed.countDown();
         }
     }
 
     private void persist(Entry entry) {
-        byte[] bytes = entry.encoded().getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = entry.encoded()
+                .getBytes(StandardCharsets.UTF_8);
         synchronized (accountingLock) {
             if (persistedBytes + bytes.length > MAX_JOURNAL_BYTES) {
                 complete = false;
@@ -290,7 +356,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         }
     }
 
-    private boolean omit(String category, boolean terminal) {
+    private boolean omit(String category) {
         synchronized (accountingLock) {
             complete = false;
             overflowMarker = true;
@@ -319,7 +385,9 @@ public final class CodexEvidenceJournal implements AutoCloseable {
             manifest.put("droppedCategories", new LinkedHashMap<>(dropped));
             manifest.put("persistedBytes", persistedBytes);
         }
-        manifest.put("journal", journal.getFileName().toString());
+        manifest.put("journal",
+                journal.getFileName()
+                        .toString());
         String encoded = org.synesis.workspace.infrastructure.json.ProviderJson.write(manifest);
         if (encoded.getBytes(StandardCharsets.UTF_8).length > MAX_CLOSING_SUMMARY_BYTES) {
             encoded = "{\"evidenceComplete\":" + complete + ",\"eventsDropped\":" + eventsDropped
@@ -331,41 +399,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     }
 
-    private static String digest(String value) {
-        try {
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required", impossible);
-        }
-    }
-
-    private static Object boundedValue(Object value, int depth) {
-        if (value == null || value instanceof Number || value instanceof Boolean) {
-            return value;
-        }
-        if (value instanceof String text) {
-            byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-            if (bytes.length <= MAX_ENTRY_BYTES) return text;
-            return Map.of("truncated", true, "contentDigest", digest(text), "originalBytes", bytes.length);
-        }
-        if (depth >= 4) {
-            String text = String.valueOf(value);
-            return text.length() > 512 ? text.substring(0, 512) : text;
-        }
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> bounded = new LinkedHashMap<>();
-            map.entrySet().stream().limit(32).forEach(entry -> bounded.put(String.valueOf(entry.getKey()),
-                    boundedValue(entry.getValue(), depth + 1)));
-            return bounded;
-        }
-        if (value instanceof List<?> list) {
-            return list.stream().limit(32).map(item -> boundedValue(item, depth + 1)).toList();
-        }
-        String text = String.valueOf(value);
-        return text.length() > 512 ? text.substring(0, 512) : text;
-    }
-
     private record Entry(String category, String encoded, boolean terminal) {
+
     }
 }

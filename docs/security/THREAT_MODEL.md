@@ -7,15 +7,15 @@ network actors, local filesystem attackers, and dependency/native-library
 suppliers. Assets include identity keys, identity bindings, transcripts,
 liveness state, stream metadata, and resource capacity.
 
-| Threat | Boundary | Mitigation | Residual risk / verification |
-|---|---|---|---|
-| Forged or replayed descriptors | descriptor input | canonical bytes, signatures, expiry, node-ID binding | tamper and expiry tests |
-| Impersonation or certificate substitution | QUIC handshake | expected long-term identity proof; TLS alone is insufficient | wrong-key and substitution tests |
-| Downgrade or replay | protocol negotiation | explicit versions, transcript binding, no 0-RTT | replay/downgrade tests |
-| Malformed/oversized input | wire parser | validate before allocation and hard bounds | parser tests |
-| Stream, heartbeat, callback, or executor exhaustion | resource ownership | bounded frames, queues, schedules, cleanup | saturation/leak checks |
-| Key or log leakage | storage/observability | storage abstraction and safe diagnostics | redaction tests |
-| NAT rebinding, loss, sleep, or partition | transport/liveness | QUIC path validation plus bounded application SUSPECT/EXPIRED | local fault evidence; physical migration unclaimed |
+| Threat                                              | Boundary              | Mitigation                                                    | Residual risk / verification                       |
+|-----------------------------------------------------|-----------------------|---------------------------------------------------------------|----------------------------------------------------|
+| Forged or replayed descriptors                      | descriptor input      | canonical bytes, signatures, expiry, node-ID binding          | tamper and expiry tests                            |
+| Impersonation or certificate substitution           | QUIC handshake        | expected long-term identity proof; TLS alone is insufficient  | wrong-key and substitution tests                   |
+| Downgrade or replay                                 | protocol negotiation  | explicit versions, transcript binding, no 0-RTT               | replay/downgrade tests                             |
+| Malformed/oversized input                           | wire parser           | validate before allocation and hard bounds                    | parser tests                                       |
+| Stream, heartbeat, callback, or executor exhaustion | resource ownership    | bounded frames, queues, schedules, cleanup                    | saturation/leak checks                             |
+| Key or log leakage                                  | storage/observability | storage abstraction and safe diagnostics                      | redaction tests                                    |
+| NAT rebinding, loss, sleep, or partition            | transport/liveness    | QUIC path validation plus bounded application SUSPECT/EXPIRED | local fault evidence; physical migration unclaimed |
 
 ## Identity and control path
 

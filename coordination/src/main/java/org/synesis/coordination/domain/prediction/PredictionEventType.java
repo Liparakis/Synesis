@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.prediction;
 
 
-
-
 /**
  * Append-only events that advance a speculative prediction.
  */
@@ -179,66 +177,141 @@ public enum PredictionEventType {
      * Capability dependency invalidated due to cancellation or abandonment of supplier task.
      */
     DEPENDENCY_INVALIDATED,
-    /** Announces an authenticated worker intent and atomically requested claims. */
+    /**
+     * Announces an authenticated worker intent and atomically requested claims.
+     */
     WORK_INTENT_ANNOUNCED,
-    /** Releases all claims associated with an authenticated worker intent. */
+    /**
+     * Releases all claims associated with an authenticated worker intent.
+     */
     WORK_INTENT_RELEASED,
-    /** Creates a signed coordination request between conflicting participants. */
+    /**
+     * Creates a signed coordination request between conflicting participants.
+     */
     COORDINATION_REQUESTED,
-    /** Records the target participant's coordination response. */
+    /**
+     * Records the target participant's coordination response.
+     */
     COORDINATION_RESPONDED,
-    /** Records verified activity for an authenticated participant. */
+    /**
+     * Records verified activity for an authenticated participant.
+     */
     PARTICIPANT_HEARTBEAT,
-    /** Atomically transfers an intent after an accepted handoff request. */
+    /**
+     * Atomically transfers an intent after an accepted handoff request.
+     */
     CLAIM_HANDOFF_ACCEPTED,
-    /** Marks a participant abandoned after verified process absence beyond grace. */
+    /**
+     * Marks a participant abandoned after verified process absence beyond grace.
+     */
     PARTICIPANT_ABANDONED,
-    /** Publishes a stable contract revision. */
+    /**
+     * Publishes a stable contract revision.
+     */
     CONTRACT_PUBLISHED,
-    /** Binds an intent to an exact contract revision. */
+    /**
+     * Binds an intent to an exact contract revision.
+     */
     CONTRACT_DEPENDENCY_BOUND,
-    /** Supersedes the current contract revision. */
+    /**
+     * Supersedes the current contract revision.
+     */
     CONTRACT_SUPERSEDED,
-    /** Creates a durable logical work group. */
+    /**
+     * Creates a durable logical work group.
+     */
     WORK_GROUP_CREATED,
-    /** Issues a targeted lane join or continuation grant. */
+    /**
+     * Issues a targeted lane join or continuation grant.
+     */
     LANE_GRANT_ISSUED,
-    /** Consumes a single-use lane grant. */
+    /**
+     * Consumes a single-use lane grant.
+     */
     LANE_GRANT_CONSUMED,
-    /** Revokes a lane grant or lane authority epoch. */
+    /**
+     * Revokes a lane grant or lane authority epoch.
+     */
     LANE_REVOKED,
-    /** Changes logical work-group lifecycle without closing sibling lanes. */
+    /**
+     * Changes logical work-group lifecycle without closing sibling lanes.
+     */
     WORK_GROUP_STATUS_CHANGED,
-    /** Fences a participant after verified process loss without releasing its claims. */
+    /**
+     * Fences a participant after verified process loss without releasing its claims.
+     */
     PARTICIPANT_SUSPENDED,
-    /** Records that an immutable recovery snapshot exists for a suspended participant. */
+    /**
+     * Records that an immutable recovery snapshot exists for a suspended participant.
+     */
     RECOVERY_SNAPSHOT_HELD,
-    /** Explicitly revokes a participant lane and releases its claims. */
+    /**
+     * Explicitly revokes a participant lane and releases its claims.
+     */
     PARTICIPANT_REVOKED,
-    /** Idempotently acknowledges a durable inbox item. */
+    /**
+     * Idempotently acknowledges a durable inbox item.
+     */
     INBOX_ITEM_ACKNOWLEDGED,
-    /** Explicitly cancels a participant lane and fences its epoch. */
+    /**
+     * Explicitly cancels a participant lane and fences its epoch.
+     */
     PARTICIPANT_CANCELLED,
-    /** Atomically transfers a held recovery lane into a new participant lane. */
+    /**
+     * Atomically transfers a held recovery lane into a new participant lane.
+     */
     LANE_CONTINUATION_ACCEPTED,
-    /** Records a clean connection shutdown without treating the lane as completed. */
+    /**
+     * Records a clean connection shutdown without treating the lane as completed.
+     */
     PARTICIPANT_DETACHED,
-    /** Pins a verified prepared lane tree before mutation authority is fenced. */
+    /**
+     * Pins a verified prepared lane tree before mutation authority is fenced.
+     */
     COMPLETION_PREPARED,
-    /** Records a structurally invalid immutable integration candidate. */
+    /**
+     * Records a structurally invalid immutable integration candidate.
+     */
     INTEGRATION_BLOCKED,
-    /** Records a valid immutable candidate materialized into a repair lane. */
+    /**
+     * Records a valid immutable candidate materialized into a repair lane.
+     */
     REPAIR_REQUIRED,
-    /** Atomically transfers reserved selectors into a new repair lane. */
+    /**
+     * Atomically transfers reserved selectors into a new repair lane.
+     */
     REPAIR_LANE_CREATED,
-    /** Unfences a prepared but unpublished completion at a new claim epoch. */
+    /**
+     * Unfences a prepared but unpublished completion at a new claim epoch.
+     */
     COMPLETION_UNWOUND,
-    /** Records an authenticated review decision for an immutable task snapshot. */
+    /**
+     * Records an authenticated review decision for an immutable task snapshot.
+     */
     REVIEW_VALIDATION_RECORDED,
-    /** Commits an irreversible fence for one exact provider session. */
+    /**
+     * Commits an irreversible fence for one exact provider session.
+     */
     PROVIDER_SESSION_TERMINALIZED;
 
-    /** Returns the stable persisted wire code for this event kind.
+    /**
+     * Resolves a stable persisted wire code.
+     *
+     * @param wireCode wire code
+     * @return event type
+     */
+    public static PredictionEventType fromWireCode(int wireCode) {
+        for (PredictionEventType type : values()) {
+            if (type.wireCode() == wireCode) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException("unknown event wire code: " + wireCode);
+    }
+
+    /**
+     * Returns the stable persisted wire code for this event kind.
+     *
      * @return wire code
      */
     public int wireCode() {
@@ -274,18 +347,5 @@ public enum PredictionEventType {
             case PROVIDER_SESSION_TERMINALIZED -> 71;
             default -> ordinal();
         };
-    }
-
-    /** Resolves a stable persisted wire code.
-     * @param wireCode wire code
-     * @return event type
-     */
-    public static PredictionEventType fromWireCode(int wireCode) {
-        for (PredictionEventType type : values()) {
-            if (type.wireCode() == wireCode) {
-                return type;
-            }
-        }
-        throw new IllegalArgumentException("unknown event wire code: " + wireCode);
     }
 }

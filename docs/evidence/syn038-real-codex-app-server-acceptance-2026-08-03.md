@@ -247,39 +247,39 @@ absent at cleanup.
 The harness-restart retry used disposable project
 `C:\Users\Liparakis\AppData\Local\Temp\syn038-final3-20260803-1900`
 (project `87a6c966-6bce-4d9c-b468-fa9697f255e9`) and the existing production
-owner on loopback port `64422`.  The newest binding was
+owner on loopback port `64422`. The newest binding was
 `session-773d396e-18b7-4458-b3ae-f1b70d29c325`, connection instance
 `syn038-final3-final-1920`, participant
 `agt_185700ed-a746-34ed-8498-c97ee5c9b8b4`, lane
 `9f78549f-2ff1-34b9-8e31-08e4fb0c6c8e`, epoch `1`, and the assigned isolated
-worktree under the global Synesis workspace root.  START returned the exact
+worktree under the global Synesis workspace root. START returned the exact
 thread `019fc870-b2bb-7b90-b8da-b381c05251e5`; subsequent turns retained that
 thread.
 
-The controlled foreground barrier was observed directly at PID `35292`.  A
+The controlled foreground barrier was observed directly at PID `35292`. A
 long HTTP WAIT was held while a second client sent STEER; STEER returned
-`success=true, diagnostic=steered` at the unchanged active revision.  The
+`success=true, diagnostic=steered` at the unchanged active revision. The
 WAIT caller eventually reached its own deadline because the model continued
 coordination work, but it never prevented the control request from being
-accepted.  Steering changed `src/task_tracker.txt` to
+accepted. Steering changed `src/task_tracker.txt` to
 `steered-implemented`, and the validation command returned `validation_ok`.
 
-Independent interrupt fixtures recorded both cases required by the plan.  A
+Independent interrupt fixtures recorded both cases required by the plan. A
 turn with no observable MCP command returned `turn_interrupted` with
-classification `turn_interrupted_command_state_unconfirmed`.  A second turn
+classification `turn_interrupted_command_state_unconfirmed`. A second turn
 reached barrier PID `42108` before INTERRUPT; the exact interrupted terminal
 event was recorded, the barrier process disappeared without an exit marker,
 and the owner again returned
-`turn_interrupted_command_state_unconfirmed`.  Because neither Codex nor the
+`turn_interrupted_command_state_unconfirmed`. Because neither Codex nor the
 MCP transport exposed cancellation confirmation or a
 `ProjectProcessExecutor` termination record, no command-cleanup success is
 claimed.
 
-The owner was then terminated and relaunched as new host instances.  Startup
+The owner was then terminated and relaunched as new host instances. Startup
 reconciliation was passive: it recorded the old root as exited/stopped and
-did not start a turn.  An explicit RESUME launched a replacement App Server,
+did not start a turn. An explicit RESUME launched a replacement App Server,
 performed `thread/resume` and `thread/read`, and returned
-`thread_resumed_without_turn` for the exact same thread.  A later explicit
+`thread_resumed_without_turn` for the exact same thread. A later explicit
 continuation again reached `INTERACTION_REQUIRED` when Codex 0.145.0 emitted
 `mcpServer/elicitation/request` for `get_next_action`; the local protocol
 client preserved this authoritative state and did not fabricate approval.
@@ -287,12 +287,12 @@ client preserved this authoritative state and did not fabricate approval.
 The durable coordination projection contains the immutable snapshot
 `snap_6a86317ef44f4e5b8ed36122d30400ba` and its integrity/provenance record.
 The final3 lane still has pending coordination requests and is therefore not
-represented as a completed/integrated Codex acceptance.  This is intentionally
+represented as a completed/integrated Codex acceptance. This is intentionally
 separate from direct MCP smoke evidence.
 
 After the owner was stopped, the exact global executable
 `C:\Users\Liparakis\AppData\Local\Synesis\bin\synesis-mcp.exe` was run with a
-fresh smoke connection.  MCP `initialize` succeeded and `tools/list`
+fresh smoke connection. MCP `initialize` succeeded and `tools/list`
 returned exactly the ten raw tools: `ensure_session`, `read_file`,
 `apply_patch`, `run_command`, `get_next_action`, `request_coordination`,
 `respond_coordination`, `publish_capability_implementation`, `finish_lane`,
@@ -343,17 +343,17 @@ process restart.
 After the harness restart, a fresh disposable run used the existing production
 owner on loopback port `64336` and the local Codex executable
 `C:\Users\Liparakis\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a267\codex.exe`
-(`0.146.0-alpha.9.2`).  The owner was started with the existing
+(`0.146.0-alpha.9.2`). The owner was started with the existing
 `SYNESIS_CODEX_APP_SERVER_COMMAND` override containing Codex's global
-`approval_policy="never"` and `sandbox_mode="danger-full-access"` flags.  No
+`approval_policy="never"` and `sandbox_mode="danger-full-access"` flags. No
 route, listener, approval operation, provider abstraction, or MCP tool was
-added.  This run is separate from the historical 0.145.0 elicitation runs
+added. This run is separate from the historical 0.145.0 elicitation runs
 above.
 
 The fixture was
 `C:\Users\Liparakis\AppData\Local\Temp\syn038-final3-20260803-1900`
 (project `87a6c966-6bce-4d9c-b468-fa9697f255e9`, Git baseline
-`ff59aef29c2f3c46bb1401e5e467b215c70b553d`).  The exact authority established
+`ff59aef29c2f3c46bb1401e5e467b215c70b553d`). The exact authority established
 before START was binding
 `session-7f2fb170-6ee3-4dcc-b3a0-734ffa37f11d`, fingerprint
 `2210c73484168880a096b1f073217332b7df7ca135a7dda0dc227e7ced778a21`, version
@@ -364,42 +364,42 @@ assigned canonical/real worktree under
 `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\87a6c966-6bce-4d9c-b468-fa9697f255e9\worktrees\session-7f2fb170-6ee3-4dcc-b3a0-734ffa37f11d`.
 The first owner was `host-279c1171-1475-4290-9357-4c2fe60f6a8b` (Java PID
 34120); the restarted owner was `host-21af94a1-98bf-4aba-b07a-51e66f0ee478`
-(Java PID 58344).  A competing owner was not admitted.
+(Java PID 58344). A competing owner was not admitted.
 
 START completed only after the authority verification and durable ledger gate:
 it returned revision 5, exact thread
 `019fc905-7ff9-78b1-bffd-b03e79d77096`, and initial turn
-`019fc905-81df-7470-ae15-f6b2e7e411eb`.  The initial Codex turn reached the
+`019fc905-81df-7470-ae15-f6b2e7e411eb`. The initial Codex turn reached the
 existing Synesis MCP `ensure_session` and validation path without elicitation;
 the intentionally unmodified fixture value made validation fail with the
-recorded `expected steered-implemented, got 'original'` result.  No lifecycle
+recorded `expected steered-implemented, got 'original'` result. No lifecycle
 identity was duplicated.
 
 ### WAIT/STEER control evidence
 
 An explicit NOTIFY created turn
 `019fc910-bcfa-7881-afec-97159b7adc5b` on the same thread and launched a
-foreground Synesis barrier (`STEER1461`, PID 36820).  A separate production
+foreground Synesis barrier (`STEER1461`, PID 36820). A separate production
 WAIT request (`44444444-4444-4444-8444-444444444444`) was held while a second
 production caller submitted STEER
-(`55555555-5555-4555-8555-555555555555`).  STEER returned
+(`55555555-5555-4555-8555-555555555555`). STEER returned
 `success=true, diagnostic=steered` for the exact active thread and turn; the
 App Server evidence contains the matching `turn/steer` response and delivered
-user message.  The WAIT bridge remained independent of the control path and
+user message. The WAIT bridge remained independent of the control path and
 exited after the terminal transition; it did not prevent STEER or protocol
 draining.
 
-The foreground MCP command occupied the single Synesis MCP connection.  The
+The foreground MCP command occupied the single Synesis MCP connection. The
 Codex agent therefore reported that the queued MCP mutation could not proceed
-until the barrier returned.  The barrier was released as fixture cleanup and
-the turn completed without attributing the later file mutation to STEER.  This
+until the barrier returned. The barrier was released as fixture cleanup and
+the turn completed without attributing the later file mutation to STEER. This
 is direct evidence of control acceptance and exact identity, not a claim that
 STEER cancels an active MCP command.
 
 After the release, an explicit NOTIFY on the same thread used the existing
 `apply_patch` workflow to set `src/task_tracker.txt` exactly to
 `steered-implemented`; the approved validation returned `validation_ok` with
-exit code 0.  Codex then attempted normal `finish_lane`/snapshot/integration,
+exit code 0. Codex then attempted normal `finish_lane`/snapshot/integration,
 but Synesis returned `task_not_ready` with `nextAction=retry` on every attempt;
 no snapshot or integration was fabricated.
 
@@ -407,53 +407,53 @@ no snapshot or integration was fabricated.
 
 Another NOTIFY created turn
 `019fc916-ad68-7e20-97d1-97f9465c99ea` and a foreground barrier
-`INT1460` (PID 8388).  A separate WAIT request
+`INT1460` (PID 8388). A separate WAIT request
 `88888888-8888-4888-8888-888888888888` (digest
 `d857c76910d782baaa46550145e20346f2beb293828939d74e2cb85c3543ae87`) returned
-`diagnostic=state_changed`, `state=IDLE`, and the exact thread/turn.  The
+`diagnostic=state_changed`, `state=IDLE`, and the exact thread/turn. The
 INTERRUPT request
 `99999999-9999-4999-8999-999999999999` returned
 `diagnostic=turn_interrupted`, terminal state `INTERRUPTED`, and the service's
-explicit `turn_interrupted_command_state_unconfirmed` classification.  The
+explicit `turn_interrupted_command_state_unconfirmed` classification. The
 App Server evidence independently contains the successful `turn/interrupt`
 response and exact `turn/completed` event with status `interrupted`.
 
 Direct process evidence showed the `INT1460` barrier PID was still alive and
-had no exit marker immediately after the interrupted event.  After the
+had no exit marker immediately after the interrupted event. After the
 terminal event, the fixture release marker was written and the barrier exited
-normally.  The observed acceptance classification is therefore
+normally. The observed acceptance classification is therefore
 `turn_interrupted_command_remained_active`: turn interruption was proven, while
 Codex/MCP cancellation and `ProjectProcessExecutor` command-tree termination
-were not.  No causal claim equates `turn/interrupt` with child cleanup.
+were not. No causal claim equates `turn/interrupt` with child cleanup.
 
 ### Passive restart, exact-thread resume, and duplicate replay
 
 The first owner was stopped by its exact recorded PID after the attachment
-process had exited.  The replacement owner passively reconciled the checkpoint
+process had exited. The replacement owner passively reconciled the checkpoint
 to `STOPPED`/`root_already_exited` at revision 25, retained the exact stored
-thread, and emitted no autonomous `turn/start`.  Explicit RESUME request
+thread, and emitted no autonomous `turn/start`. Explicit RESUME request
 `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` returned
 `thread_resumed_without_turn` at revision 28 after `thread/resume` and
 `thread/read`; the replacement App Server used attachment generation 2 and
-the same thread ID.  A continuation RESUME request
+the same thread ID. A continuation RESUME request
 `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb` then created turn
-`019fc91a-4c00-7b62-ba1e-7260b3b59485` on that same thread.  Validation again
+`019fc91a-4c00-7b62-ba1e-7260b3b59485` on that same thread. Validation again
 passed, while `finish_lane` remained honestly blocked at `task_not_ready`.
 
 Repeated identical STATUS request `dddddddd-dddd-4ddd-8ddd-dddddddddddd`
 and repeated identical WAIT request
 `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee` returned byte-equivalent bounded
-results; no duplicate thread, turn, steer, or interrupt was created.  Final
+results; no duplicate thread, turn, steer, or interrupt was created. Final
 status diagnostics reported `protocolFailed=false`, zero tombstones, zero
 oversized-frame failures, zero evidence drops, `evidenceComplete=true`, and
-ledger utilization `11/1024` (`11/128` for the binding).  The lifecycle record
+ledger utilization `11/1024` (`11/128` for the binding). The lifecycle record
 ended at revision 34 after the replacement App Server process exited, with the
 exact thread and turn retained.
 
 This run proves production-owner reachability, authority-before-START,
 durable START ordering, event-driven control concurrency, exact identity,
 passive reconciliation, exact-thread resume, explicit continuation, and
-independent interruption evidence.  It does not claim Codex-driven command
+independent interruption evidence. It does not claim Codex-driven command
 cancellation or normal Synesis lane integration because the installed fixture
 workflow remained `IMPLEMENT`/`task_not_ready` and issued no completion
 snapshot or integration action.
@@ -462,14 +462,14 @@ snapshot or integration action.
 
 One final explicit continuation was attempted after a new owner restart using
 the same exact binding and thread.  `ensure_session` was given the existing
-task goal, acceptance text, and exact `src/task_tracker.txt` claim.  Synesis
+task goal, acceptance text, and exact `src/task_tracker.txt` claim. Synesis
 correctly rejected that attempt as `overlapping_claim` because the original
 active lane still owned the path; the agent did not create a second claim or
 silently replace the authority.  `get_next_action` remained `ready`/`IMPLEMENT`,
 the file and validation remained correct, and `finish_lane` still returned
-`task_not_ready`/`retry`.  This confirms that the remaining completion gap is
+`task_not_ready`/`retry`. This confirms that the remaining completion gap is
 an authoritative Synesis lane-readiness condition, not a missing lifecycle
-control path.  The owner and attachment were then stopped through their exact
+control path. The owner and attachment were then stopped through their exact
 recorded process identities.
 
 ### Fresh 0.146.0 completion run

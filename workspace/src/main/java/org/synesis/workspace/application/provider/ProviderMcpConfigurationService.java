@@ -1,23 +1,27 @@
 package org.synesis.workspace.application.provider;
-import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 
-/** Owns provider MCP configuration installation and removal. */
+/**
+ * Owns provider MCP configuration installation and removal.
+ */
+@SuppressWarnings("DuplicatedCode")
 final class ProviderMcpConfigurationService {
 
-    /** Ensures the Synesis MCP entry exists in the provider configuration. */
+    /**
+     * Ensures the Synesis MCP entry exists in the provider configuration.
+     */
     String ensure(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider, Path launcher) {
         Path configPath = provider.mcpConfigurationPath(location.root());
         if (configPath == null) {
@@ -33,7 +37,8 @@ final class ProviderMcpConfigurationService {
                 }
                 CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher,
                         location.root());
-                cleanObsoleteProjectFile(location.root().resolve(".codex/mcp.json"));
+                cleanObsoleteProjectFile(location.root()
+                        .resolve(".codex/mcp.json"));
                 return before.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE
                         && after.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE ? "UNCHANGED" : "INSTALLED";
             }
@@ -52,22 +57,27 @@ final class ProviderMcpConfigurationService {
             if ("antigravity".equals(provider.id())) {
                 cleanObsoleteAntigravityProviderConfig();
             }
-            cleanObsoleteProjectFile(location.root().resolve(".agents/mcp.json"));
-            cleanObsoleteProjectFile(location.root().resolve(".gemini/mcp.json"));
+            cleanObsoleteProjectFile(location.root()
+                    .resolve(".agents/mcp.json"));
+            cleanObsoleteProjectFile(location.root()
+                    .resolve(".gemini/mcp.json"));
             return unchanged ? "UNCHANGED" : "INSTALLED";
         } catch (Exception failure) {
             return "MALFORMED_CONFIG";
         }
     }
 
-    /** Removes the Synesis MCP entry from the provider configuration. */
+    /**
+     * Removes the Synesis MCP entry from the provider configuration.
+     */
     void remove(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) {
         Path configPath = provider.mcpConfigurationPath(location.root());
         if (configPath != null && Files.exists(configPath)) {
             try {
                 if ("codex".equals(provider.id())) {
                     CodexTomlConfiguration.remove(configPath);
-                    cleanObsoleteProjectFile(location.root().resolve(".codex/mcp.json"));
+                    cleanObsoleteProjectFile(location.root()
+                            .resolve(".codex/mcp.json"));
                 } else {
                     removeEntry(configPath);
                 }
@@ -82,8 +92,10 @@ final class ProviderMcpConfigurationService {
                 } catch (IOException ignored) {
                 }
             }
-            cleanObsoleteProjectFile(location.root().resolve(".agents/mcp.json"));
-            cleanObsoleteProjectFile(location.root().resolve(".gemini/mcp.json"));
+            cleanObsoleteProjectFile(location.root()
+                    .resolve(".agents/mcp.json"));
+            cleanObsoleteProjectFile(location.root()
+                    .resolve(".gemini/mcp.json"));
         }
     }
 

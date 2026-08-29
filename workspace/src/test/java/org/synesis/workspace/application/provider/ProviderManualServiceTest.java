@@ -8,7 +8,9 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Verifies managed manual installation and tamper attestation. */
+/**
+ * Verifies managed manual installation and tamper attestation.
+ */
 class ProviderManualServiceTest {
 
     @Test
@@ -17,9 +19,12 @@ class ProviderManualServiceTest {
         System.setProperty("user.home", tempHome.toString());
         try {
             ProviderManualService service = new ProviderManualService();
-            assertFalse(service.attest("codex").valid());
-            assertTrue(service.install("codex").valid());
-            Path manual = service.skillDirectory("codex").resolve("SKILL.md");
+            assertFalse(service.attest("codex")
+                    .valid());
+            assertTrue(service.install("codex")
+                    .valid());
+            Path manual = service.skillDirectory("codex")
+                    .resolve("SKILL.md");
             String content = Files.readString(manual);
             assertTrue(content.contains("workflow `IMPLEMENT`"));
             assertTrue(content.contains("visible assigned worktree"));
@@ -29,19 +34,26 @@ class ProviderManualServiceTest {
             assertTrue(content.contains("exact tool with those exact arguments"));
             assertTrue(content.contains("do not end the session"));
             assertTrue(content.contains("bounded wait and call `get_next_action` again"));
-            assertTrue(content.contains("optional `integrationCheck` input only evaluates explicitly supplied compatibility facts"));
+            assertTrue(content.contains(
+                    "optional `integrationCheck` input only evaluates explicitly supplied compatibility facts"));
             assertTrue(content.contains("When `get_next_action` projects `WAIT`"));
             assertTrue(content.contains("Do not report success or stop merely because your own lane is complete"));
             assertTrue(content.contains("call `ensure_session` with `task.goal`, `task.acceptance`, and `task.claims`"));
             assertTrue(content.contains("likelyScopes` is descriptive only"));
             assertTrue(content.contains("A ready session without claims is not permission to mutate task files"));
             Files.writeString(manual, Files.readString(manual) + "tampered\n");
-            assertFalse(service.attest("codex").valid());
-            assertTrue(service.install("codex").valid());
-            assertTrue(service.attest("codex").valid());
+            assertFalse(service.attest("codex")
+                    .valid());
+            assertTrue(service.install("codex")
+                    .valid());
+            assertTrue(service.attest("codex")
+                    .valid());
         } finally {
-            if (previous == null) System.clearProperty("user.home");
-            else System.setProperty("user.home", previous);
+            if (previous == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previous);
+            }
         }
     }
 }

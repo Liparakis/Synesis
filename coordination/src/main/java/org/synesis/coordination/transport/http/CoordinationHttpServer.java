@@ -41,8 +41,8 @@ public final class CoordinationHttpServer implements AutoCloseable {
      * lifecycle route. The handler is injected by the production owner and no
      * provider abstraction is introduced in this coordination module.
      *
-     * @param service coordination service
-     * @param address local loopback address
+     * @param service               coordination service
+     * @param address               local loopback address
      * @param codexLifecycleHandler retained Codex handler, or {@code null}
      * @throws IOException when the listener cannot be created
      */
@@ -68,7 +68,7 @@ public final class CoordinationHttpServer implements AutoCloseable {
         }
     }
 
-    private static boolean queryBoolean(URI uri, String name) {
+    private static boolean queryBoolean(URI uri) {
         String query = uri.getRawQuery();
         if (query == null) {
             return false;
@@ -76,22 +76,22 @@ public final class CoordinationHttpServer implements AutoCloseable {
         for (String part : query.split("&")) {
             String[] pair = part.split("=", 2);
             if (pair.length == 2 && URLDecoder.decode(pair[0], StandardCharsets.UTF_8)
-                    .equals(name)) {
+                    .equals("once")) {
                 return Boolean.parseBoolean(URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
             }
         }
         return false;
     }
 
-    private static long queryLong(URI uri, String name, long fallback) {
+    private static long queryLong(URI uri) {
         String query = uri.getRawQuery();
         if (query == null) {
-            return fallback;
+            return 0;
         }
         for (String part : query.split("&")) {
             String[] pair = part.split("=", 2);
             if (pair.length == 2 && URLDecoder.decode(pair[0], StandardCharsets.UTF_8)
-                    .equals(name)) {
+                    .equals("after")) {
                 try {
                     return Long.parseLong(URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
                 } catch (NumberFormatException bad) {
@@ -99,31 +99,31 @@ public final class CoordinationHttpServer implements AutoCloseable {
                 }
             }
         }
-        return fallback;
+        return 0;
     }
 
-    private static byte[] readBounded(HttpExchange exchange, int limit) throws IOException {
+    private static byte[] readBounded(HttpExchange exchange) throws IOException {
         long declared = exchange.getRequestHeaders()
                 .getFirst("Content-Length") == null ? -1
                 : Long.parseLong(exchange.getRequestHeaders()
                                  .getFirst("Content-Length"));
-        if (declared > limit) {
+        if (declared > 64 * 1024) {
             throw new IOException("request exceeds bound");
         }
-        try (var input = exchange.getRequestBody();
-                var bytes = new java.io.ByteArrayOutputStream()) {
+        try (var input = exchange.getRequestBody(); var bytes = new java.io.ByteArrayOutputStream()) {
             input.transferTo(new java.io.OutputStream() {
                 @Override
                 public void write(int value) throws IOException {
-                    if (bytes.size() >= limit) {
+                    if (bytes.size() >= 64 * 1024) {
                         throw new IOException("request exceeds bound");
                     }
                     bytes.write(value);
                 }
 
                 @Override
+                @SuppressWarnings("NullableProblems")
                 public void write(byte[] value, int offset, int length) throws IOException {
-                    if (bytes.size() + length > limit) {
+                    if (bytes.size() + length > 64 * 1024) {
                         throw new IOException("request exceeds bound");
                     }
                     bytes.write(value, offset, length);
@@ -172,7 +172,7 @@ public final class CoordinationHttpServer implements AutoCloseable {
             send(exchange, 405, new byte[0]);
             return;
         }
-        byte[] body = readBounded(exchange, 64 * 1024);
+        byte[] body = readBounded(exchange);
         try {
             PredictionEvent event = service.submit(CoordinationCommand.decode(body));
             send(exchange, 200, event.encoded());
@@ -189,23 +189,21 @@ public final class CoordinationHttpServer implements AutoCloseable {
             send(exchange, 405, new byte[0]);
             return;
         }
-        long after = queryLong(exchange.getRequestURI(), "after", 0);
-        boolean once = queryBoolean(exchange.getRequestURI(), "once");
+        long after = queryLong(exchange.getRequestURI());
+        boolean once = queryBoolean(exchange.getRequestURI());
         exchange.getResponseHeaders()
                 .set("Content-Type", "text/event-stream; charset=utf-8");
         exchange.getResponseHeaders()
                 .set("Cache-Control", "no-cache");
         exchange.sendResponseHeaders(200, 0);
-        try (var subscription = service.subscribe(after);
+        try (exchange; var subscription = service.subscribe(after);
                 var output = exchange.getResponseBody()) {
             while (!Thread.currentThread()
                     .isInterrupted()) {
                 PredictionEvent event = once ? subscription.poll() : subscription.take();
                 if (event == null) {
-                    if (once) {
-                        output.write(": empty\n\n".getBytes(StandardCharsets.UTF_8));
-                        output.flush();
-                    }
+                    output.write(": empty\n\n".getBytes(StandardCharsets.UTF_8));
+                    output.flush();
                     break;
                 }
                 String data = "id: " + event.sequence() + "\ndata: "
@@ -218,8 +216,6 @@ public final class CoordinationHttpServer implements AutoCloseable {
         } catch (InterruptedException interrupted) {
             Thread.currentThread()
                     .interrupt();
-        } finally {
-            exchange.close();
         }
     }
 }

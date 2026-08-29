@@ -25,11 +25,15 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   SL-014; transport-neutral bytes only, with Link retaining identity,
   readiness, framing, limits, deadlines, liveness, and cleanup.
 
-- ADR-0008: Synesis root with Link transport module — accepted; the existing Link implementation moves to `link/` while the root remains a small modular monolith.
+- ADR-0008: Synesis root with Link transport module — accepted; the existing Link implementation moves to `link/` while
+  the root remains a small modular monolith.
 
-- ADR-0007: Demo-only bounded work exchange — accepted for one authenticated `synesis-demo-work/1` request/result operation; no RPC, project semantics, authority, or reconnect behavior.
+- ADR-0007: Demo-only bounded work exchange — accepted for one authenticated `synesis-demo-work/1` request/result
+  operation; no RPC, project semantics, authority, or reconnect behavior.
 
-- ADR-0006: Bounded direct candidate gathering and racing — accepted for manual/local candidates, deterministic normalization and ranking, and authenticated control-ready winner selection; router discovery, relays, and reconnection remain out of scope.
+- ADR-0006: Bounded direct candidate gathering and racing — accepted for manual/local candidates, deterministic
+  normalization and ranking, and authenticated control-ready winner selection; router discovery, relays, and
+  reconnection remain out of scope.
 
 - ADR-0001: One Gradle project with package boundaries — accepted.
 - ADR-0002: Netty 4.2 native QUIC adapter — accepted for dependency and native-runtime validation.
@@ -43,10 +47,12 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0029: Provider-session lease evidence and liveness grace periods — accepted for SYN-014C.
 - ADR-0030: Immutable reconciliation plans, locks, and journals — accepted for SYN-014C.
 - ADR-0031: Ambient task cancellation via synesis.cancel_task — accepted for SYN-014C.
-- ADR-0032: Strict non-destructive worktree preservation on session abandonment and task cancellation — accepted for SYN-014C.
+- ADR-0032: Strict non-destructive worktree preservation on session abandonment and task cancellation — accepted for
+  SYN-014C.
 - ADR-0033: Unified read-only DoctorService diagnostics — accepted for SYN-014D.
 - ADR-0034: Immutable repair plans and external administration storage — accepted for SYN-014D.
 - ADR-0035: Pre-mutation administrative file backups and exact atomic rollback — accepted for SYN-014D.
-- ADR-0036: Strict repair ownership boundary preserving signed event log, control checkout, and provider config — accepted for SYN-014D.
+- ADR-0036: Strict repair ownership boundary preserving signed event log, control checkout, and provider config —
+  accepted for SYN-014D.
 - ADR-0037: Versioned immutable installation with atomic pointer activation — accepted for SYN-014E.
 

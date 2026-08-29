@@ -54,15 +54,6 @@ public enum AgentStatus {
     }
 
     /**
-     * Returns the stable lowercase JSON representation.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
-    }
-
-    /**
      * Parses a string into an {@link AgentStatus}.
      *
      * @param input string value
@@ -73,12 +64,22 @@ public enum AgentStatus {
         if (input == null) {
             throw new IllegalArgumentException("status value cannot be null");
         }
-        String normalized = input.trim().toLowerCase(Locale.ROOT);
+        String normalized = input.trim()
+                .toLowerCase(Locale.ROOT);
         for (AgentStatus status : values()) {
             if (status.value.equals(normalized)) {
                 return status;
             }
         }
         throw new IllegalArgumentException("Unknown agent status: " + input);
+    }
+
+    /**
+     * Returns the stable lowercase JSON representation.
+     *
+     * @return lowercase string representation
+     */
+    public String value() {
+        return value;
     }
 }

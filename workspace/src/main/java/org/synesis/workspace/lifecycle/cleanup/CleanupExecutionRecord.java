@@ -27,6 +27,7 @@ public record CleanupExecutionRecord(
         long bytesReclaimed,
         String diagnosticDetails
 ) {
+
     /**
      * Invariant validation.
      */

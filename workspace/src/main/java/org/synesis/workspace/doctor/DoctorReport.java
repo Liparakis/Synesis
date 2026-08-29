@@ -36,6 +36,7 @@ public record DoctorReport(
         boolean repairAvailable,
         List<DoctorFinding> findings
 ) {
+
     /**
      * Invariant validation.
      */

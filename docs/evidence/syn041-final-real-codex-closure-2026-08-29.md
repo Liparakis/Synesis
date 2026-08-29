@@ -96,11 +96,11 @@ WorkGroup `COMPLETED`, participant `COMPLETED`, and provider session
 
 Live non-interposing observation recorded:
 
-| Process | PID | Executable | Parent | Start observation |
-|---|---:|---|---:|---|
-| Codex | 24824 | `C:\Users\Liparakis\AppData\Local\Microsoft\WinGet\Links\codex.exe` | 23652 | 2026-08-29 03:16:02 +03:00 |
-| MCP | 22700 | official bundle `bin\synesis-mcp.exe` | 24824 | 2026-08-29 03:16:04 +03:00 |
-| Java | 25532 | official bundle `runtime\bin\java.exe` | 22700 | 2026-08-29 03:16:04 +03:00 |
+| Process |   PID | Executable                                                          | Parent | Start observation          |
+|---------|------:|---------------------------------------------------------------------|-------:|----------------------------|
+| Codex   | 24824 | `C:\Users\Liparakis\AppData\Local\Microsoft\WinGet\Links\codex.exe` |  23652 | 2026-08-29 03:16:02 +03:00 |
+| MCP     | 22700 | official bundle `bin\synesis-mcp.exe`                               |  24824 | 2026-08-29 03:16:04 +03:00 |
+| Java    | 25532 | official bundle `runtime\bin\java.exe`                              |  22700 | 2026-08-29 03:16:04 +03:00 |
 
 The MCP and Java children were gone by post-run inspection; the original
 Java PID was explicitly absent before the probe. Exact child exit codes and
@@ -141,17 +141,17 @@ warnings, 0 errors, 0 critical findings, 0 mutations, and no cleanup or
 reconciliation recommendation. `stale_session_lease` was absent,
 `durable_state_ambiguous` was absent, and recovery eligibility was none.
 
-| Measure | CP-0566 | Final |
-|---|---|---|
-| Terminal seal | pass | pass, sequence 7 |
-| Original teardown | abnormal | abnormal by durable outcome/process disappearance; exact low-level cause unobserved |
-| Pre-probe lease | `TERMINAL_AUTHORITY_CONFIRMED` | `TERMINAL_AUTHORITY_CONFIRMED` |
-| Same-session rebind | `SESSION_TERMINAL` | `SESSION_TERMINAL` |
-| Original tracked process dead | yes | yes, PID 25532 absent |
-| Foreign-close liveness fallback | insufficient | executed and persisted disconnect |
-| Post-probe lease | `CLOSED_CLEANLY` | `TERMINAL_DISCONNECTED` |
-| History preserved | no | yes |
-| stale/ambiguous findings | absent | absent |
+| Measure                         | CP-0566                        | Final                                                                               |
+|---------------------------------|--------------------------------|-------------------------------------------------------------------------------------|
+| Terminal seal                   | pass                           | pass, sequence 7                                                                    |
+| Original teardown               | abnormal                       | abnormal by durable outcome/process disappearance; exact low-level cause unobserved |
+| Pre-probe lease                 | `TERMINAL_AUTHORITY_CONFIRMED` | `TERMINAL_AUTHORITY_CONFIRMED`                                                      |
+| Same-session rebind             | `SESSION_TERMINAL`             | `SESSION_TERMINAL`                                                                  |
+| Original tracked process dead   | yes                            | yes, PID 25532 absent                                                               |
+| Foreign-close liveness fallback | insufficient                   | executed and persisted disconnect                                                   |
+| Post-probe lease                | `CLOSED_CLEANLY`               | `TERMINAL_DISCONNECTED`                                                             |
+| History preserved               | no                             | yes                                                                                 |
+| stale/ambiguous findings        | absent                         | absent                                                                              |
 
 ## Closure validation
 

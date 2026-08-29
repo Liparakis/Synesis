@@ -26,18 +26,37 @@ public final class DoctorRenderer {
     public static String renderConcise(DoctorReport report) {
         Objects.requireNonNull(report, "report");
         StringBuilder sb = new StringBuilder();
-        sb.append("DOCTOR_RESULT=").append(report.overallStatus().name()).append("\n");
-        sb.append("FINDINGS=").append(report.findings().size()).append("\n");
-        sb.append("CRITICAL=").append(report.criticalCount()).append("\n");
-        sb.append("ERRORS=").append(report.errorCount()).append("\n");
-        sb.append("WARNINGS=").append(report.warningCount()).append("\n");
-        sb.append("CLEANUP_RECOMMENDED=").append(report.cleanupRecommended()).append("\n");
-        sb.append("RECONCILIATION_RECOMMENDED=").append(report.reconciliationRecommended()).append("\n");
-        sb.append("REPAIR_AVAILABLE=").append(report.repairAvailable()).append("\n");
+        sb.append("DOCTOR_RESULT=")
+                .append(report.overallStatus()
+                        .name())
+                .append("\n");
+        sb.append("FINDINGS=")
+                .append(report.findings()
+                        .size())
+                .append("\n");
+        sb.append("CRITICAL=")
+                .append(report.criticalCount())
+                .append("\n");
+        sb.append("ERRORS=")
+                .append(report.errorCount())
+                .append("\n");
+        sb.append("WARNINGS=")
+                .append(report.warningCount())
+                .append("\n");
+        sb.append("CLEANUP_RECOMMENDED=")
+                .append(report.cleanupRecommended())
+                .append("\n");
+        sb.append("RECONCILIATION_RECOMMENDED=")
+                .append(report.reconciliationRecommended())
+                .append("\n");
+        sb.append("REPAIR_AVAILABLE=")
+                .append(report.repairAvailable())
+                .append("\n");
         sb.append("MUTATIONS_PERFORMED=0\n");
 
         DoctorRecommendation primaryRec = derivePrimaryRecommendation(report);
-        sb.append("NEXT_ACTION=").append(primaryRec.value());
+        sb.append("NEXT_ACTION=")
+                .append(primaryRec.value());
 
         return sb.toString();
     }
@@ -53,13 +72,28 @@ public final class DoctorRenderer {
         StringBuilder sb = new StringBuilder(renderConcise(report));
         sb.append("\n--- DIAGNOSTIC FINDINGS ---\n");
         for (DoctorFinding f : report.findings()) {
-            sb.append("[").append(f.severity().name()).append("] ")
-                    .append(f.code().value())
-                    .append(" (").append(f.confidence().name()).append(") - ")
-                    .append(f.summary()).append("\n");
-            sb.append("  Explanation: ").append(f.explanation()).append("\n");
-            sb.append("  Recommendation: ").append(f.recommendation().value()).append("\n");
-            sb.append("  Repair Supported: ").append(f.repairSupported()).append("\n");
+            sb.append("[")
+                    .append(f.severity()
+                            .name())
+                    .append("] ")
+                    .append(f.code()
+                            .value())
+                    .append(" (")
+                    .append(f.confidence()
+                            .name())
+                    .append(") - ")
+                    .append(f.summary())
+                    .append("\n");
+            sb.append("  Explanation: ")
+                    .append(f.explanation())
+                    .append("\n");
+            sb.append("  Recommendation: ")
+                    .append(f.recommendation()
+                            .value())
+                    .append("\n");
+            sb.append("  Repair Supported: ")
+                    .append(f.repairSupported())
+                    .append("\n");
         }
         return sb.toString();
     }
@@ -70,11 +104,16 @@ public final class DoctorRenderer {
      * @param report doctor report
      * @return JSON representation
      */
+    @SuppressWarnings("ExtractMethodRecommender")
     public static String renderJson(DoctorReport report) {
         Objects.requireNonNull(report, "report");
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("doctorResult", report.overallStatus().name());
-        map.put("findingsCount", report.findings().size());
+        map.put("doctorResult",
+                report.overallStatus()
+                        .name());
+        map.put("findingsCount",
+                report.findings()
+                        .size());
         map.put("critical", report.criticalCount());
         map.put("errors", report.errorCount());
         map.put("warnings", report.warningCount());
@@ -88,14 +127,22 @@ public final class DoctorRenderer {
         List<Map<String, Object>> findingsList = new ArrayList<>();
         for (DoctorFinding f : report.findings()) {
             Map<String, Object> fm = new LinkedHashMap<>();
-            fm.put("code", f.code().value());
-            fm.put("severity", f.severity().name());
-            fm.put("confidence", f.confidence().name());
+            fm.put("code",
+                    f.code()
+                            .value());
+            fm.put("severity",
+                    f.severity()
+                            .name());
+            fm.put("confidence",
+                    f.confidence()
+                            .name());
             fm.put("summary", f.summary());
             fm.put("explanation", f.explanation());
             fm.put("affectedResourceType", f.affectedResourceType());
             fm.put("repairSupported", f.repairSupported());
-            fm.put("recommendation", f.recommendation().value());
+            fm.put("recommendation",
+                    f.recommendation()
+                            .value());
             fm.put("evidenceFingerprint", f.evidenceFingerprint());
             findingsList.add(fm);
         }

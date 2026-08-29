@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import org.synesis.link.SynesisLink;
 import org.synesis.link.candidate.Candidate;
 import org.synesis.link.candidate.CandidatePairs;
@@ -53,18 +54,15 @@ final class NettyQuicPeerProcess {
     private NettyQuicPeerProcess() {
     }
 
-    public static void main(String[] arguments) throws Exception {
+    static void main(String[] arguments) throws Exception {
         if (arguments.length != 4) {
             throw new IllegalArgumentException("expected mode, identity-file, ready-file, result-file");
         }
-        if ("client".equals(arguments[0])) {
-            client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), true);
-        } else if ("client-hold".equals(arguments[0])) {
-            client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), false);
-        } else if ("server".equals(arguments[0])) {
-            server(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]));
-        } else {
-            throw new IllegalArgumentException("unknown peer mode");
+        switch (arguments[0]) {
+            case "client" -> client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), true);
+            case "client-hold" -> client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), false);
+            case "server" -> server(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]));
+            default -> throw new IllegalArgumentException("unknown peer mode");
         }
     }
 
@@ -74,7 +72,6 @@ final class NettyQuicPeerProcess {
         writeIdentity(identityFile, identity);
         waitForFile(serverReady);
         List<String> material = Files.readAllLines(serverReady);
-        int port = Integer.parseInt(material.get(0));
         String remoteNodeId = material.get(1);
         byte[] remotePublicKey = Base64.getDecoder()
                 .decode(material.get(2));
@@ -102,11 +99,11 @@ final class NettyQuicPeerProcess {
                     .sync()
                     .channel();
             int port = Integer.parseInt(Files.readAllLines(serverReady)
-                    .get(0));
+                    .getFirst());
             var selectedPair = CandidatePairs.generate(
                             List.of(new Candidate(CandidateType.MANUAL, NetUtil.LOCALHOST4, port, 0)),
                             List.of(new Candidate(CandidateType.MANUAL, NetUtil.LOCALHOST4, port, 0)), 1)
-                    .get(0);
+                    .getFirst();
             connection = QuicChannel.newBootstrap(udp)
                     .handler(new ChannelInboundHandlerAdapter())
                     .streamHandler(new ChannelInboundHandlerAdapter())
@@ -144,14 +141,14 @@ final class NettyQuicPeerProcess {
                     .get(5, TimeUnit.SECONDS);
             Files.writeString(resultFile, "|WORK|" + work.status() + "|" + work.requestId(),
                     StandardOpenOption.APPEND);
-            waitForLine(serverReady, "LIVE_RECORDED");
+            waitForLine(serverReady);
             if (graceful) {
                 established.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
                         .toCompletableFuture()
                         .get(5, TimeUnit.SECONDS);
             } else {
-                while (true) {
-                    Thread.sleep(1_000);
+                while (!Thread.currentThread().isInterrupted()) {
+                    LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
                 }
             }
         } finally {
@@ -172,7 +169,7 @@ final class NettyQuicPeerProcess {
     private static void server(Path clientMaterial, Path serverReady, Path resultFile) throws Exception {
         waitForFile(clientMaterial);
         String expectedClient = Files.readAllLines(clientMaterial)
-                .get(0);
+                .getFirst();
         NodeIdentity identity = NodeIdentity.generate();
         MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
         TestTlsMaterial tls = TestTlsMaterial.create();
@@ -195,7 +192,7 @@ final class NettyQuicPeerProcess {
                             }, NettySessionHandshake.serverStreamHandler(identity, expectedClient,
                                     List.of(ProtocolVersion.V1), new ReplayGuard(), session,
                                     PROCESS_LOSS_LIVENESS,
-                                    (remoteNodeId, payload) -> CompletableFuture.completedFuture(payload))))
+                                    (_, payload) -> CompletableFuture.completedFuture(payload))))
                     .bind(NetUtil.LOCALHOST4, 0)
                     .sync()
                     .channel();
@@ -257,11 +254,11 @@ final class NettyQuicPeerProcess {
                         .heartbeatAcknowledgedCount())));
     }
 
-    private static void awaitHeartbeat(PeerSession session) throws Exception {
+    private static void awaitHeartbeat(PeerSession session) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
         while (session.livenessMetrics()
                 .heartbeatAcknowledgedCount() == 0 && System.nanoTime() < deadline) {
-            Thread.sleep(20);
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
         }
         if (session.livenessMetrics()
                 .heartbeatAcknowledgedCount() == 0) {
@@ -269,22 +266,22 @@ final class NettyQuicPeerProcess {
         }
     }
 
-    private static void waitForLine(Path file, String expected) throws Exception {
+    private static void waitForLine(Path file) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
         while (System.nanoTime() < deadline) {
             if (Files.exists(file) && Files.readAllLines(file)
-                    .contains(expected)) {
+                    .contains("LIVE_RECORDED")) {
                 return;
             }
-            Thread.sleep(20);
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
         }
-        throw new IllegalStateException("timed out waiting for " + expected);
+        throw new IllegalStateException("timed out waiting for LIVE_RECORDED");
     }
 
-    private static void waitForFile(Path file) throws Exception {
+    private static void waitForFile(Path file) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (!Files.exists(file) && System.nanoTime() < deadline) {
-            Thread.sleep(20);
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
         }
         if (!Files.exists(file)) {
             throw new IllegalStateException("timed out waiting for " + file.getFileName());

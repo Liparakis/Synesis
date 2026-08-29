@@ -1,6 +1,7 @@
 package org.synesis.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -43,7 +44,7 @@ final class CommandAdapterTest {
     }
 
     @Test
-    void failureMappingUsesStableExitAndRedactedStderr() throws Exception {
+    void failureMappingUsesStableExitAndRedactedStderr() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
@@ -54,7 +55,7 @@ final class CommandAdapterTest {
                 .contains("FAILURE=INVITE_INVALID"));
         assertTrue(err.toString(StandardCharsets.UTF_8)
                 .contains("invalid or expired"));
-        assertTrue(!err.toString(StandardCharsets.UTF_8)
+        assertFalse(err.toString(StandardCharsets.UTF_8)
                 .contains("secret link"));
     }
 }

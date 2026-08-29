@@ -4,11 +4,10 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.provider.ProviderSupportLevel;
+import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderMcpEvidenceTier;
+import org.synesis.workspace.provider.ProviderSupportLevel;
 
 /**
  * Codex project-local PreToolUse provider integration.
@@ -86,13 +85,14 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     /**
      * Builds the Codex TOML MCP entry.
      *
-     * @param launcher stable launcher
+     * @param launcher    stable launcher
      * @param projectRoot ignored project root
      * @return TOML-compatible entry values
      */
     @Override
     public Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
-        Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher, projectRoot));
+        Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher,
+                projectRoot));
         server.remove("version");
         return server;
     }
@@ -102,7 +102,7 @@ public final class CodexProviderIntegration implements ProviderIntegration {
      * approval or sandbox policy.
      *
      * @param worktree isolated lane worktree
-     * @param prompt initial task prompt
+     * @param prompt   initial task prompt
      * @return direct Codex argv
      */
     @Override
@@ -111,7 +111,9 @@ public final class CodexProviderIntegration implements ProviderIntegration {
             return java.util.Optional.empty();
         }
         return java.util.Optional.of(List.of("codex", "exec", "--cd",
-                worktree.toAbsolutePath().normalize().toString(), "--json", prompt));
+                worktree.toAbsolutePath()
+                        .normalize()
+                        .toString(), "--json", prompt));
     }
 
     @Override
@@ -151,21 +153,20 @@ public final class CodexProviderIntegration implements ProviderIntegration {
 
     @Override
     public Map<String, Object> managedHook(Path launcher, Path profile) {
-        Map<String, Object> hook = new LinkedHashMap<>();
-        hook.put("matcher", matcher());
-        Map<String, Object> command = new LinkedHashMap<>();
-        command.put("type", "command");
-        command.put("command", hookCommand(launcher, profile));
-        command.put("commandWindows", windowsHookCommand(launcher));
-        hook.put("hooks", List.of(command));
-        return hook;
+        return managedHook(matcher(), null, launcher, profile);
     }
 
     @Override
     public Map<String, Object> managedSessionHook(Path launcher, Path profile) {
+        return managedHook("startup|resume", "synesis-codex-session", launcher, profile);
+    }
+
+    private Map<String, Object> managedHook(String hookMatcher, String hookId, Path launcher, Path profile) {
         Map<String, Object> hook = new LinkedHashMap<>();
-        hook.put("id", "synesis-codex-session");
-        hook.put("matcher", "startup|resume");
+        if (hookId != null) {
+            hook.put("id", hookId);
+        }
+        hook.put("matcher", hookMatcher);
         Map<String, Object> command = new LinkedHashMap<>();
         command.put("type", "command");
         command.put("command", hookCommand(launcher, profile));

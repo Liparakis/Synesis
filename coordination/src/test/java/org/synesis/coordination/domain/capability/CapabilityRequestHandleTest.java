@@ -1,15 +1,14 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 class CapabilityRequestHandleTest {
 
@@ -31,9 +30,10 @@ class CapabilityRequestHandleTest {
 
         assertNotNull(handle1);
         assertNotNull(handle2);
-        assertTrue(handle1.value().startsWith("req_"));
+        assertTrue(handle1.value()
+                .startsWith("req_"));
         assertTrue(CapabilityRequestHandle.isValid(handle1.value()));
-        assertFalse(handle1.value().equals(handle2.value()));
+        assertNotEquals(handle1.value(), handle2.value());
     }
 
     @Test

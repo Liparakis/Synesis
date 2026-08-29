@@ -15,6 +15,7 @@ public final class ProviderInstallCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
     @Parameters(index = "0", description = "Provider identifier.")
+    @SuppressWarnings({"unused", "FieldCanBeLocal"})
     private String provider;
     @Option(names = "--project", description = "Project directory.")
     private String project;
@@ -33,10 +34,10 @@ public final class ProviderInstallCommand implements Callable<Integer> {
      */
     @Override
     public Integer call() {
-        return operate("install", provider, false);
+        return operate(provider);
     }
 
-    private int operate(String operation, String id, boolean unused) {
+    private int operate(String id) {
         try {
             var location = runtime.projectService()
                     .require(Path.of(project == null ? "." : project));

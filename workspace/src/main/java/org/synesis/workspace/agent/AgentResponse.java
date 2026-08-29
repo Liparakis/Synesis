@@ -10,9 +10,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * Shared provider-neutral agent response contract envelope.
  *
  * <p>All normal agent-facing outcomes serialize into this bounded envelope. Unused
-     * fields (reason, nextAction, result) are omitted rather than serializing unnecessary
-     * nulls. The assigned worktree is returned as Synesis coordination context; provider
-     * hooks route native mutations there without requiring the agent to change directory.
+ * fields (reason, nextAction, result) are omitted rather than serializing unnecessary
+ * nulls. The assigned worktree is returned as Synesis coordination context; provider
+ * hooks route native mutations there without requiring the agent to change directory.
  *
  * @param status     public operational status
  * @param reason     optional public reason code
@@ -41,9 +41,11 @@ public record AgentResponse(
         Objects.requireNonNull(status, "status");
     }
 
-    /** Creates a mutation success response carrying the updated file revision.
+    /**
+     * Creates a mutation success response carrying the updated file revision.
+     *
      * @param relativePath repository-relative target path
-     * @param revision updated opaque file revision
+     * @param revision     updated opaque file revision
      * @return completed response
      */
     public static AgentResponse completed(String relativePath, String revision) {
@@ -65,8 +67,8 @@ public record AgentResponse(
      * Creates a readiness response with explicit assigned-worktree guidance.
      *
      * @param workspace workspace state identifier
-     * @param pending pending coordination item count
-     * @param worktree assigned worktree path
+     * @param pending   pending coordination item count
+     * @param worktree  assigned worktree path
      * @return ready agent response
      */
     public static AgentResponse ready(String workspace, int pending, String worktree) {
@@ -90,65 +92,8 @@ public record AgentResponse(
     }
 
     /**
-     * Converts this response to a map omitting any null fields.
+     * Reconstructs a bounded response previously produced by {@link #toMap()}.
      *
-     * @return map representation
-     */
-    public Map<String, Object> toMap() {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("status", status.value());
-        if (reason != null) {
-            map.put("reason", reason.value());
-        }
-        if (nextAction != null) {
-            map.put("nextAction", nextAction.value());
-        }
-        if (result != null) {
-            if (result instanceof AgentMutationResult mut) {
-                Map<String, Object> mutation = new LinkedHashMap<>();
-                mutation.put("path", mut.path());
-                if (mut.revision() != null && !mut.revision().isBlank()) {
-                    mutation.put("revision", mut.revision());
-                }
-                if (mut.revision() != null && !mut.revision().isBlank()) {
-                    mutation.put("changedFiles", mut.changedFiles());
-                }
-                map.put("result", mutation);
-            } else if (result instanceof AgentCapabilityResult cap) {
-                Map<String, Object> capMap = new LinkedHashMap<>();
-                if (cap.capability() != null) {
-                    capMap.put("capability", cap.capability());
-                }
-                if (cap.requiredFields() != null && !cap.requiredFields().isEmpty()) {
-                    capMap.put("requiredFields", cap.requiredFields());
-                }
-                map.put("result", capMap);
-            } else if (result instanceof AgentStatusResult stat) {
-                Map<String, Object> status = new LinkedHashMap<>();
-                status.put("workspace", stat.workspace());
-                status.put("pending", stat.pending());
-                if (stat.worktree() != null) {
-                    status.put("worktree", stat.worktree());
-                }
-                if (stat.instruction() != null) {
-                    status.put("instruction", stat.instruction());
-                }
-                map.put("result", status);
-            } else if (result instanceof AgentWorkspaceGuidance guidance) {
-                map.put("result", Map.of(
-                        "controlCheckout", guidance.controlCheckout(),
-                        "assignedWorktree", guidance.assignedWorktree(),
-                        "instruction", guidance.instruction()));
-            } else if (result instanceof Map<?, ?> resMap) {
-                map.put("result", resMap);
-            } else {
-                map.put("result", result);
-            }
-        }
-        return map;
-    }
-
-    /** Reconstructs a bounded response previously produced by {@link #toMap()}.
      * @param map response map produced by {@link #toMap()}
      * @return reconstructed response
      */
@@ -164,6 +109,67 @@ public record AgentResponse(
                 ? AgentNextAction.fromValue(value) : null;
         Object result = map.get("result");
         return new AgentResponse(AgentStatus.fromValue(status), reason, nextAction, result);
+    }
+
+    /**
+     * Converts this response to a map omitting any null fields.
+     *
+     * @return map representation
+     */
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("status", status.value());
+        if (reason != null) {
+            map.put("reason", reason.value());
+        }
+        if (nextAction != null) {
+            map.put("nextAction", nextAction.value());
+        }
+        if (result != null) {
+            switch (result) {
+                case AgentMutationResult(String path, String revision, int changedFiles) -> {
+                    Map<String, Object> mutation = new LinkedHashMap<>();
+                    mutation.put("path", path);
+                    if (revision != null && !revision.isBlank()) {
+                        mutation.put("revision", revision);
+                    }
+                    if (revision != null && !revision.isBlank()) {
+                        mutation.put("changedFiles", changedFiles);
+                    }
+                    map.put("result", mutation);
+                }
+                case AgentCapabilityResult(String capability, java.util.List<String> requiredFields) -> {
+                    Map<String, Object> capMap = new LinkedHashMap<>();
+                    if (capability != null) {
+                        capMap.put("capability", capability);
+                    }
+                    if (requiredFields != null && !requiredFields.isEmpty()) {
+                        capMap.put("requiredFields", requiredFields);
+                    }
+                    map.put("result", capMap);
+                }
+                case AgentStatusResult(String workspace, int pending, String worktree, String instruction) -> {
+                    Map<String, Object> status = new LinkedHashMap<>();
+                    status.put("workspace", workspace);
+                    status.put("pending", pending);
+                    if (worktree != null) {
+                        status.put("worktree", worktree);
+                    }
+                    if (instruction != null) {
+                        status.put("instruction", instruction);
+                    }
+                    map.put("result", status);
+                }
+                case AgentWorkspaceGuidance(String controlCheckout, String assignedWorktree, String instruction) ->
+                        map.put("result", Map.of(
+                                "controlCheckout", controlCheckout,
+                                "assignedWorktree", assignedWorktree,
+                                "instruction", instruction));
+                case Map<?, ?> resMap -> map.put("result", resMap);
+                default -> map.put("result", result);
+            }
+        }
+        return map;
     }
 
     /**

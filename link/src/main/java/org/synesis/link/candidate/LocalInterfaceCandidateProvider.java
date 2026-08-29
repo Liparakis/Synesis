@@ -52,7 +52,7 @@ public final class LocalInterfaceCandidateProvider implements CandidateProvider 
         List<Candidate> result = new ArrayList<>();
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            while (interfaces != null && interfaces.hasMoreElements()) {
+            while (interfaces.hasMoreElements()) {
                 NetworkInterface network = interfaces.nextElement();
                 if (cancellation.isCancelled()) {
                     break;

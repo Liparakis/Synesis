@@ -1,4 +1,7 @@
+package org.synesis.workspace;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -8,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
-/** Verifies exact common-directory Git exclusions and preservation semantics. */
+/**
+ * Verifies exact common-directory Git exclusions and preservation semantics.
+ */
 class RepositoryPrivateStateServiceTest {
 
     private static void git(Path root, String... args) throws Exception {
@@ -33,10 +38,14 @@ class RepositoryPrivateStateServiceTest {
         assertTrue(content.contains("# keep this comment"));
         assertTrue(content.contains("/custom"));
         for (String line : RepositoryPrivateStateService.SYNESIS_EXCLUSIONS) {
-            assertEquals(1, content.lines().filter(candidate -> candidate.trim().equals(line)).count());
+            assertEquals(1,
+                    content.lines()
+                            .filter(candidate -> candidate.trim()
+                                    .equals(line))
+                            .count());
         }
-        assertTrue(!content.contains("/.synesis/\n"));
-        assertTrue(!content.contains("/.codex/\n"));
+        assertFalse(content.contains("/.synesis/\n"));
+        assertFalse(content.contains("/.codex/\n"));
     }
 
     @Test
@@ -59,7 +68,11 @@ class RepositoryPrivateStateServiceTest {
         assertTrue(content.contains("# shared"));
         assertTrue(content.contains("/custom"));
         for (String line : RepositoryPrivateStateService.SYNESIS_EXCLUSIONS) {
-            assertEquals(1, content.lines().filter(candidate -> candidate.trim().equals(line)).count());
+            assertEquals(1,
+                    content.lines()
+                            .filter(candidate -> candidate.trim()
+                                    .equals(line))
+                            .count());
         }
     }
 }

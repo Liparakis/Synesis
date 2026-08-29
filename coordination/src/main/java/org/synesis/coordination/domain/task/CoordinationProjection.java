@@ -1,22 +1,14 @@
 package org.synesis.coordination.domain.task;
 
-import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
-
-
-import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
-
-
-
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.ownership.OwnershipClaim;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 
 /**
  * Deterministic task and ownership projection over the shared event sequence.

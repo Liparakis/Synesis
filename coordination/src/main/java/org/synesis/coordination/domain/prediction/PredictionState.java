@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.prediction;
 
 
-
-
 /**
  * Lifecycle states for one speculative capability prediction.
  */

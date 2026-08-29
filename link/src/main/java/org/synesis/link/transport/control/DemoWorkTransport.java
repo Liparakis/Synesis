@@ -42,6 +42,7 @@ public final class DemoWorkTransport {
      * @param active         active-stream counter enforcing the stream limit
      * @return completion for the demo result
      */
+    @SuppressWarnings("DuplicatedCode")
     public static CompletionStage<DemoWorkResult> open(ChannelHandlerContext controlContext,
             DemoWorkRequest request, AtomicInteger active) {
         if (active.incrementAndGet() > MAX_STREAMS) {

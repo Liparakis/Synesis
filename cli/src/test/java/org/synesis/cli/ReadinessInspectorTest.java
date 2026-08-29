@@ -1,5 +1,6 @@
 package org.synesis.cli;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,9 +34,8 @@ final class ReadinessInspectorTest {
         String before = Files.readString(profile.resolve("identity.pub"));
         ReadinessReport report = new ReadinessInspector(profile).inspect();
         assertTrue(report.identityReady());
-        assertTrue(report.identityDetail()
-                .equals("IDENTITY_VALID"));
-        assertTrue(before.equals(Files.readString(profile.resolve("identity.pub"))));
+        assertEquals("IDENTITY_VALID", report.identityDetail());
+        assertEquals(before, Files.readString(profile.resolve("identity.pub")));
     }
 
     @Test

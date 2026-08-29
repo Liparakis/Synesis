@@ -10,6 +10,7 @@ import java.util.Objects;
  *
  * @since 1.0
  */
+@SuppressWarnings("ClassCanBeRecord")
 public final class RetentionPolicy {
 
     private static final Duration DEFAULT_WORKER_RETENTION = Duration.ofHours(24);
@@ -41,14 +42,14 @@ public final class RetentionPolicy {
     /**
      * Creates a custom retention policy with explicit clock and thresholds.
      *
-     * @param clock                         clock source
-     * @param workerWorktreeRetention       retention duration for finalized worker worktrees
-     * @param validationWorktreeRetention   retention duration for completed validation worktrees
-     * @param integrationWorktreeRetention  retention duration for completed integration worktrees
-     * @param diagnosticEvidenceRetention   retention duration for diagnostic evidence files
-     * @param temporaryFileRetention        retention duration for temporary files
-     * @param maxDiagnosticAttempts         maximum number of retained diagnostic integration worktrees
-     * @param storageWarningThresholdBytes  disk space warning threshold in bytes
+     * @param clock                        clock source
+     * @param workerWorktreeRetention      retention duration for finalized worker worktrees
+     * @param validationWorktreeRetention  retention duration for completed validation worktrees
+     * @param integrationWorktreeRetention retention duration for completed integration worktrees
+     * @param diagnosticEvidenceRetention  retention duration for diagnostic evidence files
+     * @param temporaryFileRetention       retention duration for temporary files
+     * @param maxDiagnosticAttempts        maximum number of retained diagnostic integration worktrees
+     * @param storageWarningThresholdBytes disk space warning threshold in bytes
      */
     public RetentionPolicy(
             Clock clock,
@@ -62,9 +63,12 @@ public final class RetentionPolicy {
     ) {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.workerWorktreeRetention = Objects.requireNonNull(workerWorktreeRetention, "workerWorktreeRetention");
-        this.validationWorktreeRetention = Objects.requireNonNull(validationWorktreeRetention, "validationWorktreeRetention");
-        this.integrationWorktreeRetention = Objects.requireNonNull(integrationWorktreeRetention, "integrationWorktreeRetention");
-        this.diagnosticEvidenceRetention = Objects.requireNonNull(diagnosticEvidenceRetention, "diagnosticEvidenceRetention");
+        this.validationWorktreeRetention = Objects.requireNonNull(validationWorktreeRetention,
+                "validationWorktreeRetention");
+        this.integrationWorktreeRetention = Objects.requireNonNull(integrationWorktreeRetention,
+                "integrationWorktreeRetention");
+        this.diagnosticEvidenceRetention = Objects.requireNonNull(diagnosticEvidenceRetention,
+                "diagnosticEvidenceRetention");
         this.temporaryFileRetention = Objects.requireNonNull(temporaryFileRetention, "temporaryFileRetention");
         this.maxDiagnosticAttempts = maxDiagnosticAttempts;
         this.storageWarningThresholdBytes = storageWarningThresholdBytes;
@@ -75,6 +79,7 @@ public final class RetentionPolicy {
      *
      * @return clock
      */
+    @SuppressWarnings("unused")
     public Clock clock() {
         return clock;
     }
@@ -120,6 +125,7 @@ public final class RetentionPolicy {
      *
      * @return duration
      */
+    @SuppressWarnings("unused")
     public Duration diagnosticEvidenceRetention() {
         return diagnosticEvidenceRetention;
     }
@@ -138,6 +144,7 @@ public final class RetentionPolicy {
      *
      * @return count
      */
+    @SuppressWarnings("unused")
     public int maxDiagnosticAttempts() {
         return maxDiagnosticAttempts;
     }

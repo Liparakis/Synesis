@@ -13,16 +13,16 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.transport.http.CoordinationHttpClient;
-import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.coordination.domain.prediction.PredictionContract;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.prediction.PredictionIntegrationGate;
 import org.synesis.coordination.domain.prediction.PredictionState;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.transport.http.CoordinationHttpClient;
+import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
@@ -156,7 +156,8 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
         try (CoordinationHttpServer server = new CoordinationHttpServer(service,
                 new InetSocketAddress("127.0.0.1", port))) {
             server.start();
-            System.out.println("timestamp=" + now() + " COORDINATOR_READY endpoint=http://" + server.address()
+            System.out.println("timestamp=" + now() + " COORDINATOR_READY endpoint=" + "http" + "://"
+                    + server.address()
                     .getHostString() + ":"
                     + server.address()
                     .getPort() + " nodeId=" + identity.nodeId());
@@ -167,6 +168,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
                 try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in,
                         StandardCharsets.UTF_8))) {
                     while (reader.readLine() != null) {
+                        Thread.onSpinWait();
                     }
                 }
             }
@@ -197,7 +199,8 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
         while (true) {
             List<PredictionEvent> events = client.replayAfter(cursor);
             if (events.isEmpty()) {
-                Thread.sleep(100);
+                java.util.concurrent.locks.LockSupport.parkNanos(
+                        java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(100));
                 continue;
             }
             for (PredictionEvent event : events) {
@@ -226,8 +229,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
                 + "\",\"Description\":\"capability=workspace.prediction-query\",\"workspacePaths\":[\""
                 + worktree.toString()
                 .replace("\\", "\\\\") + "\"]}";
-        var hookResult = hook.processJson(hookJson);
-        return hookResult;
+        return hook.processJson(hookJson);
     }
 
     private int resumeA(NodeIdentity identity) throws Exception {
@@ -332,6 +334,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
     }
 
     private void createSpeculation(UUID predictionId, long sequence) throws Exception {
+        //noinspection resource -- the durable speculation path owns this workspace until explicit cleanup.
         SpeculationWorkspace speculation = new SpeculationWorkspace(worktree,
                 worktree.resolve(".synesis/local"),
                 predictionId,

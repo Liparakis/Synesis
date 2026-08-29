@@ -16,6 +16,28 @@ import org.junit.jupiter.api.Test;
  */
 class WorkspacePackageArchitectureTest {
 
+    private static Stream<String> productionSources() throws IOException {
+        Path root = Path.of("src/main/java");
+        if (!Files.isDirectory(root)) {
+            root = Path.of("workspace/src/main/java");
+        }
+        try (Stream<Path> paths = Files.walk(root)) {
+            return paths.filter(path -> path.toString()
+                            .endsWith(".java"))
+                    .map(WorkspacePackageArchitectureTest::read)
+                    .toList()
+                    .stream();
+        }
+    }
+
+    private static String read(Path path) {
+        try {
+            return Files.readString(path);
+        } catch (IOException failure) {
+            throw new IllegalStateException("Cannot read " + path, failure);
+        }
+    }
+
     /**
      * Rejects package names and imports that would reintroduce the removed integration branch.
      *
@@ -40,8 +62,9 @@ class WorkspacePackageArchitectureTest {
                 .filter(source -> source.contains("package org.synesis.workspace.project;")
                         || source.contains("package org.synesis.workspace.lifecycle."))
                 .toList();
-        assertTrue(projectAndLifecycle.stream().noneMatch(source -> source.contains("org.synesis.cli")
-                || source.contains("org.synesis.mcp")));
+        assertTrue(projectAndLifecycle.stream()
+                .noneMatch(source -> source.contains("org.synesis.cli")
+                        || source.contains("org.synesis.mcp")));
     }
 
     /**
@@ -54,12 +77,13 @@ class WorkspacePackageArchitectureTest {
         List<String> contracts = productionSources()
                 .filter(source -> source.contains("package org.synesis.workspace.provider;")
                         && (source.contains("public interface ProviderIntegration")
-                                || source.contains("public enum ProviderSupportLevel")))
+                        || source.contains("public enum ProviderSupportLevel")))
                 .toList();
         assertFalse(contracts.isEmpty());
-        assertTrue(contracts.stream().noneMatch(source -> source.contains("provider.codex")
-                || source.contains("provider.antigravity")
-                || source.contains("provider.claude")));
+        assertTrue(contracts.stream()
+                .noneMatch(source -> source.contains("provider.codex")
+                        || source.contains("provider.antigravity")
+                        || source.contains("provider.claude")));
     }
 
     /**
@@ -71,26 +95,5 @@ class WorkspacePackageArchitectureTest {
     void productionDoesNotDependOnTestCode() throws IOException {
         assertTrue(productionSources().noneMatch(source -> source.contains("src/test")
                 || source.contains("org.synesis.workspace.test")));
-    }
-
-    private static Stream<String> productionSources() throws IOException {
-        Path root = Path.of("src/main/java");
-        if (!Files.isDirectory(root)) {
-            root = Path.of("workspace/src/main/java");
-        }
-        try (Stream<Path> paths = Files.walk(root)) {
-            return paths.filter(path -> path.toString().endsWith(".java"))
-                    .map(WorkspacePackageArchitectureTest::read)
-                    .toList()
-                    .stream();
-        }
-    }
-
-    private static String read(Path path) {
-        try {
-            return Files.readString(path);
-        } catch (IOException failure) {
-            throw new IllegalStateException("Cannot read " + path, failure);
-        }
     }
 }

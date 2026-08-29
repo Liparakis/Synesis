@@ -10,11 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.DecisionRecord;
-import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
+import org.synesis.projectrecord.persistence.DecisionStore;
+import org.synesis.projectrecord.security.Ed25519Signer;
 
 final class AntigravityHookAdapterTest {
 
@@ -36,6 +35,7 @@ final class AntigravityHookAdapterTest {
     }
 
     @Test
+    @SuppressWarnings("ExtractMethodRecommender")
     void blocksReplaceFileContentOnConstrainedScope() throws Exception {
         Path tempDir = Files.createTempDirectory("antigravity-test-replace-");
         try {

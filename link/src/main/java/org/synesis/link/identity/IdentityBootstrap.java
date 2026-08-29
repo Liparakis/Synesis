@@ -113,6 +113,7 @@ public final class IdentityBootstrap {
      *
      * @return private identity path
      */
+    @SuppressWarnings("unused")
     public Path privatePath() {
         return directory.resolve(PRIVATE_FILE);
     }

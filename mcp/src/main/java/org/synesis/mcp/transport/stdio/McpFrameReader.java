@@ -11,10 +11,14 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-/** Package-private bounded newline-delimited MCP frame reader. */
+/**
+ * Package-private bounded newline-delimited MCP frame reader.
+ */
 final class McpFrameReader {
 
-    /** Maximum raw UTF-8 frame bytes accepted before the first excess byte. */
+    /**
+     * Maximum raw UTF-8 frame bytes accepted before the first excess byte.
+     */
     static final int MAX_FRAME_BYTES = 32 * 1024 * 1024;
 
     private final InputStream input;
@@ -23,7 +27,21 @@ final class McpFrameReader {
         this.input = Objects.requireNonNull(input, "input");
     }
 
-    /** Reads one strict UTF-8 LF-terminated frame.
+    private static String decode(byte[] raw, int length) throws IOException {
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        try {
+            CharBuffer decoded = decoder.decode(ByteBuffer.wrap(raw, 0, length));
+            return decoded.toString();
+        } catch (CharacterCodingException failure) {
+            throw new IOException("MCP_INVALID_UTF8", failure);
+        }
+    }
+
+    /**
+     * Reads one strict UTF-8 LF-terminated frame.
+     *
      * @return trimmed frame, or {@code null} at clean EOF between frames
      * @throws IOException on overflow, partial EOF, or invalid UTF-8
      */
@@ -46,18 +64,6 @@ final class McpFrameReader {
                 return decode(raw, length).trim();
             }
             bytes.write(value);
-        }
-    }
-
-    private static String decode(byte[] raw, int length) throws IOException {
-        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT);
-        try {
-            CharBuffer decoded = decoder.decode(ByteBuffer.wrap(raw, 0, length));
-            return decoded.toString();
-        } catch (CharacterCodingException failure) {
-            throw new IOException("MCP_INVALID_UTF8", failure);
         }
     }
 }

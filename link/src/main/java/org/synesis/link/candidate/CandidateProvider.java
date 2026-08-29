@@ -26,6 +26,7 @@ public interface CandidateProvider extends AutoCloseable {
      *
      * @return immutable supported-type set
      */
+    @SuppressWarnings("unused")
     Set<CandidateType> supportedTypes();
 
     /**

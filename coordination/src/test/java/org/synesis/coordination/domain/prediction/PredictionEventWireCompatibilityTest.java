@@ -1,6 +1,7 @@
 package org.synesis.coordination.domain.prediction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -9,8 +10,11 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.link.identity.NodeIdentity;
 
-/** Verifies stable event wire codes across the SYN-020 event insertion. */
+/**
+ * Verifies stable event wire codes across the SYN-020 event insertion.
+ */
 class PredictionEventWireCompatibilityTest {
+
     @Test
     void dependencyCodeRemainsHistoricalAndCollaborationCodesAreDistinct() throws Exception {
         assertEquals(42, PredictionEventType.DEPENDENCY_INVALIDATED.wireCode());
@@ -22,7 +26,9 @@ class PredictionEventWireCompatibilityTest {
         PredictionEvent dependency = PredictionEvent.create(project, UUID.randomUUID(), 1,
                 PredictionEventType.DEPENDENCY_INVALIDATED, identity.nodeId(), new byte[0],
                 new byte[32], identity, 1L);
-        assertEquals(PredictionEventType.DEPENDENCY_INVALIDATED, PredictionEvent.decode(dependency.encoded()).type());
+        assertEquals(PredictionEventType.DEPENDENCY_INVALIDATED,
+                PredictionEvent.decode(dependency.encoded())
+                        .type());
     }
 
     @Test
@@ -36,6 +42,8 @@ class PredictionEventWireCompatibilityTest {
                 PredictionEventType.WORK_INTENT_ANNOUNCED, identity.nodeId(), CollaborationCodec.encodeIntent(intent),
                 new byte[32], identity, 1L);
 
-        assertEquals(PredictionEventType.WORK_INTENT_ANNOUNCED, PredictionEvent.decode(event.encoded()).type());
+        assertEquals(PredictionEventType.WORK_INTENT_ANNOUNCED,
+                PredictionEvent.decode(event.encoded())
+                        .type());
     }
 }

@@ -53,12 +53,12 @@ public final class NettySessionHandshake {
     /**
      * Creates the default initiator handshake stream handler.
      *
-     * @param localIdentity         local node identity
-     * @param expectedRemoteNodeId  expected remote node identifier
-     * @param transcript            handshake transcript
-     * @param localProof            local handshake proof
-     * @param replayGuard           replay guard
-     * @param result                completion receiving the authenticated session
+     * @param localIdentity        local node identity
+     * @param expectedRemoteNodeId expected remote node identifier
+     * @param transcript           handshake transcript
+     * @param localProof           local handshake proof
+     * @param replayGuard          replay guard
+     * @param result               completion receiving the authenticated session
      * @return configured client handshake handler
      */
     public static ChannelHandler clientStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
@@ -166,6 +166,7 @@ public final class NettySessionHandshake {
      * @param result               completion receiving the authenticated session
      * @return configured server handshake handler
      */
+    @SuppressWarnings("unused")
     public static ChannelHandler serverStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             HandshakeTranscript transcript, ReplayGuard replayGuard, CompletableFuture<PeerSession> result) {
         return serverStreamHandler(localIdentity, expectedRemoteNodeId, List.of(ProtocolVersion.V1), transcript,
@@ -283,6 +284,7 @@ public final class NettySessionHandshake {
      * @param admission             invitation admission state
      * @return configured invitation handshake handler
      */
+    @SuppressWarnings("unused")
     public static ChannelHandler serverInvitationStreamHandler(NodeIdentity localIdentity, String expectedRemoteNodeId,
             List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
             LivenessConfiguration livenessConfiguration, InvitationAdmission admission) {
@@ -544,7 +546,7 @@ public final class NettySessionHandshake {
                     .isOpen()) {
                 context.writeAndFlush(Unpooled.wrappedBuffer(HandshakeFailure.create(exception.code())
                                 .encoded()))
-                        .addListener(future -> context.close());
+                        .addListener(_ -> context.close());
             }
         }
 

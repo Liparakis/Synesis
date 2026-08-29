@@ -1,12 +1,5 @@
 package org.synesis.coordination.domain.integration;
 
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-
-
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -17,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 
 /**
  * Binary codec for Stage 2B Slice 2 capability implementation events.
@@ -24,19 +18,20 @@ import java.util.UUID;
  * <p>Covers {@code CAPABILITY_IMPLEMENTATION_PUBLISHED}, {@code CAPABILITY_VALIDATION_STARTED},
  * {@code CAPABILITY_IMPLEMENTATION_VALIDATED}, and {@code CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED}.
  *
- * @param handle               request handle
- * @param authorityLineageId   durable authority lineage of the publisher
- * @param revisionNumber       implementation revision number (1-based)
- * @param baseCommit           Git base commit SHA (empty string when not applicable)
- * @param commitSha            Git commit SHA of the implementation snapshot
- * @param changedPaths         list of changed paths relative to project root
- * @param summary              human-readable implementation summary
- * @param validationResult     validation outcome: {@code ""}, {@code "accepted"}, or {@code "revision_required"}
- * @param validationReason     free-text validation failure reason (may be empty)
+ * @param handle                request handle
+ * @param authorityLineageId    durable authority lineage of the publisher
+ * @param revisionNumber        implementation revision number (1-based)
+ * @param baseCommit            Git base commit SHA (empty string when not applicable)
+ * @param commitSha             Git commit SHA of the implementation snapshot
+ * @param changedPaths          list of changed paths relative to project root
+ * @param summary               human-readable implementation summary
+ * @param validationResult      validation outcome: {@code ""}, {@code "accepted"}, or {@code "revision_required"}
+ * @param validationReason      free-text validation failure reason (may be empty)
  * @param failedAcceptanceTests list of failed acceptance test names
- * @param worktreePath         absolute path to validation worktree (empty when not applicable)
+ * @param worktreePath          absolute path to validation worktree (empty when not applicable)
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public record ImplementationEventPayload(
         CapabilityRequestHandle handle,
         UUID authorityLineageId,
@@ -85,17 +80,19 @@ public record ImplementationEventPayload(
         }
     }
 
-    /** Constructs a historical payload without explicit lineage metadata.
-     * @param handle request handle
-     * @param revisionNumber revision number
-     * @param baseCommit base commit
-     * @param commitSha implementation commit
-     * @param changedPaths changed paths
-     * @param summary summary
-     * @param validationResult validation result
-     * @param validationReason validation reason
+    /**
+     * Constructs a historical payload without explicit lineage metadata.
+     *
+     * @param handle                request handle
+     * @param revisionNumber        revision number
+     * @param baseCommit            base commit
+     * @param commitSha             implementation commit
+     * @param changedPaths          changed paths
+     * @param summary               summary
+     * @param validationResult      validation result
+     * @param validationReason      validation reason
      * @param failedAcceptanceTests failed acceptance tests
-     * @param worktreePath validation worktree
+     * @param worktreePath          validation worktree
      */
     public ImplementationEventPayload(CapabilityRequestHandle handle, int revisionNumber,
             String baseCommit, String commitSha, List<String> changedPaths, String summary,
@@ -104,41 +101,6 @@ public record ImplementationEventPayload(
         this(handle, unresolvedLineage(handle), revisionNumber, baseCommit, commitSha,
                 changedPaths, summary, validationResult, validationReason,
                 failedAcceptanceTests, worktreePath);
-    }
-
-    /**
-     * Encodes this payload into binary format.
-     *
-     * @return encoded bytes
-     */
-    public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
-            out.writeInt(VERSION);
-            writeText(out, handle.value());
-            writeUuid(out, authorityLineageId);
-            out.writeInt(revisionNumber);
-            writeText(out, baseCommit);
-            writeText(out, commitSha);
-            out.writeInt(changedPaths.size());
-            for (String path : changedPaths) {
-                writeText(out, path);
-            }
-            writeText(out, summary);
-            writeText(out, validationResult);
-            writeText(out, validationReason);
-            out.writeInt(failedAcceptanceTests.size());
-            for (String test : failedAcceptanceTests) {
-                writeText(out, test);
-            }
-            writeText(out, worktreePath);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new AssertionError(impossible);
-        }
     }
 
     /**
@@ -158,7 +120,7 @@ public record ImplementationEventPayload(
                 throw new IOException("Unsupported implementation event payload format");
             }
             CapabilityRequestHandle handle = CapabilityRequestHandle.parse(readText(in));
-            UUID authorityLineageId = version >= 2 ? readUuid(in) : unresolvedLineage(handle);
+            UUID authorityLineageId = version == 2 ? readUuid(in) : unresolvedLineage(handle);
             int revisionNumber = in.readInt();
             String baseCommit = readText(in);
             String commitSha = readText(in);
@@ -225,5 +187,40 @@ public record ImplementationEventPayload(
     private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
         return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value())
                 .getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Encodes this payload into binary format.
+     *
+     * @return encoded bytes
+     */
+    public byte[] encode() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC);
+            out.writeInt(VERSION);
+            writeText(out, handle.value());
+            writeUuid(out, authorityLineageId);
+            out.writeInt(revisionNumber);
+            writeText(out, baseCommit);
+            writeText(out, commitSha);
+            out.writeInt(changedPaths.size());
+            for (String path : changedPaths) {
+                writeText(out, path);
+            }
+            writeText(out, summary);
+            writeText(out, validationResult);
+            writeText(out, validationReason);
+            out.writeInt(failedAcceptanceTests.size());
+            for (String test : failedAcceptanceTests) {
+                writeText(out, test);
+            }
+            writeText(out, worktreePath);
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
     }
 }

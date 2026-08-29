@@ -4,10 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-/** Tests the shared lifecycle plan-integrity digest. */
+/**
+ * Tests the shared lifecycle plan-integrity digest.
+ */
 class PlanIntegrityTest {
 
-    /** Verifies the canonical UTF-8 SHA-256 representation. */
+    /**
+     * Verifies the canonical UTF-8 SHA-256 representation.
+     */
     @Test
     void computesCanonicalSha256() throws Exception {
         assertEquals(

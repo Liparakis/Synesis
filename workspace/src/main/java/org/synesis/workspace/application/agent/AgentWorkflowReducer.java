@@ -22,58 +22,10 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  */
 public final class AgentWorkflowReducer {
 
-    /** Creates the stateless workflow reducer. */
-    public AgentWorkflowReducer() {
-    }
-
     /**
-     * Adds the stable workflow action envelope to a response.
-     *
-     * @param request exact lane request
-     * @param response response derived by the lane service
-     * @return response containing workflow action metadata
+     * Creates the stateless workflow reducer.
      */
-    public AgentResponse decorate(AgentNextActionService.NextActionRequest request, AgentResponse response) {
-        Objects.requireNonNull(request, "request");
-        Objects.requireNonNull(response, "response");
-        Map<String, Object> result = new LinkedHashMap<>();
-        if (response.result() instanceof Map<?, ?> map) {
-            map.forEach((key, value) -> result.put(String.valueOf(key), value));
-        } else if (response.result() != null) {
-            result.put("value", response.result());
-        }
-
-        LaneAction action = actionFor(response, result);
-        String actionId = actionId(request, response, result, action);
-        Map<String, Object> workflow = new LinkedHashMap<>();
-        workflow.put("actionId", actionId);
-        workflow.put("type", action.type());
-        workflow.put("payload", Collections.unmodifiableMap(new LinkedHashMap<>(result)));
-        Map<?, ?> laneContext = firstIntent(result);
-        if (laneContext.get("workGroupId") != null) {
-            workflow.put("workGroupId", laneContext.get("workGroupId"));
-        }
-        if (laneContext.get("intentId") != null) {
-            workflow.put("laneId", laneContext.get("intentId"));
-        }
-        workflow.put("blockers", action.blockers());
-        workflow.put("permittedOperations", action.permittedOperations());
-        workflow.put("retrySafe", action.retrySafe());
-        workflow.put("delivery", "AT_LEAST_ONCE");
-        workflow.put("acknowledgementRequired", true);
-        Map<String, Object> executable = executableAction(response, result, actionId);
-        if (executable != null) {
-            workflow.put("recommendedTool", executable.get("tool"));
-            workflow.put("arguments", executable.get("arguments"));
-        }
-        if (result.get("reviewDecision") instanceof Map<?, ?> decision) {
-            workflow.put("decision", decision);
-        }
-        result.put("workflow", workflow);
-        result.put("actionId", actionId);
-        result.put("delivery", "AT_LEAST_ONCE");
-        result.put("acknowledgementRequired", true);
-        return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
+    public AgentWorkflowReducer() {
     }
 
     private static Map<?, ?> firstIntent(Map<String, Object> result) {
@@ -91,17 +43,28 @@ public final class AgentWorkflowReducer {
     private static String actionId(AgentNextActionService.NextActionRequest request, AgentResponse response,
             Map<String, Object> result, LaneAction action) {
         StringBuilder seed = new StringBuilder(action.type())
-                .append('|').append(response.status().value())
-                .append('|').append(response.reason() == null ? "" : response.reason().value())
-                .append('|').append(request.provider())
-                .append('|').append(request.connectionInstanceId());
+                .append('|')
+                .append(response.status()
+                        .value())
+                .append('|')
+                .append(response.reason() == null ? "" : response.reason()
+                                                         .value())
+                .append('|')
+                .append(request.provider())
+                .append('|')
+                .append(request.connectionInstanceId());
         for (String key : List.of("inboxItemId", "capabilityRequestHandle", "capability", "pending", "workGroupId",
                 "laneId", "claimEpoch", "snapshotId", "latestRejectedSnapshotId")) {
             if (result.containsKey(key)) {
-                seed.append('|').append(key).append('=').append(ProviderJson.write(result.get(key)));
+                seed.append('|')
+                        .append(key)
+                        .append('=')
+                        .append(ProviderJson.write(result.get(key)));
             }
         }
-        return UUID.nameUUIDFromBytes(seed.toString().getBytes(StandardCharsets.UTF_8)).toString();
+        return UUID.nameUUIDFromBytes(seed.toString()
+                        .getBytes(StandardCharsets.UTF_8))
+                .toString();
     }
 
     private static LaneAction actionFor(AgentResponse response, Map<String, Object> result) {
@@ -123,9 +86,8 @@ public final class AgentWorkflowReducer {
         return switch (next) {
             case ENSURE_SESSION -> new LaneAction("RECOVER", List.of(reasonCode(reason)),
                     List.of("ensure_session"), true);
-            case REQUEST_COORDINATION, REVISE_CAPABILITY_REQUEST ->
-                    new LaneAction("REVISE_SCOPE",
-                            List.of(reasonCode(reason)), List.of("request_coordination", "respond_coordination"), true);
+            case REQUEST_COORDINATION, REVISE_CAPABILITY_REQUEST -> new LaneAction("REVISE_SCOPE",
+                    List.of(reasonCode(reason)), List.of("request_coordination", "respond_coordination"), true);
             case RESPOND_COORDINATION -> {
                 // A capability owner may need to accept a request before the
                 // implementation is ready.  Keep the exact response handle
@@ -137,7 +99,7 @@ public final class AgentWorkflowReducer {
                 yield new LaneAction("REVIEW_CONTRACT", List.of(reasonCode(reason)),
                         capabilityOwner
                                 ? List.of("request_coordination", "respond_coordination", "read_file",
-                                        "apply_patch", "run_command", "get_next_action")
+                                "apply_patch", "run_command", "get_next_action")
                                 : List.of("request_coordination", "respond_coordination"), true);
             }
             case REVIEW_DECISION -> new LaneAction("REVIEW_CONTRACT", List.of(reasonCode(reason)),
@@ -152,18 +114,20 @@ public final class AgentWorkflowReducer {
                         && result.containsKey("capabilityRequestHandle");
                 yield new LaneAction(capabilityImplementation ? "IMPLEMENT" : "WAIT",
                         List.of(reasonCode(reason)), capabilityImplementation
-                                ? List.of("read_file", "apply_patch", "run_command",
-                                        "publish_capability_implementation", "get_next_action")
-                                : List.of("get_next_action"), true);
+                        ? List.of("read_file", "apply_patch", "run_command",
+                        "publish_capability_implementation", "get_next_action")
+                        : List.of("get_next_action"), true);
             }
-            case RETRY -> new LaneAction("RECOVER", List.of(reasonCode(reason)), List.of("ensure_session", "get_next_action"), true);
+            case RETRY -> new LaneAction("RECOVER",
+                    List.of(reasonCode(reason)),
+                    List.of("ensure_session", "get_next_action"),
+                    true);
             case REQUEST_HUMAN_HELP -> new LaneAction("INTEGRATION_REPAIR", List.of(reasonCode(reason)),
                     List.of("get_next_action", "request_coordination"), false);
         };
     }
 
-    private static Map<String, Object> executableAction(AgentResponse response, Map<String, Object> result,
-            String actionId) {
+    private static Map<String, Object> executableAction(AgentResponse response, Map<String, Object> result) {
         AgentNextAction next = response.nextAction();
         if (next == null) {
             return null;
@@ -174,7 +138,8 @@ public final class AgentWorkflowReducer {
                 Object serverItem = result.get("inboxItemId");
                 if (serverItem == null && result.get("capabilityRequestHandle") instanceof String handle) {
                     serverItem = UUID.nameUUIDFromBytes(("capability:" + handle)
-                            .getBytes(StandardCharsets.UTF_8)).toString();
+                                    .getBytes(StandardCharsets.UTF_8))
+                            .toString();
                 }
                 if (serverItem == null) {
                     return null;
@@ -255,8 +220,59 @@ public final class AgentWorkflowReducer {
         return reason == null ? "none" : reason.value();
     }
 
+    /**
+     * Adds the stable workflow action envelope to a response.
+     *
+     * @param request  exact lane request
+     * @param response response derived by the lane service
+     * @return response containing workflow action metadata
+     */
+    public AgentResponse decorate(AgentNextActionService.NextActionRequest request, AgentResponse response) {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(response, "response");
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (response.result() instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> result.put(String.valueOf(key), value));
+        } else if (response.result() != null) {
+            result.put("value", response.result());
+        }
+
+        LaneAction action = actionFor(response, result);
+        String actionId = actionId(request, response, result, action);
+        Map<String, Object> workflow = new LinkedHashMap<>();
+        workflow.put("actionId", actionId);
+        workflow.put("type", action.type());
+        workflow.put("payload", Collections.unmodifiableMap(new LinkedHashMap<>(result)));
+        Map<?, ?> laneContext = firstIntent(result);
+        if (laneContext.get("workGroupId") != null) {
+            workflow.put("workGroupId", laneContext.get("workGroupId"));
+        }
+        if (laneContext.get("intentId") != null) {
+            workflow.put("laneId", laneContext.get("intentId"));
+        }
+        workflow.put("blockers", action.blockers());
+        workflow.put("permittedOperations", action.permittedOperations());
+        workflow.put("retrySafe", action.retrySafe());
+        workflow.put("delivery", "AT_LEAST_ONCE");
+        workflow.put("acknowledgementRequired", true);
+        Map<String, Object> executable = executableAction(response, result);
+        if (executable != null) {
+            workflow.put("recommendedTool", executable.get("tool"));
+            workflow.put("arguments", executable.get("arguments"));
+        }
+        if (result.get("reviewDecision") instanceof Map<?, ?> decision) {
+            workflow.put("decision", decision);
+        }
+        result.put("workflow", workflow);
+        result.put("actionId", actionId);
+        result.put("delivery", "AT_LEAST_ONCE");
+        result.put("acknowledgementRequired", true);
+        return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
+    }
+
     private record LaneAction(String type, List<String> blockers, List<String> permittedOperations,
-            boolean retrySafe) {
+                              boolean retrySafe) {
+
         private LaneAction {
             blockers = List.copyOf(new ArrayList<>(blockers));
             permittedOperations = List.copyOf(new ArrayList<>(permittedOperations));

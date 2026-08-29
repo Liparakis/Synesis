@@ -57,7 +57,8 @@ tasks.register("repositoryHygieneCheck") {
         val linkPattern = Regex("\\[[^]]*]\\(([^)]+)\\)")
         val scriptPattern = Regex("(?:scripts|install)/[A-Za-z0-9._/-]+\\.(?:ps1|cmd|bat|sh)")
         val countPattern = Regex("(?i)\\b(\\d+)\\s*[- ]?tools?\\b")
-        val staleProviderPattern = Regex("(?i)synesis\\s+provider\\s+(?:install|status|uninstall|migrate)\\s+claude-code\\b")
+        val staleProviderPattern =
+            Regex("(?i)synesis\\s+provider\\s+(?:install|status|uninstall|migrate)\\s+claude-code\\b")
         files.forEach { file ->
             val relative = file.relativeTo(rootDir).invariantSeparatorsPath
             val text = file.readText()
@@ -69,7 +70,10 @@ tasks.register("repositoryHygieneCheck") {
             }
             linkPattern.findAll(text).forEach { match ->
                 val raw = match.groupValues[1].trim().substringBefore(" ").substringBefore("\"")
-                if (raw.isBlank() || raw.startsWith("#") || raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("mailto:")) return@forEach
+                if (raw.isBlank() || raw.startsWith("#") || raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith(
+                        "mailto:"
+                    )
+                ) return@forEach
                 val target = URLDecoder.decode(raw, Charsets.UTF_8)
                 val resolved = file.parentFile.resolve(target).normalize()
                 if (!resolved.exists()) failures += "$relative: missing Markdown target $raw"

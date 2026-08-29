@@ -33,6 +33,7 @@ public final class PeerSession {
     private volatile ControlBinding control;
     private volatile DemoWorkBinding demoWork;
     private volatile ApplicationStreamBinding applicationStream;
+
     PeerSession(String localNodeId, String remoteNodeId, byte[] remotePublicKey, UUID sessionId,
             long localEpoch, long remoteEpoch, ProtocolVersion version, Instant establishedAt) {
         this.localNodeId = Objects.requireNonNull(localNodeId, "local node ID");
@@ -68,6 +69,7 @@ public final class PeerSession {
      *
      * @return remote public-key bytes
      */
+    @SuppressWarnings("unused")
     public byte[] remotePublicKeyEncoded() {
         return remotePublicKey.clone();
     }
@@ -113,6 +115,7 @@ public final class PeerSession {
      *
      * @return establishment time
      */
+    @SuppressWarnings("unused")
     public Instant establishedAt() {
         return establishedAt;
     }
@@ -259,6 +262,7 @@ public final class PeerSession {
      * @param listener listener to register
      * @throws IllegalStateException if the control stream is not established
      */
+    @SuppressWarnings("unused")
     public void addLivenessListener(LivenessListener listener) {
         ControlBinding binding = control;
         if (binding == null) {
@@ -273,6 +277,7 @@ public final class PeerSession {
      * @param listener listener to remove
      * @throws IllegalStateException if the control stream is not established
      */
+    @SuppressWarnings("unused")
     public void removeLivenessListener(LivenessListener listener) {
         ControlBinding binding = control;
         if (binding == null) {

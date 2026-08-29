@@ -1,138 +1,168 @@
 package org.synesis.workspace.application.collaboration;
 
 import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.security.MessageDigest;
-import java.util.HexFormat;
+import org.synesis.coordination.application.ContractService;
+import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
-import org.synesis.coordination.domain.collaboration.ResourceSelector;
-import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.Participant;
-import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.application.ContractService;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.contract.ContractDependency;
 import org.synesis.coordination.domain.contract.ContractRecord;
-import org.synesis.coordination.domain.collaboration.WorkGroup;
-import org.synesis.coordination.domain.collaboration.LaneGrant;
-import org.synesis.coordination.application.WorkGroupService;
+import org.synesis.coordination.domain.task.TaskCompletionState;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
+import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
-import org.synesis.workspace.application.provider.ProviderManualService;
-import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
-import org.synesis.coordination.domain.collaboration.CollaborationCodec;
-import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
-import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.coordination.domain.task.TaskCompletionState;
-import org.synesis.coordination.persistence.ProjectAppendLock;
-import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
+import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
 
-/** Resolves authenticated workspace sessions into collaboration intents and claims. */
+/**
+ * Resolves authenticated workspace sessions into collaboration intents and claims.
+ */
+@SuppressWarnings("DuplicatedCode")
 public final class WorkspaceCollaborationService {
+
     private final ProjectApplicationService projectService = new ProjectApplicationService();
     private final ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
     private final SessionAuthorityResolver authorityResolver = new SessionAuthorityResolver(bindingService);
     private final ProviderManualService manualService = new ProviderManualService();
     private final WorkspaceReadinessService readinessService = new WorkspaceReadinessService(bindingService);
 
-    /** Creates a workspace collaboration adapter. */
+    /**
+     * Creates a workspace collaboration adapter.
+     */
     public WorkspaceCollaborationService() {
     }
 
-    /** Announces an intent for one verified provider session.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Returns the stable opaque participant handle for a connection.
+     *
      * @param connectionInstanceId connection ID
-     * @param goal goal
-     * @param acceptance acceptance criteria
-     * @param selectors requested selectors
+     * @return opaque participant handle
+     */
+    public static String participantHandle(String connectionInstanceId) {
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        return "agt_" + UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Announces an intent for one verified provider session.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
+     * @param connectionInstanceId connection ID
+     * @param goal                 goal
+     * @param acceptance           acceptance criteria
+     * @param selectors            requested selectors
      * @return claim result
      * @throws Exception when the project, session, identity, or event store cannot be resolved
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
-                                String goal, String acceptance, List<ResourceSelector> selectors)
+            String goal, String acceptance, List<ResourceSelector> selectors)
             throws Exception {
         return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, null);
     }
 
-    /** Announces an intent in an optional logical work group.
-     * @param projectRoot project root
-     * @param provider provider
+    /**
+     * Announces an intent in an optional logical work group.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider
      * @param connectionInstanceId connection ID
-     * @param goal goal
-     * @param acceptance acceptance
-     * @param selectors claims
-     * @param workGroupId group ID
+     * @param goal                 goal
+     * @param acceptance           acceptance
+     * @param selectors            claims
+     * @param workGroupId          group ID
      * @return claim result
      * @throws Exception resolution or append failure
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
-                                String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId)
+            String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId)
             throws Exception {
         return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors,
                 workGroupId, WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
                 WorkIntent.Role.PRODUCER, List.of());
     }
 
-    /** Announces an intent with an explicit completion contract.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Announces an intent with an explicit completion contract.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId connection ID
-     * @param goal goal
-     * @param acceptance acceptance criteria
-     * @param selectors claims
-     * @param workGroupId group ID
-     * @param completionMode completion contract
+     * @param goal                 goal
+     * @param acceptance           acceptance criteria
+     * @param selectors            claims
+     * @param workGroupId          group ID
+     * @param completionMode       completion contract
      * @return claim result
      * @throws Exception resolution or append failure
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
-                                String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
-                                WorkIntent.CompletionMode completionMode)
+            String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
+            WorkIntent.CompletionMode completionMode)
             throws Exception {
         return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, workGroupId,
                 completionMode, WorkIntent.Role.PRODUCER, List.of());
     }
 
-    /** Announces an intent with explicit review-routing metadata.
-     * @param projectRoot project root
-     * @param provider provider ID
-     * @param connectionInstanceId connection ID
-     * @param goal goal
-     * @param acceptance acceptance criteria
-     * @param selectors ownership selectors for this intent
-     * @param workGroupId group ID
-     * @param completionMode completion contract
-     * @param role semantic producer or reviewer role
+    /**
+     * Announces an intent with explicit review-routing metadata.
+     *
+     * @param projectRoot           project root
+     * @param provider              provider ID
+     * @param connectionInstanceId  connection ID
+     * @param goal                  goal
+     * @param acceptance            acceptance criteria
+     * @param selectors             ownership selectors for this intent
+     * @param workGroupId           group ID
+     * @param completionMode        completion contract
+     * @param role                  semantic producer or reviewer role
      * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
      * @return claim result
      * @throws Exception resolution or append failure
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
-                                String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
-                                WorkIntent.CompletionMode completionMode, WorkIntent.Role role,
-                                List<ResourceSelector> reviewTargetSelectors)
+            String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
+            WorkIntent.CompletionMode completionMode, WorkIntent.Role role,
+            List<ResourceSelector> reviewTargetSelectors)
             throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         manualService.requireAttested(provider);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         String participant = participantHandle(binding.sessionId());
-        var existing = store.collaborationProjection().participants().stream()
-                .filter(candidate -> candidate.id().equals(participant)).findFirst();
-        if (existing.isPresent() && existing.get().state() != Participant.State.ACTIVE) {
+        var existing = store.collaborationProjection()
+                .participants()
+                .stream()
+                .filter(candidate -> candidate.id()
+                        .equals(participant))
+                .findFirst();
+        if (existing.isPresent() && existing.get()
+                .state() != Participant.State.ACTIVE) {
             throw new IOException("SESSION_EPOCH_FENCED");
         }
         WorkIntentService service = new WorkIntentService(store, identity);
@@ -140,13 +170,18 @@ public final class WorkspaceCollaborationService {
         UUID defaultGroup = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
                 .getBytes(StandardCharsets.UTF_8));
         UUID group = workGroupId == null
-                ? store.workGroupProjection().groups().stream()
-                        .filter(candidate -> candidate.projectId().equals(location.projectId()))
-                        .filter(candidate -> candidate.status() == WorkGroup.Status.ACTIVE)
-                        .map(WorkGroup::workGroupId)
-                        .findFirst()
-                        .orElseGet(() -> store.workGroupProjection().group(defaultGroup).isEmpty()
-                                ? defaultGroup : UUID.randomUUID())
+                ? store.workGroupProjection()
+                  .groups()
+                  .stream()
+                  .filter(candidate -> candidate.projectId()
+                                       .equals(location.projectId()))
+                  .filter(candidate -> candidate.status() == WorkGroup.Status.ACTIVE)
+                  .map(WorkGroup::workGroupId)
+                  .findFirst()
+                  .orElseGet(() -> store.workGroupProjection()
+                          .group(defaultGroup)
+                          .isEmpty()
+                                   ? defaultGroup : UUID.randomUUID())
                 : workGroupId;
         UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId())
                 .getBytes(StandardCharsets.UTF_8));
@@ -167,60 +202,98 @@ public final class WorkspaceCollaborationService {
      * the old lane and snapshot remain immutable while the new binding receives
      * a fresh intent ID and claim epoch.
      *
-     * @param projectRoot control project root
-     * @param provider provider ID
+     * @param projectRoot          control project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact new connection
-     * @param repairIntentId currently reserved repair intent
-     * @param snapshotId immutable conflicting snapshot
+     * @param repairIntentId       currently reserved repair intent
+     * @param snapshotId           immutable conflicting snapshot
      * @return acquired claim result
      * @throws Exception resolution, materialization, or append failure
      */
     public ClaimResult joinRepair(Path projectRoot, String provider, String connectionInstanceId,
-                                  UUID repairIntentId, String snapshotId) throws Exception {
+            UUID repairIntentId, String snapshotId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         manualService.requireAttested(provider);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        if (binding.worktreePath() == null) throw new IOException("REPAIR_BINDING_NOT_READY");
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId)
+        if (binding.worktreePath() == null) {
+            throw new IOException("REPAIR_BINDING_NOT_READY");
+        }
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        TaskSnapshotRecord snapshot = store.taskCompletionProjection()
+                .findSnapshotById(snapshotId)
                 .orElseThrow(() -> new IOException("REPAIR_SNAPSHOT_NOT_FOUND"));
-        if (!snapshot.provenance().snapshotRef().equals("refs/synesis/snapshots/" + snapshot.snapshotId())) {
+        if (!snapshot.provenance()
+                .snapshotRef()
+                .equals("refs/synesis/snapshots/" + snapshot.snapshotId())) {
             throw new IOException("REPAIR_SNAPSHOT_REF_MISMATCH");
         }
         UUID targetId = UUID.nameUUIDFromBytes(("repair-join|" + repairIntentId + "|" + binding.sessionId())
                 .getBytes(StandardCharsets.UTF_8));
-        WorkIntent existingTarget = store.collaborationProjection().intent(targetId).orElse(null);
+        WorkIntent existingTarget = store.collaborationProjection()
+                .intent(targetId)
+                .orElse(null);
         if (existingTarget != null) {
-            List<String> expectedSelectors = snapshot.provenance().claimSelectors();
-            if (!existingTarget.participant().equals(participantHandle(binding.sessionId()))
-                    || !existingTarget.workGroupId().equals(snapshot.provenance().workGroupId())
-                    || !existingTarget.authorityLineageId().equals(snapshot.provenance().authorityLineageId())
-                    || existingTarget.version() != snapshot.provenance().claimEpoch() + 1L
-                    || !existingTarget.selectors().stream()
-                            .map(selector -> selector.kind().name() + ":" + selector.value())
-                            .toList().equals(expectedSelectors)) {
+            List<String> expectedSelectors = snapshot.provenance()
+                    .claimSelectors();
+            if (!existingTarget.participant()
+                    .equals(participantHandle(binding.sessionId()))
+                    || !existingTarget.workGroupId()
+                    .equals(snapshot.provenance()
+                            .workGroupId())
+                    || !existingTarget.authorityLineageId()
+                    .equals(snapshot.provenance()
+                            .authorityLineageId())
+                    || existingTarget.version() != snapshot.provenance()
+                    .claimEpoch() + 1L
+                    || !existingTarget.selectors()
+                    .stream()
+                    .map(selector -> selector.kind()
+                            .name() + ":" + selector.value())
+                    .toList()
+                    .equals(expectedSelectors)) {
                 throw new IOException("REPAIR_TARGET_MISMATCH");
             }
             return new ClaimResult(true, existingTarget, List.of());
         }
-        WorkIntent source = store.collaborationProjection().intent(repairIntentId)
+        WorkIntent source = store.collaborationProjection()
+                .intent(repairIntentId)
                 .orElseThrow(() -> new IOException("REPAIR_INTENT_NOT_FOUND"));
-        if (store.taskCompletionProjection().taskState(snapshot.taskId()) != TaskCompletionState.REPAIR_REQUIRED) {
+        if (store.taskCompletionProjection()
+                .taskState(snapshot.taskId()) != TaskCompletionState.REPAIR_REQUIRED) {
             throw new IOException("REPAIR_SNAPSHOT_NOT_CONFLICTED");
         }
-        if (!snapshot.provenance().laneId().equals(source.intentId())
-                || !snapshot.provenance().workGroupId().equals(source.workGroupId())
-                || !snapshot.provenance().authorityLineageId().equals(source.authorityLineageId())
-                || snapshot.provenance().claimEpoch() != source.version()
-                || !snapshot.provenance().participant().equals(source.participant())
-                || !snapshot.provenance().claimSelectors().equals(source.selectors().stream()
-                        .map(selector -> selector.kind().name() + ":" + selector.value()).toList())) {
+        if (!snapshot.provenance()
+                .laneId()
+                .equals(source.intentId())
+                || !snapshot.provenance()
+                .workGroupId()
+                .equals(source.workGroupId())
+                || !snapshot.provenance()
+                .authorityLineageId()
+                .equals(source.authorityLineageId())
+                || snapshot.provenance()
+                .claimEpoch() != source.version()
+                || !snapshot.provenance()
+                .participant()
+                .equals(source.participant())
+                || !snapshot.provenance()
+                .claimSelectors()
+                .equals(source.selectors()
+                        .stream()
+                        .map(selector -> selector.kind()
+                                .name() + ":" + selector.value())
+                        .toList())) {
             throw new IOException("REPAIR_LINEAGE_OR_SCOPE_MISMATCH");
         }
         IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
         try (ProjectAppendLock appendLock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!appendLock.isHeld()) throw new IOException("event append lock unavailable");
+            if (!appendLock.isHeld()) {
+                throw new IOException("event append lock unavailable");
+            }
             String expectedControlHead = integration.currentHead(location.root());
             WorkIntent target = new WorkIntent(targetId, location.projectId(),
                     participantHandle(binding.sessionId()), provider, snapshot.taskId(), source.goal(),
@@ -235,41 +308,49 @@ public final class WorkspaceCollaborationService {
         }
     }
 
-    /** Releases the exact session intent and all of its claims.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Releases the exact session intent and all of its claims.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
      * @throws Exception when resolution or append fails
      */
     public void release(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
         WorkIntentService service = new WorkIntentService(store, identity);
-        WorkIntent current = store.collaborationProjection().intent(intentId)
+        WorkIntent current = store.collaborationProjection()
+                .intent(intentId)
                 .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
         service.release(intentId, participantHandle(binding.sessionId()),
-                WorkspaceWorkIntentMutationPrecondition.capture(current).coordinationPrecondition());
+                WorkspaceWorkIntentMutationPrecondition.capture(current)
+                        .coordinationPrecondition());
     }
 
-    /** Completes the exact bound intent successfully without publishing a snapshot.
+    /**
+     * Completes the exact bound intent successfully without publishing a snapshot.
      *
      * <p>All caller-selected identifiers are treated as optimistic evidence.
      * The participant, binding identity, authority lineage, and workspace
      * commit are derived from the verified binding and current intent.</p>
      *
-     * @param projectRoot project root
-     * @param provider provider ID
-     * @param connectionInstanceId exact connection ID
-     * @param expectedIntentId expected active intent
-     * @param expectedWorkGroupId expected work group
-     * @param expectedClaimEpoch expected claim epoch
+     * @param projectRoot              project root
+     * @param provider                 provider ID
+     * @param connectionInstanceId     exact connection ID
+     * @param expectedIntentId         expected active intent
+     * @param expectedWorkGroupId      expected work group
+     * @param expectedClaimEpoch       expected claim epoch
      * @param expectedWorkGroupVersion expected work-group version
-     * @param expectedRevision expected project event revision
-     * @param expectedParticipant expected participant handle
-     * @param summary completion explanation
+     * @param expectedRevision         expected project event revision
+     * @param expectedParticipant      expected participant handle
+     * @param summary                  completion explanation
      * @return durable no-change completion evidence
      * @throws Exception when authority, workspace, or lifecycle evidence is stale
      */
@@ -279,7 +360,7 @@ public final class WorkspaceCollaborationService {
             String expectedParticipant, String summary) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         manualService.requireAttested(provider);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        ProviderSessionBindingService.Binding binding;
         WorkspaceReadinessService.ReadinessResult readiness = readinessService.assessNoChange(
                 location, provider, connectionInstanceId);
         if (!readiness.ready()) {
@@ -288,7 +369,7 @@ public final class WorkspaceCollaborationService {
         binding = readiness.binding();
         ProviderSessionBindingService.Binding verifiedBinding = binding;
         String participant = participantHandle(binding.sessionId());
-        if (expectedParticipant == null || !participant.equals(expectedParticipant)) {
+        if (!participant.equals(expectedParticipant)) {
             throw new IOException("NO_CHANGE_PARTICIPANT_MISMATCH");
         }
         if (expectedIntentId == null || expectedWorkGroupId == null || expectedRevision < 0) {
@@ -297,37 +378,59 @@ public final class WorkspaceCollaborationService {
         if (!new TaskSnapshotService().isCleanWorktree(readiness.worktree())) {
             throw new IOException("NO_CHANGE_DIRTY_WORKSPACE");
         }
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        WorkIntent intent = store.collaborationProjection().intent(expectedIntentId)
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        WorkIntent intent = store.collaborationProjection()
+                .intent(expectedIntentId)
                 .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
-        WorkGroup group = store.workGroupProjection().group(expectedWorkGroupId)
+        WorkGroup group = store.workGroupProjection()
+                .group(expectedWorkGroupId)
                 .orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));
-        if (!intent.workGroupId().equals(expectedWorkGroupId)
+        if (!intent.workGroupId()
+                .equals(expectedWorkGroupId)
                 || intent.version() != expectedClaimEpoch
                 || group.version() != expectedWorkGroupVersion
                 || store.headSequence() != expectedRevision) {
             throw new IOException("NO_CHANGE_COMPLETION_EVIDENCE_STALE");
         }
-        boolean participantObligation = store.workGroupProjection().grants().stream()
-                .filter(grant -> grant.workGroupId().equals(expectedWorkGroupId))
-                .filter(grant -> grant.targetParticipant().equals(participant))
-                .anyMatch(grant -> store.workGroupProjection().grantAvailable(grant.grantId())
-                        || (store.workGroupProjection().grantConsumed(grant.grantId())
-                        && store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()));
+        boolean participantObligation = store.workGroupProjection()
+                .grants()
+                .stream()
+                .filter(grant -> grant.workGroupId()
+                        .equals(expectedWorkGroupId))
+                .filter(grant -> grant.targetParticipant()
+                        .equals(participant))
+                .anyMatch(grant -> store.workGroupProjection()
+                        .grantAvailable(grant.grantId())
+                        || (store.workGroupProjection()
+                        .grantConsumed(grant.grantId())
+                        && store.workGroupProjection()
+                        .reviewValidationForGrant(grant.grantId())
+                        .isEmpty()));
         if (participantObligation) {
             throw new IOException("NO_CHANGE_REVIEW_OBLIGATION");
         }
         boolean pendingDependency = store.capabilityRequestProjection()
-                .findAllForRequester(identity.nodeId()).stream()
+                .findAllForRequester(identity.nodeId())
+                .stream()
                 .filter(candidate -> candidate.matchesRequester(identity.nodeId(), verifiedBinding.supervisorId(),
                         verifiedBinding.workerId()))
-                .anyMatch(candidate -> candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.AWAITING_OWNER
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.REVISION_REQUESTED
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTING
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.VALIDATING);
-        if (pendingDependency || !store.capabilityRequestProjection().allValidationContexts().isEmpty()) {
+                .anyMatch(candidate -> candidate.state()
+                        == org.synesis.coordination.domain.capability.CapabilityLifecycleState.AWAITING_OWNER
+                        || candidate.state()
+                        == org.synesis.coordination.domain.capability.CapabilityLifecycleState.REVISION_REQUESTED
+                        || candidate.state()
+                        == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTING
+                        || candidate.state()
+                        == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE
+                        || candidate.state()
+                        == org.synesis.coordination.domain.capability.CapabilityLifecycleState.VALIDATING);
+        if (pendingDependency || !store.capabilityRequestProjection()
+                .allValidationContexts()
+                .isEmpty()) {
             throw new IOException("NO_CHANGE_DEPENDENCY_PENDING");
         }
         NoChangeCompletion completion = new NoChangeCompletion(expectedIntentId, expectedWorkGroupId,
@@ -336,41 +439,53 @@ public final class WorkspaceCollaborationService {
         return new WorkIntentService(store, identity).completeNoChange(completion);
     }
 
-    /** Detaches the exact session lane after a clean connection shutdown.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Detaches the exact session lane after a clean connection shutdown.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
      * @throws Exception when resolution or append fails
      */
     public void detach(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         new WorkIntentService(store, identity).detach(participantHandle(binding.sessionId()));
     }
 
-    /** Cancels and permanently fences the exact session lane.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Cancels and permanently fences the exact session lane.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
      * @throws Exception when resolution or append fails
      */
     public void cancel(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         new WorkIntentService(store, identity).cancel(participantHandle(binding.sessionId()));
     }
 
-    /** Opens a request against a conflicting intent owned by another participant.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Opens a request against a conflicting intent owned by another participant.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
-     * @param conflictingIntentId conflicting intent
-     * @param kind request kind
-     * @param proposal proposal
+     * @param conflictingIntentId  conflicting intent
+     * @param kind                 request kind
+     * @param proposal             proposal
      * @return durable request
      * @throws Exception when resolution or append fails
      */
@@ -380,84 +495,124 @@ public final class WorkspaceCollaborationService {
         ProviderSessionBindingService.Binding binding = kind == CoordinationRequest.Kind.REVIEW
                 ? reviewBinding(location, provider, connectionInstanceId)
                 : binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         if (kind == CoordinationRequest.Kind.REVIEW && "COMPLETED".equalsIgnoreCase(binding.status())) {
             String participant = participantHandle(binding.sessionId());
-            WorkIntent target = store.collaborationProjection().intent(conflictingIntentId)
+            WorkIntent target = store.collaborationProjection()
+                    .intent(conflictingIntentId)
                     .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
-            boolean sameCompletedGroup = store.taskCompletionProjection().allSnapshots().stream()
-                    .anyMatch(snapshot -> snapshot.provenance().participant().equals(participant)
-                            && snapshot.provenance().workGroupId().equals(target.workGroupId()));
-            boolean activeTarget = store.collaborationProjection().activeIntents().stream()
-                    .anyMatch(intent -> intent.intentId().equals(target.intentId())
-                            && !intent.participant().equals(participant));
+            boolean sameCompletedGroup = store.taskCompletionProjection()
+                    .allSnapshots()
+                    .stream()
+                    .anyMatch(snapshot -> snapshot.provenance()
+                            .participant()
+                            .equals(participant)
+                            && snapshot.provenance()
+                            .workGroupId()
+                            .equals(target.workGroupId()));
+            boolean activeTarget = store.collaborationProjection()
+                    .activeIntents()
+                    .stream()
+                    .anyMatch(intent -> intent.intentId()
+                            .equals(target.intentId())
+                            && !intent.participant()
+                            .equals(participant));
             if (!sameCompletedGroup || !activeTarget) {
                 throw new IOException("COMPLETED_REVIEW_SCOPE_MISMATCH");
             }
         }
-        return new WorkIntentService(store, identity).request(participantHandle(binding.sessionId()), conflictingIntentId, kind, proposal);
+        return new WorkIntentService(store, identity).request(participantHandle(binding.sessionId()),
+                conflictingIntentId,
+                kind,
+                proposal);
     }
 
-    /** Responds to a request addressed to the exact provider session.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Responds to a request addressed to the exact provider session.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
-     * @param requestId request ID
-     * @param status response status
-     * @param proposal revised proposal
+     * @param requestId            request ID
+     * @param status               response status
+     * @param proposal             revised proposal
      * @throws Exception when resolution or append fails
      */
     public void respond(Path projectRoot, String provider, String connectionInstanceId,
             UUID requestId, CoordinationRequest.Status status, String proposal) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()), requestId, status, proposal);
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()),
+                requestId,
+                status,
+                proposal);
     }
 
-    /** Acknowledges a durable inbox item for the exact calling session.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Acknowledges a durable inbox item for the exact calling session.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
-     * @param itemId server-issued inbox item ID
+     * @param itemId               server-issued inbox item ID
      * @throws Exception when authority or persistence validation fails
      */
     public void acknowledgeInbox(Path projectRoot, String provider, String connectionInstanceId, UUID itemId)
             throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         new WorkIntentService(store, identity).acknowledgeInbox(participantHandle(binding.sessionId()), itemId);
     }
 
-    /** Resolves and acknowledges one inbox item for the exact caller.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Resolves and acknowledges one inbox item for the exact caller.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
-     * @param itemId inbox item ID
-     * @param status terminal response status
-     * @param proposal resolution proposal
+     * @param itemId               inbox item ID
+     * @param status               terminal response status
+     * @param proposal             resolution proposal
      * @throws Exception authorization or persistence failure
      */
     public void resolveInbox(Path projectRoot, String provider, String connectionInstanceId, UUID itemId,
             CoordinationRequest.Status status, String proposal) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).resolveInbox(participantHandle(binding.sessionId()), itemId, status, proposal);
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new WorkIntentService(store, identity).resolveInbox(participantHandle(binding.sessionId()),
+                itemId,
+                status,
+                proposal);
     }
 
-    /** Offers a claim handoff to an active target participant.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Offers a claim handoff to an active target participant.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
-     * @param intentId intent ID
-     * @param target target participant
-     * @param proposal handoff proposal
+     * @param intentId             intent ID
+     * @param target               target participant
+     * @param proposal             handoff proposal
      * @return pending request
      * @throws Exception when resolution or append fails
      */
@@ -465,33 +620,45 @@ public final class WorkspaceCollaborationService {
             UUID intentId, String target, String proposal) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        return new WorkIntentService(store, identity).offerHandoff(participantHandle(binding.sessionId()), intentId, target, proposal);
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        return new WorkIntentService(store, identity).offerHandoff(participantHandle(binding.sessionId()),
+                intentId,
+                target,
+                proposal);
     }
 
-    /** Records verified activity for the exact provider session's participant.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Records verified activity for the exact provider session's participant.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
      * @throws Exception when resolution or append fails
      */
     public void heartbeat(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         new WorkIntentService(store, identity).heartbeat(participantHandle(binding.sessionId()));
     }
 
-    /** Records a heartbeat when this session has an announced collaboration participant.
+    /**
+     * Records a heartbeat when this session has an announced collaboration participant.
      *
      * <p>A verified session may own a lease without announcing a claim. Such a session has no
      * collaboration participant to heartbeat, so the absence is not a heartbeat failure. Any
      * other persistence, binding, or signing failure remains blocking.</p>
      *
-     * @param projectRoot project root
-     * @param provider provider ID
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection instance ID
      * @throws Exception when a registered participant cannot be heartbeated
      */
@@ -505,37 +672,57 @@ public final class WorkspaceCollaborationService {
         }
     }
 
-    /** Lists active intents and pending/resolved coordination requests.
+    /**
+     * Lists active intents and pending/resolved coordination requests.
+     *
      * @param projectRoot project root
      * @return collaboration snapshot
      * @throws Exception when project state cannot be read
      */
     public CollaborationSnapshot status(Path projectRoot) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         WorkIntentService service = new WorkIntentService(store,
-                new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
-        return new CollaborationSnapshot(service.activeIntents(), service.requests(),
-                store.collaborationProjection().participants(), store.workGroupProjection().groups(),
-                store.workGroupProjection().grants(), store.taskCompletionProjection().allSnapshots());
+                new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity());
+        return new CollaborationSnapshot(service.activeIntents(),
+                service.requests(),
+                store.collaborationProjection()
+                        .participants(),
+                store.workGroupProjection()
+                        .groups(),
+                store.workGroupProjection()
+                        .grants(),
+                store.taskCompletionProjection()
+                        .allSnapshots());
     }
 
-    /** Creates a logical work group through the shared coordination service.
+    /**
+     * Creates a logical work group through the shared coordination service.
+     *
      * @param projectRoot project root
-     * @param group group
+     * @param group       group
      * @throws Exception persistence failure
      */
     public void createWorkGroup(Path projectRoot, WorkGroup group) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).create(group);
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store,
+                new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity()).create(group);
     }
 
-    /** Creates a logical work group using the project's authenticated identity.
+    /**
+     * Creates a logical work group using the project's authenticated identity.
+     *
      * @param projectRoot project root
-     * @param groupId group ID
-     * @param goal shared goal
-     * @param acceptance shared acceptance criteria
+     * @param groupId     group ID
+     * @param goal        shared goal
+     * @param acceptance  shared acceptance criteria
      * @throws Exception persistence failure
      */
     public void createWorkGroup(Path projectRoot, UUID groupId, String goal, String acceptance) throws Exception {
@@ -544,50 +731,71 @@ public final class WorkspaceCollaborationService {
                 WorkGroup.Status.ACTIVE));
     }
 
-    /** Issues a targeted lane grant.
+    /**
+     * Issues a targeted lane grant.
+     *
      * @param projectRoot project root
-     * @param grant grant
+     * @param grant       grant
      * @throws Exception persistence failure
      */
     public void issueLaneGrant(Path projectRoot, LaneGrant grant) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).issue(grant);
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store,
+                new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity()).issue(grant);
     }
 
-    /** Consumes a targeted grant.
+    /**
+     * Consumes a targeted grant.
+     *
      * @param projectRoot root
-     * @param grantId grant
+     * @param grantId     grant
      * @param participant participant
-     * @param intentId intent
-     * @param epoch epoch
+     * @param intentId    intent
+     * @param epoch       epoch
      * @throws Exception persistence failure
      */
-    public void consumeLaneGrant(Path projectRoot, UUID grantId, String participant, UUID intentId, long epoch) throws Exception {
+    public void consumeLaneGrant(Path projectRoot, UUID grantId, String participant, UUID intentId, long epoch)
+            throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity())
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store,
+                new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity())
                 .consume(grantId, participant, intentId, epoch);
     }
 
-    /** Revokes a targeted grant.
+    /**
+     * Revokes a targeted grant.
+     *
      * @param projectRoot root
-     * @param grantId grant
+     * @param grantId     grant
      * @throws Exception persistence failure
      */
     public void revokeLaneGrant(Path projectRoot, UUID grantId) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).revoke(grantId);
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store,
+                new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity()).revoke(grantId);
     }
 
-    /** Continues a held recovery lane in the exact caller's new worktree.
-     * @param projectRoot project root
-     * @param provider target provider
+    /**
+     * Continues a held recovery lane in the exact caller's new worktree.
+     *
+     * @param projectRoot          project root
+     * @param provider             target provider
      * @param connectionInstanceId target connection
-     * @param grantId single-use continuation grant
-     * @param sourceIntentId suspended source intent
-     * @param claimEpoch expected source epoch
+     * @param grantId              single-use continuation grant
+     * @param sourceIntentId       suspended source intent
+     * @param claimEpoch           expected source epoch
      * @throws Exception when authority, snapshot, or grant validation fails
      */
     public void continueLane(Path projectRoot, String provider, String connectionInstanceId,
@@ -595,17 +803,31 @@ public final class WorkspaceCollaborationService {
         manualService.requireAttested(provider);
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        if (binding.worktreePath() == null) throw new IOException("CONTINUATION_TARGET_WORKTREE_REQUIRED");
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        WorkIntent source = store.collaborationProjection().intent(sourceIntentId)
+        if (binding.worktreePath() == null) {
+            throw new IOException("CONTINUATION_TARGET_WORKTREE_REQUIRED");
+        }
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        WorkIntent source = store.collaborationProjection()
+                .intent(sourceIntentId)
                 .orElseThrow(() -> new IOException("CONTINUATION_SOURCE_NOT_FOUND"));
-        var grant = store.workGroupProjection().grants().stream()
-                .filter(candidate -> candidate.grantId().equals(grantId)).findFirst()
+        var grant = store.workGroupProjection()
+                .grants()
+                .stream()
+                .filter(candidate -> candidate.grantId()
+                        .equals(grantId))
+                .findFirst()
                 .orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
         String targetParticipant = participantHandle(binding.sessionId());
-        if (!grant.targetParticipant().equals(targetParticipant)) throw new IOException("LANE_GRANT_TARGET_MISMATCH");
-        String snapshotReference = store.collaborationProjection().recoverySnapshotReference(source.participant())
+        if (!grant.targetParticipant()
+                .equals(targetParticipant)) {
+            throw new IOException("LANE_GRANT_TARGET_MISMATCH");
+        }
+        String snapshotReference = store.collaborationProjection()
+                .recoverySnapshotReference(source.participant())
                 .orElseThrow(() -> new IOException("RECOVERY_SNAPSHOT_REQUIRED"));
         new RecoverySnapshotService().restoreToLane(snapshotReference, Path.of(binding.worktreePath()));
         UUID targetIntentId = grant.targetIntentId();
@@ -615,31 +837,46 @@ public final class WorkspaceCollaborationService {
                 source.version() + 1, source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
                 source.completionMode(), source.role(), source.reviewTargetSelectors());
         CollaborationCodec.Continuation continuation = new CollaborationCodec.Continuation(
-                grantId, sourceIntentId, target, source.participant(), targetParticipant, claimEpoch, snapshotReference);
+                grantId,
+                sourceIntentId,
+                target,
+                source.participant(),
+                targetParticipant,
+                claimEpoch,
+                snapshotReference);
         new WorkIntentService(store, identity).continueFromRecovery(continuation);
     }
 
-    /** Closes a logical work group without releasing sibling lane claims.
-     * @param projectRoot project root
-     * @param groupId group ID
-     * @param status terminal status
+    /**
+     * Closes a logical work group without releasing sibling lane claims.
+     *
+     * @param projectRoot     project root
+     * @param groupId         group ID
+     * @param status          terminal status
      * @param expectedVersion current group version
      * @throws Exception persistence failure
      */
-    public void closeWorkGroup(Path projectRoot, UUID groupId, WorkGroup.Status status, long expectedVersion) throws Exception {
+    public void closeWorkGroup(Path projectRoot, UUID groupId, WorkGroup.Status status, long expectedVersion)
+            throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity())
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new WorkGroupService(store,
+                new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity())
                 .close(groupId, status, expectedVersion);
     }
 
-    /** Publishes a signed shared contract revision for this project.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Publishes a signed shared contract revision for this project.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
-     * @param contractId contract identifier
-     * @param body contract body
-     * @param selectors declared selector references
+     * @param contractId           contract identifier
+     * @param body                 contract body
+     * @param selectors            declared selector references
      * @return published contract
      * @throws Exception when session or persistence resolution fails
      */
@@ -647,87 +884,98 @@ public final class WorkspaceCollaborationService {
             UUID contractId, String body, List<String> selectors) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        return new ContractService(store, identity).publish(contractId, participantHandle(binding.sessionId()), body, selectors);
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        return new ContractService(store, identity).publish(contractId,
+                participantHandle(binding.sessionId()),
+                body,
+                selectors);
     }
 
-    /** Binds an intent to an exact active contract revision.
-     * @param projectRoot project root
-     * @param provider provider ID
+    /**
+     * Binds an intent to an exact active contract revision.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
-     * @param intentId intent identifier
-     * @param contractId contract identifier
-     * @param revision exact revision
+     * @param intentId             intent identifier
+     * @param contractId           contract identifier
+     * @param revision             exact revision
      * @throws Exception when session or persistence resolution fails
      */
     public void bindContract(Path projectRoot, String provider, String connectionInstanceId,
             UUID intentId, UUID contractId, long revision) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new ContractService(store, identity).bind(intentId, participantHandle(binding.sessionId()), contractId, revision);
+        NodeIdentity identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        new ContractService(store, identity).bind(intentId,
+                participantHandle(binding.sessionId()),
+                contractId,
+                revision);
     }
 
-    /** Lists replayed contracts and exact consumer dependencies.
+    /**
+     * Lists replayed contracts and exact consumer dependencies.
+     *
      * @param projectRoot project root
      * @return contract snapshot
      * @throws Exception when project state cannot be read
      */
     public ContractSnapshot contractStatus(Path projectRoot) throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        PredictionEventStore store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         ContractService service = new ContractService(store,
-                new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
+                new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity());
         return new ContractSnapshot(service.contracts(), service.dependencies());
     }
 
-    /** Shared contract discovery result used by CLI and MCP adapters.
-     * @param contracts contract revisions
-     * @param dependencies consumer bindings
-     */
-    public record ContractSnapshot(List<ContractRecord> contracts, List<ContractDependency> dependencies) { }
-
-    /** Shared collaboration discovery result used by CLI and MCP adapters.
-     * @param intents intents
-     * @param requests requests
-     * @param participants participants
-     * @param groups logical work groups
-     * @param grants targeted lane grants
-     * @param snapshots immutable task snapshots available for review
-     */
-    public record CollaborationSnapshot(List<WorkIntent> intents, List<CoordinationRequest> requests,
-            List<Participant> participants, List<WorkGroup> groups, List<LaneGrant> grants,
-            List<TaskSnapshotRecord> snapshots) { }
-
-    /** Returns whether the session owns the target or no collaboration protocol is active.
-     * @param projectRoot project root
-     * @param provider provider
+    /**
+     * Returns whether the session owns the target or no collaboration protocol is active.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider
      * @param connectionInstanceId connection ID
-     * @param relativePath repository-relative target
+     * @param relativePath         repository-relative target
      * @return authorization decision
      */
+    @SuppressWarnings("unused")
     public boolean permitsMutation(Path projectRoot, String provider, String connectionInstanceId,
-                                   String relativePath) {
+            String relativePath) {
         return "allowed".equals(mutationReason(projectRoot, provider, connectionInstanceId, relativePath));
     }
 
-    /** Returns a stable mutation authorization classification.
-     * @param projectRoot project root
-     * @param provider provider
+    /**
+     * Returns a stable mutation authorization classification.
+     *
+     * @param projectRoot          project root
+     * @param provider             provider
      * @param connectionInstanceId connection ID
-     * @param relativePath repository-relative target
+     * @param relativePath         repository-relative target
      * @return {@code allowed}, {@code overlapping_claim}, or {@code coordination_intent_required}
      */
     public String mutationReason(Path projectRoot, String provider, String connectionInstanceId,
-                                 String relativePath) {
+            String relativePath) {
         try {
             ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-            PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            NodeIdentity identity = new IdentityBootstrap(location.profile()
+                    .resolve("link")).loadOrCreate()
+                    .identity();
+            PredictionEventStore store = new PredictionEventStore(location.root()
+                    .resolve(".synesis/coordination"), location.projectId());
             WorkIntentService service = new WorkIntentService(store, identity);
-            if (service.activeIntents().isEmpty() && !store.collaborationProjection().activated()) {
+            if (service.activeIntents()
+                    .isEmpty() && !store.collaborationProjection()
+                    .activated()) {
                 return "allowed";
             }
             ResourceSelector selector = ResourceSelector.pathExact(relativePath);
@@ -737,47 +985,85 @@ public final class WorkspaceCollaborationService {
             // worktree after preparation or publication, even if the claim
             // projection still contains the reserved selector.
             String participant = participantHandle(binding.sessionId());
-            boolean fenced = store.taskCompletionProjection().allSnapshots().stream()
-                    .filter(snapshot -> snapshot.provenance().bindingIdentity().equals(binding.sessionId())
-                            || snapshot.provenance().participant().equals(participant))
-                    .map(snapshot -> store.taskCompletionProjection().taskState(snapshot.taskId()))
-                    .anyMatch(state -> state == org.synesis.coordination.domain.task.TaskCompletionState.COMPLETION_PREPARED
-                            || state == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_PENDING
-                            || state == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATING
-                            || state == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_BLOCKED
-                            || state == org.synesis.coordination.domain.task.TaskCompletionState.REPAIR_REQUIRED);
-            fenced = fenced || store.taskCompletionProjection().allPrepared().stream()
-                    .anyMatch(prepared -> service.activeIntents().stream()
-                            .anyMatch(intent -> intent.intentId().equals(prepared.laneId())
-                                    && intent.participant().equals(participant)
+            boolean fenced = store.taskCompletionProjection()
+                    .allSnapshots()
+                    .stream()
+                    .filter(snapshot -> snapshot.provenance()
+                            .bindingIdentity()
+                            .equals(binding.sessionId())
+                            || snapshot.provenance()
+                            .participant()
+                            .equals(participant))
+                    .map(snapshot -> store.taskCompletionProjection()
+                            .taskState(snapshot.taskId()))
+                    .anyMatch(state ->
+                            state == org.synesis.coordination.domain.task.TaskCompletionState.COMPLETION_PREPARED
+                                    || state
+                                    == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_PENDING
+                                    || state == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATING
+                                    || state
+                                    == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_BLOCKED
+                                    || state
+                                    == org.synesis.coordination.domain.task.TaskCompletionState.REPAIR_REQUIRED);
+            fenced = fenced || store.taskCompletionProjection()
+                    .allPrepared()
+                    .stream()
+                    .anyMatch(prepared -> service.activeIntents()
+                            .stream()
+                            .anyMatch(intent -> intent.intentId()
+                                    .equals(prepared.laneId())
+                                    && intent.participant()
+                                    .equals(participant)
                                     && intent.version() == prepared.claimEpoch()));
-            if (fenced) return "coordination_intent_required";
+            if (fenced) {
+                return "coordination_intent_required";
+            }
             if (service.owns(participant, selector)) {
                 return "allowed";
             }
-            return service.activeIntents().stream().anyMatch(intent -> intent.selectors().stream()
-                    .anyMatch(selector::overlaps)) ? "overlapping_claim" : "coordination_intent_required";
+            return service.activeIntents()
+                    .stream()
+                    .anyMatch(intent -> intent.selectors()
+                            .stream()
+                            .anyMatch(selector::overlaps)) ? "overlapping_claim" : "coordination_intent_required";
         } catch (Exception failure) {
             return "coordination_intent_required";
         }
     }
 
-    /** Returns the stable opaque participant handle for a connection.
-     * @param connectionInstanceId connection ID
-     * @return opaque participant handle
-     */
-    public static String participantHandle(String connectionInstanceId) {
-        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        return "agt_" + UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
-    }
-
     private ProviderSessionBindingService.Binding binding(ProjectApplicationService.ProjectLocation location,
-                                                           String provider, String connectionId) throws Exception {
+            String provider, String connectionId) throws Exception {
         return authorityResolver.resolve(location, provider, connectionId);
     }
 
     private ProviderSessionBindingService.Binding reviewBinding(ProjectApplicationService.ProjectLocation location,
-                                                                String provider, String connectionId) throws Exception {
+            String provider, String connectionId) throws Exception {
         return authorityResolver.resolveReview(location, provider, connectionId);
+    }
+
+    /**
+     * Shared contract discovery result used by CLI and MCP adapters.
+     *
+     * @param contracts    contract revisions
+     * @param dependencies consumer bindings
+     */
+    public record ContractSnapshot(List<ContractRecord> contracts, List<ContractDependency> dependencies) {
+
+    }
+
+    /**
+     * Shared collaboration discovery result used by CLI and MCP adapters.
+     *
+     * @param intents      intents
+     * @param requests     requests
+     * @param participants participants
+     * @param groups       logical work groups
+     * @param grants       targeted lane grants
+     * @param snapshots    immutable task snapshots available for review
+     */
+    public record CollaborationSnapshot(List<WorkIntent> intents, List<CoordinationRequest> requests,
+                                        List<Participant> participants, List<WorkGroup> groups, List<LaneGrant> grants,
+                                        List<TaskSnapshotRecord> snapshots) {
+
     }
 }

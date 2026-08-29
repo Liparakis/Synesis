@@ -1,5 +1,9 @@
 package org.synesis.workspace;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -12,25 +16,21 @@ import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentNextActionService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.workspace.application.provider.ProviderManualService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 class CapabilityNegotiationTest {
 
@@ -71,42 +71,93 @@ class CapabilityNegotiationTest {
         var location = projectService.locate(projectRoot);
         // Bind session for requester (antigravity) and owner (codex)
         AgentSessionService sessionService = new AgentSessionService();
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "antigravity", "inst-1", null, false));
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "codex", "inst-2", null, false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+                "antigravity",
+                "inst-1",
+                null,
+                false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+                "codex",
+                "inst-2",
+                null,
+                false));
 
         var bindings1 = bindingService.list(location, "antigravity");
-        if (!bindings1.isEmpty() && bindings1.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "antigravity", bindings1.getLast().sessionId(), Path.of(bindings1.getLast().worktreePath()));
+        if (!bindings1.isEmpty() && bindings1.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "antigravity",
+                    bindings1.getLast()
+                            .sessionId(),
+                    Path.of(bindings1.getLast()
+                            .worktreePath()));
         }
         var bindings2 = bindingService.list(location, "codex");
-        if (!bindings2.isEmpty() && bindings2.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "codex", bindings2.getLast().sessionId(), Path.of(bindings2.getLast().worktreePath()));
+        if (!bindings2.isEmpty() && bindings2.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "codex",
+                    bindings2.getLast()
+                            .sessionId(),
+                    Path.of(bindings2.getLast()
+                            .worktreePath()));
         }
 
         // Assign semantic ownership for catalog.product-query to codex node ID via event store
-        var codexIdentity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var codexIdentity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
         PredictionEventStore store = new PredictionEventStore(
-                location.root().resolve(".synesis/coordination"), location.projectId());
+                location.root()
+                        .resolve(".synesis/coordination"), location.projectId());
         UUID taskId = UUID.randomUUID();
 
         org.synesis.coordination.domain.task.CoordinationTask task = new org.synesis.coordination.domain.task.CoordinationTask(
                 taskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 codexIdentity.nodeId(), "supervisor-codex", "worker-codex");
-        CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), task.encoded(), codexIdentity);
+        CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.TASK_CREATED,
+                codexIdentity.nodeId(),
+                task.encoded(),
+                codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), cmd1.encoded(), codexIdentity);
 
         org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
                 taskId, codexIdentity.nodeId(), "supervisor-codex", "worker-codex");
-        CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), claim1.encoded(), codexIdentity);
+        CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.TASK_CLAIMED,
+                codexIdentity.nodeId(),
+                claim1.encoded(),
+                codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), cmd2.encoded(), codexIdentity);
 
-        OwnershipClaim claim2 = new OwnershipClaim(taskId, "catalog.product-query", codexIdentity.nodeId(), "supervisor-codex", List.of("catalog"), 1L);
-        CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), claim2.encoded(), codexIdentity);
-        store.append(taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), cmd3.encoded(), codexIdentity);
+        OwnershipClaim claim2 = new OwnershipClaim(taskId,
+                "catalog.product-query",
+                codexIdentity.nodeId(),
+                "supervisor-codex",
+                List.of("catalog"),
+                1L);
+        CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.OWNERSHIP_CLAIMED,
+                codexIdentity.nodeId(),
+                claim2.encoded(),
+                codexIdentity);
+        store.append(taskId,
+                PredictionEventType.OWNERSHIP_CLAIMED,
+                codexIdentity.nodeId(),
+                cmd3.encoded(),
+                codexIdentity);
     }
 
     @Test
-    void completeCapabilityNegotiationAcceptanceFlow() throws Exception {
+    @SuppressWarnings("ExtractMethodRecommender")
+    void completeCapabilityNegotiationAcceptanceFlow() {
         CapabilityContract contract = new CapabilityContract(
                 "UUID productId",
                 "Optional<Product>",
@@ -154,7 +205,8 @@ class CapabilityNegotiationTest {
     }
 
     @Test
-    void revisionAndRejectionFlows() throws Exception {
+    @SuppressWarnings("ExtractMethodRecommender")
+    void revisionAndRejectionFlows() {
         CapabilityContract contract = new CapabilityContract(
                 "UUID productId",
                 "Optional<Product>",
@@ -213,12 +265,20 @@ class CapabilityNegotiationTest {
 
         var location = projectService.locate(projectRoot);
         PredictionEventStore store = new PredictionEventStore(
-                location.root().resolve(".synesis/coordination"), location.projectId());
+                location.root()
+                        .resolve(".synesis/coordination"), location.projectId());
         String ownerParticipant = WorkspaceCollaborationService.participantHandle(
-                bindingService.list(location, "codex").getLast().sessionId());
-        UUID ownerLineage = store.collaborationProjection().activeIntents().stream()
-                .filter(intent -> intent.participant().equals(ownerParticipant))
-                .findFirst().orElseThrow().authorityLineageId();
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId());
+        UUID ownerLineage = store.collaborationProjection()
+                .activeIntents()
+                .stream()
+                .filter(intent -> intent.participant()
+                        .equals(ownerParticipant))
+                .findFirst()
+                .orElseThrow()
+                .authorityLineageId();
 
         CapabilityContract contract = new CapabilityContract(
                 "task records", "JSON-serializable task records",
@@ -232,7 +292,11 @@ class CapabilityNegotiationTest {
         assertEquals(AgentStatus.WAITING, response.status());
         assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason());
         PredictionEventStore reloaded = new PredictionEventStore(
-                location.root().resolve(".synesis/coordination"), location.projectId());
-        assertEquals(1, reloaded.capabilityRequestProjection().records().size());
+                location.root()
+                        .resolve(".synesis/coordination"), location.projectId());
+        assertEquals(1,
+                reloaded.capabilityRequestProjection()
+                        .records()
+                        .size());
     }
 }

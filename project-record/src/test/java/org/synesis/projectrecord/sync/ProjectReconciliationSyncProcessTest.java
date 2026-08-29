@@ -15,10 +15,10 @@ import org.synesis.projectrecord.persistence.DecisionStore;
  */
 final class ProjectReconciliationSyncProcessTest {
 
-    private static void waitFor(Path path) throws Exception {
+    private static void waitFor(Path path) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (!Files.exists(path) && System.nanoTime() < deadline) {
-            Thread.sleep(25);
+            java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(25));
         }
         assertTrue(Files.exists(path), "timed out waiting for " + path);
     }

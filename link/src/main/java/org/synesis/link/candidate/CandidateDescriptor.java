@@ -1,11 +1,7 @@
 package org.synesis.link.candidate;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.EOFException;
-import java.io.IOException;
+import org.synesis.link.identity.NodeIdentity;
+import java.io.*;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -14,15 +10,7 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HexFormat;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import org.synesis.link.identity.NodeIdentity;
+import java.util.*;
 
 /**
  * A bounded, signed, canonical candidate descriptor.
@@ -126,7 +114,7 @@ public final class CandidateDescriptor {
             if (input.readInt() != MAGIC || input.readUnsignedByte() != VERSION) {
                 throw new IOException("unsupported descriptor version");
             }
-            String nodeId = readString(input, MAX_NODE_ID_BYTES);
+            String nodeId = readString(input);
             byte[] publicKey = readBytes(input, MAX_PUBLIC_KEY_BYTES);
             Instant issuedAt = Instant.ofEpochSecond(input.readLong());
             Instant expiresAt = Instant.ofEpochSecond(input.readLong());
@@ -245,8 +233,8 @@ public final class CandidateDescriptor {
         return input.readNBytes(length);
     }
 
-    private static String readString(DataInputStream input, int max) throws IOException {
-        return new String(readBytes(input, max), java.nio.charset.StandardCharsets.UTF_8);
+    private static String readString(DataInputStream input) throws IOException {
+        return new String(readBytes(input, MAX_NODE_ID_BYTES), java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**
@@ -274,6 +262,7 @@ public final class CandidateDescriptor {
      * @return {@code true} only when the signature and binding are valid
      * @throws GeneralSecurityException if key parsing or signature verification fails
      */
+    @SuppressWarnings("DuplicatedCode")
     public boolean verify() throws GeneralSecurityException {
         PublicKey signer = KeyFactory.getInstance("Ed25519")
                 .generatePublic(new X509EncodedKeySpec(publicKey));

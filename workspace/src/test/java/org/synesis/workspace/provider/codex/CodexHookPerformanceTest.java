@@ -1,7 +1,5 @@
 package org.synesis.workspace.provider.codex;
 
-import org.synesis.workspace.application.ProjectApplicationService;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.Files;
@@ -9,10 +7,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 import org.synesis.projectrecord.domain.ProjectConfig;
-import org.synesis.workspace.provider.codex.CodexHookAdapter;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**

@@ -1,7 +1,8 @@
-package org.synesis.cli.command.workspace;
+package org.synesis.cli.workspace;
 
 
-import org.synesis.cli.SynesisCli;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -14,6 +15,7 @@ import java.util.HexFormat;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.exit.ExitCodes;
@@ -21,9 +23,6 @@ import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FullMutationSafetyTest {
 
@@ -42,10 +41,19 @@ class FullMutationSafetyTest {
         return new PrintStream(target, true, StandardCharsets.UTF_8);
     }
 
-    private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
-        private String output() {
-            return out.toString(StandardCharsets.UTF_8);
+    private static Map<Path, String> captureDirectoryState(Path root) throws Exception {
+        Map<Path, String> state = new HashMap<>();
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        try (var stream = Files.walk(root)) {
+            for (Path path : stream.filter(Files::isRegularFile)
+                    .toList()) {
+                byte[] bytes = Files.readAllBytes(path);
+                String hash = HexFormat.of()
+                        .formatHex(md.digest(bytes));
+                state.put(root.relativize(path), hash);
+            }
         }
+        return state;
     }
 
     @Test
@@ -58,7 +66,11 @@ class FullMutationSafetyTest {
         Path sessionsDir = projectRoot.resolve(".synesis/local/sessions");
         Files.createDirectories(sessionsDir);
         Path sessionFile = sessionsDir.resolve("codex-dummy.json");
-        Files.writeString(sessionFile, "{\"schemaVersion\":2,\"sessionId\":\"session-123\",\"projectId\":\"p1\",\"nodeId\":\"n1\",\"provider\":\"codex\",\"providerInstanceFingerprint\":\"fp1\",\"supervisorId\":\"s1\",\"workerId\":\"w1\",\"controlCheckoutPath\":\"" + projectRoot.toString().replace("\\", "\\\\") + "\",\"baseCommit\":\"0123456789012345678901234567890123456789\",\"status\":\"COMPLETED\",\"createdAtEpochMillis\":1000,\"lastSeenEpochMillis\":2000,\"lastVerifiedProjectSequence\":1,\"bindingVersion\":1}");
+        Files.writeString(sessionFile,
+                "{\"schemaVersion\":2,\"sessionId\":\"session-123\",\"projectId\":\"p1\",\"nodeId\":\"n1\",\"provider\":\"codex\",\"providerInstanceFingerprint\":\"fp1\",\"supervisorId\":\"s1\",\"workerId\":\"w1\",\"controlCheckoutPath\":\""
+                        + projectRoot.toString()
+                        .replace("\\", "\\\\")
+                        + "\",\"baseCommit\":\"0123456789012345678901234567890123456789\",\"status\":\"COMPLETED\",\"createdAtEpochMillis\":1000,\"lastSeenEpochMillis\":2000,\"lastVerifiedProjectSequence\":1,\"bindingVersion\":1}");
 
         Path snapshotsDir = projectRoot.resolve(".synesis/local/snapshots");
         Files.createDirectories(snapshotsDir);
@@ -72,7 +84,8 @@ class FullMutationSafetyTest {
         Invocation invocation = createInvocation(tempDir);
 
         // Execute dry-run cleanup
-        int exitCode = SynesisCli.execute(new String[]{"cleanup", "--dry-run", "--project", projectRoot.toString()}, invocation.runtime());
+        int exitCode = SynesisCli.execute(new String[]{"cleanup", "--dry-run", "--project", projectRoot.toString()},
+                invocation.runtime());
 
         assertEquals(ExitCodes.OK, exitCode);
 
@@ -82,19 +95,14 @@ class FullMutationSafetyTest {
         // Assert zero runtime mutations
         assertEquals(initialFileCount, afterState.size(), "FILES_DELETED must be 0");
         assertEquals(beforeState, afterState, "Filesystem state modified during dry-run");
-        assertTrue(invocation.output().contains("MUTATIONS_PERFORMED=0"));
+        assertTrue(invocation.output()
+                .contains("MUTATIONS_PERFORMED=0"));
     }
 
-    private static Map<Path, String> captureDirectoryState(Path root) throws Exception {
-        Map<Path, String> state = new HashMap<>();
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        try (var stream = Files.walk(root)) {
-            for (Path path : stream.filter(Files::isRegularFile).toList()) {
-                byte[] bytes = Files.readAllBytes(path);
-                String hash = HexFormat.of().formatHex(md.digest(bytes));
-                state.put(root.relativize(path), hash);
-            }
+    private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
+
+        private String output() {
+            return out.toString(StandardCharsets.UTF_8);
         }
-        return state;
     }
 }

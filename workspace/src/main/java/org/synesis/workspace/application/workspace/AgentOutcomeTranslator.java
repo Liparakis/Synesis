@@ -1,14 +1,12 @@
 package org.synesis.workspace.application.workspace;
 
 import java.util.List;
-import java.util.Objects;
 import org.synesis.workspace.agent.AgentCapabilityResult;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentStatusResult;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
 
@@ -28,6 +26,29 @@ public final class AgentOutcomeTranslator {
      * Creates an outcome translator.
      */
     public AgentOutcomeTranslator() {
+    }
+
+    private static boolean isProtectedTarget(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return false;
+        }
+        String normalized = relativePath.replace('\\', '/')
+                .toLowerCase();
+        return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/")
+                || normalized.startsWith(".agents/") || normalized.startsWith(".git/")
+                || normalized.equals(".synesis") || normalized.equals(".codex")
+                || normalized.equals(".agents") || normalized.equals(".git");
+    }
+
+    private static String extractCapability(String message) {
+        if (message == null || !message.contains("capability:")) {
+            return null;
+        }
+        int index = message.indexOf("capability:");
+        String substring = message.substring(index + "capability:".length())
+                .trim();
+        int space = substring.indexOf(' ');
+        return space > 0 ? substring.substring(0, space) : substring;
     }
 
     /**
@@ -86,7 +107,10 @@ public final class AgentOutcomeTranslator {
                 );
             }
             case WORKSPACE_UNVERIFIED -> new TranslatedOutcome(
-                    new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null),
+                    new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                            AgentReason.WORKSPACE_NOT_READY,
+                            AgentNextAction.ENSURE_SESSION,
+                            null),
                     decision,
                     reasonCode,
                     result.decisionId(),
@@ -94,7 +118,10 @@ public final class AgentOutcomeTranslator {
                     true, false, false
             );
             case SESSION_UNBOUND -> new TranslatedOutcome(
-                    new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null),
+                    new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                            AgentReason.SESSION_NOT_READY,
+                            AgentNextAction.ENSURE_SESSION,
+                            null),
                     decision,
                     reasonCode,
                     result.decisionId(),
@@ -102,7 +129,10 @@ public final class AgentOutcomeTranslator {
                     true, false, false
             );
             case STALE_CONTEXT -> new TranslatedOutcome(
-                    new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_STALE, AgentNextAction.ENSURE_SESSION, null),
+                    new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                            AgentReason.WORKSPACE_STALE,
+                            AgentNextAction.ENSURE_SESSION,
+                            null),
                     decision,
                     reasonCode,
                     result.decisionId(),
@@ -151,6 +181,7 @@ public final class AgentOutcomeTranslator {
      * @param pendingCount    pending items count
      * @return translated ready outcome
      */
+    @SuppressWarnings("unused")
     public TranslatedOutcome translateReady(String workspaceStatus, int pendingCount) {
         String ws = workspaceStatus == null ? "isolated" : workspaceStatus;
         AgentResponse response = new AgentResponse(
@@ -169,7 +200,8 @@ public final class AgentOutcomeTranslator {
      * @return translated failure outcome
      */
     public TranslatedOutcome translateException(Throwable failure) {
-        String reasonCode = failure == null ? "UNKNOWN_FAILURE" : failure.getClass().getSimpleName();
+        String reasonCode = failure == null ? "UNKNOWN_FAILURE" : failure.getClass()
+                                                                  .getSimpleName();
         AgentResponse response = new AgentResponse(
                 AgentStatus.FAILED,
                 AgentReason.INTERNAL_FAILURE,
@@ -177,26 +209,5 @@ public final class AgentOutcomeTranslator {
                 null
         );
         return new TranslatedOutcome(response, null, reasonCode, null, null, false, false, true);
-    }
-
-    private static boolean isProtectedTarget(String relativePath) {
-        if (relativePath == null || relativePath.isBlank()) {
-            return false;
-        }
-        String normalized = relativePath.replace('\\', '/').toLowerCase();
-        return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/")
-                || normalized.startsWith(".agents/") || normalized.startsWith(".git/")
-                || normalized.equals(".synesis") || normalized.equals(".codex")
-                || normalized.equals(".agents") || normalized.equals(".git");
-    }
-
-    private static String extractCapability(String message) {
-        if (message == null || !message.contains("capability:")) {
-            return null;
-        }
-        int index = message.indexOf("capability:");
-        String substring = message.substring(index + "capability:".length()).trim();
-        int space = substring.indexOf(' ');
-        return space > 0 ? substring.substring(0, space) : substring;
     }
 }

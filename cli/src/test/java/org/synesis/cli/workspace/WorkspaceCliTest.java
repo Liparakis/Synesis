@@ -1,7 +1,5 @@
-package org.synesis.cli.command.workspace;
+package org.synesis.cli.workspace;
 
-
-import org.synesis.cli.SynesisCli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.terminal.ConsoleTerminal;
@@ -98,7 +97,7 @@ class WorkspaceCliTest {
     }
 
     @Test
-    void test12InstalledCliContainsBrokerOperation() throws Exception {
+    void test12InstalledCliContainsBrokerOperation() {
         Invocation invocation = createInvocation(location.profile());
 
         int exit = SynesisCli.execute(new String[]{"workspace", "mutate", "--help"}, invocation.runtime());

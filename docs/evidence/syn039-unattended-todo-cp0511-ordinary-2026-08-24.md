@@ -41,10 +41,10 @@ run.
 - MCP startup evidence: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`,
   commit `bc334ac`, exactly ten tools.
 
-| Agent | Session/worktree | Participant | Intent / epoch / claim |
-|---|---|---|---|
-| A | `session-5cd788f3-0c57-4f25-be3a-0d26362c4618` | `agt_6191d861-3afc-3c6f-848b-7288c83a9118` | `974ac9d8-ca24-36ab-bba7-f50340c3eba9`, epoch 1, `todo.py` |
-| B | `session-ddb4af11-2855-4f2e-9e6b-6b6a658b48b3` | `agt_fd202887-0b58-3cf4-9eb3-9c44de2f8a68` | `e95aae8f-6412-3770-897f-9500c96c79b4`, epoch 1, `test_todo.py` |
+| Agent | Session/worktree                               | Participant                                | Intent / epoch / claim                                          |
+|-------|------------------------------------------------|--------------------------------------------|-----------------------------------------------------------------|
+| A     | `session-5cd788f3-0c57-4f25-be3a-0d26362c4618` | `agt_6191d861-3afc-3c6f-848b-7288c83a9118` | `974ac9d8-ca24-36ab-bba7-f50340c3eba9`, epoch 1, `todo.py`      |
+| B     | `session-ddb4af11-2855-4f2e-9e6b-6b6a658b48b3` | `agt_fd202887-0b58-3cf4-9eb3-9c44de2f8a68` | `e95aae8f-6412-3770-897f-9500c96c79b4`, epoch 1, `test_todo.py` |
 
 Both sessions independently reached `ready / isolated` using the same
 initialized project and distinct worktrees.

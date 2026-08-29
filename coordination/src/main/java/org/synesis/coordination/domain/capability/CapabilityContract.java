@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
 import java.util.List;
 import java.util.Objects;
 
@@ -65,7 +63,8 @@ public record CapabilityContract(
         }
         for (String item : requiredBehavior) {
             if (item == null || item.isBlank() || item.length() > MAX_ITEM_LENGTH) {
-                throw new IllegalArgumentException("requiredBehavior items must be 1 to " + MAX_ITEM_LENGTH + " characters");
+                throw new IllegalArgumentException(
+                        "requiredBehavior items must be 1 to " + MAX_ITEM_LENGTH + " characters");
             }
         }
 
@@ -74,13 +73,18 @@ public record CapabilityContract(
         }
         for (String item : acceptanceTests) {
             if (item == null || item.isBlank() || item.length() > MAX_ITEM_LENGTH) {
-                throw new IllegalArgumentException("acceptanceTests items must be 1 to " + MAX_ITEM_LENGTH + " characters");
+                throw new IllegalArgumentException(
+                        "acceptanceTests items must be 1 to " + MAX_ITEM_LENGTH + " characters");
             }
         }
 
         int totalLen = inputs.length() + output.length();
-        for (String s : requiredBehavior) totalLen += s.length();
-        for (String s : acceptanceTests) totalLen += s.length();
+        for (String s : requiredBehavior) {
+            totalLen += s.length();
+        }
+        for (String s : acceptanceTests) {
+            totalLen += s.length();
+        }
 
         if (totalLen > MAX_TOTAL_BYTES) {
             throw new IllegalArgumentException("CapabilityContract exceeds 32 KB total payload bound");

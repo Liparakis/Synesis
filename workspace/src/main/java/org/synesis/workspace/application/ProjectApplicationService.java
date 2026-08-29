@@ -20,8 +20,8 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.project.ProjectCommandSpec;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService;
+import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
 /**
  * Owns project discovery, initialization, and project-local profile paths.
@@ -33,6 +33,7 @@ import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ProjectApplicationService {
 
     /**
@@ -46,9 +47,9 @@ public final class ProjectApplicationService {
     private static final String AGENTS_END = "<!-- SYNESIS-END -->";
     private static final String AGENTS_BODY = """
             ## Synesis
-
+            
             This repository uses Synesis.
-
+            
             - Use Synesis tools for project reads, file changes, and commands.
             - One persistent MCP connection owns one provider binding and one isolated worker context.
             - After synesis.ensure_session succeeds, keep the provider in the current project directory and use Synesis MCP for all reads, writes, and commands. Synesis applies those operations internally in the assigned worktree; do not switch branches, cd, or edit another worker's worktree manually. Native provider hooks are optional and may be unavailable in desktop harnesses, so never assume a native mutation was routed. If a native tool is used and Synesis reports workspace_mismatch, stop native mutations and verify state through synesis.read_file.
@@ -96,7 +97,8 @@ public final class ProjectApplicationService {
             if (schema != 1 && schema != PROJECT_SCHEMA_VERSION) {
                 throw new IOException("unsupported project metadata schema");
             }
-            if (!Set.of("schemaVersion", "projectId", "createdAt", "validation").containsAll(value.keySet())) {
+            if (!Set.of("schemaVersion", "projectId", "createdAt", "validation")
+                    .containsAll(value.keySet())) {
                 throw new IOException("unsupported project metadata field");
             }
             UUID projectId = UUID.fromString(text(value, "projectId"));
@@ -117,7 +119,6 @@ public final class ProjectApplicationService {
                 + "  \"createdAt\": \"" + createdAt + "\"\n" + "}\n";
     }
 
-    @SuppressWarnings("unchecked")
     private static ProjectCommandSpec parseValidation(Object raw) throws IOException {
         if (raw == null) {
             return null;
@@ -125,7 +126,11 @@ public final class ProjectApplicationService {
         if (!(raw instanceof Map<?, ?> map)) {
             throw new IOException("validation must be an object");
         }
-        if (!Set.of("argv", "workingDirectory", "timeoutSeconds").containsAll(map.keySet())) {
+        if (map.keySet()
+                .stream()
+                .anyMatch(key -> !(key instanceof String text)
+                        || !Set.of("argv", "workingDirectory", "timeoutSeconds")
+                                .contains(text))) {
             throw new IOException("validation contains unsupported fields");
         }
         Object argvRaw = map.get("argv");
@@ -153,7 +158,8 @@ public final class ProjectApplicationService {
         try {
             java.nio.file.Path relative = java.nio.file.Path.of(workingDirectory);
             if (looksLikeAbsolutePath(workingDirectory) || relative.isAbsolute()
-                    || relative.normalize().startsWith(java.nio.file.Path.of(".."))) {
+                    || relative.normalize()
+                    .startsWith(java.nio.file.Path.of(".."))) {
                 throw new IOException("validation workingDirectory must remain relative");
             }
             return new ProjectCommandSpec(argv, workingDirectory, timeoutSeconds);
@@ -341,35 +347,6 @@ public final class ProjectApplicationService {
         }
     }
 
-    private static String string(String json, String key) throws IOException {
-        String marker = "\"" + key + "\": \"";
-        int start = json.indexOf(marker);
-        if (start < 0) {
-            throw new IOException("missing " + key);
-        }
-        start += marker.length();
-        int end = json.indexOf('"', start);
-        if (end < 0) {
-            throw new IOException("invalid " + key);
-        }
-        return json.substring(start, end);
-    }
-
-    @SuppressWarnings("SameParameterValue")
-    private static int integer(String json, String key) throws IOException {
-        String marker = "\"" + key + "\": ";
-        int start = json.indexOf(marker);
-        if (start < 0) {
-            throw new IOException("missing " + key);
-        }
-        start += marker.length();
-        int end = start;
-        while (end < json.length() && Character.isDigit(json.charAt(end))) {
-            end++;
-        }
-        return Integer.parseInt(json.substring(start, end));
-    }
-
     /**
      * Walks from a directory toward the filesystem root to find project metadata.
      *
@@ -443,7 +420,7 @@ public final class ProjectApplicationService {
      * <p>Internal fixture creation may disable provider configuration to avoid
      * mutating a user's provider profiles while running synthetic checks.</p>
      *
-     * @param projectRoot target directory
+     * @param projectRoot          target directory
      * @param configureProviderMcp whether provider MCP configuration should be ensured
      * @return structured initialization result
      * @throws ProjectApplicationException if the path or metadata is invalid
@@ -461,8 +438,12 @@ public final class ProjectApplicationService {
                     if (configureProviderMcp) {
                         ProviderApplicationService providerService = new ProviderApplicationService();
                         Path launcher = providerService.launcherPath();
-                        providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
-                        providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
+                        providerService.ensureMcpConfig(existing,
+                                org.synesis.workspace.provider.ProviderRegistry.find("codex"),
+                                launcher);
+                        providerService.ensureMcpConfig(existing,
+                                org.synesis.workspace.provider.ProviderRegistry.find("antigravity"),
+                                launcher);
                     }
                     return new InitResult(InitStatus.ALREADY_INITIALIZED,
                             existing,
@@ -509,8 +490,12 @@ public final class ProjectApplicationService {
                 if (configureProviderMcp) {
                     ProviderApplicationService providerService = new ProviderApplicationService();
                     Path launcher = providerService.launcherPath();
-                    providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
-                    providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("antigravity"), launcher);
+                    providerService.ensureMcpConfig(location,
+                            org.synesis.workspace.provider.ProviderRegistry.find("codex"),
+                            launcher);
+                    providerService.ensureMcpConfig(location,
+                            org.synesis.workspace.provider.ProviderRegistry.find("antigravity"),
+                            launcher);
                 }
             } catch (Exception ignored) {
             }
@@ -604,12 +589,12 @@ public final class ProjectApplicationService {
          * Compatibility constructor for internal synthetic project locations
          * without validation.
          *
-         * @param root project root
+         * @param root             project root
          * @param synesisDirectory Synesis directory
-         * @param metadataFile project metadata file
-         * @param profile local profile directory
-         * @param projectId project identifier
-         * @param createdAt creation timestamp
+         * @param metadataFile     project metadata file
+         * @param profile          local profile directory
+         * @param projectId        project identifier
+         * @param createdAt        creation timestamp
          */
         public ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId,
                 Instant createdAt) {

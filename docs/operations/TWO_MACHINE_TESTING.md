@@ -1,6 +1,8 @@
 # Two-machine testing
 
-The required two-machine test must use two physical computers on a documented direct-network scenario, exchange signed descriptors out of band, require the expected fingerprint, establish `synesis-link/1`, exercise a typed stream, record liveness, and verify graceful and abrupt-close behavior. Do not claim this evidence until it is run.
+The required two-machine test must use two physical computers on a documented direct-network scenario, exchange signed
+descriptors out of band, require the expected fingerprint, establish `synesis-link/1`, exercise a typed stream, record
+liveness, and verify graceful and abrupt-close behavior. Do not claim this evidence until it is run.
 
 For candidate and direct-connectivity validation, record the provider list,
 normalized candidate count, compatible pair ordering, attempt diagnostics,

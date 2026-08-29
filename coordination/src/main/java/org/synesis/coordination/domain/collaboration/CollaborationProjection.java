@@ -2,19 +2,22 @@ package org.synesis.coordination.domain.collaboration;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.HashSet;
 import java.util.UUID;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
-import org.synesis.coordination.domain.prediction.PredictionEventType;
 
-/** Deterministic projection of active work intents and resource claims. */
+/**
+ * Deterministic projection of active work intents and resource claims.
+ */
+@SuppressWarnings({"DuplicatedCode", "ExtractMethodRecommender"})
 public final class CollaborationProjection {
+
     private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
     private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
     private final Map<UUID, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
@@ -23,12 +26,21 @@ public final class CollaborationProjection {
     private final Set<UUID> acknowledgedInboxItems = new HashSet<>();
     private boolean activated;
 
-    /** Creates an empty collaboration projection. */
+    /**
+     * Creates an empty collaboration projection.
+     */
     public CollaborationProjection() {
+    }
+
+    private static void rejectRevoked(Participant participant) throws IOException {
+        if (participant.state() == Participant.State.REVOKED) {
+            throw new IOException("SESSION_EPOCH_FENCED");
+        }
     }
 
     /**
      * Applies one collaboration event.
+     *
      * @param event event
      * @throws IOException malformed transition
      */
@@ -48,11 +60,14 @@ public final class CollaborationProjection {
             }
             case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
             case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
-            case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
+            case PARTICIPANT_HEARTBEAT ->
+                    heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
             case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
             case REPAIR_LANE_CREATED -> repair(RepairLanePayload.decode(event.payload()));
-            case COMPLETION_UNWOUND -> unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload.decode(event.payload()));
-            case PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED -> suspended(CollaborationCodec.decodeHeartbeat(event.payload()));
+            case COMPLETION_UNWOUND ->
+                    unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload.decode(event.payload()));
+            case PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED ->
+                    suspended(CollaborationCodec.decodeHeartbeat(event.payload()));
             case RECOVERY_SNAPSHOT_HELD -> recoveryHeld(CollaborationCodec.decodeRecovery(event.payload()));
             case PARTICIPANT_REVOKED -> revoked(CollaborationCodec.decodeHeartbeat(event.payload()));
             case INBOX_ITEM_ACKNOWLEDGED -> acknowledge(CollaborationCodec.decodeUuidText(event.payload()));
@@ -69,6 +84,7 @@ public final class CollaborationProjection {
 
     /**
      * Validates one collaboration event without mutation.
+     *
      * @param event event
      * @throws IOException invalid transition
      */
@@ -86,6 +102,7 @@ public final class CollaborationProjection {
 
     /**
      * Returns an intent by identifier.
+     *
      * @param id intent ID
      * @return intent
      */
@@ -95,34 +112,43 @@ public final class CollaborationProjection {
 
     /**
      * Returns all active intents.
+     *
      * @return immutable intents
      */
     public synchronized List<WorkIntent> activeIntents() {
         return List.copyOf(intents.values());
     }
 
-    /** Returns active participant projections without connection or worktree details.
+    /**
+     * Returns active participant projections without connection or worktree details.
+     *
      * @return participant projections
      */
     public synchronized List<Participant> participants() {
         return List.copyOf(participantHistory.values());
     }
 
-    /** Returns whether this project has durable collaboration enforcement enabled.
+    /**
+     * Returns whether this project has durable collaboration enforcement enabled.
+     *
      * @return true after the first intent event
      */
     public synchronized boolean activated() {
         return activated;
     }
 
-    /** Returns all durable coordination requests.
+    /**
+     * Returns all durable coordination requests.
+     *
      * @return requests
      */
     public synchronized List<CoordinationRequest> requests() {
         return List.copyOf(requests.values());
     }
 
-    /** Returns durable no-change completion evidence for an intent, when present.
+    /**
+     * Returns durable no-change completion evidence for an intent, when present.
+     *
      * @param intentId intent identifier
      * @return completion evidence, if the intent was explicitly completed
      */
@@ -130,14 +156,18 @@ public final class CollaborationProjection {
         return Optional.ofNullable(noChangeCompletions.get(Objects.requireNonNull(intentId, "intent ID")));
     }
 
-    /** Returns all durable no-change completion evidence.
+    /**
+     * Returns all durable no-change completion evidence.
+     *
      * @return immutable completion evidence
      */
     public synchronized List<NoChangeCompletion> noChangeCompletions() {
         return List.copyOf(noChangeCompletions.values());
     }
 
-    /** Returns whether an exact provider session has an irreversible terminal fence.
+    /**
+     * Returns whether an exact provider session has an irreversible terminal fence.
+     *
      * @param sessionId exact provider session identity
      * @return true when terminalized
      */
@@ -145,16 +175,22 @@ public final class CollaborationProjection {
         return terminalSessions.containsKey(Objects.requireNonNull(sessionId, "session ID"));
     }
 
-    /** Returns whether a participant belongs to a terminal provider session.
+    /**
+     * Returns whether a participant belongs to a terminal provider session.
+     *
      * @param participant exact participant handle
      * @return true when fenced
      */
     public synchronized boolean isParticipantTerminal(String participant) {
-        return terminalSessions.values().stream()
-                .anyMatch(payload -> payload.participant().equals(Objects.requireNonNull(participant, "participant")));
+        return terminalSessions.values()
+                .stream()
+                .anyMatch(payload -> payload.participant()
+                        .equals(Objects.requireNonNull(participant, "participant")));
     }
 
-    /** Returns the durable terminal proof for one exact provider session.
+    /**
+     * Returns the durable terminal proof for one exact provider session.
+     *
      * @param sessionId exact provider session identity
      * @return terminal proof, when present
      */
@@ -162,7 +198,9 @@ public final class CollaborationProjection {
         return Optional.ofNullable(terminalSessions.get(Objects.requireNonNull(sessionId, "session ID")));
     }
 
-    /** Returns whether an inbox item has been acknowledged.
+    /**
+     * Returns whether an inbox item has been acknowledged.
+     *
      * @param itemId server-issued item identifier
      * @return true when acknowledged
      */
@@ -170,37 +208,48 @@ public final class CollaborationProjection {
         return acknowledgedInboxItems.contains(Objects.requireNonNull(itemId, "item ID"));
     }
 
-    /** Resolves the internal projection key for an opaque participant handle.
+    /**
+     * Resolves the internal projection key for an opaque participant handle.
+     *
      * @param handle participant handle
      * @return internal key, when present
      */
     public synchronized Optional<String> participantKey(String handle) {
-        return participantHistory.entrySet().stream()
-                .filter(entry -> entry.getKey().equals(handle) || entry.getValue().id().equals(handle))
+        return participantHistory.entrySet()
+                .stream()
+                .filter(entry -> entry.getKey()
+                        .equals(handle) || entry.getValue()
+                        .id()
+                        .equals(handle))
                 .map(Map.Entry::getKey)
                 .findFirst();
     }
 
-    /** Returns the internal recovery reference for a participant.
+    /**
+     * Returns the internal recovery reference for a participant.
+     *
      * @param handle participant handle
      * @return opaque snapshot reference when held
      */
     public synchronized Optional<String> recoverySnapshotReference(String handle) {
         return participantKey(handle).map(participantHistory::get)
-                .map(Participant::recoverySnapshotReference)
-                .filter(Objects::nonNull);
+                .map(Participant::recoverySnapshotReference);
     }
 
-    /** Returns a participant lifecycle state by opaque handle or projection key.
+    /**
+     * Returns a participant lifecycle state by opaque handle or projection key.
+     *
      * @param handle participant handle
      * @return lifecycle state when present
      */
     public synchronized Optional<Participant.State> participantState(String handle) {
-        return participantKey(handle).map(participantHistory::get).map(Participant::state);
+        return participantKey(handle).map(participantHistory::get)
+                .map(Participant::state);
     }
 
     /**
      * Finds claims overlapping any requested selector.
+     *
      * @param selectors selectors
      * @return conflicts
      */
@@ -210,7 +259,10 @@ public final class CollaborationProjection {
             for (ResourceSelector existing : intent.selectors()) {
                 for (ResourceSelector requested : selectors) {
                     if (existing.overlaps(requested)) {
-                        result.add(new ClaimConflict(intent.participant(), intent.intentId().toString(), existing));
+                        result.add(new ClaimConflict(intent.participant(),
+                                intent.intentId()
+                                        .toString(),
+                                existing));
                     }
                 }
             }
@@ -230,7 +282,8 @@ public final class CollaborationProjection {
             throw new IOException("OVERLAPPING_CLAIM");
         }
         intents.put(intent.intentId(), intent);
-        String opaqueId = intent.participant().startsWith("agt_") ? intent.participant() : "agt_" + intent.participant();
+        String opaqueId = intent.participant()
+                .startsWith("agt_") ? intent.participant() : "agt_" + intent.participant();
         participantHistory.put(intent.participant(), new Participant(opaqueId, intent.provider(),
                 intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors(), null));
     }
@@ -257,31 +310,43 @@ public final class CollaborationProjection {
         if (target.status() != WorkIntent.Status.ANNOUNCED) {
             throw new IOException("REPAIR_TARGET_NOT_ANNOUNCED");
         }
-        if (!source.projectId().equals(target.projectId())
-                || !source.workGroupId().equals(target.workGroupId())) {
+        if (!source.projectId()
+                .equals(target.projectId())
+                || !source.workGroupId()
+                .equals(target.workGroupId())) {
             throw new IOException("REPAIR_WORK_GROUP_MISMATCH");
         }
-        if (!source.authorityLineageId().equals(target.authorityLineageId())) {
+        if (!source.authorityLineageId()
+                .equals(target.authorityLineageId())) {
             throw new IOException("REPAIR_AUTHORITY_LINEAGE_MISMATCH");
         }
-        if (source.intentId().equals(target.intentId())
-                || source.participant().equals(target.participant())) {
+        if (source.intentId()
+                .equals(target.intentId())
+                || source.participant()
+                .equals(target.participant())) {
             throw new IOException("REPAIR_TARGET_MUST_BE_DISTINCT");
         }
-        if (!source.selectors().equals(target.selectors())) {
+        if (!source.selectors()
+                .equals(target.selectors())) {
             throw new IOException("REPAIR_SCOPE_MISMATCH");
         }
-        if (payload.snapshotId() != null && !payload.snapshotId().isBlank()) {
-            if (payload.expectedControlHead().isBlank()
+        if (payload.snapshotId() != null && !payload.snapshotId()
+                .isBlank()) {
+            if (payload.expectedControlHead()
+                    .isBlank()
                     || payload.sourceClaimEpoch() != source.version()
                     || payload.targetClaimEpoch() != target.version()
                     || target.version() != source.version() + 1L) {
                 throw new IOException("REPAIR_EPOCH_MISMATCH");
             }
         }
-        if (intents.values().stream().anyMatch(intent ->
-                !intent.intentId().equals(source.intentId())
-                        && intent.participant().equals(target.participant()))) {
+        if (intents.values()
+                .stream()
+                .anyMatch(intent ->
+                        !intent.intentId()
+                                .equals(source.intentId())
+                                && intent.participant()
+                                .equals(target.participant()))) {
             throw new IOException("REPAIR_TARGET_ALREADY_ACTIVE");
         }
 
@@ -298,9 +363,11 @@ public final class CollaborationProjection {
         if (current == null || current.status() != WorkIntent.Status.ANNOUNCED) {
             throw new IOException("UNWIND_SOURCE_NOT_ACTIVE");
         }
-        if (!current.participant().equals(replacement.participant())
+        if (!current.participant()
+                .equals(replacement.participant())
                 || replacement.version() <= current.version()
-                || !current.selectors().equals(replacement.selectors())) {
+                || !current.selectors()
+                .equals(replacement.selectors())) {
             throw new IOException("UNWIND_EPOCH_OR_SCOPE_MISMATCH");
         }
         intents.put(replacement.intentId(), replacement);
@@ -316,21 +383,30 @@ public final class CollaborationProjection {
         if (isParticipantTerminal(request.requester()) || isParticipantTerminal(request.target())) {
             throw new IOException("SESSION_TERMINAL");
         }
-        if (requests.containsKey(request.requestId())) throw new IOException("REQUEST_EXISTS");
-        if (!intents.containsKey(request.conflictingIntentId())) throw new IOException("INTENT_NOT_FOUND");
+        if (requests.containsKey(request.requestId())) {
+            throw new IOException("REQUEST_EXISTS");
+        }
+        if (!intents.containsKey(request.conflictingIntentId())) {
+            throw new IOException("INTENT_NOT_FOUND");
+        }
         requests.put(request.requestId(), request);
     }
 
     private void respond(CollaborationCodec.Response response) throws IOException {
         CoordinationRequest current = requests.get(response.requestId());
-        if (current == null) throw new IOException("REQUEST_NOT_FOUND");
+        if (current == null) {
+            throw new IOException("REQUEST_NOT_FOUND");
+        }
         if (current.status() != CoordinationRequest.Status.PENDING) {
-            if (current.status() == response.status()) return;
+            if (current.status() == response.status()) {
+                return;
+            }
             throw new IOException("REQUEST_ALREADY_RESOLVED");
         }
         requests.put(current.requestId(), new CoordinationRequest(current.requestId(), current.projectId(),
                 current.requester(), current.target(), current.conflictingIntentId(), current.kind(),
-                response.proposal().isBlank() ? current.proposal() : response.proposal(), response.status()));
+                response.proposal()
+                        .isBlank() ? current.proposal() : response.proposal(), response.status()));
     }
 
     private void review(ReviewValidationPayload validation) throws IOException {
@@ -345,9 +421,12 @@ public final class CollaborationProjection {
         if (current == null) {
             return;
         }
-        if (!current.workGroupId().equals(validation.workGroupId())
-                || !current.participant().equals(validation.sourceParticipant())
-                || !current.taskId().equals(validation.taskId())
+        if (!current.workGroupId()
+                .equals(validation.workGroupId())
+                || !current.participant()
+                .equals(validation.sourceParticipant())
+                || !current.taskId()
+                .equals(validation.taskId())
                 || current.version() != validation.claimEpoch()
                 || current.status() != WorkIntent.Status.ANNOUNCED) {
             throw new IOException("REVIEW_TARGET_STALE");
@@ -368,9 +447,13 @@ public final class CollaborationProjection {
     }
 
     private void heartbeat(String participant, long timestamp) throws IOException {
-        if (isParticipantTerminal(participant)) throw new IOException("SESSION_TERMINAL");
+        if (isParticipantTerminal(participant)) {
+            throw new IOException("SESSION_TERMINAL");
+        }
         Participant current = participantHistory.get(participant);
-        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        if (current == null) {
+            throw new IOException("PARTICIPANT_NOT_FOUND");
+        }
         if (current.state() == Participant.State.REVOKED
                 || current.state() == Participant.State.COMPLETED
                 || current.state() == Participant.State.CANCELLED
@@ -383,14 +466,32 @@ public final class CollaborationProjection {
 
     private void handoff(CollaborationCodec.Handoff handoff) throws IOException {
         WorkIntent current = intents.get(handoff.intentId());
-        if (current == null) throw new IOException("INTENT_NOT_FOUND");
-        if (current.version() != handoff.expectedVersion()) throw new IOException("CLAIM_EPOCH_STALE");
+        if (current == null) {
+            throw new IOException("INTENT_NOT_FOUND");
+        }
+        if (current.version() != handoff.expectedVersion()) {
+            throw new IOException("CLAIM_EPOCH_STALE");
+        }
         Participant target = participantHistory.get(handoff.target());
-        if (target == null || target.state() != Participant.State.ACTIVE) throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
-        WorkIntent transferred = new WorkIntent(current.intentId(), current.projectId(), handoff.target(), current.provider(),
-                current.taskId(), current.goal(), current.acceptance(), current.baseCommit(), current.selectors(),
-                current.version() + 1, current.workGroupId(), current.authorityLineageId(), current.status(),
-                current.completionMode(), current.role(), current.reviewTargetSelectors());
+        if (target == null || target.state() != Participant.State.ACTIVE) {
+            throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
+        }
+        WorkIntent transferred = new WorkIntent(current.intentId(),
+                current.projectId(),
+                handoff.target(),
+                current.provider(),
+                current.taskId(),
+                current.goal(),
+                current.acceptance(),
+                current.baseCommit(),
+                current.selectors(),
+                current.version() + 1,
+                current.workGroupId(),
+                current.authorityLineageId(),
+                current.status(),
+                current.completionMode(),
+                current.role(),
+                current.reviewTargetSelectors());
         intents.put(current.intentId(), transferred);
         Participant previous = participantHistory.get(current.participant());
         if (previous != null) {
@@ -403,7 +504,9 @@ public final class CollaborationProjection {
 
     private void suspended(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
-        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        if (current == null) {
+            throw new IOException("PARTICIPANT_NOT_FOUND");
+        }
         rejectRevoked(current);
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
                 Participant.State.SUSPENDED, current.lastVerifiedActivity(), current.claims(),
@@ -413,7 +516,9 @@ public final class CollaborationProjection {
     private void recoveryHeld(CollaborationCodec.Recovery recovery) throws IOException {
         String participant = recovery.participant();
         Participant current = participantHistory.get(participant);
-        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        if (current == null) {
+            throw new IOException("PARTICIPANT_NOT_FOUND");
+        }
         if (current.state() != Participant.State.SUSPENDED && current.state() != Participant.State.RECOVERY_HELD) {
             throw new IOException("RECOVERY_NOT_SUSPENDED");
         }
@@ -428,27 +533,36 @@ public final class CollaborationProjection {
             throw new IOException("SESSION_TERMINAL");
         }
         WorkIntent source = intents.get(continuation.sourceIntentId());
-        if (source == null || !source.participant().equals(continuation.sourceParticipant())) {
+        if (source == null || !source.participant()
+                .equals(continuation.sourceParticipant())) {
             throw new IOException("CONTINUATION_SOURCE_NOT_FOUND");
         }
-        if (source.version() != continuation.expectedEpoch()) throw new IOException("CLAIM_EPOCH_STALE");
+        if (source.version() != continuation.expectedEpoch()) {
+            throw new IOException("CLAIM_EPOCH_STALE");
+        }
         Participant sourceParticipant = participantHistory.get(continuation.sourceParticipant());
         if (sourceParticipant == null || sourceParticipant.state() != Participant.State.RECOVERY_HELD) {
             throw new IOException("RECOVERY_NOT_HELD");
         }
         WorkIntent target = continuation.targetIntent();
-        if (!target.participant().equals(continuation.targetParticipant())
-                || !target.workGroupId().equals(source.workGroupId())
-                || !target.selectors().equals(source.selectors())) {
+        if (!target.participant()
+                .equals(continuation.targetParticipant())
+                || !target.workGroupId()
+                .equals(source.workGroupId())
+                || !target.selectors()
+                .equals(source.selectors())) {
             throw new IOException("CONTINUATION_TARGET_INVALID");
         }
-        if (intents.containsKey(target.intentId())) throw new IOException("CONTINUATION_TARGET_EXISTS");
+        if (intents.containsKey(target.intentId())) {
+            throw new IOException("CONTINUATION_TARGET_EXISTS");
+        }
         intents.remove(source.intentId());
         intents.put(target.intentId(), target);
         participantHistory.put(continuation.sourceParticipant(), new Participant(sourceParticipant.id(),
                 sourceParticipant.provider(), sourceParticipant.goal(), Participant.State.DETACHED,
                 sourceParticipant.lastVerifiedActivity(), List.of(), sourceParticipant.recoverySnapshotReference()));
-        String targetId = continuation.targetParticipant().startsWith("agt_")
+        String targetId = continuation.targetParticipant()
+                .startsWith("agt_")
                 ? continuation.targetParticipant() : "agt_" + continuation.targetParticipant();
         participantHistory.put(continuation.targetParticipant(), new Participant(targetId, target.provider(),
                 target.goal(), Participant.State.ACTIVE, System.currentTimeMillis(), target.selectors(), null));
@@ -456,10 +570,20 @@ public final class CollaborationProjection {
 
     private void revoked(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
-        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
-        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
-                Participant.State.REVOKED, current.lastVerifiedActivity(), List.of(), current.recoverySnapshotReference()));
-        intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
+        if (current == null) {
+            throw new IOException("PARTICIPANT_NOT_FOUND");
+        }
+        participantHistory.put(participant, new Participant(current.id(),
+                current.provider(),
+                current.goal(),
+                Participant.State.REVOKED,
+                current.lastVerifiedActivity(),
+                List.of(),
+                current.recoverySnapshotReference()));
+        intents.entrySet()
+                .removeIf(entry -> entry.getValue()
+                        .participant()
+                        .equals(participant));
     }
 
     private void acknowledge(UUID itemId) {
@@ -468,21 +592,36 @@ public final class CollaborationProjection {
 
     private void cancelled(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
-        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        if (current == null) {
+            throw new IOException("PARTICIPANT_NOT_FOUND");
+        }
         rejectRevoked(current);
-        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
-                Participant.State.CANCELLED, current.lastVerifiedActivity(), List.of(), current.recoverySnapshotReference()));
-        intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
+        participantHistory.put(participant, new Participant(current.id(),
+                current.provider(),
+                current.goal(),
+                Participant.State.CANCELLED,
+                current.lastVerifiedActivity(),
+                List.of(),
+                current.recoverySnapshotReference()));
+        intents.entrySet()
+                .removeIf(entry -> entry.getValue()
+                        .participant()
+                        .equals(participant));
     }
 
     private void detached(String participant) throws IOException {
         Participant current = participantHistory.get(participant);
-        if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
+        if (current == null) {
+            throw new IOException("PARTICIPANT_NOT_FOUND");
+        }
         rejectRevoked(current);
         participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
                 Participant.State.DETACHED, current.lastVerifiedActivity(), List.of(),
                 current.recoverySnapshotReference()));
-        intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
+        intents.entrySet()
+                .removeIf(entry -> entry.getValue()
+                        .participant()
+                        .equals(participant));
     }
 
     private void terminalize(ProviderSessionTerminalPayload payload, long eventSequence) throws IOException {
@@ -491,19 +630,18 @@ public final class CollaborationProjection {
         }
         ProviderSessionTerminalPayload previous = terminalSessions.get(payload.sessionId());
         if (previous != null) {
-            if (!previous.equals(payload)) throw new IOException("TERMINAL_SESSION_CONFLICT");
+            if (!previous.equals(payload)) {
+                throw new IOException("TERMINAL_SESSION_CONFLICT");
+            }
             return;
         }
-        if (terminalSessions.values().stream().anyMatch(existing -> existing.participant().equals(payload.participant()))) {
+        if (terminalSessions.values()
+                .stream()
+                .anyMatch(existing -> existing.participant()
+                        .equals(payload.participant()))) {
             throw new IOException("TERMINAL_PARTICIPANT_CONFLICT");
         }
         terminalSessions.put(payload.sessionId(), payload);
-    }
-
-    private static void rejectRevoked(Participant participant) throws IOException {
-        if (participant.state() == Participant.State.REVOKED) {
-            throw new IOException("SESSION_EPOCH_FENCED");
-        }
     }
 
     private void complete(NoChangeCompletion completion, long eventSequence) throws IOException {
@@ -521,13 +659,18 @@ public final class CollaborationProjection {
         if (current == null) {
             throw new IOException("INTENT_NOT_FOUND");
         }
-        if (!current.workGroupId().equals(completion.workGroupId())
-                || !current.participant().equals(completion.participant())
-                || !current.provider().equals(completion.provider())
-                || !current.authorityLineageId().equals(completion.authorityLineageId())
+        if (!current.workGroupId()
+                .equals(completion.workGroupId())
+                || !current.participant()
+                .equals(completion.participant())
+                || !current.provider()
+                .equals(completion.provider())
+                || !current.authorityLineageId()
+                .equals(completion.authorityLineageId())
                 || current.version() != completion.claimEpoch()
                 || current.completionMode() != WorkIntent.CompletionMode.NO_CHANGE_ALLOWED
-                || !current.baseCommit().equals(completion.workspaceCommit())) {
+                || !current.baseCommit()
+                .equals(completion.workspaceCommit())) {
             throw new IOException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
         }
         intents.remove(completion.intentId());

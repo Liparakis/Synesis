@@ -28,6 +28,7 @@ import org.synesis.projectrecord.domain.DecisionRecord;
  * file. Startup validates chains and rebuilds a missing or older head from
  * durable revisions. Corrupt bytes fail recovery rather than being guessed.
  */
+@SuppressWarnings("DuplicatedCode")
 public final class DecisionStore {
 
     /**
@@ -42,6 +43,7 @@ public final class DecisionStore {
     private final Path decisions;
     private final Path heads;
     private final Path conflicts;
+
     /**
      * Opens or creates one profile-local store and performs crash recovery.
      *
@@ -122,7 +124,12 @@ public final class DecisionStore {
         try {
             try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW,
                     StandardOpenOption.WRITE)) {
-                channel.write(java.nio.ByteBuffer.wrap(bytes));
+                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(bytes);
+                while (buffer.hasRemaining()) {
+                    if (channel.write(buffer) == 0) {
+                        throw new IOException("decision store write made no progress");
+                    }
+                }
                 channel.force(true);
             }
             try {
@@ -332,6 +339,7 @@ public final class DecisionStore {
                 .toList();
     }
 
+    @SuppressWarnings("DataFlowIssue")
     private void recover() throws IOException {
         try (var recordDirs = Files.list(decisions)) {
             for (Path recordDir : recordDirs.filter(Files::isDirectory)
@@ -405,7 +413,7 @@ public final class DecisionStore {
                     .filter(path -> path.getFileName()
                             .toString()
                             .endsWith(".sdr"))
-                    .sorted(Comparator.comparingLong(path -> revisionNumber(path)))
+                    .sorted(Comparator.comparingLong(DecisionStore::revisionNumber))
                     .toList();
         }
         if (files.isEmpty() || files.size() > MAX_REVISIONS_PER_RECORD) {
@@ -564,6 +572,7 @@ public final class DecisionStore {
          *
          * @return digest text
          */
+        @SuppressWarnings("unused")
         public String digestHex() {
             return java.util.HexFormat.of()
                     .formatHex(digest);

@@ -1,14 +1,12 @@
 package org.synesis.workspace.doctor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -31,18 +29,26 @@ public class DoctorServiceTest {
         // The durable command namespace is host-wide, so prior tests may leave valid terminal
         // evidence or dead anchors for the existing cleanup workflow to report.
         assertTrue(report.overallStatus() == DoctorStatus.HEALTHY
-                || report.overallStatus() == DoctorStatus.DEGRADED, report.findings().toString());
-        assertTrue(report.findings().stream().allMatch(f -> f.code() == DoctorFindingCode.COMMAND_NAMESPACE_RECONCILIATION_REQUIRED
-                || f.code() == DoctorFindingCode.COMMAND_CAPACITY_OR_RETENTION), report.findings().toString());
+                        || report.overallStatus() == DoctorStatus.DEGRADED,
+                report.findings()
+                        .toString());
+        assertTrue(report.findings()
+                        .stream()
+                        .allMatch(f -> f.code() == DoctorFindingCode.COMMAND_NAMESPACE_RECONCILIATION_REQUIRED
+                                || f.code() == DoctorFindingCode.COMMAND_CAPACITY_OR_RETENTION),
+                report.findings()
+                        .toString());
     }
 
     @Test
-    public void testDoctorDetectionUninitialized(@TempDir Path tempDir) throws Exception {
+    public void testDoctorDetectionUninitialized(@TempDir Path tempDir) {
         DoctorService doctorService = new DoctorService();
         DoctorReport report = doctorService.diagnose(tempDir);
 
         assertEquals(DoctorStatus.UNHEALTHY, report.overallStatus());
-        assertTrue(report.findings().stream().anyMatch(f -> f.code() == DoctorFindingCode.PROJECT_NOT_INITIALIZED));
+        assertTrue(report.findings()
+                .stream()
+                .anyMatch(f -> f.code() == DoctorFindingCode.PROJECT_NOT_INITIALIZED));
     }
 
     @Test
@@ -60,7 +66,9 @@ public class DoctorServiceTest {
 
         assertEquals(DoctorStatus.DEGRADED, report.overallStatus());
         assertTrue(report.repairAvailable());
-        assertTrue(report.findings().stream().anyMatch(f -> f.code() == DoctorFindingCode.STALE_CLEANUP_EXECUTION_LOCK));
+        assertTrue(report.findings()
+                .stream()
+                .anyMatch(f -> f.code() == DoctorFindingCode.STALE_CLEANUP_EXECUTION_LOCK));
     }
 
     private long countFiles(Path dir) throws IOException {

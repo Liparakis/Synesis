@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.speculation;
 
 
-
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -35,7 +33,7 @@ public final class SpeculationWorkspace implements AutoCloseable {
                 .toAbsolutePath()
                 .normalize();
         this.predictionId = Objects.requireNonNull(predictionId, "prediction ID");
-        this.baseCommit = requireText(baseCommit, "base commit");
+        this.baseCommit = requireText(baseCommit);
         this.metadataDirectory = Objects.requireNonNull(localRoot, "local root")
                 .resolve("speculation")
                 .resolve(predictionId.toString())
@@ -74,9 +72,9 @@ public final class SpeculationWorkspace implements AutoCloseable {
         }
     }
 
-    private static String requireText(String value, String label) {
+    private static String requireText(String value) {
         if (value == null || value.isBlank() || value.length() > 256) {
-            throw new IllegalArgumentException(label + " invalid");
+            throw new IllegalArgumentException("base commit invalid");
         }
         return value;
     }
@@ -108,8 +106,8 @@ public final class SpeculationWorkspace implements AutoCloseable {
         if (!created) {
             throw new IllegalStateException("speculation workspace is not created");
         }
-        String whitespace = runGitAtWorktreeAllowFailure("diff", "--check");
-        String status = runGitAtWorktree("status", "--porcelain=v1");
+        String whitespace = runGitAtWorktreeAllowFailure();
+        String status = runGitAtWorktree();
         boolean unmerged = status.lines()
                 .anyMatch(line -> line.length() >= 2
                         && (line.startsWith("UU") || line.startsWith("AA") || line.startsWith("DD")
@@ -144,31 +142,33 @@ public final class SpeculationWorkspace implements AutoCloseable {
         created = false;
     }
 
-    private String runGitAtWorktree(String... arguments) throws IOException {
-        String[] command = new String[arguments.length + 3];
+    private String runGitAtWorktree() throws IOException {
+        String[] command = new String[5];
         command[0] = "git";
         command[1] = "-C";
         command[2] = worktree.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        command[3] = "status";
+        command[4] = "--porcelain=v1";
         return run(command);
     }
 
-    private String runGitAtWorktreeAllowFailure(String... arguments) throws IOException {
-        String[] command = new String[arguments.length + 3];
+    private String runGitAtWorktreeAllowFailure() throws IOException {
+        String[] command = new String[5];
         command[0] = "git";
         command[1] = "-C";
         command[2] = worktree.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        command[3] = "diff";
+        command[4] = "--check";
         return runAllowFailure(command);
     }
 
-    private String runGit(String... arguments) throws IOException {
+    private void runGit(String... arguments) throws IOException {
         String[] command = new String[arguments.length + 3];
         command[0] = "git";
         command[1] = "-C";
         command[2] = repositoryRoot.toString();
         System.arraycopy(arguments, 0, command, 3, arguments.length);
-        return run(command);
+        run(command);
     }
 
     /**

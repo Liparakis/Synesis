@@ -1,13 +1,12 @@
 package org.synesis.cli.command.lifecycle;
 
 
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
-
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.domain.prediction.PredictionIntegrationGate;
 import org.synesis.coordination.domain.prediction.PredictionProjection;
@@ -19,6 +18,7 @@ import picocli.CommandLine.Option;
  * Evaluates prediction resolution plus the local Git safety gate.
  */
 @Command(name = "gate", description = "Evaluate the prediction integration gate.", mixinStandardHelpOptions = true)
+@SuppressWarnings("resource")
 public final class IntegrationGateCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

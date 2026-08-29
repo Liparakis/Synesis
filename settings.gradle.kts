@@ -1,4 +1,4 @@
-import org.gradle.api.initialization.resolve.RepositoriesMode
+@file:Suppress("UnstableApiUsage")
 
 pluginManagement {
     repositories {

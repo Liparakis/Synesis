@@ -15,10 +15,10 @@
 - SYN-041 final real Codex terminal-seal acceptance (2026-08-28): one actual
   authenticated Codex lifecycle completed lawful no-change work and committed
   `PROVIDER_SESSION_TERMINALIZED` before native Java/MCP exit 1 and Codex exit
-  0. Exact-session rebind returned `SESSION_TERMINAL`, but its clean close
-  rewrote the same lease to `CLOSED_CLEANLY` while the durable terminal event
-  remained. Primary result RESULT C; SYN-041 remains ACTIVE. Evidence:
-  `docs/evidence/syn041-final-real-codex-terminal-seal-acceptance-2026-08-28.md`.
+    0. Exact-session rebind returned `SESSION_TERMINAL`, but its clean close
+       rewrote the same lease to `CLOSED_CLEANLY` while the durable terminal event
+       remained. Primary result RESULT C; SYN-041 remains ACTIVE. Evidence:
+       `docs/evidence/syn041-final-real-codex-terminal-seal-acceptance-2026-08-28.md`.
 - Exact continuation: inspect `SessionLeaseService.markClosedCleanly` and add
   a focused regression test for terminal-history preservation. Do not run
   another provider experiment or close SYN-041 until this defect is resolved.
@@ -80,12 +80,24 @@
 
 - Product: Synesis, with Synesis Link as the first implemented transport/session module
 - Repository type: modular-monolith Gradle project
-- Current phase: SYN-041 is DONE / ACCEPTED at the final real Codex closure acceptance. SYN-039 remains DONE / ACCEPTED at CP-0547 and SYN-040 remains DONE / VERIFIED; neither is reopened. SYN-038 is DONE at CP-0458, with its Codex App Server lifecycle phase preserved at CP-0447/CP-0448 and its durable project-command extension completed in implementation commit `ad9fdd8`. SYN-037 completed at CP-0415. SYN-036 remains DONE at CP-0407; SYN-014E remains paused; older verification tasks retain their recorded status.
-- Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
+- Current phase: SYN-041 is DONE / ACCEPTED at the final real Codex closure acceptance. SYN-039 remains DONE / ACCEPTED
+  at CP-0547 and SYN-040 remains DONE / VERIFIED; neither is reopened. SYN-038 is DONE at CP-0458, with its Codex App
+  Server lifecycle phase preserved at CP-0447/CP-0448 and its durable project-command extension completed in
+  implementation commit `ad9fdd8`. SYN-037 completed at CP-0415. SYN-036 remains DONE at CP-0407; SYN-014E remains
+  paused; older verification tasks retain their recorded status.
+- Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct
+  candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope; SYN-038 is the explicitly tasked Codex-only lifecycle slice
 - Goal revision: 26
 - Status: active
-- Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 is now accepted at CP-0547: independent Codex sessions preserved disjoint roles, rejected and corrected immutable snapshots, integrated only accepted work, explicitly completed the no-change reviewer lane, and left no active collaboration state. No central orchestrator, UI, daemon, Fleet system, or centralized launcher was added. SYN-038 evidence and its `turn_interrupted_command_remained_active` limitation remain unchanged. SYN-010A's required license decision is recorded as AGPL-3.0-only; publication remains unperformed pending explicit push authorization and remaining review gates.
+- Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the
+  existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 is now
+  accepted at CP-0547: independent Codex sessions preserved disjoint roles, rejected and corrected immutable snapshots,
+  integrated only accepted work, explicitly completed the no-change reviewer lane, and left no active collaboration
+  state. No central orchestrator, UI, daemon, Fleet system, or centralized launcher was added. SYN-038 evidence and its
+  `turn_interrupted_command_remained_active` limitation remain unchanged. SYN-010A's required license decision is
+  recorded as AGPL-3.0-only; publication remains unperformed pending explicit push authorization and remaining review
+  gates.
 - Completion target: Synesis Link v1 criteria in `docs/agent/CONTRACT.md`
 - Evidence: SYN-009C release evidence is complete at CP-0110; SYN-010A
   publication audit, current/reachable-history scan, documentation preparation,

@@ -14,8 +14,63 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Verifies journaled managed-baseline preparation and provenance fencing. */
+/**
+ * Verifies journaled managed-baseline preparation and provenance fencing.
+ */
 class ManagedBaselineTransactionServiceTest {
+
+    private static ManagedBaselineTransactionService service(Path temp) {
+        return new ManagedBaselineTransactionService(
+                new AdministrativeStateLocator(temp.resolve("admin-state")), new ManagedPathPolicy());
+    }
+
+    private static ManagedBaselineTransactionService crashingService(Path temp,
+            ManagedBaselineTransactionService.Phase crashAfter) {
+        return new ManagedBaselineTransactionService(new AdministrativeStateLocator(temp.resolve("admin-state")),
+                new ManagedPathPolicy(), phase -> {
+            if (phase == crashAfter) {
+                throw new IOException("injected process loss");
+            }
+        });
+    }
+
+    private static ManagedBaselineTransactionService.Journal latestJournal(
+            ManagedBaselineTransactionService service, Path root) throws Exception {
+        AdministrativeStateLocator.Resolution resolution = new AdministrativeStateLocator(
+                root.getParent()
+                        .resolve("admin-state")).resolve(root);
+        Path journalFile;
+        try (var files = Files.list(resolution.baselineRoot())) {
+            journalFile = files.filter(path -> path.getFileName()
+                            .toString()
+                            .endsWith(".json"))
+                    .findFirst()
+                    .orElseThrow();
+        }
+        String fileName = journalFile.getFileName()
+                .toString();
+        return service.journal(root, fileName.substring(0, fileName.length() - ".json".length()));
+    }
+
+    private static Map<String, byte[]> files(String path, String content) {
+        return Map.of(path, content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static Path init(Path root) throws Exception {
+        Files.createDirectories(root);
+        git(root, "init");
+        git(root, "config", "user.name", "Test User");
+        git(root, "config", "user.email", "test@example.com");
+        Files.writeString(root.resolve("tracked.txt"), "baseline\n");
+        git(root, "add", "tracked.txt");
+        git(root, "commit", "-m", "baseline");
+        return root;
+    }
+
+    private static String git(Path root, String... args) throws Exception {
+        return GitProcessRunner.run(root, args)
+                .trim();
+    }
 
     @Test
     void createsAndReplaysACompleteBaselineWithoutDirtyControlState(@TempDir Path temp) throws Exception {
@@ -30,8 +85,12 @@ class ManagedBaselineTransactionServiceTest {
         assertNotEquals(result.originalHead(), result.commit());
         ManagedBaselineTransactionService.Journal journal = service.journal(root, result.transactionId());
         assertEquals(result.commit(), journal.commit());
-        assertEquals("ABSENT", journal.managedPathStates().get("AGENTS.md"));
-        assertEquals(result.phase(), service.recover(root, result.transactionId()).phase());
+        assertEquals("ABSENT",
+                journal.managedPathStates()
+                        .get("AGENTS.md"));
+        assertEquals(result.phase(),
+                service.recover(root, result.transactionId())
+                        .phase());
     }
 
     @Test
@@ -125,7 +184,8 @@ class ManagedBaselineTransactionServiceTest {
         ManagedBaselineTransactionService.Journal journal = latestJournal(service, root);
         assertEquals(ManagedBaselineTransactionService.Phase.CONTROL_INDEX_SYNCHRONIZED, journal.phase());
         assertEquals(ManagedBaselineTransactionService.Phase.COMPLETE,
-                service.recover(root, journal.transactionId()).phase());
+                service.recover(root, journal.transactionId())
+                        .phase());
         assertTrue(git(root, "status", "--porcelain").isBlank());
     }
 
@@ -151,55 +211,10 @@ class ManagedBaselineTransactionServiceTest {
         ManagedBaselineTransactionService.Result result = service.prepare(root, files("AGENTS.md", "managed\n"));
         Files.writeString(root.resolve("AGENTS.md"), "replacement\n");
 
-        assertTrue(new ManagedPathPolicy().inspect(root).blocked());
+        assertTrue(new ManagedPathPolicy().inspect(root)
+                .blocked());
         assertEquals(ManagedBaselineTransactionService.Phase.COMPLETE,
-                service.recover(root, result.transactionId()).phase());
-    }
-
-    private static ManagedBaselineTransactionService service(Path temp) {
-        return new ManagedBaselineTransactionService(
-                new AdministrativeStateLocator(temp.resolve("admin-state")), new ManagedPathPolicy());
-    }
-
-    private static ManagedBaselineTransactionService crashingService(Path temp,
-            ManagedBaselineTransactionService.Phase crashAfter) {
-        return new ManagedBaselineTransactionService(new AdministrativeStateLocator(temp.resolve("admin-state")),
-                new ManagedPathPolicy(), phase -> {
-                    if (phase == crashAfter) {
-                        throw new IOException("injected process loss");
-                    }
-                });
-    }
-
-    private static ManagedBaselineTransactionService.Journal latestJournal(
-            ManagedBaselineTransactionService service, Path root) throws Exception {
-        AdministrativeStateLocator.Resolution resolution = new AdministrativeStateLocator(
-                root.getParent().resolve("admin-state")).resolve(root);
-        Path journalFile;
-        try (var files = Files.list(resolution.baselineRoot())) {
-            journalFile = files.filter(path -> path.getFileName().toString().endsWith(".json"))
-                    .findFirst().orElseThrow();
-        }
-        String fileName = journalFile.getFileName().toString();
-        return service.journal(root, fileName.substring(0, fileName.length() - ".json".length()));
-    }
-
-    private static Map<String, byte[]> files(String path, String content) {
-        return Map.of(path, content.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static Path init(Path root) throws Exception {
-        Files.createDirectories(root);
-        git(root, "init");
-        git(root, "config", "user.name", "Test User");
-        git(root, "config", "user.email", "test@example.com");
-        Files.writeString(root.resolve("tracked.txt"), "baseline\n");
-        git(root, "add", "tracked.txt");
-        git(root, "commit", "-m", "baseline");
-        return root;
-    }
-
-    private static String git(Path root, String... args) throws Exception {
-        return GitProcessRunner.run(root, args).trim();
+                service.recover(root, result.transactionId())
+                        .phase());
     }
 }

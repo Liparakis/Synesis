@@ -225,6 +225,7 @@ public final class HandshakeProof {
      *
      * @return challenge copy
      */
+    @SuppressWarnings("unused")
     public byte[] challenge() {
         return challenge.clone();
     }

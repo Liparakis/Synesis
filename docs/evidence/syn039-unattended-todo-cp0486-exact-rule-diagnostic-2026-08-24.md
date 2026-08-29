@@ -37,10 +37,10 @@ lifecycle behavior was changed because of this run.
 
 Both sessions independently reached `ready / isolated`:
 
-| agent | session / worktree | participant | intent, epoch, claim |
-|---|---|---|---|
-| A | `session-3792dadf-9698-45d8-a176-eebf37f1b254` | `agt_c7e999c6-d8d6-3110-b241-dae3597dcd0a` | `b9c6c975-8da3-34bc-a9e9-40ca3400b021`, epoch 1, exact `todo.py` |
-| B | `session-db80157c-0a31-42ff-8efd-06c2f55c3182` | `agt_ad76b611-f888-376e-95ec-f5d11aa4eff5` | `de9ffffc-31ac-3e73-91a8-3c8fa81f0e07`, epoch 1, exact `test_todo.py` |
+| agent | session / worktree                             | participant                                | intent, epoch, claim                                                  |
+|-------|------------------------------------------------|--------------------------------------------|-----------------------------------------------------------------------|
+| A     | `session-3792dadf-9698-45d8-a176-eebf37f1b254` | `agt_c7e999c6-d8d6-3110-b241-dae3597dcd0a` | `b9c6c975-8da3-34bc-a9e9-40ca3400b021`, epoch 1, exact `todo.py`      |
+| B     | `session-db80157c-0a31-42ff-8efd-06c2f55c3182` | `agt_ad76b611-f888-376e-95ec-f5d11aa4eff5` | `de9ffffc-31ac-3e73-91a8-3c8fa81f0e07`, epoch 1, exact `test_todo.py` |
 
 The sessions converged on one WorkGroup:
 `9527b8ec-0971-3f33-995c-ac0833d506c7`.

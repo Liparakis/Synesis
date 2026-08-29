@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,73 +31,22 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  */
 public final class CodexAppServerProtocolClient implements AutoCloseable {
 
-    /** Maximum pending requests for one connection generation. */
+    /**
+     * Maximum pending requests for one connection generation.
+     */
     public static final int MAX_PENDING_REQUESTS = 128;
-    /** Maximum late-response tombstones for one connection generation. */
+    /**
+     * Maximum late-response tombstones for one connection generation.
+     */
     public static final int MAX_TOMBSTONES = 256;
-    /** Maximum issued request IDs retained for duplicate detection. */
+    /**
+     * Maximum issued request IDs retained for duplicate detection.
+     */
     public static final int MAX_TERMINAL_IDS = 65_536;
-    /** Tombstone retention bound. */
+    /**
+     * Tombstone retention bound.
+     */
     public static final Duration TOMBSTONE_RETENTION = Duration.ofMinutes(15);
-
-    /** Receives authoritative protocol events and failures. */
-    public interface Listener {
-        /**
-         * Receives one parsed event after lifecycle state update.
-         *
-         * @param method protocol event method
-         * @param params bounded event parameters
-         */
-        void onEvent(String method, Map<String, Object> params);
-
-        /**
-         * Receives a protocol-generation failure.
-         *
-         * @param failure failure cause
-         */
-        void onFailure(Throwable failure);
-    }
-
-    /**
-     * Parsed bounded response.
-     *
-     * @param id response correlation ID
-     * @param result successful result value
-     * @param error protocol error value
-     */
-    public record Response(String id, Object result, Object error) {
-        /**
-         * Returns whether the protocol response contains an error.
-         *
-         * @return whether the response failed
-         */
-        public boolean failed() {
-            return error != null;
-        }
-    }
-
-    /**
-     * Request timeout/cancellation tombstone summary.
-     *
-     * @param connectionGeneration connection generation
-     * @param requestId request identity
-     * @param method protocol method
-     * @param classification request classification
-     * @param digest bounded request digest
-     * @param sentAtEpochMillis send timestamp
-     * @param endedAtEpochMillis timeout/cancellation timestamp
-     * @param reason terminal local reason
-     * @param expectedThreadId expected thread identity
-     * @param expectedTurnId expected turn identity
-     * @param responseArrived whether a late response arrived
-     * @param lateResponseSummary bounded late response
-     */
-    public record Tombstone(long connectionGeneration, String requestId, String method,
-            LifecycleControlRequestEnvelope.Classification classification, String digest,
-            long sentAtEpochMillis, long endedAtEpochMillis, String reason, String expectedThreadId,
-            String expectedTurnId, boolean responseArrived, String lateResponseSummary) {
-    }
-
     private final long connectionGeneration;
     private final InputStream stdout;
     private final OutputStream stdin;
@@ -120,15 +68,14 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
     private final AtomicLong oversizedFrames = new AtomicLong();
     private volatile boolean closed;
     private volatile Throwable failure;
-
     /**
      * Creates and starts a protocol reader.
      *
      * @param connectionGeneration local connection generation
-     * @param stdout App Server stdout
-     * @param stdin App Server stdin
-     * @param listener event/failure listener
-     * @param evidence asynchronous evidence journal
+     * @param stdout               App Server stdout
+     * @param stdin                App Server stdin
+     * @param listener             event/failure listener
+     * @param evidence             asynchronous evidence journal
      */
     public CodexAppServerProtocolClient(long connectionGeneration, InputStream stdout, OutputStream stdin,
             Listener listener, CodexEvidenceJournal evidence) {
@@ -146,19 +93,53 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
         this.reader.start();
     }
 
+    private static boolean isTerminalEvent(String method, Map<String, Object> params) {
+        if (CodexAppServerProtocolSchema.isLifecycleEvent(method)
+                && (method.equals("thread/started") || method.equals("thread/resumed")
+                || method.equals("thread/closed") || method.equals("turn/completed")
+                || method.equals("turn/interrupt_acknowledged") || method.equals("process/exited"))) {
+            return true;
+        }
+        // A final agent message is diagnostic evidence that must survive queue
+        // pressure even though the corresponding item delta stream is
+        // intentionally low priority.
+        if ("item/completed".equals(method) && params.get("item") instanceof Map<?, ?> item) {
+            Object type = item.get("type");
+            Object phase = item.get("phase");
+            return "agentMessage".equals(String.valueOf(type))
+                    && (phase == null || "final_answer".equals(String.valueOf(phase)));
+        }
+        return false;
+    }
+
+    private static String boundedSummary(Object result, Object error) {
+        String value = String.valueOf(error == null ? result : error);
+        return value.length() > 1024 ? value.substring(0, 1024) : value;
+    }
+
+    private static String digest(byte[] value) {
+        try {
+            return java.util.HexFormat.of()
+                    .formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(value));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError("SHA-256 is required", impossible);
+        }
+    }
+
     /**
      * Sends one bounded request and waits outside lifecycle locks.
      *
-     * @param method protocol method
-     * @param params bounded JSON parameters
-     * @param classification request classification
-     * @param digest bounded request identity/digest
+     * @param method           protocol method
+     * @param params           bounded JSON parameters
+     * @param classification   request classification
+     * @param digest           bounded request identity/digest
      * @param expectedThreadId exact expected thread
-     * @param expectedTurnId exact expected turn
-     * @param timeout caller-relative timeout
+     * @param expectedTurnId   exact expected turn
+     * @param timeout          caller-relative timeout
      * @return parsed response
-     * @throws IOException when the generation fails or write is rejected
-     * @throws TimeoutException when the caller deadline expires
+     * @throws IOException          when the generation fails or write is rejected
+     * @throws TimeoutException     when the caller deadline expires
      * @throws InterruptedException when interrupted
      */
     public Response request(String method, Map<String, ?> params,
@@ -272,7 +253,7 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
      * @return current tombstones
      */
     public List<Tombstone> tombstones() {
-            synchronized (tombstoneLock) {
+        synchronized (tombstoneLock) {
             return List.copyOf(tombstones.values());
         }
     }
@@ -296,14 +277,17 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
     /**
      * Closes the connection and wakes all pending requests.
      */
+    @SuppressWarnings("ExtractMethodRecommender")
     @Override
     public void close() {
         closed = true;
         IOException cause = new IOException("codex connection closed");
-        pending.values().forEach(item -> {
-            addTombstone(item, "owner_shutdown");
-            item.future().completeExceptionally(cause);
-        });
+        pending.values()
+                .forEach(item -> {
+                    addTombstone(item, "owner_shutdown");
+                    item.future()
+                            .completeExceptionally(cause);
+                });
         pending.clear();
         reader.interrupt();
         // Process-pipe streams can hold a monitor while a reader is blocked in
@@ -330,7 +314,8 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
             reader.join(500L);
             streamCloser.join(500L);
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
         }
     }
 
@@ -377,7 +362,7 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
         }
     }
 
-    private void handleEvent(Map<String, Object> value) throws IOException {
+    private void handleEvent(Map<String, Object> value) {
         String method = String.valueOf(value.get("method"));
         Object rawParams = value.get("params");
         Map<String, Object> params = new LinkedHashMap<>();
@@ -437,7 +422,8 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
         Object error = value.get("error");
         if (request != null) {
             rememberTerminal(id);
-            request.future().complete(new Response(id, result, error));
+            request.future()
+                    .complete(new Response(id, result, error));
             evidence.offer("request_response", Map.of("requestId", id, "method", request.method(),
                     "success", error == null), true);
             return;
@@ -494,15 +480,17 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
         failure = cause;
         closed = true;
         IOException error = cause instanceof IOException io ? io : new IOException("codex protocol failure", cause);
-        pending.values().forEach(item -> {
-            addTombstone(item, "connection_ambiguity");
-            item.future().completeExceptionally(error);
-        });
+        pending.values()
+                .forEach(item -> {
+                    addTombstone(item, "connection_ambiguity");
+                    item.future()
+                            .completeExceptionally(error);
+                });
         pending.clear();
         String diagnostic = String.valueOf(error.getMessage());
         String category = diagnostic.contains("duplicate_response_id") ? "duplicate_response_id"
                 : diagnostic.contains("codex_request_correlation_failed") ? "never_issued_response_id"
-                : "protocol_failure";
+                        : "protocol_failure";
         evidence.offer(category, Map.of("diagnostic", diagnostic), true);
         listener.onFailure(error);
         try {
@@ -521,9 +509,13 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
         synchronized (tombstoneLock) {
             expireTombstones();
             if (tombstones.size() >= MAX_TOMBSTONES) {
-                String candidate = tombstones.values().stream()
-                        .filter(item -> item.classification() == LifecycleControlRequestEnvelope.Classification.READ_ONLY)
-                        .map(Tombstone::requestId).findFirst().orElse(null);
+                String candidate = tombstones.values()
+                        .stream()
+                        .filter(item -> item.classification()
+                                == LifecycleControlRequestEnvelope.Classification.READ_ONLY)
+                        .map(Tombstone::requestId)
+                        .findFirst()
+                        .orElse(null);
                 if (candidate == null) {
                     tombstoneSaturations.incrementAndGet();
                     evidence.markIncomplete();
@@ -534,21 +526,31 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
                 tombstoneEvictions.incrementAndGet();
                 evidence.offer("tombstone_evicted", Map.of("requestId", candidate), true);
             }
-            tombstones.put(request.id(), new Tombstone(connectionGeneration, request.id(), request.method(),
-                    request.classification(), request.digest(), request.sentAtEpochMillis(),
-                    System.currentTimeMillis(), reason, request.expectedThreadId(), request.expectedTurnId(), false, ""));
+            tombstones.put(request.id(), new Tombstone(connectionGeneration,
+                    request.id(),
+                    request.method(),
+                    request.classification(),
+                    request.digest(),
+                    request.sentAtEpochMillis(),
+                    System.currentTimeMillis(),
+                    reason,
+                    request.expectedThreadId(),
+                    request.expectedTurnId(),
+                    false,
+                    ""));
             String category = request.classification()
                     == LifecycleControlRequestEnvelope.Classification.STATE_CHANGING
                     ? "ambiguous_state_changing_request" : "request_tombstone";
             evidence.offer(category, Map.of("requestId", request.id(), "method", request.method(),
                     "reason", reason), request.classification()
-                            == LifecycleControlRequestEnvelope.Classification.STATE_CHANGING);
+                    == LifecycleControlRequestEnvelope.Classification.STATE_CHANGING);
         }
     }
 
     private void expireTombstones() {
         long cutoff = System.currentTimeMillis() - TOMBSTONE_RETENTION.toMillis();
-        tombstones.values().removeIf(item -> item.endedAtEpochMillis() < cutoff);
+        tombstones.values()
+                .removeIf(item -> item.endedAtEpochMillis() < cutoff);
     }
 
     private void rememberTerminal(String id) {
@@ -585,41 +587,72 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
         }
     }
 
-    private static boolean isTerminalEvent(String method, Map<String, Object> params) {
-        if (CodexAppServerProtocolSchema.isLifecycleEvent(method)
-                && (method.equals("thread/started") || method.equals("thread/resumed")
-                || method.equals("thread/closed") || method.equals("turn/completed")
-                || method.equals("turn/interrupt_acknowledged") || method.equals("process/exited"))) {
-            return true;
-        }
-        // A final agent message is diagnostic evidence that must survive queue
-        // pressure even though the corresponding item delta stream is
-        // intentionally low priority.
-        if ("item/completed".equals(method) && params.get("item") instanceof Map<?, ?> item) {
-            Object type = item.get("type");
-            Object phase = item.get("phase");
-            return "agentMessage".equals(String.valueOf(type))
-                    && (phase == null || "final_answer".equals(String.valueOf(phase)));
-        }
-        return false;
+    /**
+     * Receives authoritative protocol events and failures.
+     */
+    public interface Listener {
+
+        /**
+         * Receives one parsed event after lifecycle state update.
+         *
+         * @param method protocol event method
+         * @param params bounded event parameters
+         */
+        void onEvent(String method, Map<String, Object> params);
+
+        /**
+         * Receives a protocol-generation failure.
+         *
+         * @param failure failure cause
+         */
+        void onFailure(Throwable failure);
     }
 
-    private static String boundedSummary(Object result, Object error) {
-        String value = String.valueOf(error == null ? result : error);
-        return value.length() > 1024 ? value.substring(0, 1024) : value;
+    /**
+     * Parsed bounded response.
+     *
+     * @param id     response correlation ID
+     * @param result successful result value
+     * @param error  protocol error value
+     */
+    public record Response(String id, Object result, Object error) {
+
+        /**
+         * Returns whether the protocol response contains an error.
+         *
+         * @return whether the response failed
+         */
+        public boolean failed() {
+            return error != null;
+        }
     }
 
-    private static String digest(byte[] value) {
-        try {
-            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(value));
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required", impossible);
-        }
+    /**
+     * Request timeout/cancellation tombstone summary.
+     *
+     * @param connectionGeneration connection generation
+     * @param requestId            request identity
+     * @param method               protocol method
+     * @param classification       request classification
+     * @param digest               bounded request digest
+     * @param sentAtEpochMillis    send timestamp
+     * @param endedAtEpochMillis   timeout/cancellation timestamp
+     * @param reason               terminal local reason
+     * @param expectedThreadId     expected thread identity
+     * @param expectedTurnId       expected turn identity
+     * @param responseArrived      whether a late response arrived
+     * @param lateResponseSummary  bounded late response
+     */
+    public record Tombstone(long connectionGeneration, String requestId, String method,
+                            LifecycleControlRequestEnvelope.Classification classification, String digest,
+                            long sentAtEpochMillis, long endedAtEpochMillis, String reason, String expectedThreadId,
+                            String expectedTurnId, boolean responseArrived, String lateResponseSummary) {
+
     }
 
     private record Pending(String id, String method, LifecycleControlRequestEnvelope.Classification classification,
-            String digest, String expectedThreadId, String expectedTurnId, long sentAtEpochMillis,
-            CompletableFuture<Response> future) {
+                           String digest, String expectedThreadId, String expectedTurnId, long sentAtEpochMillis,
+                           CompletableFuture<Response> future) {
+
     }
 }

@@ -1,16 +1,11 @@
 package org.synesis.cli.command.coordination;
 
 
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
-import org.synesis.cli.command.coordination.CoordinationEventFollower;
-
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
-
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

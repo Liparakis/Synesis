@@ -9,8 +9,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 
-/** Bounded project-local lock for serializing event-log appends across processes. */
+/**
+ * Bounded project-local lock for serializing event-log appends across processes.
+ */
 public final class ProjectAppendLock implements AutoCloseable {
+
     private final FileChannel channel;
     private final FileLock lock;
 
@@ -19,7 +22,9 @@ public final class ProjectAppendLock implements AutoCloseable {
         this.lock = lock;
     }
 
-    /** Acquires the project append lock with bounded retry.
+    /**
+     * Acquires the project append lock with bounded retry.
+     *
      * @param root project root
      * @return lock handle
      * @throws IOException when acquisition fails
@@ -43,11 +48,11 @@ public final class ProjectAppendLock implements AutoCloseable {
                 if (System.nanoTime() >= deadline) {
                     throw new IOException("event append lock timeout");
                 }
-                try {
-                    Thread.sleep(10L);
-                } catch (InterruptedException interrupted) {
+                java.util.concurrent.locks.LockSupport.parkNanos(
+                        java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10L));
+                if (Thread.interrupted()) {
                     Thread.currentThread().interrupt();
-                    throw new IOException("event append lock interrupted", interrupted);
+                    throw new IOException("event append lock interrupted");
                 }
             }
         } catch (IOException failure) {
@@ -56,14 +61,18 @@ public final class ProjectAppendLock implements AutoCloseable {
         }
     }
 
-    /** Returns whether this handle currently owns the project lock.
+    /**
+     * Returns whether this handle currently owns the project lock.
+     *
      * @return true while held
      */
     public boolean isHeld() {
         return lock.isValid();
     }
 
-    /** Releases the lock and channel. */
+    /**
+     * Releases the lock and channel.
+     */
     @Override
     public void close() throws IOException {
         try {

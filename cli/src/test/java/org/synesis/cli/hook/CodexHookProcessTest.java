@@ -1,7 +1,5 @@
-package org.synesis.cli.command.hook;
+package org.synesis.cli.hook;
 
-
-import org.synesis.cli.DistributionLauncherTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,9 +10,9 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.synesis.cli.DistributionLauncherTest;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**

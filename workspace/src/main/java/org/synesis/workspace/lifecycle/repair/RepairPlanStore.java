@@ -10,10 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.PlanIntegrity;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * Storage service for persisting and loading immutable repair plans outside control checkout under
@@ -21,6 +21,7 @@ import org.synesis.workspace.lifecycle.PlanIntegrity;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class RepairPlanStore {
 
     /**
@@ -37,7 +38,99 @@ public final class RepairPlanStore {
      */
     public static Path resolvePlansDirectory(Path controlRoot) {
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("repair-plans");
+        return workspaceRoot.resolve("admin")
+                .resolve("repair-plans");
+    }
+
+    private static String serializeCanonical(RepairPlan plan) {
+        return ProviderJson.write(toSerializableMap(plan));
+    }
+
+    private static Map<String, Object> toSerializableMap(RepairPlan plan) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("schemaVersion", plan.schemaVersion());
+        map.put("planId", plan.planId());
+        map.put("projectId", plan.projectId());
+        map.put("controlRepositoryPath", plan.controlRepositoryPath());
+        map.put("externalWorkspaceRoot", plan.externalWorkspaceRoot());
+        map.put("createdAtEpochMillis", plan.createdAtEpochMillis());
+        map.put("doctorReportFingerprint", plan.doctorReportFingerprint());
+        map.put("supportedRepairsCount", plan.supportedRepairsCount());
+        map.put("unsupportedCount", plan.unsupportedCount());
+        map.put("contentHash", plan.contentHash());
+
+        List<Map<String, Object>> entriesList = new ArrayList<>();
+        for (RepairPlanEntry e : plan.entries()) {
+            Map<String, Object> em = new LinkedHashMap<>();
+            em.put("schemaVersion", e.schemaVersion());
+            em.put("entryId", e.entryId());
+            em.put("findingCode",
+                    e.findingCode()
+                            .name());
+            em.put("action",
+                    e.action()
+                            .name());
+            em.put("targetPath", e.targetPath());
+            em.put("targetFingerprint", e.targetFingerprint());
+            em.put("executable", e.executable());
+            em.put("reasons", e.reasons());
+            em.put("summary", e.summary());
+            em.put("backupRequired", e.backupRequired());
+            entriesList.add(em);
+        }
+        map.put("entries", entriesList);
+
+        return map;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static RepairPlan fromSerializableMap(String rawJson) throws IOException {
+        try {
+            Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(rawJson);
+            int schemaVersion = ((Number) map.get("schemaVersion")).intValue();
+            String planId = (String) map.get("planId");
+            String projectId = (String) map.get("projectId");
+            String controlRepo = (String) map.get("controlRepositoryPath");
+            String workspaceRoot = (String) map.get("externalWorkspaceRoot");
+            long createdAt = ((Number) map.get("createdAtEpochMillis")).longValue();
+            String docFingerprint = (String) map.get("doctorReportFingerprint");
+            int supported = ((Number) map.get("supportedRepairsCount")).intValue();
+            int unsupported = ((Number) map.get("unsupportedCount")).intValue();
+            String contentHash = (String) map.get("contentHash");
+
+            List<Map<String, Object>> entriesRaw = (List<Map<String, Object>>) map.get("entries");
+            List<RepairPlanEntry> entries = new ArrayList<>();
+            if (entriesRaw != null) {
+                for (Map<String, Object> em : entriesRaw) {
+                    entries.add(new RepairPlanEntry(
+                            ((Number) em.get("schemaVersion")).intValue(),
+                            (String) em.get("entryId"),
+                            DoctorFindingCode.valueOf((String) em.get("findingCode")),
+                            RepairAction.valueOf((String) em.get("action")),
+                            (String) em.get("targetPath"),
+                            (String) em.get("targetFingerprint"),
+                            (Boolean) em.get("executable"),
+                            (List<String>) em.get("reasons"),
+                            (String) em.get("summary"),
+                            (Boolean) em.get("backupRequired")
+                    ));
+                }
+            }
+
+            return new RepairPlan(schemaVersion,
+                    planId,
+                    projectId,
+                    controlRepo,
+                    workspaceRoot,
+                    createdAt,
+                    docFingerprint,
+                    supported,
+                    unsupported,
+                    contentHash,
+                    entries);
+        } catch (Exception ex) {
+            throw new IOException("Failed to parse repair plan JSON", ex);
+        }
     }
 
     /**
@@ -61,11 +154,16 @@ public final class RepairPlanStore {
         Objects.requireNonNull(doctorReportFingerprint, "doctorReportFingerprint");
         Objects.requireNonNull(entries, "entries");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        String planId = "repairplan-" + UUID.randomUUID().toString().replace("-", "");
+        String planId = "repairplan-" + UUID.randomUUID()
+                .toString()
+                .replace("-", "");
 
-        int supported = (int) entries.stream().filter(RepairPlanEntry::executable).count();
+        int supported = (int) entries.stream()
+                .filter(RepairPlanEntry::executable)
+                .count();
         int unsupported = entries.size() - supported;
 
         RepairPlan unsignedPlan = new RepairPlan(
@@ -119,7 +217,8 @@ public final class RepairPlanStore {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(planId, "planId");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path plansDir = resolvePlansDirectory(root);
         Path planFile = plansDir.resolve(planId + ".json");
 
@@ -135,7 +234,8 @@ public final class RepairPlanStore {
         }
 
         Path expectedWorkspace = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        if (!expectedWorkspace.toString().equals(plan.externalWorkspaceRoot())) {
+        if (!expectedWorkspace.toString()
+                .equals(plan.externalWorkspaceRoot())) {
             throw new IOException("External workspace root mismatch in plan: " + plan.externalWorkspaceRoot());
         }
 
@@ -150,83 +250,6 @@ public final class RepairPlanStore {
         }
 
         return plan;
-    }
-
-    private static String serializeCanonical(RepairPlan plan) {
-        return ProviderJson.write(toSerializableMap(plan));
-    }
-
-    private static Map<String, Object> toSerializableMap(RepairPlan plan) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("schemaVersion", plan.schemaVersion());
-        map.put("planId", plan.planId());
-        map.put("projectId", plan.projectId());
-        map.put("controlRepositoryPath", plan.controlRepositoryPath());
-        map.put("externalWorkspaceRoot", plan.externalWorkspaceRoot());
-        map.put("createdAtEpochMillis", plan.createdAtEpochMillis());
-        map.put("doctorReportFingerprint", plan.doctorReportFingerprint());
-        map.put("supportedRepairsCount", plan.supportedRepairsCount());
-        map.put("unsupportedCount", plan.unsupportedCount());
-        map.put("contentHash", plan.contentHash());
-
-        List<Map<String, Object>> entriesList = new ArrayList<>();
-        for (RepairPlanEntry e : plan.entries()) {
-            Map<String, Object> em = new LinkedHashMap<>();
-            em.put("schemaVersion", e.schemaVersion());
-            em.put("entryId", e.entryId());
-            em.put("findingCode", e.findingCode().name());
-            em.put("action", e.action().name());
-            em.put("targetPath", e.targetPath());
-            em.put("targetFingerprint", e.targetFingerprint());
-            em.put("executable", e.executable());
-            em.put("reasons", e.reasons());
-            em.put("summary", e.summary());
-            em.put("backupRequired", e.backupRequired());
-            entriesList.add(em);
-        }
-        map.put("entries", entriesList);
-
-        return map;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static RepairPlan fromSerializableMap(String rawJson) throws IOException {
-        try {
-            Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(rawJson);
-            int schemaVersion = ((Number) map.get("schemaVersion")).intValue();
-            String planId = (String) map.get("planId");
-            String projectId = (String) map.get("projectId");
-            String controlRepo = (String) map.get("controlRepositoryPath");
-            String workspaceRoot = (String) map.get("externalWorkspaceRoot");
-            long createdAt = ((Number) map.get("createdAtEpochMillis")).longValue();
-            String docFingerprint = (String) map.get("doctorReportFingerprint");
-            int supported = ((Number) map.get("supportedRepairsCount")).intValue();
-            int unsupported = ((Number) map.get("unsupportedCount")).intValue();
-            String contentHash = (String) map.get("contentHash");
-
-            List<Map<String, Object>> entriesRaw = (List<Map<String, Object>>) map.get("entries");
-            List<RepairPlanEntry> entries = new ArrayList<>();
-            if (entriesRaw != null) {
-                for (Map<String, Object> em : entriesRaw) {
-                    entries.add(new RepairPlanEntry(
-                            ((Number) em.get("schemaVersion")).intValue(),
-                            (String) em.get("entryId"),
-                            DoctorFindingCode.valueOf((String) em.get("findingCode")),
-                            RepairAction.valueOf((String) em.get("action")),
-                            (String) em.get("targetPath"),
-                            (String) em.get("targetFingerprint"),
-                            (Boolean) em.get("executable"),
-                            (List<String>) em.get("reasons"),
-                            (String) em.get("summary"),
-                            (Boolean) em.get("backupRequired")
-                    ));
-                }
-            }
-
-            return new RepairPlan(schemaVersion, planId, projectId, controlRepo, workspaceRoot, createdAt, docFingerprint, supported, unsupported, contentHash, entries);
-        } catch (Exception ex) {
-            throw new IOException("Failed to parse repair plan JSON", ex);
-        }
     }
 
 }

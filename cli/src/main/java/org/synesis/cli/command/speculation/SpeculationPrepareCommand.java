@@ -1,16 +1,13 @@
 package org.synesis.cli.command.speculation;
 
 
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
-
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
-
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -18,6 +15,7 @@ import picocli.CommandLine.Option;
  * Creates one isolated worktree for a prediction.
  */
 @Command(name = "prepare", description = "Prepare an isolated prediction worktree.", mixinStandardHelpOptions = true)
+@SuppressWarnings("resource")
 public final class SpeculationPrepareCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

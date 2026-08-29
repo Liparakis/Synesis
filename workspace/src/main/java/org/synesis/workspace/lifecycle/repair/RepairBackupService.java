@@ -11,8 +11,8 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * Service managing pre-mutation administrative file backups and exact rollback operations under
@@ -37,7 +37,21 @@ public final class RepairBackupService {
      */
     public static Path resolveBackupDirectory(Path controlRoot, String executionId) {
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("repair-backups").resolve(executionId);
+        return workspaceRoot.resolve("admin")
+                .resolve("repair-backups")
+                .resolve(executionId);
+    }
+
+    private static String computeFileSha256(Path file) throws IOException {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = Files.readAllBytes(file);
+            byte[] digest = md.digest(bytes);
+            return HexFormat.of()
+                    .formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IOException("SHA-256 algorithm unavailable", ex);
+        }
     }
 
     /**
@@ -49,6 +63,7 @@ public final class RepairBackupService {
      * @return backup file path
      * @throws IOException if backup fails
      */
+    @SuppressWarnings("UnusedReturnValue")
     public Path createBackup(Path controlRoot, String executionId, Path targetFile) throws IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(executionId, "executionId");
@@ -61,7 +76,8 @@ public final class RepairBackupService {
         Path backupDir = resolveBackupDirectory(controlRoot, executionId);
         Files.createDirectories(backupDir);
 
-        String fileName = targetFile.getFileName().toString();
+        String fileName = targetFile.getFileName()
+                .toString();
         Path backupFile = backupDir.resolve(fileName + ".bak");
 
         String contentHash = computeFileSha256(targetFile);
@@ -70,8 +86,14 @@ public final class RepairBackupService {
         Path manifestFile = backupDir.resolve("manifest.json");
         Map<String, Object> manifest = new LinkedHashMap<>();
         manifest.put("executionId", executionId);
-        manifest.put("originalPath", targetFile.toAbsolutePath().normalize().toString());
-        manifest.put("backupPath", backupFile.toAbsolutePath().normalize().toString());
+        manifest.put("originalPath",
+                targetFile.toAbsolutePath()
+                        .normalize()
+                        .toString());
+        manifest.put("backupPath",
+                backupFile.toAbsolutePath()
+                        .normalize()
+                        .toString());
         manifest.put("contentHash", contentHash);
         manifest.put("createdAtEpochMillis", System.currentTimeMillis());
 
@@ -112,7 +134,8 @@ public final class RepairBackupService {
 
         String actualBackupHash = computeFileSha256(backupPath);
         if (!expectedHash.equals(actualBackupHash)) {
-            throw new IOException("Backup file hash mismatch for rollback: expected " + expectedHash + " but found " + actualBackupHash);
+            throw new IOException("Backup file hash mismatch for rollback: expected " + expectedHash + " but found "
+                    + actualBackupHash);
         }
 
         Files.createDirectories(originalPath.getParent());
@@ -120,18 +143,14 @@ public final class RepairBackupService {
 
         RepairExecutionJournal journal = RepairExecutionJournal.open(controlRoot, executionId);
         journal.append(new RepairExecutionJournal.RepairExecutionRecord(
-                executionId, "rollback", "rollback", "ROLLBACK", originalPath.toString(), "ROLLED_BACK", System.currentTimeMillis(), "Successfully restored administrative file from backup"
+                executionId,
+                "rollback",
+                "rollback",
+                "ROLLBACK",
+                originalPath.toString(),
+                "ROLLED_BACK",
+                System.currentTimeMillis(),
+                "Successfully restored administrative file from backup"
         ));
-    }
-
-    private static String computeFileSha256(Path file) throws IOException {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = Files.readAllBytes(file);
-            byte[] digest = md.digest(bytes);
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IOException("SHA-256 algorithm unavailable", ex);
-        }
     }
 }

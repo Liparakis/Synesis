@@ -1,1 +1,11 @@
-{"schemaVersion":1,"provider":"antigravity","supportLevel":"BETA","installedAt":"2026-07-22T17:02:24.323640100Z","configurationPath":"C:\\Users\\Liparakis\\Desktop\\SynesisTestProject\\.agents\\hooks.json","launcherPath":"C:\\Users\\Liparakis\\AppData\\Local\\Synesis\\versions\\0.1.0-dev.15\\bin\\synesis.cmd","profilePath":"C:\\Users\\Liparakis\\Desktop\\SynesisTestProject\\.synesis\\local\\profile","managedEntryId":"synesis-antigravity","lastSyntheticCheck":"PASSED"}
+{
+    "schemaVersion": 1,
+    "provider": "antigravity",
+    "supportLevel": "BETA",
+    "installedAt": "2026-07-22T17:02:24.323640100Z",
+    "configurationPath": "C:\\Users\\Liparakis\\Desktop\\SynesisTestProject\\.agents\\hooks.json",
+    "launcherPath": "C:\\Users\\Liparakis\\AppData\\Local\\Synesis\\versions\\0.1.0-dev.15\\bin\\synesis.cmd",
+    "profilePath": "C:\\Users\\Liparakis\\Desktop\\SynesisTestProject\\.synesis\\local\\profile",
+    "managedEntryId": "synesis-antigravity",
+    "lastSyntheticCheck": "PASSED"
+}

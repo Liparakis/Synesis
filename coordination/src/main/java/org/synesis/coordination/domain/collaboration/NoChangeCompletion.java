@@ -13,17 +13,17 @@ import java.util.UUID;
  * participant, authority lineage, workspace generation, and optimistic
  * work-group/revision facts observed by the caller.</p>
  *
- * @param intentId intent being completed
- * @param workGroupId logical work group containing the intent
- * @param participant exact participant handle
- * @param provider provider bound to the participant
- * @param bindingIdentity durable provider-session binding identity
+ * @param intentId           intent being completed
+ * @param workGroupId        logical work group containing the intent
+ * @param participant        exact participant handle
+ * @param provider           provider bound to the participant
+ * @param bindingIdentity    durable provider-session binding identity
  * @param authorityLineageId intent authority lineage
- * @param claimEpoch current intent claim epoch
- * @param workGroupVersion current work-group version
- * @param expectedRevision current project event revision before append
- * @param workspaceCommit verified clean workspace commit
- * @param summary bounded completion explanation
+ * @param claimEpoch         current intent claim epoch
+ * @param workGroupVersion   current work-group version
+ * @param expectedRevision   current project event revision before append
+ * @param workspaceCommit    verified clean workspace commit
+ * @param summary            bounded completion explanation
  */
 public record NoChangeCompletion(
         UUID intentId,
@@ -40,7 +40,9 @@ public record NoChangeCompletion(
 
     private static final int MAX_TEXT_BYTES = 8192;
 
-    /** Validates immutable completion evidence and its optimistic versions. */
+    /**
+     * Validates immutable completion evidence and its optimistic versions.
+     */
     public NoChangeCompletion {
         Objects.requireNonNull(intentId, "intent ID");
         Objects.requireNonNull(workGroupId, "work-group ID");
@@ -58,7 +60,8 @@ public record NoChangeCompletion(
             throw new IllegalArgumentException("expected revision must not be negative");
         }
         requireText(workspaceCommit, "workspace commit");
-        summary = summary == null || summary.isBlank() ? "Completed successfully without repository mutation" : summary.trim();
+        summary = summary == null || summary.isBlank() ? "Completed successfully without repository mutation"
+                : summary.trim();
         requireText(summary, "summary");
     }
 

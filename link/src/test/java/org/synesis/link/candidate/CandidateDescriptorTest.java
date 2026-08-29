@@ -1,6 +1,7 @@
 package org.synesis.link.candidate;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -52,8 +53,8 @@ final class CandidateDescriptorTest {
         Candidate candidate = new Candidate(CandidateType.LAN, InetAddress.getLoopbackAddress(), 4433, 1);
         CandidateDescriptor descriptor = CandidateDescriptor.create(identity, ISSUED, EXPIRES,
                 List.of(candidate, candidate));
-        assertTrue(descriptor.candidates()
-                .size() == 1);
+        assertEquals(1, descriptor.candidates()
+                .size());
         assertThrows(IllegalArgumentException.class, () -> new Candidate(CandidateType.LAN,
                 InetAddress.getLoopbackAddress(), 0, 1));
     }

@@ -10,17 +10,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.PlanIntegrity;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * Storage service for persisting and loading immutable reconciliation plans outside the control checkout.
  *
- * <p>Plans are stored under {@code %LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\reconciliation-plans\<plan-id>.json}.
+ * <p>Plans are stored under
+ * {@code %LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\reconciliation-plans\<plan-id>.json}.
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ReconciliationPlanStore {
 
     /**
@@ -37,16 +39,97 @@ public final class ReconciliationPlanStore {
      */
     public static Path resolvePlansDirectory(Path controlRoot) {
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("reconciliation-plans");
+        return workspaceRoot.resolve("admin")
+                .resolve("reconciliation-plans");
+    }
+
+    private static String serializeCanonical(ReconciliationPlan plan) {
+        return ProviderJson.write(toSerializableMap(plan));
+    }
+
+    private static Map<String, Object> toSerializableMap(ReconciliationPlan plan) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("schemaVersion", plan.schemaVersion());
+        map.put("planId", plan.planId());
+        map.put("projectId", plan.projectId());
+        map.put("controlRepositoryPath", plan.controlRepositoryPath());
+        map.put("externalWorkspaceRoot", plan.externalWorkspaceRoot());
+        map.put("createdAtEpochMillis", plan.createdAtEpochMillis());
+        map.put("totalInspectedCount", plan.totalInspectedCount());
+        map.put("executableCount", plan.executableCount());
+        map.put("contentHash", plan.contentHash());
+
+        List<Map<String, Object>> entriesList = new ArrayList<>();
+        for (ReconciliationPlanEntry e : plan.entries()) {
+            Map<String, Object> em = new LinkedHashMap<>();
+            em.put("schemaVersion", e.schemaVersion());
+            em.put("actionId", e.actionId());
+            em.put("action",
+                    e.action()
+                            .name());
+            em.put("targetResourceId", e.targetResourceId());
+            em.put("executable", e.executable());
+            em.put("reasons", e.reasons());
+            em.put("preconditionSummary", e.preconditionSummary());
+            entriesList.add(em);
+        }
+        map.put("entries", entriesList);
+
+        return map;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ReconciliationPlan fromSerializableMap(String rawJson) throws IOException {
+        try {
+            Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(rawJson);
+            int schemaVersion = ((Number) map.get("schemaVersion")).intValue();
+            String planId = (String) map.get("planId");
+            String projectId = (String) map.get("projectId");
+            String controlRepo = (String) map.get("controlRepositoryPath");
+            String workspaceRoot = (String) map.get("externalWorkspaceRoot");
+            long createdAt = ((Number) map.get("createdAtEpochMillis")).longValue();
+            int totalInspected = ((Number) map.get("totalInspectedCount")).intValue();
+            int executableCount = ((Number) map.get("executableCount")).intValue();
+            String contentHash = (String) map.get("contentHash");
+
+            List<Map<String, Object>> entriesRaw = (List<Map<String, Object>>) map.get("entries");
+            List<ReconciliationPlanEntry> entries = new ArrayList<>();
+            if (entriesRaw != null) {
+                for (Map<String, Object> em : entriesRaw) {
+                    entries.add(new ReconciliationPlanEntry(
+                            ((Number) em.get("schemaVersion")).intValue(),
+                            (String) em.get("actionId"),
+                            ReconciliationAction.valueOf((String) em.get("action")),
+                            (String) em.get("targetResourceId"),
+                            (Boolean) em.get("executable"),
+                            (List<String>) em.get("reasons"),
+                            (String) em.get("preconditionSummary")
+                    ));
+                }
+            }
+
+            return new ReconciliationPlan(schemaVersion,
+                    planId,
+                    projectId,
+                    controlRepo,
+                    workspaceRoot,
+                    createdAt,
+                    totalInspected,
+                    executableCount,
+                    contentHash,
+                    entries);
+        } catch (Exception ex) {
+            throw new IOException("Failed to parse reconciliation plan JSON", ex);
+        }
     }
 
     /**
      * Saves a reconciliation plan to disk with canonical content hashing.
      *
-     * @param controlRoot          control project root path
-     * @param projectId            project ID
-     * @param totalInspectedCount  count of total inspected resources
-     * @param entries              list of plan entries
+     * @param controlRoot         control project root path
+     * @param projectId           project ID
+     * @param totalInspectedCount count of total inspected resources
+     * @param entries             list of plan entries
      * @return saved persisted reconciliation plan instance
      * @throws IOException if saving fails
      */
@@ -60,11 +143,16 @@ public final class ReconciliationPlanStore {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(entries, "entries");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        String planId = "recplan-" + UUID.randomUUID().toString().replace("-", "");
+        String planId = "recplan-" + UUID.randomUUID()
+                .toString()
+                .replace("-", "");
 
-        int executableCount = (int) entries.stream().filter(ReconciliationPlanEntry::executable).count();
+        int executableCount = (int) entries.stream()
+                .filter(ReconciliationPlanEntry::executable)
+                .count();
 
         ReconciliationPlan unsignedPlan = new ReconciliationPlan(
                 1,
@@ -115,7 +203,8 @@ public final class ReconciliationPlanStore {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(planId, "planId");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path plansDir = resolvePlansDirectory(root);
         Path planFile = plansDir.resolve(planId + ".json");
 
@@ -131,7 +220,8 @@ public final class ReconciliationPlanStore {
         }
 
         Path expectedWorkspace = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        if (!expectedWorkspace.toString().equals(plan.externalWorkspaceRoot())) {
+        if (!expectedWorkspace.toString()
+                .equals(plan.externalWorkspaceRoot())) {
             throw new IOException("External workspace root mismatch in plan: " + plan.externalWorkspaceRoot());
         }
 
@@ -146,75 +236,6 @@ public final class ReconciliationPlanStore {
         }
 
         return plan;
-    }
-
-    private static String serializeCanonical(ReconciliationPlan plan) {
-        return ProviderJson.write(toSerializableMap(plan));
-    }
-
-    private static Map<String, Object> toSerializableMap(ReconciliationPlan plan) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("schemaVersion", plan.schemaVersion());
-        map.put("planId", plan.planId());
-        map.put("projectId", plan.projectId());
-        map.put("controlRepositoryPath", plan.controlRepositoryPath());
-        map.put("externalWorkspaceRoot", plan.externalWorkspaceRoot());
-        map.put("createdAtEpochMillis", plan.createdAtEpochMillis());
-        map.put("totalInspectedCount", plan.totalInspectedCount());
-        map.put("executableCount", plan.executableCount());
-        map.put("contentHash", plan.contentHash());
-
-        List<Map<String, Object>> entriesList = new ArrayList<>();
-        for (ReconciliationPlanEntry e : plan.entries()) {
-            Map<String, Object> em = new LinkedHashMap<>();
-            em.put("schemaVersion", e.schemaVersion());
-            em.put("actionId", e.actionId());
-            em.put("action", e.action().name());
-            em.put("targetResourceId", e.targetResourceId());
-            em.put("executable", e.executable());
-            em.put("reasons", e.reasons());
-            em.put("preconditionSummary", e.preconditionSummary());
-            entriesList.add(em);
-        }
-        map.put("entries", entriesList);
-
-        return map;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static ReconciliationPlan fromSerializableMap(String rawJson) throws IOException {
-        try {
-            Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(rawJson);
-            int schemaVersion = ((Number) map.get("schemaVersion")).intValue();
-            String planId = (String) map.get("planId");
-            String projectId = (String) map.get("projectId");
-            String controlRepo = (String) map.get("controlRepositoryPath");
-            String workspaceRoot = (String) map.get("externalWorkspaceRoot");
-            long createdAt = ((Number) map.get("createdAtEpochMillis")).longValue();
-            int totalInspected = ((Number) map.get("totalInspectedCount")).intValue();
-            int executableCount = ((Number) map.get("executableCount")).intValue();
-            String contentHash = (String) map.get("contentHash");
-
-            List<Map<String, Object>> entriesRaw = (List<Map<String, Object>>) map.get("entries");
-            List<ReconciliationPlanEntry> entries = new ArrayList<>();
-            if (entriesRaw != null) {
-                for (Map<String, Object> em : entriesRaw) {
-                    entries.add(new ReconciliationPlanEntry(
-                            ((Number) em.get("schemaVersion")).intValue(),
-                            (String) em.get("actionId"),
-                            ReconciliationAction.valueOf((String) em.get("action")),
-                            (String) em.get("targetResourceId"),
-                            (Boolean) em.get("executable"),
-                            (List<String>) em.get("reasons"),
-                            (String) em.get("preconditionSummary")
-                    ));
-                }
-            }
-
-            return new ReconciliationPlan(schemaVersion, planId, projectId, controlRepo, workspaceRoot, createdAt, totalInspected, executableCount, contentHash, entries);
-        } catch (Exception ex) {
-            throw new IOException("Failed to parse reconciliation plan JSON", ex);
-        }
     }
 
 }

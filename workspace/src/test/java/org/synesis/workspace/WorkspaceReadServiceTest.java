@@ -7,13 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.workspace.WorkspaceReadService;
 
 class WorkspaceReadServiceTest {
@@ -33,7 +32,7 @@ class WorkspaceReadServiceTest {
 
         Files.createDirectories(controlRoot.resolve("src"));
         Files.writeString(controlRoot.resolve("src/Product.java"), "line1\nline2\nline3\nline4\nline5\n");
-        byte[] binaryBytes = new byte[] { 0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x00, 0x57, 0x6F, 0x72, 0x6C, 0x64 };
+        byte[] binaryBytes = new byte[]{0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x00, 0x57, 0x6F, 0x72, 0x6C, 0x64};
         Files.write(controlRoot.resolve("src/image.bin"), binaryBytes);
 
         git(controlRoot, "add", ".");
@@ -84,13 +83,16 @@ class WorkspaceReadServiceTest {
                 controlRoot, "codex", "conn-read-missing", "src/NewTracker.py", 1, 10, 65536));
 
         assertEquals(AgentStatus.COMPLETED, response.status());
-        assertTrue(response.toJson().contains("\"exists\":false"));
-        assertTrue(response.toJson().contains("\"createAllowed\":true"));
-        assertTrue(response.toJson().contains("\"contentHash\":\"\""));
+        assertTrue(response.toJson()
+                .contains("\"exists\":false"));
+        assertTrue(response.toJson()
+                .contains("\"createAllowed\":true"));
+        assertTrue(response.toJson()
+                .contains("\"contentHash\":\"\""));
     }
 
     @Test
-    void testRejectsAbsolutePathsAndPathTraversal() throws Exception {
+    void testRejectsAbsolutePathsAndPathTraversal() {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "conn-read-2", null, false);
@@ -99,21 +101,25 @@ class WorkspaceReadServiceTest {
         WorkspaceReadService readService = new WorkspaceReadService();
 
         // Absolute path
-        String absPath = controlRoot.resolve("src/Product.java").toAbsolutePath().toString();
+        String absPath = controlRoot.resolve("src/Product.java")
+                .toAbsolutePath()
+                .toString();
         AgentResponse absResp = readService.readFile(new WorkspaceReadService.ReadRequest(
                 controlRoot, "codex", "conn-read-2", absPath, 1, 10, 65536));
         assertEquals(AgentStatus.BLOCKED, absResp.status());
-        assertTrue(absResp.toJson().contains("invalid_path"));
+        assertTrue(absResp.toJson()
+                .contains("invalid_path"));
 
         // Traversal
         AgentResponse travResp = readService.readFile(new WorkspaceReadService.ReadRequest(
                 controlRoot, "codex", "conn-read-2", "../src/Product.java", 1, 10, 65536));
         assertEquals(AgentStatus.BLOCKED, travResp.status());
-        assertTrue(travResp.toJson().contains("invalid_path"));
+        assertTrue(travResp.toJson()
+                .contains("invalid_path"));
     }
 
     @Test
-    void testRejectsProtectedInternalState() throws Exception {
+    void testRejectsProtectedInternalState() {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "conn-read-3", null, false);
@@ -122,23 +128,24 @@ class WorkspaceReadServiceTest {
         WorkspaceReadService readService = new WorkspaceReadService();
 
         String[] protectedPaths = {
-            ".synesis/project.json",
-            ".synesis/local/profile",
-            ".git/HEAD",
-            ".codex/mcp.json",
-            ".agents/mcp.json"
+                ".synesis/project.json",
+                ".synesis/local/profile",
+                ".git/HEAD",
+                ".codex/mcp.json",
+                ".agents/mcp.json"
         };
 
         for (String p : protectedPaths) {
             AgentResponse resp = readService.readFile(new WorkspaceReadService.ReadRequest(
                     controlRoot, "codex", "conn-read-3", p, 1, 10, 65536));
             assertEquals(AgentStatus.BLOCKED, resp.status(), "Path should be blocked: " + p);
-            assertTrue(resp.toJson().contains("invalid_path"));
+            assertTrue(resp.toJson()
+                    .contains("invalid_path"));
         }
     }
 
     @Test
-    void testRejectsBinaryFiles() throws Exception {
+    void testRejectsBinaryFiles() {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "conn-read-4", null, false);
@@ -149,11 +156,12 @@ class WorkspaceReadServiceTest {
                 controlRoot, "codex", "conn-read-4", "src/image.bin", 1, 10, 65536));
 
         assertEquals(AgentStatus.BLOCKED, resp.status());
-        assertTrue(resp.toJson().contains("invalid_path"));
+        assertTrue(resp.toJson()
+                .contains("invalid_path"));
     }
 
     @Test
-    void testSupportsLineRangesAndEnforcesMaxBytesAndTruncation() throws Exception {
+    void testSupportsLineRangesAndEnforcesMaxBytesAndTruncation() {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "conn-read-5", null, false);
@@ -180,11 +188,12 @@ class WorkspaceReadServiceTest {
         AgentResponse fullResp = readService.readFile(new WorkspaceReadService.ReadRequest(
                 controlRoot, "codex", "conn-read-5", "src/Product.java", 1, 100, 65536));
         assertEquals(AgentStatus.COMPLETED, fullResp.status());
-        assertFalse(fullResp.toJson().contains("\"truncated\":true"));
+        assertFalse(fullResp.toJson()
+                .contains("\"truncated\":true"));
     }
 
     @Test
-    void testLeaksNoInternalIdsOrAbsolutePaths() throws Exception {
+    void testLeaksNoInternalIdsOrAbsolutePaths() {
         AgentSessionService sessionService = new AgentSessionService();
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "conn-read-6", null, false);

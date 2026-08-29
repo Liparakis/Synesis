@@ -1,5 +1,6 @@
 package org.synesis.workspace.lifecycle;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,10 +11,33 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Verifies complete-tree, host-independent portability checks. */
+/**
+ * Verifies complete-tree, host-independent portability checks.
+ */
 class RepositoryPortabilityServiceTest {
 
     private final RepositoryPortabilityService service = new RepositoryPortabilityService();
+
+    private static RepositoryPortabilityService.TreeEntry entry(String path) {
+        return new RepositoryPortabilityService.TreeEntry(path, 33188, "blob", "blob");
+    }
+
+    private static boolean has(RepositoryPortabilityService.Report report,
+            RepositoryPortabilityService.FindingCode code) {
+        return report.findings()
+                .stream()
+                .anyMatch(finding -> finding.code() == code);
+    }
+
+    private static void assertEqualsFindings(RepositoryPortabilityService.Report first,
+            RepositoryPortabilityService.Report second) {
+        assertEquals(first.findings(), second.findings());
+        assertFalse(first.portable());
+    }
+
+    private static void git(Path root, String... args) throws Exception {
+        org.synesis.workspace.test.TestGit.run(root, args);
+    }
 
     @Test
     void changedPathCollidingWithUnchangedBaselineIsRejected() {
@@ -37,9 +61,9 @@ class RepositoryPortabilityServiceTest {
     @Test
     void separatorsSymlinksAndSubmodulesFailClosed() {
         RepositoryPortabilityService.Report report = service.validateEntries("tree", List.of(
-                new RepositoryPortabilityService.TreeEntry("link", 0120000, "symlink", "l"),
-                new RepositoryPortabilityService.TreeEntry("link/child.txt", 0100644, "blob", "b"),
-                new RepositoryPortabilityService.TreeEntry("vendor/module", 0160000, "commit", "c"),
+                new RepositoryPortabilityService.TreeEntry("link", 40960, "symlink", "l"),
+                new RepositoryPortabilityService.TreeEntry("link/child.txt", 33188, "blob", "b"),
+                new RepositoryPortabilityService.TreeEntry("vendor/module", 57344, "commit", "c"),
                 entry("src\\generated.txt")));
 
         assertTrue(has(report, RepositoryPortabilityService.FindingCode.SYMLINK_TRAVERSAL));
@@ -69,25 +93,7 @@ class RepositoryPortabilityServiceTest {
         git(root, "add", ".");
         git(root, "commit", "-m", "portable baseline");
 
-        assertTrue(service.preflight(root).portable());
-    }
-
-    private static RepositoryPortabilityService.TreeEntry entry(String path) {
-        return new RepositoryPortabilityService.TreeEntry(path, 0100644, "blob", "blob");
-    }
-
-    private static boolean has(RepositoryPortabilityService.Report report,
-                               RepositoryPortabilityService.FindingCode code) {
-        return report.findings().stream().anyMatch(finding -> finding.code() == code);
-    }
-
-    private static void assertEqualsFindings(RepositoryPortabilityService.Report first,
-                                             RepositoryPortabilityService.Report second) {
-        assertTrue(first.findings().equals(second.findings()));
-        assertFalse(first.portable());
-    }
-
-    private static void git(Path root, String... args) throws Exception {
-        org.synesis.workspace.test.TestGit.run(root, args);
+        assertTrue(service.preflight(root)
+                .portable());
     }
 }

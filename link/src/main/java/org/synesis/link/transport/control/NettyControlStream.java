@@ -36,7 +36,9 @@ import org.synesis.link.session.SessionCloseReason;
 /**
  * Internal bounded control-stream owner, heartbeat loop, and close state machine.
  */
-public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf> implements PeerSession.ControlBinding,
+@SuppressWarnings("resource")
+public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBuf> implements
+        PeerSession.ControlBinding,
         PeerSession.DemoWorkBinding, PeerSession.ApplicationStreamBinding {
 
     /**

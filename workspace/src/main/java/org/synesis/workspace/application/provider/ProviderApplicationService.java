@@ -1,12 +1,8 @@
 package org.synesis.workspace.application.provider;
 
-import org.synesis.workspace.application.constraint.ConstraintApplicationService;
-
-import org.synesis.workspace.application.ProjectApplicationService;
-
-import java.io.IOException;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
@@ -27,25 +23,29 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.synesis.mcp.contract.McpToolCatalog;
 import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 import org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
-import org.synesis.mcp.contract.McpToolCatalog;
 
 /**
  * Owns provider lifecycle, local metadata, configuration merging, and diagnostics.
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ProviderApplicationService {
 
     private static final int METADATA_SCHEMA = 1;
     private static final Map<Path, Object> HOOK_LOCKS = new ConcurrentHashMap<>();
     private final ProviderManualService manualService = new ProviderManualService();
+    private final ProviderMcpConfigurationService mcpConfiguration = new ProviderMcpConfigurationService();
 
     /**
      * Creates the default provider service.
@@ -69,10 +69,10 @@ public final class ProviderApplicationService {
                 values.put("WORKER_ID", binding.workerId());
                 values.put("SESSION_PROJECT_ID", binding.projectId());
                 values.put("SESSION_NODE_ID", binding.nodeId());
-                values.put("SESSION_TRUST",
-                        binding.worktreePath() == null ? "WORKSPACE_UNVERIFIED" : binding.providerTrustState());
-                values.put("WORKSPACE_TRUST",
-                        binding.worktreePath() == null ? "WORKSPACE_UNVERIFIED" : binding.providerTrustState());
+                String workspaceTrust = binding.worktreePath() == null
+                        ? "WORKSPACE_UNVERIFIED" : binding.providerTrustState();
+                values.put("SESSION_TRUST", workspaceTrust);
+                values.put("WORKSPACE_TRUST", workspaceTrust);
                 values.put("SESSION_WORKSPACE", binding.worktreePath() == null ? "UNASSIGNED" : "ASSIGNED");
                 boolean hasEvidence = hasProvenInterception(location, provider, binding.sessionId());
                 values.put("SESSION_INTERCEPTION", hasEvidence ? "PROVEN" : "UNPROVEN");
@@ -225,49 +225,9 @@ public final class ProviderApplicationService {
         }
     }
 
-    private static String quote(Path path) {
-        return "\"" + path.toAbsolutePath()
-                .normalize()
-                .toString()
-                .replace("\"", "\\\"") + "\"";
-    }
-
     private static Path metadata(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) {
         return location.synesisDirectory()
                 .resolve("local/providers/" + provider.id() + ".json");
-    }
-
-    /**
-     * Resolves the stable or configured launcher path.
-     *
-     * @return resolved launcher path
-     */
-    public Path launcherPath() {
-        return launcher();
-    }
-
-    /**
-     * Resolves the native stdio MCP launcher when the local distribution
-     * provides it, falling back to the CLI launcher for development installs.
-     *
-     * @return native MCP launcher or development fallback
-     */
-    public Path mcpLauncherPath() {
-        String executable = isWindows() ? "synesis-mcp.exe" : "synesis-mcp";
-        String configured = System.getProperty("synesis.mcp.launcher", System.getenv("SYNESIS_MCP_LAUNCHER"));
-        if (configured != null && Files.isRegularFile(Path.of(configured))) {
-            return Path.of(configured).toAbsolutePath().normalize();
-        }
-        String localAppData = System.getenv("LOCALAPPDATA");
-        if (isWindows() && localAppData != null && !localAppData.isBlank()) {
-            Path installed = Path.of(localAppData, "Synesis", "bin", executable);
-            if (Files.isRegularFile(installed)) {
-                return installed.toAbsolutePath().normalize();
-            }
-        }
-        Path cli = launcher();
-        Path candidate = cli.getParent() == null ? Path.of(executable) : cli.getParent().resolve(executable);
-        return Files.isRegularFile(candidate) ? candidate.toAbsolutePath().normalize() : cli;
     }
 
     private static Path launcher() {
@@ -285,19 +245,29 @@ public final class ProviderApplicationService {
             }
         }
         String configured = System.getProperty("synesis.launcher", System.getenv("SYNESIS_LAUNCHER"));
-        if (configured != null && Files.isRegularFile(Path.of(configured))) {
-            return Path.of(configured)
+        Path configuredPath = configuredPath(configured);
+        if (configuredPath != null && Files.isRegularFile(configuredPath)) {
+            return configuredPath
                     .toAbsolutePath()
                     .normalize();
         }
-        Path fallback = stableLauncher(executable);
-        return fallback;
+        return stableLauncher(executable);
     }
 
     private static boolean isWindows() {
         return System.getProperty("os.name", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .contains("win");
+    }
+
+    /**
+     * Parses an optional configured path.
+     *
+     * @param configured configured path text
+     * @return path, or {@code null} when absent
+     */
+    private static Path configuredPath(String configured) {
+        return configured == null ? null : Path.of(configured);
     }
 
     private static Path stableLauncher(String executable) {
@@ -369,11 +339,14 @@ public final class ProviderApplicationService {
 
     private static void materializeCodexHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile)
             throws IOException {
-        Path config = provider.configurationPath(worktree).toAbsolutePath().normalize();
+        Path config = provider.configurationPath(worktree)
+                .toAbsolutePath()
+                .normalize();
         Object lock = HOOK_LOCKS.computeIfAbsent(config, ignored -> new Object());
         synchronized (lock) {
             Path parent = config.getParent();
-            if (parent == null || !parent.startsWith(worktree.toAbsolutePath().normalize())) {
+            if (parent == null || !parent.startsWith(worktree.toAbsolutePath()
+                    .normalize())) {
                 throw providerConflict("hook path is outside the worktree");
             }
             if (Files.exists(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)
@@ -383,11 +356,12 @@ public final class ProviderApplicationService {
             }
             if (Files.isDirectory(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
                 try {
-                    if (!parent.toRealPath().startsWith(worktree.toAbsolutePath().normalize().toRealPath())) {
+                    if (!parent.toRealPath()
+                            .startsWith(worktree.toAbsolutePath()
+                                    .normalize()
+                                    .toRealPath())) {
                         throw providerConflict("hook parent escapes the worktree");
                     }
-                } catch (java.nio.file.NoSuchFileException missing) {
-                    throw providerConflict("hook parent cannot be verified");
                 } catch (IOException failure) {
                     throw providerConflict("hook parent cannot be verified");
                 }
@@ -397,7 +371,7 @@ public final class ProviderApplicationService {
                     && !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
                 throw providerConflict("hook path is not a regular file");
             }
-            if (isTracked(worktree, ".codex/hooks.json")) {
+            if (isTracked(worktree)) {
                 throw providerConflict("tracked hook file cannot be managed");
             }
             byte[] originalBytes = Files.exists(config) ? Files.readAllBytes(config) : null;
@@ -492,10 +466,10 @@ public final class ProviderApplicationService {
                 && command.endsWith(" hook codex");
     }
 
-    private static boolean isTracked(Path worktree, String relativePath) throws IOException {
+    private static boolean isTracked(Path worktree) throws IOException {
         try {
             return org.synesis.workspace.lifecycle.GitProcessRunner
-                    .runResult(worktree, "ls-files", "--error-unmatch", "--", relativePath)
+                    .runResult(worktree, "ls-files", "--error-unmatch", "--", ".codex/hooks.json")
                     .exitCode() == 0;
         } catch (IOException failure) {
             throw providerConflict("could not verify tracked state");
@@ -507,18 +481,15 @@ public final class ProviderApplicationService {
     }
 
     private static ProviderResult result(ProviderIntegration provider,
-            String key,
             String state,
             ProviderIntegration.SyntheticCheck synthetic,
             Path config,
             Path profile,
-            Path launcher,
-            String mcpStatus,
-            int exit) {
-        return simple(provider,
-                key,
+            String mcpStatus) {
+        return simple(
+                "PROVIDER_INSTALL_RESULT",
                 state,
-                exit,
+                0,
                 "PROVIDER",
                 provider.id(),
                 "SUPPORT_LEVEL",
@@ -552,7 +523,7 @@ public final class ProviderApplicationService {
             boolean profile,
             boolean synthetic,
             int exit) {
-        return simple(provider,
+        return simple(
                 "PROVIDER_STATUS",
                 state,
                 exit,
@@ -582,8 +553,7 @@ public final class ProviderApplicationService {
                 "NOT_COMPLETED");
     }
 
-    private static ProviderResult simple(ProviderIntegration provider,
-            String key,
+    private static ProviderResult simple(String key,
             String state,
             int exit,
             String... fields) {
@@ -603,6 +573,78 @@ public final class ProviderApplicationService {
             values.put("PROVIDER", id);
         }
         return new ProviderResult(exit, values);
+    }
+
+    private static ProviderResult withValue(ProviderResult result, String key, String value) {
+        Map<String, String> values = new LinkedHashMap<>(result.values());
+        values.put(key, value);
+        return new ProviderResult(result.exitCode(), values);
+    }
+
+    private static String readWithTimeout(BufferedReader reader) throws Exception {
+        return CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return reader.readLine();
+                    } catch (IOException failure) {
+                        throw new RuntimeException(failure);
+                    }
+                })
+                .get(10, TimeUnit.SECONDS);
+    }
+
+    private static boolean catalogNamesMatch(List<?> advertised) {
+        if (advertised.size() != McpToolCatalog.rawNames()
+                .size()) {
+            return false;
+        }
+        for (int index = 0; index < advertised.size(); index++) {
+            if (!(advertised.get(index) instanceof Map<?, ?> descriptor)
+                    || !McpToolCatalog.rawNames()
+                    .get(index)
+                    .equals(descriptor.get("name"))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Resolves the stable or configured launcher path.
+     *
+     * @return resolved launcher path
+     */
+    public Path launcherPath() {
+        return launcher();
+    }
+
+    /**
+     * Resolves the native stdio MCP launcher when the local distribution
+     * provides it, falling back to the CLI launcher for development installs.
+     *
+     * @return native MCP launcher or development fallback
+     */
+    public Path mcpLauncherPath() {
+        String executable = isWindows() ? "synesis-mcp.exe" : "synesis-mcp";
+        String configured = System.getProperty("synesis.mcp.launcher", System.getenv("SYNESIS_MCP_LAUNCHER"));
+        Path configuredPath = configuredPath(configured);
+        if (configuredPath != null && Files.isRegularFile(configuredPath)) {
+            return configuredPath
+                    .toAbsolutePath()
+                    .normalize();
+        }
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (isWindows() && localAppData != null && !localAppData.isBlank()) {
+            Path installed = Path.of(localAppData, "Synesis", "bin", executable);
+            if (Files.isRegularFile(installed)) {
+                return installed.toAbsolutePath()
+                        .normalize();
+            }
+        }
+        Path cli = launcher();
+        Path candidate = cli.getParent() == null ? Path.of(executable) : cli.getParent()
+                                                                         .resolve(executable);
+        return Files.isRegularFile(candidate) ? candidate.toAbsolutePath()
+                                                .normalize() : cli;
     }
 
     /**
@@ -695,7 +737,7 @@ public final class ProviderApplicationService {
             Path mcpLauncher = mcpLauncherPath();
             String mcpStatus = ensureMcpConfig(location, provider, mcpLauncher);
             McpHealth health = probeMcp(mcpLauncher, provider.id(), location.root());
-            ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(location, provider);
+            ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(provider);
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("schemaVersion", METADATA_SCHEMA);
             metadata.put("provider", provider.id());
@@ -729,7 +771,10 @@ public final class ProviderApplicationService {
             metadata.put("wireCompatibilityDigest", manual.wireCompatibilityDigest());
             metadata.put("catalogContentDigest", manual.catalogContentDigest());
             metadata.put("guidanceArtifactDigest", manual.guidanceArtifactDigest());
-            metadata.put("manualPath", manualService.skillDirectory(provider.id()).resolve("SKILL.md").toString());
+            metadata.put("manualPath",
+                    manualService.skillDirectory(provider.id())
+                            .resolve("SKILL.md")
+                            .toString());
             metadata.put("lastSyntheticCheck",
                     synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED");
             atomicWrite(metadata(location, provider), ProviderJson.write(metadata) + System.lineSeparator());
@@ -738,14 +783,11 @@ public final class ProviderApplicationService {
                     && !provider.requiresRealValidation()
                     ? (already ? "ALREADY_INSTALLED" : "SUCCESS") : "DEGRADED";
             ProviderResult installedResult = result(provider,
-                    "PROVIDER_INSTALL_RESULT",
                     result,
                     synthetic,
                     config,
                     profile,
-                    launcher,
-                    mcpStatus,
-                    0);
+                    mcpStatus);
             installedResult = withValue(installedResult, "SYNESIS_MANUAL", "ATTESTED");
             installedResult = withValue(installedResult, "MCP_HEALTH", health.status());
             try {
@@ -763,17 +805,12 @@ public final class ProviderApplicationService {
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_INSTALL_RESULT", 10);
         } catch (Exception failure) {
-            if (String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")) {
+            if (String.valueOf(failure.getMessage())
+                    .contains("PROVIDER_CONFIGURATION_CONFLICT")) {
                 return failure(id, "PROVIDER_CONFIGURATION_CONFLICT", "PROVIDER_INSTALL_RESULT", 10);
             }
             return failure(id, "INSTALL_FAILED", "PROVIDER_INSTALL_RESULT", 10);
         }
-    }
-
-    private static ProviderResult withValue(ProviderResult result, String key, String value) {
-        Map<String, String> values = new LinkedHashMap<>(result.values());
-        values.put(key, value);
-        return new ProviderResult(result.exitCode(), values);
     }
 
     /**
@@ -787,7 +824,7 @@ public final class ProviderApplicationService {
         ProviderIntegration resolvedProvider = provider(id);
         String resolvedId = resolvedProvider == null ? id : resolvedProvider.id();
         ProviderResult result = decorate(location, resolvedId, statusInternal(location, resolvedId), null);
-        if ("codex".equals(resolvedId)) {
+        if (resolvedProvider != null && "codex".equals(resolvedId)) {
             try {
                 Path path = resolvedProvider.mcpConfigurationPath(location.root());
                 CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(path,
@@ -843,7 +880,7 @@ public final class ProviderApplicationService {
                 return status(provider,
                         "BROKEN",
                         config,
-                        metadataPresent,
+                        true,
                         count,
                         launcherPresent,
                         profilePresent,
@@ -852,7 +889,7 @@ public final class ProviderApplicationService {
             }
             if (!validMetadata || !configurationCorrect) {
                 return status(provider,
-                        metadataPresent ? "DEGRADED" : "DEGRADED",
+                        "DEGRADED",
                         config,
                         metadataPresent,
                         count,
@@ -861,14 +898,15 @@ public final class ProviderApplicationService {
                         false,
                         1);
             }
-            var synthetic = syntheticCheck(location, provider);
+            var synthetic = syntheticCheck(provider);
             String state = synthetic.blocked() && synthetic.allowed() && synthetic.validJson()
                     ? (provider.requiresRealValidation() ? "DEGRADED" : "HEALTHY") : "BROKEN";
             boolean wireCompatible = McpToolCatalog.wireCompatibilityDigest()
                     .equals(String.valueOf(metadata.get("wireCompatibilityDigest")));
             boolean catalogFresh = McpToolCatalog.catalogContentDigest()
                     .equals(String.valueOf(metadata.get("catalogContentDigest")));
-            Path managedManual = manualService.skillDirectory(provider.id()).resolve("SKILL.md");
+            Path managedManual = manualService.skillDirectory(provider.id())
+                    .resolve("SKILL.md");
             boolean guidanceValid = manual.valid() && Files.isRegularFile(managedManual)
                     && McpToolCatalog.guidanceArtifactDigest("synesis-manual", provider.id(),
                             Files.readAllBytes(managedManual))
@@ -876,7 +914,7 @@ public final class ProviderApplicationService {
             if (!wireCompatible) {
                 state = "DEGRADED";
             }
-            ProviderResult result = status(provider, state, config, true, count, launcherPresent, profilePresent,
+            ProviderResult result = status(provider, state, config, true, count, true, true,
                     synthetic.blocked() && synthetic.allowed(), state.equals("HEALTHY") ? 0 : 1);
             result = withValue(result, "SYNESIS_MANUAL", manual.valid() ? "ATTESTED" : manual.reason());
             result = withValue(result, "MCP_WIRE_COMPATIBILITY", wireCompatible ? "CURRENT" : "MCP_CATALOG_MISMATCH");
@@ -910,13 +948,13 @@ public final class ProviderApplicationService {
         Path config = provider.configurationPath(location.root());
         Path metadata = metadata(location, provider);
         if (!Files.exists(config) && !Files.exists(metadata)) {
-            return simple(provider, "PROVIDER_UNINSTALL_RESULT", "NOT_INSTALLED", 0);
+            return simple("PROVIDER_UNINSTALL_RESULT", "NOT_INSTALLED", 0);
         }
         try {
             if ("codex".equals(provider.id()) && Files.exists(config)) {
                 if (Files.isSymbolicLink(config)
                         || !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS)
-                        || isTracked(location.root(), ".codex/hooks.json")) {
+                        || isTracked(location.root())) {
                     throw providerConflict("tracked or non-regular hook cannot be rewritten");
                 }
             }
@@ -955,27 +993,18 @@ public final class ProviderApplicationService {
             } catch (ProviderSessionBindingService.BindingException ignored) {
                 // Status exposes a broken binding; managed hook removal remains complete.
             }
-            return simple(provider, "PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0,
+            return simple("PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0,
                     "MANAGED_HOOK_REMOVED", Boolean.toString(removed), "UNRELATED_CONFIGURATION_PRESERVED", "true");
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_UNINSTALL_RESULT", 10);
         } catch (Exception failure) {
-            if (String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")) {
+            if (String.valueOf(failure.getMessage())
+                    .contains("PROVIDER_CONFIGURATION_CONFLICT")) {
                 return failure(id, "PROVIDER_CONFIGURATION_CONFLICT", "PROVIDER_UNINSTALL_RESULT", 10);
             }
             return failure(id, "UNINSTALL_FAILED", "PROVIDER_UNINSTALL_RESULT", 10);
         }
     }
-
-    /**
-     * Ensures provider-neutral Model Context Protocol (MCP) server configuration is installed.
-     *
-     * @param location project location
-     * @param provider provider integration
-     * @param launcher stable launcher path
-     * @return installation status identifier
-     */
-    private final ProviderMcpConfigurationService mcpConfiguration = new ProviderMcpConfigurationService();
 
     /**
      * Ensures provider-neutral Model Context Protocol (MCP) server configuration is installed.
@@ -995,17 +1024,27 @@ public final class ProviderApplicationService {
      *
      * @param launcher native MCP launcher
      * @param provider provider identifier
-     * @param project project root supplied to the server
+     * @param project  project root supplied to the server
      * @return probe outcome
      */
     private McpHealth probeMcp(Path launcher, String provider, Path project) {
         Process process = null;
         try {
-            List<String> command = List.of(launcher.toAbsolutePath().normalize().toString(), "mcp",
-                    "--provider", provider, "--project", project.toAbsolutePath().normalize().toString());
-            process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+            List<String> command = List.of(launcher.toAbsolutePath()
+                            .normalize()
+                            .toString(),
+                    "mcp",
+                    "--provider",
+                    provider,
+                    "--project",
+                    project.toAbsolutePath()
+                            .normalize()
+                            .toString());
+            process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),
-                    StandardCharsets.UTF_8)); BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    StandardCharsets.UTF_8));
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(
                             process.getInputStream(), StandardCharsets.UTF_8))) {
                 writer.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{"
                         + "\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
@@ -1028,7 +1067,9 @@ public final class ProviderApplicationService {
         } catch (TimeoutException failure) {
             return new McpHealth(false, "FAILED:timeout");
         } catch (Exception failure) {
-            return new McpHealth(false, "FAILED:" + failure.getClass().getSimpleName());
+            return new McpHealth(false,
+                    "FAILED:" + failure.getClass()
+                            .getSimpleName());
         } finally {
             if (process != null) {
                 process.destroy();
@@ -1037,37 +1078,12 @@ public final class ProviderApplicationService {
                         process.destroyForcibly();
                     }
                 } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
+                    Thread.currentThread()
+                            .interrupt();
                     process.destroyForcibly();
                 }
             }
         }
-    }
-
-    private static String readWithTimeout(BufferedReader reader) throws Exception {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return reader.readLine();
-            } catch (IOException failure) {
-                throw new RuntimeException(failure);
-            }
-        }).get(10, TimeUnit.SECONDS);
-    }
-
-    private static boolean catalogNamesMatch(List<?> advertised) {
-        if (advertised.size() != McpToolCatalog.rawNames().size()) {
-            return false;
-        }
-        for (int index = 0; index < advertised.size(); index++) {
-            if (!(advertised.get(index) instanceof Map<?, ?> descriptor)
-                    || !McpToolCatalog.rawNames().get(index).equals(descriptor.get("name"))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private record McpHealth(boolean passed, String status) {
     }
 
     private void removeMcpConfig(ProjectApplicationService.ProjectLocation location, ProviderIntegration provider) {
@@ -1114,8 +1130,7 @@ public final class ProviderApplicationService {
         return ProviderRegistry.find(id);
     }
 
-    private ProviderIntegration.SyntheticCheck syntheticCheck(ProjectApplicationService.ProjectLocation location,
-            ProviderIntegration provider) throws Exception {
+    private ProviderIntegration.SyntheticCheck syntheticCheck(ProviderIntegration provider) throws Exception {
         Path root = Files.createTempDirectory("synesis-provider-check-");
         try {
             Files.createDirectories(root);
@@ -1142,6 +1157,10 @@ public final class ProviderApplicationService {
                         });
             }
         }
+    }
+
+    private record McpHealth(boolean passed, String status) {
+
     }
 
     /**

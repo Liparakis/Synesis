@@ -39,13 +39,20 @@ $deferredValidator = Join-Path $RepositoryRoot 'scripts/agent-validate-deferred.
 {
     Fail 'Deferred register validation failed'
 }
-$taskMatches = [regex]::Matches($texts['docs/agent/TASKS.md'], '(?ms)^##\s+((?:SL|SYN)-[A-Z0-9.-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*(ACTIVE)\s*$')
+$taskMatches = [regex]::Matches($texts['docs/agent/TASKS.md'], '(?ms)^##\s+((?:MAINT|SL|SYN)-[A-Z0-9.-]+)\s*\r?\n(?:(?!^##\s).)*?^\s*- Status:\s*(ACTIVE)\s*$')
 $roadmapComplete = $texts['docs/agent/GOAL.md'] -match '(?im)^- Status:\s*.*roadmap complete'
 if ($taskMatches.Count -ne 1 -and -not ($roadmapComplete -and $taskMatches.Count -eq 0))
 {
     Fail "Expected exactly one ACTIVE task; found $( $taskMatches.Count )"
 }
-$activeTask = if ($taskMatches.Count -eq 1) { $taskMatches[0].Groups[1].Value } else { 'none (roadmap complete)' }
+$activeTask = if ($taskMatches.Count -eq 1)
+{
+    $taskMatches[0].Groups[1].Value
+}
+else
+{
+    'none (roadmap complete)'
+}
 $currentMatch = [regex]::Match($texts['docs/agent/CURRENT.md'], '(?m)^- Task ID:\s*(\S+)\s*$')
 if ($taskMatches.Count -eq 1 -and (-not $currentMatch.Success -or $currentMatch.Groups[1].Value -ne $activeTask))
 {

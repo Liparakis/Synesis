@@ -1,5 +1,10 @@
 package org.synesis.mcp.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -10,19 +15,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+@SuppressWarnings("TextBlockMigration")
 class McpStage2BSlice1Test {
 
     @TempDir
@@ -37,8 +38,10 @@ class McpStage2BSlice1Test {
         cmd[1] = "-C";
         cmd[2] = root.toString();
         System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        p.getInputStream().readAllBytes();
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true)
+                .start();
+        p.getInputStream()
+                .readAllBytes();
         if (p.waitFor() != 0) {
             throw new IllegalStateException("git failed");
         }
@@ -62,32 +65,68 @@ class McpStage2BSlice1Test {
         new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         AgentSessionService sessionService = new AgentSessionService();
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "antigravity", "inst-mcp-1", null, false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+                "antigravity",
+                "inst-mcp-1",
+                null,
+                false));
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
         var bindings = bindingService.list(location, "antigravity");
-        if (!bindings.isEmpty() && bindings.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "antigravity", bindings.getLast().sessionId(), Path.of(bindings.getLast().worktreePath()));
+        if (!bindings.isEmpty() && bindings.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "antigravity",
+                    bindings.getLast()
+                            .sessionId(),
+                    Path.of(bindings.getLast()
+                            .worktreePath()));
         }
 
-        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
         PredictionEventStore store = new PredictionEventStore(
-                location.root().resolve(".synesis/coordination"), location.projectId());
+                location.root()
+                        .resolve(".synesis/coordination"), location.projectId());
         UUID taskId = UUID.randomUUID();
         org.synesis.coordination.domain.task.CoordinationTask task = new org.synesis.coordination.domain.task.CoordinationTask(
                 taskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 identity.nodeId(), "supervisor-1", "worker-1");
-        CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, identity.nodeId(), task.encoded(), identity);
+        CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.TASK_CREATED,
+                identity.nodeId(),
+                task.encoded(),
+                identity);
         store.append(taskId, PredictionEventType.TASK_CREATED, identity.nodeId(), cmd1.encoded(), identity);
 
         org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
                 taskId, identity.nodeId(), "supervisor-1", "worker-1");
-        CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), claim1.encoded(), identity);
+        CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.TASK_CLAIMED,
+                identity.nodeId(),
+                claim1.encoded(),
+                identity);
         store.append(taskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), cmd2.encoded(), identity);
 
-        OwnershipClaim claim2 = new OwnershipClaim(taskId, "catalog.product-query", identity.nodeId(), "supervisor-1", List.of("catalog"), 1L);
-        CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(), claim2.encoded(), identity);
+        OwnershipClaim claim2 = new OwnershipClaim(taskId,
+                "catalog.product-query",
+                identity.nodeId(),
+                "supervisor-1",
+                List.of("catalog"),
+                1L);
+        CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.OWNERSHIP_CLAIMED,
+                identity.nodeId(),
+                claim2.encoded(),
+                identity);
         store.append(taskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(), cmd3.encoded(), identity);
 
         handler = new McpProtocolHandler(sessionService, projectRoot, "antigravity", "inst-mcp-1");
@@ -107,16 +146,36 @@ class McpStage2BSlice1Test {
         List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
         assertEquals(10, tools.size());
-        assertEquals("ensure_session", tools.get(0).get("name"));
-        assertEquals("read_file", tools.get(1).get("name"));
-        assertEquals("apply_patch", tools.get(2).get("name"));
-        assertEquals("run_command", tools.get(3).get("name"));
-        assertEquals("get_next_action", tools.get(4).get("name"));
-        assertEquals("request_coordination", tools.get(5).get("name"));
-        assertEquals("respond_coordination", tools.get(6).get("name"));
-        assertEquals("publish_capability_implementation", tools.get(7).get("name"));
-        assertEquals("finish_lane", tools.get(8).get("name"));
-        assertEquals("cancel_lane", tools.get(9).get("name"));
+        assertEquals("ensure_session",
+                tools.get(0)
+                        .get("name"));
+        assertEquals("read_file",
+                tools.get(1)
+                        .get("name"));
+        assertEquals("apply_patch",
+                tools.get(2)
+                        .get("name"));
+        assertEquals("run_command",
+                tools.get(3)
+                        .get("name"));
+        assertEquals("get_next_action",
+                tools.get(4)
+                        .get("name"));
+        assertEquals("request_coordination",
+                tools.get(5)
+                        .get("name"));
+        assertEquals("respond_coordination",
+                tools.get(6)
+                        .get("name"));
+        assertEquals("publish_capability_implementation",
+                tools.get(7)
+                        .get("name"));
+        assertEquals("finish_lane",
+                tools.get(8)
+                        .get("name"));
+        assertEquals("cancel_lane",
+                tools.get(9)
+                        .get("name"));
     }
 
     @Test
@@ -145,15 +204,18 @@ class McpStage2BSlice1Test {
         String res = handler.handleMessage(callJson);
         assertNotNull(res);
         assertTrue(res.contains("req_"));
-        assertFalse(res.contains(projectRoot.toString().replace('\\', '/')));
+        assertFalse(res.contains(projectRoot.toString()
+                .replace('\\', '/')));
         assertFalse(res.contains("eventId"));
     }
 
     @Test
     void lifecycleRejectsLegacyNamesAndNonDiscriminatedCoordinationPayloads() {
-        String legacy = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"complete_task\",\"arguments\":{}}}");
+        String legacy = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"complete_task\",\"arguments\":{}}}");
         assertTrue(legacy.contains("Unknown tool"));
-        String nonDiscriminated = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"capability\":\"x\"}}}");
+        String nonDiscriminated = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"capability\":\"x\"}}}");
         assertTrue(nonDiscriminated.contains("COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
     }
 }

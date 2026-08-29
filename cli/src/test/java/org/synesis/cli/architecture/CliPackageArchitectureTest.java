@@ -20,39 +20,6 @@ class CliPackageArchitectureTest {
             "identity", "sync", "provider", "hook", "project", "workspace", "coordination",
             "prediction", "ownership", "task", "speculation", "lifecycle");
 
-    /**
-     * Ensures command families do not import other command-family implementations or MCP code.
-     *
-     * @throws IOException if CLI sources cannot be read
-     */
-    @Test
-    void commandFamiliesDoNotDependOnUnrelatedDeliveryInternals() throws IOException {
-        List<String> sources = productionSources().toList();
-        assertFalse(sources.isEmpty());
-        for (String source : sources) {
-            String family = familyOf(source);
-            if (family == null) {
-                continue;
-            }
-            assertTrue(source.lines().noneMatch(line -> line.contains("org.synesis.mcp")), family);
-            assertTrue(source.lines().noneMatch(line -> FAMILIES.stream()
-                    .filter(other -> !other.equals(family))
-                    .filter(other -> !lineContainsSharedCoordinationSupport(other, source))
-                    .anyMatch(other -> line.contains("org.synesis.cli.command." + other + "."))), family);
-        }
-    }
-
-    /**
-     * Ensures the stable CLI entrypoint remains in its root package.
-     *
-     * @throws IOException if CLI sources cannot be read
-     */
-    @Test
-    void stableCliEntrypointRemainsAtRoot() throws IOException {
-        assertTrue(productionSources().anyMatch(source -> source.contains("package org.synesis.cli;")
-                && source.contains("class SynesisCli")));
-    }
-
     private static String familyOf(String source) {
         for (String family : FAMILIES) {
             if (source.contains("package org.synesis.cli.command." + family + ";")) {
@@ -69,7 +36,8 @@ class CliPackageArchitectureTest {
 
     private static Stream<String> productionSources() throws IOException {
         try (Stream<Path> paths = Files.walk(Path.of("src/main/java"))) {
-            return paths.filter(path -> path.toString().endsWith(".java"))
+            return paths.filter(path -> path.toString()
+                            .endsWith(".java"))
                     .map(CliPackageArchitectureTest::read)
                     .toList()
                     .stream();
@@ -82,5 +50,40 @@ class CliPackageArchitectureTest {
         } catch (IOException failure) {
             throw new IllegalStateException("Cannot read " + path, failure);
         }
+    }
+
+    /**
+     * Ensures command families do not import other command-family implementations or MCP code.
+     *
+     * @throws IOException if CLI sources cannot be read
+     */
+    @Test
+    void commandFamiliesDoNotDependOnUnrelatedDeliveryInternals() throws IOException {
+        List<String> sources = productionSources().toList();
+        assertFalse(sources.isEmpty());
+        for (String source : sources) {
+            String family = familyOf(source);
+            if (family == null) {
+                continue;
+            }
+            assertTrue(source.lines()
+                    .noneMatch(line -> line.contains("org.synesis.mcp")), family);
+            assertTrue(source.lines()
+                    .noneMatch(line -> FAMILIES.stream()
+                            .filter(other -> !other.equals(family))
+                            .filter(other -> !lineContainsSharedCoordinationSupport(other, source))
+                            .anyMatch(other -> line.contains("org.synesis.cli.command." + other + "."))), family);
+        }
+    }
+
+    /**
+     * Ensures the stable CLI entrypoint remains in its root package.
+     *
+     * @throws IOException if CLI sources cannot be read
+     */
+    @Test
+    void stableCliEntrypointRemainsAtRoot() throws IOException {
+        assertTrue(productionSources().anyMatch(source -> source.contains("package org.synesis.cli;")
+                && source.contains("class SynesisCli")));
     }
 }

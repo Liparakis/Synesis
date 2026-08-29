@@ -82,6 +82,7 @@ public final class ClaudeCodeHookAdapter {
         return paths;
     }
 
+    @SuppressWarnings("DuplicatedCode")
     private static String extractJsonField(String json, String key) {
         String search = "\"" + key + "\":";
         int idx = json.indexOf(search);
@@ -253,16 +254,13 @@ public final class ClaudeCodeHookAdapter {
             case REQUEST_OWNER ->
                     new Result(Outcome.REQUEST_OWNER, denyJson(finalResponse.message()), finalResponse.message());
             case WARNING -> {
+                var warningConstraint = finalResponse.warningConstraint();
+                String warningTitle = warningConstraint == null ? "Warning" : warningConstraint.title();
+                String warningRationale = warningConstraint == null ? finalResponse.message()
+                                                                     : warningConstraint.rationale();
                 String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE="
-                        + (finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()
-                                                                       .title() : "Warning")
-                        + "\nREASON=" + finalResponse.message();
-                yield new Result(Outcome.WARNING, warnJson(
-                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()
-                                                                    .title() : "Warning",
-                        finalResponse.warningConstraint() != null ? finalResponse.warningConstraint()
-                                                                    .rationale() : finalResponse.message()
-                ), warningDiag);
+                        + warningTitle + "\nREASON=" + finalResponse.message();
+                yield new Result(Outcome.WARNING, warnJson(warningTitle, warningRationale), warningDiag);
             }
             case INVALID_INPUT ->
                     new Result(Outcome.INVALID_INPUT, denyJson(finalResponse.message()), finalResponse.message());

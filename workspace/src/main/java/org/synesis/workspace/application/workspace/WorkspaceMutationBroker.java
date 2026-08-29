@@ -1,8 +1,4 @@
 package org.synesis.workspace.application.workspace;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.SessionAuthorityResolver;
-
-import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,10 +13,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.project.ActionGuardrail;
 import org.synesis.workspace.project.ProjectPathResolver;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Broker enforcing workspace mutation invariants across providers.
@@ -84,10 +82,10 @@ public final class WorkspaceMutationBroker {
         String updatedRevision = null;
         if (success && mutatedPath != null) {
             try {
-                updatedRevision = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                        .digest(Files.readAllBytes(mutatedPath)));
+                updatedRevision = HexFormat.of()
+                        .formatHex(MessageDigest.getInstance("SHA-256")
+                                .digest(Files.readAllBytes(mutatedPath)));
             } catch (Exception ignored) {
-                updatedRevision = null;
             }
         }
         return new MutationResult(success,
@@ -162,9 +160,10 @@ public final class WorkspaceMutationBroker {
         // 1. Session binding check
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
         SessionAuthorityResolver authorityResolver = new SessionAuthorityResolver(bindingService);
-        ProviderSessionBindingService.Binding binding = null;
+        ProviderSessionBindingService.Binding binding;
         try {
-            if (request.connectionInstanceId() == null || request.connectionInstanceId().isBlank()) {
+            if (request.connectionInstanceId() == null || request.connectionInstanceId()
+                    .isBlank()) {
                 return evaluateAndRecord(false, Decision.SESSION_UNBOUND, "EXACT_SESSION_REQUIRED",
                         "An exact provider connection is required for mutation authority",
                         decisionId, interceptionEvidence, request, null, null);
@@ -427,9 +426,10 @@ public final class WorkspaceMutationBroker {
         try {
             Files.createDirectories(targetFile.getParent());
             byte[] contentBytes = request.newContentBytes() != null
-                    ? request.newContentBytes().clone()
+                    ? request.newContentBytes()
+                      .clone()
                     : (request.newContent() == null ? new byte[0] : request.newContent()
-                                                                               .getBytes(StandardCharsets.UTF_8));
+                                                                    .getBytes(StandardCharsets.UTF_8));
             atomicWrite(targetFile, contentBytes);
         } catch (Exception failure) {
             return evaluateAndRecord(false,
@@ -444,7 +444,7 @@ public final class WorkspaceMutationBroker {
         }
 
         // Verify control checkout remains unchanged
-        boolean controlUnchanged = true;
+        boolean controlUnchanged;
         if (Files.exists(controlFile)) {
             if (controlBefore == null) {
                 controlUnchanged = false;
@@ -532,15 +532,15 @@ public final class WorkspaceMutationBroker {
     /**
      * Workspace mutation request parameters.
      *
-     * @param location         initialized project location
-     * @param provider         provider identifier
+     * @param location             initialized project location
+     * @param provider             provider identifier
      * @param connectionInstanceId exact provider connection identity, or {@code null}
-     * @param relativePath     target repository-relative path
-     * @param toolName         tool or action identifier
-     * @param newContent       new proposed file content
-     * @param newContentBytes  exact encoded bytes to persist, or {@code null} for UTF-8 encoding
-     * @param hookIntercepted  whether Synesis intercepted the proposed mutation
-     * @param isSyntheticCheck whether execution is a synthetic check
+     * @param relativePath         target repository-relative path
+     * @param toolName             tool or action identifier
+     * @param newContent           new proposed file content
+     * @param newContentBytes      exact encoded bytes to persist, or {@code null} for UTF-8 encoding
+     * @param hookIntercepted      whether Synesis intercepted the proposed mutation
+     * @param isSyntheticCheck     whether execution is a synthetic check
      */
     public record MutationRequest(
             ProjectApplicationService.ProjectLocation location,
@@ -564,13 +564,15 @@ public final class WorkspaceMutationBroker {
             Objects.requireNonNull(toolName, "toolName");
         }
 
-        /** Constructs a request without a connection identity for controlled internal checks.
-         * @param location initialized project location
-         * @param provider provider identifier
-         * @param relativePath target repository-relative path
-         * @param toolName tool or action identifier
-         * @param newContent proposed file content
-         * @param hookIntercepted whether Synesis intercepted the mutation
+        /**
+         * Constructs a request without a connection identity for controlled internal checks.
+         *
+         * @param location         initialized project location
+         * @param provider         provider identifier
+         * @param relativePath     target repository-relative path
+         * @param toolName         tool or action identifier
+         * @param newContent       proposed file content
+         * @param hookIntercepted  whether Synesis intercepted the mutation
          * @param isSyntheticCheck whether execution is synthetic
          */
         public MutationRequest(ProjectApplicationService.ProjectLocation location, String provider,
@@ -583,14 +585,14 @@ public final class WorkspaceMutationBroker {
         /**
          * Constructs a connection-aware request using default UTF-8 persistence.
          *
-         * @param location initialized project location
-         * @param provider provider identifier
+         * @param location             initialized project location
+         * @param provider             provider identifier
          * @param connectionInstanceId exact connection identity
-         * @param relativePath target repository-relative path
-         * @param toolName tool or action identifier
-         * @param newContent proposed file content
-         * @param hookIntercepted whether Synesis intercepted the mutation
-         * @param isSyntheticCheck whether execution is synthetic
+         * @param relativePath         target repository-relative path
+         * @param toolName             tool or action identifier
+         * @param newContent           proposed file content
+         * @param hookIntercepted      whether Synesis intercepted the mutation
+         * @param isSyntheticCheck     whether execution is synthetic
          */
         public MutationRequest(ProjectApplicationService.ProjectLocation location, String provider,
                 String connectionInstanceId, String relativePath, String toolName, String newContent,
@@ -625,14 +627,16 @@ public final class WorkspaceMutationBroker {
             String updatedRevision
     ) {
 
-        /** Constructs a result without a returned revision.
-         * @param success whether mutation succeeded
-         * @param decision broker decision
-         * @param reasonCode bounded reason code
-         * @param message bounded message
-         * @param decisionId internal decision identifier
-         * @param interceptionEvidence internal evidence
-         * @param mutatedPath mutated path
+        /**
+         * Constructs a result without a returned revision.
+         *
+         * @param success                  whether mutation succeeded
+         * @param decision                 broker decision
+         * @param reasonCode               bounded reason code
+         * @param message                  bounded message
+         * @param decisionId               internal decision identifier
+         * @param interceptionEvidence     internal evidence
+         * @param mutatedPath              mutated path
          * @param controlCheckoutUnchanged whether control checkout stayed unchanged
          */
         public MutationResult(boolean success, Decision decision, String reasonCode, String message,

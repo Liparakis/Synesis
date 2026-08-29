@@ -13,7 +13,9 @@ import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.integration.IntegrationAttemptRecord;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 
-/** Deterministic task completion and integration projection over the shared event sequence. */
+/**
+ * Deterministic task completion and integration projection over the shared event sequence.
+ */
 public final class TaskCompletionProjection {
 
     private final Map<UUID, TaskCompletionState> taskStates = new LinkedHashMap<>();
@@ -27,11 +29,15 @@ public final class TaskCompletionProjection {
     private String activeAttemptId = null;
     private String lastControlHeadAdvanced = null;
 
-    /** Creates an empty task completion projection. */
+    /**
+     * Creates an empty task completion projection.
+     */
     public TaskCompletionProjection() {
     }
 
-    /** Copy constructor for non-mutating validation.
+    /**
+     * Copy constructor for non-mutating validation.
+     *
      * @param source source projection
      */
     private TaskCompletionProjection(TaskCompletionProjection source) {
@@ -47,7 +53,20 @@ public final class TaskCompletionProjection {
         lastControlHeadAdvanced = source.lastControlHeadAdvanced;
     }
 
-    /** Applies one task completion or integration event.
+    private static boolean isIntegrationEligibleState(TaskCompletionState state) {
+        return state == TaskCompletionState.INTEGRATION_PENDING
+                || state == TaskCompletionState.SNAPSHOT_READY
+                || state == TaskCompletionState.READY_FOR_INTEGRATION
+                || state == TaskCompletionState.REVIEW_ACCEPTED;
+    }
+
+    private static String revisionKey(UUID taskId, UUID laneId, long claimEpoch) {
+        return taskId + ":" + laneId + ":" + claimEpoch;
+    }
+
+    /**
+     * Applies one task completion or integration event.
+     *
      * @param event event to apply
      * @throws IOException malformed or invalid transition
      */
@@ -74,7 +93,9 @@ public final class TaskCompletionProjection {
         }
     }
 
-    /** Validates one event without mutating this projection.
+    /**
+     * Validates one event without mutating this projection.
+     *
      * @param event event to validate
      * @throws IOException malformed or invalid transition
      */
@@ -82,7 +103,9 @@ public final class TaskCompletionProjection {
         new TaskCompletionProjection(this).apply(event);
     }
 
-    /** Returns the current completion state for a task.
+    /**
+     * Returns the current completion state for a task.
+     *
      * @param taskId task identity
      * @return latest snapshot state, or the non-snapshot task state
      */
@@ -96,7 +119,9 @@ public final class TaskCompletionProjection {
         return taskStates.getOrDefault(taskId, TaskCompletionState.ACTIVE);
     }
 
-    /** Looks up the latest immutable task snapshot by task identity.
+    /**
+     * Looks up the latest immutable task snapshot by task identity.
+     *
      * @param taskId task identity
      * @return latest snapshot when present
      */
@@ -105,9 +130,11 @@ public final class TaskCompletionProjection {
         return history == null || history.isEmpty() ? Optional.empty() : Optional.of(history.getLast());
     }
 
-    /** Looks up the immutable snapshot for one exact lane revision.
-     * @param taskId task identity
-     * @param laneId WorkIntent identity
+    /**
+     * Looks up the immutable snapshot for one exact lane revision.
+     *
+     * @param taskId     task identity
+     * @param laneId     WorkIntent identity
      * @param claimEpoch exact WorkIntent version
      * @return matching snapshot when present
      */
@@ -117,23 +144,36 @@ public final class TaskCompletionProjection {
         if (history == null) {
             return Optional.empty();
         }
-        return history.stream().filter(snapshot -> snapshot.provenance().laneId().equals(laneId)
-                && snapshot.provenance().claimEpoch() == claimEpoch).findFirst();
+        return history.stream()
+                .filter(snapshot -> snapshot.provenance()
+                        .laneId()
+                        .equals(laneId)
+                        && snapshot.provenance()
+                        .claimEpoch() == claimEpoch)
+                .findFirst();
     }
 
-    /** Looks up a snapshot by exact lane revision across task identities.
-     * @param laneId WorkIntent identity
+    /**
+     * Looks up a snapshot by exact lane revision across task identities.
+     *
+     * @param laneId     WorkIntent identity
      * @param claimEpoch exact WorkIntent version
      * @return matching snapshot when present
      */
     public synchronized Optional<TaskSnapshotRecord> findSnapshotForLaneRevision(UUID laneId, long claimEpoch) {
-        return snapshotsById.values().stream()
-                .filter(snapshot -> snapshot.provenance().laneId().equals(laneId)
-                        && snapshot.provenance().claimEpoch() == claimEpoch)
+        return snapshotsById.values()
+                .stream()
+                .filter(snapshot -> snapshot.provenance()
+                        .laneId()
+                        .equals(laneId)
+                        && snapshot.provenance()
+                        .claimEpoch() == claimEpoch)
                 .findFirst();
     }
 
-    /** Looks up an immutable task snapshot by snapshot ID.
+    /**
+     * Looks up an immutable task snapshot by snapshot ID.
+     *
      * @param snapshotId snapshot identity
      * @return snapshot when present
      */
@@ -141,8 +181,10 @@ public final class TaskCompletionProjection {
         return Optional.ofNullable(snapshotsById.get(snapshotId));
     }
 
-    /** Returns the latest snapshot published by a worker.
-     * @param nodeId worker node ID
+    /**
+     * Returns the latest snapshot published by a worker.
+     *
+     * @param nodeId   worker node ID
      * @param workerId worker ID
      * @return latest matching snapshot when present
      */
@@ -153,21 +195,30 @@ public final class TaskCompletionProjection {
         List<TaskSnapshotRecord> history = allSnapshots();
         for (int index = history.size() - 1; index >= 0; index--) {
             TaskSnapshotRecord snapshot = history.get(index);
-            if (snapshot.nodeId().equals(nodeId) && snapshot.workerId().equals(workerId)) {
+            if (snapshot.nodeId()
+                    .equals(nodeId) && snapshot.workerId()
+                    .equals(workerId)) {
                 return Optional.of(snapshot);
             }
         }
         return Optional.empty();
     }
 
-    /** Returns all immutable task snapshots, including rejected history.
+    /**
+     * Returns all immutable task snapshots, including rejected history.
+     *
      * @return immutable snapshot history
      */
     public synchronized List<TaskSnapshotRecord> allSnapshots() {
-        return snapshotsByTask.values().stream().flatMap(List::stream).toList();
+        return snapshotsByTask.values()
+                .stream()
+                .flatMap(List::stream)
+                .toList();
     }
 
-    /** Returns the latest prepared completion for a task.
+    /**
+     * Returns the latest prepared completion for a task.
+     *
      * @param taskId task identity
      * @return prepared completion when present
      */
@@ -175,9 +226,11 @@ public final class TaskCompletionProjection {
         return Optional.ofNullable(prepared.get(taskId));
     }
 
-    /** Returns prepared completion evidence for one exact lane revision.
-     * @param taskId task identity
-     * @param laneId WorkIntent identity
+    /**
+     * Returns prepared completion evidence for one exact lane revision.
+     *
+     * @param taskId     task identity
+     * @param laneId     WorkIntent identity
      * @param claimEpoch exact WorkIntent version
      * @return matching prepared completion when present
      */
@@ -186,14 +239,18 @@ public final class TaskCompletionProjection {
         return Optional.ofNullable(preparedByRevision.get(revisionKey(taskId, laneId, claimEpoch)));
     }
 
-    /** Returns the latest prepared completion per task.
+    /**
+     * Returns the latest prepared completion per task.
+     *
      * @return immutable prepared completions
      */
     public synchronized List<CompletionPreparedPayload> allPrepared() {
         return List.copyOf(prepared.values());
     }
 
-    /** Returns snapshots currently eligible for guarded integration.
+    /**
+     * Returns snapshots currently eligible for guarded integration.
+     *
      * @return immutable eligible snapshots
      */
     public synchronized List<TaskSnapshotRecord> readySnapshots() {
@@ -202,14 +259,18 @@ public final class TaskCompletionProjection {
                 .toList();
     }
 
-    /** Returns snapshots currently eligible for the integration pump.
+    /**
+     * Returns snapshots currently eligible for the integration pump.
+     *
      * @return immutable eligible snapshots
      */
     public synchronized List<TaskSnapshotRecord> eligibleSnapshots() {
         return readySnapshots();
     }
 
-    /** Returns snapshots waiting for a durable review decision.
+    /**
+     * Returns snapshots waiting for a durable review decision.
+     *
      * @return immutable review-pending snapshots
      */
     public synchronized List<TaskSnapshotRecord> pendingReviewSnapshots() {
@@ -218,7 +279,9 @@ public final class TaskCompletionProjection {
                 .toList();
     }
 
-    /** Returns snapshots rejected by a durable review decision.
+    /**
+     * Returns snapshots rejected by a durable review decision.
+     *
      * @return immutable rejected snapshots
      */
     public synchronized List<TaskSnapshotRecord> rejectedSnapshots() {
@@ -227,7 +290,9 @@ public final class TaskCompletionProjection {
                 .toList();
     }
 
-    /** Returns the durable state for one immutable snapshot.
+    /**
+     * Returns the durable state for one immutable snapshot.
+     *
      * @param snapshotId snapshot identity
      * @return snapshot state when present
      */
@@ -235,7 +300,9 @@ public final class TaskCompletionProjection {
         return Optional.ofNullable(snapshotStates.get(snapshotId));
     }
 
-    /** Returns the active integration attempt, if any.
+    /**
+     * Returns the active integration attempt, if any.
+     *
      * @return active attempt when present
      */
     public synchronized Optional<IntegrationAttemptRecord> activeIntegrationAttempt() {
@@ -245,7 +312,9 @@ public final class TaskCompletionProjection {
         return Optional.ofNullable(attempts.get(activeAttemptId));
     }
 
-    /** Returns the last control HEAD advanced by integration.
+    /**
+     * Returns the last control HEAD advanced by integration.
+     *
      * @return last advanced commit or {@code null}
      */
     public synchronized String lastControlHeadAdvanced() {
@@ -266,20 +335,30 @@ public final class TaskCompletionProjection {
 
     private void processCompletionUnwound(PredictionEvent event) throws IOException {
         CompletionUnwoundPayload payload = CompletionUnwoundPayload.decode(event.payload());
-        String key = revisionKey(payload.prepared().taskId(), payload.prepared().laneId(),
-                payload.prepared().claimEpoch());
+        String key = revisionKey(payload.prepared()
+                        .taskId(),
+                payload.prepared()
+                        .laneId(),
+                payload.prepared()
+                        .claimEpoch());
         CompletionPreparedPayload current = preparedByRevision.get(key);
         if (current == null || !current.equals(payload.prepared())) {
             throw new IOException("COMPLETION_PREPARATION_MISMATCH");
         }
-        if (!snapshotsByTask.getOrDefault(payload.prepared().taskId(), List.of()).isEmpty()) {
+        if (!snapshotsByTask.getOrDefault(payload.prepared()
+                        .taskId(), List.of())
+                .isEmpty()) {
             throw new IOException("PUBLISHED_COMPLETION_CANNOT_UNWIND");
         }
         preparedByRevision.remove(key);
-        if (prepared.get(payload.prepared().taskId()).equals(payload.prepared())) {
-            prepared.remove(payload.prepared().taskId());
+        if (prepared.get(payload.prepared()
+                        .taskId())
+                .equals(payload.prepared())) {
+            prepared.remove(payload.prepared()
+                    .taskId());
         }
-        taskStates.put(payload.prepared().taskId(), TaskCompletionState.ACTIVE);
+        taskStates.put(payload.prepared()
+                .taskId(), TaskCompletionState.ACTIVE);
     }
 
     private void processSnapshotCreated(PredictionEvent event) throws IOException {
@@ -288,8 +367,14 @@ public final class TaskCompletionProjection {
             throw new IOException("SNAPSHOT_ID_EXISTS");
         }
         List<TaskSnapshotRecord> history = new ArrayList<>(snapshotsByTask.getOrDefault(payload.taskId(), List.of()));
-        if (history.stream().anyMatch(existing -> existing.provenance().laneId().equals(payload.provenance().laneId())
-                && existing.provenance().claimEpoch() == payload.provenance().claimEpoch())) {
+        if (history.stream()
+                .anyMatch(existing -> existing.provenance()
+                        .laneId()
+                        .equals(payload.provenance()
+                                .laneId())
+                        && existing.provenance()
+                        .claimEpoch() == payload.provenance()
+                        .claimEpoch())) {
             throw new IOException("SNAPSHOT_REVISION_EXISTS");
         }
         TaskSnapshotRecord record = new TaskSnapshotRecord(
@@ -314,10 +399,16 @@ public final class TaskCompletionProjection {
         if (snapshot == null) {
             return;
         }
-        if (!snapshot.taskId().equals(payload.taskId())
-                || !snapshot.provenance().workGroupId().equals(payload.workGroupId())
-                || !snapshot.provenance().laneId().equals(payload.targetIntentId())
-                || snapshot.provenance().claimEpoch() != payload.claimEpoch()) {
+        if (!snapshot.taskId()
+                .equals(payload.taskId())
+                || !snapshot.provenance()
+                .workGroupId()
+                .equals(payload.workGroupId())
+                || !snapshot.provenance()
+                .laneId()
+                .equals(payload.targetIntentId())
+                || snapshot.provenance()
+                .claimEpoch() != payload.claimEpoch()) {
             throw new IOException("REVIEW_SNAPSHOT_BINDING_MISMATCH");
         }
         TaskCompletionState current = snapshotStates.get(snapshot.snapshotId());
@@ -367,7 +458,8 @@ public final class TaskCompletionProjection {
                     "pending".equalsIgnoreCase(payload.status()) ? "pending" : "failed",
                     payload.failureReason(), current.startedAtMillis(), event.createdAtEpochMillis()));
         }
-        if (payload.attemptId().equals(activeAttemptId)) {
+        if (payload.attemptId()
+                .equals(activeAttemptId)) {
             activeAttemptId = null;
         }
         for (String snapshotId : payload.taskSnapshotIds()) {
@@ -394,7 +486,8 @@ public final class TaskCompletionProjection {
                     current.expectedControlHead(), current.integrationCommitSha(),
                     "conflict", payload.failureReason(), current.startedAtMillis(), event.createdAtEpochMillis()));
         }
-        if (payload.attemptId().equals(activeAttemptId)) {
+        if (payload.attemptId()
+                .equals(activeAttemptId)) {
             activeAttemptId = null;
         }
         for (String snapshotId : payload.taskSnapshotIds()) {
@@ -447,7 +540,8 @@ public final class TaskCompletionProjection {
                     current.expectedControlHead(), payload.integrationCommitSha(), "advanced", "",
                     current.startedAtMillis(), event.createdAtEpochMillis()));
         }
-        if (payload.attemptId().equals(activeAttemptId)) {
+        if (payload.attemptId()
+                .equals(activeAttemptId)) {
             activeAttemptId = null;
         }
     }
@@ -502,19 +596,10 @@ public final class TaskCompletionProjection {
 
     private void setSnapshotState(TaskSnapshotRecord snapshot, TaskCompletionState state) {
         snapshotStates.put(snapshot.snapshotId(), state);
-        if (latestSnapshot(snapshot.taskId()).map(latest -> latest.snapshotId().equals(snapshot.snapshotId())).orElse(false)) {
+        if (latestSnapshot(snapshot.taskId()).map(latest -> latest.snapshotId()
+                        .equals(snapshot.snapshotId()))
+                .orElse(false)) {
             taskStates.put(snapshot.taskId(), state);
         }
-    }
-
-    private static boolean isIntegrationEligibleState(TaskCompletionState state) {
-        return state == TaskCompletionState.INTEGRATION_PENDING
-                || state == TaskCompletionState.SNAPSHOT_READY
-                || state == TaskCompletionState.READY_FOR_INTEGRATION
-                || state == TaskCompletionState.REVIEW_ACCEPTED;
-    }
-
-    private static String revisionKey(UUID taskId, UUID laneId, long claimEpoch) {
-        return taskId + ":" + laneId + ":" + claimEpoch;
     }
 }

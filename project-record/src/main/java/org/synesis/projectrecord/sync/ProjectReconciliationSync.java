@@ -26,6 +26,7 @@ import org.synesis.projectrecord.sync.protocol.ReconciliationMessage.InventoryEn
 /**
  * Handles project-wide bidirectional reconciliation (PRP1) over one authenticated session.
  */
+@SuppressWarnings({"DuplicatedCode", "MultipleOccurrences", "ClassCanBeRecord"})
 public final class ProjectReconciliationSync {
 
     /**
@@ -47,6 +48,7 @@ public final class ProjectReconciliationSync {
     private final String localNodeId;
     private final ProjectConfig config;
     private final DecisionStore store;
+
     /**
      * Creates a project reconciliation sync endpoint.
      *
@@ -114,7 +116,6 @@ public final class ProjectReconciliationSync {
 
             // 2. Fetch Remote Inventory
             List<InventoryEntry> remoteInventory = new ArrayList<>();
-            int corruptRemoteCount = 0;
             int currentChunk = 0;
             while (true) {
                 byte[] requestChunk = ReconciliationMessage.inventoryChunkAck(config.projectId(), currentChunk)
@@ -138,7 +139,6 @@ public final class ProjectReconciliationSync {
                         || chunkMsg.chunkIndex() != currentChunk) {
                     return fail("Inventory exchange out of order.");
                 }
-                corruptRemoteCount = chunkMsg.corruptCount();
                 remoteInventory.addAll(chunkMsg.entries());
                 if (remoteInventory.size() > MAX_INVENTORY_ENTRIES) {
                     return fail("Exceeded inventory limit.");
@@ -182,7 +182,7 @@ public final class ProjectReconciliationSync {
                     uploadList.add(id);
                 } else if (local == null && remote != null) {
                     downloadList.add(id);
-                } else if (local != null && remote != null) {
+                } else if (local != null) {
                     if (local.revision() == remote.headVersion() && Arrays.equals(local.digest(),
                             remote.headDigest())) {
                         duplicateCount++;
@@ -334,8 +334,8 @@ public final class ProjectReconciliationSync {
                         rec = DecisionRecord.decode(resp.recordBytes());
                         if (!config.projectId()
                                 .equals(rec.projectId())
-                                || !isValidPeer(rec.ownerNodeId())
-                                || !isValidPeer(rec.authorNodeId())
+                                || isInvalidPeer(rec.ownerNodeId())
+                                || isInvalidPeer(rec.authorNodeId())
                                 || !rec.verify()) {
                             outcomes.add(id + ": REJECTED");
                             break;
@@ -421,7 +421,7 @@ public final class ProjectReconciliationSync {
 
             // Fetch final host inventory to ensure exact client-side validation
             List<InventoryEntry> finalHostEntries = new ArrayList<>();
-            int finalHostCorruptCount = 0;
+            int finalHostCorruptCount;
             currentChunk = 0;
             while (true) {
                 byte[] requestFinalChunk = ReconciliationMessage.finalInventoryChunkAck(config.projectId(),
@@ -472,6 +472,10 @@ public final class ProjectReconciliationSync {
         }
     }
 
+    private boolean isForeignProject(ReconciliationMessage message) {
+        return !config.projectId().equals(message.projectId());
+    }
+
     private CompletionStage<byte[]> handle(String remoteNodeId, byte[] payload) {
         CompletableFuture<byte[]> result = new CompletableFuture<>();
         try {
@@ -485,8 +489,7 @@ public final class ProjectReconciliationSync {
             ReconciliationMessage message = ReconciliationMessage.decode(payload);
             switch (message.kind()) {
                 case VALIDATE_PROJECT -> {
-                    if (!config.projectId()
-                            .equals(message.projectId())) {
+                    if (isForeignProject(message)) {
                         result.complete(ReconciliationMessage.error(ReconciliationMessage.ErrorCode.PROJECT_MISMATCH,
                                         "project mismatch")
                                 .encoded());
@@ -496,8 +499,7 @@ public final class ProjectReconciliationSync {
                     }
                 }
                 case INVENTORY_CHUNK_ACK -> {
-                    if (!config.projectId()
-                            .equals(message.projectId())) {
+                    if (isForeignProject(message)) {
                         result.complete(ReconciliationMessage.error(ReconciliationMessage.ErrorCode.PROJECT_MISMATCH,
                                         "project mismatch")
                                 .encoded());
@@ -537,8 +539,7 @@ public final class ProjectReconciliationSync {
                     }
                 }
                 case CLIENT_UPLOAD_REVISION -> {
-                    if (!config.projectId()
-                            .equals(message.projectId())) {
+                    if (isForeignProject(message)) {
                         result.complete(ReconciliationMessage.error(ReconciliationMessage.ErrorCode.PROJECT_MISMATCH,
                                         "project mismatch")
                                 .encoded());
@@ -549,11 +550,11 @@ public final class ProjectReconciliationSync {
                         record = DecisionRecord.decode(message.recordBytes());
                         if (!config.projectId()
                                 .equals(record.projectId())
-                                || !isValidPeer(record.ownerNodeId())
-                                || !isValidPeer(record.authorNodeId())
+                                || isInvalidPeer(record.ownerNodeId())
+                                || isInvalidPeer(record.authorNodeId())
                                 || !record.verify()) {
                             result.complete(ReconciliationMessage.clientUploadAck(config.projectId(),
-                                            record != null ? record.recordId() : UUID.randomUUID(),
+                                            record.recordId(),
                                             0,
                                             RecordStatus.REJECTED.ordinal())
                                     .encoded());
@@ -586,8 +587,7 @@ public final class ProjectReconciliationSync {
                     }
                 }
                 case CLIENT_DOWNLOAD_REQUEST -> {
-                    if (!config.projectId()
-                            .equals(message.projectId())) {
+                    if (isForeignProject(message)) {
                         result.complete(ReconciliationMessage.error(ReconciliationMessage.ErrorCode.PROJECT_MISMATCH,
                                         "project mismatch")
                                 .encoded());
@@ -631,8 +631,7 @@ public final class ProjectReconciliationSync {
                     }
                 }
                 case FINAL_INVENTORY_CHUNK -> {
-                    if (!config.projectId()
-                            .equals(message.projectId())) {
+                    if (isForeignProject(message)) {
                         result.complete(ReconciliationMessage.error(ReconciliationMessage.ErrorCode.PROJECT_MISMATCH,
                                         "project mismatch")
                                 .encoded());
@@ -658,8 +657,7 @@ public final class ProjectReconciliationSync {
                             .encoded());
                 }
                 case FINAL_INVENTORY_CHUNK_ACK -> {
-                    if (!config.projectId()
-                            .equals(message.projectId())) {
+                    if (isForeignProject(message)) {
                         result.complete(ReconciliationMessage.error(ReconciliationMessage.ErrorCode.PROJECT_MISMATCH,
                                         "project mismatch")
                                 .encoded());
@@ -716,8 +714,8 @@ public final class ProjectReconciliationSync {
         return new ReconciliationResult(false, 0, 0, 0, 0, countCorruptRecords(), 0, List.of(), hint);
     }
 
-    private boolean isValidPeer(String nodeId) {
-        return nodeId.equals(localNodeId) || config.allows(nodeId);
+    private boolean isInvalidPeer(String nodeId) {
+        return !nodeId.equals(localNodeId) && !config.allows(nodeId);
     }
 
     private int countCorruptRecords() {
@@ -892,6 +890,7 @@ public final class ProjectReconciliationSync {
          *
          * @return corrupt remote count
          */
+        @SuppressWarnings("unused")
         public int corruptRemoteCount() {
             return corruptRemoteCount;
         }
@@ -910,6 +909,7 @@ public final class ProjectReconciliationSync {
          *
          * @return diagnostic hint
          */
+        @SuppressWarnings("unused")
         public String hint() {
             return hint;
         }

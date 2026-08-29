@@ -45,10 +45,10 @@ completion.
 
 ## Participants and ownership
 
-| Agent | Participant | Session worktree | Intent | Claim | Epoch |
-|---|---|---|---|---|---:|
-| A / implementation | `agt_60fb5632-a261-3c08-a944-61e2b1c731f7` | `session-f8503d11-7169-48f6-828e-eb8b466edc84` | `a0953122-26c0-3556-aff7-9282c0d16014` | `PATH_EXACT todo.py` | 1 |
-| B / test | `agt_46dc7d8b-e9a7-3bd1-b1d7-31727d064e14` | `session-9504e1a0-8954-429c-8d8f-19f9d3344ab3` | `10593860-7070-3ed4-8903-5908b27b1def` | `PATH_EXACT test_todo.py` | 1 |
+| Agent              | Participant                                | Session worktree                               | Intent                                 | Claim                     | Epoch |
+|--------------------|--------------------------------------------|------------------------------------------------|----------------------------------------|---------------------------|------:|
+| A / implementation | `agt_60fb5632-a261-3c08-a944-61e2b1c731f7` | `session-f8503d11-7169-48f6-828e-eb8b466edc84` | `a0953122-26c0-3556-aff7-9282c0d16014` | `PATH_EXACT todo.py`      |     1 |
+| B / test           | `agt_46dc7d8b-e9a7-3bd1-b1d7-31727d064e14` | `session-9504e1a0-8954-429c-8d8f-19f9d3344ab3` | `10593860-7070-3ed4-8903-5908b27b1def` | `PATH_EXACT test_todo.py` |     1 |
 
 Both sessions reached `ready / isolated` and converged on WorkGroup
 `7dad9076-f0be-3117-9667-b5260ce1ca1e`.

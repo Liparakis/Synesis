@@ -225,7 +225,9 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
             String jsonOutput = ProviderJson.write(output);
             if ("agent".equalsIgnoreCase(outputMode)) {
                 org.synesis.workspace.application.workspace.AgentOutcomeTranslator translator = new org.synesis.workspace.application.workspace.AgentOutcomeTranslator();
-                org.synesis.workspace.application.workspace.TranslatedOutcome translated = translator.translateMutationResult(res, target);
+                org.synesis.workspace.application.workspace.TranslatedOutcome translated = translator.translateMutationResult(
+                        res,
+                        target);
                 runtime.terminal()
                         .stdout(translated.publicResponse()
                                 .toJson()

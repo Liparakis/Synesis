@@ -8,21 +8,21 @@ import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
-import org.synesis.link.identity.NodeIdentity;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.domain.task.CoordinationProjection;
-import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
+import org.synesis.coordination.domain.integration.ValidationContextRecord;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.prediction.PredictionContract;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.prediction.PredictionProjection;
+import org.synesis.coordination.domain.task.CoordinationProjection;
+import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.task.TaskClaim;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
-import org.synesis.coordination.domain.integration.ValidationContextRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Coordinates signed commands, durable events, replay, and live subscribers.
@@ -67,11 +67,7 @@ public final class CoordinationService {
     }
 
     private static PredictionContract decodeContract(byte[] payload) throws IOException {
-        try {
-            return PredictionContract.decode(payload);
-        } catch (IOException failure) {
-            throw failure;
-        }
+        return PredictionContract.decode(payload);
     }
 
     /**
@@ -120,8 +116,7 @@ public final class CoordinationService {
      * @return subscription
      */
     public synchronized Subscription subscribe(long sequence) {
-        LinkedBlockingQueue<PredictionEvent> queue = new LinkedBlockingQueue<>();
-        queue.addAll(replayAfter(sequence));
+        LinkedBlockingQueue<PredictionEvent> queue = new LinkedBlockingQueue<>(replayAfter(sequence));
         subscribers.add(queue);
         return new Subscription(queue, subscribers);
     }
@@ -169,7 +164,8 @@ public final class CoordinationService {
      * @return latest revision record when found
      */
     public java.util.Optional<ImplementationRevisionRecord> latestImplementationRevision(String handleValue) {
-        return store.capabilityRequestProjection().findLatestImplementation(handleValue);
+        return store.capabilityRequestProjection()
+                .findLatestImplementation(handleValue);
     }
 
     /**
@@ -179,7 +175,8 @@ public final class CoordinationService {
      * @return active validation context when found
      */
     public java.util.Optional<ValidationContextRecord> validationContext(String handleValue) {
-        return store.capabilityRequestProjection().findValidationContext(handleValue);
+        return store.capabilityRequestProjection()
+                .findValidationContext(handleValue);
     }
 
     /**
@@ -310,33 +307,12 @@ public final class CoordinationService {
         boolean owner = actor.equals(contract.ownerNodeId())
                 && logicalMatches(command, contract.ownerSupervisorId(), null);
         boolean allowed = switch (command.type()) {
-            case PREDICTION_CREATED -> requester;
-            case PREDICTION_ROUTED, VALIDATION_STARTED, SPECULATION_RETIRED, PREDICTION_INVALIDATED -> requester;
+            case PREDICTION_CREATED, PREDICTION_ROUTED, VALIDATION_STARTED, SPECULATION_RETIRED,
+                 PREDICTION_INVALIDATED -> requester;
             case REQUEST_RECEIVED, ACCEPTED_EXACT, ACCEPTED_EQUIVALENT, CONTRACT_REVISED,
                  IMPLEMENTATION_STARTED, PATCH_READY, CAPABILITY_AVAILABLE -> owner;
             case REQUEST_REJECTED -> requester || owner;
-            case PREDICTION_EXPIRED -> false;
-            case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED -> false;
-            case CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED, CAPABILITY_REQUEST_ACCEPTED,
-                 CAPABILITY_REQUEST_REJECTED, CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED,
-                 CAPABILITY_IMPLEMENTATION_PUBLISHED, CAPABILITY_VALIDATION_STARTED,
-                 CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
-                 TASK_COMPLETION_REQUESTED, TASK_SNAPSHOT_CREATED, TASK_WAITING_FOR_DEPENDENCIES,
-                 INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
-                 INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED, SESSION_FINALIZED,
-                 SESSION_ABANDONED, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED,
-                 COMPLETION_PREPARED, INTEGRATION_BLOCKED, REPAIR_REQUIRED, REPAIR_LANE_CREATED,
-                 COMPLETION_UNWOUND,
-                 WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
-                 COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
-                 PARTICIPANT_ABANDONED,
-                 CONTRACT_PUBLISHED, CONTRACT_DEPENDENCY_BOUND, CONTRACT_SUPERSEDED,
-                 DEPENDENCY_INVALIDATED, WORK_GROUP_CREATED, LANE_GRANT_ISSUED,
-                 LANE_GRANT_CONSUMED, LANE_REVOKED, WORK_GROUP_STATUS_CHANGED,
-                 PARTICIPANT_SUSPENDED, RECOVERY_SNAPSHOT_HELD, PARTICIPANT_REVOKED,
-                 INBOX_ITEM_ACKNOWLEDGED, PARTICIPANT_CANCELLED, LANE_CONTINUATION_ACCEPTED,
-                 PARTICIPANT_DETACHED, REVIEW_VALIDATION_RECORDED,
-                 PROVIDER_SESSION_TERMINALIZED -> true;
+            default -> false;
         };
         if (!allowed) {
             throw new GeneralSecurityException("ACTOR_NOT_AUTHORIZED");
@@ -403,7 +379,7 @@ public final class CoordinationService {
          */
         @Override
         public void close() {
-            owners.remove(queue);
+            owners.removeIf(candidate -> candidate == queue);
         }
     }
 }

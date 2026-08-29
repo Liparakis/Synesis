@@ -37,10 +37,10 @@ projectId: ec8a50d0-1f75-4490-9366-3a578533d87f
 
 Participants, intents, claims, and epoch:
 
-| participant | intent | claim | epoch |
-|---|---|---|---:|
-| `agt_d69273ae-cc06-3ac4-b4b0-9bc760b6a8e8` | `9cb018f1-b745-321d-85c7-4fe1aa04e700` | `todo.py` | 1 |
-| `agt_fce37679-5462-3a41-a8d0-479877de3c70` | `7f3e3c24-a659-3a5e-871a-5ef9a07e6756` | `test_todo.py` | 1 |
+| participant                                | intent                                 | claim          | epoch |
+|--------------------------------------------|----------------------------------------|----------------|------:|
+| `agt_d69273ae-cc06-3ac4-b4b0-9bc760b6a8e8` | `9cb018f1-b745-321d-85c7-4fe1aa04e700` | `todo.py`      |     1 |
+| `agt_fce37679-5462-3a41-a8d0-479877de3c70` | `7f3e3c24-a659-3a5e-871a-5ef9a07e6756` | `test_todo.py` |     1 |
 
 Shared WorkGroup: `3d7f36ad-26fa-3099-b4c8-433b24224261`.
 
@@ -119,10 +119,10 @@ The only agent prompts were the two visible coding responsibilities:
 
 Participants and claims:
 
-| participant | intent | claim | epoch | session |
-|---|---|---|---:|---|
-| `agt_c3bad58a-fec1-33da-8dec-78d550d38891` | `d5d3af94-d014-33f6-9065-aa295befa1ef` | `todo.py` | 1 | `session-9607b55f-4e4b-462f-89bb-bac1b2f8c13a` |
-| `agt_d1b338fd-6429-3eb5-9e49-0e9748ee67ed` | `9336286f-6a0f-3b5d-9fe2-caae6d223c6e` | `test_todo.py` | 1 | `session-3f635041-f502-4dd1-9a2a-c126cef5b493` |
+| participant                                | intent                                 | claim          | epoch | session                                        |
+|--------------------------------------------|----------------------------------------|----------------|------:|------------------------------------------------|
+| `agt_c3bad58a-fec1-33da-8dec-78d550d38891` | `d5d3af94-d014-33f6-9065-aa295befa1ef` | `todo.py`      |     1 | `session-9607b55f-4e4b-462f-89bb-bac1b2f8c13a` |
+| `agt_d1b338fd-6429-3eb5-9e49-0e9748ee67ed` | `9336286f-6a0f-3b5d-9fe2-caae6d223c6e` | `test_todo.py` |     1 | `session-3f635041-f502-4dd1-9a2a-c126cef5b493` |
 
 Both sessions reached `ready / isolated` and converged on WorkGroup
 `c8834a58-fe9d-3a75-8b56-bbf7a86f7a6a`.

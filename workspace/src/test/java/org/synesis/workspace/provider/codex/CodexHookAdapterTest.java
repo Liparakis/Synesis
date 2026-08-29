@@ -1,7 +1,5 @@
 package org.synesis.workspace.provider.codex;
 
-import org.synesis.workspace.application.ProjectApplicationService;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,14 +9,12 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.provider.codex.CodexHookAdapter;
+import org.synesis.projectrecord.persistence.DecisionStore;
+import org.synesis.projectrecord.security.Ed25519Signer;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**

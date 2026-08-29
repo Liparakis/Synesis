@@ -56,11 +56,11 @@ The disposable control checkout remained at baseline commit
 
 The measured process topology was:
 
-| Process | PID | Parent | Observed command |
-|---|---:|---:|---|
-| Codex provider | 5608 | harness root | `codex exec --json --ephemeral ...` |
-| Official `synesis-mcp.exe` | 20908 | 5608 | official bundle `mcp --provider codex --project ... --connection-instance-id syn041-real-codex-lease-20260828-002` |
-| Packaged Java runtime | 18076 | 20908 | official bundle Java running `org.synesis.cli.SynesisCli mcp ...` |
+| Process                    |   PID |       Parent | Observed command                                                                                                   |
+|----------------------------|------:|-------------:|--------------------------------------------------------------------------------------------------------------------|
+| Codex provider             |  5608 | harness root | `codex exec --json --ephemeral ...`                                                                                |
+| Official `synesis-mcp.exe` | 20908 |         5608 | official bundle `mcp --provider codex --project ... --connection-instance-id syn041-real-codex-lease-20260828-002` |
+| Packaged Java runtime      | 18076 |        20908 | official bundle Java running `org.synesis.cli.SynesisCli mcp ...`                                                  |
 
 Codex started at `2026-08-28T16:38:55.1645554Z`. The lease record was created
 at `2026-08-28T16:39:06.238Z`, recorded the Java process identity PID `18076`,

@@ -142,7 +142,7 @@ public final class SessionInvitation {
                 throw new IOException("invalid invitation URI");
             }
             String path = uri.getPath();
-            if (path == null || !path.startsWith("/SYN1-") || path.length() <= 6) {
+            if (path == null || path.length() <= 6 || !"/SYN1-".equals(path.substring(0, 6))) {
                 throw new IOException("invalid invitation link format");
             }
             byte[] encoded = Base64.getUrlDecoder()
@@ -284,6 +284,7 @@ public final class SessionInvitation {
      *
      * @return issue instant
      */
+    @SuppressWarnings("unused")
     public Instant issuedAt() {
         return issuedAt;
     }
@@ -293,6 +294,7 @@ public final class SessionInvitation {
      *
      * @return expiry instant
      */
+    @SuppressWarnings("unused")
     public Instant expiresAt() {
         return expiresAt;
     }

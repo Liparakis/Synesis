@@ -15,6 +15,7 @@ public final class ProviderStatusCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
     @Parameters(index = "0", description = "Provider identifier.")
+    @SuppressWarnings({"unused", "FieldCanBeLocal"})
     private String provider;
     @Option(names = "--project", description = "Project directory.")
     private String project;

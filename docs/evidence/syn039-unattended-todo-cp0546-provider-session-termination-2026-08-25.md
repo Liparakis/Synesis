@@ -73,14 +73,14 @@ honors the existing continued-engagement contract.
 
 ## Completion audit
 
-| Requirement | Current evidence |
-|---|---|
-| Fresh Git + Synesis and two independent current-MCP agents | Repeated PASS, CP-0541–CP-0545 |
-| Shared WorkGroup, claims, REVIEW admission, grants | PASS in diagnostic and ordinary runs |
-| Snapshot, validation, ACCEPT/REJECT, integration | PASS only in CP-0535 exact diagnostic; not in ordinary acceptance |
-| Ordinary unattended completion with only coding prompts | NOT PROVEN; repeated provider-session termination |
-| Green integrated control tests and clean WorkGroup closure | NOT PROVEN in ordinary acceptance |
-| Final cleanup and healthy Doctor | NOT PROVEN; fixture Doctor remains DEGRADED with six warnings |
+| Requirement                                                | Current evidence                                                  |
+|------------------------------------------------------------|-------------------------------------------------------------------|
+| Fresh Git + Synesis and two independent current-MCP agents | Repeated PASS, CP-0541–CP-0545                                    |
+| Shared WorkGroup, claims, REVIEW admission, grants         | PASS in diagnostic and ordinary runs                              |
+| Snapshot, validation, ACCEPT/REJECT, integration           | PASS only in CP-0535 exact diagnostic; not in ordinary acceptance |
+| Ordinary unattended completion with only coding prompts    | NOT PROVEN; repeated provider-session termination                 |
+| Green integrated control tests and clean WorkGroup closure | NOT PROVEN in ordinary acceptance                                 |
+| Final cleanup and healthy Doctor                           | NOT PROVEN; fixture Doctor remains DEGRADED with six warnings     |
 
 Known Git subprocess stalls, bootstrap migration failures, and Doctor warnings
 remain separately classified. They are not causal to the provider-session

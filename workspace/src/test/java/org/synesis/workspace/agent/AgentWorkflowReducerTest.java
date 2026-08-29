@@ -10,10 +10,14 @@ import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.agent.AgentWorkflowReducer;
 
-/** Verifies stable, transport-neutral durable workflow action metadata. */
+/**
+ * Verifies stable, transport-neutral durable workflow action metadata.
+ */
 final class AgentWorkflowReducerTest {
 
-    /** Verifies repeated retrieval derives the same action identity and policy. */
+    /**
+     * Verifies repeated retrieval derives the same action identity and policy.
+     */
     @Test
     void derivesStableAtLeastOnceAction() {
         AgentWorkflowReducer reducer = new AgentWorkflowReducer();
@@ -34,7 +38,9 @@ final class AgentWorkflowReducerTest {
         assertTrue((Boolean) workflow.get("retrySafe"));
     }
 
-    /** Terminal and recovery lane states produce autonomous lifecycle actions. */
+    /**
+     * Terminal and recovery lane states produce autonomous lifecycle actions.
+     */
     @Test
     void derivesCloseAndRecoverLifecycleActions() {
         AgentWorkflowReducer reducer = new AgentWorkflowReducer();
@@ -50,7 +56,9 @@ final class AgentWorkflowReducerTest {
         assertEquals("RECOVER", ((Map<?, ?>) ((Map<?, ?>) recovery.result()).get("workflow")).get("type"));
     }
 
-    /** Capability handoff does not fence the owner's already-authorized lane. */
+    /**
+     * Capability handoff does not fence the owner's already-authorized lane.
+     */
     @Test
     void capabilityOwnerMayImplementAfterRequestAcceptance() {
         AgentWorkflowReducer reducer = new AgentWorkflowReducer();
@@ -72,8 +80,11 @@ final class AgentWorkflowReducerTest {
                 .contains("publish_capability_implementation"));
     }
 
-    /** A publication-required response recommends the existing finish lane tool. */
+    /**
+     * A publication-required response recommends the existing finish lane tool.
+     */
     @Test
+    @SuppressWarnings("ExtractMethodRecommender")
     void snapshotPublicationUsesExistingFinishLaneTool() {
         AgentWorkflowReducer reducer = new AgentWorkflowReducer();
         AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
@@ -94,7 +105,9 @@ final class AgentWorkflowReducerTest {
         assertEquals("Publish the completed immutable snapshot", arguments.get("summary"));
     }
 
-    /** A review decision remains an explicit reviewer choice, not a guessed command. */
+    /**
+     * A review decision remains an explicit reviewer choice, not a guessed command.
+     */
     @Test
     void reviewValidationExposesChoicesWithoutProjectingAnInvalidCommand() {
         AgentWorkflowReducer reducer = new AgentWorkflowReducer();

@@ -1,3 +1,19 @@
+# 2026-08-29 — MAINT-001 IntelliJ analyzer cleanup continuation
+
+- Corrected one inverted Optional check found during targeted re-analysis.
+- Removed dead response maps, unused private dependency fields/parameters,
+  redundant switch scopes, constant-only helper parameters, and redundant
+  test projection assignments. Preserved lifecycle resource ownership,
+  polling, reflection, and public compatibility patterns.
+- IntelliJ build passed after the slice. Fresh full analyzer pass covered 576
+  Java files with zero request failures and reported 783 findings: 484
+  `WARNING` and 299 `WEAK WARNING`, down from 851 findings (550/301).
+- Gradle test execution remains blocked by the host's loopback connection
+  failure; no test pass claim is made from that attempt.
+- Evidence/checkpoint: `docs/agent/checkpoints/CP-0573.md`.
+- Exact next action: inspect one further high-confidence warning batch, then
+  re-run affected-file analysis and IntelliJ build validation.
+
 ## 2026-08-28 — SYN-041 final real Codex terminal-seal acceptance
 
 - Rebuilt the official platform bundle with `TEMP/TMP=C:\t` because the
@@ -82,7 +98,7 @@
 - Fresh real Codex, using the official existing bundle and an explicit ordered
   provider prompt, completed task-bearing `ensure_session`, `read_file`,
   `get_next_action`, exact `finish_lane`, and WorkGroup completion; Codex exited
-  0. The independent packaged control agreed.
+    0. The independent packaged control agreed.
 - Result A: no product defect. Stop before lease-clean-exit measurement unless
   explicitly authorized. No source, schema, guidance, Doctor, or lifecycle
   change was made.
@@ -1830,12 +1846,26 @@ Append-only operational history.
 - Timestamp: 2026-07-25 Europe/Athens
 - Checkpoint: CP-0190
 - Active task: SYN-014D
-- Completed work: Implemented unified read-only `DoctorService` diagnostics (`synesis doctor`), 38 machine-readable finding codes, severity/status/confidence models, actionable recommendations, read-only guarantees, concise/verbose/JSON formatters, and a separate, reviewable, narrowly scoped repair-plan system (`synesis repair`: `--dry-run`, `--prepare`, `--show-plan`, `--execute`, `--rollback`) with immutable persisted plans (`RepairPlanStore`), repair execution lock (`RepairExecutionLock`), append-only journal (`RepairExecutionJournal`), and pre-mutation backup & exact atomic rollback (`RepairBackupService`). Added unit/integration tests for DoctorService, RepairPlan, DoctorCommand, and RepairCommand.
-- Files changed: workspace/src/main/java/org/synesis/workspace/doctor/*, workspace/src/main/java/org/synesis/workspace/repair/*, cli/src/main/java/org/synesis/cli/command/DoctorCommand.java, cli/src/main/java/org/synesis/cli/command/RepairCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java, tests in workspace/cli, docs/agent/*
-- Commands run: `.\gradlew.bat check --no-daemon`, `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Completed work: Implemented unified read-only `DoctorService` diagnostics (`synesis doctor`), 38 machine-readable
+  finding codes, severity/status/confidence models, actionable recommendations, read-only guarantees,
+  concise/verbose/JSON formatters, and a separate, reviewable, narrowly scoped repair-plan system (`synesis repair`:
+  `--dry-run`, `--prepare`, `--show-plan`, `--execute`, `--rollback`) with immutable persisted plans (
+  `RepairPlanStore`), repair execution lock (`RepairExecutionLock`), append-only journal (`RepairExecutionJournal`), and
+  pre-mutation backup & exact atomic rollback (`RepairBackupService`). Added unit/integration tests for DoctorService,
+  RepairPlan, DoctorCommand, and RepairCommand.
+- Files changed: workspace/src/main/java/org/synesis/workspace/doctor/*,
+  workspace/src/main/java/org/synesis/workspace/repair/*, cli/src/main/java/org/synesis/cli/command/DoctorCommand.java,
+  cli/src/main/java/org/synesis/cli/command/RepairCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java, tests
+  in workspace/cli, docs/agent/*
+- Commands run: `.\gradlew.bat check --no-daemon`,
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
 - Results: BUILD SUCCESSFUL — 49 actionable tasks, all 135+ unit tests and smoke tests passed cleanly.
-- Decisions: DoctorService is strictly read-only by construction; DoctorCommand performs no repair logic; repair actions require prepared immutable plans with SHA-256 content verification; backups stored outside control checkout under admin directory; MCP tools count remains 11; provider config remains diagnostic-only.
-- Failed attempts: `DoctorServiceTest` initially failed on `ProjectApplicationService.init` argument count; fixed by using single Path parameter `init(tempDir)`; Javadoc doclint warning on record constructors; fixed by adding compact constructor doc comments.
+- Decisions: DoctorService is strictly read-only by construction; DoctorCommand performs no repair logic; repair actions
+  require prepared immutable plans with SHA-256 content verification; backups stored outside control checkout under
+  admin directory; MCP tools count remains 11; provider config remains diagnostic-only.
+- Failed attempts: `DoctorServiceTest` initially failed on `ProjectApplicationService.init` argument count; fixed by
+  using single Path parameter `init(tempDir)`; Javadoc doclint warning on record constructors; fixed by adding compact
+  constructor doc comments.
 - Remaining work: Post-MVP operational milestone.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
@@ -1876,12 +1906,26 @@ Append-only operational history.
 - Timestamp: 2026-07-25 Europe/Athens
 - Checkpoint: CP-0189
 - Active task: SYN-014C
-- Completed work: Implemented provider-session lease evidence, strong process verification, suspected-stale grace periods, immutable reconciliation plans, explicit reconciliation execution CLI (`synesis reconcile`), safe recovery of interrupted integrations, durable session abandonment, ambient `synesis.cancel_task` MCP tool (tool #11), dependency invalidation, and semantic ownership release. Added unit/integration/MCP tests proving non-destructive worktree preservation, lease state evaluation, plan immutability, and 11 MCP tools schema registration.
-- Files changed: workspace/src/main/java/org/synesis/workspace/lease/*, workspace/src/main/java/org/synesis/workspace/reconcile/*, workspace/src/main/java/org/synesis/workspace/application/AgentTaskCancellationService.java, coordination/src/main/java/org/synesis/coordination/*, mcp/src/main/java/org/synesis/mcp/McpProtocolHandler.java, cli/src/main/java/org/synesis/cli/command/ReconcileCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java, tests in workspace/mcp/cli, docs/agent/*
-- Commands run: `.\gradlew.bat check --no-daemon`, `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Completed work: Implemented provider-session lease evidence, strong process verification, suspected-stale grace
+  periods, immutable reconciliation plans, explicit reconciliation execution CLI (`synesis reconcile`), safe recovery of
+  interrupted integrations, durable session abandonment, ambient `synesis.cancel_task` MCP tool (tool #11), dependency
+  invalidation, and semantic ownership release. Added unit/integration/MCP tests proving non-destructive worktree
+  preservation, lease state evaluation, plan immutability, and 11 MCP tools schema registration.
+- Files changed: workspace/src/main/java/org/synesis/workspace/lease/*,
+  workspace/src/main/java/org/synesis/workspace/reconcile/*,
+  workspace/src/main/java/org/synesis/workspace/application/AgentTaskCancellationService.java,
+  coordination/src/main/java/org/synesis/coordination/*, mcp/src/main/java/org/synesis/mcp/McpProtocolHandler.java,
+  cli/src/main/java/org/synesis/cli/command/ReconcileCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java,
+  tests in workspace/mcp/cli, docs/agent/*
+- Commands run: `.\gradlew.bat check --no-daemon`,
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
 - Results: BUILD SUCCESSFUL — 49 actionable tasks, all 133+ unit tests and smoke tests passed cleanly.
-- Decisions: Non-destructive worktree preservation on session abandonment and task cancellation; external administration directory storage for leases, plans, locks, and journals; ambient task cancellation authorization enforced strictly for owning worker; 11 MCP tools registered in `tools/list`.
-- Failed attempts: `CoordinationService` authorization initially failed for `SESSION_ABANDONED` event due to missing bypass entry; fixed by adding new event types to `CoordinationService` bypass list; `PredictionProjection` initially failed on `current == null` for non-prediction events; fixed in `PredictionProjection.transition`.
+- Decisions: Non-destructive worktree preservation on session abandonment and task cancellation; external administration
+  directory storage for leases, plans, locks, and journals; ambient task cancellation authorization enforced strictly
+  for owning worker; 11 MCP tools registered in `tools/list`.
+- Failed attempts: `CoordinationService` authorization initially failed for `SESSION_ABANDONED` event due to missing
+  bypass entry; fixed by adding new event types to `CoordinationService` bypass list; `PredictionProjection` initially
+  failed on `current == null` for non-prediction events; fixed in `PredictionProjection.transition`.
 - Remaining work: SYN-014D, SYN-014E (installer/updater, demo fixtures).
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
@@ -1890,12 +1934,26 @@ Append-only operational history.
 - Timestamp: 2026-07-25 Europe/Athens
 - Checkpoint: CP-0188
 - Active task: SYN-014B
-- Completed work: Implemented controlled lifecycle cleanup execution using Slice 1 foundation. Created `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`, `CleanupPlanStore`, `CleanupExecutionLock`, `CleanupExecutionRecord`, `CleanupEntryExecutionState`, `CleanupExecutionJournal`, `LifecycleQuarantineService`, and `CleanupExecutionService`. Extended `CleanupCommand` with `--prepare`, `--show-plan <plan-id>`, and `--execute <plan-id>`. Added 10 unit/integration/mutation tests proving safe worktree removal (without `--force`), exact file deletion, atomic quarantine move, lock acquisition, journal idempotency, and zero control checkout / durable state mutations.
-- Files changed: workspace/src/main/java/org/synesis/workspace/cleanup/*, workspace/src/test/java/org/synesis/workspace/cleanup/*, cli/src/main/java/org/synesis/cli/command/CleanupCommand.java, cli/src/test/java/org/synesis/cli/Slice2MutationBoundaryTest.java, cli/src/test/java/org/synesis/cli/CleanupCommandTest.java, docs/agent/*
-- Commands run: `.\gradlew.bat check --no-daemon`, `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Completed work: Implemented controlled lifecycle cleanup execution using Slice 1 foundation. Created
+  `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`, `CleanupPlanStore`, `CleanupExecutionLock`,
+  `CleanupExecutionRecord`, `CleanupEntryExecutionState`, `CleanupExecutionJournal`, `LifecycleQuarantineService`, and
+  `CleanupExecutionService`. Extended `CleanupCommand` with `--prepare`, `--show-plan <plan-id>`, and
+  `--execute <plan-id>`. Added 10 unit/integration/mutation tests proving safe worktree removal (without `--force`),
+  exact file deletion, atomic quarantine move, lock acquisition, journal idempotency, and zero control checkout /
+  durable state mutations.
+- Files changed: workspace/src/main/java/org/synesis/workspace/cleanup/*,
+  workspace/src/test/java/org/synesis/workspace/cleanup/*,
+  cli/src/main/java/org/synesis/cli/command/CleanupCommand.java,
+  cli/src/test/java/org/synesis/cli/Slice2MutationBoundaryTest.java,
+  cli/src/test/java/org/synesis/cli/CleanupCommandTest.java, docs/agent/*
+- Commands run: `.\gradlew.bat check --no-daemon`,
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
 - Results: BUILD SUCCESSFUL — 49 actionable tasks, all pass. Checkpoint CP-0188 created.
-- Decisions: Atomic move for quarantine; non-forced git worktree removal for worktrees; strict precondition re-verification at execution time; project-scoped lock stored outside control checkout under admin directory.
-- Failed attempts: `NoForceAndSafetyArchitectureTest` initially failed due to comments containing `--force`; fixed by stripping comments before code checks; `WorkerCleanupTest` failed due to relative git-common-dir output resolution; fixed in `LifecyclePathVerifier` and `CleanupEligibilityService`.
+- Decisions: Atomic move for quarantine; non-forced git worktree removal for worktrees; strict precondition
+  re-verification at execution time; project-scoped lock stored outside control checkout under admin directory.
+- Failed attempts: `NoForceAndSafetyArchitectureTest` initially failed due to comments containing `--force`; fixed by
+  stripping comments before code checks; `WorkerCleanupTest` failed due to relative git-common-dir output resolution;
+  fixed in `LifecyclePathVerifier` and `CleanupEligibilityService`.
 - Remaining work: SYN-014C through SYN-014E (remaining hardening slices).
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
@@ -1904,12 +1962,25 @@ Append-only operational history.
 - Timestamp: 2026-07-25 Europe/Athens
 - Checkpoint: CP-0187 (pending)
 - Active task: SYN-014A
-- Completed work: Implemented full read-only lifecycle cleanup planning foundation. Created 12 domain enums and records in `org.synesis.workspace.cleanup`: `LifecycleResourceType`, `CleanupClassification`, `ProcessEvidenceState`, `CleanupReason`, `LifecycleResourceFingerprint`, `RetentionPolicy`, `LifecyclePathVerifier`, `CleanupPlanEntry`, `CleanupPlan`, `ProcessInspector`. Implemented `LifecycleInventoryService`, `CleanupEligibilityService`, and `CleanupPlanService`. Added `synesis cleanup --dry-run` CLI command (`CleanupCommand`) with concise/verbose/JSON output modes registered in `SynesisCli`. Added 5 test classes including `FullMutationSafetyTest` proving zero runtime mutations. All 49 Gradle tasks pass.
-- Files changed: workspace/src/main/java/org/synesis/workspace/cleanup/*, workspace/src/test/java/org/synesis/workspace/cleanup/*, cli/src/main/java/org/synesis/cli/command/CleanupCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java, cli/src/test/java/org/synesis/cli/CleanupCommandTest.java, cli/src/test/java/org/synesis/cli/FullMutationSafetyTest.java, docs/agent/*
+- Completed work: Implemented full read-only lifecycle cleanup planning foundation. Created 12 domain enums and records
+  in `org.synesis.workspace.cleanup`: `LifecycleResourceType`, `CleanupClassification`, `ProcessEvidenceState`,
+  `CleanupReason`, `LifecycleResourceFingerprint`, `RetentionPolicy`, `LifecyclePathVerifier`, `CleanupPlanEntry`,
+  `CleanupPlan`, `ProcessInspector`. Implemented `LifecycleInventoryService`, `CleanupEligibilityService`, and
+  `CleanupPlanService`. Added `synesis cleanup --dry-run` CLI command (`CleanupCommand`) with concise/verbose/JSON
+  output modes registered in `SynesisCli`. Added 5 test classes including `FullMutationSafetyTest` proving zero runtime
+  mutations. All 49 Gradle tasks pass.
+- Files changed: workspace/src/main/java/org/synesis/workspace/cleanup/*,
+  workspace/src/test/java/org/synesis/workspace/cleanup/*,
+  cli/src/main/java/org/synesis/cli/command/CleanupCommand.java, cli/src/main/java/org/synesis/cli/SynesisCli.java,
+  cli/src/test/java/org/synesis/cli/CleanupCommandTest.java,
+  cli/src/test/java/org/synesis/cli/FullMutationSafetyTest.java, docs/agent/*
 - Commands run: `.\gradlew.bat check --no-daemon`
 - Results: BUILD SUCCESSFUL — 49 actionable tasks, all pass.
-- Decisions: Snapshot types (`TASK_SNAPSHOT`, `IMPLEMENTATION_SNAPSHOT`) are evaluated before path safety to ensure they always receive `PROTECTED`+`SNAPSHOT_CLEANUP_NOT_SUPPORTED` regardless of path location.
-- Failed attempts: Initial `CleanupCommandTest` used non-existent `TestTerminal` and `initialize()` method; corrected to `ConsoleTerminal` pattern from `WorkspaceCliTest`; `FullMutationSafetyTest` initially used `Files.readString` causing `MalformedInputException` on binary files; corrected to SHA-256 byte hashing.
+- Decisions: Snapshot types (`TASK_SNAPSHOT`, `IMPLEMENTATION_SNAPSHOT`) are evaluated before path safety to ensure they
+  always receive `PROTECTED`+`SNAPSHOT_CLEANUP_NOT_SUPPORTED` regardless of path location.
+- Failed attempts: Initial `CleanupCommandTest` used non-existent `TestTerminal` and `initialize()` method; corrected to
+  `ConsoleTerminal` pattern from `WorkspaceCliTest`; `FullMutationSafetyTest` initially used `Files.readString` causing
+  `MalformedInputException` on binary files; corrected to SHA-256 byte hashing.
 - Remaining work: SYN-014B through SYN-014E (remaining hardening slices).
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
@@ -1918,11 +1989,18 @@ Append-only operational history.
 - Timestamp: 2026-07-25 Europe/Athens
 - Checkpoint: CP-0179
 - Active task: SYN-013D
-- Completed work: Implemented Stage 2B Slice 1 capability negotiation with durable handle domain types, binary payload codecs, event store projections, application services, and 2 new MCP tools (synesis.describe_required_capability, synesis.respond_to_owner_request).
-- Files changed: coordination/src/main/java/org/synesis/coordination/*, workspace/src/main/java/org/synesis/workspace/*, mcp/src/main/java/org/synesis/mcp/*, docs/agent/*
-- Commands run: `.\gradlew.bat :coordination:check --no-daemon`; `.\gradlew.bat :workspace:check --no-daemon`; `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat check --no-daemon`; `git commit -m "Add Synesis MCP capability negotiation"`; `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
+- Completed work: Implemented Stage 2B Slice 1 capability negotiation with durable handle domain types, binary payload
+  codecs, event store projections, application services, and 2 new MCP tools (synesis.describe_required_capability,
+  synesis.respond_to_owner_request).
+- Files changed: coordination/src/main/java/org/synesis/coordination/*, workspace/src/main/java/org/synesis/workspace/*,
+  mcp/src/main/java/org/synesis/mcp/*, docs/agent/*
+- Commands run: `.\gradlew.bat :coordination:check --no-daemon`; `.\gradlew.bat :workspace:check --no-daemon`;
+  `.\gradlew.bat :mcp:check --no-daemon`; `.\gradlew.bat :cli:check --no-daemon`; `.\gradlew.bat check --no-daemon`;
+  `git commit -m "Add Synesis MCP capability negotiation"`;
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-checkpoint.ps1`
 - Results: PASS; full test suite passed (49 actionable tasks); git commit 1fb83df; checkpoint CP-0179 created.
-- Decisions: Handles use SecureRandom Base32 tokens with req_ prefix and upper-case normalization; total tools exposed via tools/list is exactly 7.
+- Decisions: Handles use SecureRandom Base32 tokens with req_ prefix and upper-case normalization; total tools exposed
+  via tools/list is exactly 7.
 - Failed attempts: None.
 - Remaining work: Awaiting Stage 2B Slice 2 implementation instructions.
 - Exact continuation: powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1
@@ -1934,116 +2012,174 @@ Append-only operational history.
 - Active task: SL-SETUP-002
 - Completed work: Installed and validated durable memory, scripts, and fixtures.
 - Files changed: AGENTS.md, docs/agent/*, scripts/*, src/test/resources/agent-persistence-fixtures/*
-- Commands run: `powershell -ExecutionPolicy Bypass -File scripts/agent-validate-fixtures.ps1`; resume; doctor; checkpoint
+- Commands run: `powershell -ExecutionPolicy Bypass -File scripts/agent-validate-fixtures.ps1`; resume; doctor;
+  checkpoint
 - Results: PASS; invalid fixtures rejected; valid fixture accepted; checkpoint written.
 - Decisions: No product architecture decisions.
 - Failed attempts: None.
 - Remaining work: Install complete v1 contract.
-- Exact continuation: Install the complete contract into `docs/agent/CONTRACT.md`, reconcile `GOAL.md`, create the initial product task graph, and unblock `SL-001`.
+- Exact continuation: Install the complete contract into `docs/agent/CONTRACT.md`, reconcile `GOAL.md`, create the
+  initial product task graph, and unblock `SL-001`.
 
 ## 2026-07-20 — contract and architecture installation
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0005
 - Active task: SL-001
-- Completed work: Installed the complete contract verbatim at revision 1, ran the constraint-driven architecture pass, recorded the modular-monolith and Netty QUIC decisions, created the initial protocol/security/operations documentation, and activated Slice 1.
-- Files changed: `docs/agent/CONTRACT.md`, `docs/agent/GOAL.md`, `docs/agent/STATE.md`, `docs/agent/TASKS.md`, `docs/agent/CURRENT.md`, `docs/agent/DECISIONS.md`, `docs/agent/TEST_MATRIX.md`, `docs/agent/NEXT_SESSION.md`, `docs/architecture/`, `docs/adr/`, `docs/protocol/`, `docs/security/`, `docs/operations/`.
-- Commands run: resume; durable-memory read; Java 25 check; architecture skill/reference review; primary-source QUIC research; checkpoint.
+- Completed work: Installed the complete contract verbatim at revision 1, ran the constraint-driven architecture pass,
+  recorded the modular-monolith and Netty QUIC decisions, created the initial protocol/security/operations
+  documentation, and activated Slice 1.
+- Files changed: `docs/agent/CONTRACT.md`, `docs/agent/GOAL.md`, `docs/agent/STATE.md`, `docs/agent/TASKS.md`,
+  `docs/agent/CURRENT.md`, `docs/agent/DECISIONS.md`, `docs/agent/TEST_MATRIX.md`, `docs/agent/NEXT_SESSION.md`,
+  `docs/architecture/`, `docs/adr/`, `docs/protocol/`, `docs/security/`, `docs/operations/`.
+- Commands run: resume; durable-memory read; Java 25 check; architecture skill/reference review; primary-source QUIC
+  research; checkpoint.
 - Results: Contract and architecture gates pass; product build not yet run.
 - Decisions: One Gradle project; Netty 4.2 native QUIC behind an internal adapter, pending build validation.
 - Failed attempts: None.
 - Remaining work: Materialize the Gradle project and first passing test.
-- Exact continuation: Create `settings.gradle.kts`, `build.gradle.kts`, and `gradle/libs.versions.toml` for the single Java 25 project, without adding production networking code.
+- Exact continuation: Create `settings.gradle.kts`, `build.gradle.kts`, and `gradle/libs.versions.toml` for the single
+  Java 25 project, without adding production networking code.
 
 ## 2026-07-20 — build and identity slices
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0006
 - Active task: SL-003
-- Completed work: Added Gradle Wrapper, Java 25 build, strict compile/Javadocs/tests, formatting/package/static checks, dependency locking and verification, protocol ALPN marker, Ed25519 identity generation/signing/verification, bounded file persistence, and tests.
+- Completed work: Added Gradle Wrapper, Java 25 build, strict compile/Javadocs/tests, formatting/package/static checks,
+  dependency locking and verification, protocol ALPN marker, Ed25519 identity generation/signing/verification, bounded
+  file persistence, and tests.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
 - Results: PASS.
-- Decisions: JDK Ed25519 identity with SHA-256 lowercase hexadecimal `sl1-` node IDs; file storage refuses overwrite and uses atomic sibling moves.
-- Failed attempts: JUnit launcher was initially absent; adding the explicit JUnit Platform launcher fixed the test runtime. Provider key algorithm reports `EdDSA`; the implementation accepts the provider alias while generating with `Ed25519`.
+- Decisions: JDK Ed25519 identity with SHA-256 lowercase hexadecimal `sl1-` node IDs; file storage refuses overwrite and
+  uses atomic sibling moves.
+- Failed attempts: JUnit launcher was initially absent; adding the explicit JUnit Platform launcher fixed the test
+  runtime. Provider key algorithm reports `EdDSA`; the implementation accepts the provider alias while generating with
+  `Ed25519`.
 - Remaining work: Candidate descriptors.
-- Exact continuation: Create `package-info.java`, `Candidate`, and `CandidateDescriptor` under `src/main/java/org/synesis/link/candidate/` with bounded canonical encoding and signature verification.
+- Exact continuation: Create `package-info.java`, `Candidate`, and `CandidateDescriptor` under
+  `src/main/java/org/synesis/link/candidate/` with bounded canonical encoding and signature verification.
 
 ## 2026-07-20 — candidate descriptor slice
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0007
 - Active task: SL-004
-- Completed work: Added bounded immutable candidates, deterministic normalization, versioned canonical descriptor encoding, Ed25519 signing/verification, expiry and clock-skew checks, parser limits, and tests.
+- Completed work: Added bounded immutable candidates, deterministic normalization, versioned canonical descriptor
+  encoding, Ed25519 signing/verification, expiry and clock-skew checks, parser limits, and tests.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
 - Results: PASS.
 - Decisions: Descriptor signatures cover canonical unsigned bytes; routes remain distinct from identity.
-- Failed attempts: Javadocs initially failed on missing `@return` tags for descriptor accessors; tags were added and the gate passed.
+- Failed attempts: Javadocs initially failed on missing `@return` tags for descriptor accessors; tags were added and the
+  gate passed.
 - Remaining work: First real local QUIC connection.
-- Exact continuation: Resolve `io.netty:netty-codec-native-quic:4.2.16.Final` with the local platform classifier and add only an internal transport adapter package; do not expose Netty types publicly.
+- Exact continuation: Resolve `io.netty:netty-codec-native-quic:4.2.16.Final` with the local platform classifier and add
+  only an internal transport adapter package; do not expose Netty types publicly.
 
 ## 2026-07-20 — QUIC transport validation slice
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0007
 - Active task: SL-004
-- Completed work: Added Netty 4.2.16 native QUIC dependency with Windows runtime classifier, updated locks and verification metadata, enabled explicit native access for tests, and passed a real local QUIC loopback handshake and deterministic close.
-- Commands run: `gradlew.bat dependencies --write-locks --write-verification-metadata sha256`; `gradlew.bat clean check --dependency-verification=strict`; targeted `NettyQuicLoopbackTest`.
-- Results: PASS for dependency resolution and in-process QUIC loopback; two-process and identity binding remain unverified.
-- Decisions: Keep Netty types internal; use insecure TLS trust only in the pre-identity transport test and replace it in Slice 5.
-- Failed attempts: Initial JUnit runtime lacked the launcher; deprecated Netty test certificate failed on Java 25; missing QUIC token/connection handlers caused handshake setup failures; each was corrected with explicit launcher, keytool-generated test TLS material, token handler, and connection handlers.
+- Completed work: Added Netty 4.2.16 native QUIC dependency with Windows runtime classifier, updated locks and
+  verification metadata, enabled explicit native access for tests, and passed a real local QUIC loopback handshake and
+  deterministic close.
+- Commands run: `gradlew.bat dependencies --write-locks --write-verification-metadata sha256`;
+  `gradlew.bat clean check --dependency-verification=strict`; targeted `NettyQuicLoopbackTest`.
+- Results: PASS for dependency resolution and in-process QUIC loopback; two-process and identity binding remain
+  unverified.
+- Decisions: Keep Netty types internal; use insecure TLS trust only in the pre-identity transport test and replace it in
+  Slice 5.
+- Failed attempts: Initial JUnit runtime lacked the launcher; deprecated Netty test certificate failed on Java 25;
+  missing QUIC token/connection handlers caused handshake setup failures; each was corrected with explicit launcher,
+  keytool-generated test TLS material, token handler, and connection handlers.
 - Remaining work: Production-internal adapter and two-process local harness.
-- Exact continuation: Move the passing loopback path into a production-internal transport adapter and add a two-process local integration harness; do not expose Netty types publicly.
+- Exact continuation: Move the passing loopback path into a production-internal transport adapter and add a two-process
+  local integration harness; do not expose Netty types publicly.
 
 ## 2026-07-20 - QUIC authenticated control stream
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: pending
 - Active task: SL-005
-- Completed work: Added bounded `SLH1` handshake envelopes, Netty length framing, internal client/server stream handlers, and a real local QUIC test proving both sides receive an authenticated `PeerSession` only after transcript proofs pass.
+- Completed work: Added bounded `SLH1` handshake envelopes, Netty length framing, internal client/server stream
+  handlers, and a real local QUIC test proving both sides receive an authenticated `PeerSession` only after transcript
+  proofs pass.
 - Commands run: targeted `NettyQuicLoopbackTest.establishesIdentityBoundSessionOnLocalQuicControlStream`.
 - Results: PASS.
-- Decisions: Keep the stream adapter package-private and retain insecure TLS trust only inside the test fixture; application identity is established by the signed transcript proofs.
-- Remaining work: Advertised-version negotiation, wrong-identity transport rejection, and authenticated two-process evidence.
-- Exact continuation: Extend the control exchange with version offers and update the two-process harness to exchange persistent node identities.
+- Decisions: Keep the stream adapter package-private and retain insecure TLS trust only inside the test fixture;
+  application identity is established by the signed transcript proofs.
+- Remaining work: Advertised-version negotiation, wrong-identity transport rejection, and authenticated two-process
+  evidence.
+- Exact continuation: Extend the control exchange with version offers and update the two-process harness to exchange
+  persistent node identities.
 
 ## 2026-07-20 - SL-005 completion
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Active task: SL-005 completed; SL-006 is handoff-only.
-- Results: PASS. Repeated independent JVMs authenticated expected identities and agreed on version 1/session ID; real-QUIC wrong-identity and no-common-version cases returned categorized failures without `PeerSession`; transcript version tampering was rejected; strict clean verification passed.
-- Evidence: `NettyQuicLoopbackTest`, `SessionAuthenticatorTest`, `gradlew.bat clean check --dependency-verification=strict`.
+- Results: PASS. Repeated independent JVMs authenticated expected identities and agreed on version 1/session ID;
+  real-QUIC wrong-identity and no-common-version cases returned categorized failures without `PeerSession`; transcript
+  version tampering was rejected; strict clean verification passed.
+- Evidence: `NettyQuicLoopbackTest`, `SessionAuthenticatorTest`,
+  `gradlew.bat clean check --dependency-verification=strict`.
 - Handoff: No SL-006 code was implemented.
 
 ## 2026-07-20 - SL-006 completion
 
 - Active task: SL-006 completed; SL-007 is handoff-only.
-- Completed work: Added bounded SLH1 control frames, CONTROL_READY gating, one-control-stream ownership, protocol-error closure, GOODBYE/GOODBYE_ACK, categorized close reasons, exactly-once terminal completion, idempotent graceful close, duplicate-stream rejection, malformed/oversized parser tests, large non-control stream isolation, and process-level graceful close.
-- Results: PASS — `ControlFrameTest`, local QUIC control integration, repeated process test, and `gradlew.bat clean check --dependency-verification=strict`.
+- Completed work: Added bounded SLH1 control frames, CONTROL_READY gating, one-control-stream ownership, protocol-error
+  closure, GOODBYE/GOODBYE_ACK, categorized close reasons, exactly-once terminal completion, idempotent graceful close,
+  duplicate-stream rejection, malformed/oversized parser tests, large non-control stream isolation, and process-level
+  graceful close.
+- Results: PASS — `ControlFrameTest`, local QUIC control integration, repeated process test, and
+  `gradlew.bat clean check --dependency-verification=strict`.
 - Handoff: No heartbeat, liveness, reconnect, candidate, or application protocol behavior was implemented.
 
 ## 2026-07-20 - SL-007 completion
 
 - Checkpoint: CP-0027
 - Active task: SL-007 completed; SL-008 is handoff-only.
-- Completed work: Added fixed-size versioned HEARTBEAT/HEARTBEAT_ACK payloads, sequence and session binding validation, control-ready liveness start, manual-clock LIVE/SUSPECT/EXPIRED state machine with recovery and delayed-expiry history, public liveness state/metrics/listener API, bounded callback dispatch, terminal precedence and cleanup, local QUIC heartbeat evidence, healthy two-process heartbeat evidence, golden vectors, ADR-0005, protocol state/wire/security updates, and durable-memory reconciliation.
-- Files changed: `src/main/java/org/synesis/link/session/`, `src/main/java/org/synesis/link/transport/`, affected tests, `docs/adr/0005-heartbeat-liveness.md`, `docs/protocol/`, `docs/security/`, `docs/agent/`.
-- Commands run: targeted codec/liveness tests; local QUIC and two-process tests; `gradlew.bat clean check --dependency-verification=strict`; fixture validator; doctor; resume; checkpoint.
-- Results: PASS. Abrupt child-process loss is classified within the documented transport-failure/liveness-expiry bound; physical migration, temporary application silence, and QUIC idle-timeout tuning remain explicitly unverified.
-- Decisions: newest valid current-session heartbeat/ACK is the only v1 liveness refresh; duplicates/stale messages do not refresh; first terminal reason wins; expiry is irreversible; transport closure before expiry remains transport failure.
-- Failed attempts: initial RED compile failure before liveness production types; one malformed test assumption about heartbeat type binding; one process assertion race fixed with a readiness marker. No failed approach was repeated.
+- Completed work: Added fixed-size versioned HEARTBEAT/HEARTBEAT_ACK payloads, sequence and session binding validation,
+  control-ready liveness start, manual-clock LIVE/SUSPECT/EXPIRED state machine with recovery and delayed-expiry
+  history, public liveness state/metrics/listener API, bounded callback dispatch, terminal precedence and cleanup, local
+  QUIC heartbeat evidence, healthy two-process heartbeat evidence, golden vectors, ADR-0005, protocol
+  state/wire/security updates, and durable-memory reconciliation.
+- Files changed: `src/main/java/org/synesis/link/session/`, `src/main/java/org/synesis/link/transport/`, affected tests,
+  `docs/adr/0005-heartbeat-liveness.md`, `docs/protocol/`, `docs/security/`, `docs/agent/`.
+- Commands run: targeted codec/liveness tests; local QUIC and two-process tests;
+  `gradlew.bat clean check --dependency-verification=strict`; fixture validator; doctor; resume; checkpoint.
+- Results: PASS. Abrupt child-process loss is classified within the documented transport-failure/liveness-expiry bound;
+  physical migration, temporary application silence, and QUIC idle-timeout tuning remain explicitly unverified.
+- Decisions: newest valid current-session heartbeat/ACK is the only v1 liveness refresh; duplicates/stale messages do
+  not refresh; first terminal reason wins; expiry is irreversible; transport closure before expiry remains transport
+  failure.
+- Failed attempts: initial RED compile failure before liveness production types; one malformed test assumption about
+  heartbeat type binding; one process assertion race fixed with a readiness marker. No failed approach was repeated.
 - Remaining work: SL-008 candidate providers and racing.
-- Exact continuation: Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, read durable memory, and inspect candidate boundaries; do not implement SL-008 in the handoff.
+- Exact continuation: Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, read durable memory, and
+  inspect candidate boundaries; do not implement SL-008 in the handoff.
 
 ## 2026-07-20 — SL-008 completion
 
 - Checkpoint: CP-0030
 - Active task: SL-008 completed; SL-009 is handoff-only.
-- Completed work: Added bounded manual and local-interface providers, explicit provider policy and diagnostics, cancellable concurrent gathering, normalization and privacy filtering, deterministic same-family pair ranking, bounded staggered racing, exact authenticated expected-identity/control-ready winner selection, loser cancellation and late-session cleanup, redacted diagnostics, ADR-0006, protocol/state/wire/security/operations documentation, and local/two-process QUIC candidate-pair integration evidence.
-- Files changed: `src/main/java/org/synesis/link/candidate/`, candidate tests, QUIC integration harnesses, `docs/protocol/`, `docs/security/`, `docs/operations/`, `docs/adr/ADR-0006-bounded-direct-candidates.md`, and `docs/agent/`.
-- Commands run: targeted candidate tests; `NettyQuicLoopbackTest`; `gradlew.bat clean check --dependency-verification=strict`; fixture validator; doctor; resume; checkpoint.
-- Results: PASS. Unsupported router discovery, relays, NAT traversal, physical reachability, path migration, reconnect, and temporary liveness-suppression recovery remain explicitly unverified or out of scope.
-- Decisions: direct-only manual/local providers; no fake PCP/NAT-PMP/UPnP/STUN/TURN support; only authenticated control-ready sessions win; deterministic bounded cleanup is required.
-- Failed attempts: one combined documentation patch failed due to an exact-text/encoding mismatch and made no changes; smaller exact patches succeeded. No product code was reverted.
+- Completed work: Added bounded manual and local-interface providers, explicit provider policy and diagnostics,
+  cancellable concurrent gathering, normalization and privacy filtering, deterministic same-family pair ranking, bounded
+  staggered racing, exact authenticated expected-identity/control-ready winner selection, loser cancellation and
+  late-session cleanup, redacted diagnostics, ADR-0006, protocol/state/wire/security/operations documentation, and
+  local/two-process QUIC candidate-pair integration evidence.
+- Files changed: `src/main/java/org/synesis/link/candidate/`, candidate tests, QUIC integration harnesses,
+  `docs/protocol/`, `docs/security/`, `docs/operations/`, `docs/adr/ADR-0006-bounded-direct-candidates.md`, and
+  `docs/agent/`.
+- Commands run: targeted candidate tests; `NettyQuicLoopbackTest`;
+  `gradlew.bat clean check --dependency-verification=strict`; fixture validator; doctor; resume; checkpoint.
+- Results: PASS. Unsupported router discovery, relays, NAT traversal, physical reachability, path migration, reconnect,
+  and temporary liveness-suppression recovery remain explicitly unverified or out of scope.
+- Decisions: direct-only manual/local providers; no fake PCP/NAT-PMP/UPnP/STUN/TURN support; only authenticated
+  control-ready sessions win; deterministic bounded cleanup is required.
+- Failed attempts: one combined documentation patch failed due to an exact-text/encoding mismatch and made no changes;
+  smaller exact patches succeeded. No product code was reverted.
 - Remaining work: SL-009 reconnect and path behavior, not started here.
 - Exact continuation: Read CP-0030 and the SL-009 contract; do not infer SL-009 implementation from this handoff.
 
@@ -2051,63 +2187,90 @@ Append-only operational history.
 
 - Checkpoint: CP-0031
 - Active task: SL-DEMO-001; SL-009 deferred.
-- Completed work: Added the 27-entry deferred register and validator enforcement in resume, doctor, fixtures, and checkpoints; added demo-gap analysis; implemented bounded `synesis-demo-work/1` request/result records, strict codec, authenticated control-ready binding, bounded QUIC application streams, source-run identity/server/client CLI, local/two-process exchange evidence, first-demo procedure, threat/protocol/release documentation, and ADR-0007.
-- Files changed: `docs/agent/DEFERRED.md`, `docs/agent/DEMO_GAP_ANALYSIS.md`, `scripts/agent-validate-deferred.ps1`, durable scripts/docs, `src/main/java/org/synesis/link/demo/`, `PeerSession`, transport demo stream/CLI, tests, `docs/demo/FIRST_DEMO.md`, and release readiness draft.
-- Commands run: deferred validator; resume; doctor; fixture validator; RED demo tests; targeted demo/local/process tests; `gradlew.bat demoCli --args=--help`; `gradlew.bat check --dependency-verification=strict`.
-- Results: PASS. Physical two-machine normal, abrupt-loss, and wrong-identity runs are not available in this workspace and remain unclaimed.
-- Decisions: Keep SL-009 reconnect/path behavior deferred; ship only one fixed demo operation; no NAT/router/STUN/relay/discovery work; preserve two-process versus two-machine evidence distinction.
-- Failed attempts: Initial deferred validator invocation needed explicit `$LASTEXITCODE` initialization under PowerShell strict mode; initial application stream ordering incorrectly classified app frames as duplicate control and was fixed at the shared responder boundary. Both were retested.
-- Remaining work: Execute and record `docs/demo/FIRST_DEMO.md` on two independent computers; do not add transport features.
-- Exact continuation: Run the physical normal, abrupt-loss, and invalid-identity scenarios with sanitized evidence, then update `TEST_MATRIX.md`, `CURRENT.md`, and the checkpoint without claiming unsupported capabilities.
+- Completed work: Added the 27-entry deferred register and validator enforcement in resume, doctor, fixtures, and
+  checkpoints; added demo-gap analysis; implemented bounded `synesis-demo-work/1` request/result records, strict codec,
+  authenticated control-ready binding, bounded QUIC application streams, source-run identity/server/client CLI,
+  local/two-process exchange evidence, first-demo procedure, threat/protocol/release documentation, and ADR-0007.
+- Files changed: `docs/agent/DEFERRED.md`, `docs/agent/DEMO_GAP_ANALYSIS.md`, `scripts/agent-validate-deferred.ps1`,
+  durable scripts/docs, `src/main/java/org/synesis/link/demo/`, `PeerSession`, transport demo stream/CLI, tests,
+  `docs/demo/FIRST_DEMO.md`, and release readiness draft.
+- Commands run: deferred validator; resume; doctor; fixture validator; RED demo tests; targeted demo/local/process
+  tests; `gradlew.bat demoCli --args=--help`; `gradlew.bat check --dependency-verification=strict`.
+- Results: PASS. Physical two-machine normal, abrupt-loss, and wrong-identity runs are not available in this workspace
+  and remain unclaimed.
+- Decisions: Keep SL-009 reconnect/path behavior deferred; ship only one fixed demo operation; no
+  NAT/router/STUN/relay/discovery work; preserve two-process versus two-machine evidence distinction.
+- Failed attempts: Initial deferred validator invocation needed explicit `$LASTEXITCODE` initialization under PowerShell
+  strict mode; initial application stream ordering incorrectly classified app frames as duplicate control and was fixed
+  at the shared responder boundary. Both were retested.
+- Remaining work: Execute and record `docs/demo/FIRST_DEMO.md` on two independent computers; do not add transport
+  features.
+- Exact continuation: Run the physical normal, abrupt-loss, and invalid-identity scenarios with sanitized evidence, then
+  update `TEST_MATRIX.md`, `CURRENT.md`, and the checkpoint without claiming unsupported capabilities.
 
 ## 2026-07-20 — authenticated session core
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: pending
 - Active task: SL-005
-- Completed work: Added canonical bounded handshake transcripts, role-specific transcript challenges, Ed25519 proof creation/verification, bounded process-local replay protection, and an immutable transport-neutral `PeerSession`.
+- Completed work: Added canonical bounded handshake transcripts, role-specific transcript challenges, Ed25519 proof
+  creation/verification, bounded process-local replay protection, and an immutable transport-neutral `PeerSession`.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
-- Results: PASS. Unit tests cover transcript round trips, role binding, expected-identity rejection, cross-connection proof substitution, and replay rejection.
-- Decisions: The transcript binds ALPN, version, session ID, both role identities, both nonces, and both epochs. QUIC stream integration is still required before calling the session authenticated over transport.
-- Failed attempts: Strict Javadocs initially failed because new public accessors lacked `@return` tags; corrected and reran the full gate.
-- Remaining work: Exchange transcript/proofs through a bounded bidirectional QUIC control stream and prove wrong-identity rejection with a real transport.
-- Exact continuation: Add the internal QUIC control-stream handshake adapter; do not expose Netty types publicly or publish `PeerSession` before authentication completes.
+- Results: PASS. Unit tests cover transcript round trips, role binding, expected-identity rejection, cross-connection
+  proof substitution, and replay rejection.
+- Decisions: The transcript binds ALPN, version, session ID, both role identities, both nonces, and both epochs. QUIC
+  stream integration is still required before calling the session authenticated over transport.
+- Failed attempts: Strict Javadocs initially failed because new public accessors lacked `@return` tags; corrected and
+  reran the full gate.
+- Remaining work: Exchange transcript/proofs through a bounded bidirectional QUIC control stream and prove
+  wrong-identity rejection with a real transport.
+- Exact continuation: Add the internal QUIC control-stream handshake adapter; do not expose Netty types publicly or
+  publish `PeerSession` before authentication completes.
 
 ## 2026-07-20 — two-process QUIC slice
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0009
 - Active task: SL-005
-- Completed work: Added test-only keytool TLS material, a process entry point, and a separate-process integration test. Two Java processes now establish and close a real local Netty QUIC connection using `synesis-link/1`.
+- Completed work: Added test-only keytool TLS material, a process entry point, and a separate-process integration test.
+  Two Java processes now establish and close a real local Netty QUIC connection using `synesis-link/1`.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
 - Results: PASS.
-- Decisions: The proof is transport-only and uses test-only insecure TLS trust; identity binding is explicitly deferred to Slice 5.
+- Decisions: The proof is transport-only and uses test-only insecure TLS trust; identity binding is explicitly deferred
+  to Slice 5.
 - Failed attempts: Process launch initially shadowed the `java` package name; the executable variable was renamed.
 - Remaining work: Identity-bound handshake and PeerSession.
-- Exact continuation: Create `package-info.java`, `ProtocolVersion`, and a bounded signed handshake transcript under `src/main/java/org/synesis/link/protocol/`; do not expose Netty types publicly.
+- Exact continuation: Create `package-info.java`, `ProtocolVersion`, and a bounded signed handshake transcript under
+  `src/main/java/org/synesis/link/protocol/`; do not expose Netty types publicly.
 
 ## 2026-07-20 — internal transport adapter
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: pending
 - Active task: SL-004
-- Completed work: Moved Netty codec construction behind package-private `NettyQuicTransport`; the public API remains Netty-free.
+- Completed work: Moved Netty codec construction behind package-private `NettyQuicTransport`; the public API remains
+  Netty-free.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
 - Results: PASS.
-- Decisions: Insecure QUIC token handling remains test-only; production adapter accepts a token handler supplied by the future transport configuration.
-- Failed attempts: A client builder was incorrectly given connection handlers; Netty 4.2 requires those handlers on `QuicChannel` bootstrap, so the adapter now owns codec construction only.
+- Decisions: Insecure QUIC token handling remains test-only; production adapter accepts a token handler supplied by the
+  future transport configuration.
+- Failed attempts: A client builder was incorrectly given connection handlers; Netty 4.2 requires those handlers on
+  `QuicChannel` bootstrap, so the adapter now owns codec construction only.
 - Remaining work: Two-process local integration and later identity-bound TLS/session handshake.
-- Exact continuation: Move the passing loopback path into a production-internal transport adapter and add a two-process local integration harness; do not expose Netty types publicly.
+- Exact continuation: Move the passing loopback path into a production-internal transport adapter and add a two-process
+  local integration harness; do not expose Netty types publicly.
 
 ## 2026-07-20 â€” dependency verification repair
 
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0032
 - Active task: SL-DEMO-001
-- Completed work: Added SHA-256 verification entries for the nine Netty 4.2.16.Final source JARs named by the failing Gradle verification report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
+- Completed work: Added SHA-256 verification entries for the nine Netty 4.2.16.Final source JARs named by the failing
+  Gradle verification report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
 - Results: PASS; all eight verification tasks completed successfully.
-- Decisions: Keep strict dependency verification enabled; do not use `--offline`, disable verification, or record unverified local hashes.
+- Decisions: Keep strict dependency verification enabled; do not use `--offline`, disable verification, or record
+  unverified local hashes.
 - Failed attempts: None.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
@@ -2117,13 +2280,18 @@ Append-only operational history.
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0037
 - Active task: SL-DEMO-001
-- Completed work: Changed the local interface provider to skip down adapters instead of terminating the scan. Added `demo/` protection to `.gitignore`.
-- Commands run: direct Java candidate gather check; `gradlew.bat :link:test --tests org.synesis.link.candidate.CandidateGathererTest --tests org.synesis.link.candidate.CandidateNormalizationTest --dependency-verification=strict`; full `gradlew.bat clean check --dependency-verification=strict`.
-- Results: Direct gather returned 10 candidates; targeted tests PASS. Full check remains blocked by seven package-info files removed in the user commit `0cc4d3a`.
+- Completed work: Changed the local interface provider to skip down adapters instead of terminating the scan. Added
+  `demo/` protection to `.gitignore`.
+- Commands run: direct Java candidate gather check;
+  `gradlew.bat :link:test --tests org.synesis.link.candidate.CandidateGathererTest --tests org.synesis.link.candidate.CandidateNormalizationTest --dependency-verification=strict`;
+  full `gradlew.bat clean check --dependency-verification=strict`.
+- Results: Direct gather returned 10 candidates; targeted tests PASS. Full check remains blocked by seven package-info
+  files removed in the user commit `0cc4d3a`.
 - Decisions: Keep the minimal `continue` fix; do not add interface-specific or VPN-specific filtering.
 - Failed attempts: None in the fix; the original failure was the provider’s premature `break`.
 - Remaining work: Restore package-info files before a clean gate; rerun the physical demo with a fresh descriptor.
-- Exact continuation: Restore the seven required `package-info.java` files, rerun strict check, then restart the server and recopy `demo\node-a.descriptor`.
+- Exact continuation: Restore the seven required `package-info.java` files, rerun strict check, then restart the server
+  and recopy `demo\node-a.descriptor`.
 
 ## 2026-07-20 — package metadata restoration and strict verification
 
@@ -2131,9 +2299,12 @@ Append-only operational history.
 - Checkpoint: CP-0038
 - Active task: SL-DEMO-001
 - Completed work: Restored the seven required package-info.java files from the last valid commit.
-- Commands run: `gradlew.bat :link:packageInfoCheck --dependency-verification=strict`; `gradlew.bat clean check --dependency-verification=strict`.
-- Results: Focused package check PASS. First full run had one `NettyQuicLoopbackTest` NoClassDefFoundError; targeted rerun PASS and immediate full rerun PASS with all 40 tests.
-- Decisions: No test or production workaround for the transient class-loading failure; retain the strict suite unchanged.
+- Commands run: `gradlew.bat :link:packageInfoCheck --dependency-verification=strict`;
+  `gradlew.bat clean check --dependency-verification=strict`.
+- Results: Focused package check PASS. First full run had one `NettyQuicLoopbackTest` NoClassDefFoundError; targeted
+  rerun PASS and immediate full rerun PASS with all 40 tests.
+- Decisions: No test or production workaround for the transient class-loading failure; retain the strict suite
+  unchanged.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Restart the server with the candidate-provider fix and recopy the fresh descriptor.
 
@@ -2144,8 +2315,11 @@ Append-only operational history.
 - Active task: SL-DEMO-001
 - Completed work: Recorded a successful two-computer same-LAN normal-operation run.
 - Evidence: `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`.
-- Results: Host A advertised 10 candidates; Host B gathered 6 and generated 8 compatible pairs; direct LAN pair selected; both sides authenticated the expected node, reached `CONTROL_READY=true` and `LIVENESS=LIVE`, returned `WORK_RESULT=OK`, closed cleanly, and reported cleanup.
-- Claim boundary: Classify only Scenario A as `TWO_MACHINE_VERIFIED`; abrupt process loss and wrong expected identity remain unverified.
+- Results: Host A advertised 10 candidates; Host B gathered 6 and generated 8 compatible pairs; direct LAN pair
+  selected; both sides authenticated the expected node, reached `CONTROL_READY=true` and `LIVENESS=LIVE`, returned
+  `WORK_RESULT=OK`, closed cleanly, and reported cleanup.
+- Claim boundary: Classify only Scenario A as `TWO_MACHINE_VERIFIED`; abrupt process loss and wrong expected identity
+  remain unverified.
 - Remaining work: Execute and record Scenario B and Scenario C if physical evidence for those cases is required.
 - Exact continuation: Repeat the demo for abrupt process loss, then wrong expected identity.
 
@@ -2154,10 +2328,12 @@ Append-only operational history.
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0042
 - Active task: SL-DEMO-001
-- Completed work: Removed the seven package-info.java files, removed the `packageInfoCheck` Gradle task from `:link:check`, and removed the corresponding active-contract requirements.
+- Completed work: Removed the seven package-info.java files, removed the `packageInfoCheck` Gradle task from
+  `:link:check`, and removed the corresponding active-contract requirements.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
 - Results: PASS; compilation, strict Javadocs, formatting, static analysis, and all 40 tests passed.
-- Decision: Package-level `package-info.java` documentation is intentionally out of scope by explicit user direction; public/protected API Javadocs remain required.
+- Decision: Package-level `package-info.java` documentation is intentionally out of scope by explicit user direction;
+  public/protected API Javadocs remain required.
 - Remaining work: Physical abrupt-loss and wrong-identity demo scenarios remain pending.
 - Exact continuation: Repeat the demo for Scenario B abrupt process loss and Scenario C wrong expected identity.
 
@@ -2166,10 +2342,16 @@ Append-only operational history.
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0036
 - Active task: SL-DEMO-001 after completing SL-ARCH-001.
-- Completed work: Moved Link `src/`, module `build.gradle.kts`, and module lockfile into `link/`; added root Synesis settings and build delegation; updated Link CLI commands and durable architecture/contract state; added ADR-0008.
-- Commands run: `gradlew.bat projects --dependency-verification=strict`; `gradlew.bat clean check --dependency-verification=strict`; `gradlew.bat :link:demoCli --args=--help --dependency-verification=strict`; resume; doctor; fixture validator; deferred validator.
-- Results: PASS; root discovery shows `synesis` and `:link`; root check executes `:link:check`; CLI and durable validators pass.
-- Decisions: Keep one root modular monolith with Link as the first subproject; do not invent placeholder Synesis modules.
+- Completed work: Moved Link `src/`, module `build.gradle.kts`, and module lockfile into `link/`; added root Synesis
+  settings and build delegation; updated Link CLI commands and durable architecture/contract state; added ADR-0008.
+- Commands run: `gradlew.bat projects --dependency-verification=strict`;
+  `gradlew.bat clean check --dependency-verification=strict`;
+  `gradlew.bat :link:demoCli --args=--help --dependency-verification=strict`; resume; doctor; fixture validator;
+  deferred validator.
+- Results: PASS; root discovery shows `synesis` and `:link`; root check executes `:link:check`; CLI and durable
+  validators pass.
+- Decisions: Keep one root modular monolith with Link as the first subproject; do not invent placeholder Synesis
+  modules.
 - Failed attempts: None.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
@@ -2179,11 +2361,14 @@ Append-only operational history.
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0035
 - Active task: SL-DEMO-001
-- Completed work: Added verification entries for the Gradle 9.0.0 source distribution and four Kotlin 2.2.0 artifacts named by the failing compile classpath report. The Gradle ZIP matched its official SHA-256 sidecar; Kotlin artifacts were byte-identical between the Gradle Plugin Portal and Maven Central.
+- Completed work: Added verification entries for the Gradle 9.0.0 source distribution and four Kotlin 2.2.0 artifacts
+  named by the failing compile classpath report. The Gradle ZIP matched its official SHA-256 sidecar; Kotlin artifacts
+  were byte-identical between the Gradle Plugin Portal and Maven Central.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
 - Results: PASS; all eight verification tasks completed successfully.
 - Decisions: Keep strict dependency verification enabled; do not disable verification or record unverified local hashes.
-- Failed attempts: Kotlin repository `.sha256` sidecar URLs returned 404; exact artifact bytes were independently compared with Maven Central before recording hashes.
+- Failed attempts: Kotlin repository `.sha256` sidecar URLs returned 404; exact artifact bytes were independently
+  compared with Maven Central before recording hashes.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
 
@@ -2192,10 +2377,13 @@ Append-only operational history.
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0034
 - Active task: SL-DEMO-001
-- Completed work: Added SHA-256 verification entries for the three JUnit engine/runtime source JARs named by the failing `testRuntimeClasspath` report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
+- Completed work: Added SHA-256 verification entries for the three JUnit engine/runtime source JARs named by the failing
+  `testRuntimeClasspath` report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
-- Results: PASS; main, test compile, and test runtime classpaths now pass strict verification and all eight verification tasks completed successfully.
-- Decisions: Keep strict dependency verification enabled; source artifacts remain allowlisted only by exact module/version/artifact/hash.
+- Results: PASS; main, test compile, and test runtime classpaths now pass strict verification and all eight verification
+  tasks completed successfully.
+- Decisions: Keep strict dependency verification enabled; source artifacts remain allowlisted only by exact
+  module/version/artifact/hash.
 - Failed attempts: None.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
@@ -2205,13 +2393,18 @@ Append-only operational history.
 - Timestamp: 2026-07-20 Europe/Athens
 - Checkpoint: CP-0033
 - Active task: SL-DEMO-001
-- Completed work: Added SHA-256 verification entries for the six JUnit-related source JARs named by the failing `testCompileClasspath` report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
+- Completed work: Added SHA-256 verification entries for the six JUnit-related source JARs named by the failing
+  `testCompileClasspath` report. Each downloaded artifact matched Maven Central's published SHA-256 sidecar.
 - Commands run: `gradlew.bat clean check --dependency-verification=strict`.
-- Results: PASS; main and test classpaths now pass strict verification and all eight verification tasks completed successfully.
-- Decisions: Keep strict dependency verification enabled; source artifacts are allowlisted only by exact module/version/artifact/hash.
-- Failed attempts: The first PowerShell hash-collection command used an unescaped colon in an interpolated variable name and failed before downloading; the corrected command succeeded with no repository impact.
+- Results: PASS; main and test classpaths now pass strict verification and all eight verification tasks completed
+  successfully.
+- Decisions: Keep strict dependency verification enabled; source artifacts are allowlisted only by exact
+  module/version/artifact/hash.
+- Failed attempts: The first PowerShell hash-collection command used an unescaped colon in an interpolated variable name
+  and failed before downloading; the corrected command succeeded with no repository impact.
 - Remaining work: Physical two-computer demonstration remains pending under SL-DEMO-001.
 - Exact continuation: Run `docs/demo/FIRST_DEMO.md` on two independent computers and record sanitized evidence.
+
 ## 2026-07-20 — SL-012 zero-configuration onboarding slice
 
 - Checkpoint: CP-0047
@@ -2263,6 +2456,7 @@ Append-only operational history.
 - Exact continuation: perform the documented two-machine onboarding validation
   when two physical computers are available; do not claim it from process
   evidence.
+
 ## 2026-07-20 — standalone CLI development distribution
 
 - Task: SL-013.
@@ -2427,18 +2621,25 @@ Append-only operational history.
 
 - Implemented `:workspace` search and inspect subcommands, completing CP-W3 and closing SYN-003.
 - `decision search` composes the existing `DecisionSearch` API to scan only fully validated current heads.
-- `decision inspect --record <uuid>` implements a dedicated single-record validator that validates the head and revision chain of the requested record, isolating it from corruption in other records.
-- Outputs for search and inspect are stable, safe, and byte-stable. Standard CLI exit codes are preserved (0 for success, 10 for failure).
-- Generated-launcher integration tests verify APPLIED, DUPLICATE, restart stability, empty search, malformed filters, missing records, corruption, conflicts, and stale revisions. Full strict check and validators pass.
+- `decision inspect --record <uuid>` implements a dedicated single-record validator that validates the head and revision
+  chain of the requested record, isolating it from corruption in other records.
+- Outputs for search and inspect are stable, safe, and byte-stable. Standard CLI exit codes are preserved (0 for
+  success, 10 for failure).
+- Generated-launcher integration tests verify APPLIED, DUPLICATE, restart stability, empty search, malformed filters,
+  missing records, corruption, conflicts, and stale revisions. Full strict check and validators pass.
 - Evidence: `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.
 
 ## 2026-07-21 — SYN-004 planning and activation
 
 - User requested SYN-004 minimal guided workspace demo flow design.
-- Analyzed the two-person demo. Determined that a single copyable URI can safely embed the Link invitation payload, project ID, record ID, and host Node ID parameters while preserving cryptographic host pinning.
-- Corrected the roadmap in `PRODUCT_REVIEW.md` to ensure decision records are treated as declarative policies/metadata, never as executable tasks or job scripts.
-- Documented the exact operator commands, security guarantees, command contracts, failure behavior, hints, and test matrix in `docs/agent/SYN_004_DESIGN.md`.
+- Analyzed the two-person demo. Determined that a single copyable URI can safely embed the Link invitation payload,
+  project ID, record ID, and host Node ID parameters while preserving cryptographic host pinning.
+- Corrected the roadmap in `PRODUCT_REVIEW.md` to ensure decision records are treated as declarative policies/metadata,
+  never as executable tasks or job scripts.
+- Documented the exact operator commands, security guarantees, command contracts, failure behavior, hints, and test
+  matrix in `docs/agent/SYN_004_DESIGN.md`.
 - Closed the planning/review task and promoted `SYN-004` as the ACTIVE task. All validators and checkpoint pass.
+
 ## 2026-07-22 — SYN-009A promotion
 
 - User supplied the SYN-009A scope for a unified CLI, application services,
@@ -2693,6 +2894,7 @@ Append-only operational history.
   `gradlew.bat clean check --dependency-verification=strict` PASS.
 - Hosted workflow confirmation remains pending until an authorized push/rerun.
 - Checkpoint: CP-0126.
+
 ## 2026-07-22 — SYN-011 Antigravity real-integration investigation
 
 - Promoted SYN-011 as the sole active task after the supplied failed real
@@ -2711,6 +2913,7 @@ Append-only operational history.
 - Real unrelated editing succeeded with `--add-dir`; proposal replan reached
   `proposals/tcp-fallback.md`. Full sanitized evidence is in
   `docs/evidence/antigravity-real-investigation-2026-07-22/report.md`.
+
 ## 2026-07-22 — Local Synesis installation
 
 - Built the current source as `0.1.0-dev.16` with the Windows platform bundle
@@ -2900,6 +3103,7 @@ Append-only operational history.
   workspace/CLI checks remain green.
 - Exact continuation: implement provider `REQUEST_OWNER` enforcement and a
   minimal foreground supervisor inbox before worktree speculation.
+
 # 2026-07-24 — SYN-013 activation and architecture plan
 
 - Closed SYN-012 against the recorded CP-0144 real CLI evidence and activated
@@ -2915,6 +3119,7 @@ Append-only operational history.
 - User authorized implementation of the approved AGENTS.md bootstrap contract.
 - Promoted SYN-013A as the sole ACTIVE task; scope is limited to init-managed
   AGENTS.md content and focused tests.
+
 # 2026-07-24 — SYN-013B provider-session binding activation
 
 - Closed SYN-013A after AGENTS.md bootstrap tests and bundled smoke passed.
@@ -2975,91 +3180,141 @@ Append-only operational history.
   `notifications/initialized` and `tools/list`, and receives all 11 tools.
   Noninteractive Codex runs cancel MCP tool calls, so successful provider tool
   execution is not claimed. Required Gradle and Go verification passes.
+
 # 2026-07-26 — SYN-014E Slice 5C.6 signed Codex closure
 
-- Resolved actual source lineage: `HEAD=8d5447b35772a99f7097faa10f401c6c6156a714`; both reported freshness fixes are ancestors and the source tree is clean.
-- Classified prior successful tool calls as `SYNTHETIC_MCP_HARNESS`; no evidence attributes them to a real Codex process.
-- Audited the unchanged 11-tool MCP surface: the content-hash precondition is an explicit backward-compatible optional/clarifying contract, with `patch_precondition_required` for omission.
-- Built candidate `0.1.0-dev-local-5c10` from the actual HEAD with deterministic payload hash metadata. The established signer requires `SYNESIS_MANIFEST_PRIVATE_KEY_B64`; it is absent, and the unsigned release-mode manifest was rejected before update planning.
-- Required Gradle checks, Go tests, and Go vet passed. Existing active `0.1.0-dev-local-5c9`, fixture control checkout, and preserved worker evidence were not altered. No processes were terminated and no worktrees were force-removed.
+- Resolved actual source lineage: `HEAD=8d5447b35772a99f7097faa10f401c6c6156a714`; both reported freshness fixes are
+  ancestors and the source tree is clean.
+- Classified prior successful tool calls as `SYNTHETIC_MCP_HARNESS`; no evidence attributes them to a real Codex
+  process.
+- Audited the unchanged 11-tool MCP surface: the content-hash precondition is an explicit backward-compatible
+  optional/clarifying contract, with `patch_precondition_required` for omission.
+- Built candidate `0.1.0-dev-local-5c10` from the actual HEAD with deterministic payload hash metadata. The established
+  signer requires `SYNESIS_MANIFEST_PRIVATE_KEY_B64`; it is absent, and the unsigned release-mode manifest was rejected
+  before update planning.
+- Required Gradle checks, Go tests, and Go vet passed. Existing active `0.1.0-dev-local-5c9`, fixture control checkout,
+  and preserved worker evidence were not altered. No processes were terminated and no worktrees were force-removed.
+
 # 2026-07-26 — SYN-014E Slice 5C.7 signing provisioning and real Codex retry
 
-- Audited the trust model: Ed25519 detached signatures, embedded release public key, signer private key supplied only through `SYNESIS_MANIFEST_PRIVATE_KEY_B64`, and no pre-existing matching local credential or registration path.
-- Added explicit acceptance-only trust validation and `provision-acceptance-key`; generated the user-scoped private key outside Git with restrictive ACLs. Acceptance mode requires a signed `developmentOnly` manifest, matching public-key identifier, and explicit `--acceptance`; release verification remains isolated.
-- Verified matching-key acceptance, tampered-manifest rejection, wrong-key rejection, unsigned acceptance rejection, and release isolation. Built and activated signed `0.1.0-dev-local-5c11` from `b5f264a`; previous `5c10` remains retained.
-- Corrected the Codex MCP launcher entry through supported `codex mcp remove/add`, preserving `other-server` and `notify`; the real Codex process loaded the global config, discovered 11 tools, and executed ensure/read/apply/run/get. A complete final mutation/test closure was not claimed because repeated refreshes caused genuine workspace-generation rejections on later test patches.
-- Gradle checks, Go tests, and Go vet passed. Fixture control checkout stayed clean; no process termination or forced worktree removal was used.
+- Audited the trust model: Ed25519 detached signatures, embedded release public key, signer private key supplied only
+  through `SYNESIS_MANIFEST_PRIVATE_KEY_B64`, and no pre-existing matching local credential or registration path.
+- Added explicit acceptance-only trust validation and `provision-acceptance-key`; generated the user-scoped private key
+  outside Git with restrictive ACLs. Acceptance mode requires a signed `developmentOnly` manifest, matching public-key
+  identifier, and explicit `--acceptance`; release verification remains isolated.
+- Verified matching-key acceptance, tampered-manifest rejection, wrong-key rejection, unsigned acceptance rejection, and
+  release isolation. Built and activated signed `0.1.0-dev-local-5c11` from `b5f264a`; previous `5c10` remains retained.
+- Corrected the Codex MCP launcher entry through supported `codex mcp remove/add`, preserving `other-server` and
+  `notify`; the real Codex process loaded the global config, discovered 11 tools, and executed
+  ensure/read/apply/run/get. A complete final mutation/test closure was not claimed because repeated refreshes caused
+  genuine workspace-generation rejections on later test patches.
+- Gradle checks, Go tests, and Go vet passed. Fixture control checkout stayed clean; no process termination or forced
+  worktree removal was used.
 
 # 2026-07-26 — SYN-014E Slice 5C.8 multi-file freshness
 
-- Resolved lineage from reported `b5f264a`/`35cc7bd` to actual implementation base `49da341ae33123cd040ce96f9d393ef8f7aa12ac`.
-- Added per-file revisions and explicit reason codes for file revision staleness, patch-context mismatch, and workspace-generation change; exact connection-instance binding is preserved.
-- Workspace tests (154), full Gradle checks, Go tests, and Go vet passed. Sequential multi-file and same-file old/new revision tests pass.
-- Built, verified, prepared, and activated signed `0.1.0-dev-local-5c12`; active pointer retains `0.1.0-dev-local-5c11` as previous.
-- Real noninteractive Codex loaded the preserved TOML, discovered 11 Synesis tools, executed ensure/read/read/apply/apply/run/get, passed `run-tests.cmd`, and returned no pending action. Fixture control checkout remained clean; no process termination or forced worktree removal was used.
+- Resolved lineage from reported `b5f264a`/`35cc7bd` to actual implementation base
+  `49da341ae33123cd040ce96f9d393ef8f7aa12ac`.
+- Added per-file revisions and explicit reason codes for file revision staleness, patch-context mismatch, and
+  workspace-generation change; exact connection-instance binding is preserved.
+- Workspace tests (154), full Gradle checks, Go tests, and Go vet passed. Sequential multi-file and same-file old/new
+  revision tests pass.
+- Built, verified, prepared, and activated signed `0.1.0-dev-local-5c12`; active pointer retains `0.1.0-dev-local-5c11`
+  as previous.
+- Real noninteractive Codex loaded the preserved TOML, discovered 11 Synesis tools, executed
+  ensure/read/read/apply/apply/run/get, passed `run-tests.cmd`, and returned no pending action. Fixture control checkout
+  remained clean; no process termination or forced worktree removal was used.
 
 # 2026-07-26 — SYN-014E Slice 5C.9 Antigravity discovery preflight
 
-- Resolved the installed Antigravity surface: version 2.3.1 at the local Windows application path; production MCP configuration is `%USERPROFILE%\\.gemini\\antigravity\\mcp_config.json`, with the matching `%USERPROFILE%\\.gemini\\config\\mcp_config.json` mirror.
-- Verified the sole Synesis entry uses the stable `synesis.cmd` launcher and exact `mcp --provider antigravity` arguments, with no worker path, fixture path, credentials, or model override. No migration was needed and no unrelated settings were changed.
-- Gradle checks and Go tests/vet passed. Fixture control checkout remains clean; signed `0.1.0-dev-local-5c12` remains active with `5c11` previous. Read-only cleanup/reconciliation found no executable actions or ambiguous active leases.
-- Real Antigravity GUI discovery and tool execution remain unproven pending the operator's required close/reopen/open-workspace action. No production Synesis defect has been demonstrated.
+- Resolved the installed Antigravity surface: version 2.3.1 at the local Windows application path; production MCP
+  configuration is `%USERPROFILE%\\.gemini\\antigravity\\mcp_config.json`, with the matching
+  `%USERPROFILE%\\.gemini\\config\\mcp_config.json` mirror.
+- Verified the sole Synesis entry uses the stable `synesis.cmd` launcher and exact `mcp --provider antigravity`
+  arguments, with no worker path, fixture path, credentials, or model override. No migration was needed and no unrelated
+  settings were changed.
+- Gradle checks and Go tests/vet passed. Fixture control checkout remains clean; signed `0.1.0-dev-local-5c12` remains
+  active with `5c11` previous. Read-only cleanup/reconciliation found no executable actions or ambiguous active leases.
+- Real Antigravity GUI discovery and tool execution remain unproven pending the operator's required
+  close/reopen/open-workspace action. No production Synesis defect has been demonstrated.
 
 # 2026-07-26 — SYN-014E Claude Code MCP provider support
 
-- Renamed the canonical provider ID to `claude` and retained `claude-code` as a registry input alias. Claude Code hook configuration remains `.claude/settings.json`.
-- Added project-scoped `.mcp.json` management with append/update-only `mcpServers.synesis`, launcher command preservation, `mcp --provider claude` arguments, idempotent reinstall, and unrelated-entry-preserving uninstall. Claude Desktop configuration was not added.
-- Focused `ProviderApplicationServiceTest`, provider/module checks, root Gradle `check`, and bootstrap `go test ./...`/`go vet ./...` pass. Existing 11-tool MCP surface is unchanged.
+- Renamed the canonical provider ID to `claude` and retained `claude-code` as a registry input alias. Claude Code hook
+  configuration remains `.claude/settings.json`.
+- Added project-scoped `.mcp.json` management with append/update-only `mcpServers.synesis`, launcher command
+  preservation, `mcp --provider claude` arguments, idempotent reinstall, and unrelated-entry-preserving uninstall.
+  Claude Desktop configuration was not added.
+- Focused `ProviderApplicationServiceTest`, provider/module checks, root Gradle `check`, and bootstrap `go test ./...`/
+  `go vet ./...` pass. Existing 11-tool MCP surface is unchanged.
 
 # 2026-07-26 — SYN-015 STRUCT-1A foundational package completion
 
-- Paused `SYN-014E` before production edits and promoted `SYN-015` as the sole validator-recognized ACTIVE primary task for the staged package-structure refactor.
-- Completed `STRUCT-1A` only: reorganized packages within `:project-record`, `:coordination`, and `:link`, moved `DemoCli` to `org.synesis.link.cli`, and updated the `link` Gradle main-class reference.
-- Required validation passed: `.\gradlew.bat :project-record:check --no-daemon`, `.\gradlew.bat :coordination:check --no-daemon`, `.\gradlew.bat :link:check --no-daemon`, `.\gradlew.bat check --no-daemon`, `go test -count=1 ./...`, and `go vet ./...`.
+- Paused `SYN-014E` before production edits and promoted `SYN-015` as the sole validator-recognized ACTIVE primary task
+  for the staged package-structure refactor.
+- Completed `STRUCT-1A` only: reorganized packages within `:project-record`, `:coordination`, and `:link`, moved
+  `DemoCli` to `org.synesis.link.cli`, and updated the `link` Gradle main-class reference.
+- Required validation passed: `.\gradlew.bat :project-record:check --no-daemon`,
+  `.\gradlew.bat :coordination:check --no-daemon`, `.\gradlew.bat :link:check --no-daemon`,
+  `.\gradlew.bat check --no-daemon`, `go test -count=1 ./...`, and `go vet ./...`.
 - Committed the slice as `Reorganize Synesis foundational packages` at `376f2d2ce6003b32d28994b19b6728926ab0af6e`.
-- Stopped before `STRUCT-1B`; the only remaining work in this session is durable-state reconciliation and checkpoint creation for the completed slice.
+- Stopped before `STRUCT-1B`; the only remaining work in this session is durable-state reconciliation and checkpoint
+  creation for the completed slice.
 
 # 2026-07-26 — SYN-015 STRUCT-1B activation
 
 - Sealed the STRUCT-1A durable-state reconciliation in `95f696cc6442b426b28d7e2f2d7b7dd54a43b541`.
 - Confirmed a clean worktree and passing `:workspace:check`, `:cli:check`, and `:mcp:check` preflight from that commit.
-- Activated `STRUCT-1B — Workspace packages` as the sole active subtask under `SYN-015`; `STRUCT-1C` and `STRUCT-1D` remain inactive.
+- Activated `STRUCT-1B — Workspace packages` as the sole active subtask under `SYN-015`; `STRUCT-1C` and `STRUCT-1D`
+  remain inactive.
 - No workspace production edits have started. The next action is the required workspace FQN reference inventory.
 
 # 2026-07-26 — SYN-015 STRUCT-1B workspace package completion
 
-- Reorganized only the `:workspace` module: project/bootstrap ownership, provider-specific adapters, JSON/configuration, lifecycle cleanup/reconciliation/repair/lease, and responsibility-specific infrastructure packages.
-- Removed production references to the old `workspace.integration`, flat lifecycle, guardrail, provider JSON, and migration Codex TOML package names; aligned moved tests with production packages.
-- Added narrow workspace architecture tests for removed integration ownership, delivery isolation, provider-neutral contracts, and production/test separation.
-- Required validation passed: `:workspace:check`, `:coordination:check`, `:cli:check`, `:mcp:check`, root `check`, `go test -count=1 ./...`, `go vet ./...`, and focused `McpTool11Test`.
+- Reorganized only the `:workspace` module: project/bootstrap ownership, provider-specific adapters, JSON/configuration,
+  lifecycle cleanup/reconciliation/repair/lease, and responsibility-specific infrastructure packages.
+- Removed production references to the old `workspace.integration`, flat lifecycle, guardrail, provider JSON, and
+  migration Codex TOML package names; aligned moved tests with production packages.
+- Added narrow workspace architecture tests for removed integration ownership, delivery isolation, provider-neutral
+  contracts, and production/test separation.
+- Required validation passed: `:workspace:check`, `:coordination:check`, `:cli:check`, `:mcp:check`, root `check`,
+  `go test -count=1 ./...`, `go vet ./...`, and focused `McpTool11Test`.
 - Committed as `Reorganize Synesis workspace packages` at `b67ac1c`; stopped before `STRUCT-1C`.
 
 # 2026-07-26 — SYN-015 STRUCT-1B ownership correction and final checkpoint
 
 - The initial workspace move exposed an accidental `application -> provider -> project -> application` package cycle.
-- Restored `ProjectApplicationService` to `workspace.application` and moved application-facing agent services and `TranslatedOutcome` into `workspace.application`; retained agent response/value records in `workspace.agent`.
-- Updated the required CLI FQNs and architecture/test package references. No new interface or durable/public format was introduced.
-- Verified `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go tests, Go vet, focused `McpTool11Test`, stale FQN scan, and an acyclic production workspace package graph.
+- Restored `ProjectApplicationService` to `workspace.application` and moved application-facing agent services and
+  `TranslatedOutcome` into `workspace.application`; retained agent response/value records in `workspace.agent`.
+- Updated the required CLI FQNs and architecture/test package references. No new interface or durable/public format was
+  introduced.
+- Verified `:workspace:check`, `:cli:check`, `:mcp:check`, root `check`, Go tests, Go vet, focused `McpTool11Test`,
+  stale FQN scan, and an acyclic production workspace package graph.
 - Committed the correction as `248889a`; created checkpoint `CP-0214`; stopped before `STRUCT-1C`.
 
 # 2026-07-26 — SYN-015 STRUCT-1C MCP package completion
 
 - Activated STRUCT-1C after baseline Gradle and Go validation passed.
-- Moved `McpProtocolHandler` to `org.synesis.mcp.application` and `McpStdioServer` to `org.synesis.mcp.transport.stdio`; retained `SynesisMcpServer` at the stable root package.
-- Added narrow MCP package architecture tests and protocol/transport package markers; moved MCP tests to mirror the application package.
+- Moved `McpProtocolHandler` to `org.synesis.mcp.application` and `McpStdioServer` to `org.synesis.mcp.transport.stdio`;
+  retained `SynesisMcpServer` at the stable root package.
+- Added narrow MCP package architecture tests and protocol/transport package markers; moved MCP tests to mirror the
+  application package.
 - Verified `:mcp:check`, focused persistent MCP tests, `:cli:check`, root `check`, and stale production FQN scans.
 - Committed as `5cb0656`; STRUCT-1D is now the sole active subtask.
 
 # 2026-07-26 — SYN-015 STRUCT-1D CLI package completion
 
-- Moved command implementations into identity, sync, provider, hook, project, workspace, coordination, prediction, ownership, task, speculation, and lifecycle packages; retained cross-cutting root command wiring.
+- Moved command implementations into identity, sync, provider, hook, project, workspace, coordination, prediction,
+  ownership, task, speculation, and lifecycle packages; retained cross-cutting root command wiring.
 - Moved representative CLI tests to mirror production command families and added CLI package architecture checks.
-- Verified CLI/MCP/root Gradle checks, launcher help/version/init/doctor/provider/workspace/lifecycle acceptance, and stale command-FQN scanning.
+- Verified CLI/MCP/root Gradle checks, launcher help/version/init/doctor/provider/workspace/lifecycle acceptance, and
+  stale command-FQN scanning.
 - Committed as `958a039`; QUALITY-DEDUP is now the sole active subtask.
 
 # 2026-07-26 — SYN-015 deduplication completion
 
-- Audited repeated infrastructure and lifecycle logic. One strong identical group was confirmed: SHA-256 UTF-8 plan hashing duplicated in cleanup, reconciliation, and repair plan stores.
+- Audited repeated infrastructure and lifecycle logic. One strong identical group was confirmed: SHA-256 UTF-8 plan
+  hashing duplicated in cleanup, reconciliation, and repair plan stores.
 - Extracted lifecycle-owned `PlanIntegrity` with direct coverage; no generic utility or behavior rewrite introduced.
 - Verified `:workspace:check`; committed as `98755b3`; QUALITY-WARNINGS is now the sole active subtask.
 
@@ -3067,26 +3322,35 @@ Append-only operational history.
 
 - Warning-mode Gradle audit identified four execution-time `project.file(...)` deprecations in verification tasks.
 - Replaced those lookups with `layout` providers without changing the files scanned or runtime behavior.
-- Verified root `check --warning-mode all` with zero warning lines; committed as `98cda05`; QUALITY-GOD is now the sole active subtask.
+- Verified root `check --warning-mode all` with zero warning lines; committed as `98cda05`; QUALITY-GOD is now the sole
+  active subtask.
 
 # 2026-07-26 — SYN-015 god-class split completion
 
-- Ranked oversized classes by size and responsibility concentration; selected `ProviderApplicationService` as the strongest safe candidate.
-- Extracted MCP configuration persistence into `ProviderMcpConfigurationService` while preserving the stable facade and provider result strings.
+- Ranked oversized classes by size and responsibility concentration; selected `ProviderApplicationService` as the
+  strongest safe candidate.
+- Extracted MCP configuration persistence into `ProviderMcpConfigurationService` while preserving the stable facade and
+  provider result strings.
 - Verified `:workspace:check` and focused provider tests; committed as `04977b9`; final repository validation is next.
 
 # 2026-07-26 — SYN-015 final validation completion
 
 - Full Gradle module matrix and root `check` passed; Go tests and vet passed.
-- Focused MCP server/tool tests passed with exactly 11 tools; stale production FQN and production-to-test scans were clean; no module dependency changes were found.
-- CLI help/version and command-family help passed; the disposable CLI MCP launcher retains its pre-existing missing MCP runtime classpath limitation.
+- Focused MCP server/tool tests passed with exactly 11 tools; stale production FQN and production-to-test scans were
+  clean; no module dependency changes were found.
+- CLI help/version and command-family help passed; the disposable CLI MCP launcher retains its pre-existing missing MCP
+  runtime classpath limitation.
 - Working tree was clean before this final durable checkpoint; `SYN-015` is complete and `SYN-014E` remains paused.
+
 # 2026-07-26 — SYN-016 coordination domain organization
 
-- Reorganized the flat coordination domain into `capability`, `task`, `ownership`, `prediction`, `integration`, `speculation`, and `command` packages.
-- Updated production/test references and mirrored coordination tests; added a package ownership architecture test without adding package-info files.
+- Reorganized the flat coordination domain into `capability`, `task`, `ownership`, `prediction`, `integration`,
+  `speculation`, and `command` packages.
+- Updated production/test references and mirrored coordination tests; added a package ownership architecture test
+  without adding package-info files.
 - Verified `:coordination:check`, root `check`, Go tests/vet, stale-FQN scans, and no-flat-package scans.
 - Committed as `195fc95`; SYN-016 is complete and `SYN-014E` remains paused.
+
 # 2026-07-27 — SYN-018 repository hygiene
 
 - Promoted `SYN-018` as the sole active task; `SYN-014E` remains paused.
@@ -3105,6 +3369,7 @@ Append-only operational history.
 - Commits: `4b7f530` documentation; `59f7c63` hygiene checks. No script cleanup
   commit was needed. Exact continuation: preserve the final checkpoint and
   leave the architecture-test mismatch for a separately authorized task.
+
 # 2026-07-27 — Root AGENTS.md current-boundary correction
 
 - Corrected the handwritten repository `AGENTS.md`, which still described only
@@ -3116,6 +3381,7 @@ Append-only operational history.
 - The initialized-project generated template remains owned by
   `ProjectApplicationService` and was not conflated with the repository
   contract.
+
 # 2026-07-27 — SYN-019 workspace architecture-test closure
 
 - Reproduced `WorkspaceApplicationPackageArchitectureTest` failure.
@@ -3130,6 +3396,7 @@ Append-only operational history.
   checks pass before the unrelated README edit appeared. That edit triggers a
   false positive in the existing hygiene count regex (`%20tools-11`) and was
   preserved outside this task. Commit: `a87d3d8`.
+
 ## 2026-07-27 — Bootstrap versioned activation portability correction
 
 - Checkpoint: CP-0235
@@ -3145,6 +3412,7 @@ Append-only operational history.
 - Remaining work: Review and commit disposition; do not modify the unrelated
   README edit.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-07-27 — Deferred register refinement
 
 - Active task: SYN-019; documentation-only deferred-register cleanup authorized
@@ -3195,6 +3463,7 @@ Append-only operational history.
   pytest -q` (45 passed); deferred validator; and `git diff --check` PASS.
 - Remaining work: No collaboration roadmap task remains active. Do not publish,
   push, or claim native provider enforcement without new evidence.
+
 ## 2026-08-02 — SYN-036 promotion
 
 - Active task: SYN-036 — Canonical baselines and lineage-aware integration.
@@ -3206,6 +3475,7 @@ Append-only operational history.
   during promotion.
 - Exact continuation: inspect the current MCP catalog and administrative-state
   abstractions, then implement task 1.
+
 ## 2026-08-02 — SYN-036 task 1 complete
 
 - Completed the authoritative ten-tool MCP catalog foundation in `mcp-contract`.
@@ -3590,6 +3860,7 @@ Append-only operational history.
   keep the independent command-cleanup outcome explicitly unproven.
 - Exact continuation: `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1`
+
 # 2026-08-05 — SYN-038 durable command admission and Git runner verification
 
 - Reproduced `McpServerTest.testMcpReadFileAndApplyPatchEndToEnd` alone. The
@@ -3733,7 +4004,7 @@ Append-only operational history.
   `WorkspaceCliTest.setUp:74` / `ProcessCommandRunner.execute:81` with worker
   `29372` and child `git.exe` `22824`; existing hardening was preserved.
 - Next action: rerun the exact fresh Todo acceptance with isolated initial
-ownership. No push and no SYN-040.
+  ownership. No push and no SYN-040.
 
 # 2026-08-23 — SYN-039 CP-0472 unattended Todo acceptance
 
@@ -3884,6 +4155,7 @@ ownership. No push and no SYN-040.
   failures. The full root check reproduced the known `McpServerTest` Git
   subprocess failure/stall and was bounded/interrupted after process evidence
   capture. Doctor remains DEGRADED with six fixture warnings.
+
 ## 2026-08-24 — SYN-039 CP-0525 bounded and ordinary acceptance
 
 - Ran a fresh bounded exact-projection diagnostic with two independent
@@ -3898,7 +4170,9 @@ ownership. No push and no SYN-040.
   remains DEGRADED with six warnings; the root Git stall and bootstrap
   migration failures remain independent. Evidence:
   `docs/evidence/syn039-unattended-todo-cp0525-002-bounded-and-ordinary-2026-08-24.md`.
+
 ## 2026-08-25 — SYN-039 CP-0528 bounded diagnostic and ordinary acceptance
+
 ## 2026-08-25 — SYN-039 CP-0533 ordinary acceptance boundary
 
 - Ran a fresh ordinary two-agent Todo acceptance using only complementary
@@ -3920,6 +4194,7 @@ ownership. No push and no SYN-040.
 
 - Exact next action: run a bounded same-session continuity diagnostic across a
   delayed peer REVIEW request without relay or manual lifecycle intervention.
+
 ## 2026-08-25 — SYN-039 CP-0536 review projection fix and post-fix acceptance
 
 - Reproduced and fixed the stale-review fallback projection: a validated
@@ -3948,6 +4223,7 @@ ownership. No push and no SYN-040.
 - Exact next action: run one fresh ordinary unattended two-agent Todo
   acceptance with only complementary coding prompts using the rebuilt bundle.
   Do not relay, manually transition, push, or create SYN-040.
+
 # 2026-08-25 — SYN-039 CP-0539 ordinary acceptance compliance boundary
 
 - Ran a fresh ordinary unattended two-agent Todo acceptance with the rebuilt
@@ -3971,6 +4247,7 @@ ownership. No push and no SYN-040.
 - Exact next action: run another fresh ordinary unattended two-agent Todo
   acceptance with only complementary coding prompts; preserve the first
   unchanged projected-action failure or missing usable projection.
+
 ## 2026-08-28 — SYN-039 closure — final canonical acceptance
 
 - Formally closed SYN-039 as `DONE / ACCEPTED` using the already-proven final
@@ -3989,6 +4266,7 @@ ownership. No push and no SYN-040.
 
 - Exact next action: select and explicitly promote the next authorized task
   before beginning implementation.
+
 ## 2026-08-28 — SYN-041 final real Codex lease measurement
 
 - Ran the explicitly authorized fresh default-authenticated Codex measurement
@@ -4003,6 +4281,7 @@ ownership. No push and no SYN-040.
   change is justified. SYN-041 remains ACTIVE; SYN-039 and SYN-040 stay closed.
 - Evidence:
   `docs/evidence/syn041-real-codex-lease-measurement-2026-08-28.md`.
+
 ## 2026-08-28 — SYN-041 instrumented real Codex teardown measurement
 
 - Reconfirmed the source call chain from MCP EOF through
@@ -4018,6 +4297,7 @@ ownership. No push and no SYN-040.
   justified. SYN-041 remains ACTIVE; SYN-039 and SYN-040 remain closed.
 - Evidence:
   `docs/evidence/syn041-real-codex-teardown-measurement-2026-08-28.md`.
+
 ## 2026-08-28 — SYN-041 final native transport validation
 
 - Reconfirmed the clean-close source chain and ran the official MCP directly,
@@ -4032,6 +4312,7 @@ ownership. No push and no SYN-040.
   SYN-041 remains ACTIVE and no further equivalent probe is authorized.
 - Evidence:
   `docs/evidence/syn041-real-codex-native-teardown-2026-08-28.md`.
+
 # 2026-08-28 — SYN-041 native observability design
 
 - Completed the requested measurement-design slice only; no equivalent real
@@ -4052,6 +4333,7 @@ ownership. No push and no SYN-040.
   sufficient to classify the child termination observed ~24.5 seconds before
   Codex exit. No production code, lease/Doctor behavior, migration,
   generalized identity, or SYN-039 state changed.
+
 ## 2026-08-29 — SYN-041 terminal-disconnect trigger implementation
 
 - Read-first tracing localized both causal boundaries: externally launched
@@ -4080,6 +4362,7 @@ ownership. No push and no SYN-040.
 
 Review CP-0567 and await separately authorized final provider confirmation; do
 not run Codex or close SYN-041.
+
 ## 2026-08-29 — SYN-041 final real Codex closure acceptance
 
 - Rebuilt the official bundle from the current checkout and ran exactly one
@@ -4099,3 +4382,21 @@ not run Codex or close SYN-041.
   remain incomplete after host timeout. SYN-041 is DONE / ACCEPTED, RESULT A.
 - Evidence: `docs/evidence/syn041-final-real-codex-closure-2026-08-29.md`.
 - Exact next action: preserve closure; do not create SYN-042 or broaden scope.
+## 2026-08-29 — MAINT-001 IntelliJ analyzer cleanup
+
+- Promoted MAINT-001 as the sole active maintenance task while preserving the
+  accepted SYN-041 closure and all pre-existing dirty work.
+- Full IntelliJ file inspection covered 571 Java files with zero analyzer-call
+  failures. The baseline of 1,072 findings (767 warnings, 305 weak warnings)
+  is now 859 findings (555 warnings, 304 weak warnings).
+- Applied bounded behavior-preserving cleanup across provider, coordination,
+  workspace, MCP, link, CLI, and project-record code: removed redundant
+  declarations and suppressions, modernized safe collection/assertion forms,
+  corrected partial FileChannel writes, removed a record self-assignment and
+  dead private helper, and fixed a few redundant guards/wrappers.
+- IntelliJ project build passed with no reported problems. Gradle focused tests
+  remain blocked by the host's loopback connection failure and are not claimed
+  as passing. Remaining analyzer findings require source-level judgment and
+  are not being hidden with broad suppressions.
+- Evidence: IntelliJ analyzer passes and build output from this session;
+  checkpoint CP-0571.md remains preserved.

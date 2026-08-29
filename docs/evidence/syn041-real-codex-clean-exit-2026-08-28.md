@@ -41,11 +41,11 @@ Branch: `master`
 
 ## Real topology and lifecycle
 
-| Process | PID | Parent | Start |
-|---|---:|---:|---|
-| Codex `codex-x86_64-pc-windows-msvc.exe` | 17156 | 8112 | 2026-08-28 15:05:55 UTC |
-| Official `synesis-mcp.exe` | 19784 | 17156 | 2026-08-28 15:05:55 UTC |
-| Packaged Java runtime | 11356 | 19784 | 2026-08-28 15:05:55 UTC |
+| Process                                  |   PID | Parent | Start                   |
+|------------------------------------------|------:|-------:|-------------------------|
+| Codex `codex-x86_64-pc-windows-msvc.exe` | 17156 |   8112 | 2026-08-28 15:05:55 UTC |
+| Official `synesis-mcp.exe`               | 19784 |  17156 | 2026-08-28 15:05:55 UTC |
+| Packaged Java runtime                    | 11356 |  19784 | 2026-08-28 15:05:55 UTC |
 
 Connection ID: `syn041-real-codex-connection-20260828-007`  
 Session/binding ID: `session-d2915a2f-55f2-4fd0-8277-0d7cb89d643b`  

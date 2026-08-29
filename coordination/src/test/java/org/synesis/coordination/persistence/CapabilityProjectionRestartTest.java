@@ -1,11 +1,14 @@
 package org.synesis.coordination.persistence;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.link.identity.NodeIdentity;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
@@ -13,10 +16,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.link.identity.NodeIdentity;
 
 class CapabilityProjectionRestartTest {
 
@@ -29,23 +29,44 @@ class CapabilityProjectionRestartTest {
         PredictionEventStore store1 = new PredictionEventStore(tempDir, projectId);
 
         CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
-        CapabilityContract contract = new CapabilityContract("UUID id", "Optional<P>", List.of("behavior"), List.of("test"));
+        CapabilityContract contract = new CapabilityContract("UUID id",
+                "Optional<P>",
+                List.of("behavior"),
+                List.of("test"));
 
         // 1. Create request
         CapabilityRequestPayload createdPayload = new CapabilityRequestPayload(
                 handle, "catalog.product-query", requesterIdentity.nodeId(), ownerIdentity.nodeId(),
                 contract, CapabilityLifecycleState.AWAITING_OWNER, null);
-        store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requesterIdentity.nodeId(), createdPayload.encode(), requesterIdentity);
+        store1.append(UUID.randomUUID(),
+                PredictionEventType.CAPABILITY_REQUEST_CREATED,
+                requesterIdentity.nodeId(),
+                createdPayload.encode(),
+                requesterIdentity);
 
         // 2. Owner revises contract
-        CapabilityContract revisedContract = new CapabilityContract("UUID id", "Optional<P>", List.of("revised behavior"), List.of("test"));
+        CapabilityContract revisedContract = new CapabilityContract("UUID id",
+                "Optional<P>",
+                List.of("revised behavior"),
+                List.of("test"));
         CapabilityRequestPayload revisedPayload = new CapabilityRequestPayload(
-                handle, "catalog.product-query", requesterIdentity.nodeId(), ownerIdentity.nodeId(),
-                revisedContract, CapabilityLifecycleState.REVISION_REQUESTED, "Existing catalog API requires revised behavior");
-        store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, ownerIdentity.nodeId(), revisedPayload.encode(), ownerIdentity);
+                handle,
+                "catalog.product-query",
+                requesterIdentity.nodeId(),
+                ownerIdentity.nodeId(),
+                revisedContract,
+                CapabilityLifecycleState.REVISION_REQUESTED,
+                "Existing catalog API requires revised behavior");
+        store1.append(UUID.randomUUID(),
+                PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED,
+                ownerIdentity.nodeId(),
+                revisedPayload.encode(),
+                ownerIdentity);
 
         // Verify pre-restart state
-        CapabilityRequestRecord recordBefore = store1.capabilityRequestProjection().findByHandle(handle.value()).orElseThrow();
+        CapabilityRequestRecord recordBefore = store1.capabilityRequestProjection()
+                .findByHandle(handle.value())
+                .orElseThrow();
         assertEquals(CapabilityLifecycleState.REVISION_REQUESTED, recordBefore.state());
         assertEquals("Existing catalog API requires revised behavior", recordBefore.reason());
 
@@ -53,14 +74,18 @@ class CapabilityProjectionRestartTest {
         PredictionEventStore store2 = new PredictionEventStore(tempDir, projectId);
         CapabilityRequestProjection projectionAfter = store2.capabilityRequestProjection();
 
-        CapabilityRequestRecord recordAfter = projectionAfter.findByHandle(handle.value()).orElseThrow();
+        CapabilityRequestRecord recordAfter = projectionAfter.findByHandle(handle.value())
+                .orElseThrow();
         assertNotNull(recordAfter);
-        assertEquals("req_TEST1234567890ABCDEF", recordAfter.handle().value());
+        assertEquals("req_TEST1234567890ABCDEF",
+                recordAfter.handle()
+                        .value());
         assertEquals("catalog.product-query", recordAfter.capability());
         assertEquals(requesterIdentity.nodeId(), recordAfter.requesterNodeId());
         assertEquals(ownerIdentity.nodeId(), recordAfter.ownerNodeId());
         assertEquals(CapabilityLifecycleState.REVISION_REQUESTED, recordAfter.state());
         assertEquals("Existing catalog API requires revised behavior", recordAfter.reason());
-        assertTrue(recordAfter.contract().isEquivalent(revisedContract));
+        assertTrue(recordAfter.contract()
+                .isEquivalent(revisedContract));
     }
 }

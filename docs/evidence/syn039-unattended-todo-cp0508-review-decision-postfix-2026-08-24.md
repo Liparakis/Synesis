@@ -40,13 +40,13 @@ stopped on agent-compliance evidence before clean WorkGroup closure
   `9766b0bf-606e-39ba-b4ad-1e5b03064168`; claim
   `PATH_EXACT:test_todo.py`; epoch `1`
 - REVIEW requests:
-  - B → A: `9dd58277-6772-43d3-a54a-e6f04cb25ed7`, `ACCEPTED`
-  - A → B: `8e4a3a80-0276-40a7-8ab4-29fd14c298cc`, `ACCEPTED`
+    - B → A: `9dd58277-6772-43d3-a54a-e6f04cb25ed7`, `ACCEPTED`
+    - A → B: `8e4a3a80-0276-40a7-8ab4-29fd14c298cc`, `ACCEPTED`
 - REVIEW grants:
-  - `c82b8803-5fd7-3e97-82a3-f5d8a7302ac7`, target B, A intent, epoch 1;
-    consumed once
-  - `f879b4ff-047c-3dc8-8b70-2568a5d4a4a3`, target A, B intent, epoch 1;
-    still available at the end of the run
+    - `c82b8803-5fd7-3e97-82a3-f5d8a7302ac7`, target B, A intent, epoch 1;
+      consumed once
+    - `f879b4ff-047c-3dc8-8b70-2568a5d4a4a3`, target A, B intent, epoch 1;
+      still available at the end of the run
 
 ## Progress and exact projection evidence
 

@@ -1,7 +1,5 @@
-package org.synesis.cli.command.hook;
+package org.synesis.cli.hook;
 
-
-import org.synesis.cli.DistributionLauncherTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,12 +10,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.synesis.cli.DistributionLauncherTest;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -33,15 +32,9 @@ final class AntigravityHookProcessTest {
         command.add("/d");
         command.add("/c");
         command.add(launcher.toString());
-        for (String argument : arguments) {
-            command.add(argument);
-        }
-        ProcessBuilder builder = new ProcessBuilder(command).directory(directory.toFile())
-                .redirectErrorStream(true);
-        String path = builder.environment()
-                .get("PATH");
-        builder.environment()
-                .put("PATH", settings.get("PATH_PREFIX") + ";" + path);
+        command.addAll(Arrays.asList(arguments));
+        ProcessBuilder builder = new ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true);
+        builder.environment().compute("PATH", (_, path) -> settings.get("PATH_PREFIX") + ";" + path);
         Process process = builder.start();
         return new CommandResult(process.waitFor(),
                 new String(process.getInputStream()
@@ -88,18 +81,44 @@ final class AntigravityHookProcessTest {
             Map<String, String> environment = Map.of("PATH_PREFIX", pathBin.toString());
 
             assertEquals(0, run(launcher, project, environment, "init", "--project", project.toString()).exit());
-            assertEquals(0, run(launcher, project, environment, "project", "create", "--project",
-                    project.toString(), "--peer", "sl1-" + "0".repeat(64)).exit());
+            assertEquals(0,
+                    run(launcher,
+                            project,
+                            environment,
+                            "project",
+                            "create",
+                            "--project",
+                            project.toString(),
+                            "--peer",
+                            "sl1-" + "0".repeat(64)).exit());
             Files.createDirectories(project.resolve("src"));
             Path protectedFile = project.resolve("src/protected.txt");
             Files.writeString(protectedFile, "unchanged");
-            CommandResult constraint = run(launcher, project, environment, "constraint", "create",
-                    "--project", project.toString(), "--title", "Protect file", "--rationale", "Frozen.",
-                    "--scope", "src/protected.txt", "--effect", "block");
+            CommandResult constraint = run(launcher,
+                    project,
+                    environment,
+                    "constraint",
+                    "create",
+                    "--project",
+                    project.toString(),
+                    "--title",
+                    "Protect file",
+                    "--rationale",
+                    "Frozen.",
+                    "--scope",
+                    "src/protected.txt",
+                    "--effect",
+                    "block");
             assertEquals(0, constraint.exit(), constraint.output());
 
-            CommandResult install = run(launcher, project, environment, "provider", "install", "antigravity",
-                    "--project", project.toString());
+            CommandResult install = run(launcher,
+                    project,
+                    environment,
+                    "provider",
+                    "install",
+                    "antigravity",
+                    "--project",
+                    project.toString());
             assertEquals(0, install.exit(), install.output());
             Path wrapper = project.resolve(".synesis/local/run-antigravity-hook.ps1");
             assertTrue(Files.isRegularFile(wrapper));
@@ -113,10 +132,14 @@ final class AntigravityHookProcessTest {
             assertFalse(command.contains("-File \"" + wrapper));
 
             String payload = "{\"workspacePaths\":[\"" + jsonPath(project)
-                    + "\"],\"toolCall\":{\"name\":\"replace_file_content\",\"args\":{\"TargetFile\":\""
-                    + jsonPath(protectedFile) + "\"}}}";
-            ProcessBuilder builder = new ProcessBuilder("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-File", wrapper.toString()).directory(outside.toFile());
+                    + "\"],\"toolCall\":{\"name\":\"replace_file_content\",\"args\":{\"TargetFile\":\"" + jsonPath(
+                    protectedFile) + "\"}}}";
+            ProcessBuilder builder = new ProcessBuilder("powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    wrapper.toString()).directory(outside.toFile());
             builder.environment()
                     .put("PATH", pathBin + ";" + System.getenv("PATH"));
             Process hook = builder.start();

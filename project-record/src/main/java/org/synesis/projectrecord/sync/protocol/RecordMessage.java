@@ -38,6 +38,7 @@ public final class RecordMessage {
     private final String errorText;
     private final long revision;
     private final byte[] digest;
+
     private RecordMessage(Kind kind, UUID projectId, UUID recordId, long knownRevision, byte[] knownDigest,
             byte[] recordBytes, ResultCode resultCode, ErrorCode errorCode, String errorText, long revision,
             byte[] digest) {
@@ -206,7 +207,7 @@ public final class RecordMessage {
         if (code >= ErrorCode.values().length) {
             throw new IOException("unknown error");
         }
-        String text = readText(input, MAX_ERROR_TEXT_BYTES);
+        String text = readText(input);
         if (input.available() != 0) {
             throw new IOException("trailing error bytes");
         }
@@ -238,9 +239,9 @@ public final class RecordMessage {
         output.write(value);
     }
 
-    private static String readText(DataInputStream input, int max) throws IOException {
+    private static String readText(DataInputStream input) throws IOException {
         byte[] bytes = readBytes(input);
-        if (bytes.length > max) {
+        if (bytes.length > MAX_ERROR_TEXT_BYTES) {
             throw new IOException("text exceeds bound");
         }
         try {
@@ -254,8 +255,9 @@ public final class RecordMessage {
         }
     }
 
-    private static void writeText(DataOutputStream output, String value, int max) throws IOException {
-        if (value == null || value.isEmpty() || value.getBytes(StandardCharsets.UTF_8).length > max) {
+    private static void writeText(DataOutputStream output, String value) throws IOException {
+        if (value == null || value.isEmpty()
+                || value.getBytes(StandardCharsets.UTF_8).length > MAX_ERROR_TEXT_BYTES) {
             throw new IllegalArgumentException("text exceeds bound");
         }
         writeBytes(output, value.getBytes(StandardCharsets.UTF_8));
@@ -329,6 +331,7 @@ public final class RecordMessage {
      *
      * @return error code
      */
+    @SuppressWarnings("unused")
     public ErrorCode errorCode() {
         return errorCode;
     }
@@ -394,7 +397,7 @@ public final class RecordMessage {
                     }
                     case ERROR -> {
                         output.writeByte(errorCode.ordinal());
-                        writeText(output, errorText, MAX_ERROR_TEXT_BYTES);
+                        writeText(output, errorText);
                     }
                 }
             }

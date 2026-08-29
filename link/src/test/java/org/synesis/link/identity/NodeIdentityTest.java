@@ -1,5 +1,6 @@
 package org.synesis.link.identity;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,8 +26,7 @@ final class NodeIdentityTest {
         assertFalse(identity.verify("other".getBytes(java.nio.charset.StandardCharsets.UTF_8), signature));
         assertTrue(identity.nodeId()
                 .startsWith("sl1-"));
-        assertTrue(identity.nodeId()
-                .equals(NodeIdentity.deriveNodeId(identity.publicKeyEncoded())));
+        assertEquals(NodeIdentity.deriveNodeId(identity.publicKeyEncoded()), identity.nodeId());
         assertFalse(identity.toString()
                 .contains("PRIVATE"));
         assertNotEquals(identity.nodeId(),
@@ -43,8 +43,7 @@ final class NodeIdentityTest {
         store.save(original);
 
         NodeIdentity loaded = store.load();
-        assertTrue(loaded.nodeId()
-                .equals(original.nodeId()));
+        assertEquals(original.nodeId(), loaded.nodeId());
         org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
                 () -> store.save(NodeIdentity.generate()));
         Files.deleteIfExists(path);

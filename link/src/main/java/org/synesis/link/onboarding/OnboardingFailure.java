@@ -13,6 +13,7 @@ import java.util.Objects;
  */
 public final class OnboardingFailure extends Exception {
 
+    @java.io.Serial
     private static final long serialVersionUID = 1L;
     /**
      * Stable typed classification for this failure.

@@ -94,15 +94,15 @@ fence already rejects conflicting ownership once reached.
 
 ## Acceptance mapping
 
-| Required behavior | Baseline result |
-| --- | --- |
-| Two sessions discover and join one WorkGroup without assistance | **FAIL** — A created the WorkGroup; B discovered it but could not join without an unavailable `grantId`. |
-| Reviewer sees completed immutable snapshot without mutation ownership | **FAIL** — no reviewer grant or snapshot projection became available to B. |
-| Structured validation accept/reject and rejection routing | **FAIL** — no validation item was created; no accept/reject decision or handoff occurred. |
-| Accepted work integrates into control checkout | **FAIL** — snapshot published, integration failed with `TESTS_FAILED`; control stayed at `7a5925f`. |
-| WorkGroup closes and coordination artifacts are cleaned | **FAIL** — A's lane/claims were active at stop; session worktrees and stale leases remained. |
-| Final Doctor healthy or explicitly accepted warning-only state | **FAIL** — Doctor was `DEGRADED` with stale leases and reconciliation recommended. |
-| Unattended Todo end-to-end completion | **FAIL** — implementation and isolated tests passed, but review, handoff, integration, closure, and clean state did not. |
+| Required behavior                                                     | Baseline result                                                                                                          |
+|-----------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| Two sessions discover and join one WorkGroup without assistance       | **FAIL** — A created the WorkGroup; B discovered it but could not join without an unavailable `grantId`.                 |
+| Reviewer sees completed immutable snapshot without mutation ownership | **FAIL** — no reviewer grant or snapshot projection became available to B.                                               |
+| Structured validation accept/reject and rejection routing             | **FAIL** — no validation item was created; no accept/reject decision or handoff occurred.                                |
+| Accepted work integrates into control checkout                        | **FAIL** — snapshot published, integration failed with `TESTS_FAILED`; control stayed at `7a5925f`.                      |
+| WorkGroup closes and coordination artifacts are cleaned               | **FAIL** — A's lane/claims were active at stop; session worktrees and stale leases remained.                             |
+| Final Doctor healthy or explicitly accepted warning-only state        | **FAIL** — Doctor was `DEGRADED` with stale leases and reconciliation recommended.                                       |
+| Unattended Todo end-to-end completion                                 | **FAIL** — implementation and isolated tests passed, but review, handoff, integration, closure, and clean state did not. |
 
 ## Scope conclusion
 

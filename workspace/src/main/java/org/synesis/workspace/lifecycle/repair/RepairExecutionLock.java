@@ -10,8 +10,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * File lock ensuring single repair executor per project admin root outside control checkout under
@@ -63,13 +63,24 @@ public final class RepairExecutionLock implements AutoCloseable {
 
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("acquiredAtEpochMillis", System.currentTimeMillis());
-        metadata.put("pid", ProcessHandle.current().pid());
+        metadata.put("pid",
+                ProcessHandle.current()
+                        .pid());
         metadata.put("planId", planId);
-        metadata.put("controlRepositoryPath", controlRoot.toAbsolutePath().normalize().toString());
+        metadata.put("controlRepositoryPath",
+                controlRoot.toAbsolutePath()
+                        .normalize()
+                        .toString());
 
-        byte[] payload = ProviderJson.write(metadata).getBytes(StandardCharsets.UTF_8);
+        byte[] payload = ProviderJson.write(metadata)
+                .getBytes(StandardCharsets.UTF_8);
         fc.truncate(0);
-        fc.write(java.nio.ByteBuffer.wrap(payload));
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(payload);
+        while (buffer.hasRemaining()) {
+            if (fc.write(buffer) == 0) {
+                throw new IOException("repair lock metadata write made no progress");
+            }
+        }
         fc.force(true);
 
         return new RepairExecutionLock(lockPath, fc, fl);

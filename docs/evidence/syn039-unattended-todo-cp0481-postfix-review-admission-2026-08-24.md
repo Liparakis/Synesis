@@ -35,10 +35,10 @@ The repository's MCP contract remains the ten-tool catalog. Both sessions
 reached `ensure_session=ready` with `workspace=isolated`, the same project,
 distinct session identities, and disjoint exact claims:
 
-| Agent | Session | Participant | Claim | Intent | Epoch |
-|---|---|---|---|---|---:|
-| A | `session-765b0fa6-1c40-4e61-8f2f-ed81dc42e2bf` | `agt_314ed7cf-077b-3486-9332-e641dedd4d0a` | `todo.py` | `3096a26b-92d7-3056-8468-747b7c77e1e5` | 1 |
-| B | `session-4c9dbd8a-4ee7-4845-9bac-84670aab0e84` | `agt_54e796c5-3877-396f-a90f-5a13b2fb8b67` | `test_todo.py` | `2b0bc998-4bd9-30ba-b416-407b7bbd9d9a` | 1 |
+| Agent | Session                                        | Participant                                | Claim          | Intent                                 | Epoch |
+|-------|------------------------------------------------|--------------------------------------------|----------------|----------------------------------------|------:|
+| A     | `session-765b0fa6-1c40-4e61-8f2f-ed81dc42e2bf` | `agt_314ed7cf-077b-3486-9332-e641dedd4d0a` | `todo.py`      | `3096a26b-92d7-3056-8468-747b7c77e1e5` |     1 |
+| B     | `session-4c9dbd8a-4ee7-4845-9bac-84670aab0e84` | `agt_54e796c5-3877-396f-a90f-5a13b2fb8b67` | `test_todo.py` | `2b0bc998-4bd9-30ba-b416-407b7bbd9d9a` |     1 |
 
 The first shared projection showed both participants, both intents, one
 active WorkGroup, and no claim conflict. Backend WorkGroup convergence and

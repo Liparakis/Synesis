@@ -1,12 +1,12 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NoForceAndSafetyArchitectureTest {
 
@@ -19,18 +19,26 @@ class NoForceAndSafetyArchitectureTest {
         assertTrue(Files.isDirectory(srcDir), "Cleanup source directory must exist");
 
         try (var stream = Files.list(srcDir)) {
-            List<Path> javaFiles = stream.filter(p -> p.getFileName().toString().endsWith(".java")).toList();
+            List<Path> javaFiles = stream.filter(p -> p.getFileName()
+                            .toString()
+                            .endsWith(".java"))
+                    .toList();
             assertFalse(javaFiles.isEmpty());
 
             for (Path file : javaFiles) {
                 String code = Files.readString(file);
                 // Strip single-line and multi-line comments so descriptive Javadoc comments do not trigger false positives
-                String codeWithoutComments = code.replaceAll("//.*", "").replaceAll("(?s)/\\*.*?\\*/", "");
+                String codeWithoutComments = code.replaceAll("//.*", "")
+                        .replaceAll("(?s)/\\*.*?\\*/", "");
 
-                assertFalse(codeWithoutComments.contains("\"--force\""), "Prohibited --force flag argument found in " + file);
-                assertFalse(codeWithoutComments.contains("worktree\", \"prune\""), "Prohibited worktree prune command found in " + file);
-                assertFalse(codeWithoutComments.contains(".destroy()"), "Prohibited process termination found in " + file);
-                assertFalse(codeWithoutComments.contains("destroyForcibly()"), "Prohibited process forcible destruction found in " + file);
+                assertFalse(codeWithoutComments.contains("\"--force\""),
+                        "Prohibited --force flag argument found in " + file);
+                assertFalse(codeWithoutComments.contains("worktree\", \"prune\""),
+                        "Prohibited worktree prune command found in " + file);
+                assertFalse(codeWithoutComments.contains(".destroy()"),
+                        "Prohibited process termination found in " + file);
+                assertFalse(codeWithoutComments.contains("destroyForcibly()"),
+                        "Prohibited process forcible destruction found in " + file);
             }
         }
     }

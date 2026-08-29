@@ -2,7 +2,6 @@ package org.synesis.cli.command.lifecycle;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
@@ -21,6 +20,7 @@ import picocli.CommandLine.Option;
  * @since 1.0
  */
 @Command(name = "reconcile", description = "Inspects process liveness, prepares reconciliation plans, and executes crash recovery.", mixinStandardHelpOptions = true)
+@SuppressWarnings("DuplicatedCode")
 public final class ReconcileCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
@@ -73,7 +73,8 @@ public final class ReconcileCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         if (!dryRun && !prepare && showPlan == null && executePlan == null) {
-            runtime.terminal().stderr("Reconciliation execution is not available in this version without --dry-run, --prepare, --show-plan, or --execute.");
+            runtime.terminal()
+                    .stderr("Reconciliation execution is not available in this version without --dry-run, --prepare, --show-plan, or --execute.");
             return ExitCodes.LOCAL_CONFIGURATION;
         }
 
@@ -91,13 +92,10 @@ public final class ReconcileCommand implements Callable<Integer> {
             return handleShowPlan(controlRoot, showPlan);
         }
 
-        if (executePlan != null) {
-            return handleExecute(controlRoot, executePlan);
-        }
-
-        return ExitCodes.LOCAL_CONFIGURATION;
+        return handleExecute(controlRoot, java.util.Objects.requireNonNull(executePlan));
     }
 
+    @SuppressWarnings("ExtractMethodRecommender")
     private int handleDryRun(Path controlRoot) {
         try {
             ReconciliationService.ReconciliationDiscoverySummary summary = service.discover(controlRoot);
@@ -113,24 +111,36 @@ public final class ReconcileCommand implements Callable<Integer> {
                 map.put("recoverableIntegrations", summary.recoverableIntegrations());
                 map.put("executableActions", summary.executableActionsCount());
                 map.put("mutationsPerformed", 0);
-                runtime.terminal().stdout(ProviderJson.write(map));
+                runtime.terminal()
+                        .stdout(ProviderJson.write(map));
                 return ExitCodes.OK;
             }
 
-            runtime.terminal().stdout("RECONCILIATION_RESULT=DRY_RUN");
-            runtime.terminal().stdout("SESSIONS_INSPECTED=" + summary.totalSessionsInspected());
-            runtime.terminal().stdout("ACTIVE=" + summary.activeCount());
-            runtime.terminal().stdout("SUSPECTED_STALE=" + summary.suspectedStaleCount());
-            runtime.terminal().stdout("RECOVERY_ELIGIBLE=" + summary.recoveryEligibleCount());
-            runtime.terminal().stdout("AMBIGUOUS=" + summary.ambiguousCount());
-            runtime.terminal().stdout("RECOVERABLE_INTEGRATIONS=" + summary.recoverableIntegrations());
-            runtime.terminal().stdout("EXECUTABLE_ACTIONS=" + summary.executableActionsCount());
-            runtime.terminal().stdout("MUTATIONS_PERFORMED=0");
-            runtime.terminal().stdout("NEXT_ACTION=prepare_reconciliation_plan");
+            runtime.terminal()
+                    .stdout("RECONCILIATION_RESULT=DRY_RUN");
+            runtime.terminal()
+                    .stdout("SESSIONS_INSPECTED=" + summary.totalSessionsInspected());
+            runtime.terminal()
+                    .stdout("ACTIVE=" + summary.activeCount());
+            runtime.terminal()
+                    .stdout("SUSPECTED_STALE=" + summary.suspectedStaleCount());
+            runtime.terminal()
+                    .stdout("RECOVERY_ELIGIBLE=" + summary.recoveryEligibleCount());
+            runtime.terminal()
+                    .stdout("AMBIGUOUS=" + summary.ambiguousCount());
+            runtime.terminal()
+                    .stdout("RECOVERABLE_INTEGRATIONS=" + summary.recoverableIntegrations());
+            runtime.terminal()
+                    .stdout("EXECUTABLE_ACTIONS=" + summary.executableActionsCount());
+            runtime.terminal()
+                    .stdout("MUTATIONS_PERFORMED=0");
+            runtime.terminal()
+                    .stdout("NEXT_ACTION=prepare_reconciliation_plan");
 
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Reconciliation dry-run failed: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Reconciliation dry-run failed: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }
@@ -146,20 +156,28 @@ public final class ReconcileCommand implements Callable<Integer> {
                 map.put("sessionsInspected", plan.totalInspectedCount());
                 map.put("executableActions", plan.executableCount());
                 map.put("mutationsPerformed", 1);
-                runtime.terminal().stdout(ProviderJson.write(map));
+                runtime.terminal()
+                        .stdout(ProviderJson.write(map));
                 return ExitCodes.OK;
             }
 
-            runtime.terminal().stdout("RECONCILIATION_RESULT=PLAN_PREPARED");
-            runtime.terminal().stdout("PLAN=" + plan.planId());
-            runtime.terminal().stdout("SESSIONS_INSPECTED=" + plan.totalInspectedCount());
-            runtime.terminal().stdout("EXECUTABLE_ACTIONS=" + plan.executableCount());
-            runtime.terminal().stdout("MUTATIONS_PERFORMED=1");
-            runtime.terminal().stdout("NEXT_ACTION=review_plan_then_execute");
+            runtime.terminal()
+                    .stdout("RECONCILIATION_RESULT=PLAN_PREPARED");
+            runtime.terminal()
+                    .stdout("PLAN=" + plan.planId());
+            runtime.terminal()
+                    .stdout("SESSIONS_INSPECTED=" + plan.totalInspectedCount());
+            runtime.terminal()
+                    .stdout("EXECUTABLE_ACTIONS=" + plan.executableCount());
+            runtime.terminal()
+                    .stdout("MUTATIONS_PERFORMED=1");
+            runtime.terminal()
+                    .stdout("NEXT_ACTION=review_plan_then_execute");
 
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Failed to prepare reconciliation plan: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Failed to prepare reconciliation plan: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }
@@ -174,37 +192,54 @@ public final class ReconcileCommand implements Callable<Integer> {
                 map.put("planId", plan.planId());
                 map.put("executableActions", plan.executableCount());
                 map.put("mutationsPerformed", 0);
-                runtime.terminal().stdout(ProviderJson.write(map));
+                runtime.terminal()
+                        .stdout(ProviderJson.write(map));
                 return ExitCodes.OK;
             }
 
             if (verbose) {
-                runtime.terminal().stdout("RECONCILIATION_RESULT=PLAN_LOADED");
-                runtime.terminal().stdout("PLAN=" + plan.planId());
-                runtime.terminal().stdout("PROJECT_ID=" + plan.projectId());
-                runtime.terminal().stdout("CONTENT_HASH=" + plan.contentHash());
-                runtime.terminal().stdout("EXECUTABLE_ACTIONS=" + plan.executableCount());
-                runtime.terminal().stdout("MUTATIONS_PERFORMED=0");
-                runtime.terminal().stdout("--- PERSISTED ACTIONS ---");
+                runtime.terminal()
+                        .stdout("RECONCILIATION_RESULT=PLAN_LOADED");
+                runtime.terminal()
+                        .stdout("PLAN=" + plan.planId());
+                runtime.terminal()
+                        .stdout("PROJECT_ID=" + plan.projectId());
+                runtime.terminal()
+                        .stdout("CONTENT_HASH=" + plan.contentHash());
+                runtime.terminal()
+                        .stdout("EXECUTABLE_ACTIONS=" + plan.executableCount());
+                runtime.terminal()
+                        .stdout("MUTATIONS_PERFORMED=0");
+                runtime.terminal()
+                        .stdout("--- PERSISTED ACTIONS ---");
                 for (ReconciliationPlanEntry entry : plan.entries()) {
-                    runtime.terminal().stdout("[" + entry.action() + "] target=" + entry.targetResourceId() + " | executable=" + entry.executable());
+                    runtime.terminal()
+                            .stdout("[" + entry.action() + "] target=" + entry.targetResourceId() + " | executable="
+                                    + entry.executable());
                 }
                 return ExitCodes.OK;
             }
 
-            runtime.terminal().stdout("RECONCILIATION_RESULT=PLAN_LOADED");
-            runtime.terminal().stdout("PLAN=" + plan.planId());
-            runtime.terminal().stdout("EXECUTABLE_ACTIONS=" + plan.executableCount());
-            runtime.terminal().stdout("MUTATIONS_PERFORMED=0");
-            runtime.terminal().stdout("NEXT_ACTION=execute_with_plan_id");
+            runtime.terminal()
+                    .stdout("RECONCILIATION_RESULT=PLAN_LOADED");
+            runtime.terminal()
+                    .stdout("PLAN=" + plan.planId());
+            runtime.terminal()
+                    .stdout("EXECUTABLE_ACTIONS=" + plan.executableCount());
+            runtime.terminal()
+                    .stdout("MUTATIONS_PERFORMED=0");
+            runtime.terminal()
+                    .stdout("NEXT_ACTION=execute_with_plan_id");
 
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Failed to load reconciliation plan: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Failed to load reconciliation plan: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }
 
+    @SuppressWarnings("ExtractMethodRecommender")
     private int handleExecute(Path controlRoot, String planId) {
         try {
             ReconciliationService.ReconciliationExecutionSummary summary = service.executePlan(controlRoot, planId);
@@ -221,25 +256,38 @@ public final class ReconcileCommand implements Callable<Integer> {
                 map.put("failed", summary.failedCount());
                 map.put("controlCheckoutModified", summary.controlCheckoutModified());
                 map.put("processTerminations", 0);
-                runtime.terminal().stdout(ProviderJson.write(map));
+                runtime.terminal()
+                        .stdout(ProviderJson.write(map));
                 return summary.failedCount() > 0 ? ExitCodes.LOCAL_CONFIGURATION : ExitCodes.OK;
             }
 
-            runtime.terminal().stdout("RECONCILIATION_RESULT=" + summary.resultStatus());
-            runtime.terminal().stdout("PLAN=" + summary.planId());
-            runtime.terminal().stdout("EXECUTION=" + summary.executionId());
-            runtime.terminal().stdout("ACTIONS_REQUESTED=" + summary.actionsRequested());
-            runtime.terminal().stdout("COMPLETED=" + summary.completedCount());
-            runtime.terminal().stdout("SKIPPED_STALE=" + summary.skippedStaleCount());
-            runtime.terminal().stdout("SKIPPED_AMBIGUOUS=" + summary.skippedAmbiguousCount());
-            runtime.terminal().stdout("FAILED=" + summary.failedCount());
-            runtime.terminal().stdout("CONTROL_CHECKOUT_MODIFIED=" + summary.controlCheckoutModified());
-            runtime.terminal().stdout("PROCESS_TERMINATIONS=0");
-            runtime.terminal().stdout("NEXT_ACTION=none");
+            runtime.terminal()
+                    .stdout("RECONCILIATION_RESULT=" + summary.resultStatus());
+            runtime.terminal()
+                    .stdout("PLAN=" + summary.planId());
+            runtime.terminal()
+                    .stdout("EXECUTION=" + summary.executionId());
+            runtime.terminal()
+                    .stdout("ACTIONS_REQUESTED=" + summary.actionsRequested());
+            runtime.terminal()
+                    .stdout("COMPLETED=" + summary.completedCount());
+            runtime.terminal()
+                    .stdout("SKIPPED_STALE=" + summary.skippedStaleCount());
+            runtime.terminal()
+                    .stdout("SKIPPED_AMBIGUOUS=" + summary.skippedAmbiguousCount());
+            runtime.terminal()
+                    .stdout("FAILED=" + summary.failedCount());
+            runtime.terminal()
+                    .stdout("CONTROL_CHECKOUT_MODIFIED=" + summary.controlCheckoutModified());
+            runtime.terminal()
+                    .stdout("PROCESS_TERMINATIONS=0");
+            runtime.terminal()
+                    .stdout("NEXT_ACTION=none");
 
             return summary.failedCount() > 0 ? ExitCodes.LOCAL_CONFIGURATION : ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Reconciliation execution failed: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Reconciliation execution failed: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

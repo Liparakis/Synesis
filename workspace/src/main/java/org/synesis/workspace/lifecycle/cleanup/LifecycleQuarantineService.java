@@ -50,11 +50,14 @@ public final class LifecycleQuarantineService {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(entry, "entry");
 
-        if (entry.resourcePath().isBlank()) {
+        if (entry.resourcePath()
+                .isBlank()) {
             throw new IOException(CleanupReason.CLEANUP_QUARANTINE_NOT_SUPPORTED.code() + ": virtual resource path");
         }
 
-        Path candidatePath = Path.of(entry.resourcePath()).toAbsolutePath().normalize();
+        Path candidatePath = Path.of(entry.resourcePath())
+                .toAbsolutePath()
+                .normalize();
 
         // Safety verification: Path must be verified under workspace root
         LifecyclePathVerifier.PathVerificationResult pathResult = pathVerifier.verifyPath(controlRoot, candidatePath);
@@ -64,28 +67,39 @@ public final class LifecycleQuarantineService {
 
         // Must NOT quarantine control checkout, git worktrees, snapshots, event logs, keys
         if (candidatePath.equals(controlRoot) || candidatePath.startsWith(controlRoot)) {
-            throw new IOException(CleanupReason.CONTROL_CHECKOUT_PROTECTED.code() + ": cannot quarantine control checkout");
+            throw new IOException(
+                    CleanupReason.CONTROL_CHECKOUT_PROTECTED.code() + ": cannot quarantine control checkout");
         }
 
         if (Files.isDirectory(candidatePath) && Files.exists(candidatePath.resolve(".git"))) {
-            throw new IOException(CleanupReason.CLEANUP_QUARANTINE_NOT_SUPPORTED.code() + ": registered git worktrees cannot be quarantined");
+            throw new IOException(CleanupReason.CLEANUP_QUARANTINE_NOT_SUPPORTED.code()
+                    + ": registered git worktrees cannot be quarantined");
         }
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        String quarantineId = "quarantine-" + UUID.randomUUID().toString().replace("-", "");
-        Path quarantineTargetDir = workspaceRoot.resolve("admin").resolve("quarantine").resolve(quarantineId);
+        String quarantineId = "quarantine-" + UUID.randomUUID()
+                .toString()
+                .replace("-", "");
+        Path quarantineTargetDir = workspaceRoot.resolve("admin")
+                .resolve("quarantine")
+                .resolve(quarantineId);
 
         Files.createDirectories(quarantineTargetDir);
-        Path destination = quarantineTargetDir.resolve(candidatePath.getFileName().toString());
+        Path destination = quarantineTargetDir.resolve(candidatePath.getFileName()
+                .toString());
 
         // Perform atomic move
         try {
             Files.move(candidatePath, destination, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException ex) {
-            throw new IOException(CleanupReason.CLEANUP_ATOMIC_MOVE_UNAVAILABLE.code() + ": atomic filesystem move not supported across volumes", ex);
+            throw new IOException(CleanupReason.CLEANUP_ATOMIC_MOVE_UNAVAILABLE.code()
+                    + ": atomic filesystem move not supported across volumes", ex);
         } catch (Exception ex) {
-            throw new IOException(CleanupReason.CLEANUP_ATOMIC_MOVE_UNAVAILABLE.code() + ": atomic move failed: " + ex.getMessage(), ex);
+            throw new IOException(
+                    CleanupReason.CLEANUP_ATOMIC_MOVE_UNAVAILABLE.code() + ": atomic move failed: " + ex.getMessage(),
+                    ex);
         }
 
         // Write quarantine manifest
@@ -94,9 +108,13 @@ public final class LifecycleQuarantineService {
         manifest.put("originalPath", candidatePath.toString());
         manifest.put("quarantinedAtEpochMillis", System.currentTimeMillis());
         manifest.put("resourceId", entry.resourceId());
-        manifest.put("resourceType", entry.resourceType().name());
+        manifest.put("resourceType",
+                entry.resourceType()
+                        .name());
         manifest.put("estimatedBytes", entry.estimatedBytes());
-        manifest.put("fingerprintHash", entry.fingerprint().metadataHash());
+        manifest.put("fingerprintHash",
+                entry.fingerprint()
+                        .metadataHash());
 
         Path manifestFile = quarantineTargetDir.resolve("quarantine-manifest.json");
         Files.writeString(manifestFile, ProviderJson.write(manifest), StandardCharsets.UTF_8);

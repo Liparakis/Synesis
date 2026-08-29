@@ -1,19 +1,16 @@
 package org.synesis.cli.command.speculation;
 
 
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
-
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
-
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -21,6 +18,7 @@ import picocli.CommandLine.Option;
  * Runs the local speculation gate and records requester validation.
  */
 @Command(name = "validate", description = "Validate an isolated prediction worktree.", mixinStandardHelpOptions = true)
+@SuppressWarnings("resource")
 public final class SpeculationValidateCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

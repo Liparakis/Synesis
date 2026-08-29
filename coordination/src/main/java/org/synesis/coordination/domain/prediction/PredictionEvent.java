@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.prediction;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -25,6 +23,7 @@ import org.synesis.link.identity.NodeIdentity;
 /**
  * Immutable signed event in the project coordination log.
  */
+@SuppressWarnings("DuplicatedCode")
 public final class PredictionEvent {
 
     private static final int MAGIC = 0x53434531;
@@ -43,9 +42,19 @@ public final class PredictionEvent {
     private final byte[] signerPublicKey;
     private final byte[] signature;
 
-    private PredictionEvent(UUID eventId, UUID projectId, UUID predictionId, long sequence,
-            PredictionEventType type, int encodedWireCode, String actorNodeId, long createdAtEpochMillis, byte[] payload,
-            byte[] previousDigest, byte[] digest, byte[] signerPublicKey, byte[] signature) {
+    private PredictionEvent(UUID eventId,
+            UUID projectId,
+            UUID predictionId,
+            long sequence,
+            PredictionEventType type,
+            int encodedWireCode,
+            String actorNodeId,
+            long createdAtEpochMillis,
+            byte[] payload,
+            byte[] previousDigest,
+            byte[] digest,
+            byte[] signerPublicKey,
+            byte[] signature) {
         this.eventId = Objects.requireNonNull(eventId, "event ID");
         this.projectId = Objects.requireNonNull(projectId, "project ID");
         this.predictionId = Objects.requireNonNull(predictionId, "prediction ID");
@@ -174,7 +183,15 @@ public final class PredictionEvent {
 
     private static byte[] canonical(UUID eventId, UUID projectId, UUID predictionId, long sequence,
             PredictionEventType type, String actor, long created, byte[] payload, byte[] previous) {
-        return canonical(eventId, projectId, predictionId, sequence, type.wireCode(), actor, created, payload, previous);
+        return canonical(eventId,
+                projectId,
+                predictionId,
+                sequence,
+                type.wireCode(),
+                actor,
+                created,
+                payload,
+                previous);
     }
 
     private static byte[] canonical(UUID eventId, UUID projectId, UUID predictionId, long sequence,

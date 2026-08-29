@@ -37,14 +37,14 @@ The agents received the explicit rule to execute every concrete
 - Seed commit: `259ef9f`
 - Managed baseline: `06430c6`
 - Sessions/worktrees:
-  - A: `session-cd692781-d83d-4f87-98d0-279bdda929d1`, participant
-    `agt_1abd04e8-65cb-3b10-83c2-d7110e664350`
-  - B: `session-66e3ff85-3981-44a1-96ec-9807506c1772`, participant
-    `agt_9e3efd10-b218-3418-b884-05a48c2dc942`
+    - A: `session-cd692781-d83d-4f87-98d0-279bdda929d1`, participant
+      `agt_1abd04e8-65cb-3b10-83c2-d7110e664350`
+    - B: `session-66e3ff85-3981-44a1-96ec-9807506c1772`, participant
+      `agt_9e3efd10-b218-3418-b884-05a48c2dc942`
 - Intents and claims, both epoch 1:
-  - A intent `157a36a3-3788-3537-a094-64dd93b22dd5`, exact claim `todo.py`
-  - B intent `5670ad10-d666-3151-bf46-63361ba7cc3d`, exact claim
-    `test_todo.py`
+    - A intent `157a36a3-3788-3537-a094-64dd93b22dd5`, exact claim `todo.py`
+    - B intent `5670ad10-d666-3151-bf46-63361ba7cc3d`, exact claim
+      `test_todo.py`
 - WorkGroup: `52ceb172-4e63-332b-ac6a-a5d932acd03d`, final `COMPLETED`,
   version 2.
 
@@ -101,21 +101,21 @@ provided.
 - Seed commit: `bdab0cb`
 - Managed baseline: `0931a46`
 - Sessions/worktrees:
-  - A: `session-02865bdb-b0fa-4d63-9687-e6b05c37f8ad`, participant
-    `agt_a752cedf-c9f6-3f32-b2ab-414d2ab4bf44`, intent
-    `821ba540-fd60-3ae1-b05d-ef5115b8c4c9`, exact claim `todo.py`, epoch 1
-  - B: `session-476b41ef-33b8-4bd5-b2f1-f06a194b0baa`, participant
-    `agt_b5d2eb1d-0d1b-3cdc-9fc0-c6e915f8c4ca`, intent
-    `3e291f66-34e2-3478-965e-35f641a29966`, exact claim `test_todo.py`,
-    epoch 1
+    - A: `session-02865bdb-b0fa-4d63-9687-e6b05c37f8ad`, participant
+      `agt_a752cedf-c9f6-3f32-b2ab-414d2ab4bf44`, intent
+      `821ba540-fd60-3ae1-b05d-ef5115b8c4c9`, exact claim `todo.py`, epoch 1
+    - B: `session-476b41ef-33b8-4bd5-b2f1-f06a194b0baa`, participant
+      `agt_b5d2eb1d-0d1b-3cdc-9fc0-c6e915f8c4ca`, intent
+      `3e291f66-34e2-3478-965e-35f641a29966`, exact claim `test_todo.py`,
+      epoch 1
 - Shared WorkGroup:
   `5e0a82d7-635d-3e47-9e3e-5a4c37d83822`, final observed `ACTIVE`, version 1.
 - REVIEW requests, both `ACCEPTED`:
-  - `e4ce5111-8d75-4715-a1cb-625616f0c2d5` B → A
-  - `93dcbd40-37bc-40d9-88cf-ee23161ad757` A → B
+    - `e4ce5111-8d75-4715-a1cb-625616f0c2d5` B → A
+    - `93dcbd40-37bc-40d9-88cf-ee23161ad757` A → B
 - REVIEW grants consumed with exact projected arguments:
-  - `a7bbc462-9c63-3033-bef2-1d436019b3b1` targeted B
-  - `a5cc0b20-241f-3c8a-9424-1e9c7ae1ee1f` targeted A
+    - `a7bbc462-9c63-3033-bef2-1d436019b3b1` targeted B
+    - `a5cc0b20-241f-3c8a-9424-1e9c7ae1ee1f` targeted A
 - A snapshot:
   `snap_de38379e858662f72b2a5de69db6d983`, immutable commit
   `64bbfba43959ef33c706626ee86a345f92add58f`, `todo.py`; integrated control

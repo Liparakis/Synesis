@@ -87,17 +87,17 @@ process end bypasses that branch.
 partial or conditional evidence; `N` means it cannot establish the item.
 “Topology” means whether it inserts itself into Codex-to-MCP stdio.
 
-| Mechanism | Codex/MCP/Java exit | Termination caller | Pipe/EOF | Crash vs self-exit | Handle timing | Topology | Decision value |
-|---|---|---|---|---|---|---|---|
-| Retained native process handles | Y, exact status after wait | N | N | P | Y | unchanged | **Primary** for child exit and ordering |
-| `Win32_ProcessStopTrace` | P/Y, includes `ExitStatus`, PID, parent, UTC time | N | N | P | Y | unchanged | Useful fallback/cross-check; prior host attempt was not reliable |
-| Kernel ETW process provider | Y/P, start/stop and process identity | N | N | P | Y | unchanged | Supplemental process timeline; events can be lost |
-| Kernel ETW object/file/I/O providers | P | N | P, not a dependable anonymous-pipe EOF proof | N/P | P | unchanged | Investigative only; no stable pipe-object conclusion |
-| WMI/CIM process snapshots | N after disappearance; Y only while live | N | N | N | P/polling | unchanged | Parent/path/command-line inventory only |
-| Process Monitor | P | N | P, tool-dependent and not authoritative | P | P | unchanged | Heavy supplemental observation, not primary proof |
-| WER/Application Error | N/P, crash records only | N | N | Y for recorded crash | Y | unchanged | Distinguishes some crashes; absence proves nothing |
-| Job-object inspection | P if a named/accessible job is known | N/P | N | N | P | unchanged | Can show job membership/accounting, not caller origin |
-| Sysinternals handle/process tools | P snapshot | N | P snapshot only | N | P | unchanged | Manual relationship check; insufficient timing guarantee |
+| Mechanism                            | Codex/MCP/Java exit                               | Termination caller | Pipe/EOF                                     | Crash vs self-exit   | Handle timing | Topology  | Decision value                                                   |
+|--------------------------------------|---------------------------------------------------|--------------------|----------------------------------------------|----------------------|---------------|-----------|------------------------------------------------------------------|
+| Retained native process handles      | Y, exact status after wait                        | N                  | N                                            | P                    | Y             | unchanged | **Primary** for child exit and ordering                          |
+| `Win32_ProcessStopTrace`             | P/Y, includes `ExitStatus`, PID, parent, UTC time | N                  | N                                            | P                    | Y             | unchanged | Useful fallback/cross-check; prior host attempt was not reliable |
+| Kernel ETW process provider          | Y/P, start/stop and process identity              | N                  | N                                            | P                    | Y             | unchanged | Supplemental process timeline; events can be lost                |
+| Kernel ETW object/file/I/O providers | P                                                 | N                  | P, not a dependable anonymous-pipe EOF proof | N/P                  | P             | unchanged | Investigative only; no stable pipe-object conclusion             |
+| WMI/CIM process snapshots            | N after disappearance; Y only while live          | N                  | N                                            | N                    | P/polling     | unchanged | Parent/path/command-line inventory only                          |
+| Process Monitor                      | P                                                 | N                  | P, tool-dependent and not authoritative      | P                    | P             | unchanged | Heavy supplemental observation, not primary proof                |
+| WER/Application Error                | N/P, crash records only                           | N                  | N                                            | Y for recorded crash | Y             | unchanged | Distinguishes some crashes; absence proves nothing               |
+| Job-object inspection                | P if a named/accessible job is known              | N/P                | N                                            | N                    | P             | unchanged | Can show job membership/accounting, not caller origin            |
+| Sysinternals handle/process tools    | P snapshot                                        | N                  | P snapshot only                              | N                    | P             | unchanged | Manual relationship check; insufficient timing guarantee         |
 
 The matrix is intentionally conservative. Ordinary ETW/WMI process events
 show what ended and when; they do not prove that Codex called
@@ -198,15 +198,15 @@ blocking inherited pipe.
 
 ## Classification rules
 
-| Evidence | Classification |
-|---|---|
-| MCP exit `0`, no crash evidence, process end while Codex remains alive, and corroborated writer close | graceful transport shutdown is supported; literal EOF remains inferred unless MCP logs it |
-| MCP nonzero or exception/WER evidence while Codex remains alive | MCP/Java failure or crash boundary |
-| MCP/Java exit while Codex remains alive, with evidence of a job/process kill but no caller identity | externally caused teardown is supported; Codex attribution remains unproven |
-| Pipe closes, MCP exits `0`, and lease becomes `CLOSED_CLEANLY` | healthy clean-close path supported |
-| Pipe closes, MCP exits `0`, and lease remains `ACTIVE` | Synesis shutdown defect candidate, pending proof that the pipe close reached the reader as EOF |
-| Child exit status and timing captured but pipe/caller origin unavailable | bounded inconclusive result; do not label provider teardown or lease defect |
-| No retained-handle result or incomplete Codex output | RESULT E; measurement failed again |
+| Evidence                                                                                              | Classification                                                                                 |
+|-------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| MCP exit `0`, no crash evidence, process end while Codex remains alive, and corroborated writer close | graceful transport shutdown is supported; literal EOF remains inferred unless MCP logs it      |
+| MCP nonzero or exception/WER evidence while Codex remains alive                                       | MCP/Java failure or crash boundary                                                             |
+| MCP/Java exit while Codex remains alive, with evidence of a job/process kill but no caller identity   | externally caused teardown is supported; Codex attribution remains unproven                    |
+| Pipe closes, MCP exits `0`, and lease becomes `CLOSED_CLEANLY`                                        | healthy clean-close path supported                                                             |
+| Pipe closes, MCP exits `0`, and lease remains `ACTIVE`                                                | Synesis shutdown defect candidate, pending proof that the pipe close reached the reader as EOF |
+| Child exit status and timing captured but pipe/caller origin unavailable                              | bounded inconclusive result; do not label provider teardown or lease defect                    |
+| No retained-handle result or incomplete Codex output                                                  | RESULT E; measurement failed again                                                             |
 
 The ~24.5-second gap currently matches no documented Codex or Synesis timeout,
 shutdown setting, or source-level constant found in the installed help or
@@ -244,7 +244,8 @@ must remain explicit in the resulting classification.
 - Synesis source: `mcp/src/main/java/org/synesis/mcp/transport/stdio/McpStdioServer.java`,
   `mcp/src/main/java/org/synesis/mcp/application/McpProtocolHandler.java`,
   `workspace/src/main/java/org/synesis/workspace/lifecycle/lease/SessionLeaseService.java`.
-- Microsoft Learn: [GetExitCodeProcess](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getexitcodeprocess),
+- Microsoft
+  Learn: [GetExitCodeProcess](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getexitcodeprocess),
   [process handles and identifiers](https://learn.microsoft.com/en-us/windows/win32/procthread/process-handles-and-identifiers),
   [WaitForSingleObject](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject),
   [Win32_ProcessStopTrace](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/krnlprov/win32-processstoptrace),

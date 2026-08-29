@@ -1,7 +1,8 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,10 +13,7 @@ import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.workspace.infrastructure.process.ProcessInspector;
 
 class CleanupEligibilityServiceTest {
 
@@ -42,7 +40,8 @@ class CleanupEligibilityServiceTest {
                 2L * 1024 * 1024 * 1024
         );
 
-        long lastMod = now.minus(Duration.ofHours(48)).toEpochMilli();
+        long lastMod = now.minus(Duration.ofHours(48))
+                .toEpochMilli();
 
         LifecycleInventoryService.DiscoveredResource resource = new LifecycleInventoryService.DiscoveredResource(
                 LifecycleResourceType.WORKER_WORKTREE,
@@ -55,13 +54,16 @@ class CleanupEligibilityServiceTest {
                 null
         );
 
-        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(), policy, ProcessInspector.system());
+        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(),
+                policy,
+                ProcessInspector.system());
 
         CleanupPlanEntry entry = service.evaluateResource(controlRoot, resource);
 
         assertEquals(CleanupClassification.CLEANUP_ELIGIBLE, entry.classification());
         assertTrue(entry.eligible());
-        assertTrue(entry.reasons().contains(CleanupReason.FINALIZED_AND_CLEAN.code()));
+        assertTrue(entry.reasons()
+                .contains(CleanupReason.FINALIZED_AND_CLEAN.code()));
     }
 
     @Test
@@ -87,7 +89,8 @@ class CleanupEligibilityServiceTest {
                 2L * 1024 * 1024 * 1024
         );
 
-        long lastMod = now.minus(Duration.ofHours(2)).toEpochMilli();
+        long lastMod = now.minus(Duration.ofHours(2))
+                .toEpochMilli();
 
         LifecycleInventoryService.DiscoveredResource resource = new LifecycleInventoryService.DiscoveredResource(
                 LifecycleResourceType.WORKER_WORKTREE,
@@ -100,13 +103,16 @@ class CleanupEligibilityServiceTest {
                 null
         );
 
-        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(), policy, ProcessInspector.system());
+        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(),
+                policy,
+                ProcessInspector.system());
 
         CleanupPlanEntry entry = service.evaluateResource(controlRoot, resource);
 
         assertEquals(CleanupClassification.DIAGNOSTIC_RETAINED, entry.classification());
         assertFalse(entry.eligible());
-        assertTrue(entry.reasons().contains(CleanupReason.RETENTION_WINDOW_ACTIVE.code()));
+        assertTrue(entry.reasons()
+                .contains(CleanupReason.RETENTION_WINDOW_ACTIVE.code()));
     }
 
     @Test
@@ -130,13 +136,16 @@ class CleanupEligibilityServiceTest {
                 null
         );
 
-        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(), new RetentionPolicy(), ProcessInspector.system());
+        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(),
+                new RetentionPolicy(),
+                ProcessInspector.system());
 
         CleanupPlanEntry entry = service.evaluateResource(controlRoot, resource);
 
         assertEquals(CleanupClassification.ORPHANED, entry.classification());
         assertFalse(entry.eligible());
-        assertTrue(entry.reasons().contains(CleanupReason.DURABLE_RECORD_MISSING.code()));
+        assertTrue(entry.reasons()
+                .contains(CleanupReason.DURABLE_RECORD_MISSING.code()));
     }
 
     @Test
@@ -160,12 +169,15 @@ class CleanupEligibilityServiceTest {
                 null
         );
 
-        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(), new RetentionPolicy(), ProcessInspector.system());
+        CleanupEligibilityService service = new CleanupEligibilityService(new LifecyclePathVerifier(),
+                new RetentionPolicy(),
+                ProcessInspector.system());
 
         CleanupPlanEntry entry = service.evaluateResource(controlRoot, resource);
 
         assertEquals(CleanupClassification.PROTECTED, entry.classification());
         assertFalse(entry.eligible());
-        assertTrue(entry.reasons().contains(CleanupReason.SNAPSHOT_CLEANUP_NOT_SUPPORTED.code()));
+        assertTrue(entry.reasons()
+                .contains(CleanupReason.SNAPSHOT_CLEANUP_NOT_SUPPORTED.code()));
     }
 }

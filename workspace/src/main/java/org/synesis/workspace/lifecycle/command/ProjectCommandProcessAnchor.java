@@ -7,10 +7,12 @@ import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
-/** Immutable identity of one exact MCP process bound to one physical scope.
- * @param anchorId versioned anchor locator
- * @param scopeLocator verified physical-worktree scope locator
- * @param processIdentity exact process evidence
+/**
+ * Immutable identity of one exact MCP process bound to one physical scope.
+ *
+ * @param anchorId             versioned anchor locator
+ * @param scopeLocator         verified physical-worktree scope locator
+ * @param processIdentity      exact process evidence
  * @param createdAtEpochMillis anchor creation epoch milliseconds
  */
 public record ProjectCommandProcessAnchor(
@@ -20,7 +22,9 @@ public record ProjectCommandProcessAnchor(
         long createdAtEpochMillis
 ) {
 
-    /** Validates anchor identity and process evidence. */
+    /**
+     * Validates anchor identity and process evidence.
+     */
     public ProjectCommandProcessAnchor {
         Objects.requireNonNull(anchorId, "anchorId");
         Objects.requireNonNull(scopeLocator, "scopeLocator");
@@ -30,9 +34,11 @@ public record ProjectCommandProcessAnchor(
         }
     }
 
-    /** Creates an anchor from captured process evidence.
-     * @param scopeLocator physical scope locator
-     * @param processIdentity process evidence
+    /**
+     * Creates an anchor from captured process evidence.
+     *
+     * @param scopeLocator         physical scope locator
+     * @param processIdentity      process evidence
      * @param createdAtEpochMillis creation epoch milliseconds
      * @return immutable process anchor
      */
@@ -46,8 +52,9 @@ public record ProjectCommandProcessAnchor(
                 + processIdentity.processStartTime() + "\n"
                 + processIdentity.connectionNonce() + "\n" + createdAtEpochMillis;
         try {
-            String digest = java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(material.getBytes(StandardCharsets.UTF_8)));
+            String digest = java.util.HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(material.getBytes(StandardCharsets.UTF_8)));
             return new ProjectCommandProcessAnchor("v1-" + digest, scopeLocator,
                     processIdentity, createdAtEpochMillis);
         } catch (Exception failure) {
@@ -55,18 +62,33 @@ public record ProjectCommandProcessAnchor(
         }
     }
 
-    /** Captures one fresh anchor for the current MCP process.
+    /**
+     * Captures one fresh anchor for the current MCP process.
+     *
      * @param scopeLocator physical scope locator
      * @return fresh process anchor
      */
+    @SuppressWarnings("unused")
     public static ProjectCommandProcessAnchor fresh(String scopeLocator) {
-        long now = Instant.now().toEpochMilli();
-        ProcessHandle.Info info = ProcessHandle.current().info();
-        String executable = info.command().orElse("unknown");
-        String commandLine = info.commandLine().orElse(executable);
-        long start = info.startInstant().map(Instant::toEpochMilli).orElse(now);
+        long now = Instant.now()
+                .toEpochMilli();
+        ProcessHandle.Info info = ProcessHandle.current()
+                .info();
+        String executable = info.command()
+                .orElse("unknown");
+        String commandLine = info.commandLine()
+                .orElse(executable);
+        long start = info.startInstant()
+                .map(Instant::toEpochMilli)
+                .orElse(now);
         SessionProcessIdentity identity = new SessionProcessIdentity(
-                ProcessHandle.current().pid(), executable, commandLine, start, UUID.randomUUID().toString());
+                ProcessHandle.current()
+                        .pid(),
+                executable,
+                commandLine,
+                start,
+                UUID.randomUUID()
+                        .toString());
         return capture(scopeLocator, identity, now);
     }
 }

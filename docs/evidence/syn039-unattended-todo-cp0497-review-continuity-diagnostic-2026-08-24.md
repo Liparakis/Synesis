@@ -34,10 +34,10 @@ agent non-compliance.
 
 Participants and lanes:
 
-| Agent | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---:|
-| A | `agt_4ccf5981-ec68-3fb4-ba44-fdd686d0a1a2` | `25ab2ea7-3bcc-3411-9289-438184a7f38e` | `todo.py` | 1 |
-| B | `agt_5baa7728-3cda-3d80-9fab-89c82a3c041b` | `758178e9-688a-35bf-b081-9e104211405d` | `test_todo.py` | 1 |
+| Agent | Participant                                | Intent                                 | Claim          | Epoch |
+|-------|--------------------------------------------|----------------------------------------|----------------|------:|
+| A     | `agt_4ccf5981-ec68-3fb4-ba44-fdd686d0a1a2` | `25ab2ea7-3bcc-3411-9289-438184a7f38e` | `todo.py`      |     1 |
+| B     | `agt_5baa7728-3cda-3d80-9fab-89c82a3c041b` | `758178e9-688a-35bf-b081-9e104211405d` | `test_todo.py` |     1 |
 
 Shared WorkGroup: `7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771`. B's test intent
 established the group and became its producer. A became the reviewer for B,
@@ -45,18 +45,18 @@ while A's own implementation intent remained active.
 
 ## Exact projection/action trace
 
-| Projection | Exact following action | Result |
-|---|---|---|
-| A: `REVIEW_ADMISSION_REQUIRED`, `request_coordination`, `kind=work_group_join`, WorkGroup `7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771`, intent `758178e9-688a-35bf-b081-9e104211405d` | `request_coordination` with the projected kind/payload | Request `cec841ea-98d7-414e-9721-0d92266c1b03`, `REVIEW`, `ACCEPTED` |
-| A: repeated identical REVIEW admission projection | exact repeated `request_coordination` | Request `6ae2e8ce-0d4d-4b3c-92f9-7f5e16dd9120`, `REVIEW`, `ACCEPTED` |
-| B: owner `respond_coordination` for request `cec841ea-98d7-414e-9721-0d92266c1b03` | exact `{kind:coordination_response,payload:{coordinationRequest,coordinationStatus:ACCEPTED,proposal:admitted}}` | REVIEW grant `01455883-e2b3-35bc-aea1-e787b5c16329` issued to A |
-| B: owner `respond_coordination` for request `6ae2e8ce-0d4d-4b3c-92f9-7f5e16dd9120` | exact projected acceptance | REVIEW grant `81abb964-a6c9-3436-a8d1-5dbd4c9c492f` issued to A |
-| A: grant available for `01455883-e2b3-35bc-aea1-e787b5c16329` | exact projected grant consumption payload, target A, intent `758178e9-688a-35bf-b081-9e104211405d`, epoch 1 | `CONSUMED`; no overlapping write ownership |
-| B: `snapshot_publication_required`, `finish_lane`, summary `Publish the completed immutable snapshot` | exact `finish_lane({summary:...})` | `task=integrated`; snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`; snapshot `PUBLISHED`; integration `integrated` |
-| A: `workspace_stale` → `ensure_session` after control advanced | exact `ensure_session({})` | `ready/isolated`; same A session identity preserved on a new recovery worktree |
-| A: `validation_required`, `review_validation`, grant `01455883-e2b3-35bc-aea1-e787b5c16329`, snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`, intent `758178e9-688a-35bf-b081-9e104211405d`, epoch 1 | exact `respond_coordination` with `result=accepted` | `ACCEPTED`; response reported `workGroupStatus=COMPLETED` |
-| A: second exact grant-consumption projection for `81abb964-a6c9-3436-a8d1-5dbd4c9c492f` | exact projected consumption | `CONSUMED` |
-| A: second exact `review_validation` projection for the same snapshot | exact `respond_coordination` with `result=accepted` | `ACCEPTED`; response again reported `workGroupStatus=COMPLETED` |
+| Projection                                                                                                                                                                                            | Exact following action                                                                                           | Result                                                                                                              |
+|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| A: `REVIEW_ADMISSION_REQUIRED`, `request_coordination`, `kind=work_group_join`, WorkGroup `7c5ac4f7-c538-39c2-8e5d-ed9fadbdc771`, intent `758178e9-688a-35bf-b081-9e104211405d`                       | `request_coordination` with the projected kind/payload                                                           | Request `cec841ea-98d7-414e-9721-0d92266c1b03`, `REVIEW`, `ACCEPTED`                                                |
+| A: repeated identical REVIEW admission projection                                                                                                                                                     | exact repeated `request_coordination`                                                                            | Request `6ae2e8ce-0d4d-4b3c-92f9-7f5e16dd9120`, `REVIEW`, `ACCEPTED`                                                |
+| B: owner `respond_coordination` for request `cec841ea-98d7-414e-9721-0d92266c1b03`                                                                                                                    | exact `{kind:coordination_response,payload:{coordinationRequest,coordinationStatus:ACCEPTED,proposal:admitted}}` | REVIEW grant `01455883-e2b3-35bc-aea1-e787b5c16329` issued to A                                                     |
+| B: owner `respond_coordination` for request `6ae2e8ce-0d4d-4b3c-92f9-7f5e16dd9120`                                                                                                                    | exact projected acceptance                                                                                       | REVIEW grant `81abb964-a6c9-3436-a8d1-5dbd4c9c492f` issued to A                                                     |
+| A: grant available for `01455883-e2b3-35bc-aea1-e787b5c16329`                                                                                                                                         | exact projected grant consumption payload, target A, intent `758178e9-688a-35bf-b081-9e104211405d`, epoch 1      | `CONSUMED`; no overlapping write ownership                                                                          |
+| B: `snapshot_publication_required`, `finish_lane`, summary `Publish the completed immutable snapshot`                                                                                                 | exact `finish_lane({summary:...})`                                                                               | `task=integrated`; snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`; snapshot `PUBLISHED`; integration `integrated` |
+| A: `workspace_stale` → `ensure_session` after control advanced                                                                                                                                        | exact `ensure_session({})`                                                                                       | `ready/isolated`; same A session identity preserved on a new recovery worktree                                      |
+| A: `validation_required`, `review_validation`, grant `01455883-e2b3-35bc-aea1-e787b5c16329`, snapshot `snap_3eb0df616deb0c00e78540f63877b1c2`, intent `758178e9-688a-35bf-b081-9e104211405d`, epoch 1 | exact `respond_coordination` with `result=accepted`                                                              | `ACCEPTED`; response reported `workGroupStatus=COMPLETED`                                                           |
+| A: second exact grant-consumption projection for `81abb964-a6c9-3436-a8d1-5dbd4c9c492f`                                                                                                               | exact projected consumption                                                                                      | `CONSUMED`                                                                                                          |
+| A: second exact `review_validation` projection for the same snapshot                                                                                                                                  | exact `respond_coordination` with `result=accepted`                                                              | `ACCEPTED`; response again reported `workGroupStatus=COMPLETED`                                                     |
 
 Agent A then completed its separate visible `todo.py` implementation and
 reported `3 passed`. Its subsequent `get_next_action` responses remained

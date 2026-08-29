@@ -7,21 +7,28 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-/** Acquires command protection in process-local and permanent filesystem order. */
+/**
+ * Acquires command protection in process-local and permanent filesystem order.
+ */
 public final class ProjectCommandProtectionService {
 
     private static final ConcurrentHashMap<Path, ReentrantLock> ADMISSION_LOCKS = new ConcurrentHashMap<>();
     private final Path namespaceRoot;
 
-    /** Creates a protection service for one host-wide command namespace.
+    /**
+     * Creates a protection service for one host-wide command namespace.
+     *
      * @param namespaceRoot host-wide command namespace root
      */
     public ProjectCommandProtectionService(Path namespaceRoot) {
         this.namespaceRoot = Objects.requireNonNull(namespaceRoot, "namespaceRoot")
-                .toAbsolutePath().normalize();
+                .toAbsolutePath()
+                .normalize();
     }
 
-    /** Acquires namespace and physical-worktree protection with bounded waiting.
+    /**
+     * Acquires namespace and physical-worktree protection with bounded waiting.
+     *
      * @param identity verified worktree identity
      * @return held protection permit
      * @throws IOException if protection cannot be acquired
@@ -34,7 +41,8 @@ public final class ProjectCommandProtectionService {
                 throw new IOException("COMMAND_ADMISSION_MUTEX_TIMEOUT");
             }
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
             throw new IOException("COMMAND_ADMISSION_MUTEX_INTERRUPTED", interrupted);
         }
         ProjectCommandNamespace namespace = null;
@@ -63,8 +71,11 @@ public final class ProjectCommandProtectionService {
         }
     }
 
-    /** Owns one command-protection acquisition and releases all resources in reverse order. */
+    /**
+     * Owns one command-protection acquisition and releases all resources in reverse order.
+     */
     public static final class ProtectionPermit implements AutoCloseable {
+
         private final ReentrantLock admission;
         private final CommandPermanentLock worktreeLock;
         private final String worktreeLocator;
@@ -77,21 +88,28 @@ public final class ProjectCommandProtectionService {
             this.worktreeLocator = worktreeLocator;
         }
 
-        /** Returns the protected physical-worktree locator.
+        /**
+         * Returns the protected physical-worktree locator.
+         *
          * @return worktree locator
          */
+        @SuppressWarnings("unused")
         public String worktreeLocator() {
             return worktreeLocator;
         }
 
-        /** Returns whether the worktree lock remains held.
+        /**
+         * Returns whether the worktree lock remains held.
+         *
          * @return true while protection is active
          */
         public boolean isHeld() {
             return !closed && worktreeLock.isHeld();
         }
 
-        /** Releases worktree protection, namespace protection, and the process mutex. */
+        /**
+         * Releases worktree protection, namespace protection, and the process mutex.
+         */
         @Override
         public void close() throws IOException {
             if (closed) {

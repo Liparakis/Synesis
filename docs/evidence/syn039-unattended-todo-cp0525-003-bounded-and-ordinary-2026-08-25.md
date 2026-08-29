@@ -39,9 +39,9 @@ Project ID: `83318ef3-f435-4122-bd7c-a40a29c80e79`
 
 The seed commit was `488de82`; the managed baseline was `ea90f91`.
 
-| participant | session | claim / epoch | intent |
-| --- | --- | --- | --- |
-| `agt_b7e455b3-5bf8-3533-b6d3-0dcaf940e583` | `session-69350ac6-fa0f-4ab3-b1d3-c176b8a03835` | `todo.py` / 1 | `bbc61592-123e-34bf-b8cf-afebcdb7b04d` |
+| participant                                | session                                        | claim / epoch      | intent                                 |
+|--------------------------------------------|------------------------------------------------|--------------------|----------------------------------------|
+| `agt_b7e455b3-5bf8-3533-b6d3-0dcaf940e583` | `session-69350ac6-fa0f-4ab3-b1d3-c176b8a03835` | `todo.py` / 1      | `bbc61592-123e-34bf-b8cf-afebcdb7b04d` |
 | `agt_18a76131-3fb6-3fe9-a2e3-4ac0a02b7804` | `session-311bac0b-20da-43bf-a2d5-6be462f2134e` | `test_todo.py` / 1 | `200cc50d-6ad4-38bb-ab04-6e41dd1d794a` |
 
 WorkGroup: `18f226ad-d28b-3fd6-b8aa-3afb83429f4b`, final `COMPLETED`,
@@ -83,9 +83,9 @@ Project:
 
 Project ID: `bebad616-240b-4b06-8b02-9b6f01e01f2d`; seed commit `54cfd5b`.
 
-| participant | session | claim / epoch | intent |
-| --- | --- | --- | --- |
-| `agt_e297990a-bd36-3c82-b5e4-b212274de0d1` | `session-02cefbbb-4458-4d31-9fa6-3cd2bf41a341` | `todo.py` / 1 | `0aa91b39-1b98-3841-90f0-9f99e9a45844` |
+| participant                                | session                                        | claim / epoch      | intent                                 |
+|--------------------------------------------|------------------------------------------------|--------------------|----------------------------------------|
+| `agt_e297990a-bd36-3c82-b5e4-b212274de0d1` | `session-02cefbbb-4458-4d31-9fa6-3cd2bf41a341` | `todo.py` / 1      | `0aa91b39-1b98-3841-90f0-9f99e9a45844` |
 | `agt_a25a9bc6-7ffd-377f-98b3-f8b5e3e5a4e1` | `session-a71ce1e7-3217-419f-b48c-026994f79f8c` | `test_todo.py` / 1 | `f67f4ca9-6836-3d57-8700-8b511b4f4dd2` |
 
 WorkGroup: `0d6e6301-e6d1-3084-b0be-abbca3cdaa10`, final observed `ACTIVE`.

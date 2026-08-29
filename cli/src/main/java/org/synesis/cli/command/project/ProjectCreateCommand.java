@@ -35,6 +35,7 @@ public final class ProjectCreateCommand implements Callable<Integer> {
      * Creates project configuration. @return stable exit code
      */
     @Override
+    @SuppressWarnings("DuplicatedCode")
     public Integer call() {
         try {
             var location = runtime.projectService()

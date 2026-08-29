@@ -1,7 +1,7 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,9 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
 class StalePlanTest {
 
@@ -31,10 +29,21 @@ class StalePlanTest {
                 System.currentTimeMillis(),
                 1, 0, 0, 0, 0, 1, 0, 100L, false,
                 List.of(new CleanupPlanEntry(
-                        LifecycleResourceType.TEMPORARY_FILE, "temp-stale", tempFile,
-                        CleanupClassification.CLEANUP_ELIGIBLE, true, List.of("temporary_file_expired"), 100L, "Expired",
-                        List.of("temp"), "NOT_APPLICABLE", false, "path_verified", ProcessEvidenceState.NOT_OBSERVED,
-                        new LifecycleResourceFingerprint("temp-stale", 1000L, "NONE", "NONE", "", "hash1"), "DELETE_TEMPORARY_FILE"
+                        LifecycleResourceType.TEMPORARY_FILE,
+                        "temp-stale",
+                        tempFile,
+                        CleanupClassification.CLEANUP_ELIGIBLE,
+                        true,
+                        List.of("temporary_file_expired"),
+                        100L,
+                        "Expired",
+                        List.of("temp"),
+                        "NOT_APPLICABLE",
+                        false,
+                        "path_verified",
+                        ProcessEvidenceState.NOT_OBSERVED,
+                        new LifecycleResourceFingerprint("temp-stale", 1000L, "NONE", "NONE", "", "hash1"),
+                        "DELETE_TEMPORARY_FILE"
                 ))
         );
 
@@ -49,6 +58,8 @@ class StalePlanTest {
 
         assertEquals(1, summary.skippedStaleCount());
         assertEquals(0, summary.completedCount());
-        assertTrue(summary.records().get(0).state() == CleanupEntryExecutionState.SKIPPED_STALE);
+        assertSame(CleanupEntryExecutionState.SKIPPED_STALE, summary.records()
+                .getFirst()
+                .state());
     }
 }

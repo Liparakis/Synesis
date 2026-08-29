@@ -18,26 +18,11 @@ import java.util.HexFormat;
  */
 public final class TextFileDocument {
 
-    /** Supported physical newline styles. */
-    public enum LineEndingStyle {
-        /** No newline separators are present. */
-        NONE,
-        /** LF separators are present. */
-        LF,
-        /** CRLF separators are present. */
-        CRLF,
-        /** CR separators are present. */
-        CR,
-        /** More than one physical separator style is present. */
-        MIXED
-    }
-
     private static final byte[] UTF8_BOM = {(byte) 0xef, (byte) 0xbb, (byte) 0xbf};
     private final byte[] rawBytes;
     private final String logicalText;
     private final LineEndingStyle lineEndingStyle;
     private final boolean utf8Bom;
-
     private TextFileDocument(byte[] rawBytes, String logicalText, LineEndingStyle lineEndingStyle,
             boolean utf8Bom) {
         this.rawBytes = rawBytes.clone();
@@ -61,88 +46,9 @@ public final class TextFileDocument {
         int offset = bom ? UTF8_BOM.length : 0;
         String physical = decodeUtf8(bytes, offset);
         LineEndingStyle style = detectStyle(physical);
-        String logical = physical.replace("\r\n", "\n").replace('\r', '\n');
+        String logical = physical.replace("\r\n", "\n")
+                .replace('\r', '\n');
         return new TextFileDocument(bytes, logical, style, bom);
-    }
-
-    /**
-     * Returns the exact raw bytes captured for the revision check.
-     *
-     * @return defensive copy of the raw bytes
-     */
-    public byte[] rawBytes() {
-        return rawBytes.clone();
-    }
-
-    /**
-     * Returns normalized provider-facing text using LF separators and no BOM character.
-     *
-     * @return logical text
-     */
-    public String logicalText() {
-        return logicalText;
-    }
-
-    /**
-     * Returns the physical line-ending style detected in the raw document.
-     *
-     * @return detected style
-     */
-    public LineEndingStyle lineEndingStyle() {
-        return lineEndingStyle;
-    }
-
-    /**
-     * Indicates whether the original document carried a UTF-8 BOM.
-     *
-     * @return {@code true} when a BOM was present
-     */
-    public boolean utf8Bom() {
-        return utf8Bom;
-    }
-
-    /**
-     * Returns the SHA-256 revision of the exact raw bytes.
-     *
-     * @return lowercase hexadecimal revision
-     */
-    public String revision() {
-        try {
-            return HexFormat.of().formatHex(
-                    java.security.MessageDigest.getInstance("SHA-256").digest(rawBytes));
-        } catch (Exception ex) {
-            throw new IllegalStateException("SHA-256 is unavailable", ex);
-        }
-    }
-
-    /**
-     * Encodes logical text using the original physical storage policy.
-     *
-     * @param newLogicalText normalized logical replacement text
-     * @return bytes suitable for persistence
-     * @throws IOException when a mixed-line-ending document would be rewritten
-     */
-    public byte[] encode(String newLogicalText) throws IOException {
-        if (newLogicalText == null) {
-            throw new IOException("logical text is missing");
-        }
-        if (lineEndingStyle == LineEndingStyle.MIXED) {
-            throw new IOException("mixed_line_endings_require_review");
-        }
-        String physical = switch (lineEndingStyle) {
-            case CRLF -> newLogicalText.replace("\n", "\r\n");
-            case CR -> newLogicalText.replace('\n', '\r');
-            case LF, NONE -> newLogicalText;
-            case MIXED -> throw new IOException("mixed_line_endings_require_review");
-        };
-        byte[] body = physical.getBytes(StandardCharsets.UTF_8);
-        if (!utf8Bom) {
-            return body;
-        }
-        byte[] encoded = new byte[UTF8_BOM.length + body.length];
-        System.arraycopy(UTF8_BOM, 0, encoded, 0, UTF8_BOM.length);
-        System.arraycopy(body, 0, encoded, UTF8_BOM.length, body.length);
-        return encoded;
     }
 
     private static String decodeUtf8(byte[] bytes, int offset) throws IOException {
@@ -193,5 +99,116 @@ public final class TextFileDocument {
             return LineEndingStyle.CR;
         }
         return LineEndingStyle.NONE;
+    }
+
+    /**
+     * Returns the exact raw bytes captured for the revision check.
+     *
+     * @return defensive copy of the raw bytes
+     */
+    @SuppressWarnings("unused")
+    public byte[] rawBytes() {
+        return rawBytes.clone();
+    }
+
+    /**
+     * Returns normalized provider-facing text using LF separators and no BOM character.
+     *
+     * @return logical text
+     */
+    public String logicalText() {
+        return logicalText;
+    }
+
+    /**
+     * Returns the physical line-ending style detected in the raw document.
+     *
+     * @return detected style
+     */
+    public LineEndingStyle lineEndingStyle() {
+        return lineEndingStyle;
+    }
+
+    /**
+     * Indicates whether the original document carried a UTF-8 BOM.
+     *
+     * @return {@code true} when a BOM was present
+     */
+    @SuppressWarnings("unused")
+    public boolean utf8Bom() {
+        return utf8Bom;
+    }
+
+    /**
+     * Returns the SHA-256 revision of the exact raw bytes.
+     *
+     * @return lowercase hexadecimal revision
+     */
+    public String revision() {
+        try {
+            return HexFormat.of()
+                    .formatHex(
+                            java.security.MessageDigest.getInstance("SHA-256")
+                                    .digest(rawBytes));
+        } catch (Exception ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
+        }
+    }
+
+    /**
+     * Encodes logical text using the original physical storage policy.
+     *
+     * @param newLogicalText normalized logical replacement text
+     * @return bytes suitable for persistence
+     * @throws IOException when a mixed-line-ending document would be rewritten
+     */
+    @SuppressWarnings("ExtractMethodRecommender")
+    public byte[] encode(String newLogicalText) throws IOException {
+        if (newLogicalText == null) {
+            throw new IOException("logical text is missing");
+        }
+        if (lineEndingStyle == LineEndingStyle.MIXED) {
+            throw new IOException("mixed_line_endings_require_review");
+        }
+        String physical = switch (lineEndingStyle) {
+            case CRLF -> newLogicalText.replace("\n", "\r\n");
+            case CR -> newLogicalText.replace('\n', '\r');
+            case LF, NONE -> newLogicalText;
+            case MIXED -> throw new IOException("mixed_line_endings_require_review");
+        };
+        byte[] body = physical.getBytes(StandardCharsets.UTF_8);
+        if (!utf8Bom) {
+            return body;
+        }
+        byte[] encoded = new byte[UTF8_BOM.length + body.length];
+        System.arraycopy(UTF8_BOM, 0, encoded, 0, UTF8_BOM.length);
+        System.arraycopy(body, 0, encoded, UTF8_BOM.length, body.length);
+        return encoded;
+    }
+
+    /**
+     * Supported physical newline styles.
+     */
+    public enum LineEndingStyle {
+        /**
+         * No newline separators are present.
+         */
+        NONE,
+        /**
+         * LF separators are present.
+         */
+        LF,
+        /**
+         * CRLF separators are present.
+         */
+        CRLF,
+        /**
+         * CR separators are present.
+         */
+        CR,
+        /**
+         * More than one physical separator style is present.
+         */
+        MIXED
     }
 }

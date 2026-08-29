@@ -28,10 +28,10 @@ by CP-0512.
 - MCP startup evidence: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`,
   commit `bc334ac`, exactly ten tools.
 
-| Agent | Session/worktree | Participant | Intent / epoch / claim |
-|---|---|---|---|
-| A | `session-e18b0e9c-2d89-410d-b9a8-b2afb332635c` | `agt_83c01454-48aa-3291-92f1-7651c8f81790` | `a335b9dc-4289-3dcc-bbc0-def759571ae2`, epoch 1, `todo.py` |
-| B | `session-35f90f9c-62b0-493e-af62-396b5fe98378` | `agt_22ef75bd-f109-3a05-9d83-3759fcd3f528` | `fb3a7edb-f4a0-3d2f-861f-890e1a33f532`, epoch 1, `test_todo.py` |
+| Agent | Session/worktree                               | Participant                                | Intent / epoch / claim                                          |
+|-------|------------------------------------------------|--------------------------------------------|-----------------------------------------------------------------|
+| A     | `session-e18b0e9c-2d89-410d-b9a8-b2afb332635c` | `agt_83c01454-48aa-3291-92f1-7651c8f81790` | `a335b9dc-4289-3dcc-bbc0-def759571ae2`, epoch 1, `todo.py`      |
+| B     | `session-35f90f9c-62b0-493e-af62-396b5fe98378` | `agt_22ef75bd-f109-3a05-9d83-3759fcd3f528` | `fb3a7edb-f4a0-3d2f-861f-890e1a33f532`, epoch 1, `test_todo.py` |
 
 Both independently reached `ensure_session=ready`, `workspace=isolated`.
 

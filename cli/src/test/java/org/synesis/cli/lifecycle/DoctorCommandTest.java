@@ -1,7 +1,5 @@
-package org.synesis.cli.command.lifecycle;
+package org.synesis.cli.lifecycle;
 
-
-import org.synesis.cli.SynesisCli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.terminal.ConsoleTerminal;
 

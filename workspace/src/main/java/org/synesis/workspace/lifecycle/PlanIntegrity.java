@@ -6,7 +6,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** Computes the canonical digest used to protect persisted lifecycle plans. */
+/**
+ * Computes the canonical digest used to protect persisted lifecycle plans.
+ */
 public final class PlanIntegrity {
 
     private PlanIntegrity() {
@@ -22,7 +24,8 @@ public final class PlanIntegrity {
     public static String sha256Utf8(String text) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException failure) {
             throw new IOException("SHA-256 algorithm unavailable", failure);
         }

@@ -81,15 +81,14 @@ public final class DemoCli {
         }
         Map<String, String> options = options(arguments);
         String mode = options.getOrDefault("mode", arguments.length == 0 ? "" : arguments[0]);
-        if ("identity".equals(mode)) {
-            NodeIdentity identity = identity(required(options, "identity"));
-            System.out.println("NODE_ID=" + identity.nodeId());
-        } else if ("server".equals(mode)) {
-            runServer(options);
-        } else if ("client".equals(mode)) {
-            runClient(options);
-        } else {
-            throw new IllegalArgumentException(usage());
+        switch (mode) {
+            case "identity" -> {
+                NodeIdentity identity = identity(required(options, "identity"));
+                System.out.println("NODE_ID=" + identity.nodeId());
+            }
+            case "server" -> runServer(options);
+            case "client" -> runClient(options);
+            default -> throw new IllegalArgumentException(usage());
         }
     }
 
@@ -180,7 +179,7 @@ public final class DemoCli {
                     identity.nodeId(), identity.publicKeyEncoded(), descriptor.nodeId(), descriptor.publicKeyEncoded());
             try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(8, 1, 1, Duration.ZERO,
                     Duration.ofSeconds(20), Duration.ofSeconds(30), Duration.ofSeconds(2), 16))) {
-                CandidatePair pair = pairs.get(0);
+                CandidatePair pair = pairs.getFirst();
                 DirectConnectionResult connection = racer.race(pairs, expected,
                                 value -> attempt(identity, descriptor, transcript, clientUdp, value))
                         .completion()
@@ -353,6 +352,7 @@ public final class DemoCli {
 
     }
 
+    @SuppressWarnings("ClassCanBeRecord")
     private static final class TlsMaterial implements AutoCloseable {
 
         private final PrivateKey key;

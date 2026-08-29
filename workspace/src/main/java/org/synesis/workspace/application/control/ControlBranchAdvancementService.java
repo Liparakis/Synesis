@@ -3,18 +3,16 @@ package org.synesis.workspace.application.control;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -31,6 +29,7 @@ import org.synesis.link.identity.NodeIdentity;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ControlBranchAdvancementService {
 
     /**
@@ -39,26 +38,42 @@ public final class ControlBranchAdvancementService {
     public ControlBranchAdvancementService() {
     }
 
+    private static String runGitOutput(Path workdir, String... args) throws IOException {
+        return org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, args)
+                .trim();
+    }
+
+    private static void runGit(Path workdir, String... args) throws IOException {
+        runGitOutput(workdir, args);
+    }
+
     /**
-     * Result of control branch advancement operation.
+     * Ignores only untracked Synesis/provider administration material that is
+     * intentionally created beside the source checkout. Tracked changes and
+     * every unrelated path remain integration blockers.
      *
-     * @param advanced            true if control branch fast-forwarded successfully
-     * @param stale               true if control branch moved before advancement
-     * @param dirtyControl        true if control checkout working tree is dirty
-     * @param failureReason       explanation when advanced is false
+     * @param status porcelain status output
+     * @return whether source or unrelated user changes block advancement
      */
-    public record AdvancementResult(
-            boolean advanced,
-            boolean stale,
-            boolean dirtyControl,
-            String failureReason
-    ) {
-        /**
-         * Validates non-null failureReason.
-         */
-        public AdvancementResult {
-            Objects.requireNonNull(failureReason, "failureReason");
+    private static boolean hasBlockingControlChanges(String status) {
+        if (status == null || status.isBlank()) {
+            return false;
         }
+        return status.lines()
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .anyMatch(line -> {
+                    if (!line.startsWith("?? ")) {
+                        return true;
+                    }
+                    String path = line.substring(3)
+                            .replace('\\', '/');
+                    return !(path.equals("AGENTS.md") || path.equals(".synesis") || path.startsWith(".synesis/")
+                            || path.equals(".mcp.json")
+                            || path.equals(".codex") || path.startsWith(".codex/")
+                            || path.equals(".claude") || path.startsWith(".claude/")
+                            || path.equals(".agents") || path.startsWith(".agents/"));
+                });
     }
 
     /**
@@ -110,7 +125,9 @@ public final class ControlBranchAdvancementService {
             // 4. Append CONTROL_BRANCH_ADVANCED event
             IntegrationAttemptPayload advPayload = new IntegrationAttemptPayload(
                     attemptId, store.projectId(),
-                    integratedSnapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(),
+                    integratedSnapshots.stream()
+                            .map(TaskSnapshotRecord::snapshotId)
+                            .toList(),
                     expectedControlHead, integrationCommitSha, "advanced", "");
             store.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED,
                     identity.nodeId(), advPayload.encode(), identity);
@@ -126,10 +143,13 @@ public final class ControlBranchAdvancementService {
                         identity.nodeId(), snapPayload.encode(), identity);
 
                 // Release semantic ownership if claim exists
-                var ownerships = store.coordinationProjection().ownerships();
+                var ownerships = store.coordinationProjection()
+                        .ownerships();
                 for (var entry : ownerships.entrySet()) {
                     OwnershipClaim claim = entry.getValue();
-                    if (claim.taskId().equals(snap.taskId()) && claim.ownerNodeId().equals(snap.nodeId())) {
+                    if (claim.taskId()
+                            .equals(snap.taskId()) && claim.ownerNodeId()
+                            .equals(snap.nodeId())) {
                         CoordinationCommand relCmd = CoordinationCommand.create(
                                 UUID.randomUUID(), store.projectId(), claim.taskId(),
                                 PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(),
@@ -156,13 +176,13 @@ public final class ControlBranchAdvancementService {
      * The method never changes Git state; it only records the already observed
      * exact advancement and idempotently finalizes the included lanes.
      *
-     * @param controlRoot control project root
-     * @param attemptId integration attempt identifier
-     * @param expectedControlHead head recorded before integration
+     * @param controlRoot          control project root
+     * @param attemptId            integration attempt identifier
+     * @param expectedControlHead  head recorded before integration
      * @param integrationCommitSha commit already observed at control HEAD
-     * @param integratedSnapshots snapshots included in the attempt
-     * @param store prediction event store
-     * @param identity signing identity
+     * @param integratedSnapshots  snapshots included in the attempt
+     * @param store                prediction event store
+     * @param identity             signing identity
      * @return advancement result
      */
     public AdvancementResult recoverAdvancedControlBranch(
@@ -193,16 +213,25 @@ public final class ControlBranchAdvancementService {
             PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
         var projection = store.taskCompletionProjection();
         boolean branchRecorded = projection.lastControlHeadAdvanced() != null
-                && projection.lastControlHeadAdvanced().equals(integrationCommitSha);
+                && projection.lastControlHeadAdvanced()
+                .equals(integrationCommitSha);
         if (!branchRecorded) {
             IntegrationAttemptPayload payload = new IntegrationAttemptPayload(
-                    attemptId, store.projectId(), snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                    expectedControlHead, integrationCommitSha, "advanced", "");
+                    attemptId,
+                    store.projectId(),
+                    snapshots.stream()
+                            .map(TaskSnapshotRecord::snapshotId)
+                            .toList(),
+                    expectedControlHead,
+                    integrationCommitSha,
+                    "advanced",
+                    "");
             store.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED,
                     identity.nodeId(), payload.encode(), identity);
         }
         for (TaskSnapshotRecord snap : snapshots) {
-            if (projection.taskState(snap.taskId()) != org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED) {
+            if (projection.taskState(snap.taskId())
+                    != org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED) {
                 TaskSnapshotPayload payload = new TaskSnapshotPayload(
                         snap.taskId(), snap.snapshotId(), snap.nodeId(), snap.supervisorId(), snap.workerId(),
                         snap.providerSessionId(), snap.baseCommit(), snap.commitSha(), snap.changedPaths(),
@@ -218,9 +247,13 @@ public final class ControlBranchAdvancementService {
 
     private void releaseExactOwnership(TaskSnapshotRecord snap, PredictionEventStore store,
             NodeIdentity identity) throws IOException, GeneralSecurityException {
-        for (var entry : store.coordinationProjection().ownerships().entrySet()) {
+        for (var entry : store.coordinationProjection()
+                .ownerships()
+                .entrySet()) {
             OwnershipClaim claim = entry.getValue();
-            if (claim.taskId().equals(snap.taskId()) && claim.ownerNodeId().equals(snap.nodeId())) {
+            if (claim.taskId()
+                    .equals(snap.taskId()) && claim.ownerNodeId()
+                    .equals(snap.nodeId())) {
                 CoordinationCommand relCmd = CoordinationCommand.create(
                         UUID.randomUUID(), store.projectId(), claim.taskId(),
                         PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(), claim.encoded(), identity);
@@ -230,36 +263,26 @@ public final class ControlBranchAdvancementService {
         }
     }
 
-    private static String runGitOutput(Path workdir, String... args) throws IOException {
-        return org.synesis.workspace.lifecycle.GitProcessRunner.run(workdir, args).trim();
-    }
-
-    private static void runGit(Path workdir, String... args) throws IOException {
-        runGitOutput(workdir, args);
-    }
-
     /**
-     * Ignores only untracked Synesis/provider administration material that is
-     * intentionally created beside the source checkout. Tracked changes and
-     * every unrelated path remain integration blockers.
+     * Result of control branch advancement operation.
      *
-     * @param status porcelain status output
-     * @return whether source or unrelated user changes block advancement
+     * @param advanced      true if control branch fast-forwarded successfully
+     * @param stale         true if control branch moved before advancement
+     * @param dirtyControl  true if control checkout working tree is dirty
+     * @param failureReason explanation when advanced is false
      */
-    private static boolean hasBlockingControlChanges(String status) {
-        if (status == null || status.isBlank()) {
-            return false;
+    public record AdvancementResult(
+            boolean advanced,
+            boolean stale,
+            boolean dirtyControl,
+            String failureReason
+    ) {
+
+        /**
+         * Validates non-null failureReason.
+         */
+        public AdvancementResult {
+            Objects.requireNonNull(failureReason, "failureReason");
         }
-        return status.lines().map(String::trim).filter(line -> !line.isBlank()).anyMatch(line -> {
-            if (!line.startsWith("?? ")) {
-                return true;
-            }
-            String path = line.substring(3).replace('\\', '/');
-            return !(path.equals("AGENTS.md") || path.equals(".synesis") || path.startsWith(".synesis/")
-                    || path.equals(".mcp.json")
-                    || path.equals(".codex") || path.startsWith(".codex/")
-                    || path.equals(".claude") || path.startsWith(".claude/")
-                    || path.equals(".agents") || path.startsWith(".agents/"));
-        });
     }
 }

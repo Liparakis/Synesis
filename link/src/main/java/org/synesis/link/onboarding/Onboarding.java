@@ -204,7 +204,7 @@ public final class Onboarding {
      *                           setup fails or the bounded host wait expires
      */
     public void host(String expectedPeer) throws OnboardingFailure {
-        host(expectedPeer, null, session -> {
+        host(expectedPeer, null, _ -> {
         });
     }
 
@@ -404,7 +404,7 @@ public final class Onboarding {
                     throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
                 }
                 emit(OnboardingEventType.PATH_SELECTED,
-                        pairs.get(0)
+                        pairs.getFirst()
                                 .identifier());
                 emitSession(session);
                 sessionAction.accept(session);
@@ -415,8 +415,6 @@ public final class Onboarding {
             }
         } catch (OnboardingFailure failure) {
             throw failure;
-        } catch (java.util.concurrent.TimeoutException timeout) {
-            throw failure(OnboardingFailureCode.CONNECTION_FAILED, timeout);
         } catch (Exception failure) {
             throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
         } finally {

@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.integration;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -26,6 +24,7 @@ import java.util.UUID;
  * @param failureReason        failure explanation
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public record IntegrationAttemptPayload(
         String attemptId,
         UUID projectId,
@@ -59,34 +58,6 @@ public record IntegrationAttemptPayload(
         Objects.requireNonNull(integrationCommitSha, "integrationCommitSha");
         Objects.requireNonNull(status, "status");
         Objects.requireNonNull(failureReason, "failureReason");
-    }
-
-    /**
-     * Encodes this payload into binary format.
-     *
-     * @return encoded bytes
-     */
-    public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
-            out.writeInt(VERSION);
-            writeText(out, attemptId);
-            writeUuid(out, projectId);
-            out.writeInt(taskSnapshotIds.size());
-            for (String snap : taskSnapshotIds) {
-                writeText(out, snap);
-            }
-            writeText(out, expectedControlHead);
-            writeText(out, integrationCommitSha);
-            writeText(out, status);
-            writeText(out, failureReason);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new AssertionError(impossible);
-        }
     }
 
     /**
@@ -150,5 +121,33 @@ public record IntegrationAttemptPayload(
             throw new IOException("Truncated payload");
         }
         return new String(b, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Encodes this payload into binary format.
+     *
+     * @return encoded bytes
+     */
+    public byte[] encode() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC);
+            out.writeInt(VERSION);
+            writeText(out, attemptId);
+            writeUuid(out, projectId);
+            out.writeInt(taskSnapshotIds.size());
+            for (String snap : taskSnapshotIds) {
+                writeText(out, snap);
+            }
+            writeText(out, expectedControlHead);
+            writeText(out, integrationCommitSha);
+            writeText(out, status);
+            writeText(out, failureReason);
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
     }
 }

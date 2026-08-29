@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
 import java.util.Objects;
 import java.util.UUID;
 
@@ -74,20 +72,22 @@ public record CapabilityRequestRecord(
         Objects.requireNonNull(state, "state");
     }
 
-    /** Constructs a worker-aware request without an explicit authority lineage.
-     * @param handle request handle
-     * @param capability capability identifier
-     * @param requesterNodeId requester node
+    /**
+     * Constructs a worker-aware request without an explicit authority lineage.
+     *
+     * @param handle                request handle
+     * @param capability            capability identifier
+     * @param requesterNodeId       requester node
      * @param requesterSupervisorId requester supervisor
-     * @param requesterWorkerId requester worker
-     * @param ownerNodeId owner node
-     * @param ownerSupervisorId owner supervisor
-     * @param ownerWorkerId owner worker
-     * @param contract capability contract
-     * @param state lifecycle state
-     * @param reason optional reason
-     * @param createdAtEpochMillis creation timestamp
-     * @param updatedAtEpochMillis update timestamp
+     * @param requesterWorkerId     requester worker
+     * @param ownerNodeId           owner node
+     * @param ownerSupervisorId     owner supervisor
+     * @param ownerWorkerId         owner worker
+     * @param contract              capability contract
+     * @param state                 lifecycle state
+     * @param reason                optional reason
+     * @param createdAtEpochMillis  creation timestamp
+     * @param updatedAtEpochMillis  update timestamp
      */
     public CapabilityRequestRecord(
             CapabilityRequestHandle handle,
@@ -109,14 +109,16 @@ public record CapabilityRequestRecord(
                 contract, state, reason, createdAtEpochMillis, updatedAtEpochMillis);
     }
 
-    /** Constructs a request without optional worker or supervisor identities.
-     * @param handle request handle
-     * @param capability capability identifier
-     * @param requesterNodeId requester node
-     * @param ownerNodeId owner node
-     * @param contract capability contract
-     * @param state lifecycle state
-     * @param reason optional reason
+    /**
+     * Constructs a request without optional worker or supervisor identities.
+     *
+     * @param handle               request handle
+     * @param capability           capability identifier
+     * @param requesterNodeId      requester node
+     * @param ownerNodeId          owner node
+     * @param contract             capability contract
+     * @param state                lifecycle state
+     * @param reason               optional reason
      * @param createdAtEpochMillis creation timestamp
      * @param updatedAtEpochMillis update timestamp
      */
@@ -135,15 +137,17 @@ public record CapabilityRequestRecord(
                 unresolvedLineage(handle), contract, state, reason, createdAtEpochMillis, updatedAtEpochMillis);
     }
 
-    /** Constructs a request with an explicit authority lineage and no optional actors.
-     * @param handle request handle
-     * @param capability capability identifier
-     * @param requesterNodeId requester node
-     * @param ownerNodeId owner node
-     * @param authorityLineageId durable authority lineage
-     * @param contract capability contract
-     * @param state lifecycle state
-     * @param reason optional reason
+    /**
+     * Constructs a request with an explicit authority lineage and no optional actors.
+     *
+     * @param handle               request handle
+     * @param capability           capability identifier
+     * @param requesterNodeId      requester node
+     * @param ownerNodeId          owner node
+     * @param authorityLineageId   durable authority lineage
+     * @param contract             capability contract
+     * @param state                lifecycle state
+     * @param reason               optional reason
      * @param createdAtEpochMillis creation timestamp
      * @param updatedAtEpochMillis update timestamp
      */
@@ -163,6 +167,11 @@ public record CapabilityRequestRecord(
                 authorityLineageId, contract, state, reason, createdAtEpochMillis, updatedAtEpochMillis);
     }
 
+    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
+        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     /**
      * Creates an updated record with a new state, contract, and modification timestamp.
      *
@@ -172,7 +181,10 @@ public record CapabilityRequestRecord(
      * @param updatedEpochMillis current modification timestamp
      * @return updated record instance
      */
-    public CapabilityRequestRecord withUpdate(CapabilityLifecycleState newState, CapabilityContract newContract, String newReason, long updatedEpochMillis) {
+    public CapabilityRequestRecord withUpdate(CapabilityLifecycleState newState,
+            CapabilityContract newContract,
+            String newReason,
+            long updatedEpochMillis) {
         return new CapabilityRequestRecord(
                 handle,
                 capability,
@@ -203,13 +215,10 @@ public record CapabilityRequestRecord(
         if (!requesterNodeId.equals(callerNodeId)) {
             return false;
         }
-        if (!requesterWorkerId.isBlank() && callerWorkerId != null && !callerWorkerId.isBlank() && !requesterWorkerId.equals(callerWorkerId)) {
+        if (scopedIdentityMismatch(requesterWorkerId, callerWorkerId)) {
             return false;
         }
-        if (!requesterSupervisorId.isBlank() && callerSupervisorId != null && !callerSupervisorId.isBlank() && !requesterSupervisorId.equals(callerSupervisorId)) {
-            return false;
-        }
-        return true;
+        return !scopedIdentityMismatch(requesterSupervisorId, callerSupervisorId);
     }
 
     /**
@@ -224,17 +233,13 @@ public record CapabilityRequestRecord(
         if (!ownerNodeId.equals(callerNodeId)) {
             return false;
         }
-        if (!ownerWorkerId.isBlank() && callerWorkerId != null && !callerWorkerId.isBlank() && !ownerWorkerId.equals(callerWorkerId)) {
+        if (scopedIdentityMismatch(ownerWorkerId, callerWorkerId)) {
             return false;
         }
-        if (!ownerSupervisorId.isBlank() && callerSupervisorId != null && !callerSupervisorId.isBlank() && !ownerSupervisorId.equals(callerSupervisorId)) {
-            return false;
-        }
-        return true;
+        return !scopedIdentityMismatch(ownerSupervisorId, callerSupervisorId);
     }
 
-    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
-        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value())
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    private static boolean scopedIdentityMismatch(String expected, String caller) {
+        return !expected.isBlank() && caller != null && !caller.isBlank() && !expected.equals(caller);
     }
 }

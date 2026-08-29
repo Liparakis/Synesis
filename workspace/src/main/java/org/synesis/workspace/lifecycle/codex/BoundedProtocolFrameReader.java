@@ -22,9 +22,13 @@ import java.util.Objects;
  */
 public final class BoundedProtocolFrameReader {
 
-    /** Maximum raw payload bytes before the newline terminator. */
+    /**
+     * Maximum raw payload bytes before the newline terminator.
+     */
     public static final int MAX_FRAME_BYTES = 8 * 1024 * 1024;
-    /** Maximum diagnostic prefix retained for an oversized frame. */
+    /**
+     * Maximum diagnostic prefix retained for an oversized frame.
+     */
     public static final int MAX_DIAGNOSTIC_PREFIX_BYTES = 64 * 1024;
 
     private final InputStream input;
@@ -37,65 +41,6 @@ public final class BoundedProtocolFrameReader {
      */
     public BoundedProtocolFrameReader(InputStream input) {
         this.input = Objects.requireNonNull(input, "input");
-    }
-
-    /**
-     * Reads one complete frame.
-     *
-     * @return decoded UTF-8 JSON payload without LF or CRLF terminator
-     * @throws EOFException when EOF occurs after a non-empty unterminated frame
-     * @throws CleanEofException when EOF occurs at a frame boundary
-     * @throws EmptyFrameException when an empty line is encountered
-     * @throws OversizedFrameException when raw bytes exceed the configured bound
-     * @throws InvalidUtf8Exception when the bounded payload is not valid UTF-8
-     * @throws IOException when the stream cannot be read
-     */
-    public String readFrame() throws IOException {
-        ByteArrayOutputStream payload = new ByteArrayOutputStream(Math.min(4096, MAX_FRAME_BYTES));
-        byte[] diagnosticPrefix = new byte[MAX_DIAGNOSTIC_PREFIX_BYTES];
-        int diagnosticPrefixLength = 0;
-        int count = 0;
-        boolean pendingCarriageReturn = false;
-        while (true) {
-            int read = input.read(one, 0, 1);
-            if (read == 0) {
-                continue;
-            }
-            if (read < 0) {
-                if (pendingCarriageReturn) {
-                    count = append(payload, count, '\r', diagnosticPrefix, diagnosticPrefixLength);
-                    if (diagnosticPrefixLength < MAX_DIAGNOSTIC_PREFIX_BYTES) {
-                        diagnosticPrefixLength++;
-                    }
-                }
-                if (count == 0) {
-                    throw new CleanEofException();
-                }
-                throw new EOFException("unterminated App Server frame");
-            }
-            int value = one[0] & 0xff;
-            if (pendingCarriageReturn) {
-                if (value == '\n') {
-                    return finish(payload, count);
-                }
-                count = append(payload, count, '\r', diagnosticPrefix, diagnosticPrefixLength);
-                if (diagnosticPrefixLength < MAX_DIAGNOSTIC_PREFIX_BYTES) {
-                    diagnosticPrefixLength++;
-                }
-                pendingCarriageReturn = false;
-            }
-            if (value == '\r') {
-                pendingCarriageReturn = true;
-                continue;
-            }
-            if (value == '\n') {
-                return finish(payload, count);
-            }
-            count = append(payload, count, value, diagnosticPrefix, diagnosticPrefixLength);
-            if (diagnosticPrefixLength < MAX_DIAGNOSTIC_PREFIX_BYTES) {
-                diagnosticPrefixLength++;
-            }
-        }
     }
 
     private static int append(ByteArrayOutputStream payload, int count, int value, byte[] diagnosticPrefix,
@@ -131,28 +76,100 @@ public final class BoundedProtocolFrameReader {
         }
     }
 
-    /** Clean EOF at a frame boundary. */
+    /**
+     * Reads one complete frame.
+     *
+     * @return decoded UTF-8 JSON payload without LF or CRLF terminator
+     * @throws EOFException            when EOF occurs after a non-empty unterminated frame
+     * @throws CleanEofException       when EOF occurs at a frame boundary
+     * @throws EmptyFrameException     when an empty line is encountered
+     * @throws OversizedFrameException when raw bytes exceed the configured bound
+     * @throws InvalidUtf8Exception    when the bounded payload is not valid UTF-8
+     * @throws IOException             when the stream cannot be read
+     */
+    public String readFrame() throws IOException {
+        ByteArrayOutputStream payload = new ByteArrayOutputStream(Math.min(4096, MAX_FRAME_BYTES));
+        byte[] diagnosticPrefix = new byte[MAX_DIAGNOSTIC_PREFIX_BYTES];
+        int diagnosticPrefixLength = 0;
+        int count = 0;
+        boolean pendingCarriageReturn = false;
+        while (true) {
+            int read = input.read(one, 0, 1);
+            if (read == 0) {
+                continue;
+            }
+            if (read < 0) {
+                if (pendingCarriageReturn) {
+                    count = append(payload, count, '\r', diagnosticPrefix, diagnosticPrefixLength);
+                }
+                if (count == 0) {
+                    throw new CleanEofException();
+                }
+                throw new EOFException("unterminated App Server frame");
+            }
+            int value = one[0] & 0xff;
+            if (pendingCarriageReturn) {
+                if (value == '\n') {
+                    return finish(payload, count);
+                }
+                count = append(payload, count, '\r', diagnosticPrefix, diagnosticPrefixLength);
+                if (diagnosticPrefixLength < MAX_DIAGNOSTIC_PREFIX_BYTES) {
+                    diagnosticPrefixLength++;
+                }
+                pendingCarriageReturn = false;
+            }
+            if (value == '\r') {
+                pendingCarriageReturn = true;
+                continue;
+            }
+            if (value == '\n') {
+                return finish(payload, count);
+            }
+            count = append(payload, count, value, diagnosticPrefix, diagnosticPrefixLength);
+            if (diagnosticPrefixLength < MAX_DIAGNOSTIC_PREFIX_BYTES) {
+                diagnosticPrefixLength++;
+            }
+        }
+    }
+
+    /**
+     * Clean EOF at a frame boundary.
+     */
     public static final class CleanEofException extends EOFException {
+
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
 
-        /** Creates the clean frame-boundary EOF diagnostic. */
+        /**
+         * Creates the clean frame-boundary EOF diagnostic.
+         */
         public CleanEofException() {
             super("clean App Server EOF");
         }
     }
 
-    /** Empty line encountered where a JSON frame was required. */
+    /**
+     * Empty line encountered where a JSON frame was required.
+     */
     public static final class EmptyFrameException extends IOException {
+
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
 
-        /** Creates the stable empty-frame diagnostic. */
+        /**
+         * Creates the stable empty-frame diagnostic.
+         */
         public EmptyFrameException() {
             super("empty App Server frame");
         }
     }
 
-    /** Invalid UTF-8 encountered after bounded framing. */
+    /**
+     * Invalid UTF-8 encountered after bounded framing.
+     */
     public static final class InvalidUtf8Exception extends IOException {
+
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
 
         /**
@@ -165,18 +182,26 @@ public final class BoundedProtocolFrameReader {
         }
     }
 
-    /** Oversized raw frame with bounded diagnostic prefix. */
+    /**
+     * Oversized raw frame with bounded diagnostic prefix.
+     */
     public static final class OversizedFrameException extends IOException {
+
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
-        /** Bounded raw diagnostic prefix. */
+        /**
+         * Bounded raw diagnostic prefix.
+         */
         private final byte[] prefix;
-        /** Number of raw bytes observed before overflow. */
+        /**
+         * Number of raw bytes observed before overflow.
+         */
         private final int observedBytes;
 
         /**
          * Creates an oversized-frame failure.
          *
-         * @param prefix bounded raw prefix
+         * @param prefix        bounded raw prefix
          * @param observedBytes number of raw bytes observed before failure
          */
         public OversizedFrameException(byte[] prefix, int observedBytes) {

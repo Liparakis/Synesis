@@ -13,43 +13,39 @@ import java.util.Objects;
  */
 public final class SnapshotArtifactPolicy {
 
-    /** One classification of a changed repository-relative path. */
-    public enum Classification {
-        /** Path is source content and belongs in the snapshot delta. */
-        SOURCE,
-        /** Path is attested provider/runtime material omitted from source trees. */
-        ALLOWED_RUNTIME_ARTIFACT,
-        /** Path is a managed contract and cannot be silently omitted. */
-        MANAGED_CONTRACT,
-        /** Path is a Synesis/provider-looking artifact outside the allowlist. */
-        UNSUPPORTED_ARTIFACT
-    }
-
-    /** Explicit artifact manifest recorded in snapshot provenance.
-     * @param allowedArtifacts attested provider/runtime paths omitted from source
-     * @param rejectedArtifacts paths that must block publication
-     * @param digest deterministic manifest digest
+    /**
+     * Creates the fixed first-release artifact policy.
      */
-    public record Manifest(List<String> allowedArtifacts, List<String> rejectedArtifacts, String digest) {
-        /** Copies paths and validates the manifest digest. */
-        public Manifest {
-            allowedArtifacts = List.copyOf(Objects.requireNonNull(allowedArtifacts, "allowedArtifacts"));
-            rejectedArtifacts = List.copyOf(Objects.requireNonNull(rejectedArtifacts, "rejectedArtifacts"));
-            Objects.requireNonNull(digest, "digest");
-        }
-
-        /**
-         * Returns whether the changed paths are permitted by the policy.
-         *
-         * @return true when no path requires rejection
-         */
-        public boolean valid() {
-            return rejectedArtifacts.isEmpty();
-        }
+    public SnapshotArtifactPolicy() {
     }
 
-    /** Creates the fixed first-release artifact policy. */
-    public SnapshotArtifactPolicy() {
+    private static boolean isPythonBytecodeCache(String normalized) {
+        return normalized.equals("__pycache__")
+                || normalized.startsWith("__pycache__/")
+                || normalized.endsWith("/__pycache__")
+                || normalized.contains("/__pycache__/");
+    }
+
+    private static String normalize(String path) {
+        Objects.requireNonNull(path, "path");
+        String normalized = path.replace('\\', '/');
+        if (normalized.startsWith("/") || normalized.contains("//") || normalized.contains("../")
+                || normalized.equals("..") || normalized.isBlank()) {
+            throw new IllegalArgumentException("invalid snapshot path: " + path);
+        }
+        return normalized;
+    }
+
+    private static String digest(List<String> allowed, List<String> rejected) {
+        String value = "allowed\n" + String.join("\n", allowed) + "\nrejected\n"
+                + String.join("\n", rejected);
+        try {
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception failure) {
+            throw new IllegalStateException("SNAPSHOT_ARTIFACT_DIGEST_FAILED", failure);
+        }
     }
 
     /**
@@ -71,8 +67,14 @@ public final class SnapshotArtifactPolicy {
                 rejected.add(path);
             }
         }
-        allowed = allowed.stream().distinct().sorted().toList();
-        rejected = rejected.stream().distinct().sorted().toList();
+        allowed = allowed.stream()
+                .distinct()
+                .sorted()
+                .toList();
+        rejected = rejected.stream()
+                .distinct()
+                .sorted()
+                .toList();
         return new Manifest(allowed, rejected, digest(allowed, rejected));
     }
 
@@ -100,31 +102,53 @@ public final class SnapshotArtifactPolicy {
         return Classification.SOURCE;
     }
 
-    private static boolean isPythonBytecodeCache(String normalized) {
-        return normalized.equals("__pycache__")
-                || normalized.startsWith("__pycache__/")
-                || normalized.endsWith("/__pycache__")
-                || normalized.contains("/__pycache__/");
+    /**
+     * One classification of a changed repository-relative path.
+     */
+    public enum Classification {
+        /**
+         * Path is source content and belongs in the snapshot delta.
+         */
+        SOURCE,
+        /**
+         * Path is attested provider/runtime material omitted from source trees.
+         */
+        ALLOWED_RUNTIME_ARTIFACT,
+        /**
+         * Path is a managed contract and cannot be silently omitted.
+         */
+        MANAGED_CONTRACT,
+        /**
+         * Path is a Synesis/provider-looking artifact outside the allowlist.
+         */
+        UNSUPPORTED_ARTIFACT
     }
 
-    private static String normalize(String path) {
-        Objects.requireNonNull(path, "path");
-        String normalized = path.replace('\\', '/');
-        if (normalized.startsWith("/") || normalized.contains("//") || normalized.contains("../")
-                || normalized.equals("..") || normalized.isBlank()) {
-            throw new IllegalArgumentException("invalid snapshot path: " + path);
+    /**
+     * Explicit artifact manifest recorded in snapshot provenance.
+     *
+     * @param allowedArtifacts  attested provider/runtime paths omitted from source
+     * @param rejectedArtifacts paths that must block publication
+     * @param digest            deterministic manifest digest
+     */
+    public record Manifest(List<String> allowedArtifacts, List<String> rejectedArtifacts, String digest) {
+
+        /**
+         * Copies paths and validates the manifest digest.
+         */
+        public Manifest {
+            allowedArtifacts = List.copyOf(Objects.requireNonNull(allowedArtifacts, "allowedArtifacts"));
+            rejectedArtifacts = List.copyOf(Objects.requireNonNull(rejectedArtifacts, "rejectedArtifacts"));
+            Objects.requireNonNull(digest, "digest");
         }
-        return normalized;
-    }
 
-    private static String digest(List<String> allowed, List<String> rejected) {
-        String value = "allowed\n" + String.join("\n", allowed) + "\nrejected\n"
-                + String.join("\n", rejected);
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            throw new IllegalStateException("SNAPSHOT_ARTIFACT_DIGEST_FAILED", failure);
+        /**
+         * Returns whether the changed paths are permitted by the policy.
+         *
+         * @return true when no path requires rejection
+         */
+        public boolean valid() {
+            return rejectedArtifacts.isEmpty();
         }
     }
 }

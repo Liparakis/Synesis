@@ -5,11 +5,11 @@ import java.util.Objects;
 /**
  * Immutable process identity evidence capturing portable host process attributes.
  *
- * @param pid                  process ID
- * @param executableIdentity   executable path or name
- * @param commandLine          command line string, if available
- * @param processStartTime     process start epoch millisecond timestamp
- * @param connectionNonce      random connection nonce
+ * @param pid                process ID
+ * @param executableIdentity executable path or name
+ * @param commandLine        command line string, if available
+ * @param processStartTime   process start epoch millisecond timestamp
+ * @param connectionNonce    random connection nonce
  * @since 1.0
  */
 public record SessionProcessIdentity(
@@ -19,6 +19,7 @@ public record SessionProcessIdentity(
         long processStartTime,
         String connectionNonce
 ) {
+
     /**
      * Invariant validation.
      */

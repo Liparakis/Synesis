@@ -12,7 +12,8 @@ publication, validation, or integration was performed by the harness.
 - Harness/logs: `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-ordinary-cp0522-006`
 - Project ID: `a7163c0d-1946-45d1-91e2-aa0efa82875d`
 - Seed commit: `a1b13f5`; managed baseline: `17b214c`
-- MCP executable: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
+- MCP executable:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
 - MCP startup evidence: version `0.1.0-SNAPSHOT`, commit `bc334ac`, provider
   `codex`, the same project root, and connection instances
   `syn039-ordinary-cp0522-agent-a` / `syn039-ordinary-cp0522-agent-b`.

@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
 /**
  * Strategy interface for generating durable capability request handles.
  *

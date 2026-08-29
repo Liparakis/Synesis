@@ -1,7 +1,6 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,7 +29,10 @@ public final class CleanupPlanService {
      * Creates a cleanup plan service with default application services and retention policy.
      */
     public CleanupPlanService() {
-        this(new ProjectApplicationService(), new LifecycleInventoryService(), new CleanupEligibilityService(), new RetentionPolicy());
+        this(new ProjectApplicationService(),
+                new LifecycleInventoryService(),
+                new CleanupEligibilityService(),
+                new RetentionPolicy());
     }
 
     /**
@@ -59,13 +61,16 @@ public final class CleanupPlanService {
      * @param controlRoot control project root path
      * @return generated immutable cleanup plan
      * @throws ProjectApplicationService.ProjectApplicationException if project location fails
-     * @throws IOException if inventory discovery fails
+     * @throws IOException                                           if inventory discovery fails
      */
-    public CleanupPlan generatePlan(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException, IOException {
+    public CleanupPlan generatePlan(Path controlRoot)
+            throws ProjectApplicationService.ProjectApplicationException, IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         ProjectApplicationService.ProjectLocation location = projectService.locate(root);
-        String projectId = location.projectId().toString();
+        String projectId = location.projectId()
+                .toString();
 
         List<LifecycleInventoryService.DiscoveredResource> discovered = inventoryService.discoverResources(root);
 
@@ -102,7 +107,8 @@ public final class CleanupPlanService {
 
         return new CleanupPlan(
                 projectId,
-                retentionPolicy.now().toEpochMilli(),
+                retentionPolicy.now()
+                        .toEpochMilli(),
                 discovered.size(),
                 protectedCount,
                 activeCount,
@@ -116,10 +122,14 @@ public final class CleanupPlanService {
         );
     }
 
-    /** Returns the bounded command-retention projection alongside a cleanup review.
+    /**
+     * Returns the bounded command-retention projection alongside a cleanup review.
+     *
      * @return read-only durable command diagnostic report
      */
+    @SuppressWarnings("unused")
     public ProjectCommandDiagnostics.Report commandNamespaceDiagnostics() {
-        return ProjectCommandDiagnostics.inspect(AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
+        return ProjectCommandDiagnostics.inspect(AdministrativeStateLocator.applicationStateRoot()
+                .resolve("commands"));
     }
 }

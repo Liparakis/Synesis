@@ -15,10 +15,12 @@ work. No manual relay or lifecycle transition was performed.
 - Project ID: `290da007-e42b-4d8d-9353-c446c56c0e1a`
 - Seed commit: `56646d4 seed Todo diagnostic acceptance`
 - Managed baseline: `4fe7acff687bd6ed4d8b6381a8ed2e02714b5172`
-- MCP executable: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
+- MCP executable:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
 - MCP SHA-256: `133E5C2D2A12ADF8FC3E72113BAF11A90DA0E7AB17FB536BF2E92C3ED0131D6C`
 - MCP identity: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`, commit `bc334ac`, exactly 10 tools
-- MCP startup connections: A `conn-instance-e541f753-88d6-4e58-afc4-7987c6583c2e`, B `conn-instance-e0a3b1a2-816c-4d2e-b0a6-3ac5c745fc02`
+- MCP startup connections: A `conn-instance-e541f753-88d6-4e58-afc4-7987c6583c2e`, B
+  `conn-instance-e0a3b1a2-816c-4d2e-b0a6-3ac5c745fc02`
 
 ## Participants and ownership
 

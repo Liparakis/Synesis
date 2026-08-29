@@ -3,27 +3,27 @@
 Baseline: CP-0030. Evidence classifications are conservative: two JVMs on one
 computer are `TWO_PROCESS_VERIFIED`, not `TWO_MACHINE_VERIFIED`.
 
-| Capability | Classification | Evidence / gap |
-|---|---|---|
+| Capability                                | Classification                      | Evidence / gap                                                                                                                                  |
+|-------------------------------------------|-------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
 | Two genuinely separate physical computers | TWO_MACHINE_VERIFIED for Scenario A | Normal-operation LAN evidence recorded in `docs/evidence/PHYSICAL-DEMO-2026-07-20.md`; abrupt-loss and wrong-identity scenarios remain pending. |
-| Independent long-term node identities | READY | `NodeIdentity` and `FileIdentityStore` are implemented and tested. |
-| Separate JVM/process state | READY | Existing two-process harness passes. |
-| Manual/LAN candidate exchange | READY | Candidate providers, descriptors, and pair ranking pass. |
-| Signed candidate descriptor validation | READY | `CandidateDescriptorTest` passes. |
-| Expected remote identity verification | READY | Wrong-identity transport tests pass. |
-| Authenticated QUIC establishment | READY | Local and two-process QUIC evidence passes. |
-| CONTROL_READY | READY | Existing control stream gates `PeerSession`. |
-| LIVE state and heartbeat | READY | Local/two-process heartbeat evidence passes. |
-| One bounded WORK_REQUEST | MINIMAL_IMPLEMENTATION_REQUIRED | No application-stream API or demo protocol exists. Add one fixed operation and bounded frame. |
-| One bounded WORK_RESULT | MINIMAL_IMPLEMENTATION_REQUIRED | Add correlated fixed result over one authenticated application stream. |
-| Graceful closure | READY | Existing control close tests pass. |
-| Abrupt-loss classification | READY | Existing process test proves documented terminal categories, but not physically. |
-| Invalid expected-identity rejection | READY | Existing integration evidence passes. |
-| Deterministic cleanup | READY | Existing control/race cleanup tests pass; demo stream cleanup needs tests. |
-| Understandable CLI operation | MINIMAL_IMPLEMENTATION_REQUIRED | No production/demo entry point exists. Add a small source-run CLI using existing internal transport seams. |
-| Safe output suitable for recording | MINIMAL_IMPLEMENTATION_REQUIRED | CLI must redact keys, paths, and full endpoints by default. |
-| Reproducible commands | MINIMAL_IMPLEMENTATION_REQUIRED | Add `docs/demo/FIRST_DEMO.md` and CLI command contract. |
-| Truthful public claims | READY | Constrain claims with `DEFERRED.md` and `NETWORK_VALIDATION_MATRIX.md`; physical claims remain blocked. |
+| Independent long-term node identities     | READY                               | `NodeIdentity` and `FileIdentityStore` are implemented and tested.                                                                              |
+| Separate JVM/process state                | READY                               | Existing two-process harness passes.                                                                                                            |
+| Manual/LAN candidate exchange             | READY                               | Candidate providers, descriptors, and pair ranking pass.                                                                                        |
+| Signed candidate descriptor validation    | READY                               | `CandidateDescriptorTest` passes.                                                                                                               |
+| Expected remote identity verification     | READY                               | Wrong-identity transport tests pass.                                                                                                            |
+| Authenticated QUIC establishment          | READY                               | Local and two-process QUIC evidence passes.                                                                                                     |
+| CONTROL_READY                             | READY                               | Existing control stream gates `PeerSession`.                                                                                                    |
+| LIVE state and heartbeat                  | READY                               | Local/two-process heartbeat evidence passes.                                                                                                    |
+| One bounded WORK_REQUEST                  | MINIMAL_IMPLEMENTATION_REQUIRED     | No application-stream API or demo protocol exists. Add one fixed operation and bounded frame.                                                   |
+| One bounded WORK_RESULT                   | MINIMAL_IMPLEMENTATION_REQUIRED     | Add correlated fixed result over one authenticated application stream.                                                                          |
+| Graceful closure                          | READY                               | Existing control close tests pass.                                                                                                              |
+| Abrupt-loss classification                | READY                               | Existing process test proves documented terminal categories, but not physically.                                                                |
+| Invalid expected-identity rejection       | READY                               | Existing integration evidence passes.                                                                                                           |
+| Deterministic cleanup                     | READY                               | Existing control/race cleanup tests pass; demo stream cleanup needs tests.                                                                      |
+| Understandable CLI operation              | MINIMAL_IMPLEMENTATION_REQUIRED     | No production/demo entry point exists. Add a small source-run CLI using existing internal transport seams.                                      |
+| Safe output suitable for recording        | MINIMAL_IMPLEMENTATION_REQUIRED     | CLI must redact keys, paths, and full endpoints by default.                                                                                     |
+| Reproducible commands                     | MINIMAL_IMPLEMENTATION_REQUIRED     | Add `docs/demo/FIRST_DEMO.md` and CLI command contract.                                                                                         |
+| Truthful public claims                    | READY                               | Constrain claims with `DEFERRED.md` and `NETWORK_VALIDATION_MATRIX.md`; physical claims remain blocked.                                         |
 
 ## Minimum implementation
 

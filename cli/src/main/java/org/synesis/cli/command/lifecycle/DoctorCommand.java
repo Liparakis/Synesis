@@ -65,11 +65,14 @@ public final class DoctorCommand implements Callable<Integer> {
             DoctorReport report = doctorService.diagnose(controlRoot);
 
             if (json) {
-                runtime.terminal().stdout(DoctorRenderer.renderJson(report));
+                runtime.terminal()
+                        .stdout(DoctorRenderer.renderJson(report));
             } else if (verbose) {
-                runtime.terminal().stdout(DoctorRenderer.renderVerbose(report));
+                runtime.terminal()
+                        .stdout(DoctorRenderer.renderVerbose(report));
             } else {
-                runtime.terminal().stdout(DoctorRenderer.renderConcise(report));
+                runtime.terminal()
+                        .stdout(DoctorRenderer.renderConcise(report));
             }
 
             if (strict && report.overallStatus() != DoctorStatus.HEALTHY) {
@@ -78,7 +81,8 @@ public final class DoctorCommand implements Callable<Integer> {
 
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Doctor diagnostic execution failed: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Doctor diagnostic execution failed: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

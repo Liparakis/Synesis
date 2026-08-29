@@ -30,10 +30,10 @@ integration was manually triggered.
 
 ## Participants and ownership
 
-| Agent | Participant | Intent | Claim | Epoch | Session worktree |
-|---|---|---|---|---:|---|
-| A | `agt_724b59a9-2a62-3f63-8335-093ce2f65fc9` | `3152e5e6-783c-3064-979c-25d4627efce8` | `todo.py` | 1 | `session-7e568cef-7014-4523-82fa-dfad10bb19bf` |
-| B | `agt_e3b1223c-a595-31b3-a6c6-7bf4b94ecfd5` | `8c103aab-8b2d-395a-871a-00e1bf7324e4` | `test_todo.py` | 1 | `session-0262c7e7-6391-4217-ae4a-bec3e4626118` |
+| Agent | Participant                                | Intent                                 | Claim          | Epoch | Session worktree                               |
+|-------|--------------------------------------------|----------------------------------------|----------------|------:|------------------------------------------------|
+| A     | `agt_724b59a9-2a62-3f63-8335-093ce2f65fc9` | `3152e5e6-783c-3064-979c-25d4627efce8` | `todo.py`      |     1 | `session-7e568cef-7014-4523-82fa-dfad10bb19bf` |
+| B     | `agt_e3b1223c-a595-31b3-a6c6-7bf4b94ecfd5` | `8c103aab-8b2d-395a-871a-00e1bf7324e4` | `test_todo.py` |     1 | `session-0262c7e7-6391-4217-ae4a-bec3e4626118` |
 
 Both claim-bearing `ensure_session` calls returned `ready / isolated`, and
 the claims remained disjoint.

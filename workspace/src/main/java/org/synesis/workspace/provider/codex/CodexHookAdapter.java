@@ -10,11 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.project.ActionGuardrail;
 import org.synesis.workspace.project.ProjectPathResolver;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Translates Codex {@code PreToolUse} apply-patch events into guardrail decisions.
@@ -80,6 +79,7 @@ public final class CodexHookAdapter {
      * @param inputStream event input
      * @return fail-closed or silent hook result
      */
+    @SuppressWarnings("unused")
     public Result processStream(InputStream inputStream) {
         if (inputStream == null) {
             return invalid("Missing hook input");
@@ -134,14 +134,17 @@ public final class CodexHookAdapter {
                 return invalid("Codex apply_patch event is missing cwd or tool_input.command");
             }
 
+            Path cwdPath = Path.of(cwd);
             ProjectApplicationService.ProjectLocation location;
             try {
-                location = new ProjectApplicationService().locate(Path.of(cwd));
+                location = new ProjectApplicationService().locate(cwdPath);
             } catch (Exception failure) {
                 if (policyLocation == null) {
                     return invalid("Codex cwd is not an initialized Synesis project");
                 }
-                Path assignedRoot = Path.of(cwd).toAbsolutePath().normalize();
+                Path assignedRoot = cwdPath
+                        .toAbsolutePath()
+                        .normalize();
                 location = new ProjectApplicationService.ProjectLocation(
                         assignedRoot,
                         assignedRoot.resolve(".synesis"),

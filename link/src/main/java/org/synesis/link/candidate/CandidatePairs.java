@@ -20,6 +20,7 @@ public final class CandidatePairs {
      * @param maximum maximum retained pairs
      * @return stable ranked compatible pairs
      */
+    @SuppressWarnings("ExtractMethodRecommender")
     public static List<CandidatePair> generate(List<Candidate> local, List<Candidate> remote, int maximum) {
         if (maximum < 1) {
             throw new IllegalArgumentException("maximum pairs must be positive");

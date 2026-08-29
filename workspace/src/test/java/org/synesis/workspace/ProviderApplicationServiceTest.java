@@ -3,22 +3,23 @@ package org.synesis.workspace;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
-import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.provider.ProviderIntegration;
 
 /**
  * Verifies provider registry and isolated lifecycle behavior.
@@ -27,10 +28,24 @@ final class ProviderApplicationServiceTest {
 
     private String previousUserHome;
 
+    private static void git(Path root, String... arguments) throws Exception {
+        org.synesis.workspace.test.TestGit.run(root, arguments);
+    }
+
+    private static void restoreProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
+        }
+    }
+
     @BeforeEach
     void isolateProviderHome() throws Exception {
         previousUserHome = System.getProperty("user.home");
-        System.setProperty("user.home", Files.createTempDirectory("provider-test-home-").toString());
+        System.setProperty("user.home",
+                Files.createTempDirectory("provider-test-home-")
+                        .toString());
     }
 
     @AfterEach
@@ -42,18 +57,14 @@ final class ProviderApplicationServiceTest {
         }
     }
 
-    private static void git(Path root, String... arguments) throws Exception {
-        org.synesis.workspace.test.TestGit.run(root, arguments);
-    }
-
     @Test
     void registryIsDeterministicAndListsCodexAsExperimental() {
         assertEquals(java.util.List.of("antigravity", "claude", "codex"),
                 ProviderRegistry.providers()
                         .stream()
-                        .map(provider -> provider.id())
+                        .map(ProviderIntegration::id)
                         .toList());
-        assertEquals(null, ProviderRegistry.find("claude-code"));
+        assertNull(ProviderRegistry.find("claude-code"));
         assertEquals(org.synesis.workspace.provider.ProviderSupportLevel.EXPERIMENTAL,
                 ProviderRegistry.find("codex")
                         .supportLevel());
@@ -96,7 +107,7 @@ final class ProviderApplicationServiceTest {
                             .get("PROVIDER_INSTALL_RESULT"));
             Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
-            assertTrue(!Files.readString(config)
+            assertFalse(Files.readString(config)
                     .contains("versions"));
             assertEquals("DEGRADED",
                     service.status(location, "antigravity")
@@ -171,7 +182,7 @@ final class ProviderApplicationServiceTest {
                             .get("TRUST_STATUS"));
             Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
-            assertTrue(!Files.readString(config)
+            assertFalse(Files.readString(config)
                     .contains("versions"));
             Map<?, ?> hooks = (Map<?, ?>) merged.get("hooks");
             assertTrue(hooks.containsKey("Stop"));
@@ -240,9 +251,13 @@ final class ProviderApplicationServiceTest {
             assertTrue(parsed.contains("notify = [\"keep\"]"));
             assertTrue(parsed.contains("[mcp_servers.other-server]"));
             assertTrue(parsed.contains("[mcp_servers.synesis]"));
-            assertTrue(parsed.contains("command = '" + mcpLauncher.toAbsolutePath().normalize() + "'"));
+            assertTrue(parsed.contains("command = '" + mcpLauncher.toAbsolutePath()
+                    .normalize() + "'"));
             assertTrue(parsed.contains("\"mcp\", \"--provider\", \"codex\", \"--project\""));
-            assertTrue(parsed.contains(root.toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
+            assertTrue(parsed.contains(root.toAbsolutePath()
+                    .normalize()
+                    .toString()
+                    .replace("\\", "\\\\")));
             Map<?, ?> legacy = (Map<?, ?>) ProviderJson.parse(Files.readString(legacyProjectMcp));
             assertTrue(((Map<?, ?>) legacy.get("mcpServers")).containsKey("other"));
             assertFalse(((Map<?, ?>) legacy.get("mcpServers")).containsKey("synesis"));
@@ -277,38 +292,45 @@ final class ProviderApplicationServiceTest {
         System.setProperty("synesis.launcher", launcher.toString());
         System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
         try {
-            ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+            ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
+                    .location();
             ProviderApplicationService service = new ProviderApplicationService();
             service.install(location, "codex");
 
-            Path config = ProviderRegistry.find("codex").mcpConfigurationPath(root);
+            Path config = ProviderRegistry.find("codex")
+                    .mcpConfigurationPath(root);
             String configured = Files.readString(config);
             assertTrue(configured.contains("\"--project\""));
-            assertTrue(configured.contains(root.toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
+            assertTrue(configured.contains(root.toAbsolutePath()
+                    .normalize()
+                    .toString()
+                    .replace("\\", "\\\\")));
 
             AgentSessionService sessions = new AgentSessionService();
             AgentSessionService.SessionResolutionRequest first =
                     new AgentSessionService.SessionResolutionRequest(root, "codex", "fresh-agent-a", null, false);
             AgentSessionService.SessionResolutionRequest second =
                     new AgentSessionService.SessionResolutionRequest(root, "codex", "fresh-agent-b", null, false);
-            assertEquals(AgentStatus.READY, sessions.ensureSession(first).status());
-            assertEquals(AgentStatus.READY, sessions.ensureSession(first).status());
-            assertEquals(AgentStatus.READY, sessions.ensureSession(second).status());
-            assertTrue(sessions.resolveSessionContext(first).isIsolatedWorkspace());
-            assertTrue(sessions.resolveSessionContext(second).isIsolatedWorkspace());
-            assertNotEquals(sessions.resolveSessionContext(first).sessionId(),
-                    sessions.resolveSessionContext(second).sessionId());
+            assertEquals(AgentStatus.READY,
+                    sessions.ensureSession(first)
+                            .status());
+            assertEquals(AgentStatus.READY,
+                    sessions.ensureSession(first)
+                            .status());
+            assertEquals(AgentStatus.READY,
+                    sessions.ensureSession(second)
+                            .status());
+            assertTrue(sessions.resolveSessionContext(first)
+                    .isIsolatedWorkspace());
+            assertTrue(sessions.resolveSessionContext(second)
+                    .isIsolatedWorkspace());
+            assertNotEquals(sessions.resolveSessionContext(first)
+                            .sessionId(),
+                    sessions.resolveSessionContext(second)
+                            .sessionId());
         } finally {
             restoreProperty("synesis.launcher", previousLauncher);
             restoreProperty("synesis.mcp.launcher", previousMcp);
-        }
-    }
-
-    private static void restoreProperty(String key, String value) {
-        if (value == null) {
-            System.clearProperty(key);
-        } else {
-            System.setProperty(key, value);
         }
     }
 
@@ -339,7 +361,9 @@ final class ProviderApplicationServiceTest {
                     .normalize()
                     .toString(), synesis.get("command"));
             assertEquals(java.util.List.of("mcp", "--provider", "claude", "--project",
-                    root.toAbsolutePath().normalize().toString()), synesis.get("args"));
+                    root.toAbsolutePath()
+                            .normalize()
+                            .toString()), synesis.get("args"));
 
             var reinstalled = service.install(location, "claude-code");
             assertEquals("UNKNOWN_PROVIDER",
@@ -353,7 +377,7 @@ final class ProviderApplicationServiceTest {
             Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(mcp));
             assertEquals(Boolean.TRUE, after.get("custom"));
             assertTrue(((Map<?, ?>) after.get("mcpServers")).containsKey("other"));
-            assertTrue(!((Map<?, ?>) after.get("mcpServers")).containsKey("synesis"));
+        assertFalse(((Map<?, ?>) after.get("mcpServers")).containsKey("synesis"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");
@@ -364,7 +388,7 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void claudeCodeHookUsesCanonicalCommandName() throws Exception {
+    void claudeCodeHookUsesCanonicalCommandName() {
         Path launcher = Path.of("C:/tools/synesis.cmd");
         Path profile = Path.of("C:/project/.synesis/local/profile");
 
@@ -372,7 +396,7 @@ final class ProviderApplicationServiceTest {
                 .hookCommand(launcher, profile);
 
         assertTrue(command.contains(" hook claude --profile "));
-        assertTrue(!command.contains(" hook claude-code --profile "));
+        assertFalse(command.contains(" hook claude-code --profile "));
     }
 
     @Test
@@ -442,7 +466,7 @@ final class ProviderApplicationServiceTest {
                     && "mcp".equals(args.get(0))
                     && "--provider".equals(args.get(1))
                     && "antigravity".equals(args.get(2)));
-            assertTrue(!synesisEntry.containsKey("connectionInstanceId"));
+            assertFalse(synesisEntry.containsKey("connectionInstanceId"));
 
             Path obsoleteProviderMcp = userMcp.getParent()
                     .getParent()
@@ -454,13 +478,13 @@ final class ProviderApplicationServiceTest {
             }
 
             // Verify obsolete project-local pure synesis file was deleted
-            assertTrue(!Files.exists(agentsMcp));
+            assertFalse(Files.exists(agentsMcp));
 
             // Verify project-local file with unrelated entry preserved unrelated key but removed synesis
             assertTrue(Files.exists(geminiMcp));
             Map<?, ?> parsedGemini = (Map<?, ?>) ProviderJson.parse(Files.readString(geminiMcp));
             Map<?, ?> geminiServers = (Map<?, ?>) parsedGemini.get("mcpServers");
-            assertTrue(!geminiServers.containsKey("synesis"));
+            assertFalse(geminiServers.containsKey("synesis"));
             assertTrue(geminiServers.containsKey("unrelated"));
 
             // Verify provider trust remains UNVALIDATED (does not promote real maturity)

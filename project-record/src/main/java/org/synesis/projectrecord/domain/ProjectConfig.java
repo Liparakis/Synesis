@@ -18,6 +18,7 @@ import java.util.UUID;
 /**
  * Immutable local project namespace and explicit authenticated peer allowlist.
  */
+@SuppressWarnings("ClassCanBeRecord")
 public final class ProjectConfig {
 
     /**
@@ -179,7 +180,12 @@ public final class ProjectConfig {
             try (FileChannel channel = FileChannel.open(temporary,
                     StandardOpenOption.CREATE_NEW,
                     StandardOpenOption.WRITE)) {
-                channel.write(java.nio.ByteBuffer.wrap(bytes));
+                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(bytes);
+                while (buffer.hasRemaining()) {
+                    if (channel.write(buffer) == 0) {
+                        throw new IOException("project configuration write made no progress");
+                    }
+                }
                 channel.force(true);
             }
             try {

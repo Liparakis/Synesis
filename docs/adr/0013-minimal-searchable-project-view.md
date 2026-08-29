@@ -67,12 +67,12 @@ and current tip without exposing private storage paths to the view.
 
 ## Alternatives
 
-| Candidate | Result | Reason |
-|---|---|---|
-| Add `failed-experiment` record v1 | Deferred | Duplicates envelope/signature/storage/sync machinery and adds semantics without a current consumer. |
-| Build a minimal searchable decision view | Selected | Reuses verified signed decisions, adds no protocol or durable authority, and tests explainability directly. |
-| Add Obsidian/shared Markdown projection | Rejected | Reintroduces mutable prose as an authority surface and adds an integration before need. |
-| Add workers, leases, autonomy, background sync, or federation | Rejected | No current invariant requires them; they multiply ownership and failure modes. |
+| Candidate                                                     | Result   | Reason                                                                                                      |
+|---------------------------------------------------------------|----------|-------------------------------------------------------------------------------------------------------------|
+| Add `failed-experiment` record v1                             | Deferred | Duplicates envelope/signature/storage/sync machinery and adds semantics without a current consumer.         |
+| Build a minimal searchable decision view                      | Selected | Reuses verified signed decisions, adds no protocol or durable authority, and tests explainability directly. |
+| Add Obsidian/shared Markdown projection                       | Rejected | Reintroduces mutable prose as an authority surface and adds an integration before need.                     |
+| Add workers, leases, autonomy, background sync, or federation | Rejected | No current invariant requires them; they multiply ownership and failure modes.                              |
 
 ## Checkpoints and acceptance gates
 

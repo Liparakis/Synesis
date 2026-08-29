@@ -1,13 +1,7 @@
 package org.synesis.coordination.domain.prediction;
 
-import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
-
-
-import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
-
-
-
 import java.util.Objects;
+import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
 
 /**
  * Combines prediction resolution with the existing Git speculation gate.

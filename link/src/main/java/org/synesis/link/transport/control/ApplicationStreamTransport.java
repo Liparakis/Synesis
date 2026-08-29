@@ -25,6 +25,7 @@ import org.synesis.link.session.PeerSession;
 /**
  * Internal Netty transport for one bounded opaque application-stream exchange.
  */
+@SuppressWarnings("resource")
 public final class ApplicationStreamTransport {
 
     private static final int MAX_STREAMS = 4;
@@ -41,6 +42,7 @@ public final class ApplicationStreamTransport {
      * @param active         active-stream counter enforcing the stream limit
      * @return completion for the opaque response payload
      */
+    @SuppressWarnings("DuplicatedCode")
     public static CompletionStage<byte[]> open(ChannelHandlerContext controlContext, byte[] payload,
             AtomicInteger active) {
         if (payload.length > ApplicationStreamCodec.MAX_PAYLOAD_BYTES) {

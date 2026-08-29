@@ -1,15 +1,13 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
-import java.util.List;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import org.junit.jupiter.api.Test;
 
 class CapabilityContractTest {
 
@@ -24,8 +22,12 @@ class CapabilityContractTest {
 
         assertEquals("UUID productId", contract.inputs());
         assertEquals("Optional<Product>", contract.output());
-        assertEquals(2, contract.requiredBehavior().size());
-        assertEquals(2, contract.acceptanceTests().size());
+        assertEquals(2,
+                contract.requiredBehavior()
+                        .size());
+        assertEquals(2,
+                contract.acceptanceTests()
+                        .size());
     }
 
     @Test
@@ -56,19 +58,23 @@ class CapabilityContractTest {
 
     @Test
     void rejectsBlankInputsOrOutput() {
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityContract("", "Optional<Product>", List.of(), List.of()));
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityContract("UUID productId", "   ", List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> new CapabilityContract("", "Optional<Product>", List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> new CapabilityContract("UUID productId", "   ", List.of(), List.of()));
     }
 
     @Test
     void rejectsOversizedInputsOrOutput() {
         String longText = "a".repeat(2001);
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityContract(longText, "Optional<Product>", List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> new CapabilityContract(longText, "Optional<Product>", List.of(), List.of()));
     }
 
     @Test
     void rejectsTooManyListItems() {
         List<String> items = java.util.Collections.nCopies(17, "item");
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityContract("UUID id", "Optional<P>", items, List.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> new CapabilityContract("UUID id", "Optional<P>", items, List.of()));
     }
 }

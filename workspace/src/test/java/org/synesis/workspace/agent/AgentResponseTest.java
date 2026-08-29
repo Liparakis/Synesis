@@ -49,7 +49,8 @@ class AgentResponseTest {
                 AgentStatus.NEEDS_CAPABILITY,
                 AgentReason.OWNER_REQUIRED,
                 AgentNextAction.REQUEST_COORDINATION,
-                new AgentCapabilityResult("catalog.product-query", List.of("inputs", "output", "behavior", "acceptanceTest"))
+                new AgentCapabilityResult("catalog.product-query",
+                        List.of("inputs", "output", "behavior", "acceptanceTest"))
         );
 
         String json = response.toJson();

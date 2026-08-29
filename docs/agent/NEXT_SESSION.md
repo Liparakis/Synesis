@@ -1,5 +1,20 @@
 # Next Session
 
+## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
+
+The IntelliJ baseline was 1,072 findings across 576 Java files (767 warnings
+and 305 weak warnings), not 666. After bounded cleanup, the latest full pass is
+783 findings across 576 Java files (484 warnings and 299 weak warnings), with
+zero analyzer-call failures. The repository already has broad uncommitted user
+changes; preserve them. MAINT-001 is active and does not reopen SYN-041 or
+create SYN-042.
+
+Exact next action: review and fix one further high-confidence warning batch,
+run affected-file IntelliJ checks and build validation, then record the
+remaining count and evidence. Do not rewrite intentional lifecycle, polling,
+reflection, or public-API patterns solely to reduce the counter. Latest full
+pass evidence is checkpoint CP-0573.
+
 ## SYN-041 final real Codex closure acceptance — 2026-08-29
 
 SYN-041 is DONE / ACCEPTED, RESULT A. The one real Codex lifecycle sealed the

@@ -25,6 +25,7 @@ Operator B bootstraps their profile identity and shares the printed Node ID with
 ```
 
 Output:
+
 ```text
 NODE_ID=sl1-<B_NODE_ID_HEX>
 ```
@@ -38,6 +39,7 @@ Operator A creates the project configuration allowlisting Operator B's Node ID:
 ```
 
 Output:
+
 ```text
 NODE_ID=sl1-<A_NODE_ID_HEX>
 PROJECT_ID=<PROJECT_UUID>
@@ -58,6 +60,7 @@ $hash = (Get-FileHash -Algorithm SHA256 .\README.md).Hash.ToLowerInvariant()
 ```
 
 Output:
+
 ```text
 NODE_ID=sl1-<A_NODE_ID_HEX>
 PROJECT_ID=<PROJECT_UUID>
@@ -79,14 +82,19 @@ Operator A starts the sync host with project and record parameters to generate a
 ```
 
 Output:
+
 ```text
 INVITATION=synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&record=<RECORD_UUID>&host=sl1-<A_NODE_ID_HEX>
 ```
 
 > [!IMPORTANT]
-> The `--expect-host` parameter is used to bootstrap cryptographic trust for a new project. It is secure and trustworthy **only** when the expected host identity (fingerprint) is obtained through an independent, verified out-of-band channel (e.g., in person, via secure chat, or a pre-trusted document). Never trust a fingerprint received over the same untrusted transport channel as the invitation URI convenience bundle.
+> The `--expect-host` parameter is used to bootstrap cryptographic trust for a new project. It is secure and trustworthy
+**only** when the expected host identity (fingerprint) is obtained through an independent, verified out-of-band
+> channel (e.g., in person, via secure chat, or a pre-trusted document). Never trust a fingerprint received over the same
+> untrusted transport channel as the invitation URI convenience bundle.
 
-Operator B can now onboard and sync the record with a single command by passing the parameterized invitation link and confirming the host fingerprint:
+Operator B can now onboard and sync the record with a single command by passing the parameterized invitation link and
+confirming the host fingerprint:
 
 ```powershell
 & $ws --profile $profileB sync join `
@@ -95,6 +103,7 @@ Operator B can now onboard and sync the record with a single command by passing 
 ```
 
 Output:
+
 ```text
 AUTHENTICATED_REMOTE=sl1-<A_NODE_ID_HEX>
 PROJECT_ID=<PROJECT_UUID>
@@ -111,11 +120,13 @@ Alternatively, Operator A starts the sync host without specifying a record, gene
 ```
 
 Output:
+
 ```text
 INVITATION=synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&host=sl1-<A_NODE_ID_HEX>
 ```
 
-Operator B joins the host and syncs the record by passing the invitation link, project ID, record ID, and expected host Node ID:
+Operator B joins the host and syncs the record by passing the invitation link, project ID, record ID, and expected host
+Node ID:
 
 ```powershell
 & $ws --profile $profileB sync join `
@@ -126,6 +137,7 @@ Operator B joins the host and syncs the record by passing the invitation link, p
 ```
 
 Output:
+
 ```text
 AUTHENTICATED_REMOTE=sl1-<A_NODE_ID_HEX>
 PROJECT_ID=<PROJECT_UUID>
@@ -142,6 +154,7 @@ Operator B can now search and inspect the verified synced record locally:
 ```
 
 Output:
+
 ```text
 RESULTS=1
 RECORD_ID=<RECORD_UUID>
@@ -160,6 +173,7 @@ And inspect details of the specific record:
 ```
 
 Output:
+
 ```text
 PROJECT_ID=<PROJECT_UUID>
 RECORD_ID=<RECORD_UUID>
@@ -177,8 +191,12 @@ SIGNATURE_VALID=true
 
 ## Safe output
 
-Normal successful output contains stable labels such as `NODE_ID`, `PROJECT_ID`, `RECORD_ID`, `DIGEST`, `VERSION`, `REVISION`, `EVIDENCE_DIGEST`, and `SIGNATURE_VALID`. It does not expose private keys, absolute paths, endpoints, or stack traces. Evidence references are recorded as logical references only; this slice does not fetch or validate their files.
+Normal successful output contains stable labels such as `NODE_ID`, `PROJECT_ID`, `RECORD_ID`, `DIGEST`, `VERSION`,
+`REVISION`, `EVIDENCE_DIGEST`, and `SIGNATURE_VALID`. It does not expose private keys, absolute paths, endpoints, or
+stack traces. Evidence references are recorded as logical references only; this slice does not fetch or validate their
+files.
 
 ## Deferred work
 
-No background sync, retries, reconnect, discovery, membership, workers, leases, autonomy, federation, Obsidian integration, or physical-machine claims are included in this module.
+No background sync, retries, reconnect, discovery, membership, workers, leases, autonomy, federation, Obsidian
+integration, or physical-machine claims are included in this module.

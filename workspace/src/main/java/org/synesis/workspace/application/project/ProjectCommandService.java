@@ -23,13 +23,16 @@ import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandService {
 
     private final ProjectApplicationService projectService;
     private final WorkspaceReadinessService readinessService;
     private final ProjectProcessExecutor executor;
 
-    /** Creates a command service using the default project and process services. */
+    /**
+     * Creates a command service using the default project and process services.
+     */
     public ProjectCommandService() {
         this(new ProjectApplicationService(), new WorkspaceReadinessService(), new ProjectProcessExecutor());
     }
@@ -37,9 +40,9 @@ public final class ProjectCommandService {
     /**
      * Creates a command service with explicit collaborators.
      *
-     * @param projectService project discovery service
+     * @param projectService   project discovery service
      * @param readinessService lane readiness service
-     * @param executor shared direct process executor
+     * @param executor         shared direct process executor
      */
     public ProjectCommandService(ProjectApplicationService projectService,
             WorkspaceReadinessService readinessService, ProjectProcessExecutor executor) {
@@ -48,37 +51,44 @@ public final class ProjectCommandService {
         this.executor = Objects.requireNonNull(executor, "executor");
     }
 
-    /**
-     * Direct argv request from the MCP boundary.
-     *
-     * @param projectRoot          control checkout
-     * @param provider             canonical provider ID
-     * @param connectionInstanceId exact persistent MCP connection identity
-     * @param argv                 executable and arguments, passed unchanged
-     * @param workingDirectory     relative lane directory, or {@code null}
-     * @param timeoutSeconds       timeout in seconds, or {@code null} for default
-     */
-    public record CommandRequest(Path projectRoot, String provider, String connectionInstanceId,
-            List<String> argv, String workingDirectory, Integer timeoutSeconds) {
-        /** Validates and copies request values. */
-        public CommandRequest {
-            Objects.requireNonNull(projectRoot, "projectRoot");
-            Objects.requireNonNull(provider, "provider");
-            Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-            Objects.requireNonNull(argv, "argv");
-            argv = List.copyOf(argv);
-        }
+    private static AgentStatus statusFor(ProjectProcessExecutor.Outcome outcome) {
+        return switch (outcome) {
+            case COMPLETED -> AgentStatus.COMPLETED;
+            case NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND,
+                 COMMAND_PERMISSION_DENIED -> AgentStatus.BLOCKED;
+            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentStatus.FAILED;
+        };
+    }
 
-        /**
-         * Creates a request with default working directory and timeout.
-         *
-         * @param projectRoot control checkout
-         * @param provider provider identifier
-         * @param connectionInstanceId exact connection identity
-         * @param argv direct executable and arguments
-         */
-        public CommandRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> argv) {
-            this(projectRoot, provider, connectionInstanceId, argv, ".", null);
+    private static AgentReason reasonFor(ProjectProcessExecutor.Outcome outcome) {
+        return switch (outcome) {
+            case COMPLETED -> null;
+            case NON_ZERO_EXIT -> AgentReason.COMMAND_FAILED;
+            case COMMAND_WORKING_DIRECTORY_INVALID -> AgentReason.COMMAND_WORKING_DIRECTORY_INVALID;
+            case COMMAND_EXECUTABLE_NOT_FOUND -> AgentReason.COMMAND_EXECUTABLE_NOT_FOUND;
+            case COMMAND_PERMISSION_DENIED -> AgentReason.COMMAND_PERMISSION_DENIED;
+            case COMMAND_TIMED_OUT -> AgentReason.COMMAND_TIMEOUT;
+            case COMMAND_CANCELLED -> AgentReason.COMMAND_CANCELLED;
+            case COMMAND_START_FAILED -> AgentReason.COMMAND_START_FAILED;
+            case COMMAND_TERMINATED -> AgentReason.COMMAND_TERMINATED;
+        };
+    }
+
+    private static AgentNextAction nextActionFor(ProjectProcessExecutor.Outcome outcome) {
+        return switch (outcome) {
+            case COMPLETED, NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID,
+                 COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> null;
+            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED ->
+                    AgentNextAction.REQUEST_HUMAN_HELP;
+        };
+    }
+
+    private static long getDirectoryLastModified(Path path) {
+        try {
+            return Files.exists(path) ? Files.getLastModifiedTime(path)
+                                        .toMillis() : 0L;
+        } catch (Exception failure) {
+            return 0L;
         }
     }
 
@@ -93,11 +103,15 @@ public final class ProjectCommandService {
         });
     }
 
-    /** Executes direct argv while observing the exact child process at start. */
+    /**
+     * Executes direct argv while observing the exact child process at start.
+     */
     AgentResponse runCommand(CommandRequest request, Consumer<ProjectProcessExecutor.StartedProcessIdentity> observer) {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(observer, "observer");
-        Path root = request.projectRoot().toAbsolutePath().normalize();
+        Path root = request.projectRoot()
+                .toAbsolutePath()
+                .normalize();
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY,
                     AgentNextAction.ENSURE_SESSION, null);
@@ -130,43 +144,40 @@ public final class ProjectCommandService {
                 nextActionFor(result.outcome()), result.toMap());
     }
 
-    private static AgentStatus statusFor(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED -> AgentStatus.COMPLETED;
-            case NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND,
-                    COMMAND_PERMISSION_DENIED -> AgentStatus.BLOCKED;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentStatus.FAILED;
-        };
-    }
+    /**
+     * Direct argv request from the MCP boundary.
+     *
+     * @param projectRoot          control checkout
+     * @param provider             canonical provider ID
+     * @param connectionInstanceId exact persistent MCP connection identity
+     * @param argv                 executable and arguments, passed unchanged
+     * @param workingDirectory     relative lane directory, or {@code null}
+     * @param timeoutSeconds       timeout in seconds, or {@code null} for default
+     */
+    public record CommandRequest(Path projectRoot, String provider, String connectionInstanceId,
+                                 List<String> argv, String workingDirectory, Integer timeoutSeconds) {
 
-    private static AgentReason reasonFor(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED -> null;
-            case NON_ZERO_EXIT -> AgentReason.COMMAND_FAILED;
-            case COMMAND_WORKING_DIRECTORY_INVALID -> AgentReason.COMMAND_WORKING_DIRECTORY_INVALID;
-            case COMMAND_EXECUTABLE_NOT_FOUND -> AgentReason.COMMAND_EXECUTABLE_NOT_FOUND;
-            case COMMAND_PERMISSION_DENIED -> AgentReason.COMMAND_PERMISSION_DENIED;
-            case COMMAND_TIMED_OUT -> AgentReason.COMMAND_TIMEOUT;
-            case COMMAND_CANCELLED -> AgentReason.COMMAND_CANCELLED;
-            case COMMAND_START_FAILED -> AgentReason.COMMAND_START_FAILED;
-            case COMMAND_TERMINATED -> AgentReason.COMMAND_TERMINATED;
-        };
-    }
+        /**
+         * Validates and copies request values.
+         */
+        public CommandRequest {
+            Objects.requireNonNull(projectRoot, "projectRoot");
+            Objects.requireNonNull(provider, "provider");
+            Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+            Objects.requireNonNull(argv, "argv");
+            argv = List.copyOf(argv);
+        }
 
-    private static AgentNextAction nextActionFor(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED, NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID,
-                    COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> null;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED ->
-                    AgentNextAction.REQUEST_HUMAN_HELP;
-        };
-    }
-
-    private static long getDirectoryLastModified(Path path) {
-        try {
-            return Files.exists(path) ? Files.getLastModifiedTime(path).toMillis() : 0L;
-        } catch (Exception failure) {
-            return 0L;
+        /**
+         * Creates a request with default working directory and timeout.
+         *
+         * @param projectRoot          control checkout
+         * @param provider             provider identifier
+         * @param connectionInstanceId exact connection identity
+         * @param argv                 direct executable and arguments
+         */
+        public CommandRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> argv) {
+            this(projectRoot, provider, connectionInstanceId, argv, ".", null);
         }
     }
 }

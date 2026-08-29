@@ -1,7 +1,5 @@
 package org.synesis.workspace.application.provider;
 
-import org.synesis.workspace.application.ProjectApplicationService;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,16 +12,16 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
+import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.provider.ProviderRegistry;
 
 /**
  * Creates and resumes project-scoped provider session bindings.
@@ -36,6 +34,7 @@ import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ProviderSessionBindingService {
 
     private static final int SCHEMA_VERSION = 2;
@@ -116,7 +115,8 @@ public final class ProviderSessionBindingService {
                     binding.providerTrustState());
             return verifyBinding(location.root(), allocated);
         } catch (Exception failure) {
-            String diagnostic = String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")
+            String diagnostic = String.valueOf(failure.getMessage())
+                    .contains("PROVIDER_CONFIGURATION_CONFLICT")
                     ? "PROVIDER_CONFIGURATION_CONFLICT" : "WORKSPACE_ALLOCATION_FAILED";
             return copy(binding,
                     null,
@@ -263,6 +263,7 @@ public final class ProviderSessionBindingService {
                 ProviderJson.write(marker) + System.lineSeparator());
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static Binding copy(Binding b, String worktreeId, String control, String path, String base, String branch,
             String creation, String verification, String lastSeen, String trust) {
         return new Binding(SCHEMA_VERSION,
@@ -438,6 +439,140 @@ public final class ProviderSessionBindingService {
         }
     }
 
+    private static Binding newBinding(ProjectApplicationService.ProjectLocation location,
+            NodeIdentity identity, String provider, String fingerprint) {
+        long now = System.currentTimeMillis();
+        return new Binding(SCHEMA_VERSION,
+                "session-" + UUID.randomUUID(),
+                location.projectId()
+                        .toString(),
+                identity.nodeId(),
+                provider,
+                fingerprint,
+                "supervisor-" + UUID.randomUUID(),
+                "worker-" + UUID.randomUUID(),
+                null,
+                null,
+                location.root()
+                        .toString(),
+                null,
+                currentCommit(location.root()),
+                null,
+                "UNASSIGNED",
+                "UNVERIFIED",
+                "BOOTSTRAPPED",
+                "BOUND",
+                now,
+                now,
+                0L,
+                "WORKSPACE_UNVERIFIED",
+                1,
+                null);
+    }
+
+    private static boolean cleanlyDetached(ProjectApplicationService.ProjectLocation location, Binding binding) {
+        Path coordination = location.root()
+                .resolve(".synesis/coordination");
+        if (!Files.isDirectory(coordination.resolve("events"))) {
+            return false;
+        }
+        try {
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            return new PredictionEventStore(coordination, location.projectId()).collaborationProjection()
+                    .participantState(participant)
+                    .map(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.DETACHED)
+                    .orElse(false);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static boolean workspaceGenerationFresh(ProjectApplicationService.ProjectLocation location,
+            Binding binding) {
+        if (binding == null || binding.worktreePath() == null || !validCommit(binding.baseCommit())) {
+            return false;
+        }
+        try {
+            Path worker = Path.of(binding.worktreePath());
+            return Files.isDirectory(worker)
+                    && binding.baseCommit()
+                    .equals(currentCommit(worker))
+                    && binding.baseCommit()
+                    .equals(currentCommit(location.root()));
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    private static boolean controlAdvancedWithoutUnintegratedWorkerWork(ProjectApplicationService.ProjectLocation location,
+            Binding binding) {
+        if (binding == null || binding.worktreePath() == null || !validCommit(binding.baseCommit())) {
+            return false;
+        }
+        try {
+            String controlHead = currentCommit(location.root());
+            String workerHead = currentCommit(Path.of(binding.worktreePath()));
+            // A clean worker that already contains the control head has no
+            // private committed delta to discard. Preserve its session
+            // identity just as for an untouched worker; replacing the
+            // binding would strand any durable collaboration intent on the
+            // previous participant.
+            return validCommit(controlHead) && validCommit(workerHead)
+                    && !binding.baseCommit()
+                    .equals(controlHead)
+                    && (binding.baseCommit()
+                    .equals(workerHead) || controlHead.equals(workerHead));
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    private static Binding reallocatePreservingSession(ProjectApplicationService.ProjectLocation location,
+            Binding binding) {
+        String suffix = "recovery-" + UUID.randomUUID();
+        Binding replacement = copy(binding,
+                null,
+                location.root()
+                        .toString(),
+                null,
+                currentCommit(location.root()),
+                null,
+                "UNASSIGNED",
+                "UNVERIFIED",
+                "WORKSPACE_REBOUND",
+                "WORKSPACE_UNVERIFIED");
+        return withWorktree(location, replacement, suffix);
+    }
+
+    private static boolean isWorktreeClean(Binding binding) {
+        if (binding == null || binding.worktreePath() == null) {
+            return false;
+        }
+        try {
+            String status = git(Path.of(binding.worktreePath()), "status", "--porcelain", "--untracked-files=all");
+            return status.lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isBlank())
+                    .allMatch(ProviderSessionBindingService::isSafeWorkspaceStatusLine);
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    private static boolean isSafeWorkspaceStatusLine(String line) {
+        String path = line.length() > 3 ? line.substring(3)
+                                          .trim() : line.trim();
+        String normalized = path.replace('\\', '/');
+        return line.endsWith(".synesis") || line.contains(".synesis/")
+                || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
+                || line.contains(".codex/hooks.json") || isPythonBytecodeCache(normalized);
+    }
+
+    private static boolean isPythonBytecodeCache(String path) {
+        return path.equals("__pycache__") || path.startsWith("__pycache__/")
+                || path.endsWith("/__pycache__") || path.contains("/__pycache__/");
+    }
+
     /**
      * Ensures one idempotent binding for a provider instance.
      *
@@ -487,7 +622,8 @@ public final class ProviderSessionBindingService {
                             "The exact provider session has an irreversible terminal fence");
                 }
                 if (cleanlyDetached(location, binding)) {
-                    Binding rebound = withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch();
+                    Binding rebound = withWorktree(location,
+                            newBinding(location, identity, provider, fingerprint)).touch();
                     write(bindingPath, rebound);
                     return new BindingResult(rebound, instanceEvidence == null || instanceEvidence.isBlank());
                 }
@@ -495,7 +631,8 @@ public final class ProviderSessionBindingService {
                         .equals("REVOKED") && !binding.status()
                         .equals("COMPLETED")
                         && !binding.status()
-                        .equals("SUSPENDED") && !binding.status().equals("CANCELLED")) {
+                        .equals("SUSPENDED") && !binding.status()
+                        .equals("CANCELLED")) {
                     if (binding.worktreePath() != null && !workspaceGenerationFresh(location, binding)) {
                         if (!isWorktreeClean(binding)) {
                             throw new BindingException("WORKSPACE_STALE_DIRTY",
@@ -537,122 +674,15 @@ public final class ProviderSessionBindingService {
     public synchronized java.util.Optional<Binding> findByWorktree(
             ProjectApplicationService.ProjectLocation location, String provider, Path worktree)
             throws BindingException {
-        Path normalized = Objects.requireNonNull(worktree, "worktree").toAbsolutePath().normalize();
+        Path normalized = Objects.requireNonNull(worktree, "worktree")
+                .toAbsolutePath()
+                .normalize();
         return list(location, provider).stream()
                 .filter(binding -> "BOUND".equals(binding.status()) && binding.worktreePath() != null)
-                .filter(binding -> normalized.equals(Path.of(binding.worktreePath()).toAbsolutePath().normalize()))
+                .filter(binding -> normalized.equals(Path.of(binding.worktreePath())
+                        .toAbsolutePath()
+                        .normalize()))
                 .findFirst();
-    }
-
-    private static Binding newBinding(ProjectApplicationService.ProjectLocation location,
-            NodeIdentity identity, String provider, String fingerprint) {
-        long now = System.currentTimeMillis();
-        return new Binding(SCHEMA_VERSION,
-                "session-" + UUID.randomUUID(),
-                location.projectId().toString(),
-                identity.nodeId(),
-                provider,
-                fingerprint,
-                "supervisor-" + UUID.randomUUID(),
-                "worker-" + UUID.randomUUID(),
-                null,
-                null,
-                location.root().toString(),
-                null,
-                currentCommit(location.root()),
-                null,
-                "UNASSIGNED",
-                "UNVERIFIED",
-                "BOOTSTRAPPED",
-                "BOUND",
-                now,
-                now,
-                0L,
-                "WORKSPACE_UNVERIFIED",
-                1,
-                null);
-    }
-
-    private static boolean cleanlyDetached(ProjectApplicationService.ProjectLocation location, Binding binding) {
-        Path coordination = location.root().resolve(".synesis/coordination");
-        if (!Files.isDirectory(coordination.resolve("events"))) {
-            return false;
-        }
-        try {
-            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-            return new PredictionEventStore(coordination, location.projectId()).collaborationProjection()
-                    .participantState(participant)
-                    .map(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.DETACHED)
-                    .orElse(false);
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private static boolean workspaceGenerationFresh(ProjectApplicationService.ProjectLocation location,
-            Binding binding) {
-        if (binding == null || binding.worktreePath() == null || !validCommit(binding.baseCommit())) {
-            return false;
-        }
-        try {
-            Path worker = Path.of(binding.worktreePath());
-            return Files.isDirectory(worker)
-                    && binding.baseCommit().equals(currentCommit(worker))
-                    && binding.baseCommit().equals(currentCommit(location.root()));
-        } catch (Exception failure) {
-            return false;
-        }
-    }
-
-    private static boolean controlAdvancedWithoutUnintegratedWorkerWork(ProjectApplicationService.ProjectLocation location,
-            Binding binding) {
-        if (binding == null || binding.worktreePath() == null || !validCommit(binding.baseCommit())) {
-            return false;
-        }
-        try {
-            String controlHead = currentCommit(location.root());
-            String workerHead = currentCommit(Path.of(binding.worktreePath()));
-            // A clean worker that already contains the control head has no
-            // private committed delta to discard. Preserve its session
-            // identity just as for an untouched worker; replacing the
-            // binding would strand any durable collaboration intent on the
-            // previous participant.
-            return validCommit(controlHead) && validCommit(workerHead)
-                    && !binding.baseCommit().equals(controlHead)
-                    && (binding.baseCommit().equals(workerHead) || controlHead.equals(workerHead));
-        } catch (Exception failure) {
-            return false;
-        }
-    }
-
-    private static Binding reallocatePreservingSession(ProjectApplicationService.ProjectLocation location,
-            Binding binding) {
-        String suffix = "recovery-" + UUID.randomUUID();
-        Binding replacement = copy(binding,
-                null,
-                location.root().toString(),
-                null,
-                currentCommit(location.root()),
-                null,
-                "UNASSIGNED",
-                "UNVERIFIED",
-                "WORKSPACE_REBOUND",
-                "WORKSPACE_UNVERIFIED");
-        return withWorktree(location, replacement, suffix);
-    }
-
-    private static boolean isWorktreeClean(Binding binding) {
-        if (binding == null || binding.worktreePath() == null) {
-            return false;
-        }
-        try {
-            String status = git(Path.of(binding.worktreePath()), "status", "--porcelain", "--untracked-files=all");
-            return status.lines().map(String::trim)
-                    .filter(line -> !line.isBlank())
-                    .noneMatch(line -> !isSafeWorkspaceStatusLine(line));
-        } catch (Exception failure) {
-            return false;
-        }
     }
 
     /**
@@ -669,25 +699,13 @@ public final class ProviderSessionBindingService {
         try {
             String status = git(Path.of(binding.worktreePath()),
                     "status", "--porcelain", "--untracked-files=all");
-            return status.lines().map(String::trim)
+            return status.lines()
+                    .map(String::trim)
                     .filter(line -> !line.isBlank())
                     .anyMatch(line -> !isSafeWorkspaceStatusLine(line));
         } catch (Exception failure) {
             return false;
         }
-    }
-
-    private static boolean isSafeWorkspaceStatusLine(String line) {
-        String path = line.length() > 3 ? line.substring(3).trim() : line.trim();
-        String normalized = path.replace('\\', '/');
-        return line.endsWith(".synesis") || line.contains(".synesis/")
-                || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
-                || line.contains(".codex/hooks.json") || isPythonBytecodeCache(normalized);
-    }
-
-    private static boolean isPythonBytecodeCache(String path) {
-        return path.equals("__pycache__") || path.startsWith("__pycache__/")
-                || path.endsWith("/__pycache__") || path.contains("/__pycache__/");
     }
 
     /**
@@ -732,8 +750,8 @@ public final class ProviderSessionBindingService {
      * normalization and fingerprinting used by {@link #ensure(ProjectApplicationService.ProjectLocation,
      * String, String)} is therefore applied here.
      *
-     * @param location initialized project location
-     * @param provider stable provider identifier
+     * @param location         initialized project location
+     * @param provider         stable provider identifier
      * @param instanceEvidence provider connection identity
      * @return the matching binding, or empty when this connection has not been ensured
      * @throws BindingException when the binding is malformed or identity-mismatched
@@ -758,8 +776,11 @@ public final class ProviderSessionBindingService {
                     .resolve("link"))
                     .loadOrCreate()
                     .identity();
-            if (!location.projectId().toString().equals(binding.projectId())
-                    || !identity.nodeId().equals(binding.nodeId())
+            if (!location.projectId()
+                    .toString()
+                    .equals(binding.projectId())
+                    || !identity.nodeId()
+                    .equals(binding.nodeId())
                     || !provider.equals(binding.provider())
                     || !instanceFingerprint.equals(binding.providerInstanceFingerprint())) {
                 throw new BindingException("SESSION_IDENTITY_MISMATCH",
@@ -779,8 +800,8 @@ public final class ProviderSessionBindingService {
      * worktree and audit record.  Resolution is by the caller's connection
      * evidence; no provider-wide or latest-binding fallback is permitted.
      *
-     * @param location initialized control project
-     * @param provider stable provider identifier
+     * @param location         initialized control project
+     * @param provider         stable provider identifier
      * @param instanceEvidence exact provider connection identity
      * @return {@code true} when the binding was transitioned or was already complete
      * @throws BindingException when the exact binding cannot be read or persisted
@@ -793,8 +814,10 @@ public final class ProviderSessionBindingService {
             String evidence = instanceEvidence == null || instanceEvidence.isBlank()
                     ? fallbackEvidence(location, provider) : instanceEvidence.trim();
             String fingerprint = fingerprint(evidence);
-            Path bindingPath = location.synesisDirectory().resolve("local")
-                    .resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + fingerprint + ".json");
+            Path bindingPath = location.synesisDirectory()
+                    .resolve("local")
+                    .resolve(SESSIONS_DIRECTORY)
+                    .resolve(provider + "-" + fingerprint + ".json");
             if (!Files.isRegularFile(bindingPath)) {
                 return false;
             }
@@ -815,19 +838,21 @@ public final class ProviderSessionBindingService {
         }
     }
 
-    /** Marks one exact provider binding complete by its durable session ID.
+    /**
+     * Marks one exact provider binding complete by its durable session ID.
      *
      * <p>This lookup is used after integration, when the immutable snapshot
      * carries the session identity but the original transient connection
      * evidence is no longer available. It never selects a latest or provider-
      * wide binding.</p>
      *
-     * @param location initialized control project
-     * @param provider stable provider identifier
+     * @param location  initialized control project
+     * @param provider  stable provider identifier
      * @param sessionId exact durable session identifier
      * @return {@code true} when the binding was transitioned or already complete
      * @throws BindingException when a matching binding is malformed or cannot be persisted
      */
+    @SuppressWarnings("UnusedReturnValue")
     public synchronized boolean completeBySessionId(ProjectApplicationService.ProjectLocation location,
             String provider, String sessionId) throws BindingException {
         Objects.requireNonNull(location, "location");
@@ -836,7 +861,8 @@ public final class ProviderSessionBindingService {
         try {
             Binding binding = list(location, provider).stream()
                     .filter(candidate -> sessionId.equals(candidate.sessionId()))
-                    .findFirst().orElse(null);
+                    .findFirst()
+                    .orElse(null);
             if (binding == null) {
                 return false;
             }
@@ -850,7 +876,8 @@ public final class ProviderSessionBindingService {
             if (!"BOUND".equals(binding.status()) && !"SUSPENDED".equals(binding.status())) {
                 return false;
             }
-            Path bindingPath = location.synesisDirectory().resolve("local")
+            Path bindingPath = location.synesisDirectory()
+                    .resolve("local")
                     .resolve(SESSIONS_DIRECTORY)
                     .resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
             if (!Files.isRegularFile(bindingPath)) {
@@ -866,13 +893,16 @@ public final class ProviderSessionBindingService {
         }
     }
 
-    /** Marks one exact provider binding as terminal after its event-log fence commits.
-     * @param location initialized control project
-     * @param provider provider identifier
+    /**
+     * Marks one exact provider binding as terminal after its event-log fence commits.
+     *
+     * @param location  initialized control project
+     * @param provider  provider identifier
      * @param sessionId exact durable session identifier
      * @return true when marked or already terminal
      * @throws BindingException when stored state cannot be read or persisted
      */
+    @SuppressWarnings("UnusedReturnValue")
     public synchronized boolean terminalizeBySessionId(ProjectApplicationService.ProjectLocation location,
             String provider, String sessionId) throws BindingException {
         Objects.requireNonNull(location, "location");
@@ -881,13 +911,24 @@ public final class ProviderSessionBindingService {
         try {
             Binding binding = list(location, provider).stream()
                     .filter(candidate -> sessionId.equals(candidate.sessionId()))
-                    .findFirst().orElse(null);
-            if (binding == null) return false;
-            if ("TERMINAL".equals(binding.status())) return true;
-            if (!"BOUND".equals(binding.status()) && !"COMPLETED".equals(binding.status())) return false;
-            Path bindingPath = location.synesisDirectory().resolve("local")
-                    .resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
-            if (!Files.isRegularFile(bindingPath)) return false;
+                    .findFirst()
+                    .orElse(null);
+            if (binding == null) {
+                return false;
+            }
+            if ("TERMINAL".equals(binding.status())) {
+                return true;
+            }
+            if (!"BOUND".equals(binding.status()) && !"COMPLETED".equals(binding.status())) {
+                return false;
+            }
+            Path bindingPath = location.synesisDirectory()
+                    .resolve("local")
+                    .resolve(SESSIONS_DIRECTORY)
+                    .resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
+            if (!Files.isRegularFile(bindingPath)) {
+                return false;
+            }
             write(bindingPath, binding.terminalize());
             return true;
         } catch (BindingException failure) {
@@ -898,8 +939,10 @@ public final class ProviderSessionBindingService {
         }
     }
 
-    /** Returns the event-log terminal fence for an exact binding session.
-     * @param location initialized control project
+    /**
+     * Returns the event-log terminal fence for an exact binding session.
+     *
+     * @param location  initialized control project
      * @param sessionId exact durable session identifier
      * @return true when terminalized
      * @throws BindingException when the event log is unreadable
@@ -981,7 +1024,8 @@ public final class ProviderSessionBindingService {
         return verifyWorkspace(location, binding, cwd, true);
     }
 
-    /** Verifies a clean no-change lane without requiring the control checkout to remain at its base.
+    /**
+     * Verifies a clean no-change lane without requiring the control checkout to remain at its base.
      *
      * <p>A no-change participant performs no repository mutation. Once another
      * lane has integrated, its clean read-only worktree may therefore have a
@@ -990,8 +1034,8 @@ public final class ProviderSessionBindingService {
      * continue using {@link #verifyWorkspace(ProjectApplicationService.ProjectLocation, Binding, Path)}.
      *
      * @param location project location
-     * @param binding session binding
-     * @param cwd provider event working directory
+     * @param binding  session binding
+     * @param cwd      provider event working directory
      * @return workspace verification result
      */
     public synchronized WorkspaceCheck verifyNoChangeWorkspace(
@@ -1038,10 +1082,12 @@ public final class ProviderSessionBindingService {
             if (!isBaseAncestor(assigned, binding.baseCommit())) {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             }
-            if (!binding.baseCommit().equals(git(assigned, "rev-parse", "HEAD"))) {
+            if (!binding.baseCommit()
+                    .equals(git(assigned, "rev-parse", "HEAD"))) {
                 return new WorkspaceCheck(false, "WORKSPACE_GENERATION_MISMATCH");
             }
-            if (requireCurrentControlBase && !binding.baseCommit().equals(git(root, "rev-parse", "HEAD"))) {
+            if (requireCurrentControlBase && !binding.baseCommit()
+                    .equals(git(root, "rev-parse", "HEAD"))) {
                 return new WorkspaceCheck(false, "CONTROL_BASE_ADVANCED");
             }
             return new WorkspaceCheck(true, "WORKSPACE_VERIFIED");
@@ -1154,7 +1200,7 @@ public final class ProviderSessionBindingService {
             // All checks passed! Transition to VERIFIED and persist evidence
             long now = System.currentTimeMillis();
             String evidenceRaw = location.projectId()
-                    .toString() + "|" + canonicalAssigned.toString() + "|"
+                    .toString() + "|" + canonicalAssigned + "|"
                     + binding.branch() + "|" + headCommit + "|" + now;
             String evidenceDigest = fingerprint(evidenceRaw);
 
@@ -1359,7 +1405,9 @@ public final class ProviderSessionBindingService {
                     providerTrustState, bindingVersion, Long.toString(completed));
         }
 
-        /** Returns an irreversible terminal binding marker while preserving audit fields.
+        /**
+         * Returns an irreversible terminal binding marker while preserving audit fields.
+         *
          * @return terminal binding
          */
         public Binding terminalize() {
@@ -1404,6 +1452,7 @@ public final class ProviderSessionBindingService {
      */
     public static final class BindingException extends Exception {
 
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
         /**
          * Stable machine-readable failure code.

@@ -1,7 +1,9 @@
 package org.synesis.workspace.lifecycle.codex;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -11,11 +13,33 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Tests durable-before-mutation idempotency and restart ambiguity. */
+/**
+ * Tests durable-before-mutation idempotency and restart ambiguity.
+ */
 class LifecycleIdempotencyLedgerTest {
 
     @TempDir
     Path temp;
+
+    private static LifecycleControlRequestEnvelope request(UUID id, String input) {
+        return new LifecycleControlRequestEnvelope(id,
+                "host",
+                new LifecycleControlRequestEnvelope.AuthorityContext(
+                        "project", "codex", "connection", "session", "fingerprint", 1, "agt_participant",
+                        UUID.randomUUID()
+                                .toString(), 1L, "worktree", "worktree", "git", "branch", "a".repeat(40),
+                        "supervisor", "worker"),
+                LifecycleControlRequestEnvelope.Operation.START,
+                0L,
+                null,
+                null,
+                true,
+                input,
+                Instant.now()
+                        .plusSeconds(60)
+                        .toEpochMilli(),
+                Map.of());
+    }
 
     @Test
     void duplicateAndConflictAreResolvedByCanonicalDigest() throws Exception {
@@ -24,8 +48,12 @@ class LifecycleIdempotencyLedgerTest {
         UUID requestId = UUID.randomUUID();
         LifecycleControlRequestEnvelope request = request(requestId, "input");
 
-        assertEquals(LifecycleIdempotencyLedger.Disposition.NEW, ledger.prepare(request, 0L).disposition());
-        assertEquals(LifecycleIdempotencyLedger.Disposition.IN_PROGRESS, ledger.prepare(request, 0L).disposition());
+        assertEquals(LifecycleIdempotencyLedger.Disposition.NEW,
+                ledger.prepare(request, 0L)
+                        .disposition());
+        assertEquals(LifecycleIdempotencyLedger.Disposition.IN_PROGRESS,
+                ledger.prepare(request, 0L)
+                        .disposition());
         assertThrows(LifecycleIdempotencyLedger.IdempotencyConflictException.class,
                 () -> ledger.prepare(request(requestId, "different"), 0L));
     }
@@ -39,40 +67,38 @@ class LifecycleIdempotencyLedgerTest {
 
         LifecycleIdempotencyLedger restarted = new LifecycleIdempotencyLedger(file);
         assertEquals(LifecycleIdempotencyLedger.State.AMBIGUOUS,
-                restarted.find(request.requestId()).orElseThrow().state());
+                restarted.find(request.requestId())
+                        .orElseThrow()
+                        .state());
     }
 
     @Test
     void initialDurabilityFailureRemovesUncommittedEntry() throws Exception {
         AtomicBoolean called = new AtomicBoolean();
-        LifecycleIdempotencyLedger ledger = new LifecycleIdempotencyLedger(temp.resolve("unused.json"), entries -> {
+        LifecycleIdempotencyLedger ledger = new LifecycleIdempotencyLedger(temp.resolve("unused.json"), _ -> {
             called.set(true);
             throw new java.io.IOException("disk full");
         });
         LifecycleControlRequestEnvelope request = request(UUID.randomUUID(), "input");
         assertThrows(java.io.IOException.class, () -> ledger.prepare(request, 0L));
-        assertEquals(true, called.get());
-        assertEquals(false, ledger.find(request.requestId()).isPresent());
+        assertTrue(called.get());
+        assertFalse(
+                ledger.find(request.requestId())
+                        .isPresent());
     }
 
     @Test
     void successfulWriteCallbackWithoutCommittedFileFailsVerification() throws Exception {
         Path file = temp.resolve("missing-after-success.json");
-        LifecycleIdempotencyLedger ledger = new LifecycleIdempotencyLedger(file, entries -> {
+        LifecycleIdempotencyLedger ledger = new LifecycleIdempotencyLedger(file, _ -> {
             // Simulate a broken store that reports success without committing
             // a readable durable representation.
         });
         LifecycleControlRequestEnvelope request = request(UUID.randomUUID(), "input");
 
-        assertEquals(LifecycleIdempotencyLedger.Disposition.NEW, ledger.prepare(request, 0L).disposition());
-        assertEquals(false, ledger.verifyCommitted(request.requestId(), request.digest(), 0L));
-    }
-
-    private static LifecycleControlRequestEnvelope request(UUID id, String input) {
-        return new LifecycleControlRequestEnvelope(id, "host", new LifecycleControlRequestEnvelope.AuthorityContext(
-                "project", "codex", "connection", "session", "fingerprint", 1, "agt_participant",
-                UUID.randomUUID().toString(), 1L, "worktree", "worktree", "git", "branch", "a".repeat(40),
-                "supervisor", "worker"), LifecycleControlRequestEnvelope.Operation.START, 0L, null, null, true,
-                input, Instant.now().plusSeconds(60).toEpochMilli(), Map.of());
+        assertEquals(LifecycleIdempotencyLedger.Disposition.NEW,
+                ledger.prepare(request, 0L)
+                        .disposition());
+        assertFalse(ledger.verifyCommitted(request.requestId(), request.digest(), 0L));
     }
 }

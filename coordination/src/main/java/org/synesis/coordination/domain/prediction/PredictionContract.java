@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.prediction;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -47,6 +45,7 @@ import java.util.UUID;
  * @param speculationRisk       speculation risk score
  * @param expiresAtEpochMillis  expiry timestamp
  */
+@SuppressWarnings("DuplicatedCode")
 public record PredictionContract(
         UUID predictionId,
         UUID projectId,

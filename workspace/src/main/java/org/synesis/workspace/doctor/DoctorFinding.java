@@ -6,16 +6,16 @@ import java.util.Objects;
 /**
  * Immutable diagnostic finding record capturing one observed condition.
  *
- * @param code                machine-readable finding code
- * @param severity            severity classification
- * @param confidence          evidence confidence level
- * @param summary             concise summary string
- * @param explanation         bounded explanation string
+ * @param code                 machine-readable finding code
+ * @param severity             severity classification
+ * @param confidence           evidence confidence level
+ * @param summary              concise summary string
+ * @param explanation          bounded explanation string
  * @param affectedResourceType resource type string
- * @param repairSupported     {@code true} if automated administrative repair is supported
- * @param recommendation      recommended next action
- * @param evidenceFingerprint evidence fingerprint SHA-256 hash
- * @param details             operator-level diagnostic details map
+ * @param repairSupported      {@code true} if automated administrative repair is supported
+ * @param recommendation       recommended next action
+ * @param evidenceFingerprint  evidence fingerprint SHA-256 hash
+ * @param details              operator-level diagnostic details map
  * @since 1.0
  */
 public record DoctorFinding(
@@ -30,6 +30,7 @@ public record DoctorFinding(
         String evidenceFingerprint,
         Map<String, String> details
 ) {
+
     /**
      * Invariant validation.
      */

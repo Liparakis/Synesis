@@ -12,9 +12,12 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-/** Announces one work intent and atomically acquires path claims. */
+/**
+ * Announces one work intent and atomically acquires path claims.
+ */
 @Command(name = "announce", description = "Announce intended work and claim paths.", mixinStandardHelpOptions = true)
 public final class CollaborationAnnounceCommand implements Callable<Integer> {
+
     private final CliRuntime runtime;
     @Option(names = "--project", defaultValue = ".")
     private Path project;
@@ -35,28 +38,38 @@ public final class CollaborationAnnounceCommand implements Callable<Integer> {
 
     /**
      * Creates the command.
+     *
      * @param runtime composed CLI runtime
      */
     public CollaborationAnnounceCommand(CliRuntime runtime) {
         this.runtime = runtime;
     }
 
-    /** Executes the announcement. @return process exit code */
+    /**
+     * Executes the announcement. @return process exit code
+     */
     @Override
     public Integer call() {
         try {
-            List<ResourceSelector> selectors = claims.stream().map(path -> subtree
-                    ? ResourceSelector.pathSubtree(path) : ResourceSelector.pathExact(path)).toList();
-            ClaimResult result = new WorkspaceCollaborationService().announce(project.toAbsolutePath().normalize(),
+            List<ResourceSelector> selectors = claims.stream()
+                    .map(path -> subtree
+                            ? ResourceSelector.pathSubtree(path) : ResourceSelector.pathExact(path))
+                    .toList();
+            ClaimResult result = new WorkspaceCollaborationService().announce(project.toAbsolutePath()
+                            .normalize(),
                     provider, connectionInstanceId, goal, acceptance, selectors, workGroupId);
             if (!result.acquired()) {
-                runtime.terminal().stderr("OVERLAPPING_CLAIM=" + result.conflicts());
+                runtime.terminal()
+                        .stderr("OVERLAPPING_CLAIM=" + result.conflicts());
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
-            runtime.terminal().stdout("INTENT_ANNOUNCED=" + result.intent().intentId());
+            runtime.terminal()
+                    .stdout("INTENT_ANNOUNCED=" + result.intent()
+                            .intentId());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("COLLABORATION_ERROR=" + failure.getMessage());
+            runtime.terminal()
+                    .stderr("COLLABORATION_ERROR=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

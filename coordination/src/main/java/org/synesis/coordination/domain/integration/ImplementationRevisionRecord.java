@@ -1,15 +1,9 @@
 package org.synesis.coordination.domain.integration;
 
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-
-
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-
-
-
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 
 /**
  * Immutable record representing a published implementation revision for a capability request.
@@ -18,14 +12,14 @@ import java.util.UUID;
  * retained even after further revisions are published. Older revisions remain immutable
  * and traceable.
  *
- * @param handle            request handle
+ * @param handle             request handle
  * @param authorityLineageId durable authority lineage of the publisher
- * @param revisionNumber    monotonically increasing revision counter (1-based)
- * @param baseCommit        Git base commit SHA in the owner worktree at time of publication
- * @param commitSha         Git commit SHA produced in the owner worktree (snapshot reference)
- * @param changedPaths      bounded list of changed paths relative to project root
- * @param summary           human-readable implementation summary (1-500 chars)
- * @param publishedAtMillis publication timestamp
+ * @param revisionNumber     monotonically increasing revision counter (1-based)
+ * @param baseCommit         Git base commit SHA in the owner worktree at time of publication
+ * @param commitSha          Git commit SHA produced in the owner worktree (snapshot reference)
+ * @param changedPaths       bounded list of changed paths relative to project root
+ * @param summary            human-readable implementation summary (1-500 chars)
+ * @param publishedAtMillis  publication timestamp
  * @since 1.0
  */
 public record ImplementationRevisionRecord(
@@ -39,10 +33,14 @@ public record ImplementationRevisionRecord(
         long publishedAtMillis
 ) {
 
-    /** Maximum number of changed paths per revision. */
+    /**
+     * Maximum number of changed paths per revision.
+     */
     public static final int MAX_CHANGED_PATHS = 64;
 
-    /** Maximum length of the summary text in characters. */
+    /**
+     * Maximum length of the summary text in characters.
+     */
     public static final int MAX_SUMMARY_LENGTH = 500;
 
     /**
@@ -74,13 +72,15 @@ public record ImplementationRevisionRecord(
         }
     }
 
-    /** Constructs a historical implementation record without lineage metadata.
-     * @param handle request handle
-     * @param revisionNumber revision number
-     * @param baseCommit base commit
-     * @param commitSha implementation commit
-     * @param changedPaths changed paths
-     * @param summary summary
+    /**
+     * Constructs a historical implementation record without lineage metadata.
+     *
+     * @param handle            request handle
+     * @param revisionNumber    revision number
+     * @param baseCommit        base commit
+     * @param commitSha         implementation commit
+     * @param changedPaths      changed paths
+     * @param summary           summary
      * @param publishedAtMillis publication time
      */
     public ImplementationRevisionRecord(CapabilityRequestHandle handle, int revisionNumber,

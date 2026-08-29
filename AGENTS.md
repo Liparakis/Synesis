@@ -50,15 +50,19 @@ before feature work.
 
 ## Checkpoint and evidence rules
 
-Use `scripts/agent-checkpoint.ps1` after meaningful slices and before stopping. Exact commands, outputs, and evidence locations belong in the state files. `CURRENT.md` and `NEXT_SESSION.md` must each contain one concrete immediate next action; vague actions are invalid.
+Use `scripts/agent-checkpoint.ps1` after meaningful slices and before stopping. Exact commands, outputs, and evidence
+locations belong in the state files. `CURRENT.md` and `NEXT_SESSION.md` must each contain one concrete immediate next
+action; vague actions are invalid.
 
 ## Safe stopping
 
-Stop when the current slice is verified, record failures and remaining work, create a checkpoint, update `SESSION_LOG.md`, and leave the exact continuation command in `NEXT_SESSION.md`.
+Stop when the current slice is verified, record failures and remaining work, create a checkpoint, update
+`SESSION_LOG.md`, and leave the exact continuation command in `NEXT_SESSION.md`.
 
 ## Prohibited behavior
 
-Do not implement wider Synesis functionality in this repository. Do not publish, push, tag, release, or modify remote repositories without explicit instruction. Do not implement product behavior while the contract is a placeholder.
+Do not implement wider Synesis functionality in this repository. Do not publish, push, tag, release, or modify remote
+repositories without explicit instruction. Do not implement product behavior while the contract is a placeholder.
 
 ## Deferred capability register
 

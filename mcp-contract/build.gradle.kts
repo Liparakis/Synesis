@@ -2,6 +2,10 @@ plugins {
     `java-library`
 }
 
+// Deliberately standalone: McpToolCatalog is the shared executable MCP
+// contract consumed by both :mcp and :workspace. Keeping it here avoids the
+// :mcp -> :workspace -> :mcp cycle that would result from placing it in :mcp,
+// and keeps MCP protocol ownership out of the lower-level workspace module.
 group = "org.synesis"
 version = "0.1.0-SNAPSHOT"
 

@@ -34,10 +34,10 @@ sibling lane in the same WorkGroup.
 
 ## Durable participants and group
 
-| Agent | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---:|
-| A | `agt_b7311eda-8883-3905-87f4-744ea613e098` | `6b4e35e3-fbcb-321c-8f61-5f230cee12ae` | `todo.py` | 1 |
-| B | `agt_2bee971d-5541-3812-94b7-1b7c862a110c` | `d6d0e407-da32-3dc2-b4f5-093727a01762` | `test_todo.py` | 1 |
+| Agent | Participant                                | Intent                                 | Claim          | Epoch |
+|-------|--------------------------------------------|----------------------------------------|----------------|------:|
+| A     | `agt_b7311eda-8883-3905-87f4-744ea613e098` | `6b4e35e3-fbcb-321c-8f61-5f230cee12ae` | `todo.py`      |     1 |
+| B     | `agt_2bee971d-5541-3812-94b7-1b7c862a110c` | `d6d0e407-da32-3dc2-b4f5-093727a01762` | `test_todo.py` |     1 |
 
 Shared WorkGroup: `1d24011b-99a6-37bd-b56b-ca09eab8edef`.
 
@@ -45,8 +45,9 @@ Requests `1e0356fa-19f9-4a77-ba96-2cedea541b3b` and
 `23c2c9ff-7654-4712-885a-b188b66b2ecb` were accepted REVIEW requests. Grants
 `f6a5a529-2b59-3fb9-b0a0-64a31e86ebe8` and
 `38e8db15-4f00-3a26-868d-9bba437cd021` were single-use REVIEW grants at epoch
+
 1. Snapshot `snap_ba45b50e94a95018f0994f54e9e68716` was published from B's
-`test_todo.py` lane and integrated.
+   `test_todo.py` lane and integrated.
 
 ## Exact progression and first blocker
 

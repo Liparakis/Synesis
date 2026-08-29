@@ -1,12 +1,5 @@
 package org.synesis.coordination.domain.command;
 
-import org.synesis.coordination.domain.prediction.PredictionEventType;
-
-
-import org.synesis.coordination.domain.prediction.PredictionEventType;
-
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -20,12 +13,13 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Objects;
 import java.util.UUID;
-
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
  * A bounded, signed request to append one coordination event.
  */
+@SuppressWarnings("DuplicatedCode")
 public final class CoordinationCommand {
 
     private static final int MAGIC = 0x53434331;

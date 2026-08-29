@@ -16,11 +16,11 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
  * lane, participant, claim epoch, lineage, or selector set from being
  * mutated by a delayed caller.</p>
  *
- * @param intentId intent identity
- * @param participant authenticated participant handle
- * @param expectedVersion expected claim epoch
+ * @param intentId           intent identity
+ * @param participant        authenticated participant handle
+ * @param expectedVersion    expected claim epoch
  * @param authorityLineageId expected authority lineage
- * @param selectorsDigest digest of the exact selector set
+ * @param selectorsDigest    digest of the exact selector set
  */
 public record WorkIntentMutationPrecondition(
         UUID intentId,
@@ -30,7 +30,9 @@ public record WorkIntentMutationPrecondition(
         String selectorsDigest
 ) {
 
-    /** Validates the bounded precondition. */
+    /**
+     * Validates the bounded precondition.
+     */
     public WorkIntentMutationPrecondition {
         Objects.requireNonNull(intentId, "intentId");
         Objects.requireNonNull(participant, "participant");
@@ -41,7 +43,9 @@ public record WorkIntentMutationPrecondition(
         }
     }
 
-    /** Captures a precondition from the current immutable intent projection.
+    /**
+     * Captures a precondition from the current immutable intent projection.
+     *
      * @param intent current work intent
      * @return exact optimistic precondition
      */
@@ -51,7 +55,23 @@ public record WorkIntentMutationPrecondition(
                 intent.authorityLineageId(), selectorsDigest(intent));
     }
 
-    /** Returns whether an intent still satisfies this precondition.
+    private static String selectorsDigest(WorkIntent intent) {
+        String material = intent.selectors()
+                .stream()
+                .map(selector -> selector.kind()
+                        .name() + "\u001f" + selector.value())
+                .collect(Collectors.joining("\u001e"));
+        try {
+            return HexFormatHolder.HEX.formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(material.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception failure) {
+            throw new IllegalStateException("work-intent selector digest unavailable", failure);
+        }
+    }
+
+    /**
+     * Returns whether an intent still satisfies this precondition.
+     *
      * @param intent candidate current intent
      * @return true when all mutation identity fields match
      */
@@ -64,7 +84,9 @@ public record WorkIntentMutationPrecondition(
                 && selectorsDigest.equals(selectorsDigest(intent));
     }
 
-    /** Requires a matching intent while the append lock is held.
+    /**
+     * Requires a matching intent while the append lock is held.
+     *
      * @param intent current intent projection
      * @throws IOException when the precondition is stale
      */
@@ -74,19 +96,8 @@ public record WorkIntentMutationPrecondition(
         }
     }
 
-    private static String selectorsDigest(WorkIntent intent) {
-        String material = intent.selectors().stream()
-                .map(selector -> selector.kind().name() + "\u001f" + selector.value())
-                .collect(Collectors.joining("\u001e"));
-        try {
-            return HexFormatHolder.HEX.formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(material.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            throw new IllegalStateException("work-intent selector digest unavailable", failure);
-        }
-    }
-
     private static final class HexFormatHolder {
+
         private static final java.util.HexFormat HEX = java.util.HexFormat.of();
 
         private HexFormatHolder() {

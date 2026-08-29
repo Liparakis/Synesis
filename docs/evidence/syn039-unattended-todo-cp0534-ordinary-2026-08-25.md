@@ -56,10 +56,10 @@ The actual Codex MCP routes also used the same executable and project root:
 
 ## Participants and durable coordination state
 
-| Agent | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---:|
-| A | `agt_ce887fa8-c59c-3302-bf1b-8dc0382824c7` | `29018c00-59b7-3454-8a10-5e653a83648d` | `PATH_EXACT todo.py` | 1 |
-| B | `agt_8dd7b59d-6211-3cb3-9948-aad707dc4d18` | `4a48c1e4-d393-367b-b4db-c87dd010c676` | `PATH_EXACT test_todo.py` | 1 |
+| Agent | Participant                                | Intent                                 | Claim                     | Epoch |
+|-------|--------------------------------------------|----------------------------------------|---------------------------|------:|
+| A     | `agt_ce887fa8-c59c-3302-bf1b-8dc0382824c7` | `29018c00-59b7-3454-8a10-5e653a83648d` | `PATH_EXACT todo.py`      |     1 |
+| B     | `agt_8dd7b59d-6211-3cb3-9948-aad707dc4d18` | `4a48c1e4-d393-367b-b4db-c87dd010c676` | `PATH_EXACT test_todo.py` |     1 |
 
 Shared WorkGroup: `d35cd7e5-6310-3d8e-be69-90d9a11c617a`.
 

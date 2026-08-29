@@ -33,12 +33,12 @@ was proven.
   `b376f614-4c70-3279-acfd-7b240768d116`, claim
   `PATH_EXACT:test_todo.py`, epoch 1, final `COMPLETED`.
 - REVIEW requests, both `ACCEPTED`:
-  - A → B: `07f0dc30-e297-4a6d-b77c-6b454057349b`
-  - B → A: `45c6d0c6-d71a-4ec4-8194-626114ef4d5c`
+    - A → B: `07f0dc30-e297-4a6d-b77c-6b454057349b`
+    - B → A: `45c6d0c6-d71a-4ec4-8194-626114ef4d5c`
 - REVIEW grants:
-  - `964ea299-c1fb-3298-a61b-d448522fb33d`, target A, consumed once after
-    one malformed retry.
-  - `c7d4b141-32fd-3547-9928-c8cf191cc1b8`, target B, still pending.
+    - `964ea299-c1fb-3298-a61b-d448522fb33d`, target A, consumed once after
+      one malformed retry.
+    - `c7d4b141-32fd-3547-9928-c8cf191cc1b8`, target B, still pending.
 
 ## Projection and action trace
 

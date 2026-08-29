@@ -2,7 +2,6 @@ package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -10,19 +9,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.application.agent.AgentSessionService;
-import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.agent.AgentNextAction;
-import org.synesis.workspace.agent.AgentReason;
-import org.synesis.workspace.application.agent.AgentNextActionService;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -31,6 +19,16 @@ import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
+import org.synesis.workspace.agent.AgentNextAction;
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.AgentNextActionService;
+import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 class AgentNextActionServiceTest {
 
@@ -94,7 +92,12 @@ class AgentNextActionServiceTest {
         Files.createDirectories(coordDir);
 
         List<Object> items = List.of(
-                java.util.Map.of("type", "NEEDS_CAPABILITY", "capability", "catalog.product-query", "workerId", "codex"),
+                java.util.Map.of("type",
+                        "NEEDS_CAPABILITY",
+                        "capability",
+                        "catalog.product-query",
+                        "workerId",
+                        "codex"),
                 java.util.Map.of("type", "SAFETY_FAILURE", "workerId", "codex")
         );
         Files.writeString(coordDir.resolve("items.json"), ProviderJson.write(items));
@@ -116,8 +119,14 @@ class AgentNextActionServiceTest {
         Files.createDirectories(coordDir);
 
         List<Object> items = List.of(
-                java.util.Map.of("type", "OWNER_REQUEST", "capability", "catalog.product-query", "workerId", "antigravity",
-                        "details", java.util.Map.of("inputs", "query", "output", "result")),
+                java.util.Map.of("type",
+                        "OWNER_REQUEST",
+                        "capability",
+                        "catalog.product-query",
+                        "workerId",
+                        "antigravity",
+                        "details",
+                        java.util.Map.of("inputs", "query", "output", "result")),
                 java.util.Map.of("type", "NEEDS_CAPABILITY", "capability", "other.service", "workerId", "other-worker")
         );
         Files.writeString(coordDir.resolve("items.json"), ProviderJson.write(items));
@@ -144,8 +153,22 @@ class AgentNextActionServiceTest {
         Files.createDirectories(coordDir);
 
         List<Object> items = List.of(
-                java.util.Map.of("type", "NEEDS_CAPABILITY", "capability", "old.cap", "workerId", "codex", "completed", true),
-                java.util.Map.of("type", "VALIDATION_REQUIRED", "capability", "old.cap2", "workerId", "codex", "obsolete", true)
+                java.util.Map.of("type",
+                        "NEEDS_CAPABILITY",
+                        "capability",
+                        "old.cap",
+                        "workerId",
+                        "codex",
+                        "completed",
+                        true),
+                java.util.Map.of("type",
+                        "VALIDATION_REQUIRED",
+                        "capability",
+                        "old.cap2",
+                        "workerId",
+                        "codex",
+                        "obsolete",
+                        true)
         );
         Files.writeString(coordDir.resolve("items.json"), ProviderJson.write(items));
 
@@ -155,7 +178,8 @@ class AgentNextActionServiceTest {
 
         AgentResponse response = service.getNextAction(req);
         assertEquals(AgentStatus.READY, response.status());
-        assertTrue(response.toJson().contains("\"pending\":0"));
+        assertTrue(response.toJson()
+                .contains("\"pending\":0"));
     }
 
     @Test
@@ -178,7 +202,8 @@ class AgentNextActionServiceTest {
                 controlRoot, "antigravity", "claim-contender"));
 
         assertEquals(AgentStatus.BLOCKED, response.status());
-        assertFalse(response.toJson().contains("REVIEW_ADMISSION_REQUIRED"), response.toJson());
+        assertFalse(response.toJson()
+                .contains("REVIEW_ADMISSION_REQUIRED"), response.toJson());
     }
 
     @Test
@@ -200,9 +225,13 @@ class AgentNextActionServiceTest {
         var reviewerClaim = collaboration.announce(controlRoot, "antigravity", "active-reviewer",
                 "Review source", "Validate the published source",
                 List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")),
-                ownerClaim.intent().workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                ownerClaim.intent()
+                        .workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
                 WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("src/task_tracker.py")));
-        assertEquals(ownerClaim.intent().workGroupId(), reviewerClaim.intent().workGroupId());
+        assertEquals(ownerClaim.intent()
+                        .workGroupId(),
+                reviewerClaim.intent()
+                        .workGroupId());
 
         AgentNextActionService service = new AgentNextActionService();
         AgentResponse response = service.getNextAction(new AgentNextActionService.NextActionRequest(
@@ -211,22 +240,35 @@ class AgentNextActionServiceTest {
         assertEquals(AgentStatus.READY, response.status());
         assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());
         assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
-        assertTrue(response.toJson().contains("REVIEW_ADMISSION_REQUIRED"));
-        assertTrue(response.toJson().contains("work_group_join"));
-        assertTrue(response.toJson().contains(ownerClaim.intent().workGroupId().toString()));
-        assertTrue(response.toJson().contains(ownerClaim.intent().intentId().toString()));
+        assertTrue(response.toJson()
+                .contains("REVIEW_ADMISSION_REQUIRED"));
+        assertTrue(response.toJson()
+                .contains("work_group_join"));
+        assertTrue(response.toJson()
+                .contains(ownerClaim.intent()
+                        .workGroupId()
+                        .toString()));
+        assertTrue(response.toJson()
+                .contains(ownerClaim.intent()
+                        .intentId()
+                        .toString()));
         Map<String, Object> result = (Map<String, Object>) response.result();
         Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
         assertEquals("request_coordination", workflow.get("recommendedTool"));
         Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
         assertEquals("work_group_join", arguments.get("kind"));
         Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
-        assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
-        assertEquals(ownerClaim.intent().intentId().toString(), payload.get("intentId"));
+        assertEquals(ownerClaim.intent()
+                .workGroupId()
+                .toString(), payload.get("workGroupId"));
+        assertEquals(ownerClaim.intent()
+                .intentId()
+                .toString(), payload.get("intentId"));
 
         AgentResponse ownerResponse = service.getNextAction(new AgentNextActionService.NextActionRequest(
                 controlRoot, "codex", "active-owner"));
-        assertFalse(ownerResponse.toJson().contains("REVIEW_ADMISSION_REQUIRED"));
+        assertFalse(ownerResponse.toJson()
+                .contains("REVIEW_ADMISSION_REQUIRED"));
     }
 
     @Test
@@ -243,18 +285,24 @@ class AgentNextActionServiceTest {
         var reviewerClaim = collaboration.announce(controlRoot, "codex", "pending-review-reviewer",
                 "Review source", "Validate the completed source snapshot",
                 List.of(ResourceSelector.pathExact("tests/ProductTest.java")),
-                ownerClaim.intent().workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                ownerClaim.intent()
+                        .workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
                 WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("src/Product.java")));
-        assertEquals(ownerClaim.intent().workGroupId(), reviewerClaim.intent().workGroupId());
+        assertEquals(ownerClaim.intent()
+                        .workGroupId(),
+                reviewerClaim.intent()
+                        .workGroupId());
 
         AgentNextActionService service = new AgentNextActionService();
         AgentResponse initial = service.getNextAction(new AgentNextActionService.NextActionRequest(
                 controlRoot, "codex", "pending-review-reviewer"));
         assertEquals(AgentNextAction.REQUEST_COORDINATION, initial.nextAction());
-        assertTrue(initial.toJson().contains("REVIEW_ADMISSION_REQUIRED"), initial.toJson());
+        assertTrue(initial.toJson()
+                .contains("REVIEW_ADMISSION_REQUIRED"), initial.toJson());
 
         CoordinationRequest request = collaboration.request(controlRoot, "codex", "pending-review-reviewer",
-                ownerClaim.intent().intentId(), CoordinationRequest.Kind.REVIEW,
+                ownerClaim.intent()
+                        .intentId(), CoordinationRequest.Kind.REVIEW,
                 "Review the completed source snapshot");
 
         AgentResponse pending = service.getNextAction(new AgentNextActionService.NextActionRequest(
@@ -265,25 +313,33 @@ class AgentNextActionServiceTest {
         Map<String, Object> result = (Map<String, Object>) pending.result();
         assertEquals(Boolean.TRUE, result.get("reviewRequestPending"));
         Map<String, Object> reviewRequest = (Map<String, Object>) result.get("reviewRequest");
-        assertEquals(request.requestId().toString(), reviewRequest.get("requestId"));
-        assertEquals(ownerClaim.intent().intentId().toString(), reviewRequest.get("intentId"));
+        assertEquals(request.requestId()
+                .toString(), reviewRequest.get("requestId"));
+        assertEquals(ownerClaim.intent()
+                .intentId()
+                .toString(), reviewRequest.get("intentId"));
         assertEquals("wait", result.get("nextProtocolAction"));
         assertEquals("review_admission", result.get("nextProtocolKind"));
         Map<String, Object> payload = (Map<String, Object>) result.get("nextProtocolPayload");
-        assertEquals(request.requestId().toString(), payload.get("requestId"));
-        assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
+        assertEquals(request.requestId()
+                .toString(), payload.get("requestId"));
+        assertEquals(ownerClaim.intent()
+                .workGroupId()
+                .toString(), payload.get("workGroupId"));
         Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
         assertEquals("WAIT", workflow.get("type"));
         assertEquals("get_next_action", workflow.get("recommendedTool"));
         assertEquals(Map.of(), workflow.get("arguments"));
-        assertFalse(pending.toJson().contains("REVIEW_ADMISSION_REQUIRED"), pending.toJson());
+        assertFalse(pending.toJson()
+                .contains("REVIEW_ADMISSION_REQUIRED"), pending.toJson());
         assertTrue(((List<?>) result.get("reviewActions")).isEmpty(), pending.toJson());
 
         AgentResponse repeated = service.getNextAction(new AgentNextActionService.NextActionRequest(
                 controlRoot, "codex", "pending-review-reviewer"));
         Map<String, Object> repeatedResult = (Map<String, Object>) repeated.result();
         Map<String, Object> repeatedRequest = (Map<String, Object>) repeatedResult.get("reviewRequest");
-        assertEquals(request.requestId().toString(), repeatedRequest.get("requestId"));
+        assertEquals(request.requestId()
+                .toString(), repeatedRequest.get("requestId"));
         assertEquals(AgentNextAction.WAIT, repeated.nextAction());
     }
 
@@ -301,8 +357,8 @@ class AgentNextActionServiceTest {
 
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
-        var reviewerBinding = bindings.find(location, "antigravity", "reviewer-first").orElseThrow();
-        var ownerBinding = bindings.find(location, "codex", "owner-second").orElseThrow();
+        var ownerBinding = bindings.find(location, "codex", "owner-second")
+                .orElseThrow();
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var reviewerClaim = collaboration.announce(controlRoot, "antigravity", "reviewer-first",
                 "Review source", "Validate the published source",
@@ -312,13 +368,21 @@ class AgentNextActionServiceTest {
         var ownerClaim = collaboration.announce(controlRoot, "codex", "owner-second",
                 "Implement source", "Publish the completed source",
                 List.of(ResourceSelector.pathExact("src/task_tracker.py")));
-        assertEquals(reviewerClaim.intent().workGroupId(), ownerClaim.intent().workGroupId());
+        assertEquals(reviewerClaim.intent()
+                        .workGroupId(),
+                ownerClaim.intent()
+                        .workGroupId());
 
-        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        var identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        var store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
         String ownerParticipant = WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId());
-        SnapshotProvenance provenance = new SnapshotProvenance(ownerClaim.intent().workGroupId(),
-                ownerClaim.intent().intentId(), ownerParticipant, ownerBinding.sessionId(), 1,
+        SnapshotProvenance provenance = new SnapshotProvenance(ownerClaim.intent()
+                .workGroupId(),
+                ownerClaim.intent()
+                        .intentId(), ownerParticipant, ownerBinding.sessionId(), 1,
                 List.of(), List.of(), List.of("PATH_EXACT:src/task_tracker.py"),
                 "refs/synesis/snapshots/snap_reviewer_first", "reviewer-first-integrity");
         TaskSnapshotPayload snapshot = new TaskSnapshotPayload(
@@ -338,14 +402,20 @@ class AgentNextActionServiceTest {
         Map<String, Object> result = (Map<String, Object>) response.result();
         List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) result.get("reviewActions");
         assertEquals(1, reviewActions.size());
-        assertEquals("REVIEW_ADMISSION_REQUIRED", reviewActions.getFirst().get("state"));
+        assertEquals("REVIEW_ADMISSION_REQUIRED",
+                reviewActions.getFirst()
+                        .get("state"));
         Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
         Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
         Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
         assertEquals("request_coordination", workflow.get("recommendedTool"));
         assertEquals("work_group_join", arguments.get("kind"));
-        assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
-        assertEquals(ownerClaim.intent().intentId().toString(), payload.get("intentId"));
+        assertEquals(ownerClaim.intent()
+                .workGroupId()
+                .toString(), payload.get("workGroupId"));
+        assertEquals(ownerClaim.intent()
+                .intentId()
+                .toString(), payload.get("intentId"));
     }
 
     @Test
@@ -361,22 +431,34 @@ class AgentNextActionServiceTest {
 
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
-        var completedBinding = bindings.find(location, "codex", "completed-reviewer").orElseThrow();
-        var ownerBinding = bindings.find(location, "codex", "active-owner").orElseThrow();
+        var completedBinding = bindings.find(location, "codex", "completed-reviewer")
+                .orElseThrow();
+        var ownerBinding = bindings.find(location, "codex", "active-owner")
+                .orElseThrow();
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var completedClaim = collaboration.announce(controlRoot, "codex", "completed-reviewer",
                 "Review the sibling implementation", "Review the immutable sibling snapshot",
                 List.of(ResourceSelector.pathExact("tests/completed_review.py")), null,
                 WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("src/sibling.py")));
-        var ownerClaim = collaboration.announce(controlRoot, "codex", "active-owner",
-                "Implement the sibling source", "Publish the completed source",
-                List.of(ResourceSelector.pathExact("src/sibling.py")), completedClaim.intent().workGroupId());
+        var ownerClaim = collaboration.announce(controlRoot,
+                "codex",
+                "active-owner",
+                "Implement the sibling source",
+                "Publish the completed source",
+                List.of(ResourceSelector.pathExact("src/sibling.py")),
+                completedClaim.intent()
+                        .workGroupId());
 
-        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        SnapshotProvenance provenance = new SnapshotProvenance(completedClaim.intent().workGroupId(),
-                completedClaim.intent().intentId(),
+        var identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
+        var store = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        SnapshotProvenance provenance = new SnapshotProvenance(completedClaim.intent()
+                .workGroupId(),
+                completedClaim.intent()
+                        .intentId(),
                 WorkspaceCollaborationService.participantHandle(completedBinding.sessionId()),
                 completedBinding.sessionId(), 1, List.of(), List.of(),
                 List.of("PATH_EXACT:tests/completed_review.py"),
@@ -401,17 +483,24 @@ class AgentNextActionServiceTest {
         assertEquals(Boolean.TRUE, result.get("reviewOnly"));
         List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) result.get("reviewActions");
         assertEquals(1, reviewActions.size());
-        assertEquals("REVIEW_ADMISSION_REQUIRED", reviewActions.getFirst().get("state"));
+        assertEquals("REVIEW_ADMISSION_REQUIRED",
+                reviewActions.getFirst()
+                        .get("state"));
         Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
         assertEquals("request_coordination", workflow.get("recommendedTool"));
         Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
         assertEquals("work_group_join", arguments.get("kind"));
         Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
-        assertEquals(ownerClaim.intent().workGroupId().toString(), payload.get("workGroupId"));
-        assertEquals(ownerClaim.intent().intentId().toString(), payload.get("intentId"));
+        assertEquals(ownerClaim.intent()
+                .workGroupId()
+                .toString(), payload.get("workGroupId"));
+        assertEquals(ownerClaim.intent()
+                .intentId()
+                .toString(), payload.get("intentId"));
 
         var request = collaboration.request(controlRoot, "codex", "completed-reviewer",
-                ownerClaim.intent().intentId(), org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.REVIEW,
+                ownerClaim.intent()
+                        .intentId(), org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.REVIEW,
                 "Review the sibling immutable snapshot");
         assertEquals(WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()), request.target());
 
@@ -423,7 +512,8 @@ class AgentNextActionServiceTest {
         Map<String, Object> pendingResult = (Map<String, Object>) pending.result();
         assertEquals(Boolean.TRUE, pendingResult.get("reviewRequestPending"));
         Map<String, Object> pendingRequest = (Map<String, Object>) pendingResult.get("reviewRequest");
-        assertEquals(request.requestId().toString(), pendingRequest.get("requestId"));
+        assertEquals(request.requestId()
+                .toString(), pendingRequest.get("requestId"));
         assertEquals("get_next_action",
                 ((Map<String, Object>) pendingResult.get("workflow")).get("recommendedTool"));
 

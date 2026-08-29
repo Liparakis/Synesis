@@ -38,13 +38,13 @@ defect was proven.
   `3c84f9d5-fbb1-36fd-8def-5074f1cbb536`, claim `PATH_EXACT:test_todo.py`,
   epoch 1. Final participant state: `ACTIVE`.
 - REVIEW requests, both `ACCEPTED`:
-  - B → A: `d5561561-b6b0-4680-9847-831108e42678`
-  - A → B: `c9a8eca7-ca9f-47b7-93bb-6e14e7bfce53`
+    - B → A: `d5561561-b6b0-4680-9847-831108e42678`
+    - A → B: `c9a8eca7-ca9f-47b7-93bb-6e14e7bfce53`
 - REVIEW grants:
-  - `d7d42eeb-45fb-35c1-9386-f9bfd435176d`, target B, target intent A,
-    consumed once by B; B returned structured `ACCEPTED` validation.
-  - `976388e2-d7f2-373e-83a1-9f36df6045ca`, target A, target intent B,
-    epoch 1, still pending because A's session ended before consumption.
+    - `d7d42eeb-45fb-35c1-9386-f9bfd435176d`, target B, target intent A,
+      consumed once by B; B returned structured `ACCEPTED` validation.
+    - `976388e2-d7f2-373e-83a1-9f36df6045ca`, target A, target intent B,
+      epoch 1, still pending because A's session ended before consumption.
 
 ## Projection and action trace
 

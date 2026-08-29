@@ -41,11 +41,11 @@ controller 4444
 
 Parentage and executable identities were:
 
-| Role | PID | Parent | Image |
-|---|---:|---:|---|
-| Codex | 1576 | 4444 | `C:\Users\Liparakis\AppData\Local\Microsoft\WinGet\Packages\OpenAI.Codex_Microsoft.Winget.Source_8wekyb3d8bbwe\codex-x86_64-pc-windows-msvc.exe` |
-| MCP | 11416 | 1576 | `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe` |
-| Java | 10192 | 11416 | `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\runtime\bin\java.exe` |
+| Role  |   PID | Parent | Image                                                                                                                                            |
+|-------|------:|-------:|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| Codex |  1576 |   4444 | `C:\Users\Liparakis\AppData\Local\Microsoft\WinGet\Packages\OpenAI.Codex_Microsoft.Winget.Source_8wekyb3d8bbwe\codex-x86_64-pc-windows-msvc.exe` |
+| MCP   | 11416 |   1576 | `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`                           |
+| Java  | 10192 |  11416 | `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\runtime\bin\java.exe`                          |
 
 The official MCP SHA-256 was
 `07F23EF1E1C9C6D344CA31A640CAA92BD483345C6F8260DE82A84C69F9E4A53B`.
@@ -92,11 +92,11 @@ mutated by the observer or controller.
 
 The observer’s monotonic timeline and Windows process times were:
 
-| Role | Process creation time | Windows process exit time | Observer signaled time | Exit code |
-|---|---|---|---|---:|
-| MCP | `2026-08-28T18:14:27.5650560Z` | `2026-08-28T18:15:01.8764560Z` | `2026-08-28T18:15:02.1403304Z` | `1` |
-| Java | `2026-08-28T18:14:27.6029938Z` | `2026-08-28T18:15:01.8764686Z` | `2026-08-28T18:15:02.1559163Z` | `1` |
-| Codex | `2026-08-28T18:14:25.9746902Z` | `2026-08-28T18:15:02.1470243Z` | `2026-08-28T18:15:02.3960967Z` | `0` |
+| Role  | Process creation time          | Windows process exit time      | Observer signaled time         | Exit code |
+|-------|--------------------------------|--------------------------------|--------------------------------|----------:|
+| MCP   | `2026-08-28T18:14:27.5650560Z` | `2026-08-28T18:15:01.8764560Z` | `2026-08-28T18:15:02.1403304Z` |       `1` |
+| Java  | `2026-08-28T18:14:27.6029938Z` | `2026-08-28T18:15:01.8764686Z` | `2026-08-28T18:15:02.1559163Z` |       `1` |
+| Codex | `2026-08-28T18:14:25.9746902Z` | `2026-08-28T18:15:02.1470243Z` | `2026-08-28T18:15:02.3960967Z` |       `0` |
 
 The retained handles returned successful exit queries for all three
 processes. MCP’s Windows exit time preceded Java by approximately 12.6

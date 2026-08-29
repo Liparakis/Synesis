@@ -2,17 +2,20 @@ package org.synesis.workspace.lifecycle.command;
 
 import java.nio.file.Path;
 
-/** Small forked-process fixture used to prove OS-level command lock exclusion. */
+/**
+ * Small forked-process fixture used to prove OS-level command lock exclusion.
+ */
 public final class CommandLockProbe {
 
     private CommandLockProbe() {
     }
 
-    /** Runs the holder or contender fixture.
+    /**
+     * Runs the holder or contender fixture.
+     *
      * @param arguments mode and lock path
-     * @throws Exception when the fixture cannot acquire or release its lock
      */
-    public static void main(String[] arguments) throws Exception {
+    static void main(String[] arguments) {
         if (arguments.length != 2) {
             System.exit(64);
         }
@@ -23,7 +26,9 @@ public final class CommandLockProbe {
             if ("hold".equals(arguments[0])) {
                 System.out.println("ready");
                 System.out.flush();
-                System.in.read();
+                if (System.in.read() < 0) {
+                    System.exit(0);
+                }
             } else if (!"try".equals(arguments[0])) {
                 System.exit(64);
             }

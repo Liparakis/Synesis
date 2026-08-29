@@ -26,13 +26,19 @@ public enum DoctorRecommendation {
      */
     REVIEW_PROVIDER_CONFIGURATION("review_provider_configuration"),
 
-    /** Prepare a provider configuration migration plan. */
+    /**
+     * Prepare a provider configuration migration plan.
+     */
     PREPARE_PROVIDER_MIGRATION("synesis_provider_migrate_prepare"),
 
-    /** Prepare a project schema migration plan. */
+    /**
+     * Prepare a project schema migration plan.
+     */
     PREPARE_PROJECT_MIGRATION("synesis_migrate_prepare"),
 
-    /** Review and resume the prepared update transaction. */
+    /**
+     * Review and resume the prepared update transaction.
+     */
     REVIEW_UPDATE_TRANSACTION("review_update_transaction"),
 
     /**

@@ -1,20 +1,17 @@
 package org.synesis.cli.command.task;
 
 
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
-
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.task.TaskClaim;
-
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

@@ -3,23 +3,25 @@ package org.synesis.workspace.lifecycle.command;
 import java.util.Map;
 import java.util.Objects;
 
-/** Immutable durable state for one typed request within one MCP process anchor.
- * @param anchorId process-anchor identity
- * @param scopeLocator physical-worktree scope
- * @param requestId canonical typed request ID
- * @param requestDigest canonical command-request digest
- * @param semanticDigest authority-bound semantic digest
- * @param phase durable lifecycle phase
- * @param terminalResolution terminal classification, when terminal
- * @param outcomeKnown whether command outcome is known
- * @param exitCode observed process exit code
- * @param stdoutComplete whether stdout evidence is complete
- * @param stderrComplete whether stderr evidence is complete
- * @param reviewReference immutable review evidence reference
- * @param revision mutable record revision
- * @param createdAtEpochMillis creation timestamp
- * @param updatedAtEpochMillis last update timestamp
- * @param response bounded agent response map
+/**
+ * Immutable durable state for one typed request within one MCP process anchor.
+ *
+ * @param anchorId               process-anchor identity
+ * @param scopeLocator           physical-worktree scope
+ * @param requestId              canonical typed request ID
+ * @param requestDigest          canonical command-request digest
+ * @param semanticDigest         authority-bound semantic digest
+ * @param phase                  durable lifecycle phase
+ * @param terminalResolution     terminal classification, when terminal
+ * @param outcomeKnown           whether command outcome is known
+ * @param exitCode               observed process exit code
+ * @param stdoutComplete         whether stdout evidence is complete
+ * @param stderrComplete         whether stderr evidence is complete
+ * @param reviewReference        immutable review evidence reference
+ * @param revision               mutable record revision
+ * @param createdAtEpochMillis   creation timestamp
+ * @param updatedAtEpochMillis   last update timestamp
+ * @param response               bounded agent response map
  * @param commandProcessIdentity exact child process identity evidence
  */
 public record ProjectCommandRecord(
@@ -42,7 +44,9 @@ public record ProjectCommandRecord(
         Map<String, Object> commandProcessIdentity
 ) {
 
-    /** Validates durable command invariants and copies the response map. */
+    /**
+     * Validates durable command invariants and copies the response map.
+     */
     public ProjectCommandRecord {
         Objects.requireNonNull(anchorId, "anchorId");
         Objects.requireNonNull(scopeLocator, "scopeLocator");
@@ -63,7 +67,9 @@ public record ProjectCommandRecord(
         commandProcessIdentity = commandProcessIdentity == null ? Map.of() : Map.copyOf(commandProcessIdentity);
     }
 
-    /** Returns whether this record is blocking for callers.
+    /**
+     * Returns whether this record is blocking for callers.
+     *
      * @return true for STARTING, RUNNING, and AMBIGUOUS phases
      */
     public boolean blocking() {

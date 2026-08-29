@@ -13,15 +13,39 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.project.ProjectCommandAdmissionService;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
-/** Tests the first bounded durable-command namespace implementation spike. */
+/**
+ * Tests the first bounded durable-command namespace implementation spike.
+ */
 class ProjectCommandNamespaceSpikeTest {
+
+    private static Process startLockProbe(String javaExecutable, String mode, Path lockPath)
+            throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(javaExecutable, "-cp", System.getProperty("java.class.path"),
+                CommandLockProbe.class.getName(), mode, lockPath.toString())
+                .redirectErrorStream(true);
+        builder.environment()
+                .remove("JAVA_TOOL_OPTIONS");
+        builder.environment()
+                .remove("JDK_JAVA_OPTIONS");
+        builder.environment()
+                .remove("_JAVA_OPTIONS");
+        return builder.start();
+    }
+
+    private static Map<String, Object> castMap(Object value) {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+            result.put((String) entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
 
     @Test
     void publishesPermanentLocksAndAtomicallyReplacesMetadata(@TempDir Path temp) throws Exception {
@@ -30,14 +54,18 @@ class ProjectCommandNamespaceSpikeTest {
         Path namespaceLock = namespace.namespaceLockPath();
         assertTrue(Files.isRegularFile(namespaceLock));
         assertTrue(Files.isRegularFile(namespace.worktreeLockPath("worktree-a")));
-        Object namespaceFileKey = Files.readAttributes(namespaceLock, "basic:fileKey").get("fileKey");
+        Object namespaceFileKey = Files.readAttributes(namespaceLock, "basic:fileKey")
+                .get("fileKey");
 
         namespace.writeIndex(Map.of("scopeCount", 1L));
         namespace.writeIndex(Map.of("scopeCount", 2L));
 
-        assertEquals(2L, ((Number) namespace.readIndex().get("scopeCount")).longValue());
+        assertEquals(2L,
+                ((Number) namespace.readIndex()
+                        .get("scopeCount")).longValue());
         assertEquals(namespaceFileKey,
-                Files.readAttributes(namespaceLock, "basic:fileKey").get("fileKey"));
+                Files.readAttributes(namespaceLock, "basic:fileKey")
+                        .get("fileKey"));
         namespace.close();
     }
 
@@ -47,7 +75,8 @@ class ProjectCommandNamespaceSpikeTest {
         Map<String, Object> newer = new java.util.LinkedHashMap<>();
         newer.put("schemaVersion", 99L);
         newer.put("scopeCount", 0L);
-        Files.writeString(namespace.root().resolve("namespace.json"),
+        Files.writeString(namespace.root()
+                        .resolve("namespace.json"),
                 org.synesis.workspace.infrastructure.json.ProviderJson.write(CommandDurableFormat.withIntegrity(newer)));
 
         assertThrows(CommandFormatException.class, namespace::readIndex);
@@ -65,7 +94,7 @@ class ProjectCommandNamespaceSpikeTest {
     }
 
     @Test
-    void freshProcessAnchorsDoNotReuseConnectionIdentity(@TempDir Path temp) throws Exception {
+    void freshProcessAnchorsDoNotReuseConnectionIdentity() {
         ProjectCommandProcessAnchor first = ProjectCommandProcessAnchor.capture(
                 "scope-a", new SessionProcessIdentity(1L, "java", "java", 2L, "nonce-a"), 10L);
         ProjectCommandProcessAnchor second = ProjectCommandProcessAnchor.capture(
@@ -88,8 +117,12 @@ class ProjectCommandNamespaceSpikeTest {
         namespace.writeAnchor(anchor);
 
         assertEquals(anchor, namespace.readAnchor(anchor.anchorId()));
-        assertTrue(Files.isRegularFile(namespace.scopesPath().resolve(worktree.locator()).resolve("scope.json")));
-        assertTrue(Files.isDirectory(namespace.scopesPath().resolve(worktree.locator()).resolve("records")));
+        assertTrue(Files.isRegularFile(namespace.scopesPath()
+                .resolve(worktree.locator())
+                .resolve("scope.json")));
+        assertTrue(Files.isDirectory(namespace.scopesPath()
+                .resolve(worktree.locator())
+                .resolve("records")));
         namespace.close();
     }
 
@@ -101,7 +134,8 @@ class ProjectCommandNamespaceSpikeTest {
 
         assertEquals(first.locator(), second.locator());
         assertEquals(first.realPath(), second.realPath());
-        assertTrue(first.locator().startsWith("v1-"));
+        assertTrue(first.locator()
+                .startsWith("v1-"));
     }
 
     @Test
@@ -127,13 +161,24 @@ class ProjectCommandNamespaceSpikeTest {
 
         ProjectCommandStore store = new ProjectCommandStore(temp.resolve("commands"));
         store.save(record);
-        assertEquals(record, store.find(worktree.locator(), anchor.anchorId(), requestId).orElseThrow());
+        assertEquals(record,
+                store.find(worktree.locator(), anchor.anchorId(), requestId)
+                        .orElseThrow());
 
-        Path recordFile = Files.walk(temp.resolve("commands").resolve("scopes"))
-                .filter(path -> path.getFileName().toString().endsWith(".json"))
-                .filter(path -> path.toString().contains("records"))
-                .findFirst().orElseThrow();
-        Files.writeString(recordFile, Files.readString(recordFile).replace("starting", "tampered"));
+        Path recordFile;
+        try (java.util.stream.Stream<Path> paths = Files.walk(temp.resolve("commands")
+                .resolve("scopes"))) {
+            recordFile = paths.filter(path -> path.getFileName()
+                            .toString()
+                            .endsWith(".json"))
+                    .filter(path -> path.toString()
+                            .contains("records"))
+                    .findFirst()
+                    .orElseThrow();
+        }
+        Files.writeString(recordFile,
+                Files.readString(recordFile)
+                        .replace("starting", "tampered"));
         assertThrows(CommandFormatException.class,
                 () -> store.find(worktree.locator(), anchor.anchorId(), requestId));
     }
@@ -145,23 +190,25 @@ class ProjectCommandNamespaceSpikeTest {
         ProjectCommandProtectionService service = new ProjectCommandProtectionService(temp.resolve("commands"));
         CountDownLatch held = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Thread owner = Thread.ofPlatform().start(() -> {
-            try (ProjectCommandProtectionService.ProtectionPermit permit = service.acquire(worktree)) {
-                assertTrue(permit.isHeld());
-                held.countDown();
-                release.await();
-            } catch (Exception failure) {
-                throw new AssertionError(failure);
-            }
-        });
+        Thread owner = Thread.ofPlatform()
+                .start(() -> {
+                    try (ProjectCommandProtectionService.ProtectionPermit permit = service.acquire(worktree)) {
+                        assertTrue(permit.isHeld());
+                        held.countDown();
+                        release.await();
+                    } catch (Exception failure) {
+                        throw new AssertionError(failure);
+                    }
+                });
         held.await();
-        Thread contender = Thread.ofPlatform().start(() -> {
-            try (ProjectCommandProtectionService.ProtectionPermit permit = service.acquire(worktree)) {
-                assertTrue(permit.isHeld());
-            } catch (Exception failure) {
-                throw new AssertionError(failure);
-            }
-        });
+        Thread contender = Thread.ofPlatform()
+                .start(() -> {
+                    try (ProjectCommandProtectionService.ProtectionPermit permit = service.acquire(worktree)) {
+                        assertTrue(permit.isHeld());
+                    } catch (Exception failure) {
+                        throw new AssertionError(failure);
+                    }
+                });
         Thread.sleep(50L);
         release.countDown();
         owner.join();
@@ -172,29 +219,24 @@ class ProjectCommandNamespaceSpikeTest {
     void forkedProcessesCannotSharePermanentLock(@TempDir Path temp) throws Exception {
         Path lockPath = temp.resolve("namespace.lock");
         String javaExecutable = Path.of(System.getProperty("java.home"), "bin",
-                System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java").toString();
+                        System.getProperty("os.name")
+                                .toLowerCase()
+                                .contains("win") ? "java.exe" : "java")
+                .toString();
         Process holder = startLockProbe(javaExecutable, "hold", lockPath);
         try {
-            assertEquals("ready", new String(holder.getInputStream().readNBytes(6), java.nio.charset.StandardCharsets.UTF_8)
-                    .trim());
+            assertEquals("ready",
+                    new String(holder.getInputStream()
+                            .readNBytes(6), java.nio.charset.StandardCharsets.UTF_8)
+                            .trim());
             Process contender = startLockProbe(javaExecutable, "try", lockPath);
             assertTrue(contender.waitFor(5, TimeUnit.SECONDS));
             assertNotEquals(0, contender.exitValue());
         } finally {
-            holder.getOutputStream().close();
+            holder.getOutputStream()
+                    .close();
             assertTrue(holder.waitFor(5, TimeUnit.SECONDS));
         }
-    }
-
-    private static Process startLockProbe(String javaExecutable, String mode, Path lockPath)
-            throws IOException {
-        ProcessBuilder builder = new ProcessBuilder(javaExecutable, "-cp", System.getProperty("java.class.path"),
-                CommandLockProbe.class.getName(), mode, lockPath.toString())
-                .redirectErrorStream(true);
-        builder.environment().remove("JAVA_TOOL_OPTIONS");
-        builder.environment().remove("JDK_JAVA_OPTIONS");
-        builder.environment().remove("_JAVA_OPTIONS");
-        return builder.start();
     }
 
     @Test
@@ -202,7 +244,11 @@ class ProjectCommandNamespaceSpikeTest {
         Path root = temp.resolve("commands");
         Files.createDirectories(root);
         Files.createDirectory(root.resolve("namespace.lock"));
-        assertThrows(java.io.IOException.class, () -> ProjectCommandNamespace.open(root));
+        assertThrows(java.io.IOException.class, () -> {
+            try (ProjectCommandNamespace ignored = ProjectCommandNamespace.open(root)) {
+                java.util.Objects.requireNonNull(ignored);
+            }
+        });
     }
 
     @Test
@@ -215,24 +261,19 @@ class ProjectCommandNamespaceSpikeTest {
         String original = org.synesis.workspace.infrastructure.json.ProviderJson.write(
                 CommandDurableFormat.withIntegrity(older));
         Files.writeString(target, original, StandardCharsets.UTF_8);
-        Path backup = temp.resolve("backup").resolve("old.json.bak");
-        Path journal = temp.resolve("journal").resolve("migration.json");
+        Path backup = temp.resolve("backup")
+                .resolve("old.json.bak");
+        Path journal = temp.resolve("journal")
+                .resolve("migration.json");
         try (CommandPermanentLock lock = CommandPermanentLock.open(temp.resolve("migration.lock"))) {
             new ProjectCommandFormatMigrationService().migrate(target, backup, journal, lock);
         }
         assertEquals(original, Files.readString(backup));
-        assertTrue(Files.readString(target).contains("\"schemaVersion\":2"));
+        assertTrue(Files.readString(target)
+                .contains("\"schemaVersion\":2"));
         assertTrue(Files.isRegularFile(journal));
         CommandDurableFormat.verify(castMap(org.synesis.workspace.infrastructure.json.ProviderJson.parse(
                 Files.readString(target))));
-    }
-
-    private static Map<String, Object> castMap(Object value) {
-        Map<String, Object> result = new java.util.LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
-            result.put((String) entry.getKey(), entry.getValue());
-        }
-        return result;
     }
 
     @Test
@@ -241,7 +282,8 @@ class ProjectCommandNamespaceSpikeTest {
         ProjectCommandNamespace namespace = ProjectCommandNamespace.open(namespaceRoot);
         PhysicalWorktreeIdentity worktree = PhysicalWorktreeIdentity.capture(
                 Files.createDirectories(temp.resolve("worktree")));
-        Path records = namespace.publishScope(worktree).resolve("records");
+        Path records = namespace.publishScope(worktree)
+                .resolve("records");
         namespace.close();
 
         Map<String, Object> minimal = new LinkedHashMap<>();
@@ -271,7 +313,8 @@ class ProjectCommandNamespaceSpikeTest {
             lockPath = namespace.worktreeLockPath(worktree.locator());
             namespace.writeAnchor(anchor);
         }
-        Object lockKey = Files.readAttributes(lockPath, "basic:fileKey").get("fileKey");
+        Object lockKey = Files.readAttributes(lockPath, "basic:fileKey")
+                .get("fileKey");
         ProjectCommandStore store = new ProjectCommandStore(namespaceRoot);
         String requestId = "n:1";
         String digest = ProjectCommandCanonicalizer.requestDigest(java.util.List.of("echo", "ok"), ".", 10);
@@ -294,7 +337,10 @@ class ProjectCommandNamespaceSpikeTest {
         assertTrue(result.lockRetained());
         assertTrue(Files.isRegularFile(result.historyPath()));
         assertTrue(Files.isRegularFile(lockPath));
-        assertEquals(lockKey, Files.readAttributes(lockPath, "basic:fileKey").get("fileKey"));
-        assertTrue(Files.notExists(namespaceRoot.resolve("process-scopes").resolve(anchor.anchorId())));
+        assertEquals(lockKey,
+                Files.readAttributes(lockPath, "basic:fileKey")
+                        .get("fileKey"));
+        assertTrue(Files.notExists(namespaceRoot.resolve("process-scopes")
+                .resolve(anchor.anchorId())));
     }
 }

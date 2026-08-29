@@ -53,16 +53,16 @@ groups remain available for unrelated or competing experiments.
 
 ## Evidence ledger
 
-| Capability | Classification | Evidence / gap |
-|---|---|---|
-| Signed coordination commands/events and replay | VERIFIED | `CoordinationService`, `PredictionEventStore`, CP-0144 evidence |
-| Semantic ownership and `REQUEST_OWNER` | VERIFIED/PARTIAL | `OwnershipRegistry`, `ActionGuardrail`; no autonomous contract flow |
-| Speculative worktree and fail-closed gate | VERIFIED | `SpeculationWorkspace`, `PredictionIntegrationGate` |
-| Two-process coordination | DEMO_ONLY | `run-speculative-coordination-real.ps1` manually drives CLI |
-| Project init and identity | PARTIAL | `ProjectApplicationService`, `InitCommand`; no ambient runtime/hooks/AGENTS contract |
-| Codex mutation hook | PARTIAL/UNSAFE_TO_REUSE | synthetic tests pass; real trust/enforcement evidence missing |
-| Antigravity mutation hook | UNSAFE_TO_REUSE | real protected edit changed the file; no hook invocation observed |
-| Autonomous bootstrap, workspace transition, inbox delivery | MISSING | no provider capability evidence |
+| Capability                                                 | Classification          | Evidence / gap                                                                       |
+|------------------------------------------------------------|-------------------------|--------------------------------------------------------------------------------------|
+| Signed coordination commands/events and replay             | VERIFIED                | `CoordinationService`, `PredictionEventStore`, CP-0144 evidence                      |
+| Semantic ownership and `REQUEST_OWNER`                     | VERIFIED/PARTIAL        | `OwnershipRegistry`, `ActionGuardrail`; no autonomous contract flow                  |
+| Speculative worktree and fail-closed gate                  | VERIFIED                | `SpeculationWorkspace`, `PredictionIntegrationGate`                                  |
+| Two-process coordination                                   | DEMO_ONLY               | `run-speculative-coordination-real.ps1` manually drives CLI                          |
+| Project init and identity                                  | PARTIAL                 | `ProjectApplicationService`, `InitCommand`; no ambient runtime/hooks/AGENTS contract |
+| Codex mutation hook                                        | PARTIAL/UNSAFE_TO_REUSE | synthetic tests pass; real trust/enforcement evidence missing                        |
+| Antigravity mutation hook                                  | UNSAFE_TO_REUSE         | real protected edit changed the file; no hook invocation observed                    |
+| Autonomous bootstrap, workspace transition, inbox delivery | MISSING                 | no provider capability evidence                                                      |
 
 The missing identity link is now explicit and local: a provider hook loads the
 project node identity, verifies project membership, and automatically binds a

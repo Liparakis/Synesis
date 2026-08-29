@@ -36,4 +36,5 @@ exact file bytes, and modifications must provide that revision as a precondition
 One persistent MCP connection owns one provider binding and does not share a
 worker worktree with another connection.
 
-See [project layout](../installation/project-layout.md), [provider management](../installation/provider-management.md), and the [CLI reference](../cli/command-reference.md).
+See [project layout](../installation/project-layout.md), [provider management](../installation/provider-management.md),
+and the [CLI reference](../cli/command-reference.md).

@@ -10,7 +10,8 @@ defect was proven.
 ## Fixture and preflight
 
 - Project: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-diagnostic-cp0540-review-contract-2026-08-25-001`
-- Harness/logs: `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-syn039-diagnostic-cp0540-review-contract-2026-08-25-001`
+- Harness/logs:
+  `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-syn039-diagnostic-cp0540-review-contract-2026-08-25-001`
 - Project ID: `39e40dec-25a2-4cf8-a9cf-4b93727383bc`
 - Seed commit: `c7f599f`
 - MCP executable used by both wrappers:
@@ -36,11 +37,11 @@ defect was proven.
   `c18f5b10-b487-37b9-b004-323333b739f4`, claim `PATH_EXACT:test_todo.py`,
   epoch 1.
 - REVIEW requests, both `ACCEPTED`:
-  - A → B: `6050acdf-9bfa-4e5f-b6ee-341e98e5da20`
-  - B → A: `f08e2fa5-694c-4b33-ad6c-7a4d3d7b16a9`
+    - A → B: `6050acdf-9bfa-4e5f-b6ee-341e98e5da20`
+    - B → A: `f08e2fa5-694c-4b33-ad6c-7a4d3d7b16a9`
 - REVIEW grants:
-  - `afb3791f-9fdd-3b71-b37c-275350c3fde9`, target A, consumed once.
-  - `8314de57-1e14-3073-a898-2c34cc82d868`, target B, still pending.
+    - `afb3791f-9fdd-3b71-b37c-275350c3fde9`, target A, consumed once.
+    - `8314de57-1e14-3073-a898-2c34cc82d868`, target B, still pending.
 
 ## Projection/action trace
 

@@ -1,26 +1,34 @@
 package org.synesis.workspace;
 
-import java.util.List;
-import java.util.UUID;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.api.Test;
-import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.workspace.application.task.TaskSnapshotService;
-import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
-import org.synesis.coordination.domain.collaboration.ResourceSelector;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
+import org.synesis.workspace.application.task.TaskSnapshotService;
 
 /**
  * Unit tests for task completion and integration application services.
  */
 class TaskIntegrationServiceTest {
+
+    private static void git(Path root, String... args) throws Exception {
+        org.synesis.workspace.test.TestGit.run(root, args);
+    }
+
+    private static String gitOutput(Path root, String... args) throws Exception {
+        return org.synesis.workspace.test.TestGit.output(root, args);
+    }
 
     @Test
     void taskSnapshotRecordInvariants() {
@@ -65,7 +73,8 @@ class TaskIntegrationServiceTest {
         org.junit.jupiter.api.Assertions.assertNotEquals(head, record.commitSha());
         assertEquals(List.of("README.md", "new.txt"), record.changedPaths());
         assertEquals("refs/synesis/snapshots/" + record.snapshotId(),
-                record.provenance().snapshotRef());
+                record.provenance()
+                        .snapshotRef());
     }
 
     @Test
@@ -122,13 +131,21 @@ class TaskIntegrationServiceTest {
                 UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of());
         String prepared = service.pinPreparedRef(root, first, "cmp_test");
         service.verifyPreparedRef(root, prepared, first.commitSha());
-        service.promotePreparedRef(root, prepared, first.provenance().snapshotRef(), first.commitSha());
+        service.promotePreparedRef(root,
+                prepared,
+                first.provenance()
+                        .snapshotRef(),
+                first.commitSha());
 
         TaskSnapshotRecord retry = service.createSnapshot(taskId, "node", "supervisor", "worker", "lane",
                 root, root, "snapshot", java.util.Optional.of(first), List.of(), List.of(),
                 UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of());
         assertEquals(first.snapshotId(), retry.snapshotId());
-        assertEquals(first.commitSha(), gitOutput(root, "rev-parse", first.provenance().snapshotRef()));
+        assertEquals(first.commitSha(),
+                gitOutput(root,
+                        "rev-parse",
+                        first.provenance()
+                                .snapshotRef()));
         assertEquals(first.commitSha(), gitOutput(root, "rev-parse", prepared));
     }
 
@@ -149,7 +166,9 @@ class TaskIntegrationServiceTest {
                 "snapshot", java.util.Optional.empty(), List.of());
 
         assertEquals(List.of("README.md"), record.changedPaths());
-        assertNotEquals("UNRECORDED", record.provenance().artifactManifestDigest());
+        assertNotEquals("UNRECORDED",
+                record.provenance()
+                        .artifactManifestDigest());
         assertEquals("", gitOutput(root, "ls-tree", "-r", "--name-only", record.commitSha(), ".codex"));
     }
 
@@ -162,7 +181,8 @@ class TaskIntegrationServiceTest {
         git(root, "add", "README.md");
         git(root, "commit", "-m", "base");
         String base = gitOutput(root, "rev-parse", "HEAD");
-        String fixtureId = UUID.randomUUID().toString();
+        String fixtureId = UUID.randomUUID()
+                .toString();
         Path laneA = root.resolveSibling(root.getFileName() + "-" + fixtureId + "-lane-a");
         Path laneB = root.resolveSibling(root.getFileName() + "-" + fixtureId + "-lane-b");
         git(root, "worktree", "add", "--detach", laneA.toString(), base);
@@ -171,11 +191,11 @@ class TaskIntegrationServiceTest {
             Files.createDirectories(laneA.resolve("src"));
             Files.writeString(laneA.resolve("src/a.py"), "lane-a\n");
             Files.createDirectories(laneA.resolve("__pycache__"));
-            Files.write(laneA.resolve("__pycache__/a.cpython-313.pyc"), new byte[] {1, 2, 3});
+            Files.write(laneA.resolve("__pycache__/a.cpython-313.pyc"), new byte[]{1, 2, 3});
 
             Files.createDirectories(laneB.resolve("src/__pycache__"));
             Files.writeString(laneB.resolve("src/b.py"), "lane-b\n");
-            Files.write(laneB.resolve("src/__pycache__/b.cpython-313.pyc"), new byte[] {4, 5, 6});
+            Files.write(laneB.resolve("src/__pycache__/b.cpython-313.pyc"), new byte[]{4, 5, 6});
 
             TaskSnapshotService snapshots = new TaskSnapshotService();
             UUID group = UUID.randomUUID();
@@ -203,12 +223,18 @@ class TaskIntegrationServiceTest {
                             List.of(snapshotA, snapshotB));
             try {
                 assertTrue(result.success(), result.failureReason());
-                assertEquals("lane-a\n", Files.readString(result.worktreePath().resolve("src/a.py"))
-                        .replace("\r\n", "\n"));
-                assertEquals("lane-b\n", Files.readString(result.worktreePath().resolve("src/b.py"))
-                        .replace("\r\n", "\n"));
-                assertFalse(Files.exists(result.worktreePath().resolve("__pycache__")));
-                assertFalse(Files.exists(result.worktreePath().resolve("src/__pycache__")));
+                assertEquals("lane-a\n",
+                        Files.readString(result.worktreePath()
+                                        .resolve("src/a.py"))
+                                .replace("\r\n", "\n"));
+                assertEquals("lane-b\n",
+                        Files.readString(result.worktreePath()
+                                        .resolve("src/b.py"))
+                                .replace("\r\n", "\n"));
+                assertFalse(Files.exists(result.worktreePath()
+                        .resolve("__pycache__")));
+                assertFalse(Files.exists(result.worktreePath()
+                        .resolve("src/__pycache__")));
             } finally {
                 integration.removeIntegrationWorktree(result.worktreePath());
             }
@@ -231,14 +257,7 @@ class TaskIntegrationServiceTest {
         IllegalStateException failure = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
                 () -> new TaskSnapshotService().createSnapshot(UUID.randomUUID(), "node", "supervisor", "worker",
                         "lane", root, root, "snapshot", java.util.Optional.empty(), List.of()));
-        assertTrue(failure.getMessage().startsWith("SNAPSHOT_ARTIFACT_POLICY:"));
-    }
-
-    private static void git(Path root, String... args) throws Exception {
-        org.synesis.workspace.test.TestGit.run(root, args);
-    }
-
-    private static String gitOutput(Path root, String... args) throws Exception {
-        return org.synesis.workspace.test.TestGit.output(root, args);
+        assertTrue(failure.getMessage()
+                .startsWith("SNAPSHOT_ARTIFACT_POLICY:"));
     }
 }

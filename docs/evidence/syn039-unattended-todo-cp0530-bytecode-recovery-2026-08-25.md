@@ -103,10 +103,10 @@ Harness:
 
 Participants and claims:
 
-| agent | participant | intent | claim | epoch |
-|---|---|---|---|---:|
-| A | `agt_bdb82963-3bf7-3718-b16c-7bbc61b83d85` | `68330d78-5f7c-3fff-8d92-159412e4c238` | `PATH_EXACT todo.py` | 1 |
-| B | `agt_60894f8a-09d3-30ee-b16b-9d936e5026c7` | `242ab48e-bd24-3481-9e15-ac7cb3dcf4d5` | `PATH_EXACT test_todo.py` | 1 |
+| agent | participant                                | intent                                 | claim                     | epoch |
+|-------|--------------------------------------------|----------------------------------------|---------------------------|------:|
+| A     | `agt_bdb82963-3bf7-3718-b16c-7bbc61b83d85` | `68330d78-5f7c-3fff-8d92-159412e4c238` | `PATH_EXACT todo.py`      |     1 |
+| B     | `agt_60894f8a-09d3-30ee-b16b-9d936e5026c7` | `242ab48e-bd24-3481-9e15-ac7cb3dcf4d5` | `PATH_EXACT test_todo.py` |     1 |
 
 Shared WorkGroup: `ab7d068e-f6cb-3c88-84e7-be59bf3e2c20`.
 

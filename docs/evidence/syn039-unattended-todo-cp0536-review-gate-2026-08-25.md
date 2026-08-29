@@ -51,10 +51,10 @@ Fixture and raw trace:
   `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-syn039-diagnostic-cp0536-review-gate-2026-08-25-005\logs`
 - WorkGroup: `ee0bc4df-04ba-3f09-b151-b3baa8416231`
 
-| Agent | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---:|
-| A | `agt_9a8d35a6-1864-36c8-b353-b20a3b068d6b` | `5b08a138-dc9f-3d8c-ba47-de3ff541f8de` | `PATH_EXACT todo.py` | 1 |
-| B | `agt_4f3ad568-842f-37ba-b505-a462021845e5` | `b763d39d-b730-3c70-8738-3660cda924ee` | `PATH_EXACT test_todo.py` | 1 |
+| Agent | Participant                                | Intent                                 | Claim                     | Epoch |
+|-------|--------------------------------------------|----------------------------------------|---------------------------|------:|
+| A     | `agt_9a8d35a6-1864-36c8-b353-b20a3b068d6b` | `5b08a138-dc9f-3d8c-ba47-de3ff541f8de` | `PATH_EXACT todo.py`      |     1 |
+| B     | `agt_4f3ad568-842f-37ba-b505-a462021845e5` | `b763d39d-b730-3c70-8738-3660cda924ee` | `PATH_EXACT test_todo.py` |     1 |
 
 Requests and grants:
 
@@ -145,17 +145,17 @@ classified; they did not cause a failed Synesis action in either run.
 
 Verification after the narrow fix:
 
-| Check | Result |
-|---|---|
-| Focused workspace, provider guidance, agent projection, MCP catalog, and SYN-039 regression tests | PASS |
-| `McpSyn039SliceTest.acceptedReviewDoesNotReprojectAdmissionForActiveReviewerLane` | PASS in isolation and in the focused suite |
-| `:cli:platformBundle --rerun-tasks --no-daemon` | PASS; 21 tasks |
-| Deferred and fixture validators | PASS |
-| Strict Javadocs | PASS |
-| `go vet ./...` | PASS |
-| `git diff --check` | PASS |
-| `go test -count=1 ./...` | Three known bootstrap migration tests fail: update migrations not prepared |
-| Root `check --no-daemon` | Not green: existing `:link:formatCheck` trailing whitespace and the recurring Git subprocess startup stall in `McpServerTest` |
+| Check                                                                                             | Result                                                                                                                        |
+|---------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| Focused workspace, provider guidance, agent projection, MCP catalog, and SYN-039 regression tests | PASS                                                                                                                          |
+| `McpSyn039SliceTest.acceptedReviewDoesNotReprojectAdmissionForActiveReviewerLane`                 | PASS in isolation and in the focused suite                                                                                    |
+| `:cli:platformBundle --rerun-tasks --no-daemon`                                                   | PASS; 21 tasks                                                                                                                |
+| Deferred and fixture validators                                                                   | PASS                                                                                                                          |
+| Strict Javadocs                                                                                   | PASS                                                                                                                          |
+| `go vet ./...`                                                                                    | PASS                                                                                                                          |
+| `git diff --check`                                                                                | PASS                                                                                                                          |
+| `go test -count=1 ./...`                                                                          | Three known bootstrap migration tests fail: update migrations not prepared                                                    |
+| Root `check --no-daemon`                                                                          | Not green: existing `:link:formatCheck` trailing whitespace and the recurring Git subprocess startup stall in `McpServerTest` |
 
 The root Git stall remains infrastructure evidence: the test worker blocked in
 `ProcessCommandRunner.startProcess` while `McpServerTest.setUp` prepared a Git

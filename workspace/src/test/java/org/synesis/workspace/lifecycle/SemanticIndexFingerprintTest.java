@@ -9,8 +9,25 @@ import java.nio.file.attribute.FileTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Verifies semantic staged-state comparisons. */
+/**
+ * Verifies semantic staged-state comparisons.
+ */
 class SemanticIndexFingerprintTest {
+
+    private static Path init(Path root) throws Exception {
+        Files.createDirectories(root);
+        git(root, "init");
+        git(root, "config", "user.name", "Test User");
+        git(root, "config", "user.email", "test@example.com");
+        Files.writeString(root.resolve("tracked.txt"), "baseline\n");
+        git(root, "add", "tracked.txt");
+        git(root, "commit", "-m", "baseline");
+        return root;
+    }
+
+    private static void git(Path root, String... args) throws Exception {
+        org.synesis.workspace.test.TestGit.run(root, args);
+    }
 
     @Test
     void unchangedIndexIsExact(@TempDir Path temp) throws Exception {
@@ -38,7 +55,8 @@ class SemanticIndexFingerprintTest {
         Files.writeString(root.resolve("new.txt"), "new\n");
         git(root, "add", "-N", "new.txt");
         SemanticIndexFingerprint.Fingerprint fingerprint = SemanticIndexFingerprint.capture(root);
-        assertTrue(fingerprint.intentToAddFlags().contains("new.txt"));
+        assertTrue(fingerprint.intentToAddFlags()
+                .contains("new.txt"));
     }
 
     @Test
@@ -55,7 +73,8 @@ class SemanticIndexFingerprintTest {
     void cacheRefreshWithUnchangedStagedSemanticsIsNotAUserMutation(@TempDir Path temp) throws Exception {
         Path root = init(temp.resolve("repo"));
         SemanticIndexFingerprint.Fingerprint before = SemanticIndexFingerprint.capture(root);
-        Files.setLastModifiedTime(root.resolve("tracked.txt"), FileTime.fromMillis(System.currentTimeMillis() + 10_000));
+        Files.setLastModifiedTime(root.resolve("tracked.txt"),
+                FileTime.fromMillis(System.currentTimeMillis() + 10_000));
         git(root, "update-index", "--refresh");
         SemanticIndexFingerprint.Fingerprint after = SemanticIndexFingerprint.capture(root);
 
@@ -78,22 +97,10 @@ class SemanticIndexFingerprintTest {
 
         SemanticIndexFingerprint.Fingerprint fingerprint = SemanticIndexFingerprint.capture(root);
 
-        assertEquals(fileCount + 1, fingerprint.stagedEntryPaths().size());
-        assertTrue(fingerprint.stagedEntryPaths().contains("src/fixture-2999.txt"));
-    }
-
-    private static Path init(Path root) throws Exception {
-        Files.createDirectories(root);
-        git(root, "init");
-        git(root, "config", "user.name", "Test User");
-        git(root, "config", "user.email", "test@example.com");
-        Files.writeString(root.resolve("tracked.txt"), "baseline\n");
-        git(root, "add", "tracked.txt");
-        git(root, "commit", "-m", "baseline");
-        return root;
-    }
-
-    private static void git(Path root, String... args) throws Exception {
-        org.synesis.workspace.test.TestGit.run(root, args);
+        assertEquals(fileCount + 1,
+                fingerprint.stagedEntryPaths()
+                        .size());
+        assertTrue(fingerprint.stagedEntryPaths()
+                .contains("src/fixture-2999.txt"));
     }
 }

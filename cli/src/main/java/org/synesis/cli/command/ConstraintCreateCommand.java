@@ -5,8 +5,8 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -14,6 +14,7 @@ import picocli.CommandLine.Option;
  * Creates a signed typed project constraint.
  */
 @Command(name = "create", description = "Create a project constraint.", mixinStandardHelpOptions = true)
+@SuppressWarnings("DuplicatedCode")
 public final class ConstraintCreateCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

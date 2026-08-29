@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
 import java.util.Locale;
 import java.util.Objects;
 
@@ -10,9 +8,11 @@ import java.util.Objects;
  * Public lifecycle states for Stage 2B capability requests.
  *
  * <p>State machine for capability negotiation:
- * {@code AWAITING_OWNER} &rarr; {@code REVISION_REQUESTED} / {@code ACCEPTED} / {@code REJECTED} / {@code CANCELLED} / {@code EXPIRED} / {@code SUPERSEDED}.
+ * {@code AWAITING_OWNER} &rarr; {@code REVISION_REQUESTED} / {@code ACCEPTED} / {@code REJECTED} / {@code CANCELLED} /
+ * {@code EXPIRED} / {@code SUPERSEDED}.
  * After acceptance:
- * {@code ACCEPTED} &rarr; {@code IMPLEMENTING} &rarr; {@code IMPLEMENTATION_AVAILABLE} &rarr; {@code VALIDATING} &rarr; {@code VALIDATED}.
+ * {@code ACCEPTED} &rarr; {@code IMPLEMENTING} &rarr; {@code IMPLEMENTATION_AVAILABLE} &rarr; {@code VALIDATING} &rarr;
+ * {@code VALIDATED}.
  * Validation revision loop:
  * {@code VALIDATING} &rarr; {@code IMPLEMENTING}.
  *
@@ -82,15 +82,6 @@ public enum CapabilityLifecycleState {
     }
 
     /**
-     * Returns the stable lowercase string representation of this state.
-     *
-     * @return lowercase string value
-     */
-    public String value() {
-        return value;
-    }
-
-    /**
      * Parses a string into a {@link CapabilityLifecycleState}.
      *
      * @param input string representation
@@ -99,12 +90,22 @@ public enum CapabilityLifecycleState {
      */
     public static CapabilityLifecycleState fromValue(String input) {
         Objects.requireNonNull(input, "input state value cannot be null");
-        String normalized = input.trim().toLowerCase(Locale.ROOT);
+        String normalized = input.trim()
+                .toLowerCase(Locale.ROOT);
         for (CapabilityLifecycleState state : values()) {
             if (state.value.equals(normalized)) {
                 return state;
             }
         }
         throw new IllegalArgumentException("Unknown capability lifecycle state: " + input);
+    }
+
+    /**
+     * Returns the stable lowercase string representation of this state.
+     *
+     * @return lowercase string value
+     */
+    public String value() {
+        return value;
     }
 }

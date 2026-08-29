@@ -1,12 +1,10 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.lifecycle.GitProcessRunner;
-
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 
 /**
  * Reusable safety verifier ensuring candidate filesystem paths remain strictly under the
@@ -15,35 +13,13 @@ import java.util.Objects;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class LifecyclePathVerifier {
 
     /**
      * Creates a path verifier.
      */
     public LifecyclePathVerifier() {
-    }
-
-    /**
-     * Result of lifecycle path safety verification.
-     *
-     * @param safe          {@code true} if path is verified safe under external workspace root
-     * @param reasonCode    stable reason code
-     * @param normalized    normalized candidate path
-     * @param canonical     canonical real path, or {@code null} if unverified
-     */
-    public record PathVerificationResult(
-            boolean safe,
-            String reasonCode,
-            Path normalized,
-            Path canonical
-    ) {
-        /**
-         * Validates non-null components.
-         */
-        public PathVerificationResult {
-            Objects.requireNonNull(reasonCode, "reasonCode");
-            Objects.requireNonNull(normalized, "normalized");
-        }
     }
 
     /**
@@ -57,79 +33,25 @@ public final class LifecyclePathVerifier {
         String projectId = resolveProjectId(controlRoot);
         String base = System.getenv("LOCALAPPDATA");
         if (base == null || base.isBlank()) {
-            base = Path.of(System.getProperty("user.home"), ".synesis").toString();
+            base = Path.of(System.getProperty("user.home"), ".synesis")
+                    .toString();
         }
         return Path.of(base, "Synesis", "workspaces", projectId)
                 .toAbsolutePath()
                 .normalize();
     }
 
-    /**
-     * Verifies that a candidate resource path is safe for inspection/planning.
-     *
-     * @param controlRoot    control project root path
-     * @param candidatePath  candidate filesystem path
-     * @return path verification result
-     */
-    public PathVerificationResult verifyPath(Path controlRoot, Path candidatePath) {
-        Objects.requireNonNull(controlRoot, "controlRoot");
-        Objects.requireNonNull(candidatePath, "candidatePath");
-
-        Path normControl = controlRoot.toAbsolutePath().normalize();
-        Path normCandidate = candidatePath.toAbsolutePath().normalize();
-
-        // 1. Reject if candidate is equal to or inside control checkout root
-        if (normCandidate.equals(normControl) || normCandidate.startsWith(normControl) || normControl.startsWith(normCandidate)) {
-            return new PathVerificationResult(false, CleanupReason.CONTROL_CHECKOUT_PROTECTED.code(), normCandidate, null);
-        }
-
-        // 2. Reject if candidate is .git directory or contains .git
-        if (normCandidate.getFileName() != null && ".git".equals(normCandidate.getFileName().toString())) {
-            return new PathVerificationResult(false, CleanupReason.CONTROL_CHECKOUT_PROTECTED.code(), normCandidate, null);
-        }
-
-        // 3. Resolve workspace root for this project
-        Path workspaceRoot = resolveWorkspaceRoot(normControl);
-
-        // 4. Verify candidate starts with workspaceRoot
-        if (!normCandidate.startsWith(workspaceRoot)) {
-            return new PathVerificationResult(false, CleanupReason.PATH_OUTSIDE_WORKSPACE_ROOT.code(), normCandidate, null);
-        }
-
-        // 5. Inspect canonical real paths to prevent symlink/junction escape
-        try {
-            Path canonicalWorkspace = Files.exists(workspaceRoot) ? workspaceRoot.toRealPath() : workspaceRoot;
-            Path canonicalCandidate = Files.exists(normCandidate) ? normCandidate.toRealPath() : normCandidate;
-
-            if (!canonicalCandidate.startsWith(canonicalWorkspace)) {
-                return new PathVerificationResult(false, CleanupReason.PATH_IDENTITY_UNVERIFIED.code(), normCandidate, null);
-            }
-
-            if (canonicalCandidate.equals(normControl.toRealPath()) || canonicalCandidate.startsWith(normControl.toRealPath())) {
-                return new PathVerificationResult(false, CleanupReason.CONTROL_CHECKOUT_PROTECTED.code(), normCandidate, canonicalCandidate);
-            }
-
-            // 6. If Git worktree, verify Git common directory matches control repo
-            if (Files.isDirectory(normCandidate) && Files.exists(normCandidate.resolve(".git"))) {
-                if (!verifyGitCommonDirectory(normControl, normCandidate)) {
-                    return new PathVerificationResult(false, CleanupReason.GIT_REPOSITORY_MISMATCH.code(), normCandidate, canonicalCandidate);
-                }
-            }
-
-            return new PathVerificationResult(true, "path_verified", normCandidate, canonicalCandidate);
-
-        } catch (Exception failure) {
-            return new PathVerificationResult(false, CleanupReason.PATH_IDENTITY_UNVERIFIED.code(), normCandidate, null);
-        }
-    }
-
     private static boolean verifyGitCommonDirectory(Path controlRoot, Path worktreePath) {
         try {
-            String expectedStr = runGit(controlRoot, "rev-parse", "--git-common-dir");
-            Path expectedCommon = controlRoot.resolve(expectedStr).toAbsolutePath().normalize();
+            String expectedStr = runGit(controlRoot);
+            Path expectedCommon = controlRoot.resolve(expectedStr)
+                    .toAbsolutePath()
+                    .normalize();
 
-            String actualStr = runGit(worktreePath, "rev-parse", "--git-common-dir");
-            Path actualCommon = worktreePath.resolve(actualStr).toAbsolutePath().normalize();
+            String actualStr = runGit(worktreePath);
+            Path actualCommon = worktreePath.resolve(actualStr)
+                    .toAbsolutePath()
+                    .normalize();
 
             Path realExpected = Files.exists(expectedCommon) ? expectedCommon.toRealPath() : expectedCommon;
             Path realActual = Files.exists(actualCommon) ? actualCommon.toRealPath() : actualCommon;
@@ -159,7 +81,117 @@ public final class LifecyclePathVerifier {
         return "default-project";
     }
 
-    private static String runGit(Path workdir, String... args) throws IOException {
-        return GitProcessRunner.run(workdir, args).trim();
+    private static String runGit(Path workdir) throws IOException {
+        return GitProcessRunner.run(workdir, "rev-parse", "--git-common-dir")
+                .trim();
+    }
+
+    /**
+     * Verifies that a candidate resource path is safe for inspection/planning.
+     *
+     * @param controlRoot   control project root path
+     * @param candidatePath candidate filesystem path
+     * @return path verification result
+     */
+    public PathVerificationResult verifyPath(Path controlRoot, Path candidatePath) {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Objects.requireNonNull(candidatePath, "candidatePath");
+
+        Path normControl = controlRoot.toAbsolutePath()
+                .normalize();
+        Path normCandidate = candidatePath.toAbsolutePath()
+                .normalize();
+
+        // 1. Reject if candidate is equal to or inside control checkout root
+        if (normCandidate.equals(normControl) || normCandidate.startsWith(normControl) || normControl.startsWith(
+                normCandidate)) {
+            return new PathVerificationResult(false,
+                    CleanupReason.CONTROL_CHECKOUT_PROTECTED.code(),
+                    normCandidate,
+                    null);
+        }
+
+        // 2. Reject if candidate is .git directory or contains .git
+        if (normCandidate.getFileName() != null && ".git".equals(normCandidate.getFileName()
+                .toString())) {
+            return new PathVerificationResult(false,
+                    CleanupReason.CONTROL_CHECKOUT_PROTECTED.code(),
+                    normCandidate,
+                    null);
+        }
+
+        // 3. Resolve workspace root for this project
+        Path workspaceRoot = resolveWorkspaceRoot(normControl);
+
+        // 4. Verify candidate starts with workspaceRoot
+        if (!normCandidate.startsWith(workspaceRoot)) {
+            return new PathVerificationResult(false,
+                    CleanupReason.PATH_OUTSIDE_WORKSPACE_ROOT.code(),
+                    normCandidate,
+                    null);
+        }
+
+        // 5. Inspect canonical real paths to prevent symlink/junction escape
+        try {
+            Path canonicalWorkspace = Files.exists(workspaceRoot) ? workspaceRoot.toRealPath() : workspaceRoot;
+            Path canonicalCandidate = Files.exists(normCandidate) ? normCandidate.toRealPath() : normCandidate;
+
+            if (!canonicalCandidate.startsWith(canonicalWorkspace)) {
+                return new PathVerificationResult(false,
+                        CleanupReason.PATH_IDENTITY_UNVERIFIED.code(),
+                        normCandidate,
+                        null);
+            }
+
+            if (canonicalCandidate.equals(normControl.toRealPath())
+                    || canonicalCandidate.startsWith(normControl.toRealPath())) {
+                return new PathVerificationResult(false,
+                        CleanupReason.CONTROL_CHECKOUT_PROTECTED.code(),
+                        normCandidate,
+                        canonicalCandidate);
+            }
+
+            // 6. If Git worktree, verify Git common directory matches control repo
+            if (Files.isDirectory(normCandidate) && Files.exists(normCandidate.resolve(".git"))) {
+                if (!verifyGitCommonDirectory(normControl, normCandidate)) {
+                    return new PathVerificationResult(false,
+                            CleanupReason.GIT_REPOSITORY_MISMATCH.code(),
+                            normCandidate,
+                            canonicalCandidate);
+                }
+            }
+
+            return new PathVerificationResult(true, "path_verified", normCandidate, canonicalCandidate);
+
+        } catch (Exception failure) {
+            return new PathVerificationResult(false,
+                    CleanupReason.PATH_IDENTITY_UNVERIFIED.code(),
+                    normCandidate,
+                    null);
+        }
+    }
+
+    /**
+     * Result of lifecycle path safety verification.
+     *
+     * @param safe       {@code true} if path is verified safe under external workspace root
+     * @param reasonCode stable reason code
+     * @param normalized normalized candidate path
+     * @param canonical  canonical real path, or {@code null} if unverified
+     */
+    public record PathVerificationResult(
+            boolean safe,
+            String reasonCode,
+            Path normalized,
+            Path canonical
+    ) {
+
+        /**
+         * Validates non-null components.
+         */
+        public PathVerificationResult {
+            Objects.requireNonNull(reasonCode, "reasonCode");
+            Objects.requireNonNull(normalized, "normalized");
+        }
     }
 }

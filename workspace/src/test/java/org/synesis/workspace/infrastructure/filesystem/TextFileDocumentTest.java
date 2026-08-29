@@ -6,9 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.infrastructure.filesystem.TextFileDocument;
 
-/** Tests the raw-byte and logical-text normalization contract. */
+/**
+ * Tests the raw-byte and logical-text normalization contract.
+ */
 class TextFileDocumentTest {
 
     @Test
@@ -18,14 +19,17 @@ class TextFileDocumentTest {
 
         assertEquals("one\ntwo\nthree", document.logicalText());
         assertEquals(TextFileDocument.LineEndingStyle.CRLF, document.lineEndingStyle());
-        byte[] changed = document.encode(document.logicalText().replace("two", "TWO"));
+        byte[] changed = document.encode(document.logicalText()
+                .replace("two", "TWO"));
         assertEquals("one\r\nTWO\r\nthree", new String(changed, StandardCharsets.UTF_8));
-        assertEquals(64, document.revision().length());
+        assertEquals(64,
+                document.revision()
+                        .length());
     }
 
     @Test
     void lfNoFinalNewlineAndBomArePreserved() throws Exception {
-        byte[] raw = new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf,
+        byte[] raw = new byte[]{(byte) 0xef, (byte) 0xbb, (byte) 0xbf,
                 'a', '\n', 'b'};
         TextFileDocument document = TextFileDocument.decode(raw);
 

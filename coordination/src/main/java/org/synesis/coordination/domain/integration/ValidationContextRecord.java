@@ -1,13 +1,7 @@
 package org.synesis.coordination.domain.integration;
 
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-
-
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-
-
-
 import java.util.Objects;
+import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 
 /**
  * Records the active disposable validation worktree context for a capability request.

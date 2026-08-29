@@ -38,10 +38,9 @@ public final class ProviderRegistry {
             return null;
         }
         String normalized = id.toLowerCase(Locale.ROOT);
-        String providerId = normalized;
         return PROVIDERS.stream()
                 .filter(provider -> provider.id()
-                        .equals(providerId))
+                        .equals(normalized))
                 .findFirst()
                 .orElse(null);
     }

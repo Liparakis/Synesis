@@ -11,20 +11,12 @@ import java.util.Optional;
 public interface ProcessInspector {
 
     /**
-     * Process details observed for a candidate PID.
+     * Creates a default Java process inspector using ProcessHandle APIs where available.
      *
-     * @param pid               process identifier
-     * @param executableName    name of process executable
-     * @param commandLine       command line string, if available
-     * @param isLive            {@code true} if process handle is active
+     * @return system process inspector
      */
-    record ProcessDetails(long pid, String executableName, String commandLine, boolean isLive) {
-        /**
-         * Validates non-null invariants.
-         */
-        public ProcessDetails {
-            Objects.requireNonNull(executableName, "executableName");
-        }
+    static ProcessInspector system() {
+        return new SystemProcessInspector();
     }
 
     /**
@@ -38,12 +30,14 @@ public interface ProcessInspector {
     /**
      * Evaluates process evidence state conservatively.
      *
-     * @param pid                     candidate PID, or {@code null}
-     * @param expectedExecutablePart  expected executable snippet (e.g. "java")
-     * @param expectedCommandSnippet  expected command snippet (e.g. "SynesisMcpServer")
+     * @param pid                    candidate PID, or {@code null}
+     * @param expectedExecutablePart expected executable snippet (e.g. "java")
+     * @param expectedCommandSnippet expected command snippet (e.g. "SynesisMcpServer")
      * @return process evidence state
      */
-    default ProcessEvidenceState evaluateEvidence(Long pid, String expectedExecutablePart, String expectedCommandSnippet) {
+    default ProcessEvidenceState evaluateEvidence(Long pid,
+            String expectedExecutablePart,
+            String expectedCommandSnippet) {
         if (pid == null || pid <= 0) {
             return ProcessEvidenceState.NOT_OBSERVED;
         }
@@ -60,8 +54,12 @@ public interface ProcessInspector {
         if (!details.isLive()) {
             return ProcessEvidenceState.NOT_OBSERVED;
         }
-        boolean execMatches = expectedExecutablePart == null || details.executableName().toLowerCase(java.util.Locale.ROOT).contains(expectedExecutablePart.toLowerCase(java.util.Locale.ROOT));
-        boolean cmdMatches = expectedCommandSnippet == null || (details.commandLine() != null && details.commandLine().toLowerCase(java.util.Locale.ROOT).contains(expectedCommandSnippet.toLowerCase(java.util.Locale.ROOT)));
+        boolean execMatches = expectedExecutablePart == null || details.executableName()
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains(expectedExecutablePart.toLowerCase(java.util.Locale.ROOT));
+        boolean cmdMatches = expectedCommandSnippet == null || (details.commandLine() != null && details.commandLine()
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains(expectedCommandSnippet.toLowerCase(java.util.Locale.ROOT)));
 
         if (execMatches && cmdMatches) {
             return ProcessEvidenceState.LIVE_VERIFIED;
@@ -73,12 +71,21 @@ public interface ProcessInspector {
     }
 
     /**
-     * Creates a default Java process inspector using ProcessHandle APIs where available.
+     * Process details observed for a candidate PID.
      *
-     * @return system process inspector
+     * @param pid            process identifier
+     * @param executableName name of process executable
+     * @param commandLine    command line string, if available
+     * @param isLive         {@code true} if process handle is active
      */
-    static ProcessInspector system() {
-        return new SystemProcessInspector();
+    record ProcessDetails(long pid, String executableName, String commandLine, boolean isLive) {
+
+        /**
+         * Validates non-null invariants.
+         */
+        public ProcessDetails {
+            Objects.requireNonNull(executableName, "executableName");
+        }
     }
 
     /**
@@ -104,8 +111,10 @@ public interface ProcessInspector {
                     return Optional.empty();
                 }
                 ProcessHandle.Info info = ph.info();
-                String exec = info.command().orElse("java");
-                String cmd = info.commandLine().orElse("");
+                String exec = info.command()
+                        .orElse("java");
+                String cmd = info.commandLine()
+                        .orElse("");
                 return Optional.of(new ProcessDetails(pid, exec, cmd, true));
             } catch (Exception ex) {
                 return Optional.empty();

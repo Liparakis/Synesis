@@ -7,15 +7,17 @@ import java.util.Objects;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 
-/** Immutable admission snapshot used to validate the lease release/reacquire gap.
- * @param bindingDigest exact binding authority digest
- * @param blockerSetDigest blocker projection digest
- * @param leaseDigest lease evidence digest
+/**
+ * Immutable admission snapshot used to validate the lease release/reacquire gap.
+ *
+ * @param bindingDigest             exact binding authority digest
+ * @param blockerSetDigest          blocker projection digest
+ * @param leaseDigest               lease evidence digest
  * @param leaseHeartbeatEpochMillis captured lease heartbeat timestamp
- * @param worktreeLocator verified physical-worktree locator
- * @param branch authoritative branch
- * @param baseCommit authoritative base commit
- * @param authorityEpoch binding/sequence authority epoch
+ * @param worktreeLocator           verified physical-worktree locator
+ * @param branch                    authoritative branch
+ * @param baseCommit                authoritative base commit
+ * @param authorityEpoch            binding/sequence authority epoch
  */
 public record ProjectCommandAuthoritySnapshot(
         String bindingDigest,
@@ -28,7 +30,9 @@ public record ProjectCommandAuthoritySnapshot(
         long authorityEpoch
 ) {
 
-    /** Validates the bounded authority snapshot. */
+    /**
+     * Validates the bounded authority snapshot.
+     */
     public ProjectCommandAuthoritySnapshot {
         Objects.requireNonNull(bindingDigest, "bindingDigest");
         Objects.requireNonNull(blockerSetDigest, "blockerSetDigest");
@@ -40,9 +44,10 @@ public record ProjectCommandAuthoritySnapshot(
 
     /**
      * Captures binding, worktree, blocker, and lease evidence for admission.
-     * @param binding exact provider binding
-     * @param worktree verified worktree identity
-     * @param lease current lease, or {@code null} before first renewal
+     *
+     * @param binding          exact provider binding
+     * @param worktree         verified worktree identity
+     * @param lease            current lease, or {@code null} before first renewal
      * @param blockerSetDigest blocker projection digest
      * @return immutable authority snapshot
      */
@@ -63,11 +68,26 @@ public record ProjectCommandAuthoritySnapshot(
                 binding.lastVerifiedProjectSequence(), binding.providerTrustState(), binding.bindingVersion(),
                 binding.completedAt()));
         String leaseDigest = lease == null ? "missing" : digest(java.util.Arrays.asList(
-                lease.schemaVersion(), lease.projectId(), lease.provider(), lease.connectionInstanceId(),
-                lease.workerNodeId(), lease.sessionId(), lease.processIdentity().pid(),
-                lease.processIdentity().executableIdentity(), lease.processIdentity().commandLine(),
-                lease.processIdentity().processStartTime(), lease.processIdentity().connectionNonce(),
-                lease.createdAtEpochMillis(), lease.lastHeartbeatEpochMillis(), lease.leaseState().name()));
+                lease.schemaVersion(),
+                lease.projectId(),
+                lease.provider(),
+                lease.connectionInstanceId(),
+                lease.workerNodeId(),
+                lease.sessionId(),
+                lease.processIdentity()
+                .pid(),
+                lease.processIdentity()
+                .executableIdentity(),
+                lease.processIdentity()
+                .commandLine(),
+                lease.processIdentity()
+                .processStartTime(),
+                lease.processIdentity()
+                .connectionNonce(),
+                lease.createdAtEpochMillis(),
+                lease.lastHeartbeatEpochMillis(),
+                lease.leaseState()
+                .name()));
         long heartbeat = lease == null ? 0L : lease.lastHeartbeatEpochMillis();
         long epoch = Math.addExact(binding.bindingVersion(), binding.lastVerifiedProjectSequence());
         return new ProjectCommandAuthoritySnapshot(bindingDigest, blockerSetDigest, leaseDigest, heartbeat,
@@ -75,7 +95,22 @@ public record ProjectCommandAuthoritySnapshot(
                 binding.baseCommit() == null ? "" : binding.baseCommit(), epoch);
     }
 
-    /** Returns whether all non-lease authority remained identical.
+    private static String digest(List<?> values) {
+        try {
+            String material = values.stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining("\u001f"));
+            return java.util.HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(material.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception failure) {
+            throw new IllegalStateException("authority digest unavailable", failure);
+        }
+    }
+
+    /**
+     * Returns whether all non-lease authority remained identical.
+     *
      * @param other post-renewal snapshot
      * @return true when only lease evidence may have changed
      */
@@ -87,15 +122,5 @@ public record ProjectCommandAuthoritySnapshot(
                 && branch.equals(other.branch)
                 && baseCommit.equals(other.baseCommit)
                 && authorityEpoch == other.authorityEpoch;
-    }
-
-    private static String digest(List<?> values) {
-        try {
-            String material = values.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("\u001f"));
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(material.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            throw new IllegalStateException("authority digest unavailable", failure);
-        }
     }
 }

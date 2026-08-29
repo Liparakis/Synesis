@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -26,102 +25,115 @@ import java.util.Objects;
  */
 public final class RepositoryPortabilityService {
 
-    /** Stable portability finding categories. */
-    public enum FindingCode {
-        /** Git could not provide the requested tree. */
-        TREE_UNAVAILABLE,
-        /** A tree path is not valid UTF-8. */
-        INVALID_UTF8,
-        /** A path uses a backslash or ambiguous separator. */
-        PATH_SEPARATOR_AMBIGUITY,
-        /** A path contains an invalid dot segment or leading separator. */
-        PATH_SYNTAX_INVALID,
-        /** Two entries differ only by case folding. */
-        CASE_COLLISION,
-        /** Two entries differ only by Unicode normalization. */
-        UNICODE_NORMALIZATION_COLLISION,
-        /** Two entries alias after Windows trailing-dot/space handling. */
-        TRAILING_ALIAS_COLLISION,
-        /** A path contains a Windows reserved device name. */
-        WINDOWS_RESERVED_NAME,
-        /** A symlink is used as a directory ancestor. */
-        SYMLINK_TRAVERSAL,
-        /** A submodule entry is outside the supported snapshot model. */
-        UNSUPPORTED_SUBMODULE,
-        /** Two entries have the same canonical Git path. */
-        DUPLICATE_PATH
-    }
-
-    /** One complete-tree Git entry used for deterministic validation.
-     * @param path canonical decoded Git path
-     * @param mode Git tree mode
-     * @param type Git tree entry type
-     * @param objectId Git object identity
+    /**
+     * Creates a repository portability validator.
      */
-    public record TreeEntry(String path, int mode, String type, String objectId) {
-        /** Validates one decoded entry. */
-        public TreeEntry {
-            Objects.requireNonNull(path, "path");
-            Objects.requireNonNull(type, "type");
-            Objects.requireNonNull(objectId, "objectId");
-        }
-
-        /**
-         * Returns whether this entry is a Git symbolic link.
-         *
-         * @return true for a symbolic-link tree mode or type
-         */
-        public boolean symbolicLink() {
-            return mode == 0120000 || "symlink".equals(type);
-        }
-
-        /**
-         * Returns whether this entry is a Git submodule.
-         *
-         * @return true for a submodule tree mode or type
-         */
-        public boolean submodule() {
-            return mode == 0160000 || "commit".equals(type);
-        }
-    }
-
-    /** One deterministic portability finding.
-     * @param code finding category
-     * @param paths affected complete-tree paths
-     */
-    public record Finding(FindingCode code, List<String> paths) {
-        /** Copies and sorts finding paths. */
-        public Finding {
-            Objects.requireNonNull(code, "code");
-            paths = List.copyOf(new LinkedHashSet<>(Objects.requireNonNull(paths, "paths")));
-        }
-    }
-
-    /** Complete-tree portability report.
-     * @param treeish validated Git tree identity
-     * @param entries complete Git tree entries
-     * @param findings deterministic policy findings
-     */
-    public record Report(String treeish, List<TreeEntry> entries, List<Finding> findings) {
-        /** Copies entries and findings into deterministic immutable lists. */
-        public Report {
-            Objects.requireNonNull(treeish, "treeish");
-            entries = List.copyOf(Objects.requireNonNull(entries, "entries"));
-            findings = List.copyOf(Objects.requireNonNull(findings, "findings"));
-        }
-
-        /**
-         * Returns whether the complete tree satisfies the policy.
-         *
-         * @return true when no portability finding exists
-         */
-        public boolean portable() {
-            return findings.isEmpty();
-        }
-    }
-
-    /** Creates a repository portability validator. */
     public RepositoryPortabilityService() {
+    }
+
+    private static void addCollisions(List<Finding> findings, Map<String, List<String>> values,
+            FindingCode code) {
+        for (List<String> paths : values.values()) {
+            if (paths.size() > 1) {
+                List<String> sorted = paths.stream()
+                        .sorted()
+                        .toList();
+                findings.add(new Finding(code, sorted));
+            }
+        }
+    }
+
+    private static List<Finding> sortFindings(List<Finding> findings) {
+        return findings.stream()
+                .sorted(Comparator.comparing((Finding f) -> f.code()
+                                .name())
+                        .thenComparing(f -> String.join("\u0000", f.paths())))
+                .toList();
+    }
+
+    private static String syntaxKey(String path) {
+        if (path.isBlank() || path.startsWith("/") || path.contains("\\") || path.contains("//")) {
+            return path.contains("\\") ? "separator" : "syntax";
+        }
+        for (String segment : path.split("/", -1)) {
+            if (segment.isBlank() || segment.equals(".") || segment.equals("..")) {
+                return "syntax";
+            }
+            if (segment.endsWith(".") || segment.endsWith(" ")) {
+                return "syntax";
+            }
+        }
+        return null;
+    }
+
+    private static boolean isReserved(String segment) {
+        String stem = segment;
+        int dot = stem.indexOf('.');
+        if (dot >= 0) {
+            stem = stem.substring(0, dot);
+        }
+        String upper = stem.toUpperCase(Locale.ROOT);
+        return upper.equals("CON") || upper.equals("PRN") || upper.equals("AUX") || upper.equals("NUL")
+                || upper.matches("COM[1-9]") || upper.matches("LPT[1-9]");
+    }
+
+    private static String windowsAlias(String path) {
+        String[] segments = path.split("/", -1);
+        for (int i = 0; i < segments.length; i++) {
+            segments[i] = segments[i].replaceFirst("[ .]+$", "");
+        }
+        return String.join("/", segments)
+                .toLowerCase(Locale.ROOT);
+    }
+
+    private static byte[][] splitNul(byte[] bytes) {
+        List<byte[]> parts = new ArrayList<>();
+        int start = 0;
+        for (int i = 0; i < bytes.length; i++) {
+            if (bytes[i] == 0) {
+                parts.add(java.util.Arrays.copyOfRange(bytes, start, i));
+                start = i + 1;
+            }
+        }
+        if (start < bytes.length) {
+            parts.add(java.util.Arrays.copyOfRange(bytes, start, bytes.length));
+        }
+        return parts.toArray(byte[][]::new);
+    }
+
+    private static int indexOf(byte[] bytes) {
+        for (int i = 0; i < bytes.length; i++) {
+            if (bytes[i] == '\t') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String decodeAscii(byte[] bytes, int length) {
+        return new String(bytes, 0, length, StandardCharsets.US_ASCII);
+    }
+
+    private static String decodeUtf8(byte[] bytes, int offset, int length) throws CharacterCodingException {
+        return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes, offset, length))
+                .toString();
+    }
+
+    private static String hex(byte[] bytes, int offset, int length) {
+        return java.util.HexFormat.of()
+                .formatHex(bytes, offset, offset + length);
+    }
+
+    private static String git(Path root) throws IOException {
+        byte[] result = gitBytes(root, "rev-parse", "--verify", "HEAD");
+        return new String(result, StandardCharsets.UTF_8).trim();
+    }
+
+    private static byte[] gitBytes(Path root, String... args) throws IOException {
+        return GitProcessRunner.runBytes(root, args);
     }
 
     /**
@@ -133,7 +145,7 @@ public final class RepositoryPortabilityService {
      */
     public Report preflight(Path repositoryRoot) throws IOException {
         Objects.requireNonNull(repositoryRoot, "repositoryRoot");
-        String head = git(repositoryRoot, "rev-parse", "--verify", "HEAD");
+        String head = git(repositoryRoot);
         return validateTree(repositoryRoot, head);
     }
 
@@ -141,7 +153,7 @@ public final class RepositoryPortabilityService {
      * Validates the complete resulting tree reached by a Git object.
      *
      * @param repositoryRoot repository worktree
-     * @param treeish commit or tree object
+     * @param treeish        commit or tree object
      * @return portability report
      * @throws IOException when Git inspection cannot be performed
      */
@@ -155,12 +167,12 @@ public final class RepositoryPortabilityService {
             if (item.length == 0) {
                 continue;
             }
-            int tab = indexOf(item, (byte) '\t');
+            int tab = indexOf(item);
             if (tab < 0) {
                 readFindings.add(new Finding(FindingCode.PATH_SYNTAX_INVALID, List.of("<malformed-tree-entry>")));
                 continue;
             }
-            String header = decodeAscii(item, 0, tab);
+            String header = decodeAscii(item, tab);
             String path;
             try {
                 path = decodeUtf8(item, tab + 1, item.length - tab - 1);
@@ -209,7 +221,8 @@ public final class RepositoryPortabilityService {
         List<String> symlinks = new ArrayList<>();
         for (TreeEntry entry : immutable) {
             String path = entry.path();
-            exact.computeIfAbsent(path, ignored -> new ArrayList<>()).add(path);
+            exact.computeIfAbsent(path, ignored -> new ArrayList<>())
+                    .add(path);
             String syntax = syntaxKey(path);
             if (syntax != null) {
                 findings.add(new Finding(syntax.equals("separator")
@@ -222,11 +235,14 @@ public final class RepositoryPortabilityService {
                 }
             }
             String folded = path.toLowerCase(Locale.ROOT);
-            caseFolded.computeIfAbsent(folded, ignored -> new ArrayList<>()).add(path);
+            caseFolded.computeIfAbsent(folded, ignored -> new ArrayList<>())
+                    .add(path);
             String normalized = Normalizer.normalize(path, Normalizer.Form.NFC);
-            unicode.computeIfAbsent(normalized, ignored -> new ArrayList<>()).add(path);
+            unicode.computeIfAbsent(normalized, ignored -> new ArrayList<>())
+                    .add(path);
             String windows = windowsAlias(path);
-            trailing.computeIfAbsent(windows, ignored -> new ArrayList<>()).add(path);
+            trailing.computeIfAbsent(windows, ignored -> new ArrayList<>())
+                    .add(path);
             if (entry.submodule()) {
                 findings.add(new Finding(FindingCode.UNSUPPORTED_SUBMODULE, List.of(path)));
             }
@@ -238,99 +254,147 @@ public final class RepositoryPortabilityService {
         addCollisions(findings, caseFolded, FindingCode.CASE_COLLISION);
         addCollisions(findings, unicode, FindingCode.UNICODE_NORMALIZATION_COLLISION);
         addCollisions(findings, trailing, FindingCode.TRAILING_ALIAS_COLLISION);
-        for (String path : immutable.stream().map(TreeEntry::path).toList()) {
-            if (symlinks.stream().anyMatch(link -> !link.equals(path) && path.startsWith(link + "/"))) {
+        for (String path : immutable.stream()
+                .map(TreeEntry::path)
+                .toList()) {
+            if (symlinks.stream()
+                    .anyMatch(link -> !link.equals(path) && path.startsWith(link + "/"))) {
                 findings.add(new Finding(FindingCode.SYMLINK_TRAVERSAL, List.of(path)));
             }
         }
         return new Report(treeish, immutable, sortFindings(findings));
     }
 
-    private static void addCollisions(List<Finding> findings, Map<String, List<String>> values,
-                                      FindingCode code) {
-        for (List<String> paths : values.values()) {
-            if (paths.size() > 1) {
-                List<String> sorted = paths.stream().sorted().toList();
-                findings.add(new Finding(code, sorted));
-            }
+    /**
+     * Stable portability finding categories.
+     */
+    public enum FindingCode {
+        /**
+         * Git could not provide the requested tree.
+         */
+        TREE_UNAVAILABLE,
+        /**
+         * A tree path is not valid UTF-8.
+         */
+        INVALID_UTF8,
+        /**
+         * A path uses a backslash or ambiguous separator.
+         */
+        PATH_SEPARATOR_AMBIGUITY,
+        /**
+         * A path contains an invalid dot segment or leading separator.
+         */
+        PATH_SYNTAX_INVALID,
+        /**
+         * Two entries differ only by case folding.
+         */
+        CASE_COLLISION,
+        /**
+         * Two entries differ only by Unicode normalization.
+         */
+        UNICODE_NORMALIZATION_COLLISION,
+        /**
+         * Two entries alias after Windows trailing-dot/space handling.
+         */
+        TRAILING_ALIAS_COLLISION,
+        /**
+         * A path contains a Windows reserved device name.
+         */
+        WINDOWS_RESERVED_NAME,
+        /**
+         * A symlink is used as a directory ancestor.
+         */
+        SYMLINK_TRAVERSAL,
+        /**
+         * A submodule entry is outside the supported snapshot model.
+         */
+        UNSUPPORTED_SUBMODULE,
+        /**
+         * Two entries have the same canonical Git path.
+         */
+        DUPLICATE_PATH
+    }
+
+    /**
+     * One complete-tree Git entry used for deterministic validation.
+     *
+     * @param path     canonical decoded Git path
+     * @param mode     Git tree mode
+     * @param type     Git tree entry type
+     * @param objectId Git object identity
+     */
+    public record TreeEntry(String path, int mode, String type, String objectId) {
+
+        /**
+         * Validates one decoded entry.
+         */
+        public TreeEntry {
+            Objects.requireNonNull(path, "path");
+            Objects.requireNonNull(type, "type");
+            Objects.requireNonNull(objectId, "objectId");
+        }
+
+        /**
+         * Returns whether this entry is a Git symbolic link.
+         *
+         * @return true for a symbolic-link tree mode or type
+         */
+        public boolean symbolicLink() {
+            return mode == 0xA000 || "symlink".equals(type);
+        }
+
+        /**
+         * Returns whether this entry is a Git submodule.
+         *
+         * @return true for a submodule tree mode or type
+         */
+        public boolean submodule() {
+            return mode == 0xE000 || "commit".equals(type);
         }
     }
 
-    private static List<Finding> sortFindings(List<Finding> findings) {
-        return findings.stream().sorted(Comparator.comparing((Finding f) -> f.code().name())
-                .thenComparing(f -> String.join("\u0000", f.paths()))).toList();
-    }
+    /**
+     * One deterministic portability finding.
+     *
+     * @param code  finding category
+     * @param paths affected complete-tree paths
+     */
+    public record Finding(FindingCode code, List<String> paths) {
 
-    private static String syntaxKey(String path) {
-        if (path.isBlank() || path.startsWith("/") || path.contains("\\") || path.contains("//")) {
-            return path.contains("\\") ? "separator" : "syntax";
+        /**
+         * Copies and sorts finding paths.
+         */
+        public Finding {
+            Objects.requireNonNull(code, "code");
+            paths = List.copyOf(new LinkedHashSet<>(Objects.requireNonNull(paths, "paths")));
         }
-        for (String segment : path.split("/", -1)) {
-            if (segment.isBlank() || segment.equals(".") || segment.equals("..")) {
-                return "syntax";
-            }
-            if (segment.endsWith(".") || segment.endsWith(" ")) {
-                return "syntax";
-            }
+    }
+
+    /**
+     * Complete-tree portability report.
+     *
+     * @param treeish  validated Git tree identity
+     * @param entries  complete Git tree entries
+     * @param findings deterministic policy findings
+     */
+    public record Report(String treeish, List<TreeEntry> entries, List<Finding> findings) {
+
+        /**
+         * Copies entries and findings into deterministic immutable lists.
+         */
+        public Report {
+            Objects.requireNonNull(treeish, "treeish");
+            entries = List.copyOf(Objects.requireNonNull(entries, "entries"));
+            findings = List.copyOf(Objects.requireNonNull(findings, "findings"));
         }
-        return null;
-    }
 
-    private static boolean isReserved(String segment) {
-        String stem = segment;
-        int dot = stem.indexOf('.');
-        if (dot >= 0) stem = stem.substring(0, dot);
-        String upper = stem.toUpperCase(Locale.ROOT);
-        return upper.equals("CON") || upper.equals("PRN") || upper.equals("AUX") || upper.equals("NUL")
-                || upper.matches("COM[1-9]") || upper.matches("LPT[1-9]");
-    }
-
-    private static String windowsAlias(String path) {
-        String[] segments = path.split("/", -1);
-        for (int i = 0; i < segments.length; i++) {
-            segments[i] = segments[i].replaceFirst("[ .]+$", "");
+        /**
+         * Returns whether the complete tree satisfies the policy.
+         *
+         * @return true when no portability finding exists
+         */
+        public boolean portable() {
+            return findings.isEmpty();
         }
-        return String.join("/", segments).toLowerCase(Locale.ROOT);
-    }
-
-    private static byte[][] splitNul(byte[] bytes) {
-        List<byte[]> parts = new ArrayList<>();
-        int start = 0;
-        for (int i = 0; i < bytes.length; i++) {
-            if (bytes[i] == 0) {
-                parts.add(java.util.Arrays.copyOfRange(bytes, start, i));
-                start = i + 1;
-            }
-        }
-        if (start < bytes.length) parts.add(java.util.Arrays.copyOfRange(bytes, start, bytes.length));
-        return parts.toArray(byte[][]::new);
-    }
-
-    private static int indexOf(byte[] bytes, byte value) {
-        for (int i = 0; i < bytes.length; i++) if (bytes[i] == value) return i;
-        return -1;
-    }
-
-    private static String decodeAscii(byte[] bytes, int offset, int length) {
-        return new String(bytes, offset, length, StandardCharsets.US_ASCII);
-    }
-
-    private static String decodeUtf8(byte[] bytes, int offset, int length) throws CharacterCodingException {
-        return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .decode(java.nio.ByteBuffer.wrap(bytes, offset, length)).toString();
-    }
-
-    private static String hex(byte[] bytes, int offset, int length) {
-        return java.util.HexFormat.of().formatHex(bytes, offset, offset + length);
-    }
-
-    private static String git(Path root, String... args) throws IOException {
-        byte[] result = gitBytes(root, args);
-        return new String(result, StandardCharsets.UTF_8).trim();
-    }
-
-    private static byte[] gitBytes(Path root, String... args) throws IOException {
-        return GitProcessRunner.runBytes(root, args);
     }
 }

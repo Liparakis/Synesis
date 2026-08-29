@@ -46,9 +46,9 @@ were relayed between agents.
 
 ## Participants, claims, and WorkGroup
 
-| Agent | Session / worktree | Participant | Intent / epoch / claim |
-|---|---|---|---|
-| A producer | `session-69511693-1e0d-4c2b-975c-77a2d355256c` / `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\84886099-22fe-489a-ae5c-94fcb6159b9d\worktrees\session-69511693-1e0d-4c2b-975c-77a2d355256c` | `agt_5474ea46-8e50-3600-8cc6-08c9647a1e1c` | `f78beb42-196b-3dad-b017-156121fcb891`, epoch 1, `PATH_EXACT todo.py` |
+| Agent      | Session / worktree                                                                                                                                                                                 | Participant                                | Intent / epoch / claim                                                     |
+|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------|----------------------------------------------------------------------------|
+| A producer | `session-69511693-1e0d-4c2b-975c-77a2d355256c` / `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\84886099-22fe-489a-ae5c-94fcb6159b9d\worktrees\session-69511693-1e0d-4c2b-975c-77a2d355256c` | `agt_5474ea46-8e50-3600-8cc6-08c9647a1e1c` | `f78beb42-196b-3dad-b017-156121fcb891`, epoch 1, `PATH_EXACT todo.py`      |
 | B reviewer | `session-7683acda-b612-4301-9b15-944841c94890` / `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\84886099-22fe-489a-ae5c-94fcb6159b9d\worktrees\session-7683acda-b612-4301-9b15-944841c94890` | `agt_a72db411-a715-3b13-8cea-04322c9fe0f8` | `710d7afa-db77-310d-946a-e85dbe598ab1`, epoch 1, `PATH_EXACT test_todo.py` |
 
 - WorkGroup: `f4bba8b9-1d6f-36ba-9285-5b63cbf702cd`, final state `ACTIVE`
@@ -96,11 +96,11 @@ visible repository work only.
 
    A executed those exact arguments. Result:
 
-   - snapshot: `snap_171a6f766e26454cf60e6cebc3106f63`
-   - snapshot state: `PUBLISHED`
-   - integration state: `integrated`
-   - lane: `f78beb42-196b-3dad-b017-156121fcb891`
-   - claim epoch: `1`
+    - snapshot: `snap_171a6f766e26454cf60e6cebc3106f63`
+    - snapshot state: `PUBLISHED`
+    - integration state: `integrated`
+    - lane: `f78beb42-196b-3dad-b017-156121fcb891`
+    - claim epoch: `1`
 6. After A's integration advanced the control checkout, B executed the exact
    recovery projection:
 

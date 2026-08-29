@@ -1,10 +1,9 @@
 import org.gradle.internal.os.OperatingSystem
-import java.nio.file.Files
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.time.Instant
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
 import java.util.*
+import java.util.concurrent.CompletableFuture
 
 plugins {
     application
@@ -384,7 +383,17 @@ tasks.register("bundleSmokeTest") {
             // Installed stdio MCP smoke test
             val mcpCommand = (if (isWindows) mutableListOf("cmd.exe", "/c", launcher.absolutePath)
             else mutableListOf(launcher.absolutePath)).apply {
-                addAll(listOf("mcp", "--provider", "codex", "--project", project.absolutePath, "--connection-instance-id", "smoke-conn-1"))
+                addAll(
+                    listOf(
+                        "mcp",
+                        "--provider",
+                        "codex",
+                        "--project",
+                        project.absolutePath,
+                        "--connection-instance-id",
+                        "smoke-conn-1"
+                    )
+                )
             }
             val mcpProcess = ProcessBuilder(mcpCommand).directory(smokeRoot).start()
             val mcpWriter = mcpProcess.outputStream.bufferedWriter(Charsets.UTF_8)

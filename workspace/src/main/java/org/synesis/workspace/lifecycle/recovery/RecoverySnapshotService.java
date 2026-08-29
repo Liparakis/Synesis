@@ -20,30 +20,43 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  */
 public final class RecoverySnapshotService {
 
-    /** Creates a recovery snapshot materializer. */
-    public RecoverySnapshotService() { }
-
-    /** Immutable recovery snapshot result.
-     * @param snapshotId snapshot identifier
-     * @param root snapshot root
-     * @param contentHash snapshot content hash
-     * @param paths repository-relative paths included
+    /**
+     * Creates a recovery snapshot materializer.
      */
-    public record Snapshot(String snapshotId, Path root, String contentHash, List<String> paths) {
+    public RecoverySnapshotService() {
+    }
 
-        /**
-         * Validates and freezes snapshot metadata.
-         */
-        public Snapshot {
-            Objects.requireNonNull(snapshotId, "snapshotId");
-            Objects.requireNonNull(root, "root");
-            Objects.requireNonNull(contentHash, "contentHash");
-            paths = List.copyOf(Objects.requireNonNull(paths, "paths"));
+    private static Snapshot readExisting(Path root) throws IOException {
+        Object parsed = ProviderJson.parse(Files.readString(root.resolve("manifest.json")));
+        if (!(parsed instanceof java.util.Map<?, ?> map)) {
+            throw new IOException("RECOVERY_MANIFEST_INVALID");
+        }
+        List<String> paths = map.get("paths") instanceof List<?> values
+                ? values.stream()
+                  .map(String::valueOf)
+                  .toList() : List.of();
+        return new Snapshot(String.valueOf(map.get("snapshotId")), root,
+                String.valueOf(map.get("contentHash")), paths);
+    }
+
+    private static String hash(Path root, List<String> paths) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (String relative : paths) {
+                digest.update(relative.getBytes(StandardCharsets.UTF_8));
+                digest.update(Files.readAllBytes(root.resolve(relative)));
+            }
+            return HexFormat.of()
+                    .formatHex(digest.digest());
+        } catch (Exception failure) {
+            throw new IOException("RECOVERY_SNAPSHOT_HASH_FAILED", failure);
         }
     }
 
-    /** Materializes a complete immutable snapshot for a suspended session.
-     * @param location project location
+    /**
+     * Materializes a complete immutable snapshot for a suspended session.
+     *
+     * @param location  project location
      * @param sessionId exact session identifier
      * @return immutable snapshot metadata
      * @throws IOException when the binding or snapshot cannot be read
@@ -52,7 +65,7 @@ public final class RecoverySnapshotService {
             throws IOException {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(sessionId, "sessionId");
-        ProviderSessionBindingService.Binding binding = null;
+        ProviderSessionBindingService.Binding binding;
         try {
             binding = new ProviderSessionBindingService().list(location, "codex")
                     .stream()
@@ -122,9 +135,11 @@ public final class RecoverySnapshotService {
         return new Snapshot(sessionId, root, hash, paths);
     }
 
-    /** Restores a verified immutable snapshot into a new isolated lane.
+    /**
+     * Restores a verified immutable snapshot into a new isolated lane.
+     *
      * @param snapshotReference snapshot root followed by {@code #contentHash}
-     * @param targetWorktree new lane worktree
+     * @param targetWorktree    new lane worktree
      * @return restored snapshot metadata
      * @throws IOException invalid reference, hash mismatch, or unsafe target
      */
@@ -135,52 +150,57 @@ public final class RecoverySnapshotService {
         if (separator <= 0 || separator == snapshotReference.length() - 1) {
             throw new IOException("RECOVERY_REFERENCE_INVALID");
         }
-        Path root = Path.of(snapshotReference.substring(0, separator)).toAbsolutePath().normalize();
+        Path root = Path.of(snapshotReference.substring(0, separator))
+                .toAbsolutePath()
+                .normalize();
         String expectedHash = snapshotReference.substring(separator + 1);
         Snapshot snapshot = readExisting(root);
         if (!expectedHash.equals(snapshot.contentHash()) || !expectedHash.equals(hash(root, snapshot.paths()))) {
             throw new IOException("RECOVERY_SNAPSHOT_HASH_MISMATCH");
         }
-        Path target = targetWorktree.toAbsolutePath().normalize();
-        if (!Files.isDirectory(target)) throw new IOException("RECOVERY_TARGET_NOT_FOUND");
+        Path target = targetWorktree.toAbsolutePath()
+                .normalize();
+        if (!Files.isDirectory(target)) {
+            throw new IOException("RECOVERY_TARGET_NOT_FOUND");
+        }
         for (String relative : snapshot.paths()) {
-            if (relative.equals("manifest.json")) continue;
-            Path source = root.resolve(relative).normalize();
-            Path destination = target.resolve(relative).normalize();
+            if (relative.equals("manifest.json")) {
+                continue;
+            }
+            Path source = root.resolve(relative)
+                    .normalize();
+            Path destination = target.resolve(relative)
+                    .normalize();
             if (!destination.startsWith(target) || relative.startsWith(".git/") || relative.startsWith(".synesis/")) {
                 throw new IOException("RECOVERY_PATH_INVALID");
             }
-            if (!Files.isRegularFile(source)) throw new IOException("RECOVERY_SOURCE_MISSING");
+            if (!Files.isRegularFile(source)) {
+                throw new IOException("RECOVERY_SOURCE_MISSING");
+            }
             Files.createDirectories(destination.getParent());
             Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
         }
         return snapshot;
     }
 
-    private static Snapshot readExisting(Path root) throws IOException {
-        Object parsed = ProviderJson.parse(Files.readString(root.resolve("manifest.json")));
-        if (!(parsed instanceof java.util.Map<?, ?> map)) {
-            throw new IOException("RECOVERY_MANIFEST_INVALID");
-        }
-        List<String> paths = map.get("paths") instanceof List<?> values
-                ? values.stream()
-                  .map(String::valueOf)
-                  .toList() : List.of();
-        return new Snapshot(String.valueOf(map.get("snapshotId")), root,
-                String.valueOf(map.get("contentHash")), paths);
-    }
+    /**
+     * Immutable recovery snapshot result.
+     *
+     * @param snapshotId  snapshot identifier
+     * @param root        snapshot root
+     * @param contentHash snapshot content hash
+     * @param paths       repository-relative paths included
+     */
+    public record Snapshot(String snapshotId, Path root, String contentHash, List<String> paths) {
 
-    private static String hash(Path root, List<String> paths) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            for (String relative : paths) {
-                digest.update(relative.getBytes(StandardCharsets.UTF_8));
-                digest.update(Files.readAllBytes(root.resolve(relative)));
-            }
-            return HexFormat.of()
-                    .formatHex(digest.digest());
-        } catch (Exception failure) {
-            throw new IOException("RECOVERY_SNAPSHOT_HASH_FAILED", failure);
+        /**
+         * Validates and freezes snapshot metadata.
+         */
+        public Snapshot {
+            Objects.requireNonNull(snapshotId, "snapshotId");
+            Objects.requireNonNull(root, "root");
+            Objects.requireNonNull(contentHash, "contentHash");
+            paths = List.copyOf(Objects.requireNonNull(paths, "paths"));
         }
     }
 }

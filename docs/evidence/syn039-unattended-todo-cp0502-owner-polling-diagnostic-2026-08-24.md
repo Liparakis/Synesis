@@ -35,8 +35,8 @@ grant-authority failure.
 - MCP startup: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`, commit
   `bc334ac`, exactly ten tools
 - Connections:
-  - A: `conn-instance-48857101-ef07-40a9-8f30-0a52c482cbc0`
-  - B: `conn-instance-c9355bb5-0d91-4ad4-b90b-e2a56379ef1f`
+    - A: `conn-instance-48857101-ef07-40a9-8f30-0a52c482cbc0`
+    - B: `conn-instance-c9355bb5-0d91-4ad4-b90b-e2a56379ef1f`
 - Both `ensure_session` calls returned `ready / isolated`.
 
 Participants were distinct and claims were disjoint. The run converged on

@@ -35,6 +35,7 @@ public record CleanupPlan(
         boolean diskBudgetWarning,
         List<CleanupPlanEntry> entries
 ) {
+
     /**
      * Validates non-null record invariants.
      */

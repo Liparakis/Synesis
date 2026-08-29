@@ -19,9 +19,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.synesis.link.identity.NodeIdentity;
 import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.coordination.domain.prediction.PredictionContract;
@@ -30,11 +28,12 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.prediction.PredictionIntegrationGate;
 import org.synesis.coordination.domain.prediction.PredictionState;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
+import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.task.SupervisorInbox;
 import org.synesis.coordination.domain.task.TaskClaim;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.transport.http.CoordinationHttpClient;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Verifies the first coordination domain and durable event-store slice.
@@ -291,6 +290,7 @@ class PredictionCoordinationTest {
     }
 
     @Test
+    @SuppressWarnings({"HttpUrlsUsage", "resource"})
     void loopbackHttpAcceptsCommandsAndReplaysSse() throws Exception {
         Path root = Files.createTempDirectory("synesis-http-");
         UUID project = UUID.randomUUID();
@@ -408,7 +408,7 @@ class PredictionCoordinationTest {
                 .accepted());
         Files.writeString(workspace.worktree()
                 .resolve("README.md"), "bad whitespace \t\n");
-        assertTrue(!workspace.gate()
+        assertFalse(workspace.gate()
                 .accepted());
         workspace.close();
     }

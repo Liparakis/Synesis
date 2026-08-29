@@ -31,6 +31,7 @@ public record ReconciliationPlan(
         String contentHash,
         List<ReconciliationPlanEntry> entries
 ) {
+
     /**
      * Invariant validation.
      */

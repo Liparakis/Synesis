@@ -22,10 +22,10 @@ current repository-bundled MCP:
 Both sessions reached `ensure_session=ready` and `workspace=isolated` with
 the same project and disjoint exact claims:
 
-| Agent | Session | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---|---:|
-| A / implementation | `session-65bface0-dcd4-497a-bc4c-14fbc1708ff5` | `agt_5b4ddb4e-38dc-31df-84e1-b380d1c14864` | `fd1cdaba-9a70-310f-8dc1-83dc165a21c1` | `todo.py` | 1 |
-| B / reviewer | `session-7a0ad8a2-7901-4faf-a40a-471c931e13d3` | `agt_5c94bb17-fb5c-3c85-acc4-59915643ed2d` | `0e184fab-d3d3-3b82-a24a-5febd5085e3c` | `test_todo.py` | 1 |
+| Agent              | Session                                        | Participant                                | Intent                                 | Claim          | Epoch |
+|--------------------|------------------------------------------------|--------------------------------------------|----------------------------------------|----------------|------:|
+| A / implementation | `session-65bface0-dcd4-497a-bc4c-14fbc1708ff5` | `agt_5b4ddb4e-38dc-31df-84e1-b380d1c14864` | `fd1cdaba-9a70-310f-8dc1-83dc165a21c1` | `todo.py`      |     1 |
+| B / reviewer       | `session-7a0ad8a2-7901-4faf-a40a-471c931e13d3` | `agt_5c94bb17-fb5c-3c85-acc4-59915643ed2d` | `0e184fab-d3d3-3b82-a24a-5febd5085e3c` | `test_todo.py` |     1 |
 
 ## Projection/action trace
 

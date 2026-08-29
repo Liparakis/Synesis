@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.task;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -20,6 +18,7 @@ import java.util.UUID;
  * @param ownerSupervisorId claiming supervisor identity
  * @param ownerWorkerId     claiming worker identity
  */
+@SuppressWarnings("DuplicatedCode")
 public record TaskClaim(UUID taskId, String ownerNodeId, String ownerSupervisorId, String ownerWorkerId) {
 
     private static final int MAGIC = 0x53544331;

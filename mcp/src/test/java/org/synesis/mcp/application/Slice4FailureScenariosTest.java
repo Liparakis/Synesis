@@ -1,5 +1,8 @@
 package org.synesis.mcp.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -8,22 +11,19 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.domain.collaboration.ResourceSelector;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+@SuppressWarnings("TextBlockMigration")
 class Slice4FailureScenariosTest {
 
     @TempDir
@@ -32,8 +32,10 @@ class Slice4FailureScenariosTest {
     private Path projectRoot;
     private McpProtocolHandler requesterHandler;
     private McpProtocolHandler ownerHandler;
+    @SuppressWarnings("FieldCanBeLocal")
     private ProviderSessionBindingService.Binding b1;
     private ProviderSessionBindingService.Binding b2;
+    @SuppressWarnings("FieldCanBeLocal")
     private AgentSessionService sessionService;
 
     private static void git(Path root, String... args) throws Exception {
@@ -42,29 +44,68 @@ class Slice4FailureScenariosTest {
         cmd[1] = "-C";
         cmd[2] = root.toString();
         System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        p.getInputStream().readAllBytes();
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true)
+                .start();
+        p.getInputStream()
+                .readAllBytes();
         if (p.waitFor() != 0) {
             throw new IllegalStateException("git failed: " + String.join(" ", args));
         }
     }
 
-    private static void commitIfNeeded(Path root, String message) throws Exception {
+    private static void commitIfNeeded(Path root) throws Exception {
         Process process = new ProcessBuilder("git", "-C", root.toString(), "status", "--porcelain")
                 .redirectErrorStream(true)
                 .start();
-        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        String output = new String(process.getInputStream()
+                .readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         if (process.waitFor() != 0) {
             throw new IllegalStateException("git status failed");
         }
         if (!output.isBlank()) {
-            git(root, "commit", "-m", message);
+            git(root, "commit", "-m", "Commit agent session files");
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String extractResultField(String jsonRpcRes) {
+        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
+        Map<String, Object> result = (Map<String, Object>) map.get("result");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        String text = (String) content.getFirst()
+                .get("text");
+        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
+        Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
+        return innerResult != null ? (String) innerResult.get("capabilityRequestHandle") : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String extractResponseStatus(String jsonRpcRes) {
+        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
+        Map<String, Object> result = (Map<String, Object>) map.get("result");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        String text = (String) content.getFirst()
+                .get("text");
+        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
+        return (String) parsed.get("status");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String extractResponseReason(String jsonRpcRes) {
+        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
+        Map<String, Object> result = (Map<String, Object>) map.get("result");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        String text = (String) content.getFirst()
+                .get("text");
+        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
+        return (String) parsed.get("reason");
     }
 
     @BeforeEach
     void setUp() throws Exception {
-        projectRoot = tempDir.resolve("failure-scenarios-test-" + UUID.randomUUID().toString().substring(0, 8));
+        projectRoot = tempDir.resolve("failure-scenarios-test-" + UUID.randomUUID()
+                .toString()
+                .substring(0, 8));
         Files.createDirectories(projectRoot);
 
         git(projectRoot, "init");
@@ -84,55 +125,118 @@ class Slice4FailureScenariosTest {
         var bindingService = new ProviderSessionBindingService();
 
         sessionService = new AgentSessionService();
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "antigravity", "inst-req-1", null, false));
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "codex", "inst-owner-1", null, false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+                "antigravity",
+                "inst-req-1",
+                null,
+                false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+                "codex",
+                "inst-owner-1",
+                null,
+                false));
 
         git(projectRoot, "add", ".");
-        commitIfNeeded(projectRoot, "Commit agent session files");
+        commitIfNeeded(projectRoot);
 
         var bindings1 = bindingService.list(location, "antigravity");
-        if (!bindings1.isEmpty() && bindings1.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "antigravity", bindings1.getLast().sessionId(), Path.of(bindings1.getLast().worktreePath()));
+        if (!bindings1.isEmpty() && bindings1.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "antigravity",
+                    bindings1.getLast()
+                            .sessionId(),
+                    Path.of(bindings1.getLast()
+                            .worktreePath()));
         }
         var bindings2 = bindingService.list(location, "codex");
-        if (!bindings2.isEmpty() && bindings2.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "codex", bindings2.getLast().sessionId(), Path.of(bindings2.getLast().worktreePath()));
+        if (!bindings2.isEmpty() && bindings2.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "codex",
+                    bindings2.getLast()
+                            .sessionId(),
+                    Path.of(bindings2.getLast()
+                            .worktreePath()));
         }
 
         b1 = bindings1.getLast();
         b2 = bindings2.getLast();
 
-        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var identity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
         PredictionEventStore store = new PredictionEventStore(
-                location.root().resolve(".synesis/coordination"), location.projectId());
+                location.root()
+                        .resolve(".synesis/coordination"), location.projectId());
 
         UUID ownerTaskId = UUID.randomUUID();
         org.synesis.coordination.domain.task.CoordinationTask ownerTask = new org.synesis.coordination.domain.task.CoordinationTask(
                 ownerTaskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 identity.nodeId(), b2.supervisorId(), b2.workerId());
         store.append(ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(),
-                CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), ownerTask.encoded(), identity).encoded(), identity);
+                CoordinationCommand.create(UUID.randomUUID(),
+                                location.projectId(),
+                                ownerTaskId,
+                                PredictionEventType.TASK_CREATED,
+                                identity.nodeId(),
+                                ownerTask.encoded(),
+                                identity)
+                        .encoded(), identity);
 
         org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
                 ownerTaskId, identity.nodeId(), b2.supervisorId(), b2.workerId());
         store.append(ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(),
-                CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), claim1.encoded(), identity).encoded(), identity);
+                CoordinationCommand.create(UUID.randomUUID(),
+                                location.projectId(),
+                                ownerTaskId,
+                                PredictionEventType.TASK_CLAIMED,
+                                identity.nodeId(),
+                                claim1.encoded(),
+                                identity)
+                        .encoded(), identity);
 
-        OwnershipClaim claim2 = new OwnershipClaim(ownerTaskId, "catalog.product-query", identity.nodeId(), b2.supervisorId(), List.of("catalog"), 1L);
+        OwnershipClaim claim2 = new OwnershipClaim(ownerTaskId,
+                "catalog.product-query",
+                identity.nodeId(),
+                b2.supervisorId(),
+                List.of("catalog"),
+                1L);
         store.append(ownerTaskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(),
-                CoordinationCommand.create(UUID.randomUUID(), location.projectId(), ownerTaskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(), claim2.encoded(), identity).encoded(), identity);
+                CoordinationCommand.create(UUID.randomUUID(),
+                                location.projectId(),
+                                ownerTaskId,
+                                PredictionEventType.OWNERSHIP_CLAIMED,
+                                identity.nodeId(),
+                                claim2.encoded(),
+                                identity)
+                        .encoded(), identity);
 
         UUID reqTaskId = UUID.randomUUID();
         org.synesis.coordination.domain.task.CoordinationTask reqTask = new org.synesis.coordination.domain.task.CoordinationTask(
                 reqTaskId, location.projectId(), "Product CLI Task", "catalog.product-cli",
                 identity.nodeId(), b1.supervisorId(), b1.workerId());
         store.append(reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(),
-                CoordinationCommand.create(UUID.randomUUID(), location.projectId(), reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), reqTask.encoded(), identity).encoded(), identity);
+                CoordinationCommand.create(UUID.randomUUID(),
+                                location.projectId(),
+                                reqTaskId,
+                                PredictionEventType.TASK_CREATED,
+                                identity.nodeId(),
+                                reqTask.encoded(),
+                                identity)
+                        .encoded(), identity);
 
         org.synesis.coordination.domain.task.TaskClaim claim3 = new org.synesis.coordination.domain.task.TaskClaim(
                 reqTaskId, identity.nodeId(), b1.supervisorId(), b1.workerId());
         store.append(reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(),
-                CoordinationCommand.create(UUID.randomUUID(), location.projectId(), reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), claim3.encoded(), identity).encoded(), identity);
+                CoordinationCommand.create(UUID.randomUUID(),
+                                location.projectId(),
+                                reqTaskId,
+                                PredictionEventType.TASK_CLAIMED,
+                                identity.nodeId(),
+                                claim3.encoded(),
+                                identity)
+                        .encoded(), identity);
 
         requesterHandler = new McpProtocolHandler(sessionService, projectRoot, "antigravity", "inst-req-1");
         ownerHandler = new McpProtocolHandler(sessionService, projectRoot, "codex", "inst-owner-1");
@@ -147,13 +251,15 @@ class Slice4FailureScenariosTest {
                         ResourceSelector.pathExact("NewFeature.java")));
 
         String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
-                + projectRoot.toUri().toString().replace("\\", "/") + "\"}}";
+                + projectRoot.toUri()
+                .toString()
+                .replace("\\", "/") + "\"}}";
         requesterHandler.handleMessage(initReq);
         ownerHandler.handleMessage(initReq);
     }
 
     @Test
-    void testCompleteTaskBeforeValidationReturnsBlockedUnresolvedDependency() throws Exception {
+    void testCompleteTaskBeforeValidationReturnsBlockedUnresolvedDependency() {
         String descJson = "{\n" +
                 "  \"jsonrpc\": \"2.0\",\n" +
                 "  \"id\": 2,\n" +
@@ -215,7 +321,7 @@ class Slice4FailureScenariosTest {
                 "  }\n" +
                 "}";
         String descRes = requesterHandler.handleMessage(descJson);
-        String reqHandle = extractResultField(descRes, "capabilityRequestHandle");
+        String reqHandle = extractResultField(descRes);
 
         // 2. Owner revises contract
         String reviseJson = "{\n" +
@@ -226,7 +332,8 @@ class Slice4FailureScenariosTest {
                 "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"kind\": \"capability_response\",\n" +
-                "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"revise\", \"revision\": {\n" +
+                "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle
+                + "\", \"response\": \"revise\", \"revision\": {\n" +
                 "        \"inputs\": \"UUID id\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
                 "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n" +
@@ -305,7 +412,10 @@ class Slice4FailureScenariosTest {
                 "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"kind\": \"implementation_validation\",\n" +
-                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000001\", \"capabilityRequestHandle\": \"" + reqHandle + "\", \"implementationRevision\": 1, \"result\": \"revision_required\", \"reason\": \"Missing null check\"}\n" +
+                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000001\", \"capabilityRequestHandle\": \""
+                + reqHandle
+                + "\", \"implementationRevision\": 1, \"result\": \"revision_required\", \"reason\": \"Missing null check\"}\n"
+                +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -342,7 +452,8 @@ class Slice4FailureScenariosTest {
                 "    \"name\": \"respond_coordination\",\n" +
                 "    \"arguments\": {\n" +
                 "      \"kind\": \"implementation_validation\",\n" +
-                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000002\", \"capabilityRequestHandle\": \"" + reqHandle + "\", \"implementationRevision\": 2, \"result\": \"accepted\"}\n" +
+                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000002\", \"capabilityRequestHandle\": \""
+                + reqHandle + "\", \"implementationRevision\": 2, \"result\": \"accepted\"}\n" +
                 "    }\n" +
                 "  }\n" +
                 "}";
@@ -378,36 +489,5 @@ class Slice4FailureScenariosTest {
         assertNotNull(ownerCompRes);
         assertEquals("waiting", extractResponseStatus(ownerCompRes), ownerCompRes);
         assertEquals("integration_pending", extractResponseReason(ownerCompRes));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static String extractResultField(String jsonRpcRes, String field) {
-        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
-        Map<String, Object> result = (Map<String, Object>) map.get("result");
-        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.get(0).get("text");
-        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
-        Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
-        return innerResult != null ? (String) innerResult.get(field) : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static String extractResponseStatus(String jsonRpcRes) {
-        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
-        Map<String, Object> result = (Map<String, Object>) map.get("result");
-        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.get(0).get("text");
-        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
-        return (String) parsed.get("status");
-    }
-
-    @SuppressWarnings("unchecked")
-    private static String extractResponseReason(String jsonRpcRes) {
-        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
-        Map<String, Object> result = (Map<String, Object>) map.get("result");
-        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.get(0).get("text");
-        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
-        return (String) parsed.get("reason");
     }
 }

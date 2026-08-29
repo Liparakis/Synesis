@@ -1,7 +1,5 @@
-package org.synesis.cli.command.lifecycle;
+package org.synesis.cli.lifecycle;
 
-
-import org.synesis.cli.SynesisCli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.terminal.ConsoleTerminal;
 
@@ -29,13 +28,17 @@ public class RepairCommandTest {
 
         CliRuntime runtime = CliRuntime.defaults(terminal);
 
-        int exitCodeDry = SynesisCli.execute(new String[]{"repair", "--dry-run", "--project", tempDir.toString()}, runtime);
+        int exitCodeDry = SynesisCli.execute(new String[]{"repair", "--dry-run", "--project", tempDir.toString()},
+                runtime);
         assertEquals(0, exitCodeDry);
-        assertTrue(stdout.toString().contains("REPAIR_DRY_RUN=COMPLETED"));
+        assertTrue(stdout.toString()
+                .contains("REPAIR_DRY_RUN=COMPLETED"));
 
         stdout.reset();
-        int exitCodePrep = SynesisCli.execute(new String[]{"repair", "--prepare", "--project", tempDir.toString()}, runtime);
+        int exitCodePrep = SynesisCli.execute(new String[]{"repair", "--prepare", "--project", tempDir.toString()},
+                runtime);
         assertEquals(0, exitCodePrep);
-        assertTrue(stdout.toString().contains("REPAIR_RESULT=PLAN_PREPARED"));
+        assertTrue(stdout.toString()
+                .contains("REPAIR_RESULT=PLAN_PREPARED"));
     }
 }

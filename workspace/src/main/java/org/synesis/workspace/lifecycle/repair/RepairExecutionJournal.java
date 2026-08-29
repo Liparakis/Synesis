@@ -11,8 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * Append-only execution journal logging repair execution events under
@@ -21,42 +21,6 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * @since 1.0
  */
 public final class RepairExecutionJournal {
-
-    /**
-     * Immutable execution record.
-     *
-     * @param executionId          opaque execution ID
-     * @param planId               repair plan ID
-     * @param entryId              plan entry ID
-     * @param action               repair action
-     * @param targetPath           target path
-     * @param status               execution status state
-     * @param timestampEpochMillis timestamp
-     * @param details              explanation message
-     */
-    public record RepairExecutionRecord(
-            String executionId,
-            String planId,
-            String entryId,
-            String action,
-            String targetPath,
-            String status,
-            long timestampEpochMillis,
-            String details
-    ) {
-        /**
-         * Validates non-null field invariants.
-         */
-        public RepairExecutionRecord {
-            Objects.requireNonNull(executionId, "executionId");
-            Objects.requireNonNull(planId, "planId");
-            Objects.requireNonNull(entryId, "entryId");
-            Objects.requireNonNull(action, "action");
-            Objects.requireNonNull(targetPath, "targetPath");
-            Objects.requireNonNull(status, "status");
-            Objects.requireNonNull(details, "details");
-        }
-    }
 
     private final Path journalFile;
 
@@ -77,7 +41,8 @@ public final class RepairExecutionJournal {
         Objects.requireNonNull(executionId, "executionId");
 
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path journalDir = workspaceRoot.resolve("admin").resolve("repair-executions");
+        Path journalDir = workspaceRoot.resolve("admin")
+                .resolve("repair-executions");
         Files.createDirectories(journalDir);
         Path file = journalDir.resolve(executionId + ".jsonl");
 
@@ -120,6 +85,7 @@ public final class RepairExecutionJournal {
      * @return list of execution records
      * @throws IOException if reading fails
      */
+    @SuppressWarnings("unused")
     public synchronized List<RepairExecutionRecord> readAll() throws IOException {
         if (!Files.exists(journalFile)) {
             return List.of();
@@ -147,5 +113,42 @@ public final class RepairExecutionJournal {
         }
 
         return Collections.unmodifiableList(result);
+    }
+
+    /**
+     * Immutable execution record.
+     *
+     * @param executionId          opaque execution ID
+     * @param planId               repair plan ID
+     * @param entryId              plan entry ID
+     * @param action               repair action
+     * @param targetPath           target path
+     * @param status               execution status state
+     * @param timestampEpochMillis timestamp
+     * @param details              explanation message
+     */
+    public record RepairExecutionRecord(
+            String executionId,
+            String planId,
+            String entryId,
+            String action,
+            String targetPath,
+            String status,
+            long timestampEpochMillis,
+            String details
+    ) {
+
+        /**
+         * Validates non-null field invariants.
+         */
+        public RepairExecutionRecord {
+            Objects.requireNonNull(executionId, "executionId");
+            Objects.requireNonNull(planId, "planId");
+            Objects.requireNonNull(entryId, "entryId");
+            Objects.requireNonNull(action, "action");
+            Objects.requireNonNull(targetPath, "targetPath");
+            Objects.requireNonNull(status, "status");
+            Objects.requireNonNull(details, "details");
+        }
     }
 }

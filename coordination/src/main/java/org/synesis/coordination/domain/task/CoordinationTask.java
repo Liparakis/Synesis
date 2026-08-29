@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.task;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -23,6 +21,7 @@ import java.util.UUID;
  * @param creatorSupervisorId creator supervisor identity
  * @param creatorWorkerId     creator worker identity
  */
+@SuppressWarnings("DuplicatedCode")
 public record CoordinationTask(
         UUID taskId,
         UUID projectId,

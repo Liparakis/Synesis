@@ -28,22 +28,23 @@ final class ProcessCommandRunner {
     /**
      * Executes one process while merging and bounding its standard streams.
      *
-     * @param command complete process command
-     * @param directory process working directory
-     * @param environment environment overrides
-     * @param timeout maximum process lifetime
+     * @param command        complete process command
+     * @param directory      process working directory
+     * @param environment    environment overrides
+     * @param timeout        maximum process lifetime
      * @param maxOutputBytes maximum captured merged output
      * @return completed process result
      * @throws IOException if the process cannot start, is interrupted, or
-     *     exceeds the timeout
+     *                     exceeds the timeout
      */
     static Result execute(List<String> command, Path directory, Map<String, String> environment,
-                          Duration timeout, int maxOutputBytes) throws IOException {
+            Duration timeout, int maxOutputBytes) throws IOException {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(environment, "environment");
         Objects.requireNonNull(timeout, "timeout");
-        if (command.isEmpty() || command.stream().anyMatch(Objects::isNull)) {
+        if (command.isEmpty() || command.stream()
+                .anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("command must contain non-null arguments");
         }
         if (timeout.isZero() || timeout.isNegative()) {
@@ -56,29 +57,45 @@ final class ProcessCommandRunner {
         ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command))
                 .directory(directory.toFile())
                 .redirectErrorStream(true);
-        builder.environment().putAll(environment);
+        builder.environment()
+                .putAll(environment);
         Process process = startProcess(builder, command, directory, timeout);
-        process.getOutputStream().close();
+        process.getOutputStream()
+                .close();
         OutputCollector collector = new OutputCollector(process.getInputStream(), maxOutputBytes);
-        Thread reader = Thread.ofPlatform().daemon(true).name("synesis-process-output").start(collector);
+        Thread reader = Thread.ofPlatform()
+                .daemon(true)
+                .name("synesis-process-output")
+                .start(collector);
         FutureTask<Integer> wait = new FutureTask<>(process::waitFor);
-        Thread waiter = Thread.ofPlatform().daemon(true).name("synesis-process-wait").start(wait);
+        Thread waiter = Thread.ofPlatform()
+                .daemon(true)
+                .name("synesis-process-wait")
+                .start(wait);
         AtomicBoolean timedOut = new AtomicBoolean();
-        Thread watchdog = Thread.ofPlatform().daemon(true).name("synesis-process-watchdog").start(() -> {
-            try {
-                Thread.sleep(timeout.toMillis());
-                if (!wait.isDone()) {
-                    timedOut.set(true);
-                    terminateProcessTree(process);
-                }
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
-        });
+        Thread watchdog = Thread.ofPlatform()
+                .daemon(true)
+                .name("synesis-process-watchdog")
+                .start(() -> {
+                    try {
+                        Thread.sleep(timeout.toMillis());
+                        if (!wait.isDone()) {
+                            timedOut.set(true);
+                            terminateProcessTree(process);
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread()
+                                .interrupt();
+                    }
+                });
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         try {
             while (!wait.isDone() && System.currentTimeMillis() < deadline) {
-                Thread.sleep(25L);
+                java.util.concurrent.locks.LockSupport.parkNanos(
+                        java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(25L));
+                if (Thread.interrupted()) {
+                    throw new InterruptedException();
+                }
             }
             if (timedOut.get() || !wait.isDone()) {
                 wait.cancel(true);
@@ -93,7 +110,8 @@ final class ProcessCommandRunner {
             wait.cancel(true);
             terminateProcessTree(process);
             joinReaderUnbounded(reader, process);
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
             throw new IOException("Process interrupted: command=" + command
                     + ", directory=" + directory, interrupted);
         } catch (ExecutionException failure) {
@@ -112,7 +130,7 @@ final class ProcessCommandRunner {
     }
 
     private static Process startProcess(ProcessBuilder builder, List<String> command,
-                                        Path directory, Duration timeout) throws IOException {
+            Path directory, Duration timeout) throws IOException {
         AtomicBoolean timedOut = new AtomicBoolean();
         AtomicReference<Process> started = new AtomicReference<>();
         FutureTask<Process> launch = new FutureTask<>(() -> {
@@ -123,25 +141,36 @@ final class ProcessCommandRunner {
             }
             return process;
         });
-        Thread launcher = Thread.ofPlatform().daemon(true).name("synesis-process-launch").start(launch);
-        Thread watchdog = Thread.ofPlatform().daemon(true).name("synesis-process-launch-watchdog").start(() -> {
-            try {
-                Thread.sleep(timeout.toMillis());
-                if (!launch.isDone()) {
-                    timedOut.set(true);
-                    Process process = started.get();
-                    if (process != null) {
-                        terminateProcessTree(process);
+        Thread launcher = Thread.ofPlatform()
+                .daemon(true)
+                .name("synesis-process-launch")
+                .start(launch);
+        Thread watchdog = Thread.ofPlatform()
+                .daemon(true)
+                .name("synesis-process-launch-watchdog")
+                .start(() -> {
+                    try {
+                        Thread.sleep(timeout.toMillis());
+                        if (!launch.isDone()) {
+                            timedOut.set(true);
+                            Process process = started.get();
+                            if (process != null) {
+                                terminateProcessTree(process);
+                            }
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread()
+                                .interrupt();
                     }
-                }
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
-        });
+                });
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         try {
             while (!launch.isDone() && !timedOut.get() && System.currentTimeMillis() < deadline) {
-                Thread.sleep(25L);
+                java.util.concurrent.locks.LockSupport.parkNanos(
+                        java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(25L));
+                if (Thread.interrupted()) {
+                    throw new InterruptedException();
+                }
             }
             if (timedOut.get() || !launch.isDone()) {
                 timedOut.set(true);
@@ -160,7 +189,8 @@ final class ProcessCommandRunner {
             if (process != null) {
                 terminateProcessTree(process);
             }
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
             throw new IOException("Process launch interrupted: command=" + command
                     + ", directory=" + directory, interrupted);
         } catch (ExecutionException failure) {
@@ -183,17 +213,22 @@ final class ProcessCommandRunner {
             reader.join(Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos(deadline))));
             if (reader.isAlive()) {
                 terminateProcessTree(process);
-                process.getInputStream().close();
+                process.getInputStream()
+                        .close();
                 reader.join(250L);
             }
             if (reader.isAlive()) {
                 throw new IOException("Process output reader did not terminate: "
-                        + process.info().command().orElse("unknown process"));
+                        + process.info()
+                        .command()
+                        .orElse("unknown process"));
             }
         } catch (InterruptedException interrupted) {
             terminateProcessTree(process);
-            process.getInputStream().close();
-            Thread.currentThread().interrupt();
+            process.getInputStream()
+                    .close();
+            Thread.currentThread()
+                    .interrupt();
             throw new IOException("Interrupted while collecting process output", interrupted);
         }
     }
@@ -202,11 +237,13 @@ final class ProcessCommandRunner {
         try {
             reader.join(250L);
             if (reader.isAlive()) {
-                process.getInputStream().close();
+                process.getInputStream()
+                        .close();
                 reader.join(250L);
             }
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
             throw new IOException("Interrupted while collecting timed-out process output", interrupted);
         }
     }
@@ -215,33 +252,39 @@ final class ProcessCommandRunner {
         try {
             reader.join(250L);
             if (reader.isAlive()) {
-                process.getInputStream().close();
+                process.getInputStream()
+                        .close();
                 reader.join(250L);
             }
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
         } catch (IOException ignored) {
             // The caller is already reporting the interruption.
         }
     }
 
     private static CommandTimeoutException timeout(List<String> command, Path directory,
-                                                    Duration timeout, String output) {
+            Duration timeout, String output) {
         return new CommandTimeoutException("Process timed out after " + timeout + ": command="
                 + command + ", directory=" + directory + ", output=" + output,
                 command, directory, output);
     }
 
     private static void terminateProcessTree(Process process) {
-        List<ProcessHandle> descendants = process.toHandle().descendants().toList();
+        List<ProcessHandle> descendants = process.toHandle()
+                .descendants()
+                .toList();
         for (int index = descendants.size() - 1; index >= 0; index--) {
-            descendants.get(index).destroy();
+            descendants.get(index)
+                    .destroy();
         }
         process.destroy();
         try {
             Thread.sleep(100L);
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
         }
         for (int index = descendants.size() - 1; index >= 0; index--) {
             ProcessHandle descendant = descendants.get(index);
@@ -254,12 +297,17 @@ final class ProcessCommandRunner {
         }
     }
 
-    /** Result of a completed process. */
+    /**
+     * Result of a completed process.
+     */
+    @SuppressWarnings("ClassCanBeRecord")
     static final class Result {
+
         private final int exitCode;
         private final String output;
         private final byte[] bytes;
 
+        @SuppressWarnings("unused")
         Result(int exitCode, String output) {
             this(exitCode, output, output.getBytes(StandardCharsets.UTF_8));
         }
@@ -283,38 +331,51 @@ final class ProcessCommandRunner {
         }
     }
 
-    /** Describes a process that exceeded its bounded lifetime. */
+    /**
+     * Describes a process that exceeded its bounded lifetime.
+     */
     static final class CommandTimeoutException extends IOException {
+
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
         private final transient List<String> command;
         private final transient Path directory;
         private final transient String output;
 
         private CommandTimeoutException(String message, List<String> command, Path directory,
-                                        String output) {
+                String output) {
             super(message);
             this.command = List.copyOf(command);
             this.directory = directory;
             this.output = output;
         }
 
-        /** @return the exact command that timed out */
+        /**
+         * @return the exact command that timed out
+         */
+        @SuppressWarnings("unused")
         List<String> command() {
             return command;
         }
 
-        /** @return the process working directory */
+        /**
+         * @return the process working directory
+         */
+        @SuppressWarnings("unused")
         Path directory() {
             return directory;
         }
 
-        /** @return bounded merged process output */
+        /**
+         * @return bounded merged process output
+         */
         String output() {
             return output;
         }
     }
 
     private static final class OutputCollector implements Runnable {
+
         private final InputStream input;
         private final int limit;
         private final ByteArrayOutputStream output = new ByteArrayOutputStream();

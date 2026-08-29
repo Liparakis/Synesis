@@ -39,7 +39,7 @@ public final class NodeIdentity {
     private NodeIdentity(KeyPair keyPair) {
         this.publicKey = Objects.requireNonNull(keyPair.getPublic(), "public key");
         this.privateKey = Objects.requireNonNull(keyPair.getPrivate(), "private key");
-        if (!isEd25519(publicKey.getAlgorithm()) || !isEd25519(privateKey.getAlgorithm())) {
+        if (isUnsupportedAlgorithm(publicKey.getAlgorithm()) || isUnsupportedAlgorithm(privateKey.getAlgorithm())) {
             throw new IllegalArgumentException("Only Ed25519 key pairs are supported");
         }
         this.publicKeyEncoded = publicKey.getEncoded()
@@ -121,8 +121,8 @@ public final class NodeIdentity {
         }
     }
 
-    private static boolean isEd25519(String algorithm) {
-        return ALGORITHM.equals(algorithm) || "EdDSA".equals(algorithm);
+    private static boolean isUnsupportedAlgorithm(String algorithm) {
+        return !ALGORITHM.equals(algorithm) && !"EdDSA".equals(algorithm);
     }
 
     /**

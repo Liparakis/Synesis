@@ -23,7 +23,7 @@ projected lifecycle action failed and no new production defect was proven.
   `tools_list_received` for both connections.
 - Prompts described only the visible coding responsibilities: Agent A
   implemented `TodoList.complete` in `todo.py`; Agent B added one regression
-test in `test_todo.py`. No lifecycle instructions, manual message passing, or post-startup
+  test in `test_todo.py`. No lifecycle instructions, manual message passing, or post-startup
   file assignment was supplied.
 
 The generated project contract already states that a ready agent must follow
@@ -43,13 +43,13 @@ remain unresolved. The sessions nevertheless ended at valid wait boundaries.
   `ae9be337-cea2-3f76-9d9b-70882252cc28`, claim `PATH_EXACT:test_todo.py`,
   epoch 1. Final state: `COMPLETED`.
 - REVIEW requests, both `ACCEPTED`:
-  - A → B: `590cbda5-7f0d-49fc-a878-37575d0f0fd8`
-  - B → A: `91dfd886-af80-4649-909b-27b8fcf2733b`
+    - A → B: `590cbda5-7f0d-49fc-a878-37575d0f0fd8`
+    - B → A: `91dfd886-af80-4649-909b-27b8fcf2733b`
 - REVIEW grants:
-  - `f2e6b918-06f3-317c-9c3a-15b3b6cdc723`, target A, target intent B,
-    consumed once by A.
-  - `939017b6-16be-377e-9ff2-915dc002ffc6`, target B, target intent A,
-    epoch 1, still pending.
+    - `f2e6b918-06f3-317c-9c3a-15b3b6cdc723`, target A, target intent B,
+      consumed once by A.
+    - `939017b6-16be-377e-9ff2-915dc002ffc6`, target B, target intent A,
+      epoch 1, still pending.
 
 ## Projection and action trace
 

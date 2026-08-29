@@ -9,19 +9,27 @@ import java.util.HexFormat;
 import java.util.Objects;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
-/** Verified physical worktree identity used as the only command exclusion key.
- * @param locator versioned SHA-256 locator over the exact real path
+/**
+ * Verified physical worktree identity used as the only command exclusion key.
+ *
+ * @param locator  versioned SHA-256 locator over the exact real path
  * @param realPath verified filesystem real path
  */
 public record PhysicalWorktreeIdentity(String locator, Path realPath) {
 
-    /** Validates and normalizes the identity values without Unicode or case folding. */
+    /**
+     * Validates and normalizes the identity values without Unicode or case folding.
+     */
     public PhysicalWorktreeIdentity {
         Objects.requireNonNull(locator, "locator");
-        realPath = Objects.requireNonNull(realPath, "realPath").toAbsolutePath().normalize();
+        realPath = Objects.requireNonNull(realPath, "realPath")
+                .toAbsolutePath()
+                .normalize();
     }
 
-    /** Captures a versioned locator from the exact filesystem real path.
+    /**
+     * Captures a versioned locator from the exact filesystem real path.
+     *
      * @param worktree candidate worktree directory
      * @return verified physical identity
      * @throws IOException if the path cannot be resolved as a directory
@@ -34,18 +42,21 @@ public record PhysicalWorktreeIdentity(String locator, Path realPath) {
         }
         try {
             String exact = real.toString();
-            String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(exact.getBytes(StandardCharsets.UTF_8)));
+            String digest = HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(exact.getBytes(StandardCharsets.UTF_8)));
             return new PhysicalWorktreeIdentity("v1-" + digest, real);
         } catch (Exception failure) {
             throw new IOException("WORKTREE_IDENTITY_HASH_FAILED", failure);
         }
     }
 
-    /** Captures identity only after the existing lifecycle path verifier approves it.
+    /**
+     * Captures identity only after the existing lifecycle path verifier approves it.
+     *
      * @param controlRoot control checkout used by the lifecycle verifier
-     * @param worktree candidate assigned worktree
-     * @param verifier existing lifecycle path verifier
+     * @param worktree    candidate assigned worktree
+     * @param verifier    existing lifecycle path verifier
      * @return verified physical identity
      * @throws IOException if verification fails
      */
@@ -59,11 +70,14 @@ public record PhysicalWorktreeIdentity(String locator, Path realPath) {
         return capture(result.canonical() == null ? result.normalized() : result.canonical());
     }
 
-    /** Compares complete physical identity using the filesystem's same-file check.
+    /**
+     * Compares complete physical identity using the filesystem's same-file check.
+     *
      * @param other identity to compare
      * @return whether both paths identify the same filesystem object
      * @throws IOException if filesystem identity cannot be checked
      */
+    @SuppressWarnings("unused")
     public boolean isSameFile(PhysicalWorktreeIdentity other) throws IOException {
         Objects.requireNonNull(other, "other");
         return Files.isSameFile(realPath, other.realPath);

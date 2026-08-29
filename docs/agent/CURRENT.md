@@ -1,5 +1,26 @@
 # Current Task
 
+## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
+
+- Task ID: MAINT-001
+- Status: ACTIVE.
+- Scope: behavior-preserving cleanup of current IntelliJ file-inspection
+  findings; SYN-041 remains closed and its terminal-session semantics are not
+  being broadened.
+- Baseline: 1,072 findings across 576 Java files: 767 warnings and 305 weak
+  warnings. Latest result: 783 findings across 576 Java files, comprising
+  484 warnings and 299 weak warnings; no analyzer request failed.
+- Acceptance: bounded fixes are re-analyzed and tested; remaining findings are
+  either resolved or explicitly classified as intentional/design guidance.
+- Existing uncommitted work is preserved. No commit, push, release, or
+  SYN-042 creation is part of this task.
+
+## Immediate next action
+
+Continue with a separately reviewed high-confidence warning batch and preserve
+intentional lifecycle, polling, reflection, and public-API behavior. The latest
+full pass is recorded in checkpoint CP-0573.
+
 ## SYN-041 final real Codex closure acceptance — 2026-08-29
 
 - Task ID: SYN-041
@@ -1391,7 +1412,8 @@ accepted lane changes and `pytest` passes 4/4.
 
 ## Immediate next action
 
-Reproduce the reviewer snapshot-read recovery transition in a deterministic MCP fixture and capture binding, worktree, control revision, snapshot, and lease state before changing production code.
+Reproduce the reviewer snapshot-read recovery transition in a deterministic MCP fixture and capture binding, worktree,
+control revision, snapshot, and lease state before changing production code.
 
 ## Work completed
 

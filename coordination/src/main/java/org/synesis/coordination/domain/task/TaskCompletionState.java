@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.task;
 
 
-
-
 import java.util.Locale;
 import java.util.Objects;
 
@@ -34,7 +32,9 @@ public enum TaskCompletionState {
      */
     COMPLETION_REQUESTED("completion_requested"),
 
-    /** Completion preparation is durable and the lane is mutation-fenced. */
+    /**
+     * Completion preparation is durable and the lane is mutation-fenced.
+     */
     COMPLETION_PREPARED("completion_prepared"),
 
     /**
@@ -57,22 +57,34 @@ public enum TaskCompletionState {
      */
     INTEGRATING("integrating"),
 
-    /** Published snapshot is eligible for integration. */
+    /**
+     * Published snapshot is eligible for integration.
+     */
     INTEGRATION_PENDING("integration_pending"),
 
-    /** Immutable snapshot is published and awaits its exact review decision. */
+    /**
+     * Immutable snapshot is published and awaits its exact review decision.
+     */
     REVIEW_PENDING("review_pending"),
 
-    /** Immutable snapshot was rejected and is permanently ineligible for integration. */
+    /**
+     * Immutable snapshot was rejected and is permanently ineligible for integration.
+     */
     REVIEW_REJECTED("review_rejected"),
 
-    /** Immutable snapshot received the exact durable acceptance required for integration. */
+    /**
+     * Immutable snapshot received the exact durable acceptance required for integration.
+     */
     REVIEW_ACCEPTED("review_accepted"),
 
-    /** Immutable candidate is structurally invalid and awaits explicit recovery. */
+    /**
+     * Immutable candidate is structurally invalid and awaits explicit recovery.
+     */
     INTEGRATION_BLOCKED("integration_blocked"),
 
-    /** Valid immutable candidate has been materialized into a repair lane. */
+    /**
+     * Valid immutable candidate has been materialized into a repair lane.
+     */
     REPAIR_REQUIRED("repair_required"),
 
     /**
@@ -102,15 +114,6 @@ public enum TaskCompletionState {
     }
 
     /**
-     * Returns the stable lowercase JSON representation.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
-    }
-
-    /**
      * Parses a string into a {@link TaskCompletionState}.
      *
      * @param input string representation
@@ -119,12 +122,22 @@ public enum TaskCompletionState {
      */
     public static TaskCompletionState fromValue(String input) {
         Objects.requireNonNull(input, "input state value cannot be null");
-        String normalized = input.trim().toLowerCase(Locale.ROOT);
+        String normalized = input.trim()
+                .toLowerCase(Locale.ROOT);
         for (TaskCompletionState state : values()) {
             if (state.value.equals(normalized)) {
                 return state;
             }
         }
         throw new IllegalArgumentException("Unknown task completion state: " + input);
+    }
+
+    /**
+     * Returns the stable lowercase JSON representation.
+     *
+     * @return lowercase string representation
+     */
+    public String value() {
+        return value;
     }
 }

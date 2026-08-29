@@ -22,7 +22,9 @@ import java.util.regex.Pattern;
  */
 public final class CodexEvidenceRetention {
 
-    /** Maximum unreferenced closed generations retained for one binding. */
+    /**
+     * Maximum unreferenced closed generations retained for one binding.
+     */
     public static final int MAX_UNREFERENCED_GENERATIONS = 8;
     private static final Pattern GENERATION = Pattern.compile("generation-(\\d+)\\.jsonl");
 
@@ -31,29 +33,11 @@ public final class CodexEvidenceRetention {
     }
 
     /**
-     * Result of one deterministic cleanup attempt.
-     *
-     * @param deleted generations deleted
-     * @param retained generations retained
-     * @param failures delete or discovery failures
-     */
-    public record CleanupResult(int deleted, int retained, int failures) {
-        /**
-         * Returns whether cleanup completed without delete failures.
-         *
-         * @return success state
-         */
-        public boolean successful() {
-            return failures == 0;
-        }
-    }
-
-    /**
      * Cleans old unreferenced generation journals after manifests are durable.
      *
      * @param evidenceDirectory binding evidence directory
-     * @param activeGeneration generation referenced by the active checkpoint
-     * @param projectRoot project root used to find durable references
+     * @param activeGeneration  generation referenced by the active checkpoint
+     * @param projectRoot       project root used to find durable references
      * @return bounded cleanup result
      */
     public static CleanupResult cleanup(Path evidenceDirectory, long activeGeneration, Path projectRoot) {
@@ -66,8 +50,11 @@ public final class CodexEvidenceRetention {
             List<Path> files;
             try (var stream = Files.list(evidenceDirectory)) {
                 files = stream.filter(Files::isRegularFile)
-                        .filter(path -> GENERATION.matcher(path.getFileName().toString()).matches())
-                        .sorted(Comparator.comparingLong(CodexEvidenceRetention::generation).reversed())
+                        .filter(path -> GENERATION.matcher(path.getFileName()
+                                        .toString())
+                                .matches())
+                        .sorted(Comparator.comparingLong(CodexEvidenceRetention::generation)
+                                .reversed())
                         .toList();
             }
             int unreferenced = 0;
@@ -78,8 +65,14 @@ public final class CodexEvidenceRetention {
                 long generation = generation(journal);
                 Path manifest = journal.resolveSibling(journal.getFileName() + ".manifest.json");
                 if (!Files.isRegularFile(manifest) || generation == activeGeneration
-                        || referenced(projectRoot, evidenceDirectory, journal.getFileName().toString())
-                        || referenced(projectRoot, evidenceDirectory, manifest.getFileName().toString())) {
+                        || referenced(projectRoot,
+                        evidenceDirectory,
+                        journal.getFileName()
+                                .toString())
+                        || referenced(projectRoot,
+                        evidenceDirectory,
+                        manifest.getFileName()
+                                .toString())) {
                     retained++;
                     continue;
                 }
@@ -102,15 +95,19 @@ public final class CodexEvidenceRetention {
     }
 
     private static long generation(Path path) {
-        Matcher matcher = GENERATION.matcher(path.getFileName().toString());
+        Matcher matcher = GENERATION.matcher(path.getFileName()
+                .toString());
         return matcher.matches() ? Long.parseLong(matcher.group(1)) : Long.MIN_VALUE;
     }
 
     private static boolean referenced(Path root, Path evidenceDirectory, String fileName) {
         try (var stream = Files.walk(root)) {
-            Path evidence = evidenceDirectory.toAbsolutePath().normalize();
+            Path evidence = evidenceDirectory.toAbsolutePath()
+                    .normalize();
             return stream.filter(Files::isRegularFile)
-                    .filter(path -> !path.toAbsolutePath().normalize().startsWith(evidence))
+                    .filter(path -> !path.toAbsolutePath()
+                            .normalize()
+                            .startsWith(evidence))
                     .anyMatch(path -> contains(path, fileName));
         } catch (IOException failure) {
             return true;
@@ -122,9 +119,29 @@ public final class CodexEvidenceRetention {
             if (Files.size(path) > 1_048_576L) {
                 return false;
             }
-            return Files.readString(path, StandardCharsets.UTF_8).contains(value);
+            return Files.readString(path, StandardCharsets.UTF_8)
+                    .contains(value);
         } catch (IOException | RuntimeException failure) {
             return true;
+        }
+    }
+
+    /**
+     * Result of one deterministic cleanup attempt.
+     *
+     * @param deleted  generations deleted
+     * @param retained generations retained
+     * @param failures delete or discovery failures
+     */
+    public record CleanupResult(int deleted, int retained, int failures) {
+
+        /**
+         * Returns whether cleanup completed without delete failures.
+         *
+         * @return success state
+         */
+        public boolean successful() {
+            return failures == 0;
         }
     }
 }

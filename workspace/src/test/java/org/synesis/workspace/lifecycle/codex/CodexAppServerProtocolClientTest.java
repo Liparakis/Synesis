@@ -2,6 +2,7 @@ package org.synesis.workspace.lifecycle.codex;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -15,15 +16,27 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Deterministic request-correlation and late-response fixtures. */
+/**
+ * Deterministic request-correlation and late-response fixtures.
+ */
 class CodexAppServerProtocolClientTest {
 
     @TempDir
     Path temp;
+
+    private static void assertThrowsTimeout(CompletableFuture<Void> call) throws Exception {
+        try {
+            call.get(2, TimeUnit.SECONDS);
+            throw new AssertionError("request did not time out");
+        } catch (ExecutionException expected) {
+            assertInstanceOf(CompletionTimeout.class, expected.getCause());
+        }
+    }
 
     @Test
     void lateResponseAfterTimeoutIsNotGenerationFailure() throws Exception {
@@ -34,8 +47,11 @@ class CodexAppServerProtocolClientTest {
             fixture.respond(id);
             Thread.sleep(50L);
             assertFalse(fixture.client.failed());
-            assertTrue(fixture.client.tombstones().stream().anyMatch(item -> item.requestId().equals(id)
-                    && item.responseArrived()));
+            assertTrue(fixture.client.tombstones()
+                    .stream()
+                    .anyMatch(item -> item.requestId()
+                            .equals(id)
+                            && item.responseArrived()));
         }
     }
 
@@ -46,10 +62,12 @@ class CodexAppServerProtocolClientTest {
                     .getBytes(StandardCharsets.UTF_8));
             fixture.stdout.flush();
             for (int i = 0; i < 20 && !fixture.client.failed(); i++) {
-                Thread.sleep(10L);
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L));
             }
             assertTrue(fixture.client.failed());
-            assertTrue(fixture.failure.get().getMessage().contains("codex_request_correlation_failed"));
+            assertTrue(fixture.failure.get()
+                    .getMessage()
+                    .contains("codex_request_correlation_failed"));
         }
     }
 
@@ -62,10 +80,12 @@ class CodexAppServerProtocolClientTest {
             call.get(2, TimeUnit.SECONDS);
             fixture.respond(id);
             for (int i = 0; i < 20 && !fixture.client.failed(); i++) {
-                Thread.sleep(10L);
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L));
             }
             assertTrue(fixture.client.failed());
-            assertTrue(fixture.failure.get().getMessage().contains("duplicate_response_id"));
+            assertTrue(fixture.failure.get()
+                    .getMessage()
+                    .contains("duplicate_response_id"));
         }
     }
 
@@ -88,8 +108,11 @@ class CodexAppServerProtocolClientTest {
             fixture.respond(id);
             Thread.sleep(50L);
             assertFalse(fixture.client.failed());
-            assertTrue(fixture.client.tombstones().stream().anyMatch(item -> item.requestId().equals(id)
-                    && item.responseArrived()));
+            assertTrue(fixture.client.tombstones()
+                    .stream()
+                    .anyMatch(item -> item.requestId()
+                            .equals(id)
+                            && item.responseArrived()));
         }
     }
 
@@ -111,16 +134,28 @@ class CodexAppServerProtocolClientTest {
         }
     }
 
-    private static void assertThrowsTimeout(CompletableFuture<Void> call) throws Exception {
-        try {
-            call.get(2, TimeUnit.SECONDS);
-            throw new AssertionError("request did not time out");
-        } catch (ExecutionException expected) {
-            assertTrue(expected.getCause() instanceof CompletionTimeout);
+    private static final class CompletionTimeout extends RuntimeException {
+
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        private CompletionTimeout(TimeoutException cause) {
+            super(cause);
         }
     }
 
-    private final class Fixture implements AutoCloseable {
+    private static final class CompletionFailure extends RuntimeException {
+
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        private CompletionFailure(Exception cause) {
+            super(cause);
+        }
+    }
+
+    private static final class Fixture implements AutoCloseable {
+
         private final PipedOutputStream stdout = new PipedOutputStream();
         private final PipedInputStream clientStdout;
         private final ByteArrayOutputStream stdin = new ByteArrayOutputStream();
@@ -185,15 +220,5 @@ class CodexAppServerProtocolClientTest {
             stdout.close();
             clientStdout.close();
         }
-    }
-
-    private static final class CompletionTimeout extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-        private CompletionTimeout(TimeoutException cause) { super(cause); }
-    }
-
-    private static final class CompletionFailure extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-        private CompletionFailure(Exception cause) { super(cause); }
     }
 }

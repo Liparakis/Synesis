@@ -6,7 +6,9 @@ package org.synesis.workspace.lifecycle.reconciliation;
  * @since 1.0
  */
 public enum ReconciliationAction {
-    /** Fences a dead session without inferring abandonment or releasing claims. */
+    /**
+     * Fences a dead session without inferring abandonment or releasing claims.
+     */
     MARK_SESSION_SUSPENDED,
 
     /**
@@ -14,7 +16,9 @@ public enum ReconciliationAction {
      */
     RELEASE_SUSPENDED_OWNERSHIP,
 
-    /** Prepares an immutable recovery snapshot while retaining suspended claims. */
+    /**
+     * Prepares an immutable recovery snapshot while retaining suspended claims.
+     */
     HOLD_SUSPENDED_RECOVERY,
 
     /**

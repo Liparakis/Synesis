@@ -1,7 +1,5 @@
 package org.synesis.workspace.application.workspace;
 
-import org.synesis.workspace.application.ProjectApplicationService;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,6 +13,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentWorkspaceGuidance;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.infrastructure.filesystem.TextFileDocument;
 import org.synesis.workspace.project.ProjectPathResolver;
@@ -27,6 +26,7 @@ import org.synesis.workspace.project.ProjectPathResolver;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class WorkspaceReadService {
 
     private final ProjectApplicationService projectService;
@@ -42,34 +42,72 @@ public final class WorkspaceReadService {
         this.reviewSnapshotAccessService = new ReviewSnapshotAccessService();
     }
 
-    /**
-     * Request parameters for reading a repository file.
-     *
-     * @param controlRoot          canonical control project root path
-     * @param provider             stable provider name
-     * @param connectionInstanceId unique process connection instance ID
-     * @param relativePath         repository-relative file path
-     * @param startLine            1-based starting line number (optional)
-     * @param endLine              1-based ending line number (optional)
-     * @param maxBytes             maximum UTF-8 bytes to return (optional)
-     */
-    public record ReadRequest(
-            Path controlRoot,
-            String provider,
-            String connectionInstanceId,
-            String relativePath,
-            Integer startLine,
-            Integer endLine,
-            Integer maxBytes
-    ) {
-        /**
-         * Validates request parameters.
-         */
-        public ReadRequest {
-            Objects.requireNonNull(controlRoot, "controlRoot");
-            Objects.requireNonNull(provider, "provider");
-            Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+    private static boolean isInvalidOrProtectedPath(String path) {
+        if (path == null || path.isBlank()) {
+            return true;
         }
+        try {
+            if (Path.of(path)
+                    .isAbsolute() || path.contains("..")) {
+                return true;
+            }
+        } catch (RuntimeException invalidPath) {
+            return true;
+        }
+        String normalized = path.replace('\\', '/')
+                .toLowerCase(java.util.Locale.ROOT);
+        return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/")
+                || normalized.startsWith(".agents/") || normalized.startsWith(".git/")
+                || normalized.equals(".synesis") || normalized.equals(".codex")
+                || normalized.equals(".agents") || normalized.equals(".git");
+    }
+
+    private static void addReviewMetadata(Map<String, Object> result,
+            ReviewSnapshotAccessService.Access reviewAccess) {
+        if (reviewAccess == null) {
+            return;
+        }
+        result.put("workspace", "immutable_review_snapshot");
+        result.put("reviewGrantId",
+                reviewAccess.grant()
+                        .grantId()
+                        .toString());
+        result.put("reviewSnapshotId",
+                reviewAccess.snapshot()
+                        .snapshotId());
+        result.put("reviewCommitSha",
+                reviewAccess.snapshot()
+                        .commitSha());
+    }
+
+    private static AgentResponse workspaceMismatch(Path controlRoot, Path assignedWorktree) {
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_MISMATCH, null,
+                new AgentWorkspaceGuidance(controlRoot.toString(), assignedWorktree.toString(),
+                        "The target exists in the control checkout, not this assigned worktree. "
+                                + "Stop native mutations and relaunch the provider from assignedWorktree."));
+    }
+
+    private static boolean isBinary(byte[] bytes) {
+        int checkLen = Math.min(bytes.length, 8192);
+        for (int i = 0; i < checkLen; i++) {
+            byte b = bytes[i];
+            if (b == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String truncateUtf8(String text, int maxBytes) {
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length <= maxBytes) {
+            return text;
+        }
+        int end = maxBytes;
+        while (end > 0 && (bytes[end] & 0xC0) == 0x80) {
+            end--;
+        }
+        return new String(bytes, 0, end, StandardCharsets.UTF_8);
     }
 
     /**
@@ -79,14 +117,20 @@ public final class WorkspaceReadService {
      * @return concise agent response
      */
     public AgentResponse readFile(ReadRequest request) {
-        if (request == null || request.relativePath() == null || request.relativePath().isBlank()) {
+        if (request == null || request.relativePath() == null || request.relativePath()
+                .isBlank()) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
         // 1. Session & Worktree Verification
-        Path root = request.controlRoot().toAbsolutePath().normalize();
+        Path root = request.controlRoot()
+                .toAbsolutePath()
+                .normalize();
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                    AgentReason.WORKSPACE_NOT_READY,
+                    AgentNextAction.ENSURE_SESSION,
+                    null);
         }
 
         String rawPath = request.relativePath();
@@ -117,7 +161,10 @@ public final class WorkspaceReadService {
                 assignedWorktree = readiness.worktree();
             }
         } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                    AgentReason.WORKSPACE_NOT_READY,
+                    AgentNextAction.ENSURE_SESSION,
+                    null);
         }
 
         // 2. Relative Path & Traversal Validation
@@ -133,7 +180,9 @@ public final class WorkspaceReadService {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
-        Path targetFile = assignedWorktree.resolve(resolvedRelative).toAbsolutePath().normalize();
+        Path targetFile = assignedWorktree.resolve(resolvedRelative)
+                .toAbsolutePath()
+                .normalize();
         if (!targetFile.startsWith(assignedWorktree)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
@@ -163,7 +212,8 @@ public final class WorkspaceReadService {
             if (!Files.exists(targetFile) || !Files.isRegularFile(targetFile)) {
                 return AgentResponse.blocked(AgentReason.INVALID_PATH);
             }
-            if (!targetFile.toRealPath().startsWith(canonicalAssigned)) {
+            if (!targetFile.toRealPath()
+                    .startsWith(canonicalAssigned)) {
                 return AgentResponse.blocked(AgentReason.INVALID_PATH);
             }
         } catch (IOException ex) {
@@ -190,7 +240,8 @@ public final class WorkspaceReadService {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
         String fullContent = document.logicalText();
-        List<String> lines = fullContent.lines().toList();
+        List<String> lines = fullContent.lines()
+                .toList();
 
         int start = (request.startLine() == null || request.startLine() < 1) ? 1 : request.startLine();
         if (start > lines.size() && !lines.isEmpty()) {
@@ -215,12 +266,14 @@ public final class WorkspaceReadService {
         } else {
             StringBuilder sb = new StringBuilder();
             for (int i = start - 1; i < end && i < lines.size(); i++) {
-                sb.append(lines.get(i)).append("\n");
+                sb.append(lines.get(i))
+                        .append("\n");
             }
             slicedContent = sb.toString();
         }
 
-        int requestedMax = (request.maxBytes() == null || request.maxBytes() <= 0) ? 65536 : Math.min(request.maxBytes(), 65536);
+        int requestedMax =
+                (request.maxBytes() == null || request.maxBytes() <= 0) ? 65536 : Math.min(request.maxBytes(), 65536);
         byte[] slicedBytes = slicedContent.getBytes(StandardCharsets.UTF_8);
 
         boolean truncated = lineSliced || (slicedBytes.length > requestedMax);
@@ -241,71 +294,34 @@ public final class WorkspaceReadService {
         return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
     }
 
-    private static boolean isInvalidOrProtectedPath(String path) {
-        if (path == null || path.isBlank()) {
-            return true;
-        }
-        try {
-            if (Path.of(path).isAbsolute() || path.contains("..")) {
-                return true;
-            }
-        } catch (RuntimeException invalidPath) {
-            return true;
-        }
-        String normalized = path.replace('\\', '/').toLowerCase(java.util.Locale.ROOT);
-        return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/")
-                || normalized.startsWith(".agents/") || normalized.startsWith(".git/")
-                || normalized.equals(".synesis") || normalized.equals(".codex")
-                || normalized.equals(".agents") || normalized.equals(".git");
-    }
+    /**
+     * Request parameters for reading a repository file.
+     *
+     * @param controlRoot          canonical control project root path
+     * @param provider             stable provider name
+     * @param connectionInstanceId unique process connection instance ID
+     * @param relativePath         repository-relative file path
+     * @param startLine            1-based starting line number (optional)
+     * @param endLine              1-based ending line number (optional)
+     * @param maxBytes             maximum UTF-8 bytes to return (optional)
+     */
+    public record ReadRequest(
+            Path controlRoot,
+            String provider,
+            String connectionInstanceId,
+            String relativePath,
+            Integer startLine,
+            Integer endLine,
+            Integer maxBytes
+    ) {
 
-    private static void addReviewMetadata(Map<String, Object> result,
-            ReviewSnapshotAccessService.Access reviewAccess) {
-        if (reviewAccess == null) {
-            return;
+        /**
+         * Validates request parameters.
+         */
+        public ReadRequest {
+            Objects.requireNonNull(controlRoot, "controlRoot");
+            Objects.requireNonNull(provider, "provider");
+            Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         }
-        result.put("workspace", "immutable_review_snapshot");
-        result.put("reviewGrantId", reviewAccess.grant().grantId().toString());
-        result.put("reviewSnapshotId", reviewAccess.snapshot().snapshotId());
-        result.put("reviewCommitSha", reviewAccess.snapshot().commitSha());
-    }
-
-    private static AgentResponse workspaceMismatch(Path controlRoot, Path assignedWorktree) {
-        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_MISMATCH, null,
-                new AgentWorkspaceGuidance(controlRoot.toString(), assignedWorktree.toString(),
-                        "The target exists in the control checkout, not this assigned worktree. "
-                                + "Stop native mutations and relaunch the provider from assignedWorktree."));
-    }
-
-    private static String computeSha256Hex(byte[] bytes) {
-        try {
-            return java.util.HexFormat.of().formatHex(
-                    java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (Exception ex) {
-            return "";
-        }
-    }
-
-    private static boolean isBinary(byte[] bytes) {
-        int checkLen = Math.min(bytes.length, 8192);
-        for (int i = 0; i < checkLen; i++) {
-            byte b = bytes[i];
-            if (b == 0) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String truncateUtf8(String text, int maxBytes) {
-        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length <= maxBytes) {
-            return text;
-        }
-        int end = maxBytes;
-        while (end > 0 && (bytes[end] & 0xC0) == 0x80) {
-            end--;
-        }
-        return new String(bytes, 0, end, StandardCharsets.UTF_8);
     }
 }

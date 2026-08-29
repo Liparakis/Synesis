@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.ownership;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -23,6 +21,7 @@ import java.util.UUID;
  * @param protectedScopes   protected scope patterns
  * @param intentVersion     ownership intent version
  */
+@SuppressWarnings("DuplicatedCode")
 public record OwnershipClaim(UUID taskId, String capability, String ownerNodeId, String ownerSupervisorId,
                              List<String> protectedScopes, long intentVersion) {
 

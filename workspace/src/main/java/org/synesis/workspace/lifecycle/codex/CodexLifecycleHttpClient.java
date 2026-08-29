@@ -5,11 +5,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,7 +29,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  */
 public final class CodexLifecycleHttpClient {
 
-    /** Maximum bounded response body. */
+    /**
+     * Maximum bounded response body.
+     */
     public static final int MAX_RESPONSE_BYTES = 64 * 1024;
     private final URI endpoint;
     private final HttpClient client;
@@ -47,7 +49,9 @@ public final class CodexLifecycleHttpClient {
                 || "127.0.0.1".equals(endpoint.getHost()) || "::1".equals(endpoint.getHost()))) {
             throw new IllegalArgumentException("Codex lifecycle endpoint must be loopback HTTP");
         }
-        this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        this.client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
     }
 
     /**
@@ -55,18 +59,19 @@ public final class CodexLifecycleHttpClient {
      *
      * @param envelope signed immutable request
      * @return bounded owner response
-     * @throws IOException when transport or owner rejects the request
+     * @throws IOException          when transport or owner rejects the request
      * @throws InterruptedException when the caller is interrupted
      */
     public Response submit(LifecycleControlRequestEnvelope.SignedEnvelope envelope)
             throws IOException, InterruptedException {
         Objects.requireNonNull(envelope, "envelope");
-        long remaining = envelope.request().callerDeadlineEpochMillis() - System.currentTimeMillis();
+        long remaining = envelope.request()
+                .callerDeadlineEpochMillis() - System.currentTimeMillis();
         if (remaining <= 0) {
             throw new IOException("lifecycle_caller_deadline_expired");
         }
         HttpRequest request = HttpRequest.newBuilder(route())
-                .timeout(Duration.ofMillis(Math.max(1L, remaining)))
+                .timeout(Duration.ofMillis(remaining))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(envelope.encoded()))
                 .build();
@@ -87,7 +92,8 @@ public final class CodexLifecycleHttpClient {
      * @return lifecycle route
      */
     public URI route() {
-        String base = endpoint.toString().endsWith("/") ? endpoint.toString() : endpoint + "/";
+        String base = endpoint.toString()
+                .endsWith("/") ? endpoint.toString() : endpoint + "/";
         if (base.endsWith("/codex-lifecycle/v1/")) {
             return URI.create(base.substring(0, base.length() - 1));
         }
@@ -97,17 +103,20 @@ public final class CodexLifecycleHttpClient {
     /**
      * Bounded lifecycle response returned by the production owner.
      *
-     * @param success whether the operation succeeded
-     * @param diagnostic stable bounded diagnostic
-     * @param state authoritative lifecycle state
+     * @param success           whether the operation succeeded
+     * @param diagnostic        stable bounded diagnostic
+     * @param state             authoritative lifecycle state
      * @param lifecycleRevision lifecycle revision
-     * @param threadId exact thread identity
-     * @param turnId exact turn identity
-     * @param result bounded result and diagnostics
+     * @param threadId          exact thread identity
+     * @param turnId            exact turn identity
+     * @param result            bounded result and diagnostics
      */
     public record Response(boolean success, String diagnostic, String state, long lifecycleRevision,
-            String threadId, String turnId, Map<String, Object> result) {
-        /** Validates and freezes response values. */
+                           String threadId, String turnId, Map<String, Object> result) {
+
+        /**
+         * Validates and freezes response values.
+         */
         public Response {
             diagnostic = diagnostic == null ? "" : diagnostic;
             state = state == null ? "UNKNOWN" : state;
@@ -135,7 +144,7 @@ public final class CodexLifecycleHttpClient {
                     map.forEach((key, item) -> result.put(String.valueOf(key), item));
                 }
                 return new Response(Boolean.TRUE.equals(value.get("success")), text(value, "diagnostic"),
-                        text(value, "state"), number(value, "lifecycleRevision"), optional(value, "threadId"),
+                        text(value, "state"), number(value), optional(value, "threadId"),
                         optional(value, "turnId"), result);
             } catch (RuntimeException failure) {
                 throw new IOException("malformed lifecycle response", failure);
@@ -154,6 +163,21 @@ public final class CodexLifecycleHttpClient {
             }
         }
 
+        private static String text(Map<String, Object> value, String key) {
+            Object item = value.get(key);
+            return item == null ? "" : String.valueOf(item);
+        }
+
+        private static String optional(Map<String, Object> value, String key) {
+            Object item = value.get(key);
+            return item == null ? null : String.valueOf(item);
+        }
+
+        private static long number(Map<String, Object> value) {
+            Object item = value.get("lifecycleRevision");
+            return item instanceof Number number ? number.longValue() : 0L;
+        }
+
         /**
          * Returns the encoded bounded response.
          *
@@ -168,22 +192,8 @@ public final class CodexLifecycleHttpClient {
             value.put("threadId", threadId);
             value.put("turnId", turnId);
             value.put("result", result);
-            return ProviderJson.write(value).getBytes(StandardCharsets.UTF_8);
-        }
-
-        private static String text(Map<String, Object> value, String key) {
-            Object item = value.get(key);
-            return item == null ? "" : String.valueOf(item);
-        }
-
-        private static String optional(Map<String, Object> value, String key) {
-            Object item = value.get(key);
-            return item == null ? null : String.valueOf(item);
-        }
-
-        private static long number(Map<String, Object> value, String key) {
-            Object item = value.get(key);
-            return item instanceof Number number ? number.longValue() : 0L;
+            return ProviderJson.write(value)
+                    .getBytes(StandardCharsets.UTF_8);
         }
     }
 }

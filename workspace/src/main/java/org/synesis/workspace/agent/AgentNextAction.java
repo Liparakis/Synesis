@@ -75,15 +75,6 @@ public enum AgentNextAction {
     }
 
     /**
-     * Returns the stable lowercase JSON representation.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
-    }
-
-    /**
      * Parses a string into an {@link AgentNextAction}.
      *
      * @param input string value
@@ -94,12 +85,22 @@ public enum AgentNextAction {
         if (input == null) {
             throw new IllegalArgumentException("nextAction value cannot be null");
         }
-        String normalized = input.trim().toLowerCase(Locale.ROOT);
+        String normalized = input.trim()
+                .toLowerCase(Locale.ROOT);
         for (AgentNextAction action : values()) {
             if (action.value.equals(normalized)) {
                 return action;
             }
         }
         throw new IllegalArgumentException("Unknown agent next action: " + input);
+    }
+
+    /**
+     * Returns the stable lowercase JSON representation.
+     *
+     * @return lowercase string representation
+     */
+    public String value() {
+        return value;
     }
 }

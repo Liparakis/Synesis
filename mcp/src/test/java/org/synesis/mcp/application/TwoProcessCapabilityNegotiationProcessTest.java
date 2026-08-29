@@ -1,5 +1,9 @@
 package org.synesis.mcp.application;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -10,19 +14,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+@SuppressWarnings("TextBlockMigration")
 class TwoProcessCapabilityNegotiationProcessTest {
 
     @TempDir
@@ -38,8 +38,10 @@ class TwoProcessCapabilityNegotiationProcessTest {
         cmd[1] = "-C";
         cmd[2] = root.toString();
         System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        p.getInputStream().readAllBytes();
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true)
+                .start();
+        p.getInputStream()
+                .readAllBytes();
         if (p.waitFor() != 0) {
             throw new IllegalStateException("git failed");
         }
@@ -66,42 +68,93 @@ class TwoProcessCapabilityNegotiationProcessTest {
         var bindingService = new ProviderSessionBindingService();
 
         AgentSessionService sessionService = new AgentSessionService();
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "antigravity", "inst-req-1", null, false));
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot, "codex", "inst-owner-1", null, false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+                "antigravity",
+                "inst-req-1",
+                null,
+                false));
+        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+                "codex",
+                "inst-owner-1",
+                null,
+                false));
 
         var bindings1 = bindingService.list(location, "antigravity");
-        if (!bindings1.isEmpty() && bindings1.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "antigravity", bindings1.getLast().sessionId(), Path.of(bindings1.getLast().worktreePath()));
+        if (!bindings1.isEmpty() && bindings1.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "antigravity",
+                    bindings1.getLast()
+                            .sessionId(),
+                    Path.of(bindings1.getLast()
+                            .worktreePath()));
         }
         var bindings2 = bindingService.list(location, "codex");
-        if (!bindings2.isEmpty() && bindings2.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "codex", bindings2.getLast().sessionId(), Path.of(bindings2.getLast().worktreePath()));
+        if (!bindings2.isEmpty() && bindings2.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "codex",
+                    bindings2.getLast()
+                            .sessionId(),
+                    Path.of(bindings2.getLast()
+                            .worktreePath()));
         }
 
-        var codexIdentity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var codexIdentity = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
         PredictionEventStore store = new PredictionEventStore(
-                location.root().resolve(".synesis/coordination"), location.projectId());
+                location.root()
+                        .resolve(".synesis/coordination"), location.projectId());
         UUID taskId = UUID.randomUUID();
         org.synesis.coordination.domain.task.CoordinationTask task = new org.synesis.coordination.domain.task.CoordinationTask(
                 taskId, location.projectId(), "Product Query Task", "catalog.product-query",
                 codexIdentity.nodeId(), "supervisor-owner", "worker-owner");
-        CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), task.encoded(), codexIdentity);
+        CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.TASK_CREATED,
+                codexIdentity.nodeId(),
+                task.encoded(),
+                codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), cmd1.encoded(), codexIdentity);
 
         org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
                 taskId, codexIdentity.nodeId(), "supervisor-owner", "worker-owner");
-        CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), claim1.encoded(), codexIdentity);
+        CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.TASK_CLAIMED,
+                codexIdentity.nodeId(),
+                claim1.encoded(),
+                codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), cmd2.encoded(), codexIdentity);
 
-        OwnershipClaim claim2 = new OwnershipClaim(taskId, "catalog.product-query", codexIdentity.nodeId(), "supervisor-owner", List.of("catalog"), 1L);
-        CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), claim2.encoded(), codexIdentity);
-        store.append(taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), cmd3.encoded(), codexIdentity);
+        OwnershipClaim claim2 = new OwnershipClaim(taskId,
+                "catalog.product-query",
+                codexIdentity.nodeId(),
+                "supervisor-owner",
+                List.of("catalog"),
+                1L);
+        CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(),
+                location.projectId(),
+                taskId,
+                PredictionEventType.OWNERSHIP_CLAIMED,
+                codexIdentity.nodeId(),
+                claim2.encoded(),
+                codexIdentity);
+        store.append(taskId,
+                PredictionEventType.OWNERSHIP_CLAIMED,
+                codexIdentity.nodeId(),
+                cmd3.encoded(),
+                codexIdentity);
 
         requesterHandler = new McpProtocolHandler(sessionService, projectRoot, "antigravity", "inst-req-1");
         ownerHandler = new McpProtocolHandler(sessionService, projectRoot, "codex", "inst-owner-1");
 
         // Perform initialize for both handlers with explicit project rootUri
-        String initParams = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + projectRoot.toUri().toString() + "\"}}";
+        String initParams = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
+                + projectRoot.toUri() + "\"}}";
         requesterHandler.handleMessage(initParams);
         ownerHandler.handleMessage(initParams);
     }
@@ -133,8 +186,10 @@ class TwoProcessCapabilityNegotiationProcessTest {
                 "      \"contract\": {\n" +
                 "        \"inputs\": \"UUID productId\",\n" +
                 "        \"output\": \"Optional<Product>\",\n" +
-                "        \"requiredBehavior\": [\"Return exact matching product\", \"Return empty when missing\", \"Reject null input\"],\n" +
-                "        \"acceptanceTests\": [\"existing product returned\", \"missing product returns empty\", \"null input rejected\"]\n" +
+                "        \"requiredBehavior\": [\"Return exact matching product\", \"Return empty when missing\", \"Reject null input\"],\n"
+                +
+                "        \"acceptanceTests\": [\"existing product returned\", \"missing product returns empty\", \"null input rejected\"]\n"
+                +
                 "      }\n" +
                 "      }\n" +
                 "    }\n" +
@@ -143,7 +198,8 @@ class TwoProcessCapabilityNegotiationProcessTest {
 
         String descRespStr = requesterHandler.handleMessage(descReq);
         assertNotNull(descRespStr);
-        assertTrue(descRespStr.contains("owner_response_pending"), "Expected owner_response_pending but got: " + descRespStr);
+        assertTrue(descRespStr.contains("owner_response_pending"),
+                "Expected owner_response_pending but got: " + descRespStr);
         assertTrue(descRespStr.contains("req_"));
 
         // Extract public handle locator
@@ -154,7 +210,8 @@ class TwoProcessCapabilityNegotiationProcessTest {
         String ownerNextReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
         String ownerNextResp = ownerHandler.handleMessage(ownerNextReq);
         assertNotNull(ownerNextResp);
-        assertTrue(ownerNextResp.contains("respond_coordination"), "Expected respond_coordination but got: " + ownerNextResp);
+        assertTrue(ownerNextResp.contains("respond_coordination"),
+                "Expected respond_coordination but got: " + ownerNextResp);
         assertTrue(ownerNextResp.contains(handle));
 
         // 5. Owner accepts the request
@@ -179,13 +236,18 @@ class TwoProcessCapabilityNegotiationProcessTest {
         String reqNextReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
         String reqNextResp = requesterHandler.handleMessage(reqNextReq);
         assertNotNull(reqNextResp);
-        assertTrue(reqNextResp.contains("implementation_unavailable"), "Expected implementation_unavailable but got: " + reqNextResp);
+        assertTrue(reqNextResp.contains("implementation_unavailable"),
+                "Expected implementation_unavailable but got: " + reqNextResp);
 
         // 7. Verify no internal IDs or absolute paths leak in responses
-        assertFalse(descRespStr.contains(projectRoot.toString().replace('\\', '/')));
-        assertFalse(ownerNextResp.contains(projectRoot.toString().replace('\\', '/')));
-        assertFalse(acceptRespStr.contains(projectRoot.toString().replace('\\', '/')));
-        assertFalse(reqNextResp.contains(projectRoot.toString().replace('\\', '/')));
+        assertFalse(descRespStr.contains(projectRoot.toString()
+                .replace('\\', '/')));
+        assertFalse(ownerNextResp.contains(projectRoot.toString()
+                .replace('\\', '/')));
+        assertFalse(acceptRespStr.contains(projectRoot.toString()
+                .replace('\\', '/')));
+        assertFalse(reqNextResp.contains(projectRoot.toString()
+                .replace('\\', '/')));
     }
 
     @Test
@@ -208,7 +270,8 @@ class TwoProcessCapabilityNegotiationProcessTest {
         Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(mcpResponseJson);
         Map<String, Object> result = (Map<String, Object>) map.get("result");
         List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.get(0).get("text");
+        String text = (String) content.getFirst()
+                .get("text");
         Map<String, Object> agentResp = (Map<String, Object>) ProviderJson.parse(text);
         Map<String, Object> innerRes = (Map<String, Object>) agentResp.get("result");
         return (String) innerRes.get("capabilityRequestHandle");

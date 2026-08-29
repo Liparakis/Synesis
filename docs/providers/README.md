@@ -2,11 +2,11 @@
 
 Synesis currently recognizes three provider IDs:
 
-| Provider ID | Support level | Configuration boundary |
-| --- | --- | --- |
-| `antigravity` | beta | project-local `.agents/hooks.json` and MCP configuration |
-| `codex` | experimental / trust review required | user Codex TOML plus project-local hooks where applicable |
-| `claude` | experimental | project-local `.claude/settings.json` and `.mcp.json` |
+| Provider ID   | Support level                        | Configuration boundary                                    |
+|---------------|--------------------------------------|-----------------------------------------------------------|
+| `antigravity` | beta                                 | project-local `.agents/hooks.json` and MCP configuration  |
+| `codex`       | experimental / trust review required | user Codex TOML plus project-local hooks where applicable |
+| `claude`      | experimental                         | project-local `.claude/settings.json` and `.mcp.json`     |
 
 - [Codex](codex.md)
 - [Antigravity](antigravity.md)

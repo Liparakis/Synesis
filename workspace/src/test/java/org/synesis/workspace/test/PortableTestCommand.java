@@ -4,7 +4,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Builds platform-neutral commands for process and validation fixtures. */
+/**
+ * Builds platform-neutral commands for process and validation fixtures.
+ */
 public final class PortableTestCommand {
 
     private PortableTestCommand() {
@@ -42,12 +44,18 @@ public final class PortableTestCommand {
      * @return direct Java argv
      */
     public static List<String> validation() {
-        return fixture("validate", Path.of("src", "task_tracker.txt").toString(), "implemented");
+        return fixture("validate",
+                Path.of("src", "task_tracker.txt")
+                        .toString(),
+                "implemented");
     }
 
     private static String javaExecutable() {
-        String executable = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
+        String executable = System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains("win")
                 ? "java.exe" : "java";
-        return Path.of(System.getProperty("java.home"), "bin", executable).toString();
+        return Path.of(System.getProperty("java.home"), "bin", executable)
+                .toString();
     }
 }

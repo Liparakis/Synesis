@@ -1,7 +1,4 @@
 package org.synesis.workspace.application.workspace;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-
-import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -9,6 +6,8 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 /**
  * Provides the single authoritative readiness predicate shared by session,
@@ -40,11 +39,20 @@ public final class WorkspaceReadinessService {
         this.bindingService = Objects.requireNonNull(bindingService, "bindingService");
     }
 
+    private static ReadinessResult unavailable(AgentReason reason, String internalReason) {
+        if ("WORKSPACE_GENERATION_MISMATCH".equals(internalReason)) {
+            reason = AgentReason.WORKSPACE_GENERATION_CHANGED;
+        }
+        AgentNextAction action = AgentNextAction.ENSURE_SESSION;
+        AgentResponse response = new AgentResponse(AgentStatus.RETRY_REQUIRED, reason, action, null);
+        return new ReadinessResult(false, null, null, response, internalReason);
+    }
+
     /**
      * Resolves and verifies the workspace for one provider connection.
      *
-     * @param location initialized project location
-     * @param provider stable provider identifier
+     * @param location             initialized project location
+     * @param provider             stable provider identifier
      * @param connectionInstanceId provider connection identity
      * @return readiness result containing the exact binding when ready
      */
@@ -53,15 +61,16 @@ public final class WorkspaceReadinessService {
         return assess(location, provider, connectionInstanceId, false);
     }
 
-    /** Resolves a no-change lane while allowing a clean control-base advance.
+    /**
+     * Resolves a no-change lane while allowing a clean control-base advance.
      *
      * <p>The ordinary readiness predicate remains fail-closed for mutation and
      * command operations. A no-change completion does not mutate the
      * repository, so a clean assigned worktree can remain usable after another
      * lane advances the control checkout.</p>
      *
-     * @param location initialized project location
-     * @param provider stable provider identifier
+     * @param location             initialized project location
+     * @param provider             stable provider identifier
      * @param connectionInstanceId provider connection identity
      * @return readiness result containing the exact binding when ready
      */
@@ -85,7 +94,9 @@ public final class WorkspaceReadinessService {
             if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
                 return unavailable(AgentReason.WORKSPACE_STALE, "SESSION_NOT_ACTIVE");
             }
-            Path worktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
+            Path worktree = Path.of(binding.worktreePath())
+                    .toAbsolutePath()
+                    .normalize();
             ProviderSessionBindingService.WorkspaceCheck workspaceCheck =
                     allowControlBaseAdvance
                             ? bindingService.verifyNoChangeWorkspace(location, binding, worktree)
@@ -104,21 +115,14 @@ public final class WorkspaceReadinessService {
                     return unavailable(AgentReason.WORKSPACE_STALE, "BINDING_RELOAD_FAILED");
                 }
                 binding = bindingOptional.get();
-                worktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
+                worktree = Path.of(binding.worktreePath())
+                        .toAbsolutePath()
+                        .normalize();
             }
             return new ReadinessResult(true, binding, worktree, null, "WORKSPACE_VERIFIED");
         } catch (Exception failure) {
             return unavailable(AgentReason.WORKSPACE_NOT_READY, "WORKSPACE_UNVERIFIED");
         }
-    }
-
-    private static ReadinessResult unavailable(AgentReason reason, String internalReason) {
-        if ("WORKSPACE_GENERATION_MISMATCH".equals(internalReason)) {
-            reason = AgentReason.WORKSPACE_GENERATION_CHANGED;
-        }
-        AgentNextAction action = AgentNextAction.ENSURE_SESSION;
-        AgentResponse response = new AgentResponse(AgentStatus.RETRY_REQUIRED, reason, action, null);
-        return new ReadinessResult(false, null, null, response, internalReason);
     }
 
     /**
@@ -131,10 +135,11 @@ public final class WorkspaceReadinessService {
      * @param internalReason bounded internal classification for diagnostics
      */
     public record ReadinessResult(boolean ready,
-            ProviderSessionBindingService.Binding binding,
-            Path worktree,
-            AgentResponse response,
-            String internalReason) {
+                                  ProviderSessionBindingService.Binding binding,
+                                  Path worktree,
+                                  AgentResponse response,
+                                  String internalReason) {
+
         /**
          * Validates readiness result consistency.
          */

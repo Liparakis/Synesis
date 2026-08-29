@@ -7,31 +7,44 @@ import java.util.Objects;
 import java.util.TreeMap;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-/** Defines and verifies compatibility metadata for durable command objects. */
+/**
+ * Defines and verifies compatibility metadata for durable command objects.
+ */
 public final class CommandDurableFormat {
 
-    /** Current durable object schema. */
+    /**
+     * Current durable object schema.
+     */
     public static final long SCHEMA_VERSION = 2L;
-    /** Lowest schema this implementation can read. */
+    /**
+     * Lowest schema this implementation can read.
+     */
     public static final long MINIMUM_READER_SCHEMA_VERSION = 1L;
-    /** Version of the canonical durable-object encoding. */
+    /**
+     * Version of the canonical durable-object encoding.
+     */
     public static final long CANONICALIZATION_VERSION = 1L;
-    /** Integrity algorithm used for durable objects. */
+    /**
+     * Integrity algorithm used for durable objects.
+     */
     public static final String INTEGRITY_ALGORITHM = "SHA-256";
-    /** Writer version recorded in durable objects. */
+    /**
+     * Writer version recorded in durable objects.
+     */
     public static final String WRITER_VERSION = "0.1.0-SNAPSHOT";
 
     private CommandDurableFormat() {
     }
 
-    /** Adds current compatibility metadata and an integrity digest to a map.
+    /**
+     * Adds current compatibility metadata and an integrity digest to a map.
+     *
      * @param source durable object fields
      * @return new map with compatibility and integrity metadata
      */
     public static Map<String, Object> withIntegrity(Map<String, Object> source) {
         Objects.requireNonNull(source, "source");
-        Map<String, Object> value = new TreeMap<>();
-        value.putAll(source);
+        Map<String, Object> value = new TreeMap<>(source);
         value.putIfAbsent("schemaVersion", SCHEMA_VERSION);
         value.putIfAbsent("minimumReaderSchemaVersion", MINIMUM_READER_SCHEMA_VERSION);
         value.putIfAbsent("writerVersion", WRITER_VERSION);
@@ -43,7 +56,9 @@ public final class CommandDurableFormat {
         return value;
     }
 
-    /** Verifies compatibility metadata and the exact stored integrity digest.
+    /**
+     * Verifies compatibility metadata and the exact stored integrity digest.
+     *
      * @param value parsed durable object
      * @throws CommandFormatException if compatibility or integrity fails
      */
@@ -75,8 +90,10 @@ public final class CommandDurableFormat {
 
     private static String digest(Map<String, Object> value) {
         try {
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance(INTEGRITY_ALGORITHM)
-                    .digest(ProviderJson.write(new TreeMap<>(value)).getBytes(StandardCharsets.UTF_8)));
+            return java.util.HexFormat.of()
+                    .formatHex(MessageDigest.getInstance(INTEGRITY_ALGORITHM)
+                            .digest(ProviderJson.write(new TreeMap<>(value))
+                                    .getBytes(StandardCharsets.UTF_8)));
         } catch (Exception failure) {
             throw new IllegalStateException("command integrity unavailable", failure);
         }

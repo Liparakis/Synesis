@@ -29,195 +29,185 @@ import java.util.function.Consumer;
  */
 public final class ProjectProcessExecutor {
 
-    /** Maximum raw bytes retained per output stream. */
+    /**
+     * Maximum raw bytes retained per output stream.
+     */
     public static final int MAX_RETAINED_BYTES = 65_536;
-    /** Raw bytes retained at the beginning of an overflowing stream. */
+    /**
+     * Raw bytes retained at the beginning of an overflowing stream.
+     */
     public static final int HEAD_RETAINED_BYTES = MAX_RETAINED_BYTES / 2;
-    /** Raw bytes retained at the end of an overflowing stream. */
+    /**
+     * Raw bytes retained at the end of an overflowing stream.
+     */
     public static final int TAIL_RETAINED_BYTES = MAX_RETAINED_BYTES / 2;
-    /** Default process timeout in seconds. */
+    /**
+     * Default process timeout in seconds.
+     */
     public static final int DEFAULT_TIMEOUT_SECONDS = ProjectCommandSpec.DEFAULT_TIMEOUT_SECONDS;
-    /** Maximum process timeout in seconds. */
+    /**
+     * Maximum process timeout in seconds.
+     */
     public static final int MAX_TIMEOUT_SECONDS = ProjectCommandSpec.MAX_TIMEOUT_SECONDS;
-    /** Stable marker inserted between retained head and tail text. */
+    /**
+     * Stable marker inserted between retained head and tail text.
+     */
     public static final String TRUNCATION_MARKER = "\n...[output truncated; retained head and tail]...\n";
 
-    /** Stable execution outcomes returned to agents and server gates. */
-    public enum Outcome {
-        /** Process started and exited with code zero. */
-        COMPLETED("completed"),
-        /** Process started and exited with a non-zero code. */
-        NON_ZERO_EXIT("non_zero_exit"),
-        /** The executable could not be started because it was not found. */
-        COMMAND_EXECUTABLE_NOT_FOUND("command_executable_not_found"),
-        /** The requested working directory failed policy or filesystem checks. */
-        COMMAND_WORKING_DIRECTORY_INVALID("command_working_directory_invalid"),
-        /** The executable was found but could not be started due to permissions. */
-        COMMAND_PERMISSION_DENIED("command_permission_denied"),
-        /** Process creation failed for another concrete reason. */
-        COMMAND_START_FAILED("command_start_failed"),
-        /** The process exceeded its configured timeout. */
-        COMMAND_TIMED_OUT("command_timed_out"),
-        /** The caller cancelled execution by interrupting the operation. */
-        COMMAND_CANCELLED("command_cancelled"),
-        /** The process tree was terminated before normal completion. */
-        COMMAND_TERMINATED("command_terminated");
-
-        private final String value;
-
-        Outcome(String value) {
-            this.value = value;
-        }
-
-        /**
-         * Returns the stable JSON value.
-         *
-         * @return lowercase outcome value
-         */
-        public String value() {
-            return value;
-        }
-    }
-
     /**
-     * One execution request. The working directory is resolved relative to
-     * {@link #worktreeRoot()} and never relative to the server process.
-     *
-     * @param argv              direct executable and arguments
-     * @param worktreeRoot      authoritative lane or integration worktree
-     * @param workingDirectory  relative working directory, or {@code null}
-     * @param timeoutSeconds    timeout in seconds, or {@code null} for default
-     * @param controlRoot       control root whose absolute path is sanitized, or {@code null}
+     * Creates a stateless generic executor.
      */
-    public record ExecutionRequest(List<String> argv, Path worktreeRoot, String workingDirectory,
-            Integer timeoutSeconds, Path controlRoot) {
-        /**
-         * Creates a request without a separate control-root sanitization path.
-         *
-         * @param argv direct executable and arguments
-         * @param worktreeRoot authoritative worktree root
-         * @param workingDirectory relative working directory, or {@code null}
-         * @param timeoutSeconds timeout in seconds, or {@code null} for default
-         */
-        public ExecutionRequest(List<String> argv, Path worktreeRoot, String workingDirectory,
-                Integer timeoutSeconds) {
-            this(argv, worktreeRoot, workingDirectory, timeoutSeconds, null);
-        }
-
-        /** Validates and normalizes request values. */
-        public ExecutionRequest {
-            Objects.requireNonNull(argv, "argv");
-            Objects.requireNonNull(worktreeRoot, "worktreeRoot");
-            argv = List.copyOf(argv);
-            worktreeRoot = worktreeRoot.toAbsolutePath().normalize();
-            if (workingDirectory == null || workingDirectory.isBlank()) {
-                workingDirectory = ".";
-            }
-            if (timeoutSeconds == null) {
-                timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
-            }
-            if (timeoutSeconds < 1 || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
-                throw new IllegalArgumentException("timeoutSeconds must be between 1 and "
-                        + MAX_TIMEOUT_SECONDS);
-            }
-        }
-
-        /**
-         * Creates a request from a project-owned command specification.
-         *
-         * @param spec project-owned command specification
-         * @param worktreeRoot authoritative lane or integration root
-         * @param controlRoot control root used for sanitization
-         * @return executable request
-         */
-        public static ExecutionRequest from(ProjectCommandSpec spec, Path worktreeRoot, Path controlRoot) {
-            Objects.requireNonNull(spec, "spec");
-            return new ExecutionRequest(spec.argv(), worktreeRoot, spec.workingDirectory(),
-                    spec.timeoutSeconds(), controlRoot);
-        }
-    }
-
-    /**
-     * Bounded structured evidence from one process execution.
-     *
-     * @param outcome              stable outcome classification
-     * @param exitCode             process exit code, or {@code null} when no exit exists
-     * @param stdout               sanitized retained stdout text
-     * @param stderr               sanitized retained stderr text
-     * @param stdoutBytesRead     raw stdout bytes drained before decoding
-     * @param stderrBytesRead     raw stderr bytes drained before decoding
-     * @param stdoutBytesRetained raw stdout bytes represented in returned text
-     * @param stderrBytesRetained raw stderr bytes represented in returned text
-     * @param stdoutTruncated      whether stdout evidence is incomplete
-     * @param stderrTruncated      whether stderr evidence is incomplete
-     */
-    public record ExecutionResult(Outcome outcome, Integer exitCode, String stdout, String stderr,
-            long stdoutBytesRead, long stderrBytesRead, long stdoutBytesRetained, long stderrBytesRetained,
-            boolean stdoutTruncated, boolean stderrTruncated) {
-        /** Validates result values. */
-        public ExecutionResult {
-            Objects.requireNonNull(outcome, "outcome");
-            Objects.requireNonNull(stdout, "stdout");
-            Objects.requireNonNull(stderr, "stderr");
-            if (stdoutBytesRead < 0 || stderrBytesRead < 0 || stdoutBytesRetained < 0 || stderrBytesRetained < 0
-                    || stdoutBytesRetained > stdoutBytesRead || stderrBytesRetained > stderrBytesRead
-                    || stdoutBytesRetained > MAX_RETAINED_BYTES || stderrBytesRetained > MAX_RETAINED_BYTES) {
-                throw new IllegalArgumentException("invalid output evidence counts");
-            }
-        }
-
-        /**
-         * Converts this evidence to the stable agent-facing result object.
-         *
-         * @return insertion-ordered result map
-         */
-        public Map<String, Object> toMap() {
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("outcome", outcome.value());
-            if (exitCode != null) {
-                result.put("exitCode", exitCode);
-            }
-            result.put("stdout", stdout);
-            result.put("stderr", stderr);
-            result.put("stdoutTruncated", stdoutTruncated);
-            result.put("stderrTruncated", stderrTruncated);
-            result.put("stdoutBytesRead", stdoutBytesRead);
-            result.put("stderrBytesRead", stderrBytesRead);
-            result.put("stdoutBytesRetained", stdoutBytesRetained);
-            result.put("stderrBytesRetained", stderrBytesRetained);
-            return result;
-        }
-
-        /**
-         * Returns whether the process started and exited with code zero.
-         *
-         * @return true only for a completed zero exit
-         */
-        public boolean succeeded() {
-            return outcome == Outcome.COMPLETED;
-        }
-    }
-
-    /** Exact process identity captured immediately after a command starts.
-     * @param pid operating-system process ID
-     * @param executableIdentity executable identity reported by the process handle
-     * @param commandLine bounded process command line evidence
-     * @param processStartTime process start epoch milliseconds
-     */
-    public record StartedProcessIdentity(long pid, String executableIdentity,
-            String commandLine, long processStartTime) {
-        /** Validates process identity evidence. */
-        public StartedProcessIdentity {
-            if (pid <= 0 || processStartTime < 0) {
-                throw new IllegalArgumentException("invalid started process identity");
-            }
-            Objects.requireNonNull(executableIdentity, "executableIdentity");
-            Objects.requireNonNull(commandLine, "commandLine");
-        }
-    }
-
-    /** Creates a stateless generic executor. */
     public ProjectProcessExecutor() {
+    }
+
+    private static List<String> validateArgv(List<String> input) {
+        if (input.isEmpty() || input.size() > ProjectCommandSpec.MAX_ARGUMENTS) {
+            throw new IllegalArgumentException("invalid argv size");
+        }
+        for (String argument : input) {
+            if (argument == null || argument.length() > ProjectCommandSpec.MAX_ARGUMENT_LENGTH) {
+                throw new IllegalArgumentException("invalid argv entry");
+            }
+        }
+        if (input.getFirst()
+                .isBlank()) {
+            throw new IllegalArgumentException("blank executable");
+        }
+        return List.copyOf(input);
+    }
+
+    private static Path resolveWorkingDirectory(Path root, String configured) {
+        if (!Files.isDirectory(root)) {
+            throw new IllegalArgumentException("worktree root is not a directory");
+        }
+        Path relative;
+        try {
+            String requested = configured == null || configured.isBlank() ? "." : configured;
+            if (looksLikeAbsolutePath(requested)) {
+                throw new IllegalArgumentException("working directory is absolute");
+            }
+            relative = Path.of(requested);
+        } catch (InvalidPathException failure) {
+            throw new IllegalArgumentException("working directory path is invalid", failure);
+        }
+        if (relative.isAbsolute() || relative.normalize()
+                .startsWith(Path.of(".."))) {
+            throw new IllegalArgumentException("working directory escapes worktree");
+        }
+        Path candidate = root.resolve(relative)
+                .normalize();
+        if (!candidate.startsWith(root) || !Files.isDirectory(candidate)) {
+            throw new IllegalArgumentException("working directory is not inside worktree");
+        }
+        try {
+            Path canonicalRoot = root.toRealPath();
+            Path canonicalCandidate = candidate.toRealPath();
+            if (!canonicalCandidate.startsWith(canonicalRoot)) {
+                throw new IllegalArgumentException("working directory symlink escapes worktree");
+            }
+        } catch (IOException failure) {
+            throw new IllegalArgumentException("working directory cannot be verified", failure);
+        }
+        return candidate;
+    }
+
+    private static boolean looksLikeAbsolutePath(String value) {
+        return value.startsWith("/") || value.startsWith("\\\\")
+                || value.matches("^[A-Za-z]:[\\\\/].*");
+    }
+
+    private static void filterEnvironment(Map<String, String> environment) {
+        environment.keySet()
+                .removeIf(key -> {
+                    String upper = key.toUpperCase(Locale.ROOT);
+                    return upper.contains("TOKEN") || upper.contains("SECRET") || upper.contains("KEY")
+                            || upper.contains("AUTH");
+                });
+    }
+
+    private static Thread startCollector(InputStream input, StreamCollector collector, String name) {
+        Thread thread = new Thread(() -> collector.read(input), name);
+        thread.setDaemon(true);
+        thread.start();
+        return thread;
+    }
+
+    private static void joinCollector(Thread thread) {
+        try {
+            thread.join(2_000L);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread()
+                    .interrupt();
+        }
+    }
+
+    private static Outcome classifyStartFailure(IOException failure) {
+        String message = String.valueOf(failure.getMessage())
+                .toLowerCase(Locale.ROOT);
+        if (message.contains("denied") || message.contains("permission") || message.contains("access is denied")) {
+            return Outcome.COMMAND_PERMISSION_DENIED;
+        }
+        if (failure instanceof java.nio.file.NoSuchFileException
+                || message.contains("cannot find") || message.contains("no such file")
+                || message.contains("error=2") || message.contains("error=3")) {
+            return Outcome.COMMAND_EXECUTABLE_NOT_FOUND;
+        }
+        return Outcome.COMMAND_START_FAILED;
+    }
+
+    private static ExecutionResult result(Outcome outcome, Integer exitCode, StreamCollector stdout,
+            StreamCollector stderr, ExecutionRequest request) {
+        Evidence out = stdout.evidence();
+        Evidence err = stderr.evidence();
+        return new ExecutionResult(outcome, exitCode,
+                sanitize(out.text(), request.controlRoot(), request.worktreeRoot()),
+                sanitize(err.text(), request.controlRoot(), request.worktreeRoot()),
+                out.bytesRead(), err.bytesRead(), out.bytesRetained(), err.bytesRetained(),
+                out.truncated(), err.truncated());
+    }
+
+    private static ExecutionResult empty(Outcome outcome) {
+        return new ExecutionResult(outcome, null, "", "", 0, 0, 0, 0, false, false);
+    }
+
+    private static String sanitize(String text, Path controlRoot, Path worktreeRoot) {
+        String sanitized = text == null ? "" : text;
+        if (controlRoot != null) {
+            sanitized = sanitized.replace(controlRoot.toAbsolutePath()
+                    .normalize()
+                    .toString(), "[PROJECT_ROOT]");
+        }
+        if (worktreeRoot != null) {
+            sanitized = sanitized.replace(worktreeRoot.toAbsolutePath()
+                    .normalize()
+                    .toString(), "[WORKTREE_ROOT]");
+        }
+        String home = System.getProperty("user.home");
+        if (home != null && !home.isBlank()) {
+            sanitized = sanitized.replace(home, "~");
+        }
+        return sanitized;
+    }
+
+    private static void killProcessTree(Process process) {
+        try {
+            process.descendants()
+                    .forEach(handle -> {
+                        try {
+                            handle.destroyForcibly();
+                        } catch (RuntimeException ignored) {
+                        }
+                    });
+            process.destroyForcibly();
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private static void closeQuietly(InputStream input) {
+        try {
+            input.close();
+        } catch (IOException ignored) {
+        }
     }
 
     /**
@@ -234,14 +224,17 @@ public final class ProjectProcessExecutor {
     /**
      * Executes one request and notifies the caller before waiting for completion.
      *
-     * @param request command execution request
+     * @param request         command execution request
      * @param startedObserver callback invoked after process start and before waiting
      * @return bounded execution evidence
      */
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     public ExecutionResult execute(ExecutionRequest request, Consumer<StartedProcessIdentity> startedObserver) {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(startedObserver, "startedObserver");
-        Path worktreeRoot = request.worktreeRoot().toAbsolutePath().normalize();
+        Path worktreeRoot = request.worktreeRoot()
+                .toAbsolutePath()
+                .normalize();
         Path workingDirectory;
         try {
             workingDirectory = resolveWorkingDirectory(worktreeRoot, request.workingDirectory());
@@ -266,12 +259,15 @@ public final class ProjectProcessExecutor {
             filterEnvironment(builder.environment());
             process = builder.start();
             ProcessHandle.Info processInfo = process.info();
-            long processStart = processInfo.startInstant().map(java.time.Instant::toEpochMilli)
+            long processStart = processInfo.startInstant()
+                    .map(java.time.Instant::toEpochMilli)
                     .orElse(System.currentTimeMillis());
             try {
                 startedObserver.accept(new StartedProcessIdentity(process.pid(),
-                        processInfo.command().orElse(argv.getFirst()),
-                        processInfo.commandLine().orElse(String.join(" ", argv)), processStart));
+                        processInfo.command()
+                                .orElse(argv.getFirst()),
+                        processInfo.commandLine()
+                                .orElse(String.join(" ", argv)), processStart));
             } catch (RuntimeException observerFailure) {
                 killProcessTree(process);
                 terminalOutcome = Outcome.COMMAND_START_FAILED;
@@ -314,15 +310,11 @@ public final class ProjectProcessExecutor {
             Integer exitCode = finished ? process.exitValue() : null;
             return result(terminalOutcome, exitCode, stdout, stderr, request);
         } catch (IOException startFailure) {
-            if (process != null) {
-                killProcessTree(process);
-            } else {
-                // No process means no pipe can remain open. Report the empty
-                // streams as complete evidence alongside the distinct no-start
-                // outcome instead of manufacturing truncation.
-                stdout.markComplete();
-                stderr.markComplete();
-            }
+            // I/O failures in this region occur before a process is available.
+            // Report the empty streams as complete evidence alongside the
+            // distinct no-start outcome instead of manufacturing truncation.
+            stdout.markComplete();
+            stderr.markComplete();
             Outcome outcome = classifyStartFailure(startFailure);
             return result(outcome, null, stdout, stderr, request);
         } catch (RuntimeException failure) {
@@ -332,154 +324,226 @@ public final class ProjectProcessExecutor {
             return result(Outcome.COMMAND_TERMINATED, null, stdout, stderr, request);
         } finally {
             if (interrupted) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                        .interrupt();
             }
         }
     }
 
-    private static List<String> validateArgv(List<String> input) {
-        if (input.isEmpty() || input.size() > ProjectCommandSpec.MAX_ARGUMENTS) {
-            throw new IllegalArgumentException("invalid argv size");
+    /**
+     * Stable execution outcomes returned to agents and server gates.
+     */
+    public enum Outcome {
+        /**
+         * Process started and exited with code zero.
+         */
+        COMPLETED("completed"),
+        /**
+         * Process started and exited with a non-zero code.
+         */
+        NON_ZERO_EXIT("non_zero_exit"),
+        /**
+         * The executable could not be started because it was not found.
+         */
+        COMMAND_EXECUTABLE_NOT_FOUND("command_executable_not_found"),
+        /**
+         * The requested working directory failed policy or filesystem checks.
+         */
+        COMMAND_WORKING_DIRECTORY_INVALID("command_working_directory_invalid"),
+        /**
+         * The executable was found but could not be started due to permissions.
+         */
+        COMMAND_PERMISSION_DENIED("command_permission_denied"),
+        /**
+         * Process creation failed for another concrete reason.
+         */
+        COMMAND_START_FAILED("command_start_failed"),
+        /**
+         * The process exceeded its configured timeout.
+         */
+        COMMAND_TIMED_OUT("command_timed_out"),
+        /**
+         * The caller cancelled execution by interrupting the operation.
+         */
+        COMMAND_CANCELLED("command_cancelled"),
+        /**
+         * The process tree was terminated before normal completion.
+         */
+        COMMAND_TERMINATED("command_terminated");
+
+        private final String value;
+
+        Outcome(String value) {
+            this.value = value;
         }
-        for (String argument : input) {
-            if (argument == null || argument.length() > ProjectCommandSpec.MAX_ARGUMENT_LENGTH) {
-                throw new IllegalArgumentException("invalid argv entry");
+
+        /**
+         * Returns the stable JSON value.
+         *
+         * @return lowercase outcome value
+         */
+        public String value() {
+            return value;
+        }
+    }
+
+    /**
+     * One execution request. The working directory is resolved relative to
+     * {@link #worktreeRoot()} and never relative to the server process.
+     *
+     * @param argv             direct executable and arguments
+     * @param worktreeRoot     authoritative lane or integration worktree
+     * @param workingDirectory relative working directory, or {@code null}
+     * @param timeoutSeconds   timeout in seconds, or {@code null} for default
+     * @param controlRoot      control root whose absolute path is sanitized, or {@code null}
+     */
+    public record ExecutionRequest(List<String> argv, Path worktreeRoot, String workingDirectory,
+                                   Integer timeoutSeconds, Path controlRoot) {
+
+        /**
+         * Creates a request without a separate control-root sanitization path.
+         *
+         * @param argv             direct executable and arguments
+         * @param worktreeRoot     authoritative worktree root
+         * @param workingDirectory relative working directory, or {@code null}
+         * @param timeoutSeconds   timeout in seconds, or {@code null} for default
+         */
+        @SuppressWarnings("unused")
+        public ExecutionRequest(List<String> argv, Path worktreeRoot, String workingDirectory,
+                Integer timeoutSeconds) {
+            this(argv, worktreeRoot, workingDirectory, timeoutSeconds, null);
+        }
+
+        /**
+         * Validates and normalizes request values.
+         */
+        public ExecutionRequest {
+            Objects.requireNonNull(argv, "argv");
+            Objects.requireNonNull(worktreeRoot, "worktreeRoot");
+            argv = List.copyOf(argv);
+            worktreeRoot = worktreeRoot.toAbsolutePath()
+                    .normalize();
+            if (workingDirectory == null || workingDirectory.isBlank()) {
+                workingDirectory = ".";
+            }
+            if (timeoutSeconds == null) {
+                timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
+            }
+            if (timeoutSeconds < 1 || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
+                throw new IllegalArgumentException("timeoutSeconds must be between 1 and "
+                        + MAX_TIMEOUT_SECONDS);
             }
         }
-        if (input.getFirst().isBlank()) {
-            throw new IllegalArgumentException("blank executable");
+
+        /**
+         * Creates a request from a project-owned command specification.
+         *
+         * @param spec         project-owned command specification
+         * @param worktreeRoot authoritative lane or integration root
+         * @param controlRoot  control root used for sanitization
+         * @return executable request
+         */
+        public static ExecutionRequest from(ProjectCommandSpec spec, Path worktreeRoot, Path controlRoot) {
+            Objects.requireNonNull(spec, "spec");
+            return new ExecutionRequest(spec.argv(), worktreeRoot, spec.workingDirectory(),
+                    spec.timeoutSeconds(), controlRoot);
         }
-        return List.copyOf(input);
     }
 
-    private static Path resolveWorkingDirectory(Path root, String configured) {
-        if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("worktree root is not a directory");
-        }
-        Path relative;
-        try {
-            String requested = configured == null || configured.isBlank() ? "." : configured;
-            if (looksLikeAbsolutePath(requested)) {
-                throw new IllegalArgumentException("working directory is absolute");
+    /**
+     * Bounded structured evidence from one process execution.
+     *
+     * @param outcome             stable outcome classification
+     * @param exitCode            process exit code, or {@code null} when no exit exists
+     * @param stdout              sanitized retained stdout text
+     * @param stderr              sanitized retained stderr text
+     * @param stdoutBytesRead     raw stdout bytes drained before decoding
+     * @param stderrBytesRead     raw stderr bytes drained before decoding
+     * @param stdoutBytesRetained raw stdout bytes represented in returned text
+     * @param stderrBytesRetained raw stderr bytes represented in returned text
+     * @param stdoutTruncated     whether stdout evidence is incomplete
+     * @param stderrTruncated     whether stderr evidence is incomplete
+     */
+    public record ExecutionResult(Outcome outcome, Integer exitCode, String stdout, String stderr,
+                                  long stdoutBytesRead, long stderrBytesRead, long stdoutBytesRetained,
+                                  long stderrBytesRetained,
+                                  boolean stdoutTruncated, boolean stderrTruncated) {
+
+        /**
+         * Validates result values.
+         */
+        public ExecutionResult {
+            Objects.requireNonNull(outcome, "outcome");
+            Objects.requireNonNull(stdout, "stdout");
+            Objects.requireNonNull(stderr, "stderr");
+            if (stdoutBytesRetained < 0 || stderrBytesRetained < 0
+                    || stdoutBytesRetained > stdoutBytesRead || stderrBytesRetained > stderrBytesRead
+                    || stdoutBytesRetained > MAX_RETAINED_BYTES || stderrBytesRetained > MAX_RETAINED_BYTES) {
+                throw new IllegalArgumentException("invalid output evidence counts");
             }
-            relative = Path.of(requested);
-        } catch (InvalidPathException failure) {
-            throw new IllegalArgumentException("working directory path is invalid", failure);
         }
-        if (relative.isAbsolute() || relative.normalize().startsWith(Path.of(".."))) {
-            throw new IllegalArgumentException("working directory escapes worktree");
-        }
-        Path candidate = root.resolve(relative).normalize();
-        if (!candidate.startsWith(root) || !Files.isDirectory(candidate)) {
-            throw new IllegalArgumentException("working directory is not inside worktree");
-        }
-        try {
-            Path canonicalRoot = root.toRealPath();
-            Path canonicalCandidate = candidate.toRealPath();
-            if (!canonicalCandidate.startsWith(canonicalRoot)) {
-                throw new IllegalArgumentException("working directory symlink escapes worktree");
+
+        /**
+         * Converts this evidence to the stable agent-facing result object.
+         *
+         * @return insertion-ordered result map
+         */
+        public Map<String, Object> toMap() {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("outcome", outcome.value());
+            if (exitCode != null) {
+                result.put("exitCode", exitCode);
             }
-        } catch (IOException failure) {
-            throw new IllegalArgumentException("working directory cannot be verified", failure);
+            result.put("stdout", stdout);
+            result.put("stderr", stderr);
+            result.put("stdoutTruncated", stdoutTruncated);
+            result.put("stderrTruncated", stderrTruncated);
+            result.put("stdoutBytesRead", stdoutBytesRead);
+            result.put("stderrBytesRead", stderrBytesRead);
+            result.put("stdoutBytesRetained", stdoutBytesRetained);
+            result.put("stderrBytesRetained", stderrBytesRetained);
+            return result;
         }
-        return candidate;
-    }
 
-    private static boolean looksLikeAbsolutePath(String value) {
-        return value.startsWith("/") || value.startsWith("\\\\")
-                || value.matches("^[A-Za-z]:[\\\\/].*");
-    }
-
-    private static void filterEnvironment(Map<String, String> environment) {
-        environment.keySet().removeIf(key -> {
-            String upper = key.toUpperCase(Locale.ROOT);
-            return upper.contains("TOKEN") || upper.contains("SECRET") || upper.contains("KEY")
-                    || upper.contains("AUTH");
-        });
-    }
-
-    private static Thread startCollector(InputStream input, StreamCollector collector, String name) {
-        Thread thread = new Thread(() -> collector.read(input), name);
-        thread.setDaemon(true);
-        thread.start();
-        return thread;
-    }
-
-    private static void joinCollector(Thread thread) {
-        try {
-            thread.join(2_000L);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+        /**
+         * Returns whether the process started and exited with code zero.
+         *
+         * @return true only for a completed zero exit
+         */
+        public boolean succeeded() {
+            return outcome == Outcome.COMPLETED;
         }
     }
 
-    private static Outcome classifyStartFailure(IOException failure) {
-        String message = String.valueOf(failure.getMessage()).toLowerCase(Locale.ROOT);
-        if (message.contains("denied") || message.contains("permission") || message.contains("access is denied")) {
-            return Outcome.COMMAND_PERMISSION_DENIED;
-        }
-        if (failure instanceof java.nio.file.NoSuchFileException
-                || message.contains("cannot find") || message.contains("no such file")
-                || message.contains("error=2") || message.contains("error=3")) {
-            return Outcome.COMMAND_EXECUTABLE_NOT_FOUND;
-        }
-        return Outcome.COMMAND_START_FAILED;
-    }
+    /**
+     * Exact process identity captured immediately after a command starts.
+     *
+     * @param pid                operating-system process ID
+     * @param executableIdentity executable identity reported by the process handle
+     * @param commandLine        bounded process command line evidence
+     * @param processStartTime   process start epoch milliseconds
+     */
+    public record StartedProcessIdentity(long pid, String executableIdentity,
+                                         String commandLine, long processStartTime) {
 
-    private static ExecutionResult result(Outcome outcome, Integer exitCode, StreamCollector stdout,
-            StreamCollector stderr, ExecutionRequest request) {
-        Evidence out = stdout.evidence();
-        Evidence err = stderr.evidence();
-        return new ExecutionResult(outcome, exitCode,
-                sanitize(out.text(), request.controlRoot(), request.worktreeRoot()),
-                sanitize(err.text(), request.controlRoot(), request.worktreeRoot()),
-                out.bytesRead(), err.bytesRead(), out.bytesRetained(), err.bytesRetained(),
-                out.truncated(), err.truncated());
-    }
-
-    private static ExecutionResult empty(Outcome outcome) {
-        return new ExecutionResult(outcome, null, "", "", 0, 0, 0, 0, false, false);
-    }
-
-    private static String sanitize(String text, Path controlRoot, Path worktreeRoot) {
-        String sanitized = text == null ? "" : text;
-        if (controlRoot != null) {
-            sanitized = sanitized.replace(controlRoot.toAbsolutePath().normalize().toString(), "[PROJECT_ROOT]");
-        }
-        if (worktreeRoot != null) {
-            sanitized = sanitized.replace(worktreeRoot.toAbsolutePath().normalize().toString(), "[WORKTREE_ROOT]");
-        }
-        String home = System.getProperty("user.home");
-        if (home != null && !home.isBlank()) {
-            sanitized = sanitized.replace(home, "~");
-        }
-        return sanitized;
-    }
-
-    private static void killProcessTree(Process process) {
-        try {
-            process.descendants().forEach(handle -> {
-                try {
-                    handle.destroyForcibly();
-                } catch (RuntimeException ignored) {
-                }
-            });
-            process.destroyForcibly();
-        } catch (RuntimeException ignored) {
-        }
-    }
-
-    private static void closeQuietly(InputStream input) {
-        try {
-            input.close();
-        } catch (IOException ignored) {
+        /**
+         * Validates process identity evidence.
+         */
+        public StartedProcessIdentity {
+            if (pid <= 0 || processStartTime < 0) {
+                throw new IllegalArgumentException("invalid started process identity");
+            }
+            Objects.requireNonNull(executableIdentity, "executableIdentity");
+            Objects.requireNonNull(commandLine, "commandLine");
         }
     }
 
     private record Evidence(String text, long bytesRead, long bytesRetained, boolean truncated) {
+
     }
 
     private static final class StreamCollector {
+
         private final ByteArrayOutputStream head = new ByteArrayOutputStream(HEAD_RETAINED_BYTES);
         private final byte[] tail = new byte[TAIL_RETAINED_BYTES];
         private int tailSize;
@@ -487,12 +551,74 @@ public final class ProjectProcessExecutor {
         private long bytesRead;
         private boolean eof;
 
+        private static int safeHeadEnd(byte[] value) {
+            if (value.length == 0) {
+                return 0;
+            }
+            int index = value.length - 1;
+            int continuation = 0;
+            while (index >= 0 && isContinuation(value[index])) {
+                continuation++;
+                index--;
+            }
+            if (index < 0) {
+                return value.length;
+            }
+            int expected = sequenceLength(value[index]);
+            if (expected > 1 && expected > continuation + 1) {
+                return index;
+            }
+            return value.length;
+        }
+
+        private static int safeTailStart(byte[] value) {
+            int start = 0;
+            while (start < value.length && isContinuation(value[start])) {
+                start++;
+            }
+            if (start >= value.length) {
+                return value.length;
+            }
+            int expected = sequenceLength(value[start]);
+            if (expected > 1) {
+                int cursor = start + 1;
+                while (cursor < value.length && isContinuation(value[cursor])) {
+                    cursor++;
+                }
+                if (expected > cursor - start) {
+                    return cursor;
+                }
+            }
+            return start;
+        }
+
+        private static boolean isContinuation(byte value) {
+            return (value & 0xC0) == 0x80;
+        }
+
+        private static int sequenceLength(byte value) {
+            int unsigned = value & 0xFF;
+            if ((unsigned & 0x80) == 0) {
+                return 1;
+            }
+            if ((unsigned & 0xE0) == 0xC0) {
+                return 2;
+            }
+            if ((unsigned & 0xF0) == 0xE0) {
+                return 3;
+            }
+            if ((unsigned & 0xF8) == 0xF0) {
+                return 4;
+            }
+            return 0;
+        }
+
         private void read(InputStream input) {
             byte[] buffer = new byte[8192];
             try {
                 int count;
                 while ((count = input.read(buffer)) != -1) {
-                    append(buffer, 0, count);
+                    append(buffer, count);
                 }
                 eof = true;
             } catch (IOException ignored) {
@@ -505,17 +631,16 @@ public final class ProjectProcessExecutor {
             eof = true;
         }
 
-        private void append(byte[] buffer, int offset, int length) {
+        private void append(byte[] buffer, int length) {
             bytesRead += length;
             int headRemaining = HEAD_RETAINED_BYTES - head.size();
             int headCount = Math.min(headRemaining, length);
             if (headCount > 0) {
-                head.write(buffer, offset, headCount);
+                head.write(buffer, 0, headCount);
             }
-            int tailOffset = offset + headCount;
             int tailLength = length - headCount;
             for (int i = 0; i < tailLength; i++) {
-                tail[tailCursor] = buffer[tailOffset + i];
+                tail[tailCursor] = buffer[headCount + i];
                 tailCursor = (tailCursor + 1) % TAIL_RETAINED_BYTES;
                 tailSize = Math.min(TAIL_RETAINED_BYTES, tailSize + 1);
             }
@@ -557,60 +682,6 @@ public final class ProjectProcessExecutor {
                 result[i] = tail[(start + i) % TAIL_RETAINED_BYTES];
             }
             return result;
-        }
-
-        private static int safeHeadEnd(byte[] value) {
-            if (value.length == 0) {
-                return 0;
-            }
-            int index = value.length - 1;
-            int continuation = 0;
-            while (index >= 0 && isContinuation(value[index])) {
-                continuation++;
-                index--;
-            }
-            if (index < 0) {
-                return value.length;
-            }
-            int expected = sequenceLength(value[index]);
-            if (expected > 1 && expected > continuation + 1) {
-                return index;
-            }
-            return continuation == 0 && expected > 1 ? index : value.length;
-        }
-
-        private static int safeTailStart(byte[] value) {
-            int start = 0;
-            while (start < value.length && isContinuation(value[start])) {
-                start++;
-            }
-            if (start >= value.length) {
-                return value.length;
-            }
-            int expected = sequenceLength(value[start]);
-            if (expected > 1) {
-                int cursor = start + 1;
-                while (cursor < value.length && isContinuation(value[cursor])) {
-                    cursor++;
-                }
-                if (expected > cursor - start) {
-                    return cursor;
-                }
-            }
-            return start;
-        }
-
-        private static boolean isContinuation(byte value) {
-            return (value & 0xC0) == 0x80;
-        }
-
-        private static int sequenceLength(byte value) {
-            int unsigned = value & 0xFF;
-            if ((unsigned & 0x80) == 0) return 1;
-            if ((unsigned & 0xE0) == 0xC0) return 2;
-            if ((unsigned & 0xF0) == 0xE0) return 3;
-            if ((unsigned & 0xF8) == 0xF0) return 4;
-            return 0;
         }
     }
 }

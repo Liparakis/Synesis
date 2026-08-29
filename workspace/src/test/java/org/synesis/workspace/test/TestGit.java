@@ -5,7 +5,9 @@ import java.nio.file.Path;
 
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 
-/** Shared deterministic Git setup helper for workspace tests. */
+/**
+ * Shared deterministic Git setup helper for workspace tests.
+ */
 public final class TestGit {
 
     private TestGit() {
@@ -14,7 +16,7 @@ public final class TestGit {
     /**
      * Runs a required Git command in a test repository.
      *
-     * @param root repository working directory
+     * @param root      repository working directory
      * @param arguments Git arguments after {@code git}
      * @throws IOException if Git fails, times out, or cannot start
      */
@@ -29,7 +31,7 @@ public final class TestGit {
     /**
      * Runs a required Git command and returns bounded output.
      *
-     * @param root repository working directory
+     * @param root      repository working directory
      * @param arguments Git arguments after {@code git}
      * @return bounded Git output
      * @throws IOException if Git fails, times out, or cannot start

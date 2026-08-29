@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Objects;
 import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.projectrecord.domain.DecisionRecord;
-import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
+import org.synesis.projectrecord.persistence.DecisionStore;
 
 /**
  * Harness-neutral action guardrail evaluator.
@@ -39,27 +39,26 @@ public final class ActionGuardrail {
             return new Response(Outcome.INVALID_INPUT, null, null, "No target relative path specified");
         }
 
-        ProjectConfig config = null;
-        DecisionStore store = null;
         List<DecisionRecord> heads = List.of();
         Path configPath = profile.resolve("project.conf");
         try {
             if (Files.exists(configPath)) {
-                config = ProjectConfig.load(configPath);
-                store = new DecisionStore(profile.resolve("records"), config.projectId());
+                ProjectConfig config = ProjectConfig.load(configPath);
+                DecisionStore store = new DecisionStore(profile.resolve("records"), config.projectId());
                 heads = store.verifiedHeads(1_000);
             } else if (Files.isDirectory(profile.resolve("records"))) {
                 java.util.UUID projId = null;
                 Path projectJson = profile.getParent() != null ? profile.getParent()
                                                                  .resolve("project.json") : null;
                 if (projectJson != null && Files.exists(projectJson)) {
-                    Object parsed = org.synesis.workspace.infrastructure.json.ProviderJson.parse(Files.readString(projectJson));
+                    Object parsed = org.synesis.workspace.infrastructure.json.ProviderJson.parse(Files.readString(
+                            projectJson));
                     if (parsed instanceof java.util.Map<?, ?> map && map.get("projectId") instanceof String s) {
                         projId = java.util.UUID.fromString(s);
                     }
                 }
                 if (projId != null) {
-                    store = new DecisionStore(profile.resolve("records"), projId);
+                    DecisionStore store = new DecisionStore(profile.resolve("records"), projId);
                     heads = store.verifiedHeads(1_000);
                 }
             }

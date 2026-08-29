@@ -6,19 +6,25 @@ import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.application.project.ProjectProcessExecutor;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-/** Canonicalizes bounded typed JSON-RPC request IDs for durable lookup. */
+/**
+ * Canonicalizes bounded typed JSON-RPC request IDs for durable lookup.
+ */
 public final class ProjectCommandCanonicalizer {
 
-    /** Maximum UTF-8-independent Java character count for one request ID. */
+    /**
+     * Maximum UTF-8-independent Java character count for one request ID.
+     */
     public static final int MAX_REQUEST_ID_LENGTH = 256;
 
     private ProjectCommandCanonicalizer() {
     }
 
-    /** Returns a type-preserving canonical request key for a JSON-RPC ID.
+    /**
+     * Returns a type-preserving canonical request key for a JSON-RPC ID.
+     *
      * @param id JSON-RPC string or integer ID
      * @return bounded type-preserving canonical ID
      */
@@ -47,10 +53,12 @@ public final class ProjectCommandCanonicalizer {
         return result;
     }
 
-    /** Computes the digest of the canonical direct-command request.
-     * @param argv direct executable and arguments
+    /**
+     * Computes the digest of the canonical direct-command request.
+     *
+     * @param argv             direct executable and arguments
      * @param workingDirectory bounded relative working directory
-     * @param timeoutSeconds command timeout, or {@code null} for default
+     * @param timeoutSeconds   command timeout, or {@code null} for default
      * @return SHA-256 request digest
      */
     public static String requestDigest(List<String> argv, String workingDirectory, Integer timeoutSeconds) {
@@ -61,11 +69,13 @@ public final class ProjectCommandCanonicalizer {
                         ? ProjectProcessExecutor.DEFAULT_TIMEOUT_SECONDS : timeoutSeconds));
     }
 
-    /** Computes the semantic digest including the authority identity of a request.
-     * @param requestDigest canonical request digest
-     * @param provider canonical provider ID
+    /**
+     * Computes the semantic digest including the authority identity of a request.
+     *
+     * @param requestDigest        canonical request digest
+     * @param provider             canonical provider ID
      * @param connectionInstanceId exact MCP connection ID
-     * @param scopeLocator physical-worktree locator
+     * @param scopeLocator         physical-worktree locator
      * @return SHA-256 semantic digest
      */
     public static String semanticDigest(String requestDigest, String provider,
@@ -76,8 +86,10 @@ public final class ProjectCommandCanonicalizer {
                 "scopeLocator", Objects.requireNonNull(scopeLocator, "scopeLocator")));
     }
 
-    /** Computes the keyed locator from complete anchor identity and typed request ID only.
-     * @param anchorId complete immutable process-anchor identity
+    /**
+     * Computes the keyed locator from complete anchor identity and typed request ID only.
+     *
+     * @param anchorId  complete immutable process-anchor identity
      * @param requestId canonical typed JSON-RPC request ID
      * @return SHA-256 keyed request locator
      */
@@ -88,8 +100,10 @@ public final class ProjectCommandCanonicalizer {
 
     private static String digest(Map<String, Object> value) {
         try {
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(ProviderJson.write(value).getBytes(StandardCharsets.UTF_8)));
+            return java.util.HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(ProviderJson.write(value)
+                                    .getBytes(StandardCharsets.UTF_8)));
         } catch (Exception failure) {
             throw new IllegalStateException("command digest unavailable", failure);
         }

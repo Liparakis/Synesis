@@ -1,4 +1,4 @@
-<div align="center">
+<div style="text-align: center;">
 
 # 🧩 Synesis
 
@@ -32,11 +32,11 @@ Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded p
   connection owns one provider binding; worker sessions and worktrees remain isolated.
 - 🔌 **Provider integrations**
 
-  | Provider | ID | Maturity |
-      |---|---|---|
-  | Antigravity | `antigravity` | `beta` |
-  | Codex | `codex` | `experimental`, trust-review limited |
-  | Claude Code | `claude` | `experimental` |
+  | Provider     | ID              | Maturity                             |
+  |--------------|-----------------|--------------------------------------|
+  | Antigravity  | `antigravity`   | `beta`                               |
+  | Codex        | `codex`         | `experimental`, trust-review limited |
+  | Claude Code  | `claude`        | `experimental`                       |
 
 - 🏗️ **Builds** — Java 25 Gradle builds and a Go bootstrapper for distribution artifacts.
 
@@ -76,7 +76,7 @@ patches, and stop when identity, ownership, freshness, or workspace verification
 Read [`AGENTS.md`](AGENTS.md) and run `scripts/agent-resume.ps1` before making
 changes. Keep work scoped to one active task, add tests for behavior changes,
 and run the Java and Go verification commands above. Record architecture
-changes as ADRs under [`docs/adr/`](docs/adr/), and keep secrets, local state,
+changes as ADRs under [`docs/adr/`](docs/adr), and keep secrets, local state,
 generated files, transcripts, and machine-specific paths out of commits.
 
 ## Roadmap

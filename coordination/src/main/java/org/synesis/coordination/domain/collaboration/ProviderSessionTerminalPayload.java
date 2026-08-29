@@ -8,11 +8,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-/** Durable payload for an explicit terminal fence on one provider session.
- * @param sessionId exact provider session identity
- * @param provider stable provider identifier
- * @param participant derived participant handle
- * @param reason bounded operator or provider reason
+/**
+ * Durable payload for an explicit terminal fence on one provider session.
+ *
+ * @param sessionId         exact provider session identity
+ * @param provider          stable provider identifier
+ * @param participant       derived participant handle
+ * @param reason            bounded operator or provider reason
  * @param validatedRevision event-log head validated before append
  */
 public record ProviderSessionTerminalPayload(
@@ -22,9 +24,12 @@ public record ProviderSessionTerminalPayload(
         String reason,
         long validatedRevision
 ) {
+
     private static final int MAGIC = 0x53544d31;
 
-    /** Validates the exact session identity and optimistic revision proof. */
+    /**
+     * Validates the exact session identity and optimistic revision proof.
+     */
     public ProviderSessionTerminalPayload {
         requireText(sessionId, "sessionId");
         requireText(provider, "provider");
@@ -35,27 +40,9 @@ public record ProviderSessionTerminalPayload(
         }
     }
 
-    /** Encodes this payload using the bounded collaboration binary convention.
-     * @return encoded payload
-     */
-    public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
-            text(out, sessionId);
-            text(out, provider);
-            text(out, participant);
-            text(out, reason);
-            out.writeLong(validatedRevision);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new AssertionError(impossible);
-        }
-    }
-
-    /** Decodes a durable terminal fence payload.
+    /**
+     * Decodes a durable terminal fence payload.
+     *
      * @param encoded encoded payload
      * @return decoded payload
      * @throws IOException when the payload is malformed
@@ -100,6 +87,28 @@ public record ProviderSessionTerminalPayload(
         Objects.requireNonNull(value, name);
         if (value.isBlank() || value.length() > 256) {
             throw new IllegalArgumentException(name + " is invalid");
+        }
+    }
+
+    /**
+     * Encodes this payload using the bounded collaboration binary convention.
+     *
+     * @return encoded payload
+     */
+    public byte[] encode() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC);
+            text(out, sessionId);
+            text(out, provider);
+            text(out, participant);
+            text(out, reason);
+            out.writeLong(validatedRevision);
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
         }
     }
 }

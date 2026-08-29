@@ -50,7 +50,7 @@ beside this report.
 6. **Ordered event timeline (UTC).**
 
    | Sequence | Time | Event | Process evidence |
-   |---:|---|---|---|
+      |---:|---|---|---|
    | 1 | 15:59:51.959121Z | `PREDICTION_CREATED` | A created |
    | 2 | 15:59:51.959121Z | `PREDICTION_ROUTED` | A routed |
    | 3 | 15:59:51.978678Z | `REQUEST_RECEIVED` | B live, 19.6 ms after creation |

@@ -12,21 +12,22 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.link.identity.NodeIdentity;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
-import org.synesis.coordination.domain.task.CoordinationProjection;
+import org.synesis.coordination.domain.contract.ContractProjection;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.prediction.PredictionProjection;
+import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
-import org.synesis.coordination.domain.contract.ContractProjection;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Crash-safe per-project event store. Each event is one immutable file; the
  * directory is the append-only log and projection replay is deterministic.
  */
+@SuppressWarnings("DuplicatedCode")
 public final class PredictionEventStore {
 
     private final Path eventsDirectory;
@@ -132,14 +133,20 @@ public final class PredictionEventStore {
         return event;
     }
 
+    @SuppressWarnings("DataFlowIssue")
     private synchronized Head durableHead() throws IOException, GeneralSecurityException {
         long sequence = 0L;
         byte[] digest = new byte[32];
         try (var files = Files.list(eventsDirectory)) {
-            for (Path file : files.filter(path -> path.getFileName().toString().endsWith(".sce"))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString())).toList()) {
+            for (Path file : files.filter(path -> path.getFileName()
+                            .toString()
+                            .endsWith(".sce"))
+                    .sorted(Comparator.comparing(path -> path.getFileName()
+                            .toString()))
+                    .toList()) {
                 PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-                if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L
+                if (!event.projectId()
+                        .equals(projectId) || event.sequence() != sequence + 1L
                         || !java.util.Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
                     throw new IOException("invalid coordination event log");
                 }
@@ -149,8 +156,6 @@ public final class PredictionEventStore {
         }
         return new Head(sequence, digest);
     }
-
-    private record Head(long sequence, byte[] digest) { }
 
     /**
      * Returns all verified events in sequence order.
@@ -179,7 +184,9 @@ public final class PredictionEventStore {
         return projectId;
     }
 
-    /** Returns the project-local store root for coordinated refreshes.
+    /**
+     * Returns the project-local store root for coordinated refreshes.
+     *
      * @return store root
      */
     public Path rootDirectory() {
@@ -222,19 +229,27 @@ public final class PredictionEventStore {
         return taskCompletionProjection;
     }
 
-    /** Returns the collaboration projection reconstructed from signed events.
+    /**
+     * Returns the collaboration projection reconstructed from signed events.
+     *
      * @return live collaboration projection
      */
     public CollaborationProjection collaborationProjection() {
         return collaborationProjection;
     }
 
-    /** Returns logical work-group and lane-grant state reconstructed from events.
+    /**
+     * Returns logical work-group and lane-grant state reconstructed from events.
+     *
      * @return work-group projection
      */
-    public WorkGroupProjection workGroupProjection() { return workGroupProjection; }
+    public WorkGroupProjection workGroupProjection() {
+        return workGroupProjection;
+    }
 
-    /** Returns the replayed contract projection.
+    /**
+     * Returns the replayed contract projection.
+     *
      * @return contract projection
      */
     public ContractProjection contractProjection() {
@@ -255,8 +270,8 @@ public final class PredictionEventStore {
         byte[] previous = new byte[32];
         for (Path file : files) {
             PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-            if (event.projectId()
-                    .equals(projectId) == false || event.sequence() != expected
+            if (!event.projectId()
+                    .equals(projectId) || event.sequence() != expected
                     || !java.util.Arrays.equals(event.previousDigest(), previous) || !event.verify()) {
                 throw new IOException("invalid coordination event log");
             }
@@ -271,5 +286,9 @@ public final class PredictionEventStore {
             previous = event.digest();
             expected++;
         }
+    }
+
+    private record Head(long sequence, byte[] digest) {
+
     }
 }

@@ -16,14 +16,14 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 /**
  * Append-only execution journal tracking cleanup execution steps for crash safety and idempotency.
  *
- * <p>Journals are stored under {@code %LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-executions\<execution-id>.jsonl}.
+ * <p>Journals are stored under
+ * {@code %LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-executions\<execution-id>.jsonl}.
  *
  * @since 1.0
  */
 public final class CleanupExecutionJournal {
 
     private final Path journalFile;
-    private final String executionId;
 
     /**
      * Creates and opens an append-only cleanup execution journal.
@@ -34,38 +34,16 @@ public final class CleanupExecutionJournal {
      */
     public CleanupExecutionJournal(Path controlRoot, String executionId) throws IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
-        this.executionId = Objects.requireNonNull(executionId, "executionId");
+        Objects.requireNonNull(executionId, "executionId");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        Path execDir = workspaceRoot.resolve("admin").resolve("cleanup-executions");
+        Path execDir = workspaceRoot.resolve("admin")
+                .resolve("cleanup-executions");
         Files.createDirectories(execDir);
 
         this.journalFile = execDir.resolve(executionId + ".jsonl");
-    }
-
-    /**
-     * Appends an execution record to the journal file.
-     *
-     * @param record execution record to append
-     * @throws IOException if writing fails
-     */
-    public synchronized void append(CleanupExecutionRecord record) throws IOException {
-        Objects.requireNonNull(record, "record");
-
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("executionId", record.executionId());
-        map.put("planId", record.planId());
-        map.put("entryResourceId", record.entryResourceId());
-        map.put("resourceType", record.resourceType().name());
-        map.put("state", record.state().name());
-        map.put("preconditionReason", record.preconditionReason());
-        map.put("timestampEpochMillis", record.timestampEpochMillis());
-        map.put("bytesReclaimed", record.bytesReclaimed());
-        map.put("diagnosticDetails", record.diagnosticDetails());
-
-        String jsonLine = ProviderJson.write(map) + "\n";
-        Files.writeString(journalFile, jsonLine, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
     /**
@@ -83,15 +61,20 @@ public final class CleanupExecutionJournal {
 
         Set<String> completed = new HashSet<>();
         try {
-            Path root = controlRoot.toAbsolutePath().normalize();
+            Path root = controlRoot.toAbsolutePath()
+                    .normalize();
             Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-            Path execDir = workspaceRoot.resolve("admin").resolve("cleanup-executions");
+            Path execDir = workspaceRoot.resolve("admin")
+                    .resolve("cleanup-executions");
             if (!Files.isDirectory(execDir)) {
                 return completed;
             }
 
             try (var stream = Files.list(execDir)) {
-                for (Path file : stream.filter(p -> p.getFileName().toString().endsWith(".jsonl")).toList()) {
+                for (Path file : stream.filter(p -> p.getFileName()
+                                .toString()
+                                .endsWith(".jsonl"))
+                        .toList()) {
                     try {
                         List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
                         for (String line : lines) {
@@ -114,5 +97,37 @@ public final class CleanupExecutionJournal {
         }
 
         return completed;
+    }
+
+    /**
+     * Appends an execution record to the journal file.
+     *
+     * @param record execution record to append
+     * @throws IOException if writing fails
+     */
+    public synchronized void append(CleanupExecutionRecord record) throws IOException {
+        Objects.requireNonNull(record, "record");
+
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("executionId", record.executionId());
+        map.put("planId", record.planId());
+        map.put("entryResourceId", record.entryResourceId());
+        map.put("resourceType",
+                record.resourceType()
+                        .name());
+        map.put("state",
+                record.state()
+                        .name());
+        map.put("preconditionReason", record.preconditionReason());
+        map.put("timestampEpochMillis", record.timestampEpochMillis());
+        map.put("bytesReclaimed", record.bytesReclaimed());
+        map.put("diagnosticDetails", record.diagnosticDetails());
+
+        String jsonLine = ProviderJson.write(map) + "\n";
+        Files.writeString(journalFile,
+                jsonLine,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND);
     }
 }

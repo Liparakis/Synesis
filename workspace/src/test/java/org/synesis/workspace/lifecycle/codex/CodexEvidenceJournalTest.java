@@ -11,7 +11,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Evidence queue, journal ceiling, truncation, and retention tests. */
+/**
+ * Evidence queue, journal ceiling, truncation, and retention tests.
+ */
 class CodexEvidenceJournalTest {
 
     @TempDir

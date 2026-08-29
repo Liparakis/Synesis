@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
+import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
 
 class AgentOutcomeTranslatorTest {
 
@@ -39,11 +39,18 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "src/example.txt");
 
-        assertEquals(AgentStatus.COMPLETED, outcome.publicResponse().status());
-        assertNull(outcome.publicResponse().reason());
-        assertNull(outcome.publicResponse().nextAction());
-        assertNotNull(outcome.publicResponse().result());
-        assertTrue(outcome.publicResponse().toJson().contains("\"path\":\"src/example.txt\""));
+        assertEquals(AgentStatus.COMPLETED,
+                outcome.publicResponse()
+                        .status());
+        assertNull(outcome.publicResponse()
+                .reason());
+        assertNull(outcome.publicResponse()
+                .nextAction());
+        assertNotNull(outcome.publicResponse()
+                .result());
+        assertTrue(outcome.publicResponse()
+                .toJson()
+                .contains("\"path\":\"src/example.txt\""));
 
         // Verify diagnostic correlation retained internally
         assertEquals(Decision.ALLOW, outcome.internalDecision());
@@ -54,7 +61,8 @@ class AgentOutcomeTranslatorTest {
         assertFalse(outcome.humanInterventionRequired());
 
         // Verify public JSON hides internal diagnostic fields
-        String json = outcome.publicResponse().toJson();
+        String json = outcome.publicResponse()
+                .toJson();
         assertFalse(json.contains("dec-12345"));
         assertFalse(json.contains("sha256-evidence-abc"));
         assertFalse(json.contains("worktree"));
@@ -76,12 +84,19 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, ".synesis/project.json");
 
-        assertEquals(AgentStatus.BLOCKED, outcome.publicResponse().status());
-        assertEquals(AgentReason.PROTECTED_CONFIGURATION, outcome.publicResponse().reason());
-        assertNull(outcome.publicResponse().nextAction());
-        assertNull(outcome.publicResponse().result());
+        assertEquals(AgentStatus.BLOCKED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.PROTECTED_CONFIGURATION,
+                outcome.publicResponse()
+                        .reason());
+        assertNull(outcome.publicResponse()
+                .nextAction());
+        assertNull(outcome.publicResponse()
+                .result());
 
-        String json = outcome.publicResponse().toJson();
+        String json = outcome.publicResponse()
+                .toJson();
         assertTrue(json.contains("\"status\":\"blocked\""));
         assertTrue(json.contains("\"reason\":\"protected_configuration\""));
         assertFalse(json.contains("dec-9999"));
@@ -102,8 +117,12 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "src/Main.java");
 
-        assertEquals(AgentStatus.BLOCKED, outcome.publicResponse().status());
-        assertEquals(AgentReason.POLICY_DENIED, outcome.publicResponse().reason());
+        assertEquals(AgentStatus.BLOCKED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.POLICY_DENIED,
+                outcome.publicResponse()
+                        .reason());
     }
 
     @Test
@@ -121,12 +140,19 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "src/Catalog.java");
 
-        assertEquals(AgentStatus.NEEDS_CAPABILITY, outcome.publicResponse().status());
-        assertEquals(AgentReason.OWNER_REQUIRED, outcome.publicResponse().reason());
-        assertEquals(AgentNextAction.REQUEST_COORDINATION, outcome.publicResponse().nextAction());
+        assertEquals(AgentStatus.NEEDS_CAPABILITY,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.OWNER_REQUIRED,
+                outcome.publicResponse()
+                        .reason());
+        assertEquals(AgentNextAction.REQUEST_COORDINATION,
+                outcome.publicResponse()
+                        .nextAction());
         assertTrue(outcome.waitRequired());
 
-        String json = outcome.publicResponse().toJson();
+        String json = outcome.publicResponse()
+                .toJson();
         assertTrue(json.contains("\"capability\":\"catalog.product-query\""));
         assertFalse(json.contains("dec-7777"));
     }
@@ -146,9 +172,15 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "src/Main.java");
 
-        assertEquals(AgentStatus.RETRY_REQUIRED, outcome.publicResponse().status());
-        assertEquals(AgentReason.WORKSPACE_NOT_READY, outcome.publicResponse().reason());
-        assertEquals(AgentNextAction.ENSURE_SESSION, outcome.publicResponse().nextAction());
+        assertEquals(AgentStatus.RETRY_REQUIRED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.WORKSPACE_NOT_READY,
+                outcome.publicResponse()
+                        .reason());
+        assertEquals(AgentNextAction.ENSURE_SESSION,
+                outcome.publicResponse()
+                        .nextAction());
         assertTrue(outcome.safeToRetry());
     }
 
@@ -167,9 +199,15 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "src/Main.java");
 
-        assertEquals(AgentStatus.RETRY_REQUIRED, outcome.publicResponse().status());
-        assertEquals(AgentReason.SESSION_NOT_READY, outcome.publicResponse().reason());
-        assertEquals(AgentNextAction.ENSURE_SESSION, outcome.publicResponse().nextAction());
+        assertEquals(AgentStatus.RETRY_REQUIRED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.SESSION_NOT_READY,
+                outcome.publicResponse()
+                        .reason());
+        assertEquals(AgentNextAction.ENSURE_SESSION,
+                outcome.publicResponse()
+                        .nextAction());
         assertTrue(outcome.safeToRetry());
     }
 
@@ -188,9 +226,15 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "src/Main.java");
 
-        assertEquals(AgentStatus.RETRY_REQUIRED, outcome.publicResponse().status());
-        assertEquals(AgentReason.WORKSPACE_STALE, outcome.publicResponse().reason());
-        assertEquals(AgentNextAction.ENSURE_SESSION, outcome.publicResponse().nextAction());
+        assertEquals(AgentStatus.RETRY_REQUIRED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.WORKSPACE_STALE,
+                outcome.publicResponse()
+                        .reason());
+        assertEquals(AgentNextAction.ENSURE_SESSION,
+                outcome.publicResponse()
+                        .nextAction());
         assertTrue(outcome.safeToRetry());
     }
 
@@ -209,8 +253,12 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "../secret.txt");
 
-        assertEquals(AgentStatus.BLOCKED, outcome.publicResponse().status());
-        assertEquals(AgentReason.INVALID_PATH, outcome.publicResponse().reason());
+        assertEquals(AgentStatus.BLOCKED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.INVALID_PATH,
+                outcome.publicResponse()
+                        .reason());
     }
 
     @Test
@@ -228,17 +276,27 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateMutationResult(internalResult, "src/Main.java");
 
-        assertEquals(AgentStatus.BLOCKED, outcome.publicResponse().status());
-        assertEquals(AgentReason.INTERCEPTION_REQUIRED, outcome.publicResponse().reason());
+        assertEquals(AgentStatus.BLOCKED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.INTERCEPTION_REQUIRED,
+                outcome.publicResponse()
+                        .reason());
     }
 
     @Test
     void testTranslatePendingOwner() {
         TranslatedOutcome outcome = translator.translatePendingOwner();
 
-        assertEquals(AgentStatus.WAITING, outcome.publicResponse().status());
-        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, outcome.publicResponse().reason());
-        assertEquals(AgentNextAction.WAIT, outcome.publicResponse().nextAction());
+        assertEquals(AgentStatus.WAITING,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING,
+                outcome.publicResponse()
+                        .reason());
+        assertEquals(AgentNextAction.WAIT,
+                outcome.publicResponse()
+                        .nextAction());
         assertTrue(outcome.waitRequired());
     }
 
@@ -248,12 +306,19 @@ class AgentOutcomeTranslatorTest {
 
         TranslatedOutcome outcome = translator.translateException(ex);
 
-        assertEquals(AgentStatus.FAILED, outcome.publicResponse().status());
-        assertEquals(AgentReason.INTERNAL_FAILURE, outcome.publicResponse().reason());
-        assertEquals(AgentNextAction.REQUEST_HUMAN_HELP, outcome.publicResponse().nextAction());
+        assertEquals(AgentStatus.FAILED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.INTERNAL_FAILURE,
+                outcome.publicResponse()
+                        .reason());
+        assertEquals(AgentNextAction.REQUEST_HUMAN_HELP,
+                outcome.publicResponse()
+                        .nextAction());
         assertTrue(outcome.humanInterventionRequired());
 
-        String json = outcome.publicResponse().toJson();
+        String json = outcome.publicResponse()
+                .toJson();
         assertFalse(json.contains("SQL syntax error"));
         assertFalse(json.contains("line 42"));
     }
@@ -262,7 +327,11 @@ class AgentOutcomeTranslatorTest {
     void testTranslateNullMutationResultFailsSafely() {
         TranslatedOutcome outcome = translator.translateMutationResult(null, "src/Main.java");
 
-        assertEquals(AgentStatus.FAILED, outcome.publicResponse().status());
-        assertEquals(AgentReason.INTERNAL_FAILURE, outcome.publicResponse().reason());
+        assertEquals(AgentStatus.FAILED,
+                outcome.publicResponse()
+                        .status());
+        assertEquals(AgentReason.INTERNAL_FAILURE,
+                outcome.publicResponse()
+                        .reason());
     }
 }

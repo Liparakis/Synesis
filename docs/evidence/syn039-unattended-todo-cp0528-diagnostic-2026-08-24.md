@@ -15,7 +15,8 @@ was performed by the harness.
 - Harness/logs: `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-cp0528-001`
 - Project ID: `5f59245e-e4f1-4847-b3e8-b0a063a532a0`
 - Seed commit: `5d9de21 seed Todo diagnostic acceptance`
-- MCP executable: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
+- MCP executable:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
 - MCP SHA-256: `133E5C2D2A12ADF8FC3E72113BAF11A90DA0E7AB17FB536BF2E92C3ED0131D6C`
 - MCP identity: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`, commit
   `bc334ac`, exactly 10 tools

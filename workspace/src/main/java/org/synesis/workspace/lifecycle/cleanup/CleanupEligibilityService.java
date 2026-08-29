@@ -1,12 +1,6 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.lifecycle.GitProcessRunner;
-
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
-
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -15,6 +9,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
+import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 
 /**
  * Evaluates raw discovered lifecycle resources against path verifiers, process inspectors,
@@ -55,6 +52,11 @@ public final class CleanupEligibilityService {
         this.processInspector = Objects.requireNonNull(processInspector, "processInspector");
     }
 
+    private static String runGit(Path workdir, String... args) throws IOException {
+        return GitProcessRunner.run(workdir, args)
+                .trim();
+    }
+
     /**
      * Evaluates a discovered candidate resource and creates a cleanup plan entry.
      *
@@ -82,7 +84,10 @@ public final class CleanupEligibilityService {
                 reasons.add(pathResult.reasonCode());
             }
         } else {
-            pathResult = new LifecyclePathVerifier.PathVerificationResult(true, "virtual_resource", Path.of("virtual"), null);
+            pathResult = new LifecyclePathVerifier.PathVerificationResult(true,
+                    "virtual_resource",
+                    Path.of("virtual"),
+                    null);
         }
 
         // 2. Read-only Git Worktree Inspection (if filesystem directory exists)
@@ -91,7 +96,10 @@ public final class CleanupEligibilityService {
             try {
                 gitHead = runGit(path, "rev-parse", "HEAD");
                 String rawCommon = runGit(path, "rev-parse", "--git-common-dir");
-                gitCommonDir = path.resolve(rawCommon).toAbsolutePath().normalize().toString();
+                gitCommonDir = path.resolve(rawCommon)
+                        .toAbsolutePath()
+                        .normalize()
+                        .toString();
                 String porcelain = runGit(path, "status", "--porcelain");
                 if (!porcelain.isBlank()) {
                     isDirty = true;
@@ -109,15 +117,18 @@ public final class CleanupEligibilityService {
         ProcessEvidenceState processState = processInspector.evaluateEvidence(
                 resource.pid(), "java", "SynesisMcpServer"
         );
-        if (processState == ProcessEvidenceState.LIVE_VERIFIED || processState == ProcessEvidenceState.LIVE_UNVERIFIED) {
+        if (processState == ProcessEvidenceState.LIVE_VERIFIED
+                || processState == ProcessEvidenceState.LIVE_UNVERIFIED) {
             reasons.add(CleanupReason.ACTIVE_SESSION.code());
-        } else if (processState == ProcessEvidenceState.NOT_OBSERVED && resource.type() == LifecycleResourceType.PROVIDER_SESSION) {
+        } else if (processState == ProcessEvidenceState.NOT_OBSERVED
+                && resource.type() == LifecycleResourceType.PROVIDER_SESSION) {
             reasons.add(CleanupReason.SUSPECTED_STALE_PROCESS.code());
         }
 
         // 4. Calculate Age and Retention Expiry
         Instant now = retentionPolicy.now();
-        Instant lastMod = Instant.ofEpochMilli(resource.lastModifiedTime() > 0 ? resource.lastModifiedTime() : now.toEpochMilli());
+        Instant lastMod = Instant.ofEpochMilli(
+                resource.lastModifiedTime() > 0 ? resource.lastModifiedTime() : now.toEpochMilli());
         Duration age = Duration.between(lastMod, now);
         if (age.isNegative()) {
             age = Duration.ZERO;
@@ -127,9 +138,10 @@ public final class CleanupEligibilityService {
         CleanupClassification classification;
         boolean eligible = false;
         String retentionDesc = "Age: " + age.toHours() + "h";
-        String proposedAction = "NONE";
+        String proposedAction;
 
-        if (resource.type() == LifecycleResourceType.IMPLEMENTATION_SNAPSHOT || resource.type() == LifecycleResourceType.TASK_SNAPSHOT) {
+        if (resource.type() == LifecycleResourceType.IMPLEMENTATION_SNAPSHOT
+                || resource.type() == LifecycleResourceType.TASK_SNAPSHOT) {
             classification = CleanupClassification.PROTECTED;
             if (!pathResult.safe()) {
                 reasons.add(pathResult.reasonCode());
@@ -189,15 +201,11 @@ public final class CleanupEligibilityService {
                 reasons.add(CleanupReason.RETENTION_WINDOW_ACTIVE.code());
                 proposedAction = "RETAIN_TEMPORARY_FILE";
             }
-        } else if (resource.type() == LifecycleResourceType.UNLINKED_EXTERNAL_WORKSPACE || resource.type() == LifecycleResourceType.DANGLING_GIT_WORKTREE) {
+        } else if (resource.type() == LifecycleResourceType.UNLINKED_EXTERNAL_WORKSPACE
+                || resource.type() == LifecycleResourceType.DANGLING_GIT_WORKTREE) {
             classification = CleanupClassification.ORPHANED;
             reasons.add(CleanupReason.DURABLE_RECORD_MISSING.code());
             proposedAction = "REQUIRES_DOCTOR_RECONCILIATION";
-        } else if (resource.type() == LifecycleResourceType.IMPLEMENTATION_SNAPSHOT || resource.type() == LifecycleResourceType.TASK_SNAPSHOT) {
-            classification = CleanupClassification.PROTECTED;
-            reasons.add(CleanupReason.SNAPSHOT_STILL_REFERENCED.code());
-            reasons.add(CleanupReason.SNAPSHOT_CLEANUP_NOT_SUPPORTED.code());
-            proposedAction = "PRESERVE_IMMUTABLE_SNAPSHOT";
         } else {
             classification = CleanupClassification.PROTECTED;
             reasons.add(CleanupReason.CONTROL_CHECKOUT_PROTECTED.code());
@@ -230,9 +238,5 @@ public final class CleanupEligibilityService {
                 fingerprint,
                 proposedAction
         );
-    }
-
-    private static String runGit(Path workdir, String... args) throws IOException {
-        return GitProcessRunner.run(workdir, args).trim();
     }
 }

@@ -16,6 +16,7 @@ import org.synesis.workspace.infrastructure.process.ProcessInspector;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class SessionLeaseService {
 
     private final SessionLeaseStore store;
@@ -37,6 +38,26 @@ public final class SessionLeaseService {
     public SessionLeaseService(SessionLeaseStore store, ProcessInspector processInspector) {
         this.store = Objects.requireNonNull(store, "store");
         this.processInspector = Objects.requireNonNull(processInspector, "processInspector");
+    }
+
+    private static Path coordinationRoot(Path controlRoot) {
+        return controlRoot.toAbsolutePath()
+                .normalize()
+                .resolve(".synesis")
+                .resolve("coordination");
+    }
+
+    private static SessionLeaseRecord copyWithState(
+            SessionLeaseRecord previous, SessionLeaseState state, boolean refreshHeartbeat) {
+        return new SessionLeaseRecord(
+                previous.schemaVersion(), previous.projectId(), previous.provider(), previous.connectionInstanceId(),
+                previous.workerNodeId(), previous.sessionId(), previous.processIdentity(), previous.synesisVersion(),
+                previous.createdAtEpochMillis(), refreshHeartbeat ? System.currentTimeMillis()
+                : previous.lastHeartbeatEpochMillis(), state);
+    }
+
+    private static boolean isTerminalTransportFinalized(SessionLeaseState state) {
+        return state == SessionLeaseState.TERMINAL_DISCONNECTED || state == SessionLeaseState.CLOSED_CLEANLY;
     }
 
     /**
@@ -74,8 +95,10 @@ public final class SessionLeaseService {
         Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
 
         if (existing.isPresent()
-                && (existing.get().leaseState() == SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED
-                || existing.get().leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED)) {
+                && (existing.get()
+                .leaseState() == SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED
+                || existing.get()
+                .leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED)) {
             return existing.get();
         }
 
@@ -87,17 +110,29 @@ public final class SessionLeaseService {
             processIdentity = prev.processIdentity();
             createdAt = prev.createdAtEpochMillis();
         } else {
-            long pid = ProcessHandle.current().pid();
-            String exec = ProcessHandle.current().info().command().orElse("java");
-            String cmd = ProcessHandle.current().info().commandLine().orElse(exec);
-            long start = ProcessHandle.current().info().startInstant().map(java.time.Instant::toEpochMilli).orElse(now);
-            String nonce = UUID.randomUUID().toString();
+            long pid = ProcessHandle.current()
+                    .pid();
+            String exec = ProcessHandle.current()
+                    .info()
+                    .command()
+                    .orElse("java");
+            String cmd = ProcessHandle.current()
+                    .info()
+                    .commandLine()
+                    .orElse(exec);
+            long start = ProcessHandle.current()
+                    .info()
+                    .startInstant()
+                    .map(java.time.Instant::toEpochMilli)
+                    .orElse(now);
+            String nonce = UUID.randomUUID()
+                    .toString();
             processIdentity = new SessionProcessIdentity(pid, exec, cmd, start, nonce);
             createdAt = now;
         }
 
         return saveLease(controlRoot, projectId, provider, connectionInstanceId, workerNodeId, sessionId,
-                processIdentity, createdAt, now, policy);
+                processIdentity, createdAt, now);
     }
 
     /**
@@ -107,17 +142,18 @@ public final class SessionLeaseService {
      * process identity is evidence for liveness; it does not grant mutation
      * authority or imply intentional abandonment when the process exits.
      *
-     * @param controlRoot control project root
-     * @param projectId project identifier
-     * @param provider provider identifier
+     * @param controlRoot          control project root
+     * @param projectId            project identifier
+     * @param provider             provider identifier
      * @param connectionInstanceId exact connection identifier
-     * @param workerNodeId worker node identifier
-     * @param sessionId session identifier
-     * @param processIdentity supervised provider process evidence
-     * @param policy lease policy
+     * @param workerNodeId         worker node identifier
+     * @param sessionId            session identifier
+     * @param processIdentity      supervised provider process evidence
+     * @param policy               lease policy
      * @return persisted lease record
      * @throws IOException when persistence fails
      */
+    @SuppressWarnings("UnusedReturnValue")
     public SessionLeaseRecord createOrRenewSupervisedLease(
             Path controlRoot,
             String projectId,
@@ -133,13 +169,16 @@ public final class SessionLeaseService {
         long now = policy.nowMillis();
         Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
         if (existing.isPresent()
-                && (existing.get().leaseState() == SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED
-                || existing.get().leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED)) {
+                && (existing.get()
+                .leaseState() == SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED
+                || existing.get()
+                .leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED)) {
             return existing.get();
         }
-        long createdAt = existing.map(SessionLeaseRecord::createdAtEpochMillis).orElse(now);
+        long createdAt = existing.map(SessionLeaseRecord::createdAtEpochMillis)
+                .orElse(now);
         return saveLease(controlRoot, projectId, provider, connectionInstanceId, workerNodeId, sessionId,
-                processIdentity, createdAt, now, policy);
+                processIdentity, createdAt, now);
     }
 
     private SessionLeaseRecord saveLease(
@@ -151,8 +190,7 @@ public final class SessionLeaseService {
             String sessionId,
             SessionProcessIdentity processIdentity,
             long createdAt,
-            long now,
-            SessionLeasePolicy policy
+            long now
     ) throws IOException {
 
         SessionLeaseRecord updated = new SessionLeaseRecord(
@@ -189,8 +227,7 @@ public final class SessionLeaseService {
             }
 
             SessionLeaseState targetState = SessionLeaseState.CLOSED_CLEANLY;
-            store.save(controlRoot, copyWithState(previous, targetState,
-                    targetState == SessionLeaseState.CLOSED_CLEANLY));
+            store.save(controlRoot, copyWithState(previous, targetState, true));
         } catch (IOException ignored) {
             // A failed finalization remains available for durable reconciliation.
         }
@@ -217,7 +254,9 @@ public final class SessionLeaseService {
                 return false;
             }
             Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
-            if (existing.isEmpty() || existing.get().processIdentity().pid() != expectedPid) {
+            if (existing.isEmpty() || existing.get()
+                    .processIdentity()
+                    .pid() != expectedPid) {
                 return false;
             }
             SessionLeaseRecord previous = existing.get();
@@ -234,31 +273,14 @@ public final class SessionLeaseService {
         }
     }
 
-    private static Path coordinationRoot(Path controlRoot) {
-        return controlRoot.toAbsolutePath().normalize().resolve(".synesis").resolve("coordination");
-    }
-
-    private static SessionLeaseRecord copyWithState(
-            SessionLeaseRecord previous, SessionLeaseState state, boolean refreshHeartbeat) {
-        return new SessionLeaseRecord(
-                previous.schemaVersion(), previous.projectId(), previous.provider(), previous.connectionInstanceId(),
-                previous.workerNodeId(), previous.sessionId(), previous.processIdentity(), previous.synesisVersion(),
-                previous.createdAtEpochMillis(), refreshHeartbeat ? System.currentTimeMillis()
-                        : previous.lastHeartbeatEpochMillis(), state);
-    }
-
-    private static boolean isTerminalTransportFinalized(SessionLeaseState state) {
-        return state == SessionLeaseState.TERMINAL_DISCONNECTED || state == SessionLeaseState.CLOSED_CLEANLY;
-    }
-
     /**
      * Marks a lease cleanly closed only when it still refers to the expected
      * supervised process. A late callback from an older process therefore
      * cannot close a replacement lease on the same connection.
      *
-     * @param controlRoot control project root path
+     * @param controlRoot          control project root path
      * @param connectionInstanceId connection instance ID
-     * @param expectedPid process ID observed at close time
+     * @param expectedPid          process ID observed at close time
      * @return {@code true} when the exact process lease was closed
      */
     public boolean markClosedCleanly(Path controlRoot, String connectionInstanceId, long expectedPid) {
@@ -273,7 +295,8 @@ public final class SessionLeaseService {
                 return false;
             }
             SessionLeaseRecord previous = existing.get();
-            if (previous.processIdentity().pid() != expectedPid) {
+            if (previous.processIdentity()
+                    .pid() != expectedPid) {
                 if (previous.leaseState() == SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED
                         && terminalProcessIsNotLive(previous)) {
                     store.save(controlRoot, copyWithState(previous,
@@ -293,9 +316,12 @@ public final class SessionLeaseService {
 
     private boolean terminalProcessIsNotLive(SessionLeaseRecord record) {
         ProcessEvidenceState evidence = processInspector.evaluateEvidence(
-                record.processIdentity().pid(),
-                record.processIdentity().executableIdentity(),
-                record.processIdentity().commandLine());
+                record.processIdentity()
+                        .pid(),
+                record.processIdentity()
+                        .executableIdentity(),
+                record.processIdentity()
+                        .commandLine());
         return evidence == ProcessEvidenceState.NOT_OBSERVED
                 || evidence == ProcessEvidenceState.PID_REUSED_OR_MISMATCHED
                 || evidence == ProcessEvidenceState.PROCESS_EVIDENCE_UNAVAILABLE;
@@ -306,7 +332,7 @@ public final class SessionLeaseService {
      * connection.  The marker is monotonic and is never changed back to
      * {@link SessionLeaseState#ACTIVE} by a later lease renewal.
      *
-     * @param controlRoot control project root
+     * @param controlRoot          control project root
      * @param connectionInstanceId exact connection identity
      * @return true when the exact lease was marked or was already marked
      */
@@ -359,9 +385,12 @@ public final class SessionLeaseService {
         Duration elapsedSinceHeartbeat = Duration.ofMillis(Math.max(0, now - record.lastHeartbeatEpochMillis()));
 
         ProcessEvidenceState processEvidence = processInspector.evaluateEvidence(
-                record.processIdentity().pid(),
-                record.processIdentity().executableIdentity(),
-                record.processIdentity().commandLine()
+                record.processIdentity()
+                        .pid(),
+                record.processIdentity()
+                        .executableIdentity(),
+                record.processIdentity()
+                        .commandLine()
         );
 
         if (processEvidence == ProcessEvidenceState.LIVE_VERIFIED) {
@@ -375,7 +404,8 @@ public final class SessionLeaseService {
             }
         }
 
-        if (processEvidence == ProcessEvidenceState.PID_REUSED_OR_MISMATCHED || processEvidence == ProcessEvidenceState.PROCESS_EVIDENCE_UNAVAILABLE) {
+        if (processEvidence == ProcessEvidenceState.PID_REUSED_OR_MISMATCHED
+                || processEvidence == ProcessEvidenceState.PROCESS_EVIDENCE_UNAVAILABLE) {
             if (terminalAuthority) {
                 return SessionLeaseState.TERMINAL_DISCONNECTED;
             }

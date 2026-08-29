@@ -25,11 +25,10 @@ public final class ProjectReconciliationPeerProcess {
     private static final UUID RECORD_A = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID RECORD_B = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID RECORD_C = UUID.fromString("33333333-3333-3333-3333-333333333333");
-    private static final UUID RECORD_D = UUID.fromString("44444444-4444-4444-4444-444444444444");
 
     private static final Instant TIME = Instant.parse("2026-01-01T00:00:00Z");
 
-    public static void main(String[] arguments) throws Exception {
+    static void main(String[] arguments) throws Exception {
         if (arguments.length != 9) {
             throw new IllegalArgumentException("expected mode and eight paths/values");
         }
@@ -46,14 +45,14 @@ public final class ProjectReconciliationPeerProcess {
         if ("join".equals(mode)) {
             join(profile, project, joinId, hostId, invitation, marker, outcomes, scenario);
         } else if ("host".equals(mode)) {
-            host(profile, project, joinId, hostId, invitation, marker, outcomes, scenario);
+            host(profile, project, joinId, hostId, invitation, marker, scenario);
         } else {
             throw new IllegalArgumentException("unknown mode");
         }
     }
 
     private static void host(Path profile, UUID project, Path joinId, Path hostId, Path invitation,
-            Path marker, Path outcomes, String scenario) throws Exception {
+            Path marker, String scenario) throws Exception {
         NodeIdentity identity = new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
                 .identity();
         Files.writeString(hostId, identity.nodeId());
@@ -92,7 +91,7 @@ public final class ProjectReconciliationPeerProcess {
             }
         });
         onboarding.host(Files.readString(joinId)
-                .trim(), sync.handler(), session -> {
+                .trim(), sync.handler(), _ -> {
             try {
                 waitFor(marker);
             } catch (Exception failure) {
@@ -144,7 +143,7 @@ public final class ProjectReconciliationPeerProcess {
         }
 
         ProjectReconciliationSync sync = new ProjectReconciliationSync(identity.nodeId(), config, store);
-        Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> {
+        Onboarding onboarding = new Onboarding(profile.resolve("link"), _ -> {
         });
         onboarding.join(Files.readString(invitation), sync.handler(), session -> {
             try {
@@ -171,10 +170,11 @@ public final class ProjectReconciliationPeerProcess {
                 "rationale", List.of(new DecisionEvidence("test", "process", new byte[32])), signer);
     }
 
-    private static void waitFor(Path path) throws Exception {
+    private static void waitFor(Path path) {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
         while (!Files.exists(path) && System.nanoTime() < deadline) {
-            Thread.sleep(20);
+            java.util.concurrent.locks.LockSupport.parkNanos(
+                    java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(20));
         }
         if (!Files.exists(path)) {
             throw new IllegalStateException("timed out waiting for " + path);

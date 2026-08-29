@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.cleanup.CleanupExecutionService;
 import org.synesis.workspace.lifecycle.cleanup.CleanupPlan;
 import org.synesis.workspace.lifecycle.cleanup.CleanupPlanEntry;
@@ -14,7 +15,6 @@ import org.synesis.workspace.lifecycle.cleanup.CleanupPlanService;
 import org.synesis.workspace.lifecycle.cleanup.CleanupPlanStore;
 import org.synesis.workspace.lifecycle.cleanup.PersistedCleanupPlan;
 import org.synesis.workspace.lifecycle.cleanup.PersistedCleanupPlanEntry;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -24,6 +24,7 @@ import picocli.CommandLine.Option;
  * @since 1.0
  */
 @Command(name = "cleanup", description = "Inspects lifecycle resources, prepares immutable plans, and executes safe cleanup.", mixinStandardHelpOptions = true)
+@SuppressWarnings("DuplicatedCode")
 public final class CleanupCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
@@ -84,7 +85,8 @@ public final class CleanupCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         if (!dryRun && !prepare && showPlan == null && executePlan == null) {
-            runtime.terminal().stderr("Cleanup execution is not available in this version without --dry-run, --prepare, --show-plan, or --execute.");
+            runtime.terminal()
+                    .stderr("Cleanup execution is not available in this version without --dry-run, --prepare, --show-plan, or --execute.");
             return ExitCodes.LOCAL_CONFIGURATION;
         }
 
@@ -111,7 +113,8 @@ public final class CleanupCommand implements Callable<Integer> {
         try {
             plan = planService.generatePlan(controlRoot);
         } catch (Exception failure) {
-            runtime.terminal().stdout("CLEANUP_RESULT=BROKEN");
+            runtime.terminal()
+                    .stdout("CLEANUP_RESULT=BROKEN");
             return ExitCodes.LOCAL_CONFIGURATION;
         }
 
@@ -131,62 +134,98 @@ public final class CleanupCommand implements Callable<Integer> {
             jsonMap.put("diskBudgetWarning", plan.diskBudgetWarning());
             jsonMap.put("mutationsPerformed", 0);
 
-            List<Map<String, Object>> entriesList = plan.entries().stream().map(e -> {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("type", e.resourceType().name());
-                item.put("id", e.resourceId());
-                item.put("classification", e.classification().name());
-                item.put("eligible", e.eligible());
-                item.put("reasons", e.reasons());
-                item.put("estimatedBytes", e.estimatedBytes());
-                item.put("pathSafety", e.pathSafetyCode());
-                item.put("proposedAction", e.proposedAction());
-                return item;
-            }).toList();
+            List<Map<String, Object>> entriesList = plan.entries()
+                    .stream()
+                    .map(e -> {
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("type",
+                                e.resourceType()
+                                        .name());
+                        item.put("id", e.resourceId());
+                        item.put("classification",
+                                e.classification()
+                                        .name());
+                        item.put("eligible", e.eligible());
+                        item.put("reasons", e.reasons());
+                        item.put("estimatedBytes", e.estimatedBytes());
+                        item.put("pathSafety", e.pathSafetyCode());
+                        item.put("proposedAction", e.proposedAction());
+                        return item;
+                    })
+                    .toList();
             jsonMap.put("entries", entriesList);
 
-            runtime.terminal().stdout(ProviderJson.write(jsonMap));
+            runtime.terminal()
+                    .stdout(ProviderJson.write(jsonMap));
             return ExitCodes.OK;
         }
 
         if (verbose) {
-            runtime.terminal().stdout("CLEANUP_RESULT=DRY_RUN");
-            runtime.terminal().stdout("PROJECT_ID=" + plan.projectId());
-            runtime.terminal().stdout("RESOURCES_DISCOVERED=" + plan.discoveredCount());
-            runtime.terminal().stdout("PROTECTED=" + plan.protectedCount());
-            runtime.terminal().stdout("ACTIVE=" + plan.activeCount());
-            runtime.terminal().stdout("RECOVERABLE=" + plan.recoverableCount());
-            runtime.terminal().stdout("DIAGNOSTIC_RETAINED=" + plan.diagnosticRetainedCount());
-            runtime.terminal().stdout("CLEANUP_ELIGIBLE=" + plan.cleanupEligibleCount());
-            runtime.terminal().stdout("ORPHANED=" + plan.orphanedCount());
-            runtime.terminal().stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.estimatedReclaimableBytes());
-            runtime.terminal().stdout("DISK_BUDGET_WARNING=" + plan.diskBudgetWarning());
-            runtime.terminal().stdout("MUTATIONS_PERFORMED=0");
-            runtime.terminal().stdout("--- ENTRIES ---");
+            runtime.terminal()
+                    .stdout("CLEANUP_RESULT=DRY_RUN");
+            runtime.terminal()
+                    .stdout("PROJECT_ID=" + plan.projectId());
+            runtime.terminal()
+                    .stdout("RESOURCES_DISCOVERED=" + plan.discoveredCount());
+            runtime.terminal()
+                    .stdout("PROTECTED=" + plan.protectedCount());
+            runtime.terminal()
+                    .stdout("ACTIVE=" + plan.activeCount());
+            runtime.terminal()
+                    .stdout("RECOVERABLE=" + plan.recoverableCount());
+            runtime.terminal()
+                    .stdout("DIAGNOSTIC_RETAINED=" + plan.diagnosticRetainedCount());
+            runtime.terminal()
+                    .stdout("CLEANUP_ELIGIBLE=" + plan.cleanupEligibleCount());
+            runtime.terminal()
+                    .stdout("ORPHANED=" + plan.orphanedCount());
+            runtime.terminal()
+                    .stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.estimatedReclaimableBytes());
+            runtime.terminal()
+                    .stdout("DISK_BUDGET_WARNING=" + plan.diskBudgetWarning());
+            runtime.terminal()
+                    .stdout("MUTATIONS_PERFORMED=0");
+            runtime.terminal()
+                    .stdout("--- ENTRIES ---");
             for (CleanupPlanEntry entry : plan.entries()) {
-                runtime.terminal().stdout("[" + entry.classification() + "] " + entry.resourceType() + " | "
-                        + entry.resourceId() + " | eligible=" + entry.eligible() + " | action=" + entry.proposedAction()
-                        + " | reasons=" + entry.reasons());
+                runtime.terminal()
+                        .stdout("[" + entry.classification() + "] " + entry.resourceType() + " | "
+                                + entry.resourceId() + " | eligible=" + entry.eligible() + " | action="
+                                + entry.proposedAction()
+                                + " | reasons=" + entry.reasons());
             }
             return ExitCodes.OK;
         }
 
-        runtime.terminal().stdout("CLEANUP_RESULT=DRY_RUN");
-        runtime.terminal().stdout("PROJECT=READY");
-        runtime.terminal().stdout("RESOURCES_DISCOVERED=" + plan.discoveredCount());
-        runtime.terminal().stdout("PROTECTED=" + plan.protectedCount());
-        runtime.terminal().stdout("ACTIVE=" + plan.activeCount());
-        runtime.terminal().stdout("RECOVERABLE=" + plan.recoverableCount());
-        runtime.terminal().stdout("DIAGNOSTIC_RETAINED=" + plan.diagnosticRetainedCount());
-        runtime.terminal().stdout("CLEANUP_ELIGIBLE=" + plan.cleanupEligibleCount());
-        runtime.terminal().stdout("ORPHANED=" + plan.orphanedCount());
-        runtime.terminal().stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.estimatedReclaimableBytes());
-        runtime.terminal().stdout("MUTATIONS_PERFORMED=0");
-        runtime.terminal().stdout("NEXT_ACTION=review_with_verbose_output");
+        runtime.terminal()
+                .stdout("CLEANUP_RESULT=DRY_RUN");
+        runtime.terminal()
+                .stdout("PROJECT=READY");
+        runtime.terminal()
+                .stdout("RESOURCES_DISCOVERED=" + plan.discoveredCount());
+        runtime.terminal()
+                .stdout("PROTECTED=" + plan.protectedCount());
+        runtime.terminal()
+                .stdout("ACTIVE=" + plan.activeCount());
+        runtime.terminal()
+                .stdout("RECOVERABLE=" + plan.recoverableCount());
+        runtime.terminal()
+                .stdout("DIAGNOSTIC_RETAINED=" + plan.diagnosticRetainedCount());
+        runtime.terminal()
+                .stdout("CLEANUP_ELIGIBLE=" + plan.cleanupEligibleCount());
+        runtime.terminal()
+                .stdout("ORPHANED=" + plan.orphanedCount());
+        runtime.terminal()
+                .stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.estimatedReclaimableBytes());
+        runtime.terminal()
+                .stdout("MUTATIONS_PERFORMED=0");
+        runtime.terminal()
+                .stdout("NEXT_ACTION=review_with_verbose_output");
 
         return ExitCodes.OK;
     }
 
+    @SuppressWarnings("ExtractMethodRecommender")
     private int handlePrepare(Path controlRoot) {
         try {
             CleanupPlan rawPlan = planService.generatePlan(controlRoot);
@@ -201,22 +240,32 @@ public final class CleanupCommand implements Callable<Integer> {
                 map.put("estimatedReclaimableBytes", persistedPlan.totalEstimatedReclaimableBytes());
                 map.put("mutationsPerformed", 1);
                 map.put("resourceMutationsPerformed", 0);
-                runtime.terminal().stdout(ProviderJson.write(map));
+                runtime.terminal()
+                        .stdout(ProviderJson.write(map));
                 return ExitCodes.OK;
             }
 
-            runtime.terminal().stdout("CLEANUP_RESULT=PLAN_PREPARED");
-            runtime.terminal().stdout("PLAN=" + persistedPlan.planId());
-            runtime.terminal().stdout("RESOURCES_DISCOVERED=" + persistedPlan.totalDiscoveredCount());
-            runtime.terminal().stdout("EXECUTABLE_ENTRIES=" + persistedPlan.totalExecutableCount());
-            runtime.terminal().stdout("ESTIMATED_RECLAIMABLE_BYTES=" + persistedPlan.totalEstimatedReclaimableBytes());
-            runtime.terminal().stdout("MUTATIONS_PERFORMED=1");
-            runtime.terminal().stdout("RESOURCE_MUTATIONS_PERFORMED=0");
-            runtime.terminal().stdout("NEXT_ACTION=review_plan_then_execute");
+            runtime.terminal()
+                    .stdout("CLEANUP_RESULT=PLAN_PREPARED");
+            runtime.terminal()
+                    .stdout("PLAN=" + persistedPlan.planId());
+            runtime.terminal()
+                    .stdout("RESOURCES_DISCOVERED=" + persistedPlan.totalDiscoveredCount());
+            runtime.terminal()
+                    .stdout("EXECUTABLE_ENTRIES=" + persistedPlan.totalExecutableCount());
+            runtime.terminal()
+                    .stdout("ESTIMATED_RECLAIMABLE_BYTES=" + persistedPlan.totalEstimatedReclaimableBytes());
+            runtime.terminal()
+                    .stdout("MUTATIONS_PERFORMED=1");
+            runtime.terminal()
+                    .stdout("RESOURCE_MUTATIONS_PERFORMED=0");
+            runtime.terminal()
+                    .stdout("NEXT_ACTION=review_plan_then_execute");
 
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Failed to prepare cleanup plan: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Failed to prepare cleanup plan: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }
@@ -233,42 +282,63 @@ public final class CleanupCommand implements Callable<Integer> {
                 map.put("executableEntries", plan.totalExecutableCount());
                 map.put("estimatedReclaimableBytes", plan.totalEstimatedReclaimableBytes());
                 map.put("mutationsPerformed", 0);
-                runtime.terminal().stdout(ProviderJson.write(map));
+                runtime.terminal()
+                        .stdout(ProviderJson.write(map));
                 return ExitCodes.OK;
             }
 
             if (verbose) {
-                runtime.terminal().stdout("CLEANUP_RESULT=PLAN_LOADED");
-                runtime.terminal().stdout("PLAN=" + plan.planId());
-                runtime.terminal().stdout("PROJECT_ID=" + plan.projectId());
-                runtime.terminal().stdout("CONTENT_HASH=" + plan.contentHash());
-                runtime.terminal().stdout("RESOURCES_DISCOVERED=" + plan.totalDiscoveredCount());
-                runtime.terminal().stdout("EXECUTABLE_ENTRIES=" + plan.totalExecutableCount());
-                runtime.terminal().stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.totalEstimatedReclaimableBytes());
-                runtime.terminal().stdout("MUTATIONS_PERFORMED=0");
-                runtime.terminal().stdout("--- PERSISTED ENTRIES ---");
+                runtime.terminal()
+                        .stdout("CLEANUP_RESULT=PLAN_LOADED");
+                runtime.terminal()
+                        .stdout("PLAN=" + plan.planId());
+                runtime.terminal()
+                        .stdout("PROJECT_ID=" + plan.projectId());
+                runtime.terminal()
+                        .stdout("CONTENT_HASH=" + plan.contentHash());
+                runtime.terminal()
+                        .stdout("RESOURCES_DISCOVERED=" + plan.totalDiscoveredCount());
+                runtime.terminal()
+                        .stdout("EXECUTABLE_ENTRIES=" + plan.totalExecutableCount());
+                runtime.terminal()
+                        .stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.totalEstimatedReclaimableBytes());
+                runtime.terminal()
+                        .stdout("MUTATIONS_PERFORMED=0");
+                runtime.terminal()
+                        .stdout("--- PERSISTED ENTRIES ---");
                 for (PersistedCleanupPlanEntry entry : plan.entries()) {
-                    runtime.terminal().stdout("[" + entry.classification() + "] " + entry.resourceType() + " | "
-                            + entry.resourceId() + " | eligible=" + entry.eligible() + " | action=" + entry.proposedOperation());
+                    runtime.terminal()
+                            .stdout("[" + entry.classification() + "] " + entry.resourceType() + " | "
+                                    + entry.resourceId() + " | eligible=" + entry.eligible() + " | action="
+                                    + entry.proposedOperation());
                 }
                 return ExitCodes.OK;
             }
 
-            runtime.terminal().stdout("CLEANUP_RESULT=PLAN_LOADED");
-            runtime.terminal().stdout("PLAN=" + plan.planId());
-            runtime.terminal().stdout("RESOURCES_DISCOVERED=" + plan.totalDiscoveredCount());
-            runtime.terminal().stdout("EXECUTABLE_ENTRIES=" + plan.totalExecutableCount());
-            runtime.terminal().stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.totalEstimatedReclaimableBytes());
-            runtime.terminal().stdout("MUTATIONS_PERFORMED=0");
-            runtime.terminal().stdout("NEXT_ACTION=execute_with_plan_id");
+            runtime.terminal()
+                    .stdout("CLEANUP_RESULT=PLAN_LOADED");
+            runtime.terminal()
+                    .stdout("PLAN=" + plan.planId());
+            runtime.terminal()
+                    .stdout("RESOURCES_DISCOVERED=" + plan.totalDiscoveredCount());
+            runtime.terminal()
+                    .stdout("EXECUTABLE_ENTRIES=" + plan.totalExecutableCount());
+            runtime.terminal()
+                    .stdout("ESTIMATED_RECLAIMABLE_BYTES=" + plan.totalEstimatedReclaimableBytes());
+            runtime.terminal()
+                    .stdout("MUTATIONS_PERFORMED=0");
+            runtime.terminal()
+                    .stdout("NEXT_ACTION=execute_with_plan_id");
 
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Failed to load cleanup plan: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Failed to load cleanup plan: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }
 
+    @SuppressWarnings("ExtractMethodRecommender")
     private int handleExecute(Path controlRoot, String planId) {
         try {
             CleanupExecutionService.CleanupExecutionSummary summary = executionService.executePlan(controlRoot, planId);
@@ -287,27 +357,42 @@ public final class CleanupCommand implements Callable<Integer> {
                 map.put("bytesReclaimed", summary.bytesReclaimed());
                 map.put("controlCheckoutModified", false);
                 map.put("eventLogModified", false);
-                runtime.terminal().stdout(ProviderJson.write(map));
+                runtime.terminal()
+                        .stdout(ProviderJson.write(map));
                 return summary.failedCount() > 0 ? ExitCodes.LOCAL_CONFIGURATION : ExitCodes.OK;
             }
 
-            runtime.terminal().stdout("CLEANUP_RESULT=" + summary.resultStatus());
-            runtime.terminal().stdout("PLAN=" + summary.planId());
-            runtime.terminal().stdout("EXECUTION=" + summary.executionId());
-            runtime.terminal().stdout("ENTRIES_REQUESTED=" + summary.totalEntries());
-            runtime.terminal().stdout("COMPLETED=" + summary.completedCount());
-            runtime.terminal().stdout("ALREADY_COMPLETED=" + summary.alreadyCompletedCount());
-            runtime.terminal().stdout("SKIPPED_STALE=" + summary.skippedStaleCount());
-            runtime.terminal().stdout("SKIPPED_UNSAFE=" + summary.skippedUnsafeCount());
-            runtime.terminal().stdout("FAILED=" + summary.failedCount());
-            runtime.terminal().stdout("BYTES_RECLAIMED=" + summary.bytesReclaimed());
-            runtime.terminal().stdout("CONTROL_CHECKOUT_MODIFIED=false");
-            runtime.terminal().stdout("EVENT_LOG_MODIFIED=false");
-            runtime.terminal().stdout("NEXT_ACTION=none");
+            runtime.terminal()
+                    .stdout("CLEANUP_RESULT=" + summary.resultStatus());
+            runtime.terminal()
+                    .stdout("PLAN=" + summary.planId());
+            runtime.terminal()
+                    .stdout("EXECUTION=" + summary.executionId());
+            runtime.terminal()
+                    .stdout("ENTRIES_REQUESTED=" + summary.totalEntries());
+            runtime.terminal()
+                    .stdout("COMPLETED=" + summary.completedCount());
+            runtime.terminal()
+                    .stdout("ALREADY_COMPLETED=" + summary.alreadyCompletedCount());
+            runtime.terminal()
+                    .stdout("SKIPPED_STALE=" + summary.skippedStaleCount());
+            runtime.terminal()
+                    .stdout("SKIPPED_UNSAFE=" + summary.skippedUnsafeCount());
+            runtime.terminal()
+                    .stdout("FAILED=" + summary.failedCount());
+            runtime.terminal()
+                    .stdout("BYTES_RECLAIMED=" + summary.bytesReclaimed());
+            runtime.terminal()
+                    .stdout("CONTROL_CHECKOUT_MODIFIED=false");
+            runtime.terminal()
+                    .stdout("EVENT_LOG_MODIFIED=false");
+            runtime.terminal()
+                    .stdout("NEXT_ACTION=none");
 
             return summary.failedCount() > 0 ? ExitCodes.LOCAL_CONFIGURATION : ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("Cleanup execution failed: " + failure.getMessage());
+            runtime.terminal()
+                    .stderr("Cleanup execution failed: " + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

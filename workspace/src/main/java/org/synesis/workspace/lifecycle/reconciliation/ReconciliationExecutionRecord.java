@@ -27,6 +27,7 @@ public record ReconciliationExecutionRecord(
         long timestampEpochMillis,
         String diagnosticDetails
 ) {
+
     /**
      * Invariant validation.
      */

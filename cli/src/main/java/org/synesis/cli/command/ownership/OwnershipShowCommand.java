@@ -1,12 +1,10 @@
 package org.synesis.cli.command.ownership;
 
 
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
-
 import java.net.URI;
-import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
@@ -21,8 +19,6 @@ import picocli.CommandLine.Option;
 public final class OwnershipShowCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
-    private Path project;
     @Option(names = "--endpoint", required = true)
     private URI endpoint;
     @Option(names = "--capability", required = true)

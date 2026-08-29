@@ -6,20 +6,27 @@ import java.util.HexFormat;
 import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
 
-/** Resolves one exact provider connection to its authenticated session binding. */
+/**
+ * Resolves one exact provider connection to its authenticated session binding.
+ */
 public final class SessionAuthorityResolver {
+
     private final ProviderSessionBindingService bindingService;
 
-    /** Creates a resolver backed by the supplied binding service.
+    /**
+     * Creates a resolver backed by the supplied binding service.
+     *
      * @param bindingService binding service
      */
     public SessionAuthorityResolver(ProviderSessionBindingService bindingService) {
         this.bindingService = Objects.requireNonNull(bindingService, "bindingService");
     }
 
-    /** Resolves an exact active binding; never falls back to a latest provider binding.
-     * @param location project location
-     * @param provider provider ID
+    /**
+     * Resolves an exact active binding; never falls back to a latest provider binding.
+     *
+     * @param location             project location
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
      * @return active binding
      * @throws Exception when the binding cannot be resolved
@@ -29,9 +36,11 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(provider, "provider");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
-        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
+        String fingerprint = HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256")
+                        .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider)
+                .stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
                         || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()))
@@ -48,8 +57,8 @@ public final class SessionAuthorityResolver {
      * retry. This never grants mutation authority; it only permits the caller
      * that owns the recorded connection to retrieve its durable result.
      *
-     * @param location project location
-     * @param provider provider ID
+     * @param location             project location
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection ID
      * @return completed binding
      * @throws Exception when no exact completed binding exists
@@ -59,9 +68,11 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(provider, "provider");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
-        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
+        String fingerprint = HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256")
+                        .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider)
+                .stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
                         || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "COMPLETED".equalsIgnoreCase(candidate.status()))
@@ -82,8 +93,8 @@ public final class SessionAuthorityResolver {
      * consuming operation must still enforce the grant participant, intent,
      * and epoch.</p>
      *
-     * @param location initialized project
-     * @param provider provider ID
+     * @param location             initialized project
+     * @param provider             provider ID
      * @param connectionInstanceId exact connection evidence
      * @return exact bound or completed binding
      * @throws Exception when no exact review authority exists
@@ -93,9 +104,11 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(provider, "provider");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
-        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
+        String fingerprint = HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256")
+                        .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider)
+                .stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
                         || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status())

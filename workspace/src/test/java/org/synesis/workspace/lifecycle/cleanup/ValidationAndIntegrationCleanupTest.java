@@ -1,7 +1,7 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,9 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
 class ValidationAndIntegrationCleanupTest {
 
@@ -49,10 +47,21 @@ class ValidationAndIntegrationCleanupTest {
                 System.currentTimeMillis(),
                 1, 0, 0, 0, 0, 1, 0, 2048L, false,
                 List.of(new CleanupPlanEntry(
-                        LifecycleResourceType.VALIDATION_WORKTREE, "val-123", valPath,
-                        CleanupClassification.CLEANUP_ELIGIBLE, true, List.of("finalized_and_clean"), 2048L, "Clean",
-                        List.of("val-123"), "REGISTERED", false, "path_verified", ProcessEvidenceState.NOT_OBSERVED,
-                        new LifecycleResourceFingerprint("val-123", 1000L, head, commonDir, "clean", "h1"), "DELETE_VALIDATION_WORKTREE"
+                        LifecycleResourceType.VALIDATION_WORKTREE,
+                        "val-123",
+                        valPath,
+                        CleanupClassification.CLEANUP_ELIGIBLE,
+                        true,
+                        List.of("finalized_and_clean"),
+                        2048L,
+                        "Clean",
+                        List.of("val-123"),
+                        "REGISTERED",
+                        false,
+                        "path_verified",
+                        ProcessEvidenceState.NOT_OBSERVED,
+                        new LifecycleResourceFingerprint("val-123", 1000L, head, commonDir, "clean", "h1"),
+                        "DELETE_VALIDATION_WORKTREE"
                 ))
         );
 

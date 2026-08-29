@@ -1,23 +1,14 @@
 package org.synesis.coordination.domain.task;
 
-import org.synesis.coordination.domain.capability.CapabilityContract;
-import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
-
-
-import org.synesis.coordination.domain.capability.CapabilityContract;
-import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
-
-
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
+import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 
 /**
  * Unit tests verifying worker-level authorization boundary matching in CapabilityRequestRecord.

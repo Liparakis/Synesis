@@ -32,8 +32,8 @@ public final class ProjectRecordSync {
         this.store = Objects.requireNonNull(store, "decision store");
     }
 
-    private static SyncOutcome outcome(Code code, DecisionRecord record, String detail) {
-        return new SyncOutcome(code, record.recordId(), record.revision(), record.digest(), detail);
+    private static SyncOutcome rejectedOutcome(DecisionRecord record, String detail) {
+        return new SyncOutcome(Code.REJECTED, record.recordId(), record.revision(), record.digest(), detail);
     }
 
     private static Code map(DecisionStore.SaveResult result) {
@@ -80,20 +80,20 @@ public final class ProjectRecordSync {
                 .equals(record.ownerNodeId())
                 || !session.localNodeId()
                 .equals(record.authorNodeId())) {
-            return outcome(Code.REJECTED, record, "project mismatch");
+            return rejectedOutcome(record, "project mismatch");
         }
         try {
             if (!record.verify()) {
-                return outcome(Code.REJECTED, record, "invalid signature");
+                return rejectedOutcome(record, "invalid signature");
             }
             DecisionStore.Head base = store.headState(record.recordId())
                     .orElse(null);
-            DecisionStore.SaveResult local = store.save(record, base);
+            store.save(record, base);
             CompletionStage<byte[]> response = session.requestApplication(RecordMessage.record(record.encoded())
                     .encoded());
             return await(response, record.recordId(), session.remoteNodeId());
         } catch (GeneralSecurityException failure) {
-            return outcome(Code.REJECTED, record, "invalid signature");
+            return rejectedOutcome(record, "invalid signature");
         } catch (Exception failure) {
             return new SyncOutcome(Code.UNKNOWN, record.recordId(), 0, null, "connection closed before result");
         }
@@ -324,6 +324,7 @@ public final class ProjectRecordSync {
          *
          * @return detail
          */
+        @SuppressWarnings("unused")
         public String detail() {
             return detail;
         }

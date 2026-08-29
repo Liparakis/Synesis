@@ -1,17 +1,15 @@
 package org.synesis.cli.command.coordination;
 
 
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
-
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.workspace.lifecycle.codex.ProjectRuntimeHost;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -51,6 +49,7 @@ public final class CoordinationServeCommand implements Callable<Integer> {
      * @return stable process exit code
      */
     @Override
+    @SuppressWarnings("HttpUrlsUsage")
     public Integer call() {
         try {
             var location = CoordinationCliSupport.project(runtime, project);
@@ -82,7 +81,8 @@ public final class CoordinationServeCommand implements Callable<Integer> {
                 } else {
                     while (!Thread.currentThread()
                             .isInterrupted()) {
-                        Thread.sleep(1000L);
+                        java.util.concurrent.locks.LockSupport.parkNanos(
+                                java.util.concurrent.TimeUnit.SECONDS.toNanos(1L));
                     }
                 }
             }

@@ -45,10 +45,10 @@ and `tools_list_received`.
 
 ## Participants and ownership
 
-| Agent | Participant | Session worktree | Intent | Claim | Epoch |
-|---|---|---|---|---|---:|
-| A / implementation | `agt_6d0b065d-b353-358f-9ec0-08da6531a3db` | `session-57ff7758-a07d-47f3-8bc8-408ac09fcf7d` | `a39919b5-72d6-3152-ae8b-cb2e344ffbf3` | `PATH_EXACT todo.py` | 1 |
-| B / test | `agt_169f9a4c-61ed-3767-a080-bce7c3138d04` | `session-db84e866-b311-4509-97d1-9cf3a327b849` | `079b28ef-9f3a-3c72-af42-a56894089302` | `PATH_EXACT test_todo.py` | 1 |
+| Agent              | Participant                                | Session worktree                               | Intent                                 | Claim                     | Epoch |
+|--------------------|--------------------------------------------|------------------------------------------------|----------------------------------------|---------------------------|------:|
+| A / implementation | `agt_6d0b065d-b353-358f-9ec0-08da6531a3db` | `session-57ff7758-a07d-47f3-8bc8-408ac09fcf7d` | `a39919b5-72d6-3152-ae8b-cb2e344ffbf3` | `PATH_EXACT todo.py`      |     1 |
+| B / test           | `agt_169f9a4c-61ed-3767-a080-bce7c3138d04` | `session-db84e866-b311-4509-97d1-9cf3a327b849` | `079b28ef-9f3a-3c72-af42-a56894089302` | `PATH_EXACT test_todo.py` |     1 |
 
 Both sessions reached `ready / isolated`. Claims were disjoint and the two
 participants converged on one WorkGroup:

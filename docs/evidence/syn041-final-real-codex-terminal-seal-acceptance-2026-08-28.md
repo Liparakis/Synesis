@@ -104,11 +104,11 @@ commands/dependencies, or remaining WorkGroup authority at the seal.
 The non-interposing observer retained only native query/synchronize handles.
 It did not read or write MCP stdin/stdout and did not terminate any process.
 
-| Role | PID | Parent | Executable | Exit code | Windows exit time |
-| --- | ---: | ---: | --- | ---: | --- |
-| Codex | 15152 | 18776 | `...\\codex-x86_64-pc-windows-msvc.exe` | 0 | `2026-08-28T20:48:21.6612618Z` |
-| MCP | 11080 | 15152 | official bundled `synesis-mcp.exe` | 1 | `2026-08-28T20:48:21.2328312Z` |
-| Java | 11564 | 11080 | bundled `runtime\\bin\\java.exe` | 1 | `2026-08-28T20:48:21.2327563Z` |
+| Role  |   PID | Parent | Executable                              | Exit code | Windows exit time              |
+|-------|------:|-------:|-----------------------------------------|----------:|--------------------------------|
+| Codex | 15152 |  18776 | `...\\codex-x86_64-pc-windows-msvc.exe` |         0 | `2026-08-28T20:48:21.6612618Z` |
+| MCP   | 11080 |  15152 | official bundled `synesis-mcp.exe`      |         1 | `2026-08-28T20:48:21.2328312Z` |
+| Java  | 11564 |  11080 | bundled `runtime\\bin\\java.exe`        |         1 | `2026-08-28T20:48:21.2327563Z` |
 
 Java and MCP exited abnormally before Codex exited normally. The MCP trace
 contains startup, initialize, and tools-list records, but no EOF or handler
@@ -158,18 +158,18 @@ After the probe, Doctor remained `DEGRADED` with only the two unrelated
 command-namespace warnings. It emitted no `stale_session_lease` and no
 `durable_state_ambiguous` for this fixture, and performed zero mutations.
 
-| Measure | CP-0557 | This acceptance |
-| --- | --- | --- |
-| Terminal seal | absent | present, event 7 |
-| Lawful lane completion | yes | yes, `NO_CHANGE` |
-| WorkGroup | `COMPLETED` | `COMPLETED` |
-| Codex exit | 0 | 0 |
-| MCP exit | 1 | 1 |
-| Java exit | 1 | 1 |
-| Lease after provider exit | `ACTIVE` | terminal authority confirmed; derived terminal-disconnected |
-| Exact rebind | not tested | fenced as `SESSION_TERMINAL` |
-| Final lease after probe | `ACTIVE` | incorrectly rewritten `CLOSED_CLEANLY` |
-| Doctor stale warning | yes | absent |
+| Measure                   | CP-0557     | This acceptance                                             |
+|---------------------------|-------------|-------------------------------------------------------------|
+| Terminal seal             | absent      | present, event 7                                            |
+| Lawful lane completion    | yes         | yes, `NO_CHANGE`                                            |
+| WorkGroup                 | `COMPLETED` | `COMPLETED`                                                 |
+| Codex exit                | 0           | 0                                                           |
+| MCP exit                  | 1           | 1                                                           |
+| Java exit                 | 1           | 1                                                           |
+| Lease after provider exit | `ACTIVE`    | terminal authority confirmed; derived terminal-disconnected |
+| Exact rebind              | not tested  | fenced as `SESSION_TERMINAL`                                |
+| Final lease after probe   | `ACTIVE`    | incorrectly rewritten `CLOSED_CLEANLY`                      |
+| Doctor stale warning      | yes         | absent                                                      |
 
 ## Classification and stopping decision
 

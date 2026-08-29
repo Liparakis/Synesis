@@ -1,6 +1,7 @@
 package org.synesis.link.candidate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetAddress;
@@ -47,13 +48,13 @@ final class CandidateGathererTest {
             CandidateGatheringOperation operation = gatherer.gather(List.of(
                     new StubProvider("pending", pending)));
             assertTrue(operation.cancel());
-            assertTrue(!operation.cancel());
+            assertFalse(operation.cancel());
             CandidateGatheringResult result = operation.completion()
                     .toCompletableFuture()
                     .get(2, TimeUnit.SECONDS);
             assertEquals(CandidateProviderFailureCategory.CANCELLED,
                     result.diagnostics()
-                            .get(0)
+                            .getFirst()
                             .category());
         }
     }

@@ -1,7 +1,10 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,12 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
 class PlanPersistenceTest {
 
@@ -59,12 +57,14 @@ class PlanPersistenceTest {
         PersistedCleanupPlan saved = store.createAndSave(controlRoot, rawPlan);
 
         assertNotNull(saved.planId());
-        assertTrue(saved.planId().startsWith("plan-"));
+        assertTrue(saved.planId()
+                .startsWith("plan-"));
         assertNotNull(saved.contentHash());
 
         // Assert plan file exists outside control checkout
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path expectedFile = workspaceRoot.resolve("admin/cleanup-plans").resolve(saved.planId() + ".json");
+        Path expectedFile = workspaceRoot.resolve("admin/cleanup-plans")
+                .resolve(saved.planId() + ".json");
         assertTrue(Files.exists(expectedFile));
         assertFalse(expectedFile.startsWith(controlRoot));
 
@@ -72,7 +72,9 @@ class PlanPersistenceTest {
         PersistedCleanupPlan loaded = store.load(controlRoot, saved.planId());
         assertEquals(saved.planId(), loaded.planId());
         assertEquals(saved.contentHash(), loaded.contentHash());
-        assertEquals(1, loaded.entries().size());
+        assertEquals(1,
+                loaded.entries()
+                        .size());
     }
 
     @Test
@@ -97,7 +99,8 @@ class PlanPersistenceTest {
         PersistedCleanupPlan saved = store.createAndSave(controlRoot, rawPlan);
 
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path planFile = workspaceRoot.resolve("admin/cleanup-plans").resolve(saved.planId() + ".json");
+        Path planFile = workspaceRoot.resolve("admin/cleanup-plans")
+                .resolve(saved.planId() + ".json");
 
         // Tamper with plan content without updating contentHash
         String content = Files.readString(planFile);

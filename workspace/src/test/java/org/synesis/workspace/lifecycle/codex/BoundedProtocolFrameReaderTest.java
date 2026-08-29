@@ -8,8 +8,16 @@ import java.io.EOFException;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
-/** Tests raw-byte frame limits before UTF-8 materialization. */
+/**
+ * Tests raw-byte frame limits before UTF-8 materialization.
+ */
 class BoundedProtocolFrameReaderTest {
+
+    private static byte[] concat(byte[] first, byte[] second) {
+        byte[] result = java.util.Arrays.copyOf(first, first.length + second.length);
+        System.arraycopy(second, 0, result, first.length, second.length);
+        return result;
+    }
 
     @Test
     void acceptsExactBoundAndCrLf() throws Exception {
@@ -37,11 +45,5 @@ class BoundedProtocolFrameReaderTest {
                 new ByteArrayInputStream(new byte[]{(byte) 0xc3, '\n'})).readFrame());
         assertThrows(BoundedProtocolFrameReader.EmptyFrameException.class, () -> new BoundedProtocolFrameReader(
                 new ByteArrayInputStream("\n".getBytes(StandardCharsets.UTF_8))).readFrame());
-    }
-
-    private static byte[] concat(byte[] first, byte[] second) {
-        byte[] result = java.util.Arrays.copyOf(first, first.length + second.length);
-        System.arraycopy(second, 0, result, first.length, second.length);
-        return result;
     }
 }

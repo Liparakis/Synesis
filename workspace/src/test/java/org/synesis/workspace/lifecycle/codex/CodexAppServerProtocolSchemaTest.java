@@ -7,7 +7,9 @@ import java.io.IOException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Verifies the generated-schema request-ID union used by Codex 0.145.0. */
+/**
+ * Verifies the generated-schema request-ID union used by Codex 0.145.0.
+ */
 class CodexAppServerProtocolSchemaTest {
 
     @Test

@@ -31,6 +31,7 @@ public record RepairPlanEntry(
         String summary,
         boolean backupRequired
 ) {
+
     /**
      * Invariant validation.
      */

@@ -94,7 +94,8 @@ files were modified by either acceptance attempt.
 
 PASS:
 
-- `:workspace:test --tests org.synesis.workspace.agent.AgentWorkflowReducerTest --tests org.synesis.workspace.Syn037CompletionValidationTest`
+-
+`:workspace:test --tests org.synesis.workspace.agent.AgentWorkflowReducerTest --tests org.synesis.workspace.Syn037CompletionValidationTest`
 - `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest`
 - `:workspace:javadoc :mcp:javadoc :coordination:javadoc`
 - `scripts/agent-validate-deferred.ps1`

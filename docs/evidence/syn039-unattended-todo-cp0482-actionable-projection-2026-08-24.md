@@ -33,10 +33,10 @@ Both sessions used the current bundled MCP through explicit per-agent
 wrappers, reached `ensure_session=ready` and `workspace=isolated`, and used
 the same project root. The claims were disjoint:
 
-| Agent | Session | Participant | Intent | Claim | Epoch |
-|---|---|---|---|---|---:|
-| A | `session-09e72674-2077-4784-a1a9-bc1c45523519` | `agt_788f02fc-20db-3593-a6ea-06f648bfeb8a` | `b74e8441-8a6f-3076-bb67-ee99b40d1af2` | `todo.py` | 1 |
-| B | `session-88fafd35-4bb3-40fa-8e0d-9688f0bf6aa7` | `agt_952b937a-8630-3a5e-9439-b599bcf3b18f` | `5e9d75aa-914b-3a25-9b1f-62fc6c29128f` | `test_todo.py` | 1 |
+| Agent | Session                                        | Participant                                | Intent                                 | Claim          | Epoch |
+|-------|------------------------------------------------|--------------------------------------------|----------------------------------------|----------------|------:|
+| A     | `session-09e72674-2077-4784-a1a9-bc1c45523519` | `agt_788f02fc-20db-3593-a6ea-06f648bfeb8a` | `b74e8441-8a6f-3076-bb67-ee99b40d1af2` | `todo.py`      |     1 |
+| B     | `session-88fafd35-4bb3-40fa-8e0d-9688f0bf6aa7` | `agt_952b937a-8630-3a5e-9439-b599bcf3b18f` | `5e9d75aa-914b-3a25-9b1f-62fc6c29128f` | `test_todo.py` |     1 |
 
 The shared `get_next_action` state showed both participants and both intents
 in the same active WorkGroup. No claims conflict was reported.

@@ -1,5 +1,19 @@
 # State
 
+## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
+
+The full IntelliJ file-level baseline was 1,072 findings across 576 Java files:
+767 `WARNING` and 305 `WEAK WARNING`. After bounded behavior-preserving
+cleanup, the latest pass reports 783 findings across 576 Java files: 484
+`WARNING` and 299 `WEAK WARNING`, with zero analyzer-call failures. The
+checkout still contains extensive user-owned modifications.
+
+## Immediate next action
+
+Continue with one separately reviewed high-confidence analyzer batch, then
+re-run affected-file inspections and IntelliJ build validation. Do not touch
+SYN-041 semantics.
+
 ## SYN-041 final real Codex closure acceptance — 2026-08-29
 
 SYN-041 is formally DONE / ACCEPTED with RESULT A. One real native Codex
@@ -75,8 +89,9 @@ connection `conn-instance-4ae3fa70-50e7-41f4-8108-8b8831bb9c9b`, session
 exit 1 before Codex exit 0. The exact rebind probe returned
 `SESSION_TERMINAL`, but its clean close rewrote the lease from terminal
 authority to `CLOSED_CLEANLY`; the durable terminal event remained at sequence
+
 7. This is a proven narrow lease-history defect, not a provider-auth or
-transport-causality inference.
+   transport-causality inference.
 
 Evidence: `docs/evidence/syn041-final-real-codex-terminal-seal-acceptance-2026-08-28.md`.
 
@@ -1893,11 +1908,12 @@ next action.
 
 ## Repository state
 
-Contract revision 1 is ACTIVE. SYN-028 is DONE at CP-0331 under ADR-0040; SYN-027 is DONE under ADR-0039; SL-005 through SL-008 are complete;
+Contract revision 1 is ACTIVE. SYN-028 is DONE at CP-0331 under ADR-0040; SYN-027 is DONE under ADR-0039; SL-005 through
+SL-008 are complete;
 SL-012 is VERIFYING, SL-013 is DONE and frozen at CP-0054, SL-014 and SL-015
 are DONE, SYN-002 is DONE at CP-0075, SYN-003 is DONE at CP-W3, SYN-009B is
-  DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
-  SYN-010A is VERIFYING, SYN-010B is VERIFYING, SYN-011 is VERIFYING, and
+DONE at CP-0102, SYN-009B.1 is VERIFYING, SYN-009C is DONE at CP-0110, and
+SYN-010A is VERIFYING, SYN-010B is VERIFYING, SYN-011 is VERIFYING, and
 SYN-012 is DONE at CP-0144, SYN-013's planning package is complete, and
 SYN-013A is DONE and SYN-013B is DONE at CP-0151;
 SYN-009D is complete. SYN-001 is DONE at
@@ -1963,42 +1979,65 @@ pre-mutation evidence exists. ADR-0029 records the decision.
 
 ## SYN-013D implementation state
 
-Stage 2A Slice 1 (foundation) and Stage 2A Slice 2 (provider MCP configuration installers & installed process validation) are DONE at CP-0167:
+Stage 2A Slice 1 (foundation) and Stage 2A Slice 2 (provider MCP configuration installers & installed process
+validation) are DONE at CP-0167:
+
 - Provider capability audit completed (`MCP_CONFIG_DISCOVERED`).
 - `AgentSessionService` ambient resolver implemented in `:workspace` (74 tests passing).
 - `:mcp` Gradle subproject created with stdio JSON-RPC 2.0 protocol handler (`SynesisMcpServer`).
 - Registered tool `synesis.ensure_session` returns concise status output.
-- `ProviderApplicationService` and `synesis init` automatically install `.codex/mcp.json` and `.agents/mcp.json` (and `.gemini/mcp.json`) idempotently while preserving unrelated provider MCP entries.
-- Platform bundle updated (`:cli:platformBundle`), launcher `synesis init` and installed MCP stdio process tested on `SynesisTestProject`.
+- `ProviderApplicationService` and `synesis init` automatically install `.codex/mcp.json` and `.agents/mcp.json` (and
+  `.gemini/mcp.json`) idempotently while preserving unrelated provider MCP entries.
+- Platform bundle updated (`:cli:platformBundle`), launcher `synesis init` and installed MCP stdio process tested on
+  `SynesisTestProject`.
 - Full root `./gradlew.bat check --no-daemon` passes cleanly (49 tasks).
 
 ## SYN-014A implementation state
 
 Post-MVP Hardening Slice 1 is DONE. Read-only lifecycle inventory and cleanup planning foundation implemented:
+
 - 12 `LifecycleResourceType` values covering all managed resource categories.
-- 6 `CleanupClassification` values: `PROTECTED`, `ACTIVE`, `RECOVERABLE`, `DIAGNOSTIC_RETAINED`, `CLEANUP_ELIGIBLE`, `ORPHANED`.
+- 6 `CleanupClassification` values: `PROTECTED`, `ACTIVE`, `RECOVERABLE`, `DIAGNOSTIC_RETAINED`, `CLEANUP_ELIGIBLE`,
+  `ORPHANED`.
 - 5 `ProcessEvidenceState` values with conservative liveness evaluation.
-- `LifecyclePathVerifier`: path normalization, canonical real-path traversal check, control-checkout protection, `.git` protection, git common-dir identity verification, fail-closed on error.
-- `RetentionPolicy`: configurable 24h worker/validation/integration, 7d evidence, 1h temp, injectable clock, 2 GB storage warning threshold.
-- `LifecycleInventoryService`: read-only discovery of sessions, worker worktrees, validation/integration worktrees, snapshots, evidence files, temp files, dangling Git worktrees.
-- `CleanupEligibilityService`: evaluates inventory against path verifier, retention policy, process liveness, Git porcelain status.
+- `LifecyclePathVerifier`: path normalization, canonical real-path traversal check, control-checkout protection, `.git`
+  protection, git common-dir identity verification, fail-closed on error.
+- `RetentionPolicy`: configurable 24h worker/validation/integration, 7d evidence, 1h temp, injectable clock, 2 GB
+  storage warning threshold.
+- `LifecycleInventoryService`: read-only discovery of sessions, worker worktrees, validation/integration worktrees,
+  snapshots, evidence files, temp files, dangling Git worktrees.
+- `CleanupEligibilityService`: evaluates inventory against path verifier, retention policy, process liveness, Git
+  porcelain status.
 - `CleanupPlanService`: orchestrates full plan generation into immutable `CleanupPlan` record.
-- `CleanupCommand` (`synesis cleanup --dry-run`): concise, verbose, and JSON output modes; `--dry-run` required; exits code 10 without it.
+- `CleanupCommand` (`synesis cleanup --dry-run`): concise, verbose, and JSON output modes; `--dry-run` required; exits
+  code 10 without it.
 - `synesis cleanup` registered in `SynesisCli`.
-- Tests: `LifecyclePathVerifierTest`, `CleanupEligibilityServiceTest`, `ProcessInspectorTest`, `CleanupCommandTest`, `FullMutationSafetyTest` (proves zero mutations).
+- Tests: `LifecyclePathVerifierTest`, `CleanupEligibilityServiceTest`, `ProcessInspectorTest`, `CleanupCommandTest`,
+  `FullMutationSafetyTest` (proves zero mutations).
 - Full root `./gradlew.bat check --no-daemon` BUILD SUCCESSFUL (49 tasks, all pass).
 
 ## SYN-014B implementation state
 
 Post-MVP Hardening Slice 2 is DONE at CP-0188. Controlled lifecycle cleanup execution implemented:
-- Immutable persisted cleanup plan store (`CleanupPlanStore`, `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-plans\<plan-id>.json`. Verified canonical SHA-256 content hashes.
-- Project-scoped execution lock (`CleanupExecutionLock`) at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-execution.lock`.
-- Append-only cleanup execution journal (`CleanupExecutionJournal`, `CleanupExecutionRecord`, `CleanupEntryExecutionState`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-executions\<execution-id>.jsonl`.
-- Safe Git worktree removal for finalized worker, completed validation, and integrated integration worktrees using `git worktree remove <path>` (NO `--force`!).
+
+- Immutable persisted cleanup plan store (`CleanupPlanStore`, `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`) under
+  `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-plans\<plan-id>.json`. Verified canonical SHA-256
+  content hashes.
+- Project-scoped execution lock (`CleanupExecutionLock`) at
+  `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-execution.lock`.
+- Append-only cleanup execution journal (`CleanupExecutionJournal`, `CleanupExecutionRecord`,
+  `CleanupEntryExecutionState`) under
+  `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\cleanup-executions\<execution-id>.jsonl`.
+- Safe Git worktree removal for finalized worker, completed validation, and integrated integration worktrees using
+  `git worktree remove <path>` (NO `--force`!).
 - Exact temporary file deletion and empty temp parent directory cleanup.
-- Atomic orphan resource quarantine (`LifecycleQuarantineService`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\quarantine\<quarantine-id>\` writing quarantine manifests.
-- CLI command options added: `synesis cleanup --prepare`, `synesis cleanup --show-plan <plan-id>`, `synesis cleanup --execute <plan-id>`.
-- 10 new test classes added (PlanPersistenceTest, StalePlanTest, WorkerCleanupTest, ValidationAndIntegrationCleanupTest, TemporaryFileCleanupTest, QuarantineTest, LockAndConcurrencyTest, JournalAndRestartTest, NoForceAndSafetyArchitectureTest, Slice2MutationBoundaryTest).
+- Atomic orphan resource quarantine (`LifecycleQuarantineService`) under
+  `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\quarantine\<quarantine-id>\` writing quarantine manifests.
+- CLI command options added: `synesis cleanup --prepare`, `synesis cleanup --show-plan <plan-id>`,
+  `synesis cleanup --execute <plan-id>`.
+- 10 new test classes added (PlanPersistenceTest, StalePlanTest, WorkerCleanupTest, ValidationAndIntegrationCleanupTest,
+  TemporaryFileCleanupTest, QuarantineTest, LockAndConcurrencyTest, JournalAndRestartTest,
+  NoForceAndSafetyArchitectureTest, Slice2MutationBoundaryTest).
 - Full root `./gradlew.bat check --no-daemon` BUILD SUCCESSFUL (49 tasks, all pass).
 
 ## Implementation state
@@ -2044,6 +2083,7 @@ responsibility-specific infrastructure packages. The required checks passed:
 
 `STRUCT-1A` was restricted to intra-module package restructuring inside
 `:project-record`, `:coordination`, and `:link`. The approved direction is:
+
 - `project-record`: `domain`, `persistence`, `security`, `sync`,
   `sync.protocol`, `guardrail`
 - `coordination`: `domain`, `application`, `persistence`, `transport.http`
@@ -2096,9 +2136,11 @@ allowed.
 ## Verification state
 
 - Strict clean verification after removing the package-info gate: PASS.
-- Package-info files and the package-info verification task were intentionally removed at the user's request; strict Javadocs for public/protected API elements remain enabled.
+- Package-info files and the package-info verification task were intentionally removed at the user's request; strict
+  Javadocs for public/protected API elements remain enabled.
 - Latest candidate-provider fix: targeted PASS; full strict check PASS.
-- Source/tooling artifact verification metadata: PASS; twenty-three exact SHA-256 entries cover main, test, Gradle, and Kotlin resolution.
+- Source/tooling artifact verification metadata: PASS; twenty-three exact SHA-256 entries cover main, test, Gradle, and
+  Kotlin resolution.
 - Deferred register validation: PASS, 9 active entries; historical IDs SL-D-001
   through SL-D-030 are preserved in the deferred-functionality archive.
 - Local and two-process demo request/result: PASS.
@@ -2144,20 +2186,24 @@ allowed.
   inspection. Evidence is in `docs/evidence/WORKSPACE-CP-W1-2026-07-21.md`,
   `docs/evidence/WORKSPACE-CP-W2-2026-07-21.md`, and
   `docs/evidence/WORKSPACE-CP-W3-2026-07-21.md`.
-- SYN-PRODUCT-REVIEW: PASS; completed the product review and roadmap planning through CP-0079. The review is recorded in `docs/agent/PRODUCT_REVIEW.md`.
-- SYN-004 planning: PASS; completed the minimal guided workspace demo flow design and task promotion under CP-0081. Detailed design is in `docs/agent/SYN_004_DESIGN.md`.
-- SYN-009A implementation: PASS; unreleased `WorkspaceOperations`, `DecisionRecordCli`, and legacy process harnesses were removed, synchronization orchestration now belongs to `SyncApplicationService`, and the unified `synesis` launcher is the only supported command entry point. Strict clean verification passed after the removal.
+- SYN-PRODUCT-REVIEW: PASS; completed the product review and roadmap planning through CP-0079. The review is recorded in
+  `docs/agent/PRODUCT_REVIEW.md`.
+- SYN-004 planning: PASS; completed the minimal guided workspace demo flow design and task promotion under CP-0081.
+  Detailed design is in `docs/agent/SYN_004_DESIGN.md`.
+- SYN-009A implementation: PASS; unreleased `WorkspaceOperations`, `DecisionRecordCli`, and legacy process harnesses
+  were removed, synchronization orchestration now belongs to `SyncApplicationService`, and the unified `synesis`
+  launcher is the only supported command entry point. Strict clean verification passed after the removal.
 - SYN-009B closure: PASS; obsolete CLI compatibility tests remain deleted, valid
   process/protocol scenarios were rewritten in `UnifiedCliSyncProcessTest`
   against the generated launcher, malformed invitations map to
   `INVITE_INVALID`, and provider lifecycle evidence includes unrelated hook
-    configuration preservation. Closed at CP-0102. SYN-009C is READY with no
-    implementation started.
+  configuration preservation. Closed at CP-0102. SYN-009C is READY with no
+  implementation started.
 
 - SYN-009B.1 promotion: PASS as a documentation/architecture gate; the
-    installed Codex baseline is `codex-cli 0.140.0`, the official hook/config
-    boundary and trust limitation are recorded, and no SYN-009C implementation
-    has started. Parser, adapter, lifecycle, fixture, and real-agent evidence
+  installed Codex baseline is `codex-cli 0.140.0`, the official hook/config
+  boundary and trust limitation are recorded, and no SYN-009C implementation
+  has started. Parser, adapter, lifecycle, fixture, and real-agent evidence
   remain pending.
 
 - SYN-009B.1 implementation slice: PASS for bounded parser/adapter behavior,
@@ -2199,6 +2245,7 @@ dependency. Production installation/signing, GUI, and broad production
 cooperation semantics are also not claimed. Abrupt child-process loss remains
 classified only as the documented transport-failure or liveness-expiry
 category.
+
 ## SYN-011 Antigravity real-integration investigation
 
 - Preserved pre-change test-project evidence before modifications under
@@ -2227,24 +2274,41 @@ category.
 
 ## SYN-014C Post-MVP Hardening Slice 3 implementation state
 
-- Provider-session lease subsystem (`SessionLeaseService`, `SessionLeaseStore`, `SessionLeaseRecord`, `SessionProcessIdentity`, `SessionLeaseState`, `SessionLeasePolicy`) implemented under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\session-leases\<connection>.json`.
-- Strong process identity verification via PID, process start time, executable identity, command-line string, connection nonce.
-- Suspected-stale and abandonment grace period evaluation with configurable policy (30s heartbeat, 2m suspected stale, 5m abandonment grace period).
-- Persisted reconciliation plan/lock/journal (`ReconciliationPlan`, `ReconciliationPlanEntry`, `ReconciliationPlanStore`, `ReconciliationExecutionLock`, `ReconciliationExecutionJournal`) under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\`.
+- Provider-session lease subsystem (`SessionLeaseService`, `SessionLeaseStore`, `SessionLeaseRecord`,
+  `SessionProcessIdentity`, `SessionLeaseState`, `SessionLeasePolicy`) implemented under
+  `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\session-leases\<connection>.json`.
+- Strong process identity verification via PID, process start time, executable identity, command-line string, connection
+  nonce.
+- Suspected-stale and abandonment grace period evaluation with configurable policy (30s heartbeat, 2m suspected stale,
+  5m abandonment grace period).
+- Persisted reconciliation plan/lock/journal (`ReconciliationPlan`, `ReconciliationPlanEntry`,
+  `ReconciliationPlanStore`, `ReconciliationExecutionLock`, `ReconciliationExecutionJournal`) under
+  `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\`.
 - CLI command `synesis reconcile` supporting `--dry-run`, `--prepare`, `--show-plan`, `--execute`.
 - Ambient `synesis.cancel_lane` MCP tool (bounded reason 1-1000 characters).
-- Event-store transitions for `SESSION_ABANDONED`, `TASK_CANCELLATION_REQUESTED`, `TASK_CANCELLED`, `DEPENDENCY_INVALIDATED`, `OWNERSHIP_RELEASED`, and `SESSION_FINALIZED`.
+- Event-store transitions for `SESSION_ABANDONED`, `TASK_CANCELLATION_REQUESTED`, `TASK_CANCELLED`,
+  `DEPENDENCY_INVALIDATED`, `OWNERSHIP_RELEASED`, and `SESSION_FINALIZED`.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0189.
 
 ## SYN-014D Post-MVP Hardening Slice 4 implementation state
 
-- Read-only `DoctorService` diagnostics (`synesis doctor`) implementing 38 distinct machine-readable finding codes across Installation, Project/Git, Durable State, Sessions/Ownership/Worktrees, Cleanup/Storage, Admin State, and Provider Config.
-- Actionable Doctor severity levels (`INFO`, `WARNING`, `ERROR`, `CRITICAL`), confidence levels (`CONFIRMED`, `HIGH_CONFIDENCE`, `SUSPECTED`, `AMBIGUOUS`), and overall health states (`HEALTHY`, `DEGRADED`, `UNHEALTHY`, `UNSAFE`).
-- Read-only guarantee: `DoctorService` performs zero file creations, zero file modifications, zero file deletions, zero process terminations, and zero lock acquisitions.
-- Separate, reviewable, narrowly scoped administrative repair system (`synesis repair`): `--dry-run`, `--prepare`, `--show-plan`, `--execute`, `--rollback`.
-- Persisted immutable repair plans (`RepairPlan`, `RepairPlanEntry`, `RepairPlanStore`) stored outside control checkout under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-plans\<plan-id>.json`.
-- Repair execution lock (`RepairExecutionLock`) at `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-execution.lock` and append-only execution journal (`RepairExecutionJournal`) at `admin/repair-executions/<execution-id>.jsonl`.
-- Pre-mutation backup and exact atomic rollback service (`RepairBackupService`) under `admin/repair-backups/<execution-id>/`.
+- Read-only `DoctorService` diagnostics (`synesis doctor`) implementing 38 distinct machine-readable finding codes
+  across Installation, Project/Git, Durable State, Sessions/Ownership/Worktrees, Cleanup/Storage, Admin State, and
+  Provider Config.
+- Actionable Doctor severity levels (`INFO`, `WARNING`, `ERROR`, `CRITICAL`), confidence levels (`CONFIRMED`,
+  `HIGH_CONFIDENCE`, `SUSPECTED`, `AMBIGUOUS`), and overall health states (`HEALTHY`, `DEGRADED`, `UNHEALTHY`,
+  `UNSAFE`).
+- Read-only guarantee: `DoctorService` performs zero file creations, zero file modifications, zero file deletions, zero
+  process terminations, and zero lock acquisitions.
+- Separate, reviewable, narrowly scoped administrative repair system (`synesis repair`): `--dry-run`, `--prepare`,
+  `--show-plan`, `--execute`, `--rollback`.
+- Persisted immutable repair plans (`RepairPlan`, `RepairPlanEntry`, `RepairPlanStore`) stored outside control checkout
+  under `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-plans\<plan-id>.json`.
+- Repair execution lock (`RepairExecutionLock`) at
+  `%LOCALAPPDATA%\Synesis\workspaces\<project-id>\admin\repair-execution.lock` and append-only execution journal (
+  `RepairExecutionJournal`) at `admin/repair-executions/<execution-id>.jsonl`.
+- Pre-mutation backup and exact atomic rollback service (`RepairBackupService`) under
+  `admin/repair-backups/<execution-id>/`.
 - MCP tools count remains exactly 10 tools; lifecycle names are explicit and strict.
 - All 49 Gradle tasks and test suites passed cleanly at CP-0190.
 
@@ -2332,12 +2396,12 @@ category.
   expected process ID. The continuation launch bridge validates distinct
   source and target lanes while grant consumption and snapshot restoration
   remain owned by collaboration services.
-Recent hardening: durable event appends derive their head from on-disk signed
-events, preventing stale provider store instances from overwriting concurrent
-coordination events. Integration refreshes pending coordination requests before
-attempt allocation, and completed provider bindings are terminalized for the
-exact caller while preserving their worktree. Snapshot publication excludes
-provider/admin metadata (`AGENTS.md`, `.synesis`, `.codex`, `.claude`, `.agents`).
+  Recent hardening: durable event appends derive their head from on-disk signed
+  events, preventing stale provider store instances from overwriting concurrent
+  coordination events. Integration refreshes pending coordination requests before
+  attempt allocation, and completed provider bindings are terminalized for the
+  exact caller while preserving their worktree. Snapshot publication excludes
+  provider/admin metadata (`AGENTS.md`, `.synesis`, `.codex`, `.claude`, `.agents`).
 
 ## SYN-038 implementation verification
 

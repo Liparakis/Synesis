@@ -1,20 +1,5 @@
 package org.synesis.coordination.domain.task;
 
-import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.domain.prediction.PredictionContract;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
-import org.synesis.coordination.domain.prediction.PredictionEventType;
-
-
-import org.synesis.coordination.domain.command.CoordinationCommand;
-import org.synesis.coordination.domain.ownership.OwnershipClaim;
-import org.synesis.coordination.domain.prediction.PredictionContract;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
-import org.synesis.coordination.domain.prediction.PredictionEventType;
-
-
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,8 +7,13 @@ import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.link.identity.NodeIdentity;
 import org.synesis.coordination.application.CoordinationService;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.ownership.OwnershipClaim;
+import org.synesis.coordination.domain.prediction.PredictionContract;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Foreground supervisor facade for submitting predictions and consuming replay.

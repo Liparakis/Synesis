@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.capability;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -32,6 +30,7 @@ import java.util.UUID;
  * @param reason                optional rejection or revision reason
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public record CapabilityRequestPayload(
         CapabilityRequestHandle handle,
         String capability,
@@ -82,18 +81,20 @@ public record CapabilityRequestPayload(
         }
     }
 
-    /** Constructs a worker-aware payload without an explicit lineage.
-     * @param handle request handle
-     * @param capability capability identifier
-     * @param requesterNodeId requester node
+    /**
+     * Constructs a worker-aware payload without an explicit lineage.
+     *
+     * @param handle                request handle
+     * @param capability            capability identifier
+     * @param requesterNodeId       requester node
      * @param requesterSupervisorId requester supervisor
-     * @param requesterWorkerId requester worker
-     * @param ownerNodeId owner node
-     * @param ownerSupervisorId owner supervisor
-     * @param ownerWorkerId owner worker
-     * @param contract capability contract
-     * @param state lifecycle state
-     * @param reason optional reason
+     * @param requesterWorkerId     requester worker
+     * @param ownerNodeId           owner node
+     * @param ownerSupervisorId     owner supervisor
+     * @param ownerWorkerId         owner worker
+     * @param contract              capability contract
+     * @param state                 lifecycle state
+     * @param reason                optional reason
      */
     public CapabilityRequestPayload(
             CapabilityRequestHandle handle,
@@ -137,15 +138,17 @@ public record CapabilityRequestPayload(
                 unresolvedLineage(handle), contract, state, reason);
     }
 
-    /** Constructs a node-only payload with an explicit authority lineage.
-     * @param handle request handle
-     * @param capability capability identifier
-     * @param requesterNodeId requester node
-     * @param ownerNodeId owner node
+    /**
+     * Constructs a node-only payload with an explicit authority lineage.
+     *
+     * @param handle             request handle
+     * @param capability         capability identifier
+     * @param requesterNodeId    requester node
+     * @param ownerNodeId        owner node
      * @param authorityLineageId durable authority lineage
-     * @param contract capability contract
-     * @param state lifecycle state
-     * @param reason optional reason
+     * @param contract           capability contract
+     * @param state              lifecycle state
+     * @param reason             optional reason
      */
     public CapabilityRequestPayload(
             CapabilityRequestHandle handle,
@@ -159,48 +162,6 @@ public record CapabilityRequestPayload(
     ) {
         this(handle, capability, requesterNodeId, "", "", ownerNodeId, "", "",
                 authorityLineageId, contract, state, reason);
-    }
-
-    /**
-     * Encodes this payload into binary event format (Version 3).
-     *
-     * @return encoded payload bytes
-     */
-    public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
-            out.writeInt(3); // Version 3
-            writeText(out, handle.value());
-            writeText(out, capability);
-            writeText(out, requesterNodeId);
-            writeText(out, requesterSupervisorId);
-            writeText(out, requesterWorkerId);
-            writeText(out, ownerNodeId);
-            writeText(out, ownerSupervisorId);
-            writeText(out, ownerWorkerId);
-            writeUuid(out, authorityLineageId);
-            writeText(out, contract.inputs());
-            writeText(out, contract.output());
-
-            out.writeInt(contract.requiredBehavior().size());
-            for (String b : contract.requiredBehavior()) {
-                writeText(out, b);
-            }
-
-            out.writeInt(contract.acceptanceTests().size());
-            for (String a : contract.acceptanceTests()) {
-                writeText(out, a);
-            }
-
-            writeText(out, state.value());
-            writeText(out, reason != null ? reason : "");
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new AssertionError(impossible);
-        }
     }
 
     /**
@@ -240,7 +201,7 @@ public record CapabilityRequestPayload(
                 ownerSupervisorId = readText(in);
                 ownerWorkerId = readText(in);
             }
-            authorityLineageId = version >= 3 ? readUuid(in) : unresolvedLineage(handle);
+            authorityLineageId = version == 3 ? readUuid(in) : unresolvedLineage(handle);
 
             String inputs = readText(in);
             String output = readText(in);
@@ -303,5 +264,49 @@ public record CapabilityRequestPayload(
     private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
         return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value())
                 .getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Encodes this payload into binary event format (Version 3).
+     *
+     * @return encoded payload bytes
+     */
+    public byte[] encode() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC);
+            out.writeInt(3); // Version 3
+            writeText(out, handle.value());
+            writeText(out, capability);
+            writeText(out, requesterNodeId);
+            writeText(out, requesterSupervisorId);
+            writeText(out, requesterWorkerId);
+            writeText(out, ownerNodeId);
+            writeText(out, ownerSupervisorId);
+            writeText(out, ownerWorkerId);
+            writeUuid(out, authorityLineageId);
+            writeText(out, contract.inputs());
+            writeText(out, contract.output());
+
+            out.writeInt(contract.requiredBehavior()
+                    .size());
+            for (String b : contract.requiredBehavior()) {
+                writeText(out, b);
+            }
+
+            out.writeInt(contract.acceptanceTests()
+                    .size());
+            for (String a : contract.acceptanceTests()) {
+                writeText(out, a);
+            }
+
+            writeText(out, state.value());
+            writeText(out, reason != null ? reason : "");
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
     }
 }

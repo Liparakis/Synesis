@@ -2,6 +2,7 @@ package org.synesis.workspace.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,12 +10,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectCommandSpec;
 
 /**
  * Verifies discovered project initialization and local-state separation.
  */
+@SuppressWarnings("TextBlockMigration")
 final class ProjectApplicationServiceTest {
 
     private static String git(Path root, String... arguments) throws Exception {
@@ -36,11 +37,14 @@ final class ProjectApplicationServiceTest {
         assertTrue(agents.contains("This repository uses Synesis."));
         assertTrue(agents.contains("use Synesis MCP for all reads, writes, and commands"));
         assertTrue(agents.contains("Native provider hooks are optional"));
-        assertTrue(agents.contains("do not call finish_lane or another lifecycle tool merely because the coding appears complete"));
-        assertTrue(agents.contains("Execute lifecycle actions only when get_next_action projects the exact tool and arguments"));
+        assertTrue(agents.contains(
+                "do not call finish_lane or another lifecycle tool merely because the coding appears complete"));
+        assertTrue(agents.contains(
+                "Execute lifecycle actions only when get_next_action projects the exact tool and arguments"));
         assertTrue(agents.contains("A mutating Synesis tool may return a required continuation"));
         assertTrue(agents.contains("the continuation is part of the durable protocol, not an optional suggestion"));
-        assertTrue(agents.contains("After any completed Synesis mutation, call get_next_action again before ending the turn"));
+        assertTrue(agents.contains(
+                "After any completed Synesis mutation, call get_next_action again before ending the turn"));
         assertTrue(agents.contains("do not end the session when IMPLEMENT has no concrete action"));
         assertTrue(agents.contains("Perform a bounded wait and call get_next_action again"));
         assertTrue(agents.contains("integrationCheck input only evaluates explicitly supplied compatibility facts"));
@@ -156,31 +160,45 @@ final class ProjectApplicationServiceTest {
         ProjectApplicationService service = new ProjectApplicationService();
         var initialized = service.init(root, false);
         String v1 = "{\n  \"schemaVersion\": 1,\n  \"projectId\": \""
-                + initialized.location().projectId() + "\",\n  \"createdAt\": \""
-                + initialized.location().createdAt() + "\"\n}\n";
-        Files.writeString(initialized.location().metadataFile(), v1);
-        assertEquals(null, service.locate(root).validation());
+                + initialized.location()
+                .projectId() + "\",\n  \"createdAt\": \""
+                + initialized.location()
+                .createdAt() + "\"\n}\n";
+        Files.writeString(initialized.location()
+                .metadataFile(), v1);
+        assertNull(
+                service.locate(root)
+                        .validation());
 
         String v2 = "{\n  \"schemaVersion\": 2,\n  \"projectId\": \""
-                + initialized.location().projectId() + "\",\n  \"createdAt\": \""
-                + initialized.location().createdAt() + "\",\n  \"validation\": {\n"
+                + initialized.location()
+                .projectId() + "\",\n  \"createdAt\": \""
+                + initialized.location()
+                .createdAt() + "\",\n  \"validation\": {\n"
                 + "    \"argv\": [\"powershell.exe\", \"-NoProfile\", \"-Command\", \"exit 0\"],\n"
                 + "    \"workingDirectory\": \".\",\n    \"timeoutSeconds\": 120\n  }\n}\n";
-        Files.writeString(initialized.location().metadataFile(), v2);
+        Files.writeString(initialized.location()
+                .metadataFile(), v2);
         var withValidation = service.locate(root);
         assertEquals(List.of("powershell.exe", "-NoProfile", "-Command", "exit 0"),
-                withValidation.validation().argv());
-        assertEquals(ProjectCommandSpec.DEFAULT_TIMEOUT_SECONDS, withValidation.validation().timeoutSeconds());
+                withValidation.validation()
+                        .argv());
+        assertEquals(ProjectCommandSpec.DEFAULT_TIMEOUT_SECONDS,
+                withValidation.validation()
+                        .timeoutSeconds());
     }
 
     @Test
     void rejectsAbsoluteProjectValidationWorkingDirectory() throws Exception {
         Path root = Files.createTempDirectory("synesis-invalid-validation-");
         var initialized = new ProjectApplicationService().init(root, false);
-        String invalid = "{\"schemaVersion\":2,\"projectId\":\"" + initialized.location().projectId()
-                + "\",\"createdAt\":\"" + initialized.location().createdAt()
+        String invalid = "{\"schemaVersion\":2,\"projectId\":\"" + initialized.location()
+                .projectId()
+                + "\",\"createdAt\":\"" + initialized.location()
+                .createdAt()
                 + "\",\"validation\":{\"argv\":[\"git\",\"status\"],\"workingDirectory\":\"C:/outside\",\"timeoutSeconds\":120}}";
-        Files.writeString(initialized.location().metadataFile(), invalid);
+        Files.writeString(initialized.location()
+                .metadataFile(), invalid);
         var failure = assertThrows(ProjectApplicationService.ProjectApplicationException.class,
                 () -> new ProjectApplicationService().locate(root));
         assertEquals("MALFORMED", failure.code());
@@ -190,11 +208,14 @@ final class ProjectApplicationServiceTest {
     void rejectsNonIntegerProjectValidationTimeout() throws Exception {
         Path root = Files.createTempDirectory("synesis-invalid-validation-timeout-");
         var initialized = new ProjectApplicationService().init(root, false);
-        String invalid = "{\"schemaVersion\":2,\"projectId\":\"" + initialized.location().projectId()
-                + "\",\"createdAt\":\"" + initialized.location().createdAt()
+        String invalid = "{\"schemaVersion\":2,\"projectId\":\"" + initialized.location()
+                .projectId()
+                + "\",\"createdAt\":\"" + initialized.location()
+                .createdAt()
                 + "\",\"validation\":{\"argv\":[\"git\",\"status\"],"
                 + "\"workingDirectory\":\".\",\"timeoutSeconds\":1.5}}";
-        Files.writeString(initialized.location().metadataFile(), invalid);
+        Files.writeString(initialized.location()
+                .metadataFile(), invalid);
         var failure = assertThrows(ProjectApplicationService.ProjectApplicationException.class,
                 () -> new ProjectApplicationService().locate(root));
         assertEquals("MALFORMED", failure.code());
@@ -204,11 +225,14 @@ final class ProjectApplicationServiceTest {
     void rejectsNullValidationFieldsInsteadOfTreatingThemAsOmitted() throws Exception {
         Path root = Files.createTempDirectory("synesis-invalid-validation-null-");
         var initialized = new ProjectApplicationService().init(root, false);
-        String invalid = "{\"schemaVersion\":2,\"projectId\":\"" + initialized.location().projectId()
-                + "\",\"createdAt\":\"" + initialized.location().createdAt()
+        String invalid = "{\"schemaVersion\":2,\"projectId\":\"" + initialized.location()
+                .projectId()
+                + "\",\"createdAt\":\"" + initialized.location()
+                .createdAt()
                 + "\",\"validation\":{\"argv\":[\"git\",\"status\"],"
                 + "\"workingDirectory\":null,\"timeoutSeconds\":null}}";
-        Files.writeString(initialized.location().metadataFile(), invalid);
+        Files.writeString(initialized.location()
+                .metadataFile(), invalid);
         var failure = assertThrows(ProjectApplicationService.ProjectApplicationException.class,
                 () -> new ProjectApplicationService().locate(root));
         assertEquals("MALFORMED", failure.code());

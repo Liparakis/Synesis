@@ -32,6 +32,7 @@ public record PersistedCleanupPlanEntry(
         LifecycleResourceFingerprint fingerprint,
         String proposedOperation
 ) {
+
     /**
      * Invariant validation.
      */

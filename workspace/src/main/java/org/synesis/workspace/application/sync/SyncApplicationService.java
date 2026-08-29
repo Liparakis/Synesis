@@ -12,14 +12,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.link.session.PeerSession;
-import org.synesis.link.session.SessionCloseReason;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.onboarding.OnboardingFailureCode;
-import org.synesis.projectrecord.persistence.DecisionStore;
+import org.synesis.link.session.PeerSession;
+import org.synesis.link.session.SessionCloseReason;
 import org.synesis.projectrecord.domain.ProjectConfig;
+import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.sync.ProjectReconciliationSync;
 import org.synesis.projectrecord.sync.ProjectRecordSync;
 
@@ -36,7 +36,7 @@ public final class SyncApplicationService {
     public SyncApplicationService() {
     }
 
-    private static ProjectConfig loadConfig(Path profile) throws Exception {
+    private static ProjectConfig loadConfig(Path profile) {
         try {
             return ProjectConfig.load(profile.resolve(PROJECT_CONFIG));
         } catch (Exception failure) {
@@ -44,7 +44,7 @@ public final class SyncApplicationService {
         }
     }
 
-    private static NodeIdentity identity(Path profile) throws Exception {
+    private static NodeIdentity identity(Path profile) {
         try {
             return new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
                     .identity();
@@ -132,6 +132,7 @@ public final class SyncApplicationService {
      * @param invitationSink receives the generated invitation
      * @return structured result
      */
+    @SuppressWarnings("ExtractMethodRecommender")
     public SyncResult host(Path profile, String project, String record, Consumer<String> invitationSink) {
         Objects.requireNonNull(profile, "profile");
         Objects.requireNonNull(invitationSink, "invitationSink");

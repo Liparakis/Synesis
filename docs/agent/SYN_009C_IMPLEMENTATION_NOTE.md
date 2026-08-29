@@ -42,14 +42,14 @@ across operating systems or architectures.
 
 ## Artifact matrix
 
-| Platform | Bundle | Bootstrap | Native smoke |
-|---|---|---|---|
-| windows-x64 | native runner | native runner | local/CI |
-| windows-arm64 | native ARM runner | native/cross | CI runner required |
-| linux-x64 | native runner | native runner | CI |
-| linux-arm64 | native ARM runner | native/cross | CI runner required |
-| macos-x64 | native Intel runner | native/cross | CI runner required |
-| macos-arm64 | native ARM runner | native/cross | CI |
+| Platform      | Bundle              | Bootstrap     | Native smoke       |
+|---------------|---------------------|---------------|--------------------|
+| windows-x64   | native runner       | native runner | local/CI           |
+| windows-arm64 | native ARM runner   | native/cross  | CI runner required |
+| linux-x64     | native runner       | native runner | CI                 |
+| linux-arm64   | native ARM runner   | native/cross  | CI runner required |
+| macos-x64     | native Intel runner | native/cross  | CI runner required |
+| macos-arm64   | native ARM runner   | native/cross  | CI                 |
 
 Unavailable native runners are reported as `CROSS_COMPILED_ONLY` or
 `NOT_SUPPORTED_BY_RUNNER`; they are not called smoke-tested.

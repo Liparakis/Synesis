@@ -5,27 +5,33 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Set;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-/** Performs a bounded, read-only projection of the durable command namespace. */
+/**
+ * Performs a bounded, read-only projection of the durable command namespace.
+ */
+@SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandDiagnostics {
 
     private ProjectCommandDiagnostics() {
     }
 
-    /** Inspects the namespace without creating directories, taking locks, or changing state.
+    /**
+     * Inspects the namespace without creating directories, taking locks, or changing state.
+     *
      * @param namespaceRoot command namespace root
      * @return bounded diagnostic projection
      */
     public static Report inspect(Path namespaceRoot) {
         Objects.requireNonNull(namespaceRoot, "namespaceRoot");
-        Path root = namespaceRoot.toAbsolutePath().normalize();
+        Path root = namespaceRoot.toAbsolutePath()
+                .normalize();
         if (!Files.isDirectory(root)) {
             return Report.absent();
         }
@@ -39,9 +45,11 @@ public final class ProjectCommandDiagnostics {
         enumerateScopes(root.resolve("scopes"), counters);
         enumerateAnchors(root.resolve("process-scopes"), counters);
         enumerateTemporaries(root, counters);
-        counters.liveAtCapacityCount = counters.recordCounts.entrySet().stream()
+        counters.liveAtCapacityCount = counters.recordCounts.entrySet()
+                .stream()
                 .filter(entry -> entry.getValue() >= 8_192 && !counters.deadAnchorIds.contains(entry.getKey()))
-                .mapToInt(ignored -> 1).sum();
+                .mapToInt(ignored -> 1)
+                .sum();
 
         boolean staleIndex = indexValue != null
                 && number(indexValue, "scopeCount") != counters.scopeCount;
@@ -65,7 +73,9 @@ public final class ProjectCommandDiagnostics {
                     counters.enumerationComplete = false;
                     return;
                 }
-                if (path.getFileName().toString().endsWith(".lock")) {
+                if (path.getFileName()
+                        .toString()
+                        .endsWith(".lock")) {
                     if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
                         counters.corruptObjectCount++;
                         counters.formatValid = false;
@@ -105,7 +115,9 @@ public final class ProjectCommandDiagnostics {
                                 counters.enumerationComplete = false;
                                 return;
                             }
-                            Map<String, Object> value = readObject(record, ProjectCommandNamespace.MAX_SCOPE_BYTES, counters);
+                            Map<String, Object> value = readObject(record,
+                                    ProjectCommandNamespace.MAX_SCOPE_BYTES,
+                                    counters);
                             if (value == null) {
                                 continue;
                             }
@@ -115,7 +127,8 @@ public final class ProjectCommandDiagnostics {
                                 counters.recordCounts.merge(anchorId, 1, Integer::sum);
                             }
                             String phase = value.get("phase") instanceof String text ? text : "";
-                            if (ProjectCommandPhase.TERMINAL.name().equals(phase)) {
+                            if (ProjectCommandPhase.TERMINAL.name()
+                                    .equals(phase)) {
                                 if (Boolean.TRUE.equals(value.get("pinned"))
                                         || Boolean.TRUE.equals(value.get("acceptancePinned"))
                                         || Boolean.TRUE.equals(value.get("checkpointPinned"))) {
@@ -175,8 +188,11 @@ public final class ProjectCommandDiagnostics {
                 if (raw instanceof Map<?, ?> process && process.get("pid") instanceof Number pid
                         && process.get("processStartTime") instanceof Number start) {
                     var handle = ProcessHandle.of(pid.longValue());
-                    if (handle.isEmpty() || handle.get().info().startInstant()
-                            .map(instant -> instant.toEpochMilli() != start.longValue()).orElse(true)) {
+                    if (handle.isEmpty() || handle.get()
+                            .info()
+                            .startInstant()
+                            .map(instant -> instant.toEpochMilli() != start.longValue())
+                            .orElse(true)) {
                         counters.deadAnchorCount++;
                         if (value.get("anchorId") instanceof String anchorId) {
                             counters.deadAnchorIds.add(anchorId);
@@ -192,7 +208,8 @@ public final class ProjectCommandDiagnostics {
     private static void enumerateTemporaries(Path root, Counters counters) {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
             for (Path path : stream) {
-                String name = path.getFileName().toString();
+                String name = path.getFileName()
+                        .toString();
                 if (name.endsWith(".tmp") || name.contains(".tmp-")) {
                     counters.temporaryArtifactCount++;
                     if (counters.temporaryArtifactCount > ProjectCommandNamespace.MAX_TEMPORARY_ENTRIES) {
@@ -234,7 +251,8 @@ public final class ProjectCommandDiagnostics {
                 CommandDurableFormat.verify(value);
             } catch (CommandFormatException format) {
                 counters.formatValid = false;
-                if (format.getMessage().contains("NEWER")) {
+                if (format.getMessage()
+                        .contains("NEWER")) {
                     counters.newerObjectCount++;
                 } else {
                     counters.corruptObjectCount++;
@@ -258,13 +276,24 @@ public final class ProjectCommandDiagnostics {
 
     private static void scanDiagnostics(Map<String, Object> value, Counters counters) {
         String text = String.valueOf(value);
-        if (text.contains("LEASE_GAP")) counters.leaseGapRevisionMismatchCount++;
-        if (text.contains("RESTART")) counters.admissionRestartCount++;
-        if (text.contains("DETACH") && text.contains("BLOCK")) counters.cleanCloseDetachBlockedCount++;
-        if (text.contains("DEFERRED")) counters.deferredMutationCount++;
+        if (text.contains("LEASE_GAP")) {
+            counters.leaseGapRevisionMismatchCount++;
+        }
+        if (text.contains("RESTART")) {
+            counters.admissionRestartCount++;
+        }
+        if (text.contains("DETACH") && text.contains("BLOCK")) {
+            counters.cleanCloseDetachBlockedCount++;
+        }
+        if (text.contains("DEFERRED")) {
+            counters.deferredMutationCount++;
+        }
     }
 
     private static final class Counters {
+
+        private final Map<String, Integer> recordCounts = new HashMap<>();
+        private final Set<String> deadAnchorIds = new HashSet<>();
         private boolean formatValid = true;
         private boolean enumerationComplete = true;
         private int inspected;
@@ -285,40 +314,42 @@ public final class ProjectCommandDiagnostics {
         private int admissionRestartCount;
         private int cleanCloseDetachBlockedCount;
         private int deferredMutationCount;
-        private final Map<String, Integer> recordCounts = new HashMap<>();
-        private final Set<String> deadAnchorIds = new HashSet<>();
     }
 
-    /** Immutable bounded command namespace diagnostic projection.
-     * @param present namespace exists
-     * @param formatValid all inspected objects have supported valid formats
-     * @param newerObjectCount unsupported newer objects
-     * @param olderFormatCount objects awaiting migration
-     * @param corruptObjectCount corrupt or substituted objects
-     * @param permanentLockCount permanent lock files
-     * @param scopeCount physical-worktree scopes
-     * @param anchorCount process anchors
-     * @param requestCount inspected request records
-     * @param liveAtCapacityCount live anchors at request capacity
-     * @param deadAnchorCount anchors whose process evidence is no longer live
-     * @param eligibleTerminalCount unpinned terminal records eligible for retention review
-     * @param pinnedEvidenceCount pinned terminal evidence
-     * @param staleIndexCount stale index observations
-     * @param temporaryArtifactCount temporary files observed
+    /**
+     * Immutable bounded command namespace diagnostic projection.
+     *
+     * @param present                        namespace exists
+     * @param formatValid                    all inspected objects have supported valid formats
+     * @param newerObjectCount               unsupported newer objects
+     * @param olderFormatCount               objects awaiting migration
+     * @param corruptObjectCount             corrupt or substituted objects
+     * @param permanentLockCount             permanent lock files
+     * @param scopeCount                     physical-worktree scopes
+     * @param anchorCount                    process anchors
+     * @param requestCount                   inspected request records
+     * @param liveAtCapacityCount            live anchors at request capacity
+     * @param deadAnchorCount                anchors whose process evidence is no longer live
+     * @param eligibleTerminalCount          unpinned terminal records eligible for retention review
+     * @param pinnedEvidenceCount            pinned terminal evidence
+     * @param staleIndexCount                stale index observations
+     * @param temporaryArtifactCount         temporary files observed
      * @param terminalHistoryCompactionCount compacted terminal-history objects
-     * @param leaseGapRevisionMismatchCount lease-gap mismatch diagnostics
-     * @param admissionRestartCount admission restart diagnostics
-     * @param cleanCloseDetachBlockedCount blocked detach diagnostics
-     * @param deferredMutationCount deferred mutation diagnostics
-     * @param enumerationComplete whether all bounded directories reached end
+     * @param leaseGapRevisionMismatchCount  lease-gap mismatch diagnostics
+     * @param admissionRestartCount          admission restart diagnostics
+     * @param cleanCloseDetachBlockedCount   blocked detach diagnostics
+     * @param deferredMutationCount          deferred mutation diagnostics
+     * @param enumerationComplete            whether all bounded directories reached end
      */
     public record Report(boolean present, boolean formatValid, int newerObjectCount, int olderFormatCount,
-            int corruptObjectCount, int permanentLockCount, int scopeCount, int anchorCount, int requestCount,
-            int liveAtCapacityCount, int deadAnchorCount, int eligibleTerminalCount, int pinnedEvidenceCount,
-            int staleIndexCount, int temporaryArtifactCount, int terminalHistoryCompactionCount,
-            int leaseGapRevisionMismatchCount,
-            int admissionRestartCount, int cleanCloseDetachBlockedCount, int deferredMutationCount,
-            boolean enumerationComplete) {
+                         int corruptObjectCount, int permanentLockCount, int scopeCount, int anchorCount,
+                         int requestCount,
+                         int liveAtCapacityCount, int deadAnchorCount, int eligibleTerminalCount,
+                         int pinnedEvidenceCount,
+                         int staleIndexCount, int temporaryArtifactCount, int terminalHistoryCompactionCount,
+                         int leaseGapRevisionMismatchCount,
+                         int admissionRestartCount, int cleanCloseDetachBlockedCount, int deferredMutationCount,
+                         boolean enumerationComplete) {
 
         private static Report absent() {
             return new Report(false, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true);

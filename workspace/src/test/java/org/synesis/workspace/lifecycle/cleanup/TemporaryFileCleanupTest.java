@@ -1,7 +1,7 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,9 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
 class TemporaryFileCleanupTest {
 
@@ -32,10 +30,21 @@ class TemporaryFileCleanupTest {
                 System.currentTimeMillis(),
                 1, 0, 0, 0, 0, 1, 0, 12L, false,
                 List.of(new CleanupPlanEntry(
-                        LifecycleResourceType.TEMPORARY_FILE, "file.tmp-1", tempFile,
-                        CleanupClassification.CLEANUP_ELIGIBLE, true, List.of("temporary_file_expired"), 12L, "Expired",
-                        List.of("temp"), "NOT_APPLICABLE", false, "path_verified", ProcessEvidenceState.NOT_OBSERVED,
-                        new LifecycleResourceFingerprint("file.tmp-1", 1000L, "NONE", "NONE", "", "h1"), "DELETE_TEMPORARY_FILE"
+                        LifecycleResourceType.TEMPORARY_FILE,
+                        "file.tmp-1",
+                        tempFile,
+                        CleanupClassification.CLEANUP_ELIGIBLE,
+                        true,
+                        List.of("temporary_file_expired"),
+                        12L,
+                        "Expired",
+                        List.of("temp"),
+                        "NOT_APPLICABLE",
+                        false,
+                        "path_verified",
+                        ProcessEvidenceState.NOT_OBSERVED,
+                        new LifecycleResourceFingerprint("file.tmp-1", 1000L, "NONE", "NONE", "", "h1"),
+                        "DELETE_TEMPORARY_FILE"
                 ))
         );
 

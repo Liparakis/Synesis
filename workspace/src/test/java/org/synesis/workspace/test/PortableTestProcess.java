@@ -1,14 +1,16 @@
 package org.synesis.workspace.test;
 
-import java.io.IOException;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Child process fixture used to keep process assertions portable across CI hosts. */
+/**
+ * Child process fixture used to keep process assertions portable across CI hosts.
+ */
 public final class PortableTestProcess {
 
     private PortableTestProcess() {
@@ -20,7 +22,7 @@ public final class PortableTestProcess {
      * @param arguments fixture operation and arguments
      * @throws Exception if the fixture cannot read its validation file
      */
-    public static void main(String[] arguments) throws Exception {
+    static void main(String[] arguments) throws Exception {
         System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out), true,
                 StandardCharsets.UTF_8));
         System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err), true,
@@ -69,7 +71,7 @@ public final class PortableTestProcess {
         }
     }
 
-    private static void writeRepeated(String value, int count, boolean error) throws IOException {
+    private static void writeRepeated(String value, int count, boolean error) {
         String output = value.repeat(count);
         if (error) {
             System.err.print(output);
@@ -81,7 +83,8 @@ public final class PortableTestProcess {
     }
 
     private static void validate(Path file, String expected) throws IOException {
-        String actual = Files.readString(file, StandardCharsets.UTF_8).trim();
+        String actual = Files.readString(file, StandardCharsets.UTF_8)
+                .trim();
         if (!actual.equals(expected)) {
             System.exit(1);
         }

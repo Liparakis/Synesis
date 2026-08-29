@@ -12,15 +12,14 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 class AgentSessionServiceTest {
 
-    private ProjectApplicationService projectService;
     private AgentSessionService sessionService;
     private Path tempRoot;
 
@@ -38,7 +37,7 @@ class AgentSessionServiceTest {
         git(tempRoot, "add", ".");
         git(tempRoot, "commit", "-m", "Initial commit");
 
-        projectService = new ProjectApplicationService();
+        ProjectApplicationService projectService = new ProjectApplicationService();
         projectService.init(tempRoot);
         sessionService = new AgentSessionService();
     }
@@ -56,7 +55,9 @@ class AgentSessionServiceTest {
         assertNotNull(context.supervisorId());
         assertNotNull(context.worktreePath());
         assertEquals("WORKSPACE_UNVERIFIED", context.providerTrustState());
-        assertEquals("VERIFIED", context.binding().verificationState());
+        assertEquals("VERIFIED",
+                context.binding()
+                        .verificationState());
         assertTrue(context.isIsolatedWorkspace());
     }
 
@@ -102,12 +103,16 @@ class AgentSessionServiceTest {
         AgentSessionService.AgentSessionContext agCtx = sessionService.resolveSessionContext(agReq);
 
         assertNotEquals(codexCtx.sessionId(), agCtx.sessionId());
-        assertEquals("codex", codexCtx.binding().provider());
-        assertEquals("antigravity", agCtx.binding().provider());
+        assertEquals("codex",
+                codexCtx.binding()
+                        .provider());
+        assertEquals("antigravity",
+                agCtx.binding()
+                        .provider());
     }
 
     @Test
-    void testEnsureSessionOutputIsConciseAndContainsNoInternalIdsOrPaths() throws Exception {
+    void testEnsureSessionOutputIsConciseAndContainsNoInternalIdsOrPaths() {
         AgentSessionService.AgentTaskIntent intent = new AgentSessionService.AgentTaskIntent(
                 "Implement feature", "Tests pass", List.of("catalog"), List.of());
         AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(

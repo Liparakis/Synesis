@@ -18,6 +18,7 @@ import java.util.UUID;
 /**
  * Bounded Project Reconciliation Protocol (PRP1) message codec.
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ReconciliationMessage {
 
     /**
@@ -44,6 +45,7 @@ public final class ReconciliationMessage {
     private final int status; // status code or result code ordinal
     private final ErrorCode errorCode;
     private final String errorText;
+
     private ReconciliationMessage(Kind kind, UUID projectId, int chunkIndex, int totalChunks, int corruptCount,
             List<InventoryEntry> entries, byte[] recordBytes, UUID recordId, long revision, int status,
             ErrorCode errorCode, String errorText) {
@@ -425,7 +427,7 @@ public final class ReconciliationMessage {
                     if (errCode >= ErrorCode.values().length) {
                         throw new IOException("unknown error code");
                     }
-                    String text = readText(input, 256);
+                    String text = readText(input);
                     yield error(ErrorCode.values()[errCode], text);
                 }
             };
@@ -463,9 +465,9 @@ public final class ReconciliationMessage {
         output.write(value);
     }
 
-    private static String readText(DataInputStream input, int max) throws IOException {
+    private static String readText(DataInputStream input) throws IOException {
         byte[] bytes = readBytes(input);
-        if (bytes.length > max) {
+        if (bytes.length > 256) {
             throw new IOException("text exceeds bound");
         }
         try {
@@ -479,9 +481,9 @@ public final class ReconciliationMessage {
         }
     }
 
-    private static void writeText(DataOutputStream output, String value, int max) throws IOException {
+    private static void writeText(DataOutputStream output, String value) throws IOException {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > max) {
+        if (bytes.length > 256) {
             throw new IllegalArgumentException("text exceeds bound");
         }
         writeBytes(output, bytes);
@@ -582,6 +584,7 @@ public final class ReconciliationMessage {
      *
      * @return error category
      */
+    @SuppressWarnings("unused")
     public ErrorCode errorCode() {
         return errorCode;
     }
@@ -624,16 +627,12 @@ public final class ReconciliationMessage {
                             output.write(entry.headDigest());
                         }
                     }
-                    case INVENTORY_CHUNK_ACK -> {
-                        output.writeInt(chunkIndex);
-                    }
+                    case INVENTORY_CHUNK_ACK -> output.writeInt(chunkIndex);
                     case FINAL_INVENTORY_CHUNK_ACK -> {
                         output.writeInt(chunkIndex);
                         output.writeInt(status);
                     }
-                    case CLIENT_UPLOAD_REVISION -> {
-                        writeBytes(output, recordBytes);
-                    }
+                    case CLIENT_UPLOAD_REVISION -> writeBytes(output, recordBytes);
                     case CLIENT_UPLOAD_ACK -> {
                         writeUuid(output, recordId);
                         output.writeLong(revision);
@@ -654,7 +653,7 @@ public final class ReconciliationMessage {
                     }
                     case ERROR -> {
                         output.writeByte(errorCode.ordinal());
-                        writeText(output, errorText, 256);
+                        writeText(output, errorText);
                     }
                 }
             }
@@ -767,11 +766,12 @@ public final class ReconciliationMessage {
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof InventoryEntry other)) {
+            if (!(o instanceof InventoryEntry(UUID otherRecordId, long otherHeadVersion,
+                    byte[] otherHeadDigest))) {
                 return false;
             }
-            return headVersion == other.headVersion && recordId.equals(other.recordId) && Arrays.equals(headDigest,
-                    other.headDigest);
+            return headVersion == otherHeadVersion && recordId.equals(otherRecordId)
+                    && Arrays.equals(headDigest, otherHeadDigest);
         }
 
         @Override

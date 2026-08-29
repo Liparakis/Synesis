@@ -37,8 +37,8 @@ and closure.
 - MCP startup: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`, commit
   `bc334ac`, exactly ten tools
 - Connections:
-  - A: `conn-instance-4f3ae725-b1d5-44f0-826d-d99e55e2391c`
-  - B: `conn-instance-c5568202-0242-42a2-9406-4fdab8e0ce25`
+    - A: `conn-instance-4f3ae725-b1d5-44f0-826d-d99e55e2391c`
+    - B: `conn-instance-c5568202-0242-42a2-9406-4fdab8e0ce25`
 - A session/worktree:
   `session-c26afb33-074d-41f9-a782-39cb7d3354ed`
 - B session/worktree:
@@ -48,11 +48,11 @@ and closure.
 ## Participants, ownership, and WorkGroup
 
 - A participant: `agt_775c66b9-5dd8-3683-934e-cf26602b6679`
-  - intent: `15ad633a-756c-372b-b9ea-563ecbed533f`
-  - claim: `PATH_EXACT todo.py`, epoch 1
+    - intent: `15ad633a-756c-372b-b9ea-563ecbed533f`
+    - claim: `PATH_EXACT todo.py`, epoch 1
 - B participant: `agt_7ee67cb4-185c-32c1-831a-875b671f92e7`
-  - intent: `1871005f-b6ba-3af8-a1d9-0508e6952951`
-  - claim: `PATH_EXACT test_todo.py`, epoch 1
+    - intent: `1871005f-b6ba-3af8-a1d9-0508e6952951`
+    - claim: `PATH_EXACT test_todo.py`, epoch 1
 - WorkGroup: `49082d5e-ecc5-3503-82fb-3d62f37597c8`, `ACTIVE`
 
 ## Projection and action trace
@@ -65,9 +65,9 @@ and closure.
    request `10fe11a8-c4bc-46ae-a11f-cd70489741d2`, returning `ACCEPTED`.
 3. Synesis issued single-use grant
    `c9cb80ae-679d-3290-902c-c55647723aae`, targeting B for A's intent at epoch
-   1. B received and executed the exact grant-consumption request with the
-   projected grant ID, WorkGroup, intent, target participant, and epoch. The
-   result was `status=CONSUMED`.
+    1. B received and executed the exact grant-consumption request with the
+       projected grant ID, WorkGroup, intent, target participant, and epoch. The
+       result was `status=CONSUMED`.
 4. B received two identical projections:
 
    ```text

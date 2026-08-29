@@ -15,9 +15,13 @@ import java.util.Map;
  */
 public final class GitProcessRunner {
 
-    /** Maximum lifetime of one local Git command. */
+    /**
+     * Maximum lifetime of one local Git command.
+     */
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
-    /** Maximum merged output retained for one local Git command. */
+    /**
+     * Maximum merged output retained for one local Git command.
+     */
     public static final int DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
 
     private GitProcessRunner() {
@@ -26,7 +30,7 @@ public final class GitProcessRunner {
     /**
      * Runs a required Git command.
      *
-     * @param workdir Git working directory
+     * @param workdir   Git working directory
      * @param arguments Git arguments after {@code git}
      * @return bounded UTF-8 output
      * @throws IOException if Git fails to start, times out, or exits nonzero
@@ -38,7 +42,7 @@ public final class GitProcessRunner {
     /**
      * Runs a required Git command and preserves its bounded raw output bytes.
      *
-     * @param workdir Git working directory
+     * @param workdir   Git working directory
      * @param arguments Git arguments after {@code git}
      * @return bounded raw Git output
      * @throws IOException if Git fails to start, times out, or exits nonzero
@@ -50,8 +54,8 @@ public final class GitProcessRunner {
     /**
      * Runs a required Git command with an explicit timeout.
      *
-     * @param workdir Git working directory
-     * @param timeout command timeout
+     * @param workdir   Git working directory
+     * @param timeout   command timeout
      * @param arguments Git arguments after {@code git}
      * @return bounded UTF-8 output
      * @throws IOException if Git fails to start, times out, or exits nonzero
@@ -63,8 +67,8 @@ public final class GitProcessRunner {
     /**
      * Runs a required Git command against an explicit temporary index.
      *
-     * @param workdir Git working directory
-     * @param index Git index file
+     * @param workdir   Git working directory
+     * @param index     Git index file
      * @param arguments Git arguments after {@code git}
      * @return bounded UTF-8 output
      * @throws IOException if Git fails to start, times out, or exits nonzero
@@ -76,7 +80,7 @@ public final class GitProcessRunner {
     /**
      * Runs a Git command where a nonzero exit is an expected negative result.
      *
-     * @param workdir Git working directory
+     * @param workdir   Git working directory
      * @param arguments Git arguments after {@code git}
      * @return bounded output, or an empty string for a nonzero exit
      * @throws IOException if Git fails to start or times out
@@ -89,7 +93,7 @@ public final class GitProcessRunner {
     /**
      * Runs a Git command and preserves its exit code for inspection operations.
      *
-     * @param workdir Git working directory
+     * @param workdir   Git working directory
      * @param arguments Git arguments after {@code git}
      * @return bounded output and process exit code
      * @throws IOException if Git fails to start or times out
@@ -105,9 +109,9 @@ public final class GitProcessRunner {
      * structured inspection may require a larger bounded result when its
      * complete projection is needed for correctness.</p>
      *
-     * @param workdir Git working directory
+     * @param workdir        Git working directory
      * @param maxOutputBytes maximum output retained for this inspection
-     * @param arguments Git arguments after {@code git}
+     * @param arguments      Git arguments after {@code git}
      * @return bounded output and process exit code
      * @throws IOException if Git fails to start or times out
      */
@@ -116,12 +120,12 @@ public final class GitProcessRunner {
     }
 
     private static Result runInternal(Path workdir, Path index, Duration timeout, boolean required,
-                                      String... arguments) throws IOException {
+            String... arguments) throws IOException {
         return runInternal(workdir, index, timeout, required, DEFAULT_MAX_OUTPUT_BYTES, arguments);
     }
 
     private static Result runInternal(Path workdir, Path index, Duration timeout, boolean required,
-                                      int maxOutputBytes, String... arguments) throws IOException {
+            int maxOutputBytes, String... arguments) throws IOException {
         Path hooks = Files.createTempDirectory("synesis-empty-hooks-");
         try {
             List<String> command = new ArrayList<>();
@@ -142,12 +146,18 @@ public final class GitProcessRunner {
             if (index != null) {
                 environment.put("GIT_INDEX_FILE", index.toString());
             }
-            command.add(1, "-c"); command.add(2, "core.hooksPath=" + hooks);
-            command.add(3, "-c"); command.add(4, "commit.gpgSign=false");
-            command.add(5, "-c"); command.add(6, "tag.gpgSign=false");
-            command.add(7, "-c"); command.add(8, "core.fsmonitor=false");
-            command.add(9, "-c"); command.add(10, "user.name=Synesis");
-            command.add(11, "-c"); command.add(12, "user.email=synesis@localhost");
+            command.add(1, "-c");
+            command.add(2, "core.hooksPath=" + hooks);
+            command.add(3, "-c");
+            command.add(4, "commit.gpgSign=false");
+            command.add(5, "-c");
+            command.add(6, "tag.gpgSign=false");
+            command.add(7, "-c");
+            command.add(8, "core.fsmonitor=false");
+            command.add(9, "-c");
+            command.add(10, "user.name=Synesis");
+            command.add(11, "-c");
+            command.add(12, "user.email=synesis@localhost");
             ProcessCommandRunner.Result result = ProcessCommandRunner.execute(command, workdir,
                     environment, timeout, maxOutputBytes);
             if (required && result.exitCode() != 0) {
@@ -155,7 +165,10 @@ public final class GitProcessRunner {
                         + ", directory=" + workdir + ", exit=" + result.exitCode()
                         + ", output=" + result.output());
             }
-            return new Result(result.exitCode(), result.output().trim(), result.bytes());
+            return new Result(result.exitCode(),
+                    result.output()
+                            .trim(),
+                    result.bytes());
         } finally {
             Files.deleteIfExists(hooks);
         }
@@ -166,11 +179,16 @@ public final class GitProcessRunner {
     }
 
     private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        return System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains("win");
     }
 
-    /** Result of one Git process. */
+    /**
+     * Result of one Git process.
+     */
     public static final class Result {
+
         private final int exitCode;
         private final String output;
         private final byte[] bytes;
@@ -179,8 +197,8 @@ public final class GitProcessRunner {
          * Creates a Git process result.
          *
          * @param exitCode process exit code
-         * @param output bounded UTF-8 process output
-         * @param bytes bounded raw process output
+         * @param output   bounded UTF-8 process output
+         * @param bytes    bounded raw process output
          */
         private Result(int exitCode, String output, byte[] bytes) {
             this.exitCode = exitCode;

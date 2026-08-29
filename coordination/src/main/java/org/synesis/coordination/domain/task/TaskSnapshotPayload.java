@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.task;
 
 
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -33,6 +31,7 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
  * @param reviewRequired         whether exact durable review acceptance gates integration
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public record TaskSnapshotPayload(
         UUID taskId,
         String snapshotId,
@@ -85,24 +84,25 @@ public record TaskSnapshotPayload(
         Objects.requireNonNull(provenance, "provenance");
     }
 
-    /** Constructs a payload with the pre-review-gate shape.
+    /**
+     * Constructs a payload with the pre-review-gate shape.
      *
      * <p>Historical and direct test callers default to an unreviewed snapshot;
      * reviewed publication uses the canonical constructor with the explicit
      * review flag.</p>
      *
-     * @param taskId task ID
-     * @param snapshotId snapshot ID
-     * @param nodeId node ID
-     * @param supervisorId supervisor ID
-     * @param workerId worker ID
-     * @param providerSessionId session ID
-     * @param baseCommit base commit
-     * @param commitSha commit SHA
-     * @param changedPaths changed paths
+     * @param taskId                 task ID
+     * @param snapshotId             snapshot ID
+     * @param nodeId                 node ID
+     * @param supervisorId           supervisor ID
+     * @param workerId               worker ID
+     * @param providerSessionId      session ID
+     * @param baseCommit             base commit
+     * @param commitSha              commit SHA
+     * @param changedPaths           changed paths
      * @param capabilityDependencies dependencies
-     * @param summary summary
-     * @param provenance immutable lane provenance
+     * @param summary                summary
+     * @param provenance             immutable lane provenance
      */
     public TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId, String supervisorId,
             String workerId, String providerSessionId, String baseCommit, String commitSha,
@@ -112,18 +112,20 @@ public record TaskSnapshotPayload(
                 commitSha, changedPaths, capabilityDependencies, summary, provenance, false);
     }
 
-    /** Constructs a payload with default provenance for a minimal snapshot record.
-     * @param taskId task ID
-     * @param snapshotId snapshot ID
-     * @param nodeId node ID
-     * @param supervisorId supervisor ID
-     * @param workerId worker ID
-     * @param providerSessionId session ID
-     * @param baseCommit base commit
-     * @param commitSha commit SHA
-     * @param changedPaths changed paths
+    /**
+     * Constructs a payload with default provenance for a minimal snapshot record.
+     *
+     * @param taskId                 task ID
+     * @param snapshotId             snapshot ID
+     * @param nodeId                 node ID
+     * @param supervisorId           supervisor ID
+     * @param workerId               worker ID
+     * @param providerSessionId      session ID
+     * @param baseCommit             base commit
+     * @param commitSha              commit SHA
+     * @param changedPaths           changed paths
      * @param capabilityDependencies dependencies
-     * @param summary summary
+     * @param summary                summary
      */
     public TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId, String supervisorId,
             String workerId, String providerSessionId, String baseCommit, String commitSha,
@@ -132,6 +134,121 @@ public record TaskSnapshotPayload(
                 commitSha, changedPaths, capabilityDependencies, summary,
                 new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
                         capabilityDependencies, List.of(), List.of(), commitSha, commitSha));
+    }
+
+    /**
+     * Decodes a {@link TaskSnapshotPayload} from binary format.
+     *
+     * @param encoded encoded bytes
+     * @return decoded payload
+     * @throws IOException if malformed or unsupported format
+     */
+    public static TaskSnapshotPayload decode(byte[] encoded) throws IOException {
+        Objects.requireNonNull(encoded, "encoded payload");
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC) {
+                throw new IOException("Unsupported task snapshot payload format");
+            }
+            int version = in.readInt();
+            if (version < 1 || version > VERSION) {
+                throw new IOException("Unsupported task snapshot payload version");
+            }
+            UUID taskId = readUuid(in);
+            String snapshotId = readText(in);
+            String nodeId = readText(in);
+            String supervisorId = readText(in);
+            String workerId = readText(in);
+            String providerSessionId = readText(in);
+            String baseCommit = readText(in);
+            String commitSha = readText(in);
+
+            int pathCount = in.readInt();
+            List<String> changedPaths = new ArrayList<>(pathCount);
+            for (int i = 0; i < pathCount; i++) {
+                changedPaths.add(readText(in));
+            }
+
+            int depCount = in.readInt();
+            List<String> deps = new ArrayList<>(depCount);
+            for (int i = 0; i < depCount; i++) {
+                deps.add(readText(in));
+            }
+
+            String summary = readText(in);
+            SnapshotProvenance provenance;
+            if (version == 1) {
+                provenance = new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
+                        deps, List.of(), List.of(), commitSha, commitSha);
+            } else {
+                UUID group = readUuid(in), lane = readUuid(in);
+                UUID authorityLineage = version >= 4
+                        ? readUuid(in) : WorkIntent.defaultAuthorityLineage(lane);
+                String participant = readText(in), binding = readText(in);
+                long epoch = in.readLong();
+                List<String> contracts = readList(in), lineage = readList(in), claims = readList(in);
+                String snapshotRef = readText(in);
+                String integrity = readText(in);
+                String artifacts = version >= 3 ? readText(in) : "UNRECORDED";
+                provenance = new SnapshotProvenance(group, lane, authorityLineage, participant, binding, epoch,
+                        contracts, lineage, claims, snapshotRef, integrity, artifacts);
+            }
+            boolean reviewRequired = version == 5 && in.readBoolean();
+            return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,
+                    providerSessionId, baseCommit, commitSha, changedPaths, deps, summary, provenance,
+                    reviewRequired);
+        } catch (RuntimeException failure) {
+            throw new IOException("Malformed task snapshot payload", failure);
+        }
+    }
+
+    private static void writeUuid(DataOutputStream out, UUID val) throws IOException {
+        out.writeLong(val.getMostSignificantBits());
+        out.writeLong(val.getLeastSignificantBits());
+    }
+
+    private static UUID readUuid(DataInputStream in) throws IOException {
+        return new UUID(in.readLong(), in.readLong());
+    }
+
+    private static void writeText(DataOutputStream out, String val) throws IOException {
+        byte[] b = val.getBytes(StandardCharsets.UTF_8);
+        if (b.length > MAX_TEXT) {
+            throw new IOException("text exceeds payload bound");
+        }
+        out.writeInt(b.length);
+        out.write(b);
+    }
+
+    private static String readText(DataInputStream in) throws IOException {
+        int len = in.readInt();
+        if (len < 0 || len > MAX_TEXT) {
+            throw new IOException("Invalid text length in payload");
+        }
+        byte[] b = in.readNBytes(len);
+        if (b.length != len) {
+            throw new IOException("Truncated payload");
+        }
+        return new String(b, StandardCharsets.UTF_8);
+    }
+
+    private static void writeList(DataOutputStream out, List<String> values) throws IOException {
+        out.writeInt(values.size());
+        for (String value : values) {
+            writeText(out, value);
+        }
+    }
+
+    private static List<String> readList(DataInputStream in) throws IOException {
+        int count = in.readInt();
+        if (count < 0 || count > 128) {
+            throw new IOException("list bound");
+        }
+        List<String> values = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            values.add(readText(in));
+        }
+        return values;
     }
 
     /**
@@ -181,112 +298,5 @@ public record TaskSnapshotPayload(
         } catch (IOException impossible) {
             throw new AssertionError(impossible);
         }
-    }
-
-    /**
-     * Decodes a {@link TaskSnapshotPayload} from binary format.
-     *
-     * @param encoded encoded bytes
-     * @return decoded payload
-     * @throws IOException if malformed or unsupported format
-     */
-    public static TaskSnapshotPayload decode(byte[] encoded) throws IOException {
-        Objects.requireNonNull(encoded, "encoded payload");
-        try {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-            if (in.readInt() != MAGIC) {
-                throw new IOException("Unsupported task snapshot payload format");
-            }
-            int version = in.readInt();
-            if (version < 1 || version > VERSION) throw new IOException("Unsupported task snapshot payload version");
-            UUID taskId = readUuid(in);
-            String snapshotId = readText(in);
-            String nodeId = readText(in);
-            String supervisorId = readText(in);
-            String workerId = readText(in);
-            String providerSessionId = readText(in);
-            String baseCommit = readText(in);
-            String commitSha = readText(in);
-
-            int pathCount = in.readInt();
-            List<String> changedPaths = new ArrayList<>(pathCount);
-            for (int i = 0; i < pathCount; i++) {
-                changedPaths.add(readText(in));
-            }
-
-            int depCount = in.readInt();
-            List<String> deps = new ArrayList<>(depCount);
-            for (int i = 0; i < depCount; i++) {
-                deps.add(readText(in));
-            }
-
-            String summary = readText(in);
-            SnapshotProvenance provenance;
-            if (version == 1) {
-                provenance = new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
-                        deps, List.of(), List.of(), commitSha, commitSha);
-            } else {
-                UUID group = readUuid(in), lane = readUuid(in);
-                UUID authorityLineage = version >= 4
-                        ? readUuid(in) : WorkIntent.defaultAuthorityLineage(lane);
-                String participant = readText(in), binding = readText(in);
-                long epoch = in.readLong();
-                List<String> contracts = readList(in), lineage = readList(in), claims = readList(in);
-                String snapshotRef = readText(in);
-                String integrity = readText(in);
-                String artifacts = version >= 3 ? readText(in) : "UNRECORDED";
-                provenance = new SnapshotProvenance(group, lane, authorityLineage, participant, binding, epoch,
-                        contracts, lineage, claims, snapshotRef, integrity, artifacts);
-            }
-            boolean reviewRequired = version >= 5 && in.readBoolean();
-            return new TaskSnapshotPayload(taskId, snapshotId, nodeId, supervisorId, workerId,
-                    providerSessionId, baseCommit, commitSha, changedPaths, deps, summary, provenance,
-                    reviewRequired);
-        } catch (RuntimeException failure) {
-            throw new IOException("Malformed task snapshot payload", failure);
-        }
-    }
-
-    private static void writeUuid(DataOutputStream out, UUID val) throws IOException {
-        out.writeLong(val.getMostSignificantBits());
-        out.writeLong(val.getLeastSignificantBits());
-    }
-
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    private static void writeText(DataOutputStream out, String val) throws IOException {
-        byte[] b = val.getBytes(StandardCharsets.UTF_8);
-        if (b.length > MAX_TEXT) {
-            throw new IOException("text exceeds payload bound");
-        }
-        out.writeInt(b.length);
-        out.write(b);
-    }
-
-    private static String readText(DataInputStream in) throws IOException {
-        int len = in.readInt();
-        if (len < 0 || len > MAX_TEXT) {
-            throw new IOException("Invalid text length in payload");
-        }
-        byte[] b = in.readNBytes(len);
-        if (b.length != len) {
-            throw new IOException("Truncated payload");
-        }
-        return new String(b, StandardCharsets.UTF_8);
-    }
-
-    private static void writeList(DataOutputStream out, List<String> values) throws IOException {
-        out.writeInt(values.size());
-        for (String value : values) writeText(out, value);
-    }
-
-    private static List<String> readList(DataInputStream in) throws IOException {
-        int count = in.readInt();
-        if (count < 0 || count > 128) throw new IOException("list bound");
-        List<String> values = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) values.add(readText(in));
-        return values;
     }
 }

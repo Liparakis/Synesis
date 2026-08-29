@@ -1,15 +1,15 @@
 package org.synesis.workspace.lifecycle.lease;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LeaseTest {
 
@@ -41,6 +41,8 @@ class LeaseTest {
         SessionLeaseStore store = new SessionLeaseStore();
         Optional<SessionLeaseRecord> closed = store.load(controlRoot, "conn-123");
         assertTrue(closed.isPresent());
-        assertEquals(SessionLeaseState.CLOSED_CLEANLY, closed.get().leaseState());
+        assertEquals(SessionLeaseState.CLOSED_CLEANLY,
+                closed.get()
+                        .leaseState());
     }
 }

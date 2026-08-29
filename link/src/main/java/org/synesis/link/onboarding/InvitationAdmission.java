@@ -30,6 +30,7 @@ public final class InvitationAdmission implements AutoCloseable {
     });
     private final AtomicReference<State> state = new AtomicReference<>(State.AVAILABLE);
     private volatile ScheduledFuture<?> expiry;
+
     /**
      * Creates one single-use admission state for a signed invitation capability.
      *

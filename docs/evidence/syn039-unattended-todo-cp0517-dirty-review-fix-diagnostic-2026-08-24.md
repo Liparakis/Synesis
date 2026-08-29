@@ -60,9 +60,9 @@ Both sessions reached `ready / isolated` through the current MCP. Agent A
 was launched first; Agent B was launched only after A's claim and WorkGroup
 were visible. No IDs, messages, or lifecycle payloads were relayed manually.
 
-| Agent | Session | Participant | Intent / epoch / claim |
-|---|---|---|---|
-| A producer | `session-48f9b2c0-8b89-4a9a-bb1e-47f7c07e3af1` | `agt_0e07bc02-780b-3178-902e-cdd0c1434514` | `b309e499-7903-3687-b291-3fa168476f67`, epoch 1, `PATH_EXACT todo.py` |
+| Agent      | Session                                        | Participant                                | Intent / epoch / claim                                                     |
+|------------|------------------------------------------------|--------------------------------------------|----------------------------------------------------------------------------|
+| A producer | `session-48f9b2c0-8b89-4a9a-bb1e-47f7c07e3af1` | `agt_0e07bc02-780b-3178-902e-cdd0c1434514` | `b309e499-7903-3687-b291-3fa168476f67`, epoch 1, `PATH_EXACT todo.py`      |
 | B reviewer | `session-464bff19-a9ff-4b77-9e56-84fc3a1e4661` | `agt_1985dd6f-3214-3887-b07b-81fa48e4c4d5` | `e4e7f529-3008-3e9f-a7fc-5230d7e5dcf1`, epoch 1, `PATH_EXACT test_todo.py` |
 
 Shared WorkGroup: `fde62e9a-5f84-370a-84db-36a21117d1f7`, `ACTIVE`.

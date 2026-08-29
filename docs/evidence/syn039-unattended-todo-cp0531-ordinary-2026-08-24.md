@@ -12,19 +12,24 @@ Status: FAILED at the first concrete product blocker after exact lifecycle progr
 - MCP SHA-256: `133E5C2D2A12ADF8FC3E72113BAF11A90DA0E7AB17FB536BF2E92C3ED0131D6C`
 - MCP startup version: `0.1.0-SNAPSHOT`; repository bundle commit: `bc334ac`; catalog: 10 tools
 - Both agents used provider `codex`, the same project pin, and distinct isolated sessions.
-- Agent A: `agt_e06ebc05-d4aa-31fd-af8c-2728216888d5`, intent `5997c1a4-1436-3ef6-b3c8-528322d31586`, claim `PATH_EXACT todo.py`, epoch 1, session worktree `session-d8dc0ce6-d920-4c32-9f3f-08fcd96fd385`.
-- Agent B: `agt_3cdeb4d6-7769-3d99-817d-d55804bc3010`, intent `ea2db8b6-6260-35c3-a2ff-dec00b9add75`, claim `PATH_EXACT test_todo.py`, epoch 1, session worktree `session-0f6a4ca3-5c45-4964-a529-ada8316f6ef4`.
+- Agent A: `agt_e06ebc05-d4aa-31fd-af8c-2728216888d5`, intent `5997c1a4-1436-3ef6-b3c8-528322d31586`, claim
+  `PATH_EXACT todo.py`, epoch 1, session worktree `session-d8dc0ce6-d920-4c32-9f3f-08fcd96fd385`.
+- Agent B: `agt_3cdeb4d6-7769-3d99-817d-d55804bc3010`, intent `ea2db8b6-6260-35c3-a2ff-dec00b9add75`, claim
+  `PATH_EXACT test_todo.py`, epoch 1, session worktree `session-0f6a4ca3-5c45-4964-a529-ada8316f6ef4`.
 
 ## Coordination reached
 
 - WorkGroup: `4183ae0a-a87d-39b5-acd8-1cd224b0dd38`, status `ACTIVE`.
 - REVIEW requests were accepted in both directions.
 - Grants were single-use and consumed by their targeted participants:
-  - `922521c6-3d6d-347f-a0f9-39881901f8fd` targeted Agent A.
-  - `4d158d08-ba61-3216-893e-07f6c8d28e2d` targeted Agent B.
-- Agent B published `snap_51fb97c22159eaf9d968c36ec511cff9`, commit `11fb23e096c78db501bfef8ef7cdbee5f140e503`; Agent A accepted it.
-- Agent A published `snap_06c01de71e64d86d0454ebcc0e987d68`, commit `1fab9b4c453e22ecaa78a708a9b5f44f6b424cfc`; Agent B accepted it.
-- Agent B's snapshot integrated into control at `d25edce`. Both agents used the exact projected `finish_lane` action for their publication.
+    - `922521c6-3d6d-347f-a0f9-39881901f8fd` targeted Agent A.
+    - `4d158d08-ba61-3216-893e-07f6c8d28e2d` targeted Agent B.
+- Agent B published `snap_51fb97c22159eaf9d968c36ec511cff9`, commit `11fb23e096c78db501bfef8ef7cdbee5f140e503`; Agent A
+  accepted it.
+- Agent A published `snap_06c01de71e64d86d0454ebcc0e987d68`, commit `1fab9b4c453e22ecaa78a708a9b5f44f6b424cfc`; Agent B
+  accepted it.
+- Agent B's snapshot integrated into control at `d25edce`. Both agents used the exact projected `finish_lane` action for
+  their publication.
 
 ## First genuine blocker
 
@@ -53,23 +58,35 @@ __pycache__/test_todo.cpython-313-pytest-9.1.1.pyc
 __pycache__/todo.cpython-313.pyc
 ```
 
-The full bounded Git command, integration directory, exit code, and stderr/stdout are preserved in `logs/agent-a.jsonl`, item `item_39`, under the harness directory above. The subsequent `workspace_stale -> ensure_session` attempt was an agent-compliance deviation after the blocker and is not the production defect.
+The full bounded Git command, integration directory, exit code, and stderr/stdout are preserved in `logs/agent-a.jsonl`,
+item `item_39`, under the harness directory above. The subsequent `workspace_stale -> ensure_session` attempt was an
+agent-compliance deviation after the blocker and is not the production defect.
 
 ## Root cause
 
-`SnapshotArtifactPolicy` already classified Python bytecode caches as `ALLOWED_RUNTIME_ARTIFACT` and removed them from the snapshot's `changedPaths`. However, `TaskSnapshotService.stageSourceIndex()` staged the entire dirty worktree with `git add -A` and reset only the other managed paths. The generated cache files therefore remained in the immutable snapshot commit even though the metadata said they were excluded. Two otherwise disjoint snapshots then conflicted on the same generated binary paths.
+`SnapshotArtifactPolicy` already classified Python bytecode caches as `ALLOWED_RUNTIME_ARTIFACT` and removed them from
+the snapshot's `changedPaths`. However, `TaskSnapshotService.stageSourceIndex()` staged the entire dirty worktree with
+`git add -A` and reset only the other managed paths. The generated cache files therefore remained in the immutable
+snapshot commit even though the metadata said they were excluded. Two otherwise disjoint snapshots then conflicted on
+the same generated binary paths.
 
-Relevant source: `workspace/src/main/java/org/synesis/workspace/application/task/SnapshotArtifactPolicy.java` and `workspace/src/main/java/org/synesis/workspace/application/task/TaskSnapshotService.java` (`stageSourceIndex`).
+Relevant source: `workspace/src/main/java/org/synesis/workspace/application/task/SnapshotArtifactPolicy.java` and
+`workspace/src/main/java/org/synesis/workspace/application/task/TaskSnapshotService.java` (`stageSourceIndex`).
 
 ## Classification
 
-This is a concrete general snapshot-materialization defect. It is not a Todo-specific behavior, ownership failure, agent-choice failure, or a reason to weaken integration conflict handling. The narrow fix is to remove root and nested `__pycache__` paths from the temporary snapshot index, matching the existing artifact policy.
+This is a concrete general snapshot-materialization defect. It is not a Todo-specific behavior, ownership failure,
+agent-choice failure, or a reason to weaken integration conflict handling. The narrow fix is to remove root and nested
+`__pycache__` paths from the temporary snapshot index, matching the existing artifact policy.
 
 ## Final observed state before disposable harness shutdown
 
 - Control HEAD: `d25edce` (`Synesis immutable lane snapshot`), containing B's `test_todo.py` plus generated bytecode.
-- Integration attempt: detached worktree `att_dfa73ead9b3f4623`, left in the documented repair-required conflict state by Synesis.
+- Integration attempt: detached worktree `att_dfa73ead9b3f4623`, left in the documented repair-required conflict state
+  by Synesis.
 - WorkGroup: `ACTIVE`; no clean closure.
-- Doctor: `DEGRADED` with six warnings: two stale session leases, command namespace reconciliation, command capacity/retention, and two provider migration warnings.
-- Those Doctor warnings, bootstrap migration failures, and the separate root Git subprocess stall remain independently classified; none was shown to cause this integration conflict.
+- Doctor: `DEGRADED` with six warnings: two stale session leases, command namespace reconciliation, command
+  capacity/retention, and two provider migration warnings.
+- Those Doctor warnings, bootstrap migration failures, and the separate root Git subprocess stall remain independently
+  classified; none was shown to cause this integration conflict.
 

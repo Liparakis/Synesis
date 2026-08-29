@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.prediction;
 
 
-
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -28,23 +26,38 @@ public final class PredictionProjection {
             }
             if (type == PredictionEventType.TASK_CREATED || type == PredictionEventType.TASK_CLAIMED
                     || type == PredictionEventType.TASK_RELEASED || type == PredictionEventType.OWNERSHIP_CLAIMED
-                    || type == PredictionEventType.OWNERSHIP_RELEASED || type == PredictionEventType.CAPABILITY_REQUEST_CREATED
-                    || type == PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED || type == PredictionEventType.CAPABILITY_REQUEST_ACCEPTED
-                    || type == PredictionEventType.CAPABILITY_REQUEST_REJECTED || type == PredictionEventType.CAPABILITY_REQUEST_CANCELLED
-                    || type == PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED
-                    || type == PredictionEventType.CAPABILITY_VALIDATION_STARTED || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED
-                    || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED || type == PredictionEventType.TASK_COMPLETION_REQUESTED
-                    || type == PredictionEventType.TASK_SNAPSHOT_CREATED || type == PredictionEventType.TASK_WAITING_FOR_DEPENDENCIES
-                    || type == PredictionEventType.INTEGRATION_ATTEMPT_STARTED || type == PredictionEventType.INTEGRATION_ATTEMPT_FAILED
-                    || type == PredictionEventType.INTEGRATION_CONFLICTED || type == PredictionEventType.INTEGRATION_COMMIT_CREATED
-                    || type == PredictionEventType.CONTROL_BRANCH_ADVANCED || type == PredictionEventType.TASK_INTEGRATED
+                    || type == PredictionEventType.OWNERSHIP_RELEASED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_CREATED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_ACCEPTED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_REJECTED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_CANCELLED
+                    || type == PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED
+                    || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED
+                    || type == PredictionEventType.CAPABILITY_VALIDATION_STARTED
+                    || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED
+                    || type == PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED
+                    || type == PredictionEventType.TASK_COMPLETION_REQUESTED
+                    || type == PredictionEventType.TASK_SNAPSHOT_CREATED
+                    || type == PredictionEventType.TASK_WAITING_FOR_DEPENDENCIES
+                    || type == PredictionEventType.INTEGRATION_ATTEMPT_STARTED
+                    || type == PredictionEventType.INTEGRATION_ATTEMPT_FAILED
+                    || type == PredictionEventType.INTEGRATION_CONFLICTED
+                    || type == PredictionEventType.INTEGRATION_COMMIT_CREATED
+                    || type == PredictionEventType.CONTROL_BRANCH_ADVANCED
+                    || type == PredictionEventType.TASK_INTEGRATED
                     || type == PredictionEventType.SESSION_FINALIZED || type == PredictionEventType.SESSION_ABANDONED
-                    || type == PredictionEventType.TASK_CANCELLATION_REQUESTED || type == PredictionEventType.TASK_CANCELLED
-                    || type == PredictionEventType.WORK_INTENT_ANNOUNCED || type == PredictionEventType.WORK_INTENT_RELEASED
-                    || type == PredictionEventType.COORDINATION_REQUESTED || type == PredictionEventType.COORDINATION_RESPONDED
-                    || type == PredictionEventType.PARTICIPANT_HEARTBEAT || type == PredictionEventType.CLAIM_HANDOFF_ACCEPTED
+                    || type == PredictionEventType.TASK_CANCELLATION_REQUESTED
+                    || type == PredictionEventType.TASK_CANCELLED
+                    || type == PredictionEventType.WORK_INTENT_ANNOUNCED
+                    || type == PredictionEventType.WORK_INTENT_RELEASED
+                    || type == PredictionEventType.COORDINATION_REQUESTED
+                    || type == PredictionEventType.COORDINATION_RESPONDED
+                    || type == PredictionEventType.PARTICIPANT_HEARTBEAT
+                    || type == PredictionEventType.CLAIM_HANDOFF_ACCEPTED
                     || type == PredictionEventType.PARTICIPANT_ABANDONED
-                    || type == PredictionEventType.CONTRACT_PUBLISHED || type == PredictionEventType.CONTRACT_DEPENDENCY_BOUND
+                    || type == PredictionEventType.CONTRACT_PUBLISHED
+                    || type == PredictionEventType.CONTRACT_DEPENDENCY_BOUND
                     || type == PredictionEventType.CONTRACT_SUPERSEDED
                     || type == PredictionEventType.WORK_GROUP_CREATED || type == PredictionEventType.LANE_GRANT_ISSUED
                     || type == PredictionEventType.LANE_GRANT_CONSUMED || type == PredictionEventType.LANE_REVOKED
@@ -128,7 +141,7 @@ public final class PredictionProjection {
         throw new IllegalStateException("duplicate creation from " + current + " via " + type);
     }
 
-    private static boolean isPredictionEvent(PredictionEventType type) {
+    private static boolean isNonPredictionEvent(PredictionEventType type) {
         return switch (type) {
             case TASK_CREATED, TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED,
                  CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED, CAPABILITY_REQUEST_ACCEPTED,
@@ -151,7 +164,7 @@ public final class PredictionProjection {
      */
     public synchronized void apply(PredictionEvent event) {
         Objects.requireNonNull(event, "event");
-        if (!isPredictionEvent(event.type())) {
+        if (isNonPredictionEvent(event.type())) {
             return;
         }
         PredictionState next = validate(event);
@@ -166,7 +179,7 @@ public final class PredictionProjection {
      */
     public synchronized PredictionState validate(PredictionEvent event) {
         Objects.requireNonNull(event, "event");
-        if (!isPredictionEvent(event.type())) {
+        if (isNonPredictionEvent(event.type())) {
             return null;
         }
         return transition(states.get(event.predictionId()), event.type());

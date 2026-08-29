@@ -88,7 +88,8 @@ GPT-5.6 Luna High Codex sessions. Both sessions used the rebuilt bundled MCP:
 - Harness/logs: `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-ordinary-cp0527-001`
 - Project ID: `0d3ffa5c-0279-4966-b926-45aedcc4b2ac`
 - Git seed: `f05c7db`; managed baseline: `8908632b5ee90a718306aa901a25e0d806be60b3`
-- MCP executable: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
+- MCP executable:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
 - MCP version: `0.1.0-SNAPSHOT`; protocol: `2025-06-18`; commit: `bc334ac`
 - MCP catalog: exactly 10 tools
 - MCP SHA-256: `776B1AA22D4EEBE566941FCCDB0F15F544555BAC8C62DB4F1128BAC03A0D9359`

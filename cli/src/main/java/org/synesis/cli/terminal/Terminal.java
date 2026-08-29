@@ -7,6 +7,7 @@ import java.io.PrintWriter;
  *
  * @since 1.0
  */
+@SuppressWarnings("resource")
 public interface Terminal {
 
     /**

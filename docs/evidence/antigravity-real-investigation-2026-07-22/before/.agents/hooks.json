@@ -1,1 +1,16 @@
-{"synesis-guardrail":{"PreToolUse":[{"id":"synesis-antigravity","matcher":"write_to_file|replace_file_content|multi_replace_file_content","hooks":[{"type":"command","command":"\"C:\\Users\\Liparakis\\AppData\\Local\\Synesis\\versions\\0.1.0-dev.15\\bin\\synesis.cmd\" hook antigravity --profile \"C:\\Users\\Liparakis\\Desktop\\SynesisTestProject\\.synesis\\local\\profile\""}]}]}}
+{
+    "synesis-guardrail": {
+        "PreToolUse": [
+            {
+                "id": "synesis-antigravity",
+                "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "\"C:\\Users\\Liparakis\\AppData\\Local\\Synesis\\versions\\0.1.0-dev.15\\bin\\synesis.cmd\" hook antigravity --profile \"C:\\Users\\Liparakis\\Desktop\\SynesisTestProject\\.synesis\\local\\profile\""
+                    }
+                ]
+            }
+        ]
+    }
+}

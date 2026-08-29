@@ -37,11 +37,11 @@ diagnostic.
 - MCP startup: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`, commit
   `bc334ac`, exactly ten tools
 - MCP connections:
-  - A: `conn-instance-63eb7d52-d4c4-4d29-b2d3-cf7d7b9c6ab9`
-  - B: `conn-instance-8208bf1a-4002-4d3b-9219-506e300fb14a`
+    - A: `conn-instance-63eb7d52-d4c4-4d29-b2d3-cf7d7b9c6ab9`
+    - B: `conn-instance-8208bf1a-4002-4d3b-9219-506e300fb14a`
 - `ensure_session`: both `ready / isolated`
-  - A worktree: `session-e2ed9671-3931-4401-8577-84c54b9d8a59`
-  - B worktree: `session-c2ae0111-b607-4521-a6cb-af2fc39452c4`
+    - A worktree: `session-e2ed9671-3931-4401-8577-84c54b9d8a59`
+    - B worktree: `session-c2ae0111-b607-4521-a6cb-af2fc39452c4`
 
 Participants and ownership were disjoint and shared one WorkGroup:
 
@@ -92,11 +92,11 @@ Participants and ownership were disjoint and shared one WorkGroup:
 4. A immediately called `get_next_action` again. The durable state contained
    one issued, unconsumed single-use grant targeted to B:
 
-   - grant: `e6b09aa2-0cf8-35de-b80c-1e4180ccb6a7`
-   - target participant: `agt_b907c21c-c1b2-3c80-9219-ff946e8bbab0`
-   - target intent: `730fc571-5511-3982-9f6c-3ce73c89b560`
-   - WorkGroup: `1f8bc962-fbb5-376b-9f72-1e0b4135a495`
-   - claim epoch: 1
+    - grant: `e6b09aa2-0cf8-35de-b80c-1e4180ccb6a7`
+    - target participant: `agt_b907c21c-c1b2-3c80-9219-ff946e8bbab0`
+    - target intent: `730fc571-5511-3982-9f6c-3ce73c89b560`
+    - WorkGroup: `1f8bc962-fbb5-376b-9f72-1e0b4135a495`
+    - claim epoch: 1
 
    Because the grant had not yet been consumed, A received ordinary
    `IMPLEMENT` with no `recommendedTool` or executable lifecycle arguments.

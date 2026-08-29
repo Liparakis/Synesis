@@ -1,28 +1,20 @@
 package org.synesis.coordination.domain.task;
 
-import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
-import org.synesis.coordination.domain.prediction.PredictionEventType;
-
-
-import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
-import org.synesis.coordination.domain.prediction.PredictionEventType;
-
-
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.link.identity.NodeIdentity;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Tests Stage 2B Slice 3 task completion and integration projection state machine.
@@ -96,23 +88,33 @@ class TaskCompletionTest {
                 "base1", "refs/synesis/prepared/cmp_100", "tree1", List.of("file.txt"));
         store1.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED,
                 workerIdentity.nodeId(), prepared.encode(), workerIdentity);
-        assertEquals(TaskCompletionState.COMPLETION_PREPARED, store1.taskCompletionProjection().taskState(taskId));
+        assertEquals(TaskCompletionState.COMPLETION_PREPARED,
+                store1.taskCompletionProjection()
+                        .taskState(taskId));
 
         store1.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED,
                 workerIdentity.nodeId(), snapPayload.encode(), workerIdentity);
 
         TaskCompletionProjection proj1 = store1.taskCompletionProjection();
         assertEquals(TaskCompletionState.INTEGRATION_PENDING, proj1.taskState(taskId));
-        assertTrue(proj1.findSnapshotForTask(taskId).isPresent());
-        assertEquals("commit1", proj1.findSnapshotForTask(taskId).get().commitSha());
+        assertTrue(proj1.findSnapshotForTask(taskId)
+                .isPresent());
+        assertEquals("commit1",
+                proj1.findSnapshotForTask(taskId)
+                        .get()
+                        .commitSha());
 
         // Restart recovery check
         PredictionEventStore store2 = new PredictionEventStore(tempDir, projectId);
         TaskCompletionProjection proj2 = store2.taskCompletionProjection();
 
         assertEquals(TaskCompletionState.INTEGRATION_PENDING, proj2.taskState(taskId));
-        assertTrue(proj2.findSnapshotForTask(taskId).isPresent());
-        assertEquals("snap_100", proj2.findSnapshotForTask(taskId).get().snapshotId());
+        assertTrue(proj2.findSnapshotForTask(taskId)
+                .isPresent());
+        assertEquals("snap_100",
+                proj2.findSnapshotForTask(taskId)
+                        .get()
+                        .snapshotId());
     }
 
     @Test
@@ -128,8 +130,12 @@ class TaskCompletionTest {
                 List.of("snap_state"), "head", "", "blocked", "stale contract");
         store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_BLOCKED,
                 identity.nodeId(), blocked.encode(), identity);
-        assertEquals(TaskCompletionState.INTEGRATION_BLOCKED, store.taskCompletionProjection().taskState(taskId));
-        assertTrue(store.taskCompletionProjection().eligibleSnapshots().isEmpty());
+        assertEquals(TaskCompletionState.INTEGRATION_BLOCKED,
+                store.taskCompletionProjection()
+                        .taskState(taskId));
+        assertTrue(store.taskCompletionProjection()
+                .eligibleSnapshots()
+                .isEmpty());
     }
 
     @Test
@@ -150,9 +156,15 @@ class TaskCompletionTest {
         store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
                 identity.nodeId(), retry.encode(), identity);
 
-        assertEquals(TaskCompletionState.INTEGRATION_PENDING, store.taskCompletionProjection().taskState(taskId));
-        assertEquals(List.of("snap_pending"), store.taskCompletionProjection().eligibleSnapshots().stream()
-                .map(TaskSnapshotRecord::snapshotId).toList());
+        assertEquals(TaskCompletionState.INTEGRATION_PENDING,
+                store.taskCompletionProjection()
+                        .taskState(taskId));
+        assertEquals(List.of("snap_pending"),
+                store.taskCompletionProjection()
+                        .eligibleSnapshots()
+                        .stream()
+                        .map(TaskSnapshotRecord::snapshotId)
+                        .toList());
     }
 
     @Test
@@ -174,11 +186,21 @@ class TaskCompletionTest {
         WorkIntent replacement = new WorkIntent(laneId, projectId, "agt_owner", "codex", taskId,
                 "implement", "tests", "base", intent.selectors(), 2, projectId, WorkIntent.Status.ANNOUNCED);
         CompletionUnwoundPayload unwind = new CompletionUnwoundPayload(prepared, replacement);
-        assertEquals(replacement, CompletionUnwoundPayload.decode(unwind.encode()).replacementIntent());
+        assertEquals(replacement,
+                CompletionUnwoundPayload.decode(unwind.encode())
+                        .replacementIntent());
         store.append(taskId, PredictionEventType.COMPLETION_UNWOUND, identity.nodeId(),
                 unwind.encode(), identity);
-        assertEquals(TaskCompletionState.ACTIVE, store.taskCompletionProjection().taskState(taskId));
-        assertTrue(store.taskCompletionProjection().findPrepared(taskId).isEmpty());
-        assertEquals(2, store.collaborationProjection().intent(laneId).orElseThrow().version());
+        assertEquals(TaskCompletionState.ACTIVE,
+                store.taskCompletionProjection()
+                        .taskState(taskId));
+        assertTrue(store.taskCompletionProjection()
+                .findPrepared(taskId)
+                .isEmpty());
+        assertEquals(2,
+                store.collaborationProjection()
+                        .intent(laneId)
+                        .orElseThrow()
+                        .version());
     }
 }

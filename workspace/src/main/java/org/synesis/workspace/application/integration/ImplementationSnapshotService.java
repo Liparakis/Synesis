@@ -34,6 +34,7 @@ public final class ImplementationSnapshotService {
     public boolean isIdempotentPublication(ImplementationRevisionRecord existing, String newCommitSha) {
         Objects.requireNonNull(existing, "existing");
         Objects.requireNonNull(newCommitSha, "newCommitSha");
-        return existing.commitSha().equals(newCommitSha);
+        return existing.commitSha()
+                .equals(newCommitSha);
     }
 }

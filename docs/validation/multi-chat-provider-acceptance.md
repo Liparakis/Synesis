@@ -37,12 +37,12 @@ For each row, record the MCP `tools/list` count, participant handles, intent
 IDs, work-group ID, claim epochs, snapshot references, integration result, and
 test output:
 
-| Row | Chat A | Chat B | Required result |
-| --- | --- | --- | --- |
-| 1 | Codex | Codex | disjoint lanes integrate; same-provider cross-binding is denied |
-| 2 | Claude | Claude | disjoint lanes integrate; same-provider cross-binding is denied |
-| 3 | Codex | Claude | overlap is denied before mutation; declared contract negotiation succeeds |
-| 4 | parent | delegated subagent | delegated lane has its own binding/worktree and targeted grant |
+| Row | Chat A | Chat B             | Required result                                                           |
+|-----|--------|--------------------|---------------------------------------------------------------------------|
+| 1   | Codex  | Codex              | disjoint lanes integrate; same-provider cross-binding is denied           |
+| 2   | Claude | Claude             | disjoint lanes integrate; same-provider cross-binding is denied           |
+| 3   | Codex  | Claude             | overlap is denied before mutation; declared contract negotiation succeeds |
+| 4   | parent | delegated subagent | delegated lane has its own binding/worktree and targeted grant            |
 
 For every row:
 
@@ -139,6 +139,7 @@ These results distinguish transport, lane mutation, completion/integration,
 and provider project-context behavior. Codex and Claude MCP transport is
 confirmed; autonomous end-to-end integration and Antigravity model autonomy
 remain open acceptance work.
+
 ## 2026-07-30 follow-up
 
 - Claude Code 2.1.220, installed with a project-scoped `.mcp.json`, completed

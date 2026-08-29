@@ -115,10 +115,10 @@ public final class CandidateRacer implements AutoCloseable {
 
         private void start() {
             if (pairs.isEmpty()) {
-                finish(null, ConnectionFailureCategory.NO_COMPATIBLE_CANDIDATE);
+                finish(ConnectionFailureCategory.NO_COMPATIBLE_CANDIDATE);
                 return;
             }
-            deadline = scheduler.schedule(() -> finish(null, ConnectionFailureCategory.CONNECTION_TIMEOUT),
+            deadline = scheduler.schedule(() -> finish(ConnectionFailureCategory.CONNECTION_TIMEOUT),
                     policy.globalRaceTimeout()
                             .toNanos(), TimeUnit.NANOSECONDS);
             scheduler.execute(this::launch);
@@ -160,7 +160,7 @@ public final class CandidateRacer implements AutoCloseable {
                 }
                 if (next >= pairs.size()) {
                     if (running == 0) {
-                        finish(null, ConnectionFailureCategory.DIRECT_CONNECTIVITY_UNAVAILABLE);
+                        finish(ConnectionFailureCategory.DIRECT_CONNECTIVITY_UNAVAILABLE);
                     }
                     return;
                 }
@@ -236,7 +236,7 @@ public final class CandidateRacer implements AutoCloseable {
                 }
                 addDiagnostic(pair, failure == null ? ConnectionFailureCategory.NOT_CONTROL_READY : category(failure));
                 if (running == 0 && (next >= pairs.size() || started >= policy.maxAttempts())) {
-                    finish(null, ConnectionFailureCategory.DIRECT_CONNECTIVITY_UNAVAILABLE);
+                    finish(ConnectionFailureCategory.DIRECT_CONNECTIVITY_UNAVAILABLE);
                 } else {
                     scheduler.schedule(this::launch,
                             policy.staggerDelay()
@@ -246,7 +246,7 @@ public final class CandidateRacer implements AutoCloseable {
             }
         }
 
-        private void finish(PeerSession session, ConnectionFailureCategory category) {
+        private void finish(ConnectionFailureCategory category) {
             if (!done.compareAndSet(false, true)) {
                 return;
             }
@@ -254,7 +254,7 @@ public final class CandidateRacer implements AutoCloseable {
                 deadline.cancel(false);
             }
             cancelAttempts();
-            complete(new DirectConnectionResult(session, category, snapshotDiagnostics()));
+            complete(new DirectConnectionResult(null, category, snapshotDiagnostics()));
             active.remove(this);
         }
 

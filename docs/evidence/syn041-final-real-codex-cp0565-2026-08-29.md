@@ -156,18 +156,18 @@ required abnormal terminal history was lost.
 
 ## CP-0562 comparison
 
-| Measure | CP-0562 | Final CP-0565 run |
-|---|---|---|
-| Terminal seal | yes, sequence 7 | yes, sequence 7 |
-| Provider completion | `NO_CHANGE`, `SESSION_TERMINATED` | `NO_CHANGE`, `SESSION_TERMINATED` |
-| Codex exit | 0 | 0 |
-| MCP/Java exit | 1/1 observed previously | exact codes not captured; child teardown abnormal/inconclusive at low level |
-| First lease outcome | derived terminal disconnect | persisted authority-confirmed, derived terminal disconnect |
-| Rebind rejected | yes | yes, `SESSION_TERMINAL` |
-| After probe cleanup | `CLOSED_CLEANLY` | `CLOSED_CLEANLY` |
-| History preserved | no | no |
-| Stale warning | absent | absent |
-| Durable ambiguous warning | absent | absent |
+| Measure                   | CP-0562                           | Final CP-0565 run                                                           |
+|---------------------------|-----------------------------------|-----------------------------------------------------------------------------|
+| Terminal seal             | yes, sequence 7                   | yes, sequence 7                                                             |
+| Provider completion       | `NO_CHANGE`, `SESSION_TERMINATED` | `NO_CHANGE`, `SESSION_TERMINATED`                                           |
+| Codex exit                | 0                                 | 0                                                                           |
+| MCP/Java exit             | 1/1 observed previously           | exact codes not captured; child teardown abnormal/inconclusive at low level |
+| First lease outcome       | derived terminal disconnect       | persisted authority-confirmed, derived terminal disconnect                  |
+| Rebind rejected           | yes                               | yes, `SESSION_TERMINAL`                                                     |
+| After probe cleanup       | `CLOSED_CLEANLY`                  | `CLOSED_CLEANLY`                                                            |
+| History preserved         | no                                | no                                                                          |
+| Stale warning             | absent                            | absent                                                                      |
+| Durable ambiguous warning | absent                            | absent                                                                      |
 
 ## Closure decision
 

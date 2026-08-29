@@ -7,8 +7,8 @@ import java.util.Objects;
  *
  * <p>Exposes only repository-relative paths without absolute worktree locations.
  *
- * @param path repository-relative file path
- * @param revision updated opaque file revision
+ * @param path         repository-relative file path
+ * @param revision     updated opaque file revision
  * @param changedFiles number of modified files
  * @since 1.0
  */

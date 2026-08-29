@@ -10,8 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * Project-scoped reconciliation execution lock ensuring strictly single-executor execution over an external
@@ -19,6 +19,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class ReconciliationExecutionLock implements AutoCloseable {
 
     private final Path lockFilePath;
@@ -43,7 +44,8 @@ public final class ReconciliationExecutionLock implements AutoCloseable {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(planId, "planId");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
         Path adminDir = workspaceRoot.resolve("admin");
         Files.createDirectories(adminDir);
@@ -54,8 +56,10 @@ public final class ReconciliationExecutionLock implements AutoCloseable {
             throw new IOException("Reconciliation execution is busy: lock file exists at " + lockFile);
         }
 
-        String nonce = UUID.randomUUID().toString();
-        long pid = ProcessHandle.current().pid();
+        String nonce = UUID.randomUUID()
+                .toString();
+        long pid = ProcessHandle.current()
+                .pid();
         long now = System.currentTimeMillis();
 
         Map<String, Object> lockData = new LinkedHashMap<>();
@@ -69,7 +73,11 @@ public final class ReconciliationExecutionLock implements AutoCloseable {
         String json = ProviderJson.write(lockData);
 
         try {
-            Files.writeString(lockFile, json, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            Files.writeString(lockFile,
+                    json,
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE);
         } catch (FileAlreadyExistsException ex) {
             throw new IOException("Reconciliation execution is busy: concurrent lock acquisition detected.", ex);
         }

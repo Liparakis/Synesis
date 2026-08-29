@@ -10,7 +10,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
-/** Verifies bounded strict MCP framing independently of the protocol handler. */
+/**
+ * Verifies bounded strict MCP framing independently of the protocol handler.
+ */
 class McpFrameReaderTest {
 
     @Test
@@ -25,21 +27,22 @@ class McpFrameReaderTest {
     @Test
     void rejectsInvalidUtf8AndPartialEof() {
         assertThrows(IOException.class, () -> new McpFrameReader(
-                new ByteArrayInputStream(new byte[] {(byte) 0xc3, '\n'})).readFrame());
+                new ByteArrayInputStream(new byte[]{(byte) 0xc3, '\n'})).readFrame());
         assertThrows(IOException.class, () -> new McpFrameReader(
                 new ByteArrayInputStream("partial".getBytes(StandardCharsets.UTF_8))).readFrame());
     }
 
     @Test
-    void failsAtFirstByteBeyondFrameLimit() {
-        InputStream oversized = new InputStream() {
+    void failsAtFirstByteBeyondFrameLimit() throws Exception {
+        try (InputStream oversized = new InputStream() {
             private int remaining = McpFrameReader.MAX_FRAME_BYTES + 1;
 
             @Override
             public int read() {
                 return remaining-- > 0 ? 'x' : -1;
             }
-        };
-        assertThrows(IOException.class, () -> new McpFrameReader(oversized).readFrame());
+        }) {
+            assertThrows(IOException.class, () -> new McpFrameReader(oversized).readFrame());
+        }
     }
 }

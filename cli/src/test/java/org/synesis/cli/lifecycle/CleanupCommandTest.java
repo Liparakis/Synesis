@@ -1,7 +1,8 @@
-package org.synesis.cli.command.lifecycle;
+package org.synesis.cli.lifecycle;
 
 
-import org.synesis.cli.SynesisCli;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -10,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.lifecycle.CleanupCommand;
 import org.synesis.cli.diagnostics.ReadinessInspector;
@@ -18,9 +20,6 @@ import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CleanupCommandTest {
 
@@ -39,15 +38,6 @@ class CleanupCommandTest {
         return new PrintStream(target, true, StandardCharsets.UTF_8);
     }
 
-    private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
-        private String output() {
-            return out.toString(StandardCharsets.UTF_8);
-        }
-        private String errorOutput() {
-            return err.toString(StandardCharsets.UTF_8);
-        }
-    }
-
     @Test
     void failsSafelyWithoutDryRunFlag(@TempDir Path tempDir) {
         Invocation invocation = createInvocation(tempDir);
@@ -56,7 +46,8 @@ class CleanupCommandTest {
         int exitCode = command.call();
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, exitCode);
-        assertTrue(invocation.errorOutput().contains("Cleanup execution is not available in this version"));
+        assertTrue(invocation.errorOutput()
+                .contains("Cleanup execution is not available in this version"));
     }
 
     @Test
@@ -67,7 +58,8 @@ class CleanupCommandTest {
 
         Invocation invocation = createInvocation(tempDir);
 
-        int exitCode = SynesisCli.execute(new String[]{"cleanup", "--dry-run", "--project", projectRoot.toString()}, invocation.runtime());
+        int exitCode = SynesisCli.execute(new String[]{"cleanup", "--dry-run", "--project", projectRoot.toString()},
+                invocation.runtime());
 
         assertEquals(ExitCodes.OK, exitCode);
         String stdout = invocation.output();
@@ -85,11 +77,23 @@ class CleanupCommandTest {
 
         Invocation invocation = createInvocation(tempDir);
 
-        int exitCode = SynesisCli.execute(new String[]{"cleanup", "--dry-run", "--json", "--project", projectRoot.toString()}, invocation.runtime());
+        int exitCode = SynesisCli.execute(new String[]{"cleanup", "--dry-run", "--json", "--project",
+                projectRoot.toString()}, invocation.runtime());
 
         assertEquals(ExitCodes.OK, exitCode);
         String stdout = invocation.output();
         assertTrue(stdout.contains("\"cleanupResult\":\"DRY_RUN\""));
         assertTrue(stdout.contains("\"mutationsPerformed\":0"));
+    }
+
+    private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
+
+        private String output() {
+            return out.toString(StandardCharsets.UTF_8);
+        }
+
+        private String errorOutput() {
+            return err.toString(StandardCharsets.UTF_8);
+        }
     }
 }

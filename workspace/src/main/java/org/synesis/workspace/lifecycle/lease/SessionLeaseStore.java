@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * Persists and loads provider session lease records outside the control checkout under the
@@ -38,92 +38,11 @@ public final class SessionLeaseStore {
      */
     public static Path resolveLeasesDirectory(Path controlRoot) {
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("session-leases");
+        return workspaceRoot.resolve("admin")
+                .resolve("session-leases");
     }
 
-    /**
-     * Atomically saves or updates a session lease record.
-     *
-     * @param controlRoot control project root path
-     * @param record      lease record to save
-     * @throws IOException if saving fails
-     */
-    public void save(Path controlRoot, SessionLeaseRecord record) throws IOException {
-        Objects.requireNonNull(controlRoot, "controlRoot");
-        Objects.requireNonNull(record, "record");
-
-        Path root = controlRoot.toAbsolutePath().normalize();
-        Path leasesDir = resolveLeasesDirectory(root);
-        Files.createDirectories(leasesDir);
-
-        Path targetFile = leasesDir.resolve(record.connectionInstanceId() + ".json");
-        Path tmpFile = leasesDir.resolve(record.connectionInstanceId() + ".tmp");
-
-        String json = ProviderJson.write(toSerializableMap(record));
-        Files.writeString(tmpFile, json, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-
-        try {
-            Files.move(tmpFile, targetFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (Exception ex) {
-            Files.move(tmpFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    /**
-     * Loads a session lease record by connection instance ID.
-     *
-     * @param controlRoot          control project root path
-     * @param connectionInstanceId connection instance identifier
-     * @return optional containing record if found
-     */
-    public Optional<SessionLeaseRecord> load(Path controlRoot, String connectionInstanceId) {
-        Objects.requireNonNull(controlRoot, "controlRoot");
-        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-
-        Path root = controlRoot.toAbsolutePath().normalize();
-        Path leasesDir = resolveLeasesDirectory(root);
-        Path targetFile = leasesDir.resolve(connectionInstanceId + ".json");
-
-        if (!Files.exists(targetFile)) {
-            return Optional.empty();
-        }
-
-        try {
-            String rawJson = Files.readString(targetFile, StandardCharsets.UTF_8);
-            return Optional.of(fromSerializableMap(rawJson));
-        } catch (Exception ex) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Lists all persisted session lease records for the specified project.
-     *
-     * @param controlRoot control project root path
-     * @return list of session lease records
-     */
-    public List<SessionLeaseRecord> listAll(Path controlRoot) {
-        Objects.requireNonNull(controlRoot, "controlRoot");
-        Path root = controlRoot.toAbsolutePath().normalize();
-        Path leasesDir = resolveLeasesDirectory(root);
-        if (!Files.isDirectory(leasesDir)) {
-            return List.of();
-        }
-
-        List<SessionLeaseRecord> records = new ArrayList<>();
-        try (var stream = Files.list(leasesDir)) {
-            for (Path file : stream.filter(p -> p.getFileName().toString().endsWith(".json")).toList()) {
-                try {
-                    String raw = Files.readString(file, StandardCharsets.UTF_8);
-                    records.add(fromSerializableMap(raw));
-                } catch (Exception ignored) {
-                }
-            }
-        } catch (IOException ignored) {
-        }
-        return Collections.unmodifiableList(records);
-    }
-
+    @SuppressWarnings("ExtractMethodRecommender")
     private static Map<String, Object> toSerializableMap(SessionLeaseRecord r) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("schemaVersion", r.schemaVersion());
@@ -135,14 +54,26 @@ public final class SessionLeaseStore {
         map.put("synesisVersion", r.synesisVersion());
         map.put("createdAtEpochMillis", r.createdAtEpochMillis());
         map.put("lastHeartbeatEpochMillis", r.lastHeartbeatEpochMillis());
-        map.put("leaseState", r.leaseState().name());
+        map.put("leaseState",
+                r.leaseState()
+                        .name());
 
         Map<String, Object> pi = new LinkedHashMap<>();
-        pi.put("pid", r.processIdentity().pid());
-        pi.put("executableIdentity", r.processIdentity().executableIdentity());
-        pi.put("commandLine", r.processIdentity().commandLine());
-        pi.put("processStartTime", r.processIdentity().processStartTime());
-        pi.put("connectionNonce", r.processIdentity().connectionNonce());
+        pi.put("pid",
+                r.processIdentity()
+                        .pid());
+        pi.put("executableIdentity",
+                r.processIdentity()
+                        .executableIdentity());
+        pi.put("commandLine",
+                r.processIdentity()
+                        .commandLine());
+        pi.put("processStartTime",
+                r.processIdentity()
+                        .processStartTime());
+        pi.put("connectionNonce",
+                r.processIdentity()
+                        .connectionNonce());
         map.put("processIdentity", pi);
 
         return map;
@@ -171,6 +102,109 @@ public final class SessionLeaseStore {
                 (String) piMap.get("connectionNonce")
         );
 
-        return new SessionLeaseRecord(schemaVersion, projectId, provider, connId, workerNodeId, sessionId, pi, version, createdAt, lastHeartbeat, state);
+        return new SessionLeaseRecord(schemaVersion,
+                projectId,
+                provider,
+                connId,
+                workerNodeId,
+                sessionId,
+                pi,
+                version,
+                createdAt,
+                lastHeartbeat,
+                state);
+    }
+
+    /**
+     * Atomically saves or updates a session lease record.
+     *
+     * @param controlRoot control project root path
+     * @param record      lease record to save
+     * @throws IOException if saving fails
+     */
+    public void save(Path controlRoot, SessionLeaseRecord record) throws IOException {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Objects.requireNonNull(record, "record");
+
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
+        Path leasesDir = resolveLeasesDirectory(root);
+        Files.createDirectories(leasesDir);
+
+        Path targetFile = leasesDir.resolve(record.connectionInstanceId() + ".json");
+        Path tmpFile = leasesDir.resolve(record.connectionInstanceId() + ".tmp");
+
+        String json = ProviderJson.write(toSerializableMap(record));
+        Files.writeString(tmpFile,
+                json,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+
+        try {
+            Files.move(tmpFile, targetFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception ex) {
+            Files.move(tmpFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    /**
+     * Loads a session lease record by connection instance ID.
+     *
+     * @param controlRoot          control project root path
+     * @param connectionInstanceId connection instance identifier
+     * @return optional containing record if found
+     */
+    public Optional<SessionLeaseRecord> load(Path controlRoot, String connectionInstanceId) {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
+        Path leasesDir = resolveLeasesDirectory(root);
+        Path targetFile = leasesDir.resolve(connectionInstanceId + ".json");
+
+        if (!Files.exists(targetFile)) {
+            return Optional.empty();
+        }
+
+        try {
+            String rawJson = Files.readString(targetFile, StandardCharsets.UTF_8);
+            return Optional.of(fromSerializableMap(rawJson));
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Lists all persisted session lease records for the specified project.
+     *
+     * @param controlRoot control project root path
+     * @return list of session lease records
+     */
+    public List<SessionLeaseRecord> listAll(Path controlRoot) {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
+        Path leasesDir = resolveLeasesDirectory(root);
+        if (!Files.isDirectory(leasesDir)) {
+            return List.of();
+        }
+
+        List<SessionLeaseRecord> records = new ArrayList<>();
+        try (var stream = Files.list(leasesDir)) {
+            for (Path file : stream.filter(p -> p.getFileName()
+                            .toString()
+                            .endsWith(".json"))
+                    .toList()) {
+                try {
+                    String raw = Files.readString(file, StandardCharsets.UTF_8);
+                    records.add(fromSerializableMap(raw));
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        return Collections.unmodifiableList(records);
     }
 }

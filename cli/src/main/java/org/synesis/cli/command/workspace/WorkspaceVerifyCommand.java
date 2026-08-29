@@ -1,14 +1,14 @@
 package org.synesis.cli.command.workspace;
 
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Diagnostic/agent command to verify workspace trust.
@@ -40,11 +40,13 @@ public final class WorkspaceVerifyCommand implements Runnable {
     }
 
     @Override
+    @SuppressWarnings("ExtractMethodRecommender")
     public void run() {
         try {
-            Path root = project == null ? Path.of(".") : project;
+            Path defaultRoot = Path.of(".");
+            Path root = project == null ? defaultRoot : project;
             ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(root);
-            Path actualCwd = cwd == null ? Path.of(".")
+            Path actualCwd = cwd == null ? defaultRoot
                                            .toAbsolutePath()
                                            .normalize() : cwd;
 

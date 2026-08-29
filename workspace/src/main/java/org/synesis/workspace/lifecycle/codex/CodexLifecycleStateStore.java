@@ -22,75 +22,8 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  *
  * @since 1.0
  */
+@SuppressWarnings("ClassCanBeRecord")
 public final class CodexLifecycleStateStore {
-
-    /** Durable lifecycle status values. */
-    public enum State {
-        /** No attachment has been started for the binding. */
-        NEW,
-        /** App Server process is starting or initializing. */
-        STARTING,
-        /** Attachment is initialized and has no active turn. */
-        IDLE,
-        /** A turn is active. */
-        RUNNING,
-        /** An interrupt has been requested and awaits terminal completion. */
-        INTERRUPTING,
-        /** The exact turn completed as interrupted. */
-        INTERRUPTED,
-        /** The exact turn completed normally. */
-        COMPLETED,
-        /** Lifecycle or protocol failure is authoritative. */
-        FAILED,
-        /** User/provider interaction is required before continuation. */
-        INTERACTION_REQUIRED,
-        /** Attachment was stopped cleanly. */
-        STOPPED,
-        /** A state-changing operation has an unproven outcome. */
-        AMBIGUOUS
-    }
-
-    /**
-     * Immutable lifecycle checkpoint.
-     *
-     * @param bindingSessionId exact provider binding session
-     * @param projectId project identity
-     * @param provider provider ID
-     * @param revision monotonic lifecycle revision
-     * @param state authoritative state
-     * @param ownerHostInstanceId owner instance identity
-     * @param attachmentGeneration process attachment generation
-     * @param connectionGeneration App Server connection generation
-     * @param rootPid owned App Server root PID, or {@code -1}
-     * @param rootStartEpochMillis verified process start instant
-     * @param rootExecutable executable identity
-     * @param rootCommandIdentity bounded command identity
-     * @param threadId exact thread identity, or {@code null}
-     * @param turnId exact active/last turn identity, or {@code null}
-     * @param terminalDiagnostic bounded terminal diagnostic, or {@code null}
-     * @param evidenceComplete whether detailed persisted evidence is complete
-     * @param updatedAtEpochMillis checkpoint timestamp
-     */
-    public record Checkpoint(String bindingSessionId, String projectId, String provider, long revision,
-            State state, String ownerHostInstanceId, long attachmentGeneration, long connectionGeneration,
-            long rootPid, long rootStartEpochMillis, String rootExecutable, String rootCommandIdentity,
-            String threadId, String turnId, String terminalDiagnostic, boolean evidenceComplete,
-            long updatedAtEpochMillis) {
-        /** Validates and freezes checkpoint state. */
-        public Checkpoint {
-            require(bindingSessionId, "bindingSessionId");
-            require(projectId, "projectId");
-            require(provider, "provider");
-            Objects.requireNonNull(state, "state");
-            require(ownerHostInstanceId, "ownerHostInstanceId");
-            require(rootExecutable, "rootExecutable");
-            require(rootCommandIdentity, "rootCommandIdentity");
-            if (revision < 0 || attachmentGeneration < 0 || connectionGeneration < 0
-                    || updatedAtEpochMillis <= 0) {
-                throw new IllegalArgumentException("invalid lifecycle checkpoint revision or timestamp");
-            }
-        }
-    }
 
     private final Path root;
 
@@ -100,14 +33,43 @@ public final class CodexLifecycleStateStore {
      * @param runtimeDirectory directory for lifecycle checkpoints
      */
     public CodexLifecycleStateStore(Path runtimeDirectory) {
-        this.root = Objects.requireNonNull(runtimeDirectory, "runtimeDirectory").toAbsolutePath().normalize();
+        this.root = Objects.requireNonNull(runtimeDirectory, "runtimeDirectory")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    private static String text(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return text;
+    }
+
+    private static String optional(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        return item == null ? null : String.valueOf(item);
+    }
+
+    private static long number(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof Number number)) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return number.longValue();
+    }
+
+    private static void require(String value, String label) {
+        if (value == null || value.isBlank() || value.length() > LifecycleControlRequestEnvelope.MAX_TEXT_BYTES) {
+            throw new IllegalArgumentException(label + " invalid");
+        }
     }
 
     /**
      * Reads a binding checkpoint, returning a revision-zero NEW state when absent.
      *
      * @param bindingSessionId exact binding session
-     * @param projectId project identity
+     * @param projectId        project identity
      * @return durable checkpoint
      * @throws IOException when state is malformed or unreadable
      */
@@ -150,7 +112,7 @@ public final class CodexLifecycleStateStore {
      * fallback when the durable file is unavailable.
      *
      * @param bindingSessionId exact binding session
-     * @param projectId project identity
+     * @param projectId        project identity
      * @return checkpoint or bounded failed fallback
      */
     public synchronized Checkpoint readUnchecked(String bindingSessionId, String projectId) {
@@ -169,6 +131,7 @@ public final class CodexLifecycleStateStore {
      * @param checkpoint checkpoint to persist
      * @throws IOException when persistence fails or revision regresses
      */
+    @SuppressWarnings("ExtractMethodRecommender")
     public synchronized void write(Checkpoint checkpoint) throws IOException {
         Objects.requireNonNull(checkpoint, "checkpoint");
         Checkpoint prior = read(checkpoint.bindingSessionId(), checkpoint.projectId());
@@ -181,7 +144,9 @@ public final class CodexLifecycleStateStore {
         value.put("projectId", checkpoint.projectId());
         value.put("provider", checkpoint.provider());
         value.put("revision", checkpoint.revision());
-        value.put("state", checkpoint.state().name());
+        value.put("state",
+                checkpoint.state()
+                        .name());
         value.put("ownerHostInstanceId", checkpoint.ownerHostInstanceId());
         value.put("attachmentGeneration", checkpoint.attachmentGeneration());
         value.put("connectionGeneration", checkpoint.connectionGeneration());
@@ -218,30 +183,99 @@ public final class CodexLifecycleStateStore {
         return root.resolve(bindingSessionId + ".json");
     }
 
-    private static String text(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return text;
+    /**
+     * Durable lifecycle status values.
+     */
+    public enum State {
+        /**
+         * No attachment has been started for the binding.
+         */
+        NEW,
+        /**
+         * App Server process is starting or initializing.
+         */
+        STARTING,
+        /**
+         * Attachment is initialized and has no active turn.
+         */
+        IDLE,
+        /**
+         * A turn is active.
+         */
+        RUNNING,
+        /**
+         * An interrupt has been requested and awaits terminal completion.
+         */
+        INTERRUPTING,
+        /**
+         * The exact turn completed as interrupted.
+         */
+        INTERRUPTED,
+        /**
+         * The exact turn completed normally.
+         */
+        COMPLETED,
+        /**
+         * Lifecycle or protocol failure is authoritative.
+         */
+        FAILED,
+        /**
+         * User/provider interaction is required before continuation.
+         */
+        INTERACTION_REQUIRED,
+        /**
+         * Attachment was stopped cleanly.
+         */
+        STOPPED,
+        /**
+         * A state-changing operation has an unproven outcome.
+         */
+        AMBIGUOUS
     }
 
-    private static String optional(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        return item == null ? null : String.valueOf(item);
-    }
+    /**
+     * Immutable lifecycle checkpoint.
+     *
+     * @param bindingSessionId     exact provider binding session
+     * @param projectId            project identity
+     * @param provider             provider ID
+     * @param revision             monotonic lifecycle revision
+     * @param state                authoritative state
+     * @param ownerHostInstanceId  owner instance identity
+     * @param attachmentGeneration process attachment generation
+     * @param connectionGeneration App Server connection generation
+     * @param rootPid              owned App Server root PID, or {@code -1}
+     * @param rootStartEpochMillis verified process start instant
+     * @param rootExecutable       executable identity
+     * @param rootCommandIdentity  bounded command identity
+     * @param threadId             exact thread identity, or {@code null}
+     * @param turnId               exact active/last turn identity, or {@code null}
+     * @param terminalDiagnostic   bounded terminal diagnostic, or {@code null}
+     * @param evidenceComplete     whether detailed persisted evidence is complete
+     * @param updatedAtEpochMillis checkpoint timestamp
+     */
+    public record Checkpoint(String bindingSessionId, String projectId, String provider, long revision,
+                             State state, String ownerHostInstanceId, long attachmentGeneration,
+                             long connectionGeneration,
+                             long rootPid, long rootStartEpochMillis, String rootExecutable, String rootCommandIdentity,
+                             String threadId, String turnId, String terminalDiagnostic, boolean evidenceComplete,
+                             long updatedAtEpochMillis) {
 
-    private static long number(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof Number number)) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return number.longValue();
-    }
-
-    private static void require(String value, String label) {
-        if (value == null || value.isBlank() || value.length() > LifecycleControlRequestEnvelope.MAX_TEXT_BYTES) {
-            throw new IllegalArgumentException(label + " invalid");
+        /**
+         * Validates and freezes checkpoint state.
+         */
+        public Checkpoint {
+            require(bindingSessionId, "bindingSessionId");
+            require(projectId, "projectId");
+            require(provider, "provider");
+            Objects.requireNonNull(state, "state");
+            require(ownerHostInstanceId, "ownerHostInstanceId");
+            require(rootExecutable, "rootExecutable");
+            require(rootCommandIdentity, "rootCommandIdentity");
+            if (revision < 0 || attachmentGeneration < 0 || connectionGeneration < 0
+                    || updatedAtEpochMillis <= 0) {
+                throw new IllegalArgumentException("invalid lifecycle checkpoint revision or timestamp");
+            }
         }
     }
 }

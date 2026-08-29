@@ -1,7 +1,8 @@
 package org.synesis.coordination.collaboration;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -12,8 +13,11 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
-/** Verifies targeted, epoch-fenced continuation grant behavior. */
+/**
+ * Verifies targeted, epoch-fenced continuation grant behavior.
+ */
 final class WorkGroupServiceTest {
+
     @Test
     void singleUseGrantIsTargetedAndCannotReplay(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
@@ -27,10 +31,14 @@ final class WorkGroupServiceTest {
         service.consume(grantId, "agt-target", intentId, 3);
         assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 3));
         assertThrows(Exception.class, () -> service.consume(UUID.randomUUID(), "agt-target", intentId, 3));
-        assertTrue(new PredictionEventStore(temp, project).workGroupProjection().groups().size() == 1);
+        assertEquals(1, new PredictionEventStore(temp, project).workGroupProjection()
+                .groups()
+                .size());
         service.close(groupId, WorkGroup.Status.COMPLETED, 1);
-        assertTrue(new PredictionEventStore(temp, project).workGroupProjection().group(groupId)
-                .orElseThrow().status() == WorkGroup.Status.COMPLETED);
+        assertEquals(WorkGroup.Status.COMPLETED, new PredictionEventStore(temp, project).workGroupProjection()
+                .group(groupId)
+                .orElseThrow()
+                .status());
     }
 
     @Test

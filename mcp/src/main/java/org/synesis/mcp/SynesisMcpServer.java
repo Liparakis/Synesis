@@ -29,7 +29,8 @@ public final class SynesisMcpServer {
     public static int execute(String[] arguments) {
         String provider = boundedEnvironment("SYNESIS_MCP_PROVIDER", "codex");
         Path projectRoot = Path.of(boundedEnvironment("SYNESIS_MCP_PROJECT", "."))
-                .toAbsolutePath().normalize();
+                .toAbsolutePath()
+                .normalize();
         String connectionInstanceId = boundedEnvironment("SYNESIS_MCP_CONNECTION_INSTANCE_ID",
                 "conn-instance-" + UUID.randomUUID());
 
@@ -38,14 +39,21 @@ public final class SynesisMcpServer {
             if ("--provider".equals(arg) && i + 1 < arguments.length) {
                 provider = arguments[++i].trim();
             } else if ("--project".equals(arg) && i + 1 < arguments.length) {
-                projectRoot = Path.of(arguments[++i]).toAbsolutePath().normalize();
+                projectRoot = Path.of(arguments[++i])
+                        .toAbsolutePath()
+                        .normalize();
             } else if ("--connection-instance-id".equals(arg) && i + 1 < arguments.length) {
                 connectionInstanceId = arguments[++i].trim();
             }
         }
 
-        long pid = ProcessHandle.current().pid();
-        System.err.println("SYNESIS_MCP_STARTUP pid=" + pid + " version=0.1.0-SNAPSHOT commit=bc334ac conn=" + connectionInstanceId + " provider=" + provider + " cwd=" + Path.of(".").toAbsolutePath().normalize());
+        long pid = ProcessHandle.current()
+                .pid();
+        System.err.println(
+                "SYNESIS_MCP_STARTUP pid=" + pid + " version=0.1.0-SNAPSHOT commit=bc334ac conn=" + connectionInstanceId
+                        + " provider=" + provider + " cwd=" + Path.of(".")
+                        .toAbsolutePath()
+                        .normalize());
 
         AgentSessionService sessionService = new AgentSessionService();
         SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
@@ -62,12 +70,17 @@ public final class SynesisMcpServer {
     }
 
     private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {
-        ProcessHandle.Info info = ProcessHandle.current().info();
-        String executable = info.command().orElse("unknown");
-        String commandLine = info.commandLine().orElse(executable);
-        long start = info.startInstant().map(java.time.Instant::toEpochMilli)
+        ProcessHandle.Info info = ProcessHandle.current()
+                .info();
+        String executable = info.command()
+                .orElse("unknown");
+        String commandLine = info.commandLine()
+                .orElse(executable);
+        long start = info.startInstant()
+                .map(java.time.Instant::toEpochMilli)
                 .orElse(System.currentTimeMillis());
-        return new SessionProcessIdentity(ProcessHandle.current().pid(), executable, commandLine, start,
+        return new SessionProcessIdentity(ProcessHandle.current()
+                .pid(), executable, commandLine, start,
                 connectionInstanceId + ":" + UUID.randomUUID());
     }
 
@@ -76,7 +89,8 @@ public final class SynesisMcpServer {
      *
      * @param arguments launch arguments
      */
-    public static void main(String[] arguments) {
+    //noinspection RedundantModifier
+    static void main(String[] arguments) {
         System.exit(execute(arguments));
     }
 }

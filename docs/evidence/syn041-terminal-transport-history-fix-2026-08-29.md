@@ -35,12 +35,12 @@ the new method does not nest the lock.
 
 ## Transition matrix
 
-| Persisted state | Clean close by original owner | Clean close by rejected/different owner | Abnormal finalizer |
-|---|---|---|---|
-| `ACTIVE` | `CLOSED_CLEANLY` | no-op | no terminal transition; existing stale/recovery evaluation remains |
-| `TERMINAL_AUTHORITY_CONFIRMED` | `CLOSED_CLEANLY` (lawful clean first finalizer) | no-op | `TERMINAL_DISCONNECTED` when expected PID matches |
-| `TERMINAL_DISCONNECTED` | unchanged | unchanged | unchanged, idempotent |
-| `CLOSED_CLEANLY` | unchanged | unchanged | no-op |
+| Persisted state                | Clean close by original owner                   | Clean close by rejected/different owner | Abnormal finalizer                                                 |
+|--------------------------------|-------------------------------------------------|-----------------------------------------|--------------------------------------------------------------------|
+| `ACTIVE`                       | `CLOSED_CLEANLY`                                | no-op                                   | no terminal transition; existing stale/recovery evaluation remains |
+| `TERMINAL_AUTHORITY_CONFIRMED` | `CLOSED_CLEANLY` (lawful clean first finalizer) | no-op                                   | `TERMINAL_DISCONNECTED` when expected PID matches                  |
+| `TERMINAL_DISCONNECTED`        | unchanged                                       | unchanged                               | unchanged, idempotent                                              |
+| `CLOSED_CLEANLY`               | unchanged                                       | unchanged                               | no-op                                                              |
 
 The terminal-disconnected state is now history-preserving and monotonic. The
 first serialized lawful finalizer wins: a clean close may legitimately close

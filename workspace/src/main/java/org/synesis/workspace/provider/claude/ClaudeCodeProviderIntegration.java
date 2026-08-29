@@ -2,13 +2,12 @@ package org.synesis.workspace.provider.claude;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.List;
-
-import org.synesis.workspace.provider.ProviderIntegration;
+import java.util.Map;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.provider.ProviderSupportLevel;
+import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderMcpEvidenceTier;
+import org.synesis.workspace.provider.ProviderSupportLevel;
 
 /**
  * Claude Code provider configuration and synthetic hook contract.
@@ -66,15 +65,18 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
      * it does not alter global provider configuration or replace root-based
      * resolution when roots are supplied.
      *
-     * @param launcher generated Synesis MCP launcher
+     * @param launcher    generated Synesis MCP launcher
      * @param projectRoot initialized project root
      * @return JSON-compatible MCP server entry
      */
     @Override
     public Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
-        Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher, projectRoot));
+        Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher,
+                projectRoot));
         server.put("args", List.of("mcp", "--provider", id(), "--project",
-                projectRoot.toAbsolutePath().normalize().toString()));
+                projectRoot.toAbsolutePath()
+                        .normalize()
+                        .toString()));
         return server;
     }
 
@@ -82,7 +84,7 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
      * Builds Claude Code's documented print-mode argv for supervised work.
      *
      * @param worktree isolated lane worktree
-     * @param prompt initial task prompt
+     * @param prompt   initial task prompt
      * @return direct Claude argv
      */
     @Override
@@ -90,9 +92,15 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
         if (worktree == null || prompt == null || prompt.isBlank()) {
             return java.util.Optional.empty();
         }
-        return java.util.Optional.of(java.util.List.of("claude", "-p", prompt,
-                "--add-dir", worktree.toAbsolutePath().normalize().toString(),
-                "--output-format", "stream-json"));
+        return java.util.Optional.of(java.util.List.of("claude",
+                "-p",
+                prompt,
+                "--add-dir",
+                worktree.toAbsolutePath()
+                        .normalize()
+                        .toString(),
+                "--output-format",
+                "stream-json"));
     }
 
     @Override
@@ -125,9 +133,9 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
                 .toString()
                 .replace("\"", "\\\"") + "\" hook claude --profile \""
                 + profile.toAbsolutePath()
-                        .normalize()
-                        .toString()
-                        .replace("\"", "\\\"") + "\"";
+                .normalize()
+                .toString()
+                .replace("\"", "\\\"") + "\"";
     }
 
     @Override

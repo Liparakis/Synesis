@@ -12,24 +12,23 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.lifecycle.cleanup.CleanupEligibilityService;
 import org.synesis.workspace.lifecycle.cleanup.LifecycleInventoryService;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
-import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
-import org.synesis.workspace.infrastructure.process.ProcessInspector;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.migration.ProviderConfigMigrationService;
 import org.synesis.workspace.migration.ProjectMigrationService;
+import org.synesis.workspace.migration.ProviderConfigMigrationService;
 
 /**
  * Primary read-only diagnostic service discovering repository, runtime, durable state, and administrative health.
@@ -82,6 +81,17 @@ public final class DoctorService {
         this.processInspector = Objects.requireNonNull(processInspector, "processInspector");
     }
 
+    private static String computeHash(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(text.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of()
+                    .formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            return "00000000000000000000000000000000";
+        }
+    }
+
     /**
      * Evaluates read-only diagnostics over the specified control root.
      *
@@ -90,14 +100,17 @@ public final class DoctorService {
      */
     public DoctorReport diagnose(Path controlRoot) {
         Objects.requireNonNull(controlRoot, "controlRoot");
-        Path root = controlRoot.toAbsolutePath().normalize();
-        String reportId = "doc-" + UUID.randomUUID().toString().replace("-", "");
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
+        String reportId = "doc-" + UUID.randomUUID()
+                .toString()
+                .replace("-", "");
         long now = System.currentTimeMillis();
 
         List<DoctorFinding> findings = new ArrayList<>();
 
         // 1. Installation and Runtime Checks
-        checkInstallationAndRuntime(root, findings);
+        checkInstallationAndRuntime(findings);
 
         // 2. Project Identity and Repository Checks
         String projectIdStr = checkProjectAndRepository(root, findings);
@@ -128,13 +141,22 @@ public final class DoctorService {
             ));
         }
 
-        int critical = (int) findings.stream().filter(f -> f.severity() == DoctorSeverity.CRITICAL).count();
-        int errors = (int) findings.stream().filter(f -> f.severity() == DoctorSeverity.ERROR).count();
-        int warnings = (int) findings.stream().filter(f -> f.severity() == DoctorSeverity.WARNING).count();
-        int info = (int) findings.stream().filter(f -> f.severity() == DoctorSeverity.INFO).count();
+        int critical = (int) findings.stream()
+                .filter(f -> f.severity() == DoctorSeverity.CRITICAL)
+                .count();
+        int errors = (int) findings.stream()
+                .filter(f -> f.severity() == DoctorSeverity.ERROR)
+                .count();
+        int warnings = (int) findings.stream()
+                .filter(f -> f.severity() == DoctorSeverity.WARNING)
+                .count();
+        int info = (int) findings.stream()
+                .filter(f -> f.severity() == DoctorSeverity.INFO)
+                .count();
 
         DoctorStatus status;
-        if (critical > 0 || findings.stream().anyMatch(f -> f.code() == DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE)) {
+        if (critical > 0 || findings.stream()
+                .anyMatch(f -> f.code() == DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE)) {
             status = DoctorStatus.UNSAFE;
         } else if (errors > 0) {
             status = DoctorStatus.UNHEALTHY;
@@ -144,9 +166,14 @@ public final class DoctorService {
             status = DoctorStatus.HEALTHY;
         }
 
-        boolean cleanupRec = findings.stream().anyMatch(f -> f.code() == DoctorFindingCode.CLEANUP_RECOMMENDED || f.code() == DoctorFindingCode.ORPHANED_RESOURCE_DETECTED);
-        boolean reconcRec = findings.stream().anyMatch(f -> f.code() == DoctorFindingCode.STALE_SESSION_LEASE || f.code() == DoctorFindingCode.ABANDONED_INTEGRATION_ATTEMPT);
-        boolean repairAvail = findings.stream().anyMatch(DoctorFinding::repairSupported);
+        boolean cleanupRec = findings.stream()
+                .anyMatch(f -> f.code() == DoctorFindingCode.CLEANUP_RECOMMENDED
+                        || f.code() == DoctorFindingCode.ORPHANED_RESOURCE_DETECTED);
+        boolean reconcRec = findings.stream()
+                .anyMatch(f -> f.code() == DoctorFindingCode.STALE_SESSION_LEASE
+                        || f.code() == DoctorFindingCode.ABANDONED_INTEGRATION_ATTEMPT);
+        boolean repairAvail = findings.stream()
+                .anyMatch(DoctorFinding::repairSupported);
 
         return new DoctorReport(
                 1, reportId, projectIdStr != null ? projectIdStr : "unbound", now, status,
@@ -155,7 +182,7 @@ public final class DoctorService {
         );
     }
 
-    private void checkInstallationAndRuntime(Path root, List<DoctorFinding> findings) {
+    private void checkInstallationAndRuntime(List<DoctorFinding> findings) {
         String userHome = System.getProperty("user.home");
         if (userHome != null) {
             Path synesisBin = Path.of(userHome, ".synesis", "bin");
@@ -166,9 +193,16 @@ public final class DoctorService {
                 }
                 if (!Files.exists(launcherFile)) {
                     findings.add(new DoctorFinding(
-                            DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
-                            "Missing installed launcher", "Installed Synesis bin directory does not contain expected launcher script.",
-                            "installation", false, DoctorRecommendation.REINSTALL_SYNESIS, computeHash("missing_launcher"), Map.of()
+                            DoctorFindingCode.MISSING_INSTALLED_LAUNCHER,
+                            DoctorSeverity.WARNING,
+                            DoctorConfidence.CONFIRMED,
+                            "Missing installed launcher",
+                            "Installed Synesis bin directory does not contain expected launcher script.",
+                            "installation",
+                            false,
+                            DoctorRecommendation.REINSTALL_SYNESIS,
+                            computeHash("missing_launcher"),
+                            Map.of()
                     ));
                 }
             }
@@ -190,13 +224,22 @@ public final class DoctorService {
             ProjectMigrationService.Entry migration = new ProjectMigrationService().inspect(root);
             if (migration.outcome() == ProjectMigrationService.Outcome.UNSUPPORTED_SCHEMA) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.PROJECT_SCHEMA_UNSUPPORTED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED,
-                        "Project schema unsupported", "Project metadata uses a schema this Synesis build cannot migrate.",
-                        "project_schema", false, DoctorRecommendation.PREPARE_PROJECT_MIGRATION, computeHash("project_schema_unsupported"), Map.of()));
-                return migration.projectId().isBlank() ? null : migration.projectId();
+                        DoctorFindingCode.PROJECT_SCHEMA_UNSUPPORTED,
+                        DoctorSeverity.ERROR,
+                        DoctorConfidence.CONFIRMED,
+                        "Project schema unsupported",
+                        "Project metadata uses a schema this Synesis build cannot migrate.",
+                        "project_schema",
+                        false,
+                        DoctorRecommendation.PREPARE_PROJECT_MIGRATION,
+                        computeHash("project_schema_unsupported"),
+                        Map.of()));
+                return migration.projectId()
+                        .isBlank() ? null : migration.projectId();
             }
             ProjectApplicationService.ProjectLocation location = projectService.locate(root);
-            return location.projectId().toString();
+            return location.projectId()
+                    .toString();
         } catch (Exception ex) {
             findings.add(new DoctorFinding(
                     DoctorFindingCode.PROJECT_IDENTITY_INVALID, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED,
@@ -215,19 +258,33 @@ public final class DoctorService {
         if (Files.isDirectory(coordDir)) {
             try {
                 UUID pId = UUID.fromString(projectIdStr);
-                PredictionEventStore store = new PredictionEventStore(coordDir, pId);
+                new PredictionEventStore(coordDir, pId);
                 // If loaded without exception, store signatures & chain are verified
             } catch (java.security.GeneralSecurityException secEx) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE, DoctorSeverity.CRITICAL, DoctorConfidence.CONFIRMED,
-                        "Event log verification failure", "Signed coordination event log cryptographic signature or digest chain verification failed.",
-                        "event_log", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED, computeHash("event_log_fail"), Map.of()
+                        DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE,
+                        DoctorSeverity.CRITICAL,
+                        DoctorConfidence.CONFIRMED,
+                        "Event log verification failure",
+                        "Signed coordination event log cryptographic signature or digest chain verification failed.",
+                        "event_log",
+                        false,
+                        DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                        computeHash("event_log_fail"),
+                        Map.of()
                 ));
             } catch (Exception ex) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.DURABLE_STATE_AMBIGUOUS, DoctorSeverity.ERROR, DoctorConfidence.AMBIGUOUS,
-                        "Durable state ambiguous", "Failed to read durable coordination event store.",
-                        "event_log", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED, computeHash("durable_ambiguous"), Map.of()
+                        DoctorFindingCode.DURABLE_STATE_AMBIGUOUS,
+                        DoctorSeverity.ERROR,
+                        DoctorConfidence.AMBIGUOUS,
+                        "Durable state ambiguous",
+                        "Failed to read durable coordination event store.",
+                        "event_log",
+                        false,
+                        DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                        computeHash("durable_ambiguous"),
+                        Map.of()
                 ));
             }
         }
@@ -241,15 +298,29 @@ public final class DoctorService {
             SessionLeaseState state = leaseService.evaluateLiveness(lease, policy);
             if (state == SessionLeaseState.RECOVERY_ELIGIBLE || state == SessionLeaseState.SUSPECTED_STALE) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.STALE_SESSION_LEASE, DoctorSeverity.WARNING, DoctorConfidence.HIGH_CONFIDENCE,
-                        "Stale session lease detected", "Provider session lease has missed heartbeats beyond policy threshold.",
-                        "session_lease", false, DoctorRecommendation.PREPARE_RECONCILIATION_PLAN, computeHash("stale_lease_" + lease.connectionInstanceId()), Map.of()
+                        DoctorFindingCode.STALE_SESSION_LEASE,
+                        DoctorSeverity.WARNING,
+                        DoctorConfidence.HIGH_CONFIDENCE,
+                        "Stale session lease detected",
+                        "Provider session lease has missed heartbeats beyond policy threshold.",
+                        "session_lease",
+                        false,
+                        DoctorRecommendation.PREPARE_RECONCILIATION_PLAN,
+                        computeHash("stale_lease_" + lease.connectionInstanceId()),
+                        Map.of()
                 ));
             } else if (state == SessionLeaseState.AMBIGUOUS) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.AMBIGUOUS_SESSION_LIVENESS, DoctorSeverity.WARNING, DoctorConfidence.AMBIGUOUS,
-                        "Ambiguous session liveness", "Process identity or liveness state for provider session lease is ambiguous.",
-                        "session_lease", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED, computeHash("ambiguous_lease_" + lease.connectionInstanceId()), Map.of()
+                        DoctorFindingCode.AMBIGUOUS_SESSION_LIVENESS,
+                        DoctorSeverity.WARNING,
+                        DoctorConfidence.AMBIGUOUS,
+                        "Ambiguous session liveness",
+                        "Process identity or liveness state for provider session lease is ambiguous.",
+                        "session_lease",
+                        false,
+                        DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                        computeHash("ambiguous_lease_" + lease.connectionInstanceId()),
+                        Map.of()
                 ));
             }
         }
@@ -262,9 +333,16 @@ public final class DoctorService {
                 var entry = eligibilityService.evaluateResource(root, resource);
                 if (entry.eligible()) {
                     findings.add(new DoctorFinding(
-                            DoctorFindingCode.CLEANUP_RECOMMENDED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
-                            "Cleanup recommended", "Eligible lifecycle resources are ready for cleanup review.",
-                            "cleanup", false, DoctorRecommendation.RUN_CLEANUP_DRY_RUN, computeHash("cleanup_rec"), Map.of()
+                            DoctorFindingCode.CLEANUP_RECOMMENDED,
+                            DoctorSeverity.WARNING,
+                            DoctorConfidence.CONFIRMED,
+                            "Cleanup recommended",
+                            "Eligible lifecycle resources are ready for cleanup review.",
+                            "cleanup",
+                            false,
+                            DoctorRecommendation.RUN_CLEANUP_DRY_RUN,
+                            computeHash("cleanup_rec"),
+                            Map.of()
                     ));
                     break;
                 }
@@ -283,9 +361,16 @@ public final class DoctorService {
             Path cleanupLock = adminDir.resolve("cleanup-execution.lock");
             if (Files.exists(cleanupLock) && isLockStale(cleanupLock)) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.STALE_CLEANUP_EXECUTION_LOCK, DoctorSeverity.WARNING, DoctorConfidence.HIGH_CONFIDENCE,
-                        "Stale cleanup execution lock", "Stale cleanup-execution.lock file present from absent process.",
-                        "admin_lock", true, DoctorRecommendation.PREPARE_REPAIR_PLAN, computeHash("stale_cleanup_lock"), Map.of()
+                        DoctorFindingCode.STALE_CLEANUP_EXECUTION_LOCK,
+                        DoctorSeverity.WARNING,
+                        DoctorConfidence.HIGH_CONFIDENCE,
+                        "Stale cleanup execution lock",
+                        "Stale cleanup-execution.lock file present from absent process.",
+                        "admin_lock",
+                        true,
+                        DoctorRecommendation.PREPARE_REPAIR_PLAN,
+                        computeHash("stale_cleanup_lock"),
+                        Map.of()
                 ));
             }
 
@@ -293,9 +378,16 @@ public final class DoctorService {
             Path reconcLock = adminDir.resolve("reconciliation-execution.lock");
             if (Files.exists(reconcLock) && isLockStale(reconcLock)) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.STALE_RECONCILIATION_EXECUTION_LOCK, DoctorSeverity.WARNING, DoctorConfidence.HIGH_CONFIDENCE,
-                        "Stale reconciliation execution lock", "Stale reconciliation-execution.lock file present from absent process.",
-                        "admin_lock", true, DoctorRecommendation.PREPARE_REPAIR_PLAN, computeHash("stale_reconc_lock"), Map.of()
+                        DoctorFindingCode.STALE_RECONCILIATION_EXECUTION_LOCK,
+                        DoctorSeverity.WARNING,
+                        DoctorConfidence.HIGH_CONFIDENCE,
+                        "Stale reconciliation execution lock",
+                        "Stale reconciliation-execution.lock file present from absent process.",
+                        "admin_lock",
+                        true,
+                        DoctorRecommendation.PREPARE_REPAIR_PLAN,
+                        computeHash("stale_reconc_lock"),
+                        Map.of()
                 ));
             }
 
@@ -303,22 +395,37 @@ public final class DoctorService {
             Path repairLock = adminDir.resolve("repair-execution.lock");
             if (Files.exists(repairLock) && isLockStale(repairLock)) {
                 findings.add(new DoctorFinding(
-                        DoctorFindingCode.STALE_REPAIR_LOCK, DoctorSeverity.WARNING, DoctorConfidence.HIGH_CONFIDENCE,
-                        "Stale repair execution lock", "Stale repair-execution.lock file present from absent process.",
-                        "admin_lock", true, DoctorRecommendation.PREPARE_REPAIR_PLAN, computeHash("stale_repair_lock"), Map.of()
+                        DoctorFindingCode.STALE_REPAIR_LOCK,
+                        DoctorSeverity.WARNING,
+                        DoctorConfidence.HIGH_CONFIDENCE,
+                        "Stale repair execution lock",
+                        "Stale repair-execution.lock file present from absent process.",
+                        "admin_lock",
+                        true,
+                        DoctorRecommendation.PREPARE_REPAIR_PLAN,
+                        computeHash("stale_repair_lock"),
+                        Map.of()
                 ));
             }
 
             // Corrupt cleanup plans
-            checkCorruptJsonFiles(adminDir.resolve("cleanup-plans"), DoctorFindingCode.CORRUPT_CLEANUP_PLAN, "Corrupt cleanup plan", findings);
+            checkCorruptJsonFiles(adminDir.resolve("cleanup-plans"),
+                    DoctorFindingCode.CORRUPT_CLEANUP_PLAN,
+                    "Corrupt cleanup plan",
+                    findings);
             // Corrupt reconciliation plans
-            checkCorruptJsonFiles(adminDir.resolve("reconciliation-plans"), DoctorFindingCode.CORRUPT_RECONCILIATION_PLAN, "Corrupt reconciliation plan", findings);
+            checkCorruptJsonFiles(adminDir.resolve("reconciliation-plans"),
+                    DoctorFindingCode.CORRUPT_RECONCILIATION_PLAN,
+                    "Corrupt reconciliation plan",
+                    findings);
         }
     }
 
+    @SuppressWarnings("ExtractMethodRecommender")
     private void checkCommandNamespace(List<DoctorFinding> findings) {
         ProjectCommandDiagnostics.Report report = ProjectCommandDiagnostics.inspect(
-                AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
+                AdministrativeStateLocator.applicationStateRoot()
+                        .resolve("commands"));
         if (!report.present()) {
             return;
         }
@@ -356,11 +463,16 @@ public final class DoctorService {
         if (report.eligibleTerminalCount() > 0 || report.pinnedEvidenceCount() > 0
                 || report.deadAnchorCount() > 0 || report.liveAtCapacityCount() > 0) {
             findings.add(new DoctorFinding(
-                    DoctorFindingCode.COMMAND_CAPACITY_OR_RETENTION, DoctorSeverity.WARNING,
-                    DoctorConfidence.HIGH_CONFIDENCE, "Durable command retention requires review",
+                    DoctorFindingCode.COMMAND_CAPACITY_OR_RETENTION,
+                    DoctorSeverity.WARNING,
+                    DoctorConfidence.HIGH_CONFIDENCE,
+                    "Durable command retention requires review",
                     "Terminal evidence, dead anchors, pins, or live request capacity require the existing cleanup workflow.",
-                    "command_namespace", false, DoctorRecommendation.RUN_CLEANUP_DRY_RUN,
-                    computeHash("command_namespace_retention"), details));
+                    "command_namespace",
+                    false,
+                    DoctorRecommendation.RUN_CLEANUP_DRY_RUN,
+                    computeHash("command_namespace_retention"),
+                    details));
         }
         if (report.leaseGapRevisionMismatchCount() > 0 || report.deferredMutationCount() > 0
                 || report.cleanCloseDetachBlockedCount() > 0) {
@@ -380,7 +492,8 @@ public final class DoctorService {
             Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(content);
             long pid = ((Number) map.get("pid")).longValue();
             var detailsOpt = processInspector.inspectProcess(pid);
-            return detailsOpt.isEmpty() || !detailsOpt.get().isLive();
+            return detailsOpt.isEmpty() || !detailsOpt.get()
+                    .isLive();
         } catch (Exception ex) {
             return false;
         }
@@ -391,15 +504,26 @@ public final class DoctorService {
             return;
         }
         try (var stream = Files.list(dir)) {
-            for (Path file : stream.filter(p -> p.getFileName().toString().endsWith(".json")).toList()) {
+            for (Path file : stream.filter(p -> p.getFileName()
+                            .toString()
+                            .endsWith(".json"))
+                    .toList()) {
                 try {
                     String raw = Files.readString(file, StandardCharsets.UTF_8);
                     ProviderJson.parse(raw);
                 } catch (Exception corrupt) {
                     findings.add(new DoctorFinding(
-                            code, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
-                            label + " file corrupted", label + " file contains malformed JSON.",
-                            "admin_plan", true, DoctorRecommendation.PREPARE_REPAIR_PLAN, computeHash(file.getFileName().toString()), Map.of()
+                            code,
+                            DoctorSeverity.WARNING,
+                            DoctorConfidence.CONFIRMED,
+                            label + " file corrupted",
+                            label + " file contains malformed JSON.",
+                            "admin_plan",
+                            true,
+                            DoctorRecommendation.PREPARE_REPAIR_PLAN,
+                            computeHash(file.getFileName()
+                                    .toString()),
+                            Map.of()
                     ));
                 }
             }
@@ -417,7 +541,9 @@ public final class DoctorService {
                 return;
             }
             try (var files = Files.list(providerState)) {
-                if (files.noneMatch(path -> path.getFileName().toString().endsWith(".json"))) {
+                if (files.noneMatch(path -> path.getFileName()
+                        .toString()
+                        .endsWith(".json"))) {
                     return;
                 }
             }
@@ -426,17 +552,38 @@ public final class DoctorService {
         }
         for (ProviderConfigMigrationService.Entry entry : new ProviderConfigMigrationService().inspect()) {
             if (entry.outcome() == ProviderConfigMigrationService.Outcome.MIGRATION_REQUIRED) {
-                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_MIGRATION_REQUIRED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
-                        "Provider migration required", "Provider MCP configuration does not reference the stable Synesis launcher.",
-                        "provider_config", false, DoctorRecommendation.PREPARE_PROVIDER_MIGRATION, computeHash(entry.provider()), Map.of("provider", entry.provider())));
+                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_MIGRATION_REQUIRED,
+                        DoctorSeverity.WARNING,
+                        DoctorConfidence.CONFIRMED,
+                        "Provider migration required",
+                        "Provider MCP configuration does not reference the stable Synesis launcher.",
+                        "provider_config",
+                        false,
+                        DoctorRecommendation.PREPARE_PROVIDER_MIGRATION,
+                        computeHash(entry.provider()),
+                        Map.of("provider", entry.provider())));
             } else if (entry.outcome() == ProviderConfigMigrationService.Outcome.MALFORMED) {
-                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_MALFORMED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED,
-                        "Provider config malformed", "Provider MCP configuration is malformed and was not changed.",
-                        "provider_config", false, DoctorRecommendation.REVIEW_PROVIDER_CONFIGURATION, computeHash(entry.provider() + "_malformed"), Map.of("provider", entry.provider())));
+                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_MALFORMED,
+                        DoctorSeverity.WARNING,
+                        DoctorConfidence.CONFIRMED,
+                        "Provider config malformed",
+                        "Provider MCP configuration is malformed and was not changed.",
+                        "provider_config",
+                        false,
+                        DoctorRecommendation.REVIEW_PROVIDER_CONFIGURATION,
+                        computeHash(entry.provider() + "_malformed"),
+                        Map.of("provider", entry.provider())));
             } else if (entry.outcome() == ProviderConfigMigrationService.Outcome.DUPLICATE_SYNSESIS_ENTRY) {
-                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED,
-                        "Duplicate Synesis provider entries", "Provider configuration contains ambiguous Synesis MCP entries.",
-                        "provider_config", false, DoctorRecommendation.HUMAN_REVIEW_REQUIRED, computeHash(entry.provider() + "_duplicate"), Map.of("provider", entry.provider())));
+                findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED,
+                        DoctorSeverity.ERROR,
+                        DoctorConfidence.CONFIRMED,
+                        "Duplicate Synesis provider entries",
+                        "Provider configuration contains ambiguous Synesis MCP entries.",
+                        "provider_config",
+                        false,
+                        DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                        computeHash(entry.provider() + "_duplicate"),
+                        Map.of("provider", entry.provider())));
             }
         }
     }
@@ -445,8 +592,11 @@ public final class DoctorService {
         String base = System.getenv("LOCALAPPDATA");
         if (base == null || base.isBlank()) {
             String home = System.getProperty("user.home");
-            if (home == null || home.isBlank()) return;
-            base = Path.of(home, "AppData", "Local").toString();
+            if (home == null || home.isBlank()) {
+                return;
+            }
+            base = Path.of(home, "AppData", "Local")
+                    .toString();
         }
         Path admin = Path.of(base, "Synesis", "admin");
         checkTransactionJournals(admin.resolve("update-executions"), findings);
@@ -454,87 +604,150 @@ public final class DoctorService {
     }
 
     private void checkTransactionJournals(Path directory, List<DoctorFinding> findings) {
-        if (!Files.isDirectory(directory)) return;
+        if (!Files.isDirectory(directory)) {
+            return;
+        }
         try (var stream = Files.list(directory)) {
-            for (Path journal : stream.filter(path -> path.getFileName().toString().endsWith(".jsonl")).toList()) {
+            for (Path journal : stream.filter(path -> path.getFileName()
+                            .toString()
+                            .endsWith(".jsonl"))
+                    .toList()) {
                 try {
                     List<String> lines = Files.readAllLines(journal, StandardCharsets.UTF_8);
-                    if (lines.isEmpty()) throw new IOException("empty journal");
+                    if (lines.isEmpty()) {
+                        throw new IOException("empty journal");
+                    }
                     for (String line : lines) {
-                        if (!line.contains("outcome=") && !line.contains("state=") && !(ProviderJson.parse(line) instanceof Map<?, ?>)) {
+                        if (!line.contains("outcome=") && !line.contains("state=")
+                                && !(ProviderJson.parse(line) instanceof Map<?, ?>)) {
                             throw new IOException("invalid journal entry");
                         }
                     }
                     String journalText = String.join("\n", lines);
                     if (journalText.contains("post_migration_replay")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.POST_MIGRATION_REPLAY_FAILED, DoctorSeverity.ERROR,
-                                DoctorConfidence.CONFIRMED, "Post-migration replay failed", "Project migration replay did not prove semantic equivalence.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_replay"), Map.of()));
+                        findings.add(new DoctorFinding(DoctorFindingCode.POST_MIGRATION_REPLAY_FAILED,
+                                DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED,
+                                "Post-migration replay failed",
+                                "Project migration replay did not prove semantic equivalence.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString() + "_replay"),
+                                Map.of()));
                     }
                     if (journalText.contains("backup_missing") || journalText.contains("restore_failed")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.MIGRATION_BACKUP_MISSING, DoctorSeverity.ERROR,
-                                DoctorConfidence.CONFIRMED, "Migration backup unavailable", "Migration rollback evidence is incomplete.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_backup"), Map.of()));
+                        findings.add(new DoctorFinding(DoctorFindingCode.MIGRATION_BACKUP_MISSING,
+                                DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED,
+                                "Migration backup unavailable",
+                                "Migration rollback evidence is incomplete.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString() + "_backup"),
+                                Map.of()));
                     }
                     if (journalText.contains("active_session_blocks_project_migration")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.ACTIVE_SESSION_BLOCKS_MIGRATION, DoctorSeverity.WARNING,
-                                DoctorConfidence.CONFIRMED, "Active session blocks migration", "Project migration is waiting for incompatible session state to quiesce.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_session"), Map.of()));
+                        findings.add(new DoctorFinding(DoctorFindingCode.ACTIVE_SESSION_BLOCKS_MIGRATION,
+                                DoctorSeverity.WARNING,
+                                DoctorConfidence.CONFIRMED,
+                                "Active session blocks migration",
+                                "Project migration is waiting for incompatible session state to quiesce.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString() + "_session"),
+                                Map.of()));
                     }
                     if (journalText.contains("RESTORE_REQUIRED") && !journalText.contains("RESTORE_VERIFIED")
                             && !journalText.contains("RESTORE_FAILED_REQUIRES_REVIEW")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_RESTORATION_PENDING, DoctorSeverity.WARNING,
-                                DoctorConfidence.CONFIRMED, "Project restoration pending", "Project metadata restoration has not reached a verified terminal state.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_restore_pending"), Map.of()));
+                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_RESTORATION_PENDING,
+                                DoctorSeverity.WARNING,
+                                DoctorConfidence.CONFIRMED,
+                                "Project restoration pending",
+                                "Project metadata restoration has not reached a verified terminal state.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString() + "_restore_pending"),
+                                Map.of()));
                     }
                     if (journalText.contains("RESTORE_FAILED_REQUIRES_REVIEW")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_RESTORATION_REQUIRES_REVIEW, DoctorSeverity.ERROR,
-                                DoctorConfidence.CONFIRMED, "Project restoration requires review", "Project metadata restoration could not be proven safe.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_restore_review"), Map.of()));
+                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_RESTORATION_REQUIRES_REVIEW,
+                                DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED,
+                                "Project restoration requires review",
+                                "Project metadata restoration could not be proven safe.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString() + "_restore_review"),
+                                Map.of()));
                     }
                     if (journalText.contains("FAILED_RESTORED")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_MIGRATION_RESTORED, DoctorSeverity.INFO,
-                                DoctorConfidence.CONFIRMED, "Failed migration restored", "Project metadata was restored after migration failure.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_restored"), Map.of()));
+                        findings.add(new DoctorFinding(DoctorFindingCode.PROJECT_MIGRATION_RESTORED,
+                                DoctorSeverity.INFO,
+                                DoctorConfidence.CONFIRMED,
+                                "Failed migration restored",
+                                "Project metadata was restored after migration failure.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString() + "_restored"),
+                                Map.of()));
                     }
-                    if (journalText.contains("ROLLBACK_PENDING") || journalText.contains("ROLLBACK_REQUIRES_HUMAN_REVIEW")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.ROLLBACK_RESTORATION_INCOMPLETE, DoctorSeverity.ERROR,
-                                DoctorConfidence.CONFIRMED, "Rollback restoration incomplete", "Rollback did not reach a verified restoration terminal state.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_rollback"), Map.of()));
+                    if (journalText.contains("ROLLBACK_PENDING") || journalText.contains(
+                            "ROLLBACK_REQUIRES_HUMAN_REVIEW")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.ROLLBACK_RESTORATION_INCOMPLETE,
+                                DoctorSeverity.ERROR,
+                                DoctorConfidence.CONFIRMED,
+                                "Rollback restoration incomplete",
+                                "Rollback did not reach a verified restoration terminal state.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString() + "_rollback"),
+                                Map.of()));
                     }
                     String last = lines.getLast();
                     if (!last.contains("COMPLETED") && !last.contains("SUCCESS") && !last.contains("ROLLED_BACK")
-                            && !last.contains("MIGRATED") && !last.contains("UP_TO_DATE") && !last.contains("FAILED_RESTORED")) {
-                        findings.add(new DoctorFinding(DoctorFindingCode.UPDATE_TRANSACTION_INCOMPLETE, DoctorSeverity.WARNING,
-                                DoctorConfidence.CONFIRMED, "Migration transaction incomplete", "A prepared update or migration journal has not reached a terminal state.",
-                                "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString()), Map.of()));
+                            && !last.contains("MIGRATED") && !last.contains("UP_TO_DATE") && !last.contains(
+                            "FAILED_RESTORED")) {
+                        findings.add(new DoctorFinding(DoctorFindingCode.UPDATE_TRANSACTION_INCOMPLETE,
+                                DoctorSeverity.WARNING,
+                                DoctorConfidence.CONFIRMED,
+                                "Migration transaction incomplete",
+                                "A prepared update or migration journal has not reached a terminal state.",
+                                "migration_transaction",
+                                false,
+                                DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                                computeHash(journal.getFileName()
+                                        .toString()),
+                                Map.of()));
                     }
                 } catch (Exception corrupt) {
-                    findings.add(new DoctorFinding(DoctorFindingCode.MIGRATION_STATE_INCOMPLETE, DoctorSeverity.ERROR,
-                            DoctorConfidence.CONFIRMED, "Migration journal corrupt", "Migration transaction evidence is malformed and requires review.",
-                            "migration_transaction", false, DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                            computeHash(journal.getFileName().toString() + "_corrupt"), Map.of()));
+                    findings.add(new DoctorFinding(DoctorFindingCode.MIGRATION_STATE_INCOMPLETE,
+                            DoctorSeverity.ERROR,
+                            DoctorConfidence.CONFIRMED,
+                            "Migration journal corrupt",
+                            "Migration transaction evidence is malformed and requires review.",
+                            "migration_transaction",
+                            false,
+                            DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
+                            computeHash(journal.getFileName()
+                                    .toString() + "_corrupt"),
+                            Map.of()));
                 }
             }
         } catch (IOException ignored) {
-        }
-    }
-
-    private static String computeHash(String text) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(text.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException ex) {
-            return "00000000000000000000000000000000";
         }
     }
 }

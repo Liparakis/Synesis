@@ -16,8 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.constraint.ConstraintApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.WorkspaceVerificationResult;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
@@ -194,7 +194,9 @@ class WorkspaceMutationBrokerTest {
 
         MutationRequest request = new MutationRequest(location,
                 "codex",
-                bindingService.list(location, "codex").getLast().sessionId(),
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(),
                 "../escaped.txt",
                 "write_file",
                 "content",
@@ -218,7 +220,9 @@ class WorkspaceMutationBrokerTest {
                 .resolve("escaped_abs.txt")
                 .toString();
         MutationRequest request = new MutationRequest(location, "codex",
-                bindingService.list(location, "codex").getLast().sessionId(), absPath, "write_file", "content", true, false);
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(), absPath, "write_file", "content", true, false);
         MutationResult result = broker.applyMutation(request);
 
         assertFalse(result.success());
@@ -246,7 +250,9 @@ class WorkspaceMutationBrokerTest {
 
         MutationRequest request = new MutationRequest(location,
                 "codex",
-                bindingService.list(location, "codex").getLast().sessionId(),
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(),
                 "symdir/file.txt",
                 "write_file",
                 "content",
@@ -262,7 +268,9 @@ class WorkspaceMutationBrokerTest {
     void test08MutationWithoutVerifiedTrustIsRejected() throws Exception {
         MutationRequest request = new MutationRequest(location,
                 "codex",
-                bindingService.list(location, "codex").getLast().sessionId(),
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(),
                 "src/file.txt",
                 "write_file",
                 "content",
@@ -289,7 +297,9 @@ class WorkspaceMutationBrokerTest {
 
         MutationRequest request = new MutationRequest(location,
                 "codex",
-                bindingService.list(location, "codex").getLast().sessionId(),
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(),
                 "src/protected.txt",
                 "write_file",
                 "content",
@@ -309,7 +319,9 @@ class WorkspaceMutationBrokerTest {
 
         MutationRequest request = new MutationRequest(location,
                 "codex",
-                bindingService.list(location, "codex").getLast().sessionId(),
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(),
                 "src/created.txt",
                 "write_file",
                 "hello world",
@@ -330,7 +342,9 @@ class WorkspaceMutationBrokerTest {
 
         MutationRequest request = new MutationRequest(location,
                 "codex",
-                bindingService.list(location, "codex").getLast().sessionId(),
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(),
                 "src/evidence.txt",
                 "write_file",
                 "data",
@@ -363,7 +377,9 @@ class WorkspaceMutationBrokerTest {
 
         MutationRequest request = new MutationRequest(location,
                 "codex",
-                bindingService.list(location, "codex").getLast().sessionId(),
+                bindingService.list(location, "codex")
+                        .getLast()
+                        .sessionId(),
                 "src/worktree_only.txt",
                 "write_file",
                 "content",
@@ -386,7 +402,8 @@ class WorkspaceMutationBrokerTest {
         assertFalse(result.success());
         assertEquals(Decision.SESSION_UNBOUND, result.decision());
         assertEquals("EXACT_SESSION_REQUIRED", result.reasonCode());
-        assertFalse(Files.exists(location.root().resolve("src/no-identity.txt")));
+        assertFalse(Files.exists(location.root()
+                .resolve("src/no-identity.txt")));
     }
 
     private void setVerifiedTrustState() throws Exception {

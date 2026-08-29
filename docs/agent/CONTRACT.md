@@ -4,11 +4,14 @@
 - Contract status: ACTIVE
 - Implementation permitted: YES
 
-You are the principal protocol and networking engineer responsible for designing and materializing Synesis Link v1 as the first production-quality transport/session module in the Synesis repository.
+You are the principal protocol and networking engineer responsible for designing and materializing Synesis Link v1 as
+the first production-quality transport/session module in the Synesis repository.
 
 Work autonomously in small, verified vertical slices.
 
-Do not stop after planning, scaffolding, architecture documents, or partial implementation. Continue until the repository satisfies the Synesis Link v1 completion criteria or an architecture-changing blocker genuinely requires human input.
+Do not stop after planning, scaffolding, architecture documents, or partial implementation. Continue until the
+repository satisfies the Synesis Link v1 completion criteria or an architecture-changing blocker genuinely requires
+human input.
 
 Your conversational context is temporary and untrusted.
 
@@ -25,15 +28,15 @@ Before planning, editing code, researching dependencies, or running broad comman
 
 3. Read:
 
-   - `docs/agent/CONTRACT.md`
-   - `docs/agent/GOAL.md`
-   - `docs/agent/STATE.md`
-   - `docs/agent/TASKS.md`
-   - `docs/agent/CURRENT.md`
-   - `docs/agent/DECISIONS.md`
-   - `docs/agent/FAILED_ATTEMPTS.md`
-   - `docs/agent/TEST_MATRIX.md`
-   - `docs/agent/NEXT_SESSION.md`
+    - `docs/agent/CONTRACT.md`
+    - `docs/agent/GOAL.md`
+    - `docs/agent/STATE.md`
+    - `docs/agent/TASKS.md`
+    - `docs/agent/CURRENT.md`
+    - `docs/agent/DECISIONS.md`
+    - `docs/agent/FAILED_ATTEMPTS.md`
+    - `docs/agent/TEST_MATRIX.md`
+    - `docs/agent/NEXT_SESSION.md`
 
 4. Inspect Git status and the actual repository.
 5. Reconcile any stale documentation with repository reality.
@@ -79,7 +82,8 @@ Use the installed `constraint-driven-architecture` skill:
 - whenever changing module boundaries;
 - whenever changing protocol guarantees;
 - whenever introducing a major dependency;
-- whenever changing identity, authentication, wire format, compatibility, persistence, security, or deployment assumptions;
+- whenever changing identity, authentication, wire format, compatibility, persistence, security, or deployment
+  assumptions;
 - whenever implementation begins diverging materially from the agreed architecture.
 
 Record architecture-changing decisions in ADRs.
@@ -92,7 +96,8 @@ The current implemented product boundary is:
 
 # Synesis Link
 
-Synesis Link is a standalone, local-first, direct peer-to-peer networking and authenticated session-liveness library built on QUIC.
+Synesis Link is a standalone, local-first, direct peer-to-peer networking and authenticated session-liveness library
+built on QUIC.
 
 The repository is `synesis`; Synesis Link is the `link/` transport/session module.
 
@@ -120,7 +125,8 @@ Build Synesis Link v1 so that two computers can:
 9. detect graceful peer shutdown promptly;
 10. infer ungraceful connection loss through bounded application-level liveness timeouts;
 11. distinguish healthy, uncertain, expired, failed, and gracefully closed sessions;
-12. tolerate ordinary packet loss, NAT rebinding, address changes, and QUIC path migration without falsely expiring healthy sessions;
+12. tolerate ordinary packet loss, NAT rebinding, address changes, and QUIC path migration without falsely expiring
+    healthy sessions;
 13. reconnect through a new authenticated session;
 14. prevent old-session messages from being confused with a new session;
 15. expose precise lifecycle events and cancellation signals;
@@ -131,7 +137,8 @@ Build Synesis Link v1 so that two computers can:
 
 Synesis Link must never claim every pair of computers can connect directly.
 
-When both peers are behind restrictive NATs, carrier-grade NAT, or firewalls that prohibit direct paths, direct communication may be impossible without rendezvous or relay infrastructure.
+When both peers are behind restrictive NATs, carrier-grade NAT, or firewalls that prohibit direct paths, direct
+communication may be impossible without rendezvous or relay infrastructure.
 
 V1 must report that limitation diagnostically rather than hiding it.
 
@@ -277,7 +284,8 @@ Synesis Link must still define:
 
 Graceful shutdown may be detected promptly when the peer sends an authenticated goodbye or QUIC close signal.
 
-Crashes, power loss, machine sleep, cable removal, blackholed traffic, and network partitions can only be inferred after bounded timeouts.
+Crashes, power loss, machine sleep, cable removal, blackholed traffic, and network partitions can only be inferred after
+bounded timeouts.
 
 Never claim instant crash detection.
 
@@ -420,40 +428,40 @@ synesis/
 â”œâ”€â”€ gradlew
 â”œâ”€â”€ gradlew.bat
 â”œâ”€â”€ gradle/
-â”‚   â”œâ”€â”€ wrapper/
-â”‚   â”œâ”€â”€ libs.versions.toml
-â”‚   â””â”€â”€ verification-metadata.xml
+â”‚ â”œâ”€â”€ wrapper/
+â”‚ â”œâ”€â”€ libs.versions.toml
+â”‚ â””â”€â”€ verification-metadata.xml
 â”œâ”€â”€ docs/
-â”‚   â”œâ”€â”€ agent/
-â”‚   â”œâ”€â”€ adr/
-â”‚   â”œâ”€â”€ protocol/
-â”‚   â”‚   â”œâ”€â”€ SYNESIS_LINK_V1.md
-â”‚   â”‚   â”œâ”€â”€ WIRE_FORMAT.md
-â”‚   â”‚   â”œâ”€â”€ STATE_MACHINES.md
-â”‚   â”‚   â””â”€â”€ TEST_VECTORS.md
-â”‚   â”œâ”€â”€ security/
-â”‚   â”‚   â””â”€â”€ THREAT_MODEL.md
-â”‚   â””â”€â”€ operations/
-â”‚       â””â”€â”€ TWO_MACHINE_TESTING.md
+â”‚ â”œâ”€â”€ agent/
+â”‚ â”œâ”€â”€ adr/
+â”‚ â”œâ”€â”€ protocol/
+â”‚ â”‚ â”œâ”€â”€ SYNESIS_LINK_V1.md
+â”‚ â”‚ â”œâ”€â”€ WIRE_FORMAT.md
+â”‚ â”‚ â”œâ”€â”€ STATE_MACHINES.md
+â”‚ â”‚ â””â”€â”€ TEST_VECTORS.md
+â”‚ â”œâ”€â”€ security/
+â”‚ â”‚ â””â”€â”€ THREAT_MODEL.md
+â”‚ â””â”€â”€ operations/
+â”‚ â””â”€â”€ TWO_MACHINE_TESTING.md
 â”œâ”€â”€ src/
-â”‚   â”œâ”€â”€ main/
-â”‚   â”‚   â”œâ”€â”€ java/
-â”‚   â”‚   â”‚   â””â”€â”€ <base-package>/
-â”‚   â”‚   â”‚       â”œâ”€â”€ api/
-â”‚   â”‚   â”‚       â”œâ”€â”€ identity/
-â”‚   â”‚   â”‚       â”œâ”€â”€ candidate/
-â”‚   â”‚   â”‚       â”œâ”€â”€ protocol/
-â”‚   â”‚   â”‚       â”œâ”€â”€ session/
-â”‚   â”‚   â”‚       â”œâ”€â”€ liveness/
-â”‚   â”‚   â”‚       â”œâ”€â”€ transport/
-â”‚   â”‚   â”‚       â”œâ”€â”€ observability/
-â”‚   â”‚   â”‚       â””â”€â”€ internal/
-â”‚   â”‚   â””â”€â”€ resources/
-â”‚   â””â”€â”€ test/
-â”‚       â”œâ”€â”€ java/
-â”‚       â””â”€â”€ resources/
+â”‚ â”œâ”€â”€ main/
+â”‚ â”‚ â”œâ”€â”€ java/
+â”‚ â”‚ â”‚ â””â”€â”€ <base-package>/
+â”‚ â”‚ â”‚ â”œâ”€â”€ api/
+â”‚ â”‚ â”‚ â”œâ”€â”€ identity/
+â”‚ â”‚ â”‚ â”œâ”€â”€ candidate/
+â”‚ â”‚ â”‚ â”œâ”€â”€ protocol/
+â”‚ â”‚ â”‚ â”œâ”€â”€ session/
+â”‚ â”‚ â”‚ â”œâ”€â”€ liveness/
+â”‚ â”‚ â”‚ â”œâ”€â”€ transport/
+â”‚ â”‚ â”‚ â”œâ”€â”€ observability/
+â”‚ â”‚ â”‚ â””â”€â”€ internal/
+â”‚ â”‚ â””â”€â”€ resources/
+â”‚ â””â”€â”€ test/
+â”‚ â”œâ”€â”€ java/
+â”‚ â””â”€â”€ resources/
 â””â”€â”€ examples/
-    â””â”€â”€ cli/
+â””â”€â”€ cli/
 
 Adapt this only when evidence supports a cleaner structure.
 

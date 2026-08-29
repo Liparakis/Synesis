@@ -49,10 +49,10 @@ diagnostic did not complete end-to-end.
 
 ## Participants, claims, and WorkGroup
 
-| Agent | Session / participant | Intent, epoch, claim |
-|---|---|---|
-| A | `session-bfc0802b-67f3-4900-a2b5-b3d49a75802e` / `agt_c1c6a39f-51ef-3999-a69f-f793e3e622de` | `ddeadea8-c8d8-35de-a33b-0394a8da6a5c`, epoch 1, `PATH_EXACT todo.py` |
-| B | `session-44719a3f-a95b-41f4-84c6-bf5c36357139` / `agt_c831091b-4087-3944-8fe7-6b42c7232698` | `30a3a95e-82aa-328f-a5a0-8a090928f775`, epoch 1, `PATH_EXACT test_todo.py` |
+| Agent | Session / participant                                                                       | Intent, epoch, claim                                                       |
+|-------|---------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|
+| A     | `session-bfc0802b-67f3-4900-a2b5-b3d49a75802e` / `agt_c1c6a39f-51ef-3999-a69f-f793e3e622de` | `ddeadea8-c8d8-35de-a33b-0394a8da6a5c`, epoch 1, `PATH_EXACT todo.py`      |
+| B     | `session-44719a3f-a95b-41f4-84c6-bf5c36357139` / `agt_c831091b-4087-3944-8fe7-6b42c7232698` | `30a3a95e-82aa-328f-a5a0-8a090928f775`, epoch 1, `PATH_EXACT test_todo.py` |
 
 Shared WorkGroup: `1fea1dc1-607e-3168-99df-8e896bf68295`, final status
 `ACTIVE`. The final collaboration status reports both participant lanes as

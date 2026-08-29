@@ -2,7 +2,6 @@ package org.synesis.workspace.lifecycle.reconciliation;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,20 +9,20 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
-import org.synesis.coordination.application.WorkIntentService;
-import org.synesis.coordination.domain.collaboration.CollaborationCodec;
-import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 
 /**
  * Core application service for discovering, planning, and executing crash reconciliation and fenced lane recovery.
@@ -38,84 +37,13 @@ public final class ReconciliationService {
     private final ReconciliationPlanStore planStore;
 
     /**
-     * Diagnostic discovery inspection summary.
-     *
-     * @param projectId               project ID
-     * @param timestamp               discovery timestamp
-     * @param totalSessionsInspected  total inspected session leases
-     * @param activeCount             active sessions count
-     * @param suspectedStaleCount     suspected stale count
-     * @param recoveryEligibleCount recovery eligible count
-     * @param ambiguousCount          ambiguous count
-     * @param recoverableIntegrations recoverable interrupted integrations count
-     * @param executableActionsCount  executable actions count
-     * @param entries                 list of plan entries
-     */
-    public record ReconciliationDiscoverySummary(
-            String projectId,
-            long timestamp,
-            int totalSessionsInspected,
-            int activeCount,
-            int suspectedStaleCount,
-            int recoveryEligibleCount,
-            int ambiguousCount,
-            int recoverableIntegrations,
-            int executableActionsCount,
-            List<ReconciliationPlanEntry> entries
-    ) {
-        /**
-         * Invariant validation.
-         */
-        public ReconciliationDiscoverySummary {
-            Objects.requireNonNull(projectId, "projectId");
-            Objects.requireNonNull(entries, "entries");
-        }
-    }
-
-    /**
-     * Execution summary output.
-     *
-     * @param planId                 plan identifier
-     * @param executionId            execution run identifier
-     * @param actionsRequested       total actions requested
-     * @param completedCount         completed actions count
-     * @param skippedStaleCount      skipped stale count
-     * @param skippedAmbiguousCount  skipped ambiguous count
-     * @param failedCount            failed count
-     * @param controlCheckoutModified {@code true} if control checkout was modified for verified recovery
-     * @param processTerminations    process terminations count (always 0)
-     * @param resultStatus           overall status code
-     * @param records                list of execution records
-     */
-    public record ReconciliationExecutionSummary(
-            String planId,
-            String executionId,
-            int actionsRequested,
-            int completedCount,
-            int skippedStaleCount,
-            int skippedAmbiguousCount,
-            int failedCount,
-            boolean controlCheckoutModified,
-            int processTerminations,
-            String resultStatus,
-            List<ReconciliationExecutionRecord> records
-    ) {
-        /**
-         * Invariant validation.
-         */
-        public ReconciliationExecutionSummary {
-            Objects.requireNonNull(planId, "planId");
-            Objects.requireNonNull(executionId, "executionId");
-            Objects.requireNonNull(resultStatus, "resultStatus");
-            Objects.requireNonNull(records, "records");
-        }
-    }
-
-    /**
      * Creates a reconciliation service with default dependencies.
      */
     public ReconciliationService() {
-        this(new ProjectApplicationService(), new SessionLeaseService(), new SessionLeaseStore(), new ReconciliationPlanStore());
+        this(new ProjectApplicationService(),
+                new SessionLeaseService(),
+                new SessionLeaseStore(),
+                new ReconciliationPlanStore());
     }
 
     /**
@@ -145,17 +73,24 @@ public final class ReconciliationService {
      * @return discovery summary
      * @throws ProjectApplicationService.ProjectApplicationException if project discovery fails
      */
-    public ReconciliationDiscoverySummary discover(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException {
+    public ReconciliationDiscoverySummary discover(Path controlRoot)
+            throws ProjectApplicationService.ProjectApplicationException {
         Objects.requireNonNull(controlRoot, "controlRoot");
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         ProjectApplicationService.ProjectLocation location = projectService.locate(root);
 
         SessionLeasePolicy policy = new SessionLeasePolicy();
         List<SessionLeaseRecord> leases = leaseStore.listAll(root);
         Set<String> knownParticipants;
         try {
-            knownParticipants = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId())
-                    .collaborationProjection().participants().stream().map(org.synesis.coordination.domain.collaboration.Participant::id).collect(java.util.stream.Collectors.toSet());
+            knownParticipants = new PredictionEventStore(location.root()
+                    .resolve(".synesis/coordination"), location.projectId())
+                    .collaborationProjection()
+                    .participants()
+                    .stream()
+                    .map(org.synesis.coordination.domain.collaboration.Participant::id)
+                    .collect(java.util.stream.Collectors.toSet());
         } catch (Exception ignored) {
             knownParticipants = Set.of();
         }
@@ -195,10 +130,13 @@ public final class ReconciliationService {
             }
         }
 
-        int executableCount = (int) entries.stream().filter(ReconciliationPlanEntry::executable).count();
+        int executableCount = (int) entries.stream()
+                .filter(ReconciliationPlanEntry::executable)
+                .count();
 
         return new ReconciliationDiscoverySummary(
-                location.projectId().toString(), System.currentTimeMillis(), leases.size(),
+                location.projectId()
+                        .toString(), System.currentTimeMillis(), leases.size(),
                 activeCount, staleCount, recoveryEligibleCount, ambiguousCount,
                 recoverableIntegrations, executableCount, Collections.unmodifiableList(entries)
         );
@@ -210,11 +148,15 @@ public final class ReconciliationService {
      * @param controlRoot control project root path
      * @return persisted reconciliation plan
      * @throws ProjectApplicationService.ProjectApplicationException if project discovery fails
-     * @throws IOException if plan creation fails
+     * @throws IOException                                           if plan creation fails
      */
-    public ReconciliationPlan preparePlan(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException, IOException {
+    public ReconciliationPlan preparePlan(Path controlRoot)
+            throws ProjectApplicationService.ProjectApplicationException, IOException {
         ReconciliationDiscoverySummary discovery = discover(controlRoot);
-        return planStore.createAndSave(controlRoot, discovery.projectId(), discovery.totalSessionsInspected(), discovery.entries());
+        return planStore.createAndSave(controlRoot,
+                discovery.projectId(),
+                discovery.totalSessionsInspected(),
+                discovery.entries());
     }
 
     /**
@@ -224,7 +166,7 @@ public final class ReconciliationService {
      * @param planId      persisted plan ID
      * @return execution summary
      * @throws ProjectApplicationService.ProjectApplicationException if project discovery fails
-     * @throws IOException if execution fails
+     * @throws IOException                                           if execution fails
      */
     @SuppressWarnings("try")
     public ReconciliationExecutionSummary executePlan(Path controlRoot, String planId)
@@ -232,17 +174,21 @@ public final class ReconciliationService {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(planId, "planId");
 
-        Path root = controlRoot.toAbsolutePath().normalize();
+        Path root = controlRoot.toAbsolutePath()
+                .normalize();
         ProjectApplicationService.ProjectLocation location = projectService.locate(root);
 
-        try (ReconciliationExecutionLock lock = ReconciliationExecutionLock.acquire(root, planId)) {
+        try (var _ = ReconciliationExecutionLock.acquire(root, planId)) {
             ReconciliationPlan plan = planStore.load(root, planId);
 
-            String executionId = "recexec-" + UUID.randomUUID().toString().replace("-", "");
+            String executionId = "recexec-" + UUID.randomUUID()
+                    .toString()
+                    .replace("-", "");
             ReconciliationExecutionJournal journal = new ReconciliationExecutionJournal(root, executionId);
             Set<String> previouslyCompleted = ReconciliationExecutionJournal.loadCompletedActionIds(root, planId);
 
-            Path coordDir = location.root().resolve(".synesis/coordination");
+            Path coordDir = location.root()
+                    .resolve(".synesis/coordination");
             PredictionEventStore store;
             try {
                 store = new PredictionEventStore(coordDir, location.projectId());
@@ -251,13 +197,14 @@ public final class ReconciliationService {
             }
             NodeIdentity identity;
             try {
-                identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+                identity = new IdentityBootstrap(location.profile()
+                        .resolve("link")).loadOrCreate()
+                        .identity();
             } catch (Exception ex) {
                 throw new IOException("Failed to load node identity for reconciliation", ex);
             }
 
             int completedCount = 0;
-            int skippedStaleCount = 0;
             int skippedAmbiguousCount = 0;
             int failedCount = 0;
             boolean controlCheckoutModified = false;
@@ -293,8 +240,11 @@ public final class ReconciliationService {
                     switch (entry.action()) {
                         case MARK_SESSION_SUSPENDED -> {
                             String participant = WorkspaceCollaborationService.participantHandle(entry.targetResourceId());
-                            boolean knownParticipant = store.collaborationProjection().participants().stream()
-                                    .anyMatch(candidate -> candidate.id().equals(participant));
+                            boolean knownParticipant = store.collaborationProjection()
+                                    .participants()
+                                    .stream()
+                                    .anyMatch(candidate -> candidate.id()
+                                            .equals(participant));
                             if (knownParticipant) {
                                 store.append(UUID.nameUUIDFromBytes(participant.getBytes(StandardCharsets.UTF_8)),
                                         PredictionEventType.PARTICIPANT_SUSPENDED, identity.nodeId(),
@@ -310,14 +260,21 @@ public final class ReconciliationService {
                         }
                         case RELEASE_SUSPENDED_OWNERSHIP -> {
                             var coordProj = store.coordinationProjection();
-                            for (var entryOwnership : coordProj.ownerships().entrySet()) {
+                            for (var entryOwnership : coordProj.ownerships()
+                                    .entrySet()) {
                                 var claim = entryOwnership.getValue();
-                                if (entry.targetResourceId().equals(claim.taskId().toString())) {
+                                if (entry.targetResourceId()
+                                        .equals(claim.taskId()
+                                                .toString())) {
                                     org.synesis.coordination.domain.command.CoordinationCommand relCmd = org.synesis.coordination.domain.command.CoordinationCommand.create(
                                             UUID.randomUUID(), store.projectId(), claim.taskId(),
                                             PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(),
                                             claim.encoded(), identity);
-                                    store.append(claim.taskId(), PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(), relCmd.encoded(), identity);
+                                    store.append(claim.taskId(),
+                                            PredictionEventType.OWNERSHIP_RELEASED,
+                                            identity.nodeId(),
+                                            relCmd.encoded(),
+                                            identity);
                                 }
                             }
                             completedCount++;
@@ -331,20 +288,34 @@ public final class ReconciliationService {
                         case HOLD_SUSPENDED_RECOVERY -> {
                             String participant = WorkspaceCollaborationService.participantHandle(entry.targetResourceId());
                             WorkIntentService intentService = new WorkIntentService(store, identity);
-                            RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location,
+                            RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(
+                                    location,
                                     entry.targetResourceId());
-                            intentService.holdRecovery(participant, snapshot.root().toString() + "#" + snapshot.contentHash());
+                            intentService.holdRecovery(participant,
+                                    snapshot.root()
+                                            .toString() + "#" + snapshot.contentHash());
                             store = new PredictionEventStore(coordDir, location.projectId());
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
-                                    executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
-                                    "COMPLETED", "recovery_held", now, "Recovery evidence reserved for authorized continuation");
+                                    executionId,
+                                    planId,
+                                    entry.actionId(),
+                                    entry.action(),
+                                    entry.targetResourceId(),
+                                    "COMPLETED",
+                                    "recovery_held",
+                                    now,
+                                    "Recovery evidence reserved for authorized continuation");
                             journal.append(rec);
                             records.add(rec);
                         }
                         case INVALIDATE_SUSPENDED_DEPENDENCIES -> {
-                            store.append(UUID.randomUUID(), PredictionEventType.DEPENDENCY_INVALIDATED, identity.nodeId(),
-                                    ("dependency_invalidated:" + entry.targetResourceId()).getBytes(StandardCharsets.UTF_8), identity);
+                            store.append(UUID.randomUUID(),
+                                    PredictionEventType.DEPENDENCY_INVALIDATED,
+                                    identity.nodeId(),
+                                    ("dependency_invalidated:"
+                                            + entry.targetResourceId()).getBytes(StandardCharsets.UTF_8),
+                                    identity);
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
@@ -354,8 +325,11 @@ public final class ReconciliationService {
                             records.add(rec);
                         }
                         case FINALIZE_SUSPENDED_SESSION -> {
-                            store.append(UUID.randomUUID(), PredictionEventType.SESSION_FINALIZED, identity.nodeId(),
-                                    ("session_finalized:" + entry.targetResourceId()).getBytes(StandardCharsets.UTF_8), identity);
+                            store.append(UUID.randomUUID(),
+                                    PredictionEventType.SESSION_FINALIZED,
+                                    identity.nodeId(),
+                                    ("session_finalized:" + entry.targetResourceId()).getBytes(StandardCharsets.UTF_8),
+                                    identity);
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
@@ -364,7 +338,8 @@ public final class ReconciliationService {
                             journal.append(rec);
                             records.add(rec);
                         }
-                        case RESUME_VERIFIED_INTEGRATION_ADVANCEMENT, FINALIZE_ALREADY_ADVANCED_INTEGRATION, CLOSE_SUSPENDED_VALIDATION_CONTEXT -> {
+                        case RESUME_VERIFIED_INTEGRATION_ADVANCEMENT, FINALIZE_ALREADY_ADVANCED_INTEGRATION,
+                             CLOSE_SUSPENDED_VALIDATION_CONTEXT -> {
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                                     executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
@@ -385,13 +360,98 @@ public final class ReconciliationService {
                 }
             }
 
-            String resultStatus = failedCount > 0 ? "FAILED_REQUIRES_REVIEW" : (skippedStaleCount > 0 ? "PARTIAL_SUCCESS" : "SUCCESS");
+            String resultStatus = failedCount > 0 ? "FAILED_REQUIRES_REVIEW" : "SUCCESS";
 
             return new ReconciliationExecutionSummary(
-                    planId, executionId, plan.entries().size(), completedCount,
-                    skippedStaleCount, skippedAmbiguousCount, failedCount,
-                    controlCheckoutModified, 0, resultStatus, Collections.unmodifiableList(records)
+                    planId,
+                    executionId,
+                    plan.entries()
+                            .size(),
+                    completedCount,
+                    0,
+                    skippedAmbiguousCount,
+                    failedCount,
+                    controlCheckoutModified,
+                    0,
+                    resultStatus,
+                    Collections.unmodifiableList(records)
             );
+        }
+    }
+
+    /**
+     * Diagnostic discovery inspection summary.
+     *
+     * @param projectId               project ID
+     * @param timestamp               discovery timestamp
+     * @param totalSessionsInspected  total inspected session leases
+     * @param activeCount             active sessions count
+     * @param suspectedStaleCount     suspected stale count
+     * @param recoveryEligibleCount   recovery eligible count
+     * @param ambiguousCount          ambiguous count
+     * @param recoverableIntegrations recoverable interrupted integrations count
+     * @param executableActionsCount  executable actions count
+     * @param entries                 list of plan entries
+     */
+    public record ReconciliationDiscoverySummary(
+            String projectId,
+            long timestamp,
+            int totalSessionsInspected,
+            int activeCount,
+            int suspectedStaleCount,
+            int recoveryEligibleCount,
+            int ambiguousCount,
+            int recoverableIntegrations,
+            int executableActionsCount,
+            List<ReconciliationPlanEntry> entries
+    ) {
+
+        /**
+         * Invariant validation.
+         */
+        public ReconciliationDiscoverySummary {
+            Objects.requireNonNull(projectId, "projectId");
+            Objects.requireNonNull(entries, "entries");
+        }
+    }
+
+    /**
+     * Execution summary output.
+     *
+     * @param planId                  plan identifier
+     * @param executionId             execution run identifier
+     * @param actionsRequested        total actions requested
+     * @param completedCount          completed actions count
+     * @param skippedStaleCount       skipped stale count
+     * @param skippedAmbiguousCount   skipped ambiguous count
+     * @param failedCount             failed count
+     * @param controlCheckoutModified {@code true} if control checkout was modified for verified recovery
+     * @param processTerminations     process terminations count (always 0)
+     * @param resultStatus            overall status code
+     * @param records                 list of execution records
+     */
+    public record ReconciliationExecutionSummary(
+            String planId,
+            String executionId,
+            int actionsRequested,
+            int completedCount,
+            int skippedStaleCount,
+            int skippedAmbiguousCount,
+            int failedCount,
+            boolean controlCheckoutModified,
+            int processTerminations,
+            String resultStatus,
+            List<ReconciliationExecutionRecord> records
+    ) {
+
+        /**
+         * Invariant validation.
+         */
+        public ReconciliationExecutionSummary {
+            Objects.requireNonNull(planId, "planId");
+            Objects.requireNonNull(executionId, "executionId");
+            Objects.requireNonNull(resultStatus, "resultStatus");
+            Objects.requireNonNull(records, "records");
         }
     }
 }

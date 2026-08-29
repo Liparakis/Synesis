@@ -2,7 +2,6 @@ package org.synesis.coordination.collaboration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.UUID;
@@ -16,8 +15,11 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
-/** Verifies grant-bound review decisions and their immutable replay projection. */
+/**
+ * Verifies grant-bound review decisions and their immutable replay projection.
+ */
 final class ReviewValidationPayloadTest {
+
     @Test
     void acceptedDecisionIsBoundToConsumedGrantAndRoundTrips(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
@@ -41,11 +43,13 @@ final class ReviewValidationPayloadTest {
         store.append(grantId, PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(),
                 accepted.encode(), identity);
         assertEquals("ACCEPTED", new PredictionEventStore(temp, project).workGroupProjection()
-                .reviewValidationForGrant(grantId).orElseThrow().result());
+                .reviewValidationForGrant(grantId)
+                .orElseThrow()
+                .result());
     }
 
     @Test
-    void rejectedDecisionRequiresReasonAndPreservesImplementerRoute(@TempDir Path temp) throws Exception {
+    void rejectedDecisionRequiresReasonAndPreservesImplementerRoute() {
         UUID grantId = UUID.randomUUID();
         UUID groupId = UUID.randomUUID();
         UUID intentId = UUID.randomUUID();
@@ -54,7 +58,7 @@ final class ReviewValidationPayloadTest {
                 intentId, "agt-reviewer", 1, taskId, "snap_reject", "rejected", "", "agt-owner"));
         ReviewValidationPayload rejected = new ReviewValidationPayload(grantId, groupId, intentId,
                 "agt-reviewer", 1, taskId, "snap_reject", "rejected", "Todo test failed", "agt-owner");
-        assertTrue(rejected.result().equals("REJECTED"));
+        assertEquals("REJECTED", rejected.result());
         assertEquals("agt-owner", rejected.sourceParticipant());
     }
 }

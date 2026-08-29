@@ -30,7 +30,7 @@ public final class Ed25519Signer {
     private Ed25519Signer(KeyPair pair) {
         this.privateKey = Objects.requireNonNull(pair.getPrivate(), "private key");
         PublicKey key = Objects.requireNonNull(pair.getPublic(), "public key");
-        if (!isEd25519(privateKey.getAlgorithm()) || !isEd25519(key.getAlgorithm())) {
+        if (isUnsupportedAlgorithm(privateKey.getAlgorithm()) || isUnsupportedAlgorithm(key.getAlgorithm())) {
             throw new IllegalArgumentException("only Ed25519 keys are supported");
         }
         this.publicKey = key.getEncoded()
@@ -69,6 +69,7 @@ public final class Ed25519Signer {
      * @return signer retaining private material in memory only
      * @throws GeneralSecurityException if either encoding is invalid
      */
+    @SuppressWarnings("unused")
     public static Ed25519Signer fromEncoded(byte[] publicKeyEncoded, byte[] privateKeyEncoded)
             throws GeneralSecurityException {
         Objects.requireNonNull(publicKeyEncoded, "public key");
@@ -91,7 +92,7 @@ public final class Ed25519Signer {
      */
     public static Ed25519Signer from(NodeIdentity identity) {
         Objects.requireNonNull(identity, "identity");
-        return new Ed25519Signer(identity.publicKeyEncoded(), identity.nodeId(), message -> identity.sign(message));
+        return new Ed25519Signer(identity.publicKeyEncoded(), identity.nodeId(), identity::sign);
     }
 
     private static byte[] signWithKey(PrivateKey key, byte[] message) throws GeneralSecurityException {
@@ -138,8 +139,8 @@ public final class Ed25519Signer {
                 .formatHex(digest);
     }
 
-    private static boolean isEd25519(String algorithm) {
-        return ALGORITHM.equals(algorithm) || "EdDSA".equals(algorithm);
+    private static boolean isUnsupportedAlgorithm(String algorithm) {
+        return !ALGORITHM.equals(algorithm) && !"EdDSA".equals(algorithm);
     }
 
     /**

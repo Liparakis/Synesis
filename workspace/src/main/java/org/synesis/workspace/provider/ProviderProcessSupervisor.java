@@ -27,78 +27,21 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
     private final Map<String, Object> laneLocks = new ConcurrentHashMap<>();
     private final AtomicLong generations = new AtomicLong();
 
-    private record Registration(Process process, String provider, long generation) {
-    }
-
-    /** Immutable provider process launch request.
-     * @param laneId isolated lane identifier
-     * @param provider provider identifier
-     * @param worktree isolated provider worktree
-     * @param command direct executable argv
+    /**
+     * Creates an empty process supervisor.
      */
-    public record StartRequest(String laneId, String provider, Path worktree, List<String> command) {
-        /** Validates and freezes the launch request. */
-        public StartRequest {
-            Objects.requireNonNull(laneId, "laneId");
-            Objects.requireNonNull(provider, "provider");
-            Objects.requireNonNull(worktree, "worktree");
-            command = List.copyOf(Objects.requireNonNull(command, "command"));
-            if (laneId.isBlank() || provider.isBlank() || command.isEmpty()
-                    || command.getFirst().isBlank()) {
-                throw new IllegalArgumentException("provider launch request is incomplete");
-            }
-        }
-    }
-
-    /** Immutable process launch result.
-     * @param laneId lane identifier
-     * @param provider provider identifier
-     * @param pid operating-system process ID
-     * @param generation monotonic lane process generation
-     * @param started whether the process started
-     */
-    public record StartResult(String laneId, String provider, long pid, long generation, boolean started) {
-    }
-
-    /** Immutable request for starting a continuation in a new lane.
-     * @param sourceLaneId suspended source lane
-     * @param target new lane launch request
-     */
-    public record ContinuationRequest(String sourceLaneId, StartRequest target) {
-        /** Validates the source and target lane relationship. */
-        public ContinuationRequest {
-            Objects.requireNonNull(sourceLaneId, "sourceLaneId");
-            Objects.requireNonNull(target, "target");
-            if (sourceLaneId.isBlank() || sourceLaneId.equals(target.laneId())) {
-                throw new IllegalArgumentException("continuation requires a distinct target lane");
-            }
-        }
-    }
-
-    /** Immutable process observation.
-     * @param laneId lane identifier
-     * @param provider provider identifier
-     * @param state observed process state
-     * @param pid operating-system process ID
-     * @param exitCode process exit code when exited
-     * @param generation monotonic lane process generation
-     */
-    public record Observation(String laneId, String provider, State state, long pid, Integer exitCode,
-            long generation) {
-    }
-
-    /** Provider process states visible to the coordinator. */
-    public enum State {
-        /** Process is currently running. */
-        RUNNING,
-        /** Process exited and its exit status is available. */
-        EXITED,
-        /** No process is registered for the lane. */
-        NOT_FOUND
-    }
-
-    /** Creates an empty process supervisor. */
     public ProviderProcessSupervisor() {
+    }
+
+    private static void rejectShellWrapper(List<String> command) {
+        String executable = Path.of(command.getFirst())
+                .getFileName()
+                .toString()
+                .toLowerCase(java.util.Locale.ROOT);
+        if (List.of("cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh", "sh", "bash", "zsh")
+                .contains(executable)) {
+            throw new IllegalArgumentException("PROVIDER_COMMAND_MUST_NOT_USE_SHELL_WRAPPER");
+        }
     }
 
     /**
@@ -110,7 +53,9 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
      */
     public StartResult start(StartRequest request) throws IOException {
         Objects.requireNonNull(request, "request");
-        Path worktree = request.worktree().toAbsolutePath().normalize();
+        Path worktree = request.worktree()
+                .toAbsolutePath()
+                .normalize();
         if (!Files.isDirectory(worktree)) {
             throw new IOException("PROVIDER_WORKTREE_NOT_FOUND");
         }
@@ -118,7 +63,8 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
         Object laneLock = laneLocks.computeIfAbsent(request.laneId(), ignored -> new Object());
         synchronized (laneLock) {
             Registration prior = processes.get(request.laneId());
-            if (prior != null && prior.process().isAlive()) {
+            if (prior != null && prior.process()
+                    .isAlive()) {
                 throw new IOException("PROVIDER_LANE_ALREADY_RUNNING");
             }
             Process process = new ProcessBuilder(new ArrayList<>(request.command()))
@@ -135,9 +81,9 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
      * Starts a provider using its declared noninteractive driver capability.
      *
      * @param integration provider integration
-     * @param laneId isolated lane identifier
-     * @param worktree isolated lane worktree
-     * @param prompt initial task prompt
+     * @param laneId      isolated lane identifier
+     * @param worktree    isolated lane worktree
+     * @param prompt      initial task prompt
      * @return launch result
      * @throws IOException when the provider is unsupported or cannot start
      */
@@ -152,7 +98,7 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
     /**
      * Observes a lane process without changing it.
      *
-     * @param laneId lane identifier
+     * @param laneId   lane identifier
      * @param provider provider identifier
      * @return current process observation
      */
@@ -179,7 +125,7 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
      * does not infer abandonment, release claims, or alter signed state; the
      * caller must route the observation through lease and recovery policy.
      *
-     * @param laneId lane identifier
+     * @param laneId   lane identifier
      * @param provider provider identifier used in the observation
      * @param callback callback invoked after process exit
      * @throws IOException when no process is registered for the lane
@@ -192,9 +138,17 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
         if (registration == null) {
             throw new IOException("PROVIDER_LANE_NOT_FOUND");
         }
-        registration.process().onExit().thenAccept(ignored -> callback.accept(new Observation(
-                laneId, registration.provider(), State.EXITED, registration.process().pid(),
-                registration.process().exitValue(), registration.generation())));
+        registration.process()
+                .onExit()
+                .thenAccept(ignored -> callback.accept(new Observation(
+                        laneId,
+                        registration.provider(),
+                        State.EXITED,
+                        registration.process()
+                                .pid(),
+                        registration.process()
+                                .exitValue(),
+                        registration.generation())));
     }
 
     /**
@@ -216,7 +170,7 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
     /**
      * Requests an interrupt and waits for bounded clean shutdown.
      *
-     * @param laneId lane identifier
+     * @param laneId  lane identifier
      * @param timeout maximum wait duration
      * @return observation after the request
      * @throws InterruptedException if the caller is interrupted
@@ -225,9 +179,12 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
         Objects.requireNonNull(laneId, "laneId");
         Objects.requireNonNull(timeout, "timeout");
         Registration registration = processes.get(laneId);
-        if (registration != null && registration.process().isAlive()) {
-            registration.process().destroy();
-            registration.process().waitFor(Math.max(0L, timeout.toMillis()), java.util.concurrent.TimeUnit.MILLISECONDS);
+        if (registration != null && registration.process()
+                .isAlive()) {
+            registration.process()
+                    .destroy();
+            registration.process()
+                    .waitFor(Math.max(0L, timeout.toMillis()), java.util.concurrent.TimeUnit.MILLISECONDS);
         }
         return observe(laneId, "unknown");
     }
@@ -242,12 +199,16 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
     public Observation close(String laneId) {
         Objects.requireNonNull(laneId, "laneId");
         Registration registration = processes.get(laneId);
-        if (registration != null && registration.process().isAlive()) {
-            registration.process().destroyForcibly();
+        if (registration != null && registration.process()
+                .isAlive()) {
+            registration.process()
+                    .destroyForcibly();
             try {
-                registration.process().waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+                registration.process()
+                        .waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
             } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                        .interrupt();
             }
         }
         return observe(laneId, "unknown");
@@ -273,7 +234,9 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
         return registration == null ? -1L : registration.generation();
     }
 
-    /** Stops all supervised processes without touching collaboration state. */
+    /**
+     * Stops all supervised processes without touching collaboration state.
+     */
     @Override
     public void close() {
         for (String laneId : List.copyOf(processes.keySet())) {
@@ -282,11 +245,99 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
         laneLocks.clear();
     }
 
-    private static void rejectShellWrapper(List<String> command) {
-        String executable = Path.of(command.getFirst()).getFileName().toString().toLowerCase(java.util.Locale.ROOT);
-        if (List.of("cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh", "sh", "bash", "zsh")
-                .contains(executable)) {
-            throw new IllegalArgumentException("PROVIDER_COMMAND_MUST_NOT_USE_SHELL_WRAPPER");
+    /**
+     * Provider process states visible to the coordinator.
+     */
+    public enum State {
+        /**
+         * Process is currently running.
+         */
+        RUNNING,
+        /**
+         * Process exited and its exit status is available.
+         */
+        EXITED,
+        /**
+         * No process is registered for the lane.
+         */
+        NOT_FOUND
+    }
+
+    private record Registration(Process process, String provider, long generation) {
+
+    }
+
+    /**
+     * Immutable provider process launch request.
+     *
+     * @param laneId   isolated lane identifier
+     * @param provider provider identifier
+     * @param worktree isolated provider worktree
+     * @param command  direct executable argv
+     */
+    public record StartRequest(String laneId, String provider, Path worktree, List<String> command) {
+
+        /**
+         * Validates and freezes the launch request.
+         */
+        public StartRequest {
+            Objects.requireNonNull(laneId, "laneId");
+            Objects.requireNonNull(provider, "provider");
+            Objects.requireNonNull(worktree, "worktree");
+            command = List.copyOf(Objects.requireNonNull(command, "command"));
+            if (laneId.isBlank() || provider.isBlank() || command.isEmpty()
+                    || command.getFirst()
+                    .isBlank()) {
+                throw new IllegalArgumentException("provider launch request is incomplete");
+            }
         }
+    }
+
+    /**
+     * Immutable process launch result.
+     *
+     * @param laneId     lane identifier
+     * @param provider   provider identifier
+     * @param pid        operating-system process ID
+     * @param generation monotonic lane process generation
+     * @param started    whether the process started
+     */
+    public record StartResult(String laneId, String provider, long pid, long generation, boolean started) {
+
+    }
+
+    /**
+     * Immutable request for starting a continuation in a new lane.
+     *
+     * @param sourceLaneId suspended source lane
+     * @param target       new lane launch request
+     */
+    public record ContinuationRequest(String sourceLaneId, StartRequest target) {
+
+        /**
+         * Validates the source and target lane relationship.
+         */
+        public ContinuationRequest {
+            Objects.requireNonNull(sourceLaneId, "sourceLaneId");
+            Objects.requireNonNull(target, "target");
+            if (sourceLaneId.isBlank() || sourceLaneId.equals(target.laneId())) {
+                throw new IllegalArgumentException("continuation requires a distinct target lane");
+            }
+        }
+    }
+
+    /**
+     * Immutable process observation.
+     *
+     * @param laneId     lane identifier
+     * @param provider   provider identifier
+     * @param state      observed process state
+     * @param pid        operating-system process ID
+     * @param exitCode   process exit code when exited
+     * @param generation monotonic lane process generation
+     */
+    public record Observation(String laneId, String provider, State state, long pid, Integer exitCode,
+                              long generation) {
+
     }
 }

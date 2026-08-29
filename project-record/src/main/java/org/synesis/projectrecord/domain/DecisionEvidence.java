@@ -7,6 +7,7 @@ import java.util.Objects;
 /**
  * Immutable bounded evidence reference included in a decision signature.
  */
+@SuppressWarnings("ClassCanBeRecord")
 public final class DecisionEvidence {
 
     static final int MAX_KIND_BYTES = 64;

@@ -22,7 +22,7 @@ public record ConnectionPolicy(int maxCandidatePairs, int maxAttempts, int maxCo
      * Validates race limits and ordered timeouts.
      */
     public ConnectionPolicy {
-        if (maxCandidatePairs < 1 || maxAttempts < 1 || maxConcurrentAttempts < 1 || maxDiagnostics < 1
+        if (maxConcurrentAttempts < 1 || maxDiagnostics < 1
                 || maxConcurrentAttempts > maxAttempts || maxAttempts > maxCandidatePairs
                 || staggerDelay.isNegative() || perAttemptTimeout.isZero() || perAttemptTimeout.isNegative()
                 || globalRaceTimeout.compareTo(perAttemptTimeout) < 0 || loserCleanupTimeout.isNegative()) {

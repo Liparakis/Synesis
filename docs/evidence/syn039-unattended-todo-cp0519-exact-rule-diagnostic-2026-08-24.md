@@ -48,10 +48,10 @@ did not complete end-to-end.
 
 ## Participants, claims, and WorkGroup
 
-| Agent | Session worktree | Participant | Intent / epoch / claim |
-|---|---|---|---|
-| A | `...\\worktrees\\session-8eaea2d6-d593-41c3-ae64-1fb525caa03b` | `agt_211a8de1-ba38-3f24-bf2f-d20bc031cc34` | `e3e82daa-c076-36c0-b008-16c0973c5c9c`, epoch 1, `PATH_EXACT todo.py` |
-| B | `...\\worktrees\\session-a1ead3db-6f49-4fd3-926c-e024bcbb8270` | `agt_8c918cd1-7c1c-3e77-9d0a-a527e1ffa677` | `48db986d-d194-3ce8-8ab1-496ef7bbdb12`, epoch 1, `PATH_EXACT test_todo.py` |
+| Agent | Session worktree                                               | Participant                                | Intent / epoch / claim                                                     |
+|-------|----------------------------------------------------------------|--------------------------------------------|----------------------------------------------------------------------------|
+| A     | `...\\worktrees\\session-8eaea2d6-d593-41c3-ae64-1fb525caa03b` | `agt_211a8de1-ba38-3f24-bf2f-d20bc031cc34` | `e3e82daa-c076-36c0-b008-16c0973c5c9c`, epoch 1, `PATH_EXACT todo.py`      |
+| B     | `...\\worktrees\\session-a1ead3db-6f49-4fd3-926c-e024bcbb8270` | `agt_8c918cd1-7c1c-3e77-9d0a-a527e1ffa677` | `48db986d-d194-3ce8-8ab1-496ef7bbdb12`, epoch 1, `PATH_EXACT test_todo.py` |
 
 Shared WorkGroup: `663cee3b-cdf3-3bf8-91cb-7e8ddcc575bf`, terminal state
 `ACTIVE`.
@@ -93,12 +93,12 @@ Shared WorkGroup: `663cee3b-cdf3-3bf8-91cb-7e8ddcc575bf`, terminal state
    `finish_lane({"summary":"Publish the completed immutable snapshot"})`.
    A executed it successfully. The result was:
 
-   - snapshot: `snap_48423ea02f57776f0064595b971197ab`
-   - snapshot state: `PUBLISHED`
-   - lane: `e3e82daa-c076-36c0-b008-16c0973c5c9c`
-   - claim epoch: `1`
-   - integration state: `integrated`
-   - integrated commit: `2563b0cbfaf593ccaf2a395b64b003692f320411`
+    - snapshot: `snap_48423ea02f57776f0064595b971197ab`
+    - snapshot state: `PUBLISHED`
+    - lane: `e3e82daa-c076-36c0-b008-16c0973c5c9c`
+    - claim epoch: `1`
+    - integration state: `integrated`
+    - integrated commit: `2563b0cbfaf593ccaf2a395b64b003692f320411`
 
 7. B received the structured review decision projection and executed:
 

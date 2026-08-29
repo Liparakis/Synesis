@@ -1,6 +1,7 @@
 package org.synesis.link.candidate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -26,10 +27,10 @@ final class CandidateNormalizationTest {
 
         assertEquals(1, normalized.size());
         assertEquals(5,
-                normalized.get(0)
+                normalized.getFirst()
                         .priority());
         assertEquals(4,
-                normalized.get(0)
+                normalized.getFirst()
                         .address()
                         .getAddress().length);
     }
@@ -54,10 +55,10 @@ final class CandidateNormalizationTest {
         List<CandidatePair> pairs = CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8);
 
         assertEquals(1, pairs.size());
-        assertTrue(pairs.get(0)
+        assertTrue(pairs.getFirst()
                 .identifier()
                 .startsWith("LAN/MANUAL/h"));
-        assertTrue(!pairs.get(0)
+        assertFalse(pairs.getFirst()
                 .identifier()
                 .contains("192.0.2.1"));
         assertEquals(pairs, CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8));

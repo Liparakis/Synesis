@@ -1,23 +1,20 @@
 package org.synesis.workspace.application.agent;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-
-import org.synesis.workspace.application.ProjectApplicationService;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.synesis.workspace.agent.AgentResponse;
-
-import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
-import org.synesis.coordination.domain.collaboration.ResourceSelector;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 class TaskCancellationTest {
 
@@ -42,8 +39,14 @@ class TaskCancellationTest {
         var location = projectService.locate(projectRoot);
         bindingService.ensure(location, "codex", "conn-cancel");
         var bindings = bindingService.list(location, "codex");
-        if (!bindings.isEmpty() && bindings.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "codex", bindings.getLast().sessionId(), Path.of(bindings.getLast().worktreePath()));
+        if (!bindings.isEmpty() && bindings.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "codex",
+                    bindings.getLast()
+                            .sessionId(),
+                    Path.of(bindings.getLast()
+                            .worktreePath()));
         }
 
         AgentSessionService sessionService = new AgentSessionService();
@@ -54,7 +57,8 @@ class TaskCancellationTest {
         assertEquals(AgentStatus.READY, sessionResp.status());
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         assertTrue(collaboration.announce(projectRoot, "codex", "conn-cancel", "cancel lane", "release",
-                List.of(ResourceSelector.pathExact("src/cancelled.py"))).acquired());
+                        List.of(ResourceSelector.pathExact("src/cancelled.py")))
+                .acquired());
 
         AgentTaskCancellationService cancelService = new AgentTaskCancellationService();
         AgentTaskCancellationService.CancelTaskRequest cancelReq = new AgentTaskCancellationService.CancelTaskRequest(
@@ -64,9 +68,12 @@ class TaskCancellationTest {
         AgentResponse cancelResp = cancelService.cancelTask(cancelReq);
         assertEquals(AgentStatus.COMPLETED, cancelResp.status());
         assertNotNull(cancelResp.result());
-        assertTrue(collaboration.status(projectRoot).intents().stream()
-                .noneMatch(intent -> intent.participant().equals(
-                        WorkspaceCollaborationService.participantHandle("conn-cancel"))));
+        assertTrue(collaboration.status(projectRoot)
+                .intents()
+                .stream()
+                .noneMatch(intent -> intent.participant()
+                        .equals(
+                                WorkspaceCollaborationService.participantHandle("conn-cancel"))));
 
         // Repeated cancellation must be idempotent
         AgentResponse repeatResp = cancelService.cancelTask(cancelReq);

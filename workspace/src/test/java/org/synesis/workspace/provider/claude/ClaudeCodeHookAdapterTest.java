@@ -12,11 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.DecisionRecord;
-import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
-import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
+import org.synesis.projectrecord.persistence.DecisionStore;
+import org.synesis.projectrecord.security.Ed25519Signer;
 
 final class ClaudeCodeHookAdapterTest {
 
@@ -38,6 +37,7 @@ final class ClaudeCodeHookAdapterTest {
     }
 
     @Test
+    @SuppressWarnings("ExtractMethodRecommender")
     void blocksEditOnConstrainedScopeWithOfficialPreToolUseContract() throws Exception {
         Path tempDir = Files.createTempDirectory("hook-test-official-");
         try {
@@ -118,7 +118,7 @@ final class ClaudeCodeHookAdapterTest {
     }
 
     @Test
-    void absoluteToRelativePathResolutionAndBoundaryRejection() throws Exception {
+    void absoluteToRelativePathResolutionAndBoundaryRejection() {
         Path root = Path.of(System.getProperty("java.io.tmpdir"), "synesis-demo")
                 .toAbsolutePath();
         Path inside = root.resolve("src/protocol/RecordMessage.java");
@@ -139,7 +139,7 @@ final class ClaudeCodeHookAdapterTest {
     }
 
     @Test
-    void supersessionExcludesSupersededConstraintFromActionCheck() throws Exception {
+    void supersessionExcludesSupersededConstraintFromActionCheck() {
         UUID idA = UUID.randomUUID();
         UUID idB = UUID.randomUUID();
 
@@ -154,10 +154,10 @@ final class ClaudeCodeHookAdapterTest {
         List<ProjectConstraint> effective = ProjectConstraint.filterEffectiveActive(List.of(constraintA, constraintB));
         assertEquals(1, effective.size());
         assertEquals(idB,
-                effective.get(0)
+                effective.getFirst()
                         .recordId());
         assertEquals(ProjectConstraint.Effect.WARN,
-                effective.get(0)
+                effective.getFirst()
                         .effect());
     }
 }

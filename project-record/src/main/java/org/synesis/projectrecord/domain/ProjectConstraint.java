@@ -17,6 +17,7 @@ import org.synesis.projectrecord.security.Ed25519Signer;
  *
  * @since 1.0
  */
+@SuppressWarnings("ClassCanBeRecord")
 public final class ProjectConstraint {
 
     private final UUID recordId;
@@ -26,6 +27,7 @@ public final class ProjectConstraint {
     private final Effect effect;
     private final List<String> scopes;
     private final List<UUID> supersedes;
+
     /**
      * Constructs a typed project constraint domain model.
      *

@@ -201,58 +201,94 @@ public enum DoctorFindingCode {
      */
     PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED("provider_config_duplicate_entry"),
 
-    /** Provider configuration requires a prepared migration. */
+    /**
+     * Provider configuration requires a prepared migration.
+     */
     PROVIDER_MIGRATION_REQUIRED("provider_migration_required"),
 
-    /** Provider configuration schema is unsupported. */
+    /**
+     * Provider configuration schema is unsupported.
+     */
     PROVIDER_CONFIG_UNSUPPORTED_SCHEMA("provider_config_unsupported_schema"),
 
-    /** Provider migration metadata is incomplete or missing. */
+    /**
+     * Provider migration metadata is incomplete or missing.
+     */
     PROVIDER_MIGRATION_METADATA_MISSING("provider_migration_metadata_missing"),
 
-    /** Project metadata requires a prepared migration. */
+    /**
+     * Project metadata requires a prepared migration.
+     */
     PROJECT_MIGRATION_REQUIRED("project_migration_required"),
 
-    /** Project schema is newer or otherwise unsupported. */
+    /**
+     * Project schema is newer or otherwise unsupported.
+     */
     PROJECT_SCHEMA_UNSUPPORTED("project_schema_unsupported"),
 
-    /** A migration journal or backup is incomplete. */
+    /**
+     * A migration journal or backup is incomplete.
+     */
     MIGRATION_STATE_INCOMPLETE("migration_state_incomplete"),
 
-    /** Update transaction has not reached a terminal state. */
+    /**
+     * Update transaction has not reached a terminal state.
+     */
     UPDATE_TRANSACTION_INCOMPLETE("update_transaction_incomplete"),
 
-    /** Replay verification failed after migration. */
+    /**
+     * Replay verification failed after migration.
+     */
     POST_MIGRATION_REPLAY_FAILED("post_migration_replay_failed"),
 
-    /** Migration backup or journal evidence is missing or corrupt. */
+    /**
+     * Migration backup or journal evidence is missing or corrupt.
+     */
     MIGRATION_BACKUP_MISSING("migration_backup_missing"),
 
-    /** An active session blocks project migration. */
+    /**
+     * An active session blocks project migration.
+     */
     ACTIVE_SESSION_BLOCKS_MIGRATION("active_session_blocks_project_migration"),
 
-    /** Project metadata restoration is pending or incomplete. */
+    /**
+     * Project metadata restoration is pending or incomplete.
+     */
     PROJECT_RESTORATION_PENDING("project_restoration_pending"),
 
-    /** Project metadata restoration failed and needs review. */
+    /**
+     * Project metadata restoration failed and needs review.
+     */
     PROJECT_RESTORATION_REQUIRES_REVIEW("project_restoration_requires_human_review"),
 
-    /** A failed migration was restored successfully. */
+    /**
+     * A failed migration was restored successfully.
+     */
     PROJECT_MIGRATION_RESTORED("project_migration_restored"),
 
-    /** Rollback restoration did not reach a verified terminal state. */
+    /**
+     * Rollback restoration did not reach a verified terminal state.
+     */
     ROLLBACK_RESTORATION_INCOMPLETE("rollback_restoration_incomplete"),
 
-    /** Durable command namespace contains unsupported or corrupt state. */
+    /**
+     * Durable command namespace contains unsupported or corrupt state.
+     */
     COMMAND_NAMESPACE_UNSAFE("command_namespace_unsafe"),
 
-    /** Durable command namespace requires migration or reconciliation. */
+    /**
+     * Durable command namespace requires migration or reconciliation.
+     */
     COMMAND_NAMESPACE_RECONCILIATION_REQUIRED("command_namespace_reconciliation_required"),
 
-    /** Durable command capacity or retention requires operator action. */
+    /**
+     * Durable command capacity or retention requires operator action.
+     */
     COMMAND_CAPACITY_OR_RETENTION("command_capacity_or_retention"),
 
-    /** Durable command admission observed a lease-gap or deferred mutation. */
+    /**
+     * Durable command admission observed a lease-gap or deferred mutation.
+     */
     COMMAND_ADMISSION_DEFERRED("command_admission_deferred");
 
     private final String value;

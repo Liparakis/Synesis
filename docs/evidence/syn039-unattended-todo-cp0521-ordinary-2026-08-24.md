@@ -25,7 +25,8 @@ not a proven production defect.
 - Seed commit: `0794246`
 - Final control checkout: `280d15d` (`Synesis immutable lane snapshot`)
 - Control checkout: clean
-- MCP executable: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
+- MCP executable:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64\bin\synesis-mcp.exe`
 - MCP SHA-256: `D7B8C0E533674C2BDA891FC60F2B013923A731838C1F0601EBC4E5AD3F11360C`
 - MCP startup version/commit: `0.1.0-SNAPSHOT` / `bc334ac`
 - Agent A connection: `conn-instance-fe3e744c-a60b-4332-b37f-16e3289bab43`
@@ -33,10 +34,10 @@ not a proven production defect.
 
 ## Participants and claims
 
-| Agent | Participant / intent | Claim and session worktree | Final state |
-|---|---|---|---|
-| A | `agt_f63934bf-e66c-335b-acf2-d9971f6cbda5` / `af6dc944-f448-3334-a90b-2378d41fcdf2` | epoch 1, `PATH_EXACT todo.py`, `session-83c55a2d-91c8-42e3-9946-c32d1b26e7bf` | COMPLETED |
-| B | `agt_7a893393-1bc6-35a9-bea1-0c525b1065bd` / `c2cf7424-99d4-3956-b61e-dff2a0793086` | epoch 1, `PATH_EXACT test_todo.py`, recovered worktree `session-17a29508-bd25-4fcb-bbb5-c6f6873aa47e-recovery-335bf0fb-d7f3-48d3-844b-03c8086ab451` | ACTIVE |
+| Agent | Participant / intent                                                                | Claim and session worktree                                                                                                                          | Final state |
+|-------|-------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| A     | `agt_f63934bf-e66c-335b-acf2-d9971f6cbda5` / `af6dc944-f448-3334-a90b-2378d41fcdf2` | epoch 1, `PATH_EXACT todo.py`, `session-83c55a2d-91c8-42e3-9946-c32d1b26e7bf`                                                                       | COMPLETED   |
+| B     | `agt_7a893393-1bc6-35a9-bea1-0c525b1065bd` / `c2cf7424-99d4-3956-b61e-dff2a0793086` | epoch 1, `PATH_EXACT test_todo.py`, recovered worktree `session-17a29508-bd25-4fcb-bbb5-c6f6873aa47e-recovery-335bf0fb-d7f3-48d3-844b-03c8086ab451` | ACTIVE      |
 
 Shared WorkGroup: `76687622-dc98-331d-946a-29b3ada29382`, `ACTIVE`.
 

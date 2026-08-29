@@ -42,8 +42,8 @@ diagnostic did not complete end to end.
   `mcp --provider codex --project <fixture-root>`.
 - Both sessions returned `ready` / `isolated` from `ensure_session` with
   distinct assigned worktrees:
-  - A: `...\worktrees\session-da28873b-b1df-4669-a360-bef6f4839a20`
-  - B: `...\worktrees\session-4076204d-548b-4451-99f8-7fc61952f5eb`
+    - A: `...\worktrees\session-da28873b-b1df-4669-a360-bef6f4839a20`
+    - B: `...\worktrees\session-4076204d-548b-4451-99f8-7fc61952f5eb`
 
 The repository contract and current bundle expose the ten-tool MCP boundary;
 the agent JSONL did not independently enumerate the catalog during this run.
@@ -164,7 +164,8 @@ separately classified.
 
 Passed:
 
-- `gradlew.bat :workspace:test --tests org.synesis.workspace.agent.AgentWorkflowReducerTest --tests org.synesis.workspace.Syn037CompletionValidationTest :mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest --no-daemon --max-workers=1 --console=plain`
+-
+`gradlew.bat :workspace:test --tests org.synesis.workspace.agent.AgentWorkflowReducerTest --tests org.synesis.workspace.Syn037CompletionValidationTest :mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest --no-daemon --max-workers=1 --console=plain`
 - `gradlew.bat :workspace:javadoc :mcp:javadoc :coordination:javadoc --no-daemon --max-workers=1 --console=plain`
 - `scripts/agent-validate-deferred.ps1`
 - `scripts/agent-validate-fixtures.ps1`

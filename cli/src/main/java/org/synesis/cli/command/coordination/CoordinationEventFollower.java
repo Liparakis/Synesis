@@ -8,9 +8,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
-import org.synesis.coordination.transport.http.CoordinationHttpClient;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.transport.http.CoordinationHttpClient;
 
 /**
  * Shared durable-cursor SSE follower for supervisor and events commands.
@@ -20,13 +19,16 @@ public final class CoordinationEventFollower {
     private CoordinationEventFollower() {
     }
 
-    /** Follows the coordination event stream for the requested duration.
-     * @param endpoint coordination HTTP endpoint
-     * @param cursorPath durable cursor path
+    /**
+     * Follows the coordination event stream for the requested duration.
+     *
+     * @param endpoint        coordination HTTP endpoint
+     * @param cursorPath      durable cursor path
      * @param durationSeconds maximum follow duration
-     * @param consumer event consumer
+     * @param consumer        event consumer
      * @throws Exception if following fails
      */
+    @SuppressWarnings("ExtractMethodRecommender")
     public static void follow(URI endpoint,
             Path cursorPath,
             int durationSeconds,
@@ -76,7 +78,9 @@ public final class CoordinationEventFollower {
         }
     }
 
-    /** Reads a durable event cursor, defaulting to zero when absent.
+    /**
+     * Reads a durable event cursor, defaulting to zero when absent.
+     *
      * @param path durable cursor path
      * @return cursor sequence
      * @throws Exception if the cursor cannot be read

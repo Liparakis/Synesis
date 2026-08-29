@@ -42,10 +42,14 @@ public enum AgentReason {
      */
     WORKSPACE_STALE("workspace_stale"),
 
-    /** The agent is operating from the control checkout instead of its assigned worktree. */
+    /**
+     * The agent is operating from the control checkout instead of its assigned worktree.
+     */
     WORKSPACE_MISMATCH("workspace_mismatch"),
 
-    /** The complete Git tree fails the declared cross-platform portability policy. */
+    /**
+     * The complete Git tree fails the declared cross-platform portability policy.
+     */
     REPOSITORY_NOT_PORTABLE("repository_not_portable"),
 
     /**
@@ -53,16 +57,24 @@ public enum AgentReason {
      */
     PATCH_PRECONDITION_REQUIRED("patch_precondition_required"),
 
-    /** Target file content differs from the revision supplied by the agent. */
+    /**
+     * Target file content differs from the revision supplied by the agent.
+     */
     FILE_REVISION_STALE("file_revision_stale"),
 
-    /** The requested edit context no longer applies to the target file. */
+    /**
+     * The requested edit context no longer applies to the target file.
+     */
     PATCH_CONTEXT_MISMATCH("patch_context_mismatch"),
 
-    /** The assigned worker generation changed and must be re-established. */
+    /**
+     * The assigned worker generation changed and must be re-established.
+     */
     WORKSPACE_GENERATION_CHANGED("workspace_generation_changed"),
 
-    /** Mutation of a mixed-line-ending file requires explicit review. */
+    /**
+     * Mutation of a mixed-line-ending file requires explicit review.
+     */
     MIXED_LINE_ENDINGS_REQUIRES_REVIEW("mixed_line_endings_require_review"),
 
     /**
@@ -75,7 +87,9 @@ public enum AgentReason {
      */
     INTERCEPTION_REQUIRED("interception_required"),
 
-    /** Provider configuration ownership is tracked, malformed, or ambiguous. */
+    /**
+     * Provider configuration ownership is tracked, malformed, or ambiguous.
+     */
     PROVIDER_CONFIGURATION_CONFLICT("provider_configuration_conflict"),
 
     /**
@@ -98,37 +112,59 @@ public enum AgentReason {
      */
     COMMAND_TIMEOUT("command_timeout"),
 
-    /** The configured command executable could not be found. */
+    /**
+     * The configured command executable could not be found.
+     */
     COMMAND_EXECUTABLE_NOT_FOUND("command_executable_not_found"),
 
-    /** The configured command working directory failed lane policy. */
+    /**
+     * The configured command working directory failed lane policy.
+     */
     COMMAND_WORKING_DIRECTORY_INVALID("command_working_directory_invalid"),
 
-    /** The configured command could not be started because of permissions. */
+    /**
+     * The configured command could not be started because of permissions.
+     */
     COMMAND_PERMISSION_DENIED("command_permission_denied"),
 
-    /** The configured command could not be started for another concrete reason. */
+    /**
+     * The configured command could not be started for another concrete reason.
+     */
     COMMAND_START_FAILED("command_start_failed"),
 
-    /** The command caller cancelled execution. */
+    /**
+     * The command caller cancelled execution.
+     */
     COMMAND_CANCELLED("command_cancelled"),
 
-    /** The command process tree terminated before normal completion. */
+    /**
+     * The command process tree terminated before normal completion.
+     */
     COMMAND_TERMINATED("command_terminated"),
 
-    /** A repeated typed request carried a different semantic digest. */
+    /**
+     * A repeated typed request carried a different semantic digest.
+     */
     COMMAND_IDEMPOTENCY_CONFLICT("command_idempotency_conflict"),
 
-    /** A durable command remains unresolved and blocks a new launch. */
+    /**
+     * A durable command remains unresolved and blocks a new launch.
+     */
     COMMAND_AMBIGUOUS("command_ambiguous"),
 
-    /** The live process anchor has reached its bounded request-ID capacity. */
+    /**
+     * The live process anchor has reached its bounded request-ID capacity.
+     */
     COMMAND_CAPACITY_EXCEEDED("command_capacity_exceeded"),
 
-    /** Durable command state uses an unsupported or corrupt format. */
+    /**
+     * Durable command state uses an unsupported or corrupt format.
+     */
     COMMAND_FORMAT_UNSUPPORTED("command_format_unsupported"),
 
-    /** Authority changed during the lease release/reacquire admission gap. */
+    /**
+     * Authority changed during the lease release/reacquire admission gap.
+     */
     COMMAND_ADMISSION_STALE("command_admission_stale"),
 
     /**
@@ -186,10 +222,14 @@ public enum AgentReason {
      */
     UNRESOLVED_DEPENDENCY("unresolved_dependency"),
 
-    /** Capability publication or resolution does not match its durable authority lineage. */
+    /**
+     * Capability publication or resolution does not match its durable authority lineage.
+     */
     CAPABILITY_LINEAGE_MISMATCH("capability_lineage_mismatch"),
 
-    /** The publisher is no longer the active authority for the capability lineage. */
+    /**
+     * The publisher is no longer the active authority for the capability lineage.
+     */
     CAPABILITY_PUBLISHER_STALE("capability_publisher_stale"),
 
     /**
@@ -222,25 +262,20 @@ public enum AgentReason {
      */
     INTEGRATION_STALE("integration_stale"),
 
-    /** Mutation requires an announced intent and owned resource claim. */
+    /**
+     * Mutation requires an announced intent and owned resource claim.
+     */
     COORDINATION_INTENT_REQUIRED("coordination_intent_required"),
 
-    /** Mutation overlaps another participant's active resource claim. */
+    /**
+     * Mutation overlaps another participant's active resource claim.
+     */
     OVERLAPPING_CLAIM("overlapping_claim");
 
     private final String value;
 
     AgentReason(String value) {
         this.value = value;
-    }
-
-    /**
-     * Returns the stable lowercase JSON representation.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
     }
 
     /**
@@ -254,12 +289,22 @@ public enum AgentReason {
         if (input == null) {
             throw new IllegalArgumentException("reason value cannot be null");
         }
-        String normalized = input.trim().toLowerCase(Locale.ROOT);
+        String normalized = input.trim()
+                .toLowerCase(Locale.ROOT);
         for (AgentReason reason : values()) {
             if (reason.value.equals(normalized)) {
                 return reason;
             }
         }
         throw new IllegalArgumentException("Unknown agent reason: " + input);
+    }
+
+    /**
+     * Returns the stable lowercase JSON representation.
+     *
+     * @return lowercase string representation
+     */
+    public String value() {
+        return value;
     }
 }

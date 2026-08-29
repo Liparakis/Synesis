@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.integration;
 
 
-
-
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -15,7 +13,8 @@ import java.util.UUID;
  * @param taskSnapshotIds      ordered list of task snapshot IDs included in this attempt
  * @param expectedControlHead  Git commit SHA of expected control branch HEAD
  * @param integrationCommitSha Git commit SHA produced in the integration worktree
- * @param status               outcome status: {@code "started"}, {@code "conflict"}, {@code "failed"}, {@code "advanced"}
+ * @param status               outcome status: {@code "started"}, {@code "conflict"}, {@code "failed"},
+ *                             {@code "advanced"}
  * @param failureReason        human-readable failure or conflict explanation
  * @param startedAtMillis      timestamp when attempt started
  * @param completedAtMillis    timestamp when attempt completed (0 if in progress)

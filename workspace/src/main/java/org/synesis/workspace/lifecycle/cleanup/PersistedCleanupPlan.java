@@ -38,6 +38,7 @@ public record PersistedCleanupPlan(
         String contentHash,
         List<PersistedCleanupPlanEntry> entries
 ) {
+
     /**
      * Invariant validation.
      */

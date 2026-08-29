@@ -49,10 +49,10 @@ did not complete end-to-end.
 
 ## Participants, claims, and WorkGroup
 
-| Agent | Session worktree | Participant | Intent / epoch / claim |
-|---|---|---|---|
-| A | `...\\worktrees\\session-cb1f28d8-16a3-4f2b-864f-cf4ad1d99cc2` | `agt_6932f607-83b9-3e7b-b13d-cf0edbbc200a` | `1bb491f6-7b8b-34e8-b770-ed7b5b661cb0`, epoch 1, `PATH_EXACT todo.py` |
-| B | `...\\worktrees\\session-fc687199-2e4f-4308-8a9d-561c3a36c1ed` | `agt_b8cd0735-c01a-37d6-bcb8-eb0b080dd707` | `a4e8a40c-7d61-314f-a288-a2d397101c1a`, epoch 1, `PATH_EXACT test_todo.py` |
+| Agent | Session worktree                                               | Participant                                | Intent / epoch / claim                                                     |
+|-------|----------------------------------------------------------------|--------------------------------------------|----------------------------------------------------------------------------|
+| A     | `...\\worktrees\\session-cb1f28d8-16a3-4f2b-864f-cf4ad1d99cc2` | `agt_6932f607-83b9-3e7b-b13d-cf0edbbc200a` | `1bb491f6-7b8b-34e8-b770-ed7b5b661cb0`, epoch 1, `PATH_EXACT todo.py`      |
+| B     | `...\\worktrees\\session-fc687199-2e4f-4308-8a9d-561c3a36c1ed` | `agt_b8cd0735-c01a-37d6-bcb8-eb0b080dd707` | `a4e8a40c-7d61-314f-a288-a2d397101c1a`, epoch 1, `PATH_EXACT test_todo.py` |
 
 Shared WorkGroup: `58c39d35-7835-3efe-b9ed-731e53e87465`, version 1, terminal
 state `ACTIVE`.

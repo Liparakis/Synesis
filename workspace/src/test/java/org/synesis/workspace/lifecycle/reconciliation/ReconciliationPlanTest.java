@@ -1,5 +1,11 @@
 package org.synesis.workspace.lifecycle.reconciliation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -7,12 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReconciliationPlanTest {
 
@@ -32,10 +32,12 @@ class ReconciliationPlanTest {
         );
 
         assertNotNull(plan.planId());
-        assertTrue(plan.planId().startsWith("recplan-"));
+        assertTrue(plan.planId()
+                .startsWith("recplan-"));
 
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path planFile = workspaceRoot.resolve("admin/reconciliation-plans").resolve(plan.planId() + ".json");
+        Path planFile = workspaceRoot.resolve("admin/reconciliation-plans")
+                .resolve(plan.planId() + ".json");
         assertTrue(Files.exists(planFile));
         assertFalse(planFile.startsWith(controlRoot));
 
@@ -60,7 +62,8 @@ class ReconciliationPlanTest {
         );
 
         Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path planFile = workspaceRoot.resolve("admin/reconciliation-plans").resolve(plan.planId() + ".json");
+        Path planFile = workspaceRoot.resolve("admin/reconciliation-plans")
+                .resolve(plan.planId() + ".json");
 
         String content = Files.readString(planFile);
         String tampered = content.replace("totalInspectedCount\":1", "totalInspectedCount\":999");

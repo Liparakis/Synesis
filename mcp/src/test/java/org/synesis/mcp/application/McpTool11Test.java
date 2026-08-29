@@ -1,19 +1,19 @@
 package org.synesis.mcp.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class McpTool11Test {
 
@@ -23,7 +23,8 @@ class McpTool11Test {
         command[1] = "-C";
         command[2] = root.toString();
         System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        Process process = new ProcessBuilder(command).redirectErrorStream(true)
+                .start();
         if (process.waitFor() != 0) {
             throw new IllegalStateException("git failed");
         }
@@ -50,15 +51,22 @@ class McpTool11Test {
         var location = projectService.locate(projectRoot);
         bindingService.ensure(location, "codex", "conn-mcp-11");
         var bindings = bindingService.list(location, "codex");
-        if (!bindings.isEmpty() && bindings.getLast().worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location, "codex", bindings.getLast().sessionId(), Path.of(bindings.getLast().worktreePath()));
+        if (!bindings.isEmpty() && bindings.getLast()
+                .worktreePath() != null) {
+            bindingService.verifyWorkspaceTrust(location,
+                    "codex",
+                    bindings.getLast()
+                            .sessionId(),
+                    Path.of(bindings.getLast()
+                            .worktreePath()));
         }
 
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, "codex", "conn-mcp-11");
 
         // 1. Initialize
-        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + projectRoot.toUri() + "\"}}";
+        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
+                + projectRoot.toUri() + "\"}}";
         String initResp = handler.handleMessage(initReq);
         assertNotNull(initResp);
 
@@ -74,7 +82,10 @@ class McpTool11Test {
         // Must equal exactly 10 tools
         assertEquals(10, tools.size());
 
-        Map<String, Object> cancelTool = tools.stream().filter(t -> "cancel_lane".equals(t.get("name"))).findFirst().orElseThrow();
+        Map<String, Object> cancelTool = tools.stream()
+                .filter(t -> "cancel_lane".equals(t.get("name")))
+                .findFirst()
+                .orElseThrow();
         assertEquals("cancel_lane", cancelTool.get("name"));
         assertNotNull(cancelTool.get("inputSchema"));
 

@@ -1,19 +1,17 @@
 package org.synesis.workspace.application.hook;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-
-import org.synesis.workspace.application.ProjectApplicationService;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
-
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
 import org.synesis.workspace.provider.codex.CodexNativePatchRouter;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Adapts provider hook streams to structured provider results.
@@ -118,7 +116,8 @@ public final class HookApplicationService {
             Path parent = current.getParent();
             current = parent == null || parent.equals(current) ? null : parent;
         }
-        return new ProjectApplicationService().locate(cwd).root();
+        return new ProjectApplicationService().locate(cwd)
+                .root();
     }
 
     /**
@@ -192,19 +191,26 @@ public final class HookApplicationService {
             if ("SessionStart".equals(eventName)) {
                 ProviderSessionBindingService.BindingResult session = bindings.ensure(location, "codex",
                         evidence(json));
-                if (session.binding().worktreePath() == null || session.binding().worktreePath().isBlank()) {
+                if (session.binding()
+                        .worktreePath() == null || session.binding()
+                        .worktreePath()
+                        .isBlank()) {
                     return denied("WORKSPACE_UNASSIGNED");
                 }
                 ProviderSessionBindingService.WorkspaceVerificationResult trust = bindings.verifyWorkspaceTrust(
-                        location, "codex", session.binding().sessionId(),
-                        Path.of(session.binding().worktreePath()));
+                        location,
+                        "codex",
+                        session.binding()
+                                .sessionId(),
+                        Path.of(session.binding()
+                                .worktreePath()));
                 if (!trust.verified()) {
                     return denied(trust.code());
                 }
                 String response = "{\"systemMessage\":\"Synesis bound this Codex session to its assigned worktree. Native mutations will be routed through Synesis.\"}";
                 return withBinding(new HookExecutionResult("SESSION_BOUND", response,
                         "Synesis session bound"), new ProviderSessionBindingService.BindingResult(
-                                trust.binding(), false));
+                        trust.binding(), false));
             }
             ProviderSessionBindingService.BindingResult binding = bindings.findByWorktree(location, "codex", eventCwd)
                     .map(existing -> new ProviderSessionBindingService.BindingResult(existing, false))
@@ -217,11 +223,18 @@ public final class HookApplicationService {
                     });
             ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
                     binding.binding(), eventCwd);
-            if (!workspace.verified() && !eventCwd.toAbsolutePath().normalize().equals(location.root())) {
+            if (!workspace.verified() && !eventCwd.toAbsolutePath()
+                    .normalize()
+                    .equals(location.root())) {
                 return denied(workspace.code());
             }
-            if (eventCwd.toAbsolutePath().normalize().equals(location.root())) {
-                if (binding.binding().worktreePath() == null || binding.binding().worktreePath().isBlank()) {
+            if (eventCwd.toAbsolutePath()
+                    .normalize()
+                    .equals(location.root())) {
+                if (binding.binding()
+                        .worktreePath() == null || binding.binding()
+                        .worktreePath()
+                        .isBlank()) {
                     return denied("GIT_HEAD_UNAVAILABLE");
                 }
                 Map<String, Object> toolInput = object(event.get("tool_input"));

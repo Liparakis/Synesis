@@ -45,16 +45,16 @@ reflective `SynesisMcpServer.execute()` ->
 
 `McpStdioServer.run()` has these decisive paths:
 
-| Java path | Trigger | Java result | `handler.close()` |
-|---|---|---:|---|
-| Normal EOF | `readFrame()` sees `-1` with an empty frame buffer | 0 | yes |
-| Partial EOF | `readFrame()` sees `-1` after buffered bytes | 1 | no |
-| Invalid UTF-8 | strict decoder throws `MCP_INVALID_UTF8` | 1 | no |
-| Oversized frame | frame limit throws `MCP_FRAME_LIMIT_EXCEEDED` | 1 | no |
-| Malformed JSON | handler creates a JSON-RPC parse error response | normally 0 if stream later ends cleanly | yes on later clean EOF |
-| Handler runtime failure | handler catches most failures and returns an error response | normally 0 if stream later ends cleanly | yes on later clean EOF |
-| Loop `Throwable` | any uncaught read/dispatch failure | 1 | no |
-| `handler.close()` | executed only after clean EOF | normally no change; `close()` swallows `Exception` | conditional |
+| Java path               | Trigger                                                     |                                        Java result | `handler.close()`      |
+|-------------------------|-------------------------------------------------------------|---------------------------------------------------:|------------------------|
+| Normal EOF              | `readFrame()` sees `-1` with an empty frame buffer          |                                                  0 | yes                    |
+| Partial EOF             | `readFrame()` sees `-1` after buffered bytes                |                                                  1 | no                     |
+| Invalid UTF-8           | strict decoder throws `MCP_INVALID_UTF8`                    |                                                  1 | no                     |
+| Oversized frame         | frame limit throws `MCP_FRAME_LIMIT_EXCEEDED`               |                                                  1 | no                     |
+| Malformed JSON          | handler creates a JSON-RPC parse error response             |            normally 0 if stream later ends cleanly | yes on later clean EOF |
+| Handler runtime failure | handler catches most failures and returns an error response |            normally 0 if stream later ends cleanly | yes on later clean EOF |
+| Loop `Throwable`        | any uncaught read/dispatch failure                          |                                                  1 | no                     |
+| `handler.close()`       | executed only after clean EOF                               | normally no change; `close()` swallows `Exception` | conditional            |
 
 The loop catches `Throwable`, logs the message and stack trace to stderr, and
 returns `1`. The `finally` block invokes `handler.close()` only when the loop
@@ -73,11 +73,11 @@ under `C:\t\syn041-exit-controls-*`. The official bundle was
 `0.1.0-dev.local`; the MCP executable hash was
 `07F23EF1E1C9C6D344CA31A640CAA92BD483345C6F8260DE82A84C69F9E4A53B`.
 
-| Control | Setup | Java/MCP exit | Lease | Fatal diagnostic |
-|---|---|---:|---|---|
-| Clean EOF | initialize, `ensure_session`, close stdin after complete frames | 0 / 0 | `CLOSED_CLEANLY` | none |
-| Partial EOF | initialize, `ensure_session`, write an unterminated frame, close stdin | 1 / 1 | `ACTIVE` | `MCP_PARTIAL_FRAME_EOF` stack trace |
-| Closed stdout reader | initialize, `ensure_session`, close parent stdout reader, send `tools/list`, close stdin | 0 / 0 | `CLOSED_CLEANLY` | none |
+| Control              | Setup                                                                                    | Java/MCP exit | Lease            | Fatal diagnostic                    |
+|----------------------|------------------------------------------------------------------------------------------|--------------:|------------------|-------------------------------------|
+| Clean EOF            | initialize, `ensure_session`, close stdin after complete frames                          |         0 / 0 | `CLOSED_CLEANLY` | none                                |
+| Partial EOF          | initialize, `ensure_session`, write an unterminated frame, close stdin                   |         1 / 1 | `ACTIVE`         | `MCP_PARTIAL_FRAME_EOF` stack trace |
+| Closed stdout reader | initialize, `ensure_session`, close parent stdout reader, send `tools/list`, close stdin |         0 / 0 | `CLOSED_CLEANLY` | none                                |
 
 The clean control used project ID `469069b6-6789-4ded-9656-e4b30d749949` and
 connection `syn041-control-clean-eof`. The partial control used project ID

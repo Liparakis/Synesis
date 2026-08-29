@@ -74,6 +74,7 @@ public final class DecisionRecord {
     private final byte[] signature;
     private final byte[] encoded;
     private final byte[] digest;
+
     private DecisionRecord(UUID projectId, UUID recordId, RecordType recordType, long revision,
             byte[] previousDigest, String ownerNodeId, String authorNodeId,
             DecisionStatus status, Instant createdAt, Instant updatedAt, String title,
@@ -269,7 +270,7 @@ public final class DecisionRecord {
             if (predecessorFlag > 1) {
                 throw new IOException("invalid predecessor marker");
             }
-            byte[] previousDigest = predecessorFlag == 0 ? null : readExact(input, 32, 32);
+            byte[] previousDigest = predecessorFlag == 0 ? null : readExact(input);
             String owner = readText(input, MAX_NODE_ID_BYTES);
             String author = readText(input, MAX_NODE_ID_BYTES);
             int status = input.readUnsignedByte();
@@ -287,7 +288,7 @@ public final class DecisionRecord {
             List<DecisionEvidence> evidence = new ArrayList<>(count);
             for (int index = 0; index < count; index++) {
                 evidence.add(new DecisionEvidence(readText(input, DecisionEvidence.MAX_KIND_BYTES),
-                        readText(input, DecisionEvidence.MAX_REFERENCE_BYTES), readExact(input, 32, 32)));
+                        readText(input, DecisionEvidence.MAX_REFERENCE_BYTES), readExact(input)));
             }
 
             ConstraintPayload constraintPayload = null;
@@ -350,11 +351,11 @@ public final class DecisionRecord {
         }
     }
 
-    private static byte[] readExact(DataInputStream input, int length, int max) throws IOException {
-        if (length <= 0 || length > max || input.available() < length) {
+    private static byte[] readExact(DataInputStream input) throws IOException {
+        if (input.available() < 32) {
             throw new IOException("invalid fixed field");
         }
-        return input.readNBytes(length);
+        return input.readNBytes(32);
     }
 
     private static byte[] readBytes(DataInputStream input, int max) throws IOException {
@@ -556,6 +557,7 @@ public final class DecisionRecord {
      *
      * @return updated instant
      */
+    @SuppressWarnings("unused")
     public Instant updatedAt() {
         return updatedAt;
     }
@@ -601,6 +603,7 @@ public final class DecisionRecord {
      *
      * @return public key bytes
      */
+    @SuppressWarnings("unused")
     public byte[] publicKeyEncoded() {
         return publicKey.clone();
     }

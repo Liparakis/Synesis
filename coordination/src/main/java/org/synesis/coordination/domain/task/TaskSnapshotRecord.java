@@ -1,8 +1,6 @@
 package org.synesis.coordination.domain.task;
 
 
-
-
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -43,10 +41,14 @@ public record TaskSnapshotRecord(
         boolean reviewRequired
 ) {
 
-    /** Maximum number of changed paths per snapshot. */
+    /**
+     * Maximum number of changed paths per snapshot.
+     */
     public static final int MAX_CHANGED_PATHS = 128;
 
-    /** Maximum length of the summary text in characters. */
+    /**
+     * Maximum length of the summary text in characters.
+     */
     public static final int MAX_SUMMARY_LENGTH = 500;
 
     /**
@@ -88,25 +90,26 @@ public record TaskSnapshotRecord(
         }
     }
 
-    /** Constructs a record with the pre-review-gate shape.
+    /**
+     * Constructs a record with the pre-review-gate shape.
      *
      * <p>Existing callers and historical payloads default to an unreviewed
      * snapshot. New reviewed publication must use the canonical constructor
      * with {@code reviewRequired=true}.</p>
      *
-     * @param taskId task identifier
-     * @param snapshotId snapshot ID
-     * @param nodeId node ID
-     * @param supervisorId supervisor ID
-     * @param workerId worker ID
-     * @param providerSessionId provider session ID
-     * @param baseCommit base commit
-     * @param commitSha commit SHA
-     * @param changedPaths changed paths
+     * @param taskId                 task identifier
+     * @param snapshotId             snapshot ID
+     * @param nodeId                 node ID
+     * @param supervisorId           supervisor ID
+     * @param workerId               worker ID
+     * @param providerSessionId      provider session ID
+     * @param baseCommit             base commit
+     * @param commitSha              commit SHA
+     * @param changedPaths           changed paths
      * @param capabilityDependencies dependencies
-     * @param summary summary
-     * @param createdAtMillis creation timestamp
-     * @param provenance immutable lane provenance
+     * @param summary                summary
+     * @param createdAtMillis        creation timestamp
+     * @param provenance             immutable lane provenance
      */
     public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
             String workerId, String providerSessionId, String baseCommit, String commitSha,
@@ -117,19 +120,21 @@ public record TaskSnapshotRecord(
                 provenance, false);
     }
 
-    /** Constructs a record with default provenance for a minimal snapshot payload.
-     * @param taskId task ID
-     * @param snapshotId snapshot ID
-     * @param nodeId node ID
-     * @param supervisorId supervisor ID
-     * @param workerId worker ID
-     * @param providerSessionId session ID
-     * @param baseCommit base commit
-     * @param commitSha commit SHA
-     * @param changedPaths changed paths
+    /**
+     * Constructs a record with default provenance for a minimal snapshot payload.
+     *
+     * @param taskId                 task ID
+     * @param snapshotId             snapshot ID
+     * @param nodeId                 node ID
+     * @param supervisorId           supervisor ID
+     * @param workerId               worker ID
+     * @param providerSessionId      session ID
+     * @param baseCommit             base commit
+     * @param commitSha              commit SHA
+     * @param changedPaths           changed paths
      * @param capabilityDependencies dependencies
-     * @param summary summary
-     * @param createdAtMillis creation timestamp
+     * @param summary                summary
+     * @param createdAtMillis        creation timestamp
      */
     public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
             String workerId, String providerSessionId, String baseCommit, String commitSha,

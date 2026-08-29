@@ -15,17 +15,17 @@ Fresh disposable project and harness:
 
 ## Reached state
 
-| Item | Value |
-|---|---|
-| WorkGroup | `53906f49-5d99-3726-ac2d-b155af973a7e` (`ACTIVE`) |
-| Todo participant / intent | `agt_ab41f497-84de-3fab-8169-3d07929a1055` / `be50e01c-dd9e-3a0b-bd13-34af1ca285de` |
-| Test participant / intent | `agt_95e7d0e5-90e0-3c4f-aa4b-5684da74fe8f` / `670f985c-861c-3176-b9aa-e9e71b26c352` |
-| Claims | `PATH_EXACT todo.py` and `PATH_EXACT test_todo.py`, epoch 1 |
-| REVIEW requests | `b19b65a5-8eca-4a91-997d-64f2ba62c136`, `ad0d9f60-7ab7-44de-b673-ae0721f10955`, both `ACCEPTED` |
-| Grants | `6d31b2ce-9d21-3316-af55-a8fcd609c1fa` to test participant; `b0c2fa3f-dd43-3c72-a641-4c8e3bf71da5` to Todo participant |
-| Snapshot | `snap_686a822915f6f230c059ddb5040fab32`, Todo implementation, integrated |
-| Validation | structured `ACCEPTED` for that snapshot |
-| Control checkout | integration reached; final WorkGroup closure not reached |
+| Item                      | Value                                                                                                                  |
+|---------------------------|------------------------------------------------------------------------------------------------------------------------|
+| WorkGroup                 | `53906f49-5d99-3726-ac2d-b155af973a7e` (`ACTIVE`)                                                                      |
+| Todo participant / intent | `agt_ab41f497-84de-3fab-8169-3d07929a1055` / `be50e01c-dd9e-3a0b-bd13-34af1ca285de`                                    |
+| Test participant / intent | `agt_95e7d0e5-90e0-3c4f-aa4b-5684da74fe8f` / `670f985c-861c-3176-b9aa-e9e71b26c352`                                    |
+| Claims                    | `PATH_EXACT todo.py` and `PATH_EXACT test_todo.py`, epoch 1                                                            |
+| REVIEW requests           | `b19b65a5-8eca-4a91-997d-64f2ba62c136`, `ad0d9f60-7ab7-44de-b673-ae0721f10955`, both `ACCEPTED`                        |
+| Grants                    | `6d31b2ce-9d21-3316-af55-a8fcd609c1fa` to test participant; `b0c2fa3f-dd43-3c72-a641-4c8e3bf71da5` to Todo participant |
+| Snapshot                  | `snap_686a822915f6f230c059ddb5040fab32`, Todo implementation, integrated                                               |
+| Validation                | structured `ACCEPTED` for that snapshot                                                                                |
+| Control checkout          | integration reached; final WorkGroup closure not reached                                                               |
 
 The completed Todo lane projected `WAIT` for its pending outgoing REVIEW
 request instead of terminal `COMPLETED`, proving the CP-0538 fix.

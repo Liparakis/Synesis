@@ -58,6 +58,7 @@ public record ProtocolVersion(int major, int minor) implements Comparable<Protoc
      * @return comparison result
      */
     @Override
+    @SuppressWarnings("NullableProblems")
     public int compareTo(ProtocolVersion other) {
         Objects.requireNonNull(other, "other");
         int majorComparison = Integer.compare(major, other.major);

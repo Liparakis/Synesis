@@ -1,15 +1,12 @@
 package org.synesis.cli.command.lifecycle;
 
 
-import org.synesis.cli.command.coordination.CoordinationEventFollower;
-
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
-
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.coordination.CoordinationEventFollower;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.link.identity.IdentityBootstrap;
-
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 

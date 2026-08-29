@@ -1,5 +1,4 @@
 package org.synesis.workspace.application.workspace;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
 
 import java.util.Objects;
 import org.synesis.workspace.agent.AgentResponse;

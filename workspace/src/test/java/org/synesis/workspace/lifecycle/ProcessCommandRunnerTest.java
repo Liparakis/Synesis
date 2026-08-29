@@ -1,12 +1,9 @@
 package org.synesis.workspace.lifecycle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,10 +15,42 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Regression coverage for bounded local Git/process execution. */
+/**
+ * Regression coverage for bounded local Git/process execution.
+ */
 class ProcessCommandRunnerTest {
 
     private static final Pattern DESCENDANT = Pattern.compile("DESCENDANT_PID=(\\d+)");
+
+    private static List<String> child(String mode) {
+        String executable = Path.of(System.getProperty("java.home"), "bin",
+                        isWindows() ? "java.exe" : "java")
+                .toString();
+        return List.of(executable, "-cp", System.getProperty("java.class.path"),
+                ProcessCommandRunnerChild.class.getName(), mode);
+    }
+
+    private static boolean awaitProcessExit(long pid) throws InterruptedException {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            if (ProcessHandle.of(pid)
+                    .isEmpty() || !ProcessHandle.of(pid)
+                    .orElseThrow()
+                    .isAlive()) {
+                return true;
+            }
+            Thread.sleep(100L);
+        }
+        return ProcessHandle.of(pid)
+                .isEmpty() || !ProcessHandle.of(pid)
+                .orElseThrow()
+                .isAlive();
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains("win");
+    }
 
     @Test
     void drainsLargeMergedStderrWithoutBlocking(@TempDir Path temp) throws Exception {
@@ -29,8 +58,10 @@ class ProcessCommandRunnerTest {
                 Map.of(), Duration.ofSeconds(5), 4096);
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.output().contains("[output truncated]"));
-        assertTrue(result.output().length() < 5000);
+        assertTrue(result.output()
+                .contains("[output truncated]"));
+        assertTrue(result.output()
+                .length() < 5000);
     }
 
     @Test
@@ -39,7 +70,8 @@ class ProcessCommandRunnerTest {
                 Map.of(), Duration.ofSeconds(5), 4096);
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.output().contains("stdin-closed"));
+        assertTrue(result.output()
+                .contains("stdin-closed"));
     }
 
     @Test
@@ -49,11 +81,16 @@ class ProcessCommandRunnerTest {
                 () -> ProcessCommandRunner.execute(child("descendant"), temp, Map.of(),
                         Duration.ofMillis(400), 128));
 
-        assertTrue(failure.getMessage().contains("command="));
-        assertTrue(failure.getMessage().contains("directory=" + temp));
-        assertTrue(failure.getMessage().contains("[output truncated]")
-                || failure.output().contains("DESCENDANT_PID="));
-        assertTrue(failure.output().length() < 200);
+        assertTrue(failure.getMessage()
+                .contains("command="));
+        assertTrue(failure.getMessage()
+                .contains("directory=" + temp));
+        assertTrue(failure.getMessage()
+                .contains("[output truncated]")
+                || failure.output()
+                .contains("DESCENDANT_PID="));
+        assertTrue(failure.output()
+                .length() < 200);
         Matcher matcher = DESCENDANT.matcher(failure.output());
         assertTrue(matcher.find(), failure.getMessage());
         long pid = Long.parseLong(matcher.group(1));
@@ -69,41 +106,25 @@ class ProcessCommandRunnerTest {
         GitProcessRunner.run(repository, "add", "README.md");
         GitProcessRunner.run(repository, "commit", "-m", "test");
 
-        String head = GitProcessRunner.run(repository, "rev-parse", "HEAD").trim();
+        String head = GitProcessRunner.run(repository, "rev-parse", "HEAD")
+                .trim();
         assertEquals(40, head.length());
         GitProcessRunner.runWithIndex(repository, temp.resolve("temporary-index"), "read-tree", head);
     }
-
-    private static List<String> child(String mode) {
-        String executable = Path.of(System.getProperty("java.home"), "bin",
-                isWindows() ? "java.exe" : "java").toString();
-        return List.of(executable, "-cp", System.getProperty("java.class.path"),
-                ProcessCommandRunnerChild.class.getName(), mode);
-    }
-
-    private static boolean awaitProcessExit(long pid) throws InterruptedException {
-        for (int attempt = 0; attempt < 20; attempt++) {
-            if (ProcessHandle.of(pid).isEmpty() || !ProcessHandle.of(pid).orElseThrow().isAlive()) {
-                return true;
-            }
-            Thread.sleep(100L);
-        }
-        return ProcessHandle.of(pid).isEmpty() || !ProcessHandle.of(pid).orElseThrow().isAlive();
-    }
-
-    private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
-    }
 }
 
-/** Child process used only to deterministically exercise process plumbing. */
+/**
+ * Child process used only to deterministically exercise process plumbing.
+ */
 final class ProcessCommandRunnerChild {
 
     private ProcessCommandRunnerChild() {
     }
 
-    /** Runs one deterministic child behavior. @param args behavior name */
-    public static void main(String[] args) throws Exception {
+    /**
+     * Runs one deterministic child behavior. @param args behavior name
+     */
+    static void main(String[] args) throws Exception {
         switch (args[0]) {
             case "stderr" -> {
                 System.err.print("e".repeat(200_000));
@@ -112,6 +133,7 @@ final class ProcessCommandRunnerChild {
             case "stdin" -> {
                 while (System.in.read() != -1) {
                     // The runner must close stdin so this loop terminates.
+                    Thread.onSpinWait();
                 }
                 System.out.print("stdin-closed");
             }
@@ -129,12 +151,16 @@ final class ProcessCommandRunnerChild {
     }
 
     private static void sleepForever() throws InterruptedException {
-        Thread.sleep(Duration.ofDays(1).toMillis());
+        Thread.sleep(Duration.ofDays(1)
+                .toMillis());
     }
 
     private static String javaExecutable() {
         return Path.of(System.getProperty("java.home"), "bin",
-                System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
-                        ? "java.exe" : "java").toString();
+                        System.getProperty("os.name", "")
+                                .toLowerCase(java.util.Locale.ROOT)
+                                .contains("win")
+                                ? "java.exe" : "java")
+                .toString();
     }
 }

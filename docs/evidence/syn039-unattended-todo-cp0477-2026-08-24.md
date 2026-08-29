@@ -9,8 +9,10 @@ Repository commit before evidence: `c7b822f`
 
 The CP-0476 comparison found two different agent routes:
 
-- One route used the stale installed `C:\Users\Liparakis\AppData\Local\Synesis\bin\synesis.cmd` with only `mcp --provider codex`; it omitted `--project` and failed readiness.
-- Another route used the current repository bundle with a pinned project argument, but its disposable CP-0476 project directory had disappeared, so fail-closed readiness correctly returned `workspace_not_ready`.
+- One route used the stale installed `C:\Users\Liparakis\AppData\Local\Synesis\bin\synesis.cmd` with only
+  `mcp --provider codex`; it omitted `--project` and failed readiness.
+- Another route used the current repository bundle with a pinned project argument, but its disposable CP-0476 project
+  directory had disappeared, so fail-closed readiness correctly returned `workspace_not_ready`.
 
 The acceptance harness was corrected without changing Synesis production code:
 each Codex CLI process received explicit MCP command, project, provider, and

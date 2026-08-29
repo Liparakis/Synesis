@@ -1,18 +1,5 @@
 package org.synesis.coordination.domain.capability;
 
-import org.synesis.coordination.domain.integration.ImplementationEventPayload;
-import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
-import org.synesis.coordination.domain.integration.ValidationContextRecord;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
-
-
-import org.synesis.coordination.domain.integration.ImplementationEventPayload;
-import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
-import org.synesis.coordination.domain.integration.ValidationContextRecord;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
-
-
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -20,6 +7,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.synesis.coordination.domain.integration.ImplementationEventPayload;
+import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
+import org.synesis.coordination.domain.integration.ValidationContextRecord;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 
 /**
  * Deterministic capability request projection over the shared event sequence.
@@ -30,6 +21,7 @@ import java.util.Optional;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class CapabilityRequestProjection {
 
     private final Map<String, CapabilityRequestRecord> records = new LinkedHashMap<>();
@@ -101,7 +93,8 @@ public final class CapabilityRequestProjection {
             return Optional.empty();
         }
         try {
-            String canonical = CapabilityRequestHandle.parse(handleValue).value();
+            String canonical = CapabilityRequestHandle.parse(handleValue)
+                    .value();
             return Optional.ofNullable(records.get(canonical));
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
@@ -115,13 +108,17 @@ public final class CapabilityRequestProjection {
      * @param capability      capability name
      * @return record when an active request exists
      */
-    public synchronized Optional<CapabilityRequestRecord> findActiveByRequesterAndCapability(String requesterNodeId, String capability) {
+    public synchronized Optional<CapabilityRequestRecord> findActiveByRequesterAndCapability(String requesterNodeId,
+            String capability) {
         if (requesterNodeId == null || capability == null) {
             return Optional.empty();
         }
         for (CapabilityRequestRecord rec : records.values()) {
-            if (rec.requesterNodeId().equals(requesterNodeId) && rec.capability().equals(capability)) {
-                if (rec.state() == CapabilityLifecycleState.AWAITING_OWNER || rec.state() == CapabilityLifecycleState.REVISION_REQUESTED) {
+            if (rec.requesterNodeId()
+                    .equals(requesterNodeId) && rec.capability()
+                    .equals(capability)) {
+                if (rec.state() == CapabilityLifecycleState.AWAITING_OWNER
+                        || rec.state() == CapabilityLifecycleState.REVISION_REQUESTED) {
                     return Optional.of(rec);
                 }
             }
@@ -142,7 +139,8 @@ public final class CapabilityRequestProjection {
         }
         List<CapabilityRequestRecord> list = new ArrayList<>();
         for (CapabilityRequestRecord rec : records.values()) {
-            if (rec.ownerNodeId().equals(ownerNodeId) && rec.state() == CapabilityLifecycleState.AWAITING_OWNER) {
+            if (rec.ownerNodeId()
+                    .equals(ownerNodeId) && rec.state() == CapabilityLifecycleState.AWAITING_OWNER) {
                 list.add(rec);
             }
         }
@@ -161,8 +159,10 @@ public final class CapabilityRequestProjection {
         }
         List<CapabilityRequestRecord> list = new ArrayList<>();
         for (CapabilityRequestRecord rec : records.values()) {
-            if (rec.ownerNodeId().equals(ownerNodeId) && rec.state() == CapabilityLifecycleState.IMPLEMENTING
-                    && rec.reason() != null && !rec.reason().isBlank()) {
+            if (rec.ownerNodeId()
+                    .equals(ownerNodeId) && rec.state() == CapabilityLifecycleState.IMPLEMENTING
+                    && rec.reason() != null && !rec.reason()
+                    .isBlank()) {
                 list.add(rec);
             }
         }
@@ -181,7 +181,8 @@ public final class CapabilityRequestProjection {
         }
         List<CapabilityRequestRecord> list = new ArrayList<>();
         for (CapabilityRequestRecord rec : records.values()) {
-            if (rec.requesterNodeId().equals(requesterNodeId)) {
+            if (rec.requesterNodeId()
+                    .equals(requesterNodeId)) {
                 CapabilityLifecycleState s = rec.state();
                 if (s == CapabilityLifecycleState.AWAITING_OWNER
                         || s == CapabilityLifecycleState.REVISION_REQUESTED
@@ -209,7 +210,8 @@ public final class CapabilityRequestProjection {
         }
         List<CapabilityRequestRecord> list = new ArrayList<>();
         for (CapabilityRequestRecord rec : records.values()) {
-            if (rec.requesterNodeId().equals(requesterNodeId)) {
+            if (rec.requesterNodeId()
+                    .equals(requesterNodeId)) {
                 list.add(rec);
             }
         }
@@ -227,7 +229,8 @@ public final class CapabilityRequestProjection {
             return Optional.empty();
         }
         try {
-            String canonical = CapabilityRequestHandle.parse(handleValue).value();
+            String canonical = CapabilityRequestHandle.parse(handleValue)
+                    .value();
             Integer rev = latestRevision.get(canonical);
             if (rev == null) {
                 return Optional.empty();
@@ -245,12 +248,14 @@ public final class CapabilityRequestProjection {
      * @param revisionNumber revision number to look up
      * @return revision record when found
      */
-    public synchronized Optional<ImplementationRevisionRecord> findImplementation(String handleValue, int revisionNumber) {
+    public synchronized Optional<ImplementationRevisionRecord> findImplementation(String handleValue,
+            int revisionNumber) {
         if (handleValue == null || handleValue.isBlank()) {
             return Optional.empty();
         }
         try {
-            String canonical = CapabilityRequestHandle.parse(handleValue).value();
+            String canonical = CapabilityRequestHandle.parse(handleValue)
+                    .value();
             return Optional.ofNullable(implementations.get(canonical + ":" + revisionNumber));
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
@@ -268,7 +273,8 @@ public final class CapabilityRequestProjection {
             return Optional.empty();
         }
         try {
-            String canonical = CapabilityRequestHandle.parse(handleValue).value();
+            String canonical = CapabilityRequestHandle.parse(handleValue)
+                    .value();
             return Optional.ofNullable(validationContexts.get(canonical));
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
@@ -295,7 +301,8 @@ public final class CapabilityRequestProjection {
 
     private void processCreated(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         if (records.containsKey(handleKey)) {
             throw new IOException("DUPLICATE_CAPABILITY_REQUEST_HANDLE");
         }
@@ -320,7 +327,8 @@ public final class CapabilityRequestProjection {
 
     private void processRevised(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
@@ -330,62 +338,83 @@ public final class CapabilityRequestProjection {
                 || current.state() == CapabilityLifecycleState.SUPERSEDED) {
             throw new IOException("TERMINAL_CAPABILITY_REQUEST_CANNOT_BE_REVISED");
         }
-        CapabilityRequestRecord updated = current.withUpdate(payload.state(), payload.contract(), payload.reason(), event.createdAtEpochMillis());
+        CapabilityRequestRecord updated = current.withUpdate(payload.state(),
+                payload.contract(),
+                payload.reason(),
+                event.createdAtEpochMillis());
         records.put(handleKey, updated);
     }
 
     private void processAccepted(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
         }
-        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.ACCEPTED, payload.contract(), null, event.createdAtEpochMillis());
+        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.ACCEPTED,
+                payload.contract(),
+                null,
+                event.createdAtEpochMillis());
         records.put(handleKey, updated);
     }
 
     private void processRejected(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
         }
-        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.REJECTED, null, payload.reason(), event.createdAtEpochMillis());
+        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.REJECTED,
+                null,
+                payload.reason(),
+                event.createdAtEpochMillis());
         records.put(handleKey, updated);
     }
 
     private void processCancelled(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
         }
-        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.CANCELLED, null, payload.reason(), event.createdAtEpochMillis());
+        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.CANCELLED,
+                null,
+                payload.reason(),
+                event.createdAtEpochMillis());
         records.put(handleKey, updated);
     }
 
     private void processSuperseded(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
         }
-        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.SUPERSEDED, null, payload.reason(), event.createdAtEpochMillis());
+        CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.SUPERSEDED,
+                null,
+                payload.reason(),
+                event.createdAtEpochMillis());
         records.put(handleKey, updated);
     }
 
     private void processImplementationPublished(PredictionEvent event) throws IOException {
         ImplementationEventPayload payload = ImplementationEventPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
         }
-        if (!current.authorityLineageId().equals(payload.authorityLineageId())) {
+        if (!current.authorityLineageId()
+                .equals(payload.authorityLineageId())) {
             throw new IOException("CAPABILITY_LINEAGE_MISMATCH");
         }
         // Transition to IMPLEMENTATION_AVAILABLE
@@ -399,8 +428,10 @@ public final class CapabilityRequestProjection {
         // and commit.  A stale or unrelated publisher must never overwrite a
         // revision number that has already become authoritative.
         ImplementationRevisionRecord existing = implementations.get(revKey);
-        if (existing != null && (!existing.authorityLineageId().equals(payload.authorityLineageId())
-                || !existing.commitSha().equals(payload.commitSha()))) {
+        if (existing != null && (!existing.authorityLineageId()
+                .equals(payload.authorityLineageId())
+                || !existing.commitSha()
+                .equals(payload.commitSha()))) {
             throw new IOException("CAPABILITY_PUBLISHER_STALE");
         }
         if (existing == null) {
@@ -415,7 +446,8 @@ public final class CapabilityRequestProjection {
 
     private void processValidationStarted(PredictionEvent event) throws IOException {
         ImplementationEventPayload payload = ImplementationEventPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
@@ -424,7 +456,8 @@ public final class CapabilityRequestProjection {
                 CapabilityLifecycleState.VALIDATING, null, null, event.createdAtEpochMillis());
         records.put(handleKey, updated);
         // Store the validation context including worktree path for restart recovery
-        if (!payload.worktreePath().isBlank()) {
+        if (!payload.worktreePath()
+                .isBlank()) {
             validationContexts.put(handleKey, new ValidationContextRecord(
                     payload.handle(), payload.revisionNumber(),
                     payload.worktreePath(), event.createdAtEpochMillis()));
@@ -433,7 +466,8 @@ public final class CapabilityRequestProjection {
 
     private void processValidated(PredictionEvent event) throws IOException {
         ImplementationEventPayload payload = ImplementationEventPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
@@ -446,12 +480,14 @@ public final class CapabilityRequestProjection {
 
     private void processRevisionRequired(PredictionEvent event) throws IOException {
         ImplementationEventPayload payload = ImplementationEventPayload.decode(event.payload());
-        String handleKey = payload.handle().value();
+        String handleKey = payload.handle()
+                .value();
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new IOException("CAPABILITY_REQUEST_NOT_FOUND");
         }
-        String reason = payload.validationReason().isBlank() ? "Revision required by requester" : payload.validationReason();
+        String reason = payload.validationReason()
+                .isBlank() ? "Revision required by requester" : payload.validationReason();
         CapabilityRequestRecord updated = current.withUpdate(
                 CapabilityLifecycleState.IMPLEMENTING, null, reason, event.createdAtEpochMillis());
         records.put(handleKey, updated);

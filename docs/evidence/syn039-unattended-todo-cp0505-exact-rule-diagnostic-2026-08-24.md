@@ -38,10 +38,12 @@ reach end-to-end completion.
   `conn-instance-400cb235-1a6e-4760-a976-5e56f55f47f8`
 - Agent A session/worktree:
   `session-af8046f3-cdc3-44ee-b132-93340a4cfd51`
-  at `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\796f6155-3a8f-47c1-8cb9-5aab2ef35138\worktrees\session-af8046f3-cdc3-44ee-b132-93340a4cfd51`
+  at
+  `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\796f6155-3a8f-47c1-8cb9-5aab2ef35138\worktrees\session-af8046f3-cdc3-44ee-b132-93340a4cfd51`
 - Agent B session/worktree:
   `session-f95fb73e-fed2-49bf-b3b7-aae8c05fcf70`
-  at `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\796f6155-3a8f-47c1-8cb9-5aab2ef35138\worktrees\session-f95fb73e-fed2-49bf-b3b7-aae8c05fcf70`
+  at
+  `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\796f6155-3a8f-47c1-8cb9-5aab2ef35138\worktrees\session-f95fb73e-fed2-49bf-b3b7-aae8c05fcf70`
 - Both `ensure_session` calls returned `status=ready`,
   `workspace=isolated`.
 
@@ -56,14 +58,14 @@ calls.
   `35aa138a-a6bf-389a-a4b5-e7bbe66024ec`, `ACTIVE`
 - Agent A participant:
   `agt_077c18ef-8b67-345f-83c7-1dd9ddab1e16`
-  - intent: `28e6aae4-6127-3007-a54e-917371722eda`
-  - claim: `PATH_EXACT todo.py`, claim epoch `1`
-  - responsibility: implement `TodoList.complete`
+    - intent: `28e6aae4-6127-3007-a54e-917371722eda`
+    - claim: `PATH_EXACT todo.py`, claim epoch `1`
+    - responsibility: implement `TodoList.complete`
 - Agent B participant:
   `agt_b3eccbab-43da-3086-bb3c-73b15b10114e`
-  - intent: `07430344-4f1d-3201-9e7a-3c28532ea888`
-  - claim: `PATH_EXACT test_todo.py`, claim epoch `1`
-  - responsibility: add one regression test
+    - intent: `07430344-4f1d-3201-9e7a-3c28532ea888`
+    - claim: `PATH_EXACT test_todo.py`, claim epoch `1`
+    - responsibility: add one regression test
 - Claims were disjoint and both intents remained `ANNOUNCED`/active at the
   last observed projections.
 

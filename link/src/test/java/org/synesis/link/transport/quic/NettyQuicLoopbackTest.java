@@ -93,7 +93,7 @@ final class NettyQuicLoopbackTest {
             client = QuicChannel.newBootstrap(clientUdp)
                     .handler(new ChannelInboundHandlerAdapter())
                     .streamHandler(new ChannelInboundHandlerAdapter())
-                    .remoteAddress((InetSocketAddress) serverUdp.localAddress())
+                    .remoteAddress(serverUdp.localAddress())
                     .connect()
                     .sync()
                     .getNow();
@@ -130,22 +130,22 @@ final class NettyQuicLoopbackTest {
                 .readAllBytes());
     }
 
-    private static void awaitHeartbeat(PeerSession session) throws InterruptedException {
+    private static void awaitHeartbeat(PeerSession session) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (session.livenessMetrics()
                 .heartbeatAcknowledgedCount() == 0
                 && System.nanoTime() < deadline) {
-            Thread.sleep(20);
+            java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
         }
         assertTrue(session.livenessMetrics()
                         .heartbeatAcknowledgedCount() > 0,
                 "heartbeat acknowledgement did not arrive");
     }
 
-    private static void waitForPath(Path path) throws Exception {
+    private static void waitForPath(Path path) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while (!Files.exists(path) && System.nanoTime() < deadline) {
-            Thread.sleep(20);
+            java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
         }
         assertTrue(Files.exists(path), "timed out waiting for " + path.getFileName());
     }
@@ -194,7 +194,7 @@ final class NettyQuicLoopbackTest {
                                     serverAddress.getPort(), 0)),
                             java.util.List.of(new Candidate(CandidateType.MANUAL, serverAddress.getAddress(),
                                     serverAddress.getPort(), 0)), 1)
-                    .get(0);
+                    .getFirst();
             assertTrue(selectedPair.identifier()
                     .startsWith("MANUAL/MANUAL/h"));
             client = QuicChannel.newBootstrap(clientUdp)
@@ -210,7 +210,6 @@ final class NettyQuicLoopbackTest {
             server = accepted.get(10, TimeUnit.SECONDS);
             assertNotNull(client);
             assertNotNull(server);
-            assertEquals(SynesisLink.ALPN, SynesisLink.ALPN);
             client.close(true, 0, io.netty.buffer.Unpooled.EMPTY_BUFFER)
                     .sync();
             server.close(true, 0, io.netty.buffer.Unpooled.EMPTY_BUFFER)
@@ -409,7 +408,7 @@ final class NettyQuicLoopbackTest {
         try {
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
             while (!Files.exists(clientMaterial) && System.nanoTime() < deadline) {
-                Thread.sleep(25);
+                java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(25));
             }
             assertTrue(Files.exists(clientMaterial), "client did not publish identity material");
             server = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,

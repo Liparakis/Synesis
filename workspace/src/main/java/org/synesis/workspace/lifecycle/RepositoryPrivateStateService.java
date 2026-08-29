@@ -19,9 +19,12 @@ import java.util.UUID;
  *
  * @since 1.0
  */
+@SuppressWarnings("DuplicatedCode")
 public final class RepositoryPrivateStateService {
 
-    /** Exact root-anchored exclusions owned by Synesis. */
+    /**
+     * Exact root-anchored exclusions owned by Synesis.
+     */
     public static final List<String> SYNESIS_EXCLUSIONS = List.of(
             "/.synesis/local/",
             "/.synesis/coordination/",
@@ -53,11 +56,12 @@ public final class RepositoryPrivateStateService {
             }
             throw unavailable;
         }
-        Path exclude = common.resolve("info").resolve("exclude");
+        Path exclude = common.resolve("info")
+                .resolve("exclude");
         synchronized (LOCK) {
             if (Files.exists(exclude, java.nio.file.LinkOption.NOFOLLOW_LINKS)
                     && (Files.isSymbolicLink(exclude) || !Files.isRegularFile(exclude,
-                            java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
                 throw new IOException("GIT_EXCLUDE_NOT_REGULAR");
             }
             String existing = Files.exists(exclude) ? Files.readString(exclude, StandardCharsets.UTF_8) : "";
@@ -87,16 +91,21 @@ public final class RepositoryPrivateStateService {
         StringBuilder result = new StringBuilder(existing);
         for (String exclusion : SYNESIS_EXCLUSIONS) {
             if (!hasLine(existing, exclusion)) {
-                if (result.length() > 0 && !result.toString().endsWith("\n") && !result.toString().endsWith("\r")) {
+                if (!result.isEmpty() && !result.toString()
+                        .endsWith("\n") && !result.toString()
+                        .endsWith("\r")) {
                     result.append(newline);
                 }
-                result.append(exclusion).append(newline);
+                result.append(exclusion)
+                        .append(newline);
             }
         }
         return result.toString();
     }
 
     private static boolean hasLine(String content, String expected) {
-        return content.lines().anyMatch(line -> line.trim().equals(expected));
+        return content.lines()
+                .anyMatch(line -> line.trim()
+                        .equals(expected));
     }
 }

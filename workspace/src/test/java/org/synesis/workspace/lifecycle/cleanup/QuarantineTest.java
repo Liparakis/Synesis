@@ -1,15 +1,14 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QuarantineTest {
 
@@ -44,7 +43,8 @@ class QuarantineTest {
         assertTrue(qId.startsWith("quarantine-"));
         assertFalse(Files.exists(orphanDir));
 
-        Path qTarget = workspaceRoot.resolve("admin/quarantine").resolve(qId);
+        Path qTarget = workspaceRoot.resolve("admin/quarantine")
+                .resolve(qId);
         assertTrue(Files.exists(qTarget));
         assertTrue(Files.exists(qTarget.resolve("unlinked-1/leftover.txt")));
         assertTrue(Files.exists(qTarget.resolve("quarantine-manifest.json")));

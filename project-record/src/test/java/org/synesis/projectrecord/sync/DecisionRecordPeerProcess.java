@@ -31,7 +31,7 @@ public final class DecisionRecordPeerProcess {
     /**
      * Runs one bounded host or join process. @param arguments process arguments
      */
-    public static void main(String[] arguments) throws Exception {
+    static void main(String[] arguments) throws Exception {
         if (arguments.length != 8) {
             throw new IllegalArgumentException("expected mode and seven paths/values");
         }
@@ -46,14 +46,14 @@ public final class DecisionRecordPeerProcess {
         if ("join".equals(mode)) {
             join(profile, project, joinId, hostId, invitation, marker, outcomes);
         } else if ("host".equals(mode)) {
-            host(profile, project, joinId, hostId, invitation, marker, outcomes);
+            host(profile, project, joinId, hostId, invitation, marker);
         } else {
             throw new IllegalArgumentException("unknown mode");
         }
     }
 
     private static void host(Path profile, UUID project, Path joinId, Path hostId, Path invitation,
-            Path marker, Path outcomes) throws Exception {
+            Path marker) throws Exception {
         NodeIdentity identity = new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
                 .identity();
         Files.writeString(hostId, identity.nodeId());
@@ -74,7 +74,7 @@ public final class DecisionRecordPeerProcess {
             }
         });
         onboarding.host(Files.readString(joinId)
-                .trim(), sync.handler(), session -> {
+                .trim(), sync.handler(), _ -> {
             try {
                 waitFor(marker);
             } catch (Exception failure) {
@@ -97,7 +97,7 @@ public final class DecisionRecordPeerProcess {
         DecisionStore store = new DecisionStore(profile.resolve("records"), project);
         ProjectRecordSync sync = new ProjectRecordSync(config, store);
         Ed25519Signer signer = Ed25519Signer.from(identity);
-        Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> {
+        Onboarding onboarding = new Onboarding(profile.resolve("link"), _ -> {
         });
         onboarding.join(Files.readString(invitation), sync.handler(), session -> {
             try {
@@ -131,10 +131,11 @@ public final class DecisionRecordPeerProcess {
                 "rationale", List.of(new DecisionEvidence("test", "process", new byte[32])), signer);
     }
 
-    private static void waitFor(Path path) throws Exception {
+    private static void waitFor(Path path) {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
         while (!Files.exists(path) && System.nanoTime() < deadline) {
-            Thread.sleep(20);
+            java.util.concurrent.locks.LockSupport.parkNanos(
+                    java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(20));
         }
         if (!Files.exists(path)) {
             throw new IllegalStateException("timed out waiting for " + path);
