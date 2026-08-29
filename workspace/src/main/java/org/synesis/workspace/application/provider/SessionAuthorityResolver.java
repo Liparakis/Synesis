@@ -31,12 +31,16 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
-        return bindingService.list(location, provider).stream()
+        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
                         || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
+        if (bindingService.isSessionTerminal(location, binding.sessionId())) {
+            throw new IllegalStateException("SESSION_TERMINAL");
+        }
+        return binding;
     }
 
     /**
@@ -57,12 +61,16 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
-        return bindingService.list(location, provider).stream()
+        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
                         || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "COMPLETED".equalsIgnoreCase(candidate.status()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
+        if (bindingService.isSessionTerminal(location, binding.sessionId())) {
+            throw new IllegalStateException("SESSION_TERMINAL");
+        }
+        return binding;
     }
 
     /**
@@ -87,12 +95,16 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
-        return bindingService.list(location, provider).stream()
+        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())
                         || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status())
                         || "COMPLETED".equalsIgnoreCase(candidate.status()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
+        if (bindingService.isSessionTerminal(location, binding.sessionId())) {
+            throw new IllegalStateException("SESSION_TERMINAL");
+        }
+        return binding;
     }
 }

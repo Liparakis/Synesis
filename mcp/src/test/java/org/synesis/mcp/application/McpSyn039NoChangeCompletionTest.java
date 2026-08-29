@@ -23,8 +23,12 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
+import org.synesis.workspace.doctor.DoctorFindingCode;
+import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
 /** Verifies the explicit SYN-039 no-change completion workflow at the MCP boundary. */
 final class McpSyn039NoChangeCompletionTest {
@@ -109,6 +113,63 @@ final class McpSyn039NoChangeCompletionTest {
                 .filter(event -> event.type() == PredictionEventType.WORK_INTENT_RELEASED).count());
         assertEquals(1, fixture.store().events().stream()
                 .filter(event -> event.type() == PredictionEventType.WORK_GROUP_STATUS_CHANGED).count());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void packagedBoundaryTerminalSealClassifiesLaterAbnormalTransportAsHistory(@TempDir Path temp) throws Exception {
+        Fixture fixture = prepare(temp, "syn041-terminal-boundary", true);
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall(
+                "get_next_action", "{}")));
+        Map<String, Object> workflow = (Map<String, Object>) ((Map<String, Object>) projection.get("result"))
+                .get("workflow");
+        Map<String, Object> finishArguments = new LinkedHashMap<>((Map<String, Object>) workflow.get("arguments"));
+        finishArguments.put("terminalSession", true);
+
+        Map<String, Object> completed = innerResult(fixture.handler.handleMessage(toolCall(
+                "finish_lane", ProviderJson.write(finishArguments))));
+        assertEquals("completed", completed.get("status"), completed.toString());
+        Map<String, Object> result = (Map<String, Object>) completed.get("result");
+        assertEquals("SESSION_TERMINATED", result.get("sessionTermination"), result.toString());
+        assertTrue(fixture.store().collaborationProjection().isSessionTerminal(
+                new ProviderSessionBindingService().list(fixture.location(), "codex").getFirst().sessionId()));
+
+        var lease = new SessionLeaseStore().load(fixture.project, fixture.connection()).orElseThrow();
+        var abnormal = new SessionLeaseService(new SessionLeaseStore(), pid -> java.util.Optional.empty())
+                .evaluateLiveness(lease, new org.synesis.workspace.lifecycle.lease.SessionLeasePolicy());
+        assertEquals(org.synesis.workspace.lifecycle.lease.SessionLeaseState.TERMINAL_DISCONNECTED, abnormal);
+
+        var doctor = new DoctorService(new ProjectApplicationService(), new org.synesis.workspace.lifecycle.cleanup.LifecycleInventoryService(),
+                new org.synesis.workspace.lifecycle.cleanup.CleanupEligibilityService(),
+                new SessionLeaseService(new SessionLeaseStore(), pid -> java.util.Optional.empty()),
+                new SessionLeaseStore(), pid -> java.util.Optional.empty()).diagnose(fixture.project);
+        assertTrue(doctor.findings().stream().noneMatch(f -> f.code() == DoctorFindingCode.STALE_SESSION_LEASE),
+                doctor.findings().toString());
+
+        long originalPid = lease.processIdentity().pid();
+        assertTrue(new SessionLeaseService(new SessionLeaseStore(), pid -> java.util.Optional.empty())
+                .markTerminalDisconnected(fixture.project, fixture.connection, originalPid));
+        var abnormalHistory = new SessionLeaseStore().load(fixture.project, fixture.connection).orElseThrow();
+        McpProtocolHandler rejectedProbe = new McpProtocolHandler(
+                new AgentSessionService(), fixture.project, "codex", fixture.connection);
+        Map<String, Object> rejectedEnsure = innerResult(rejectedProbe.handleMessage(toolCall(
+                "ensure_session", "{}")));
+        assertEquals("completed", rejectedEnsure.get("status"), rejectedEnsure.toString());
+        assertEquals("SESSION_TERMINAL", ((Map<?, ?>) rejectedEnsure.get("result")).get("state"));
+        rejectedProbe.close();
+        assertEquals(abnormalHistory,
+                new SessionLeaseStore().load(fixture.project, fixture.connection).orElseThrow());
+        var doctorAfterProbe = new DoctorService(new ProjectApplicationService(),
+                new org.synesis.workspace.lifecycle.cleanup.LifecycleInventoryService(),
+                new org.synesis.workspace.lifecycle.cleanup.CleanupEligibilityService(),
+                new SessionLeaseService(new SessionLeaseStore(), pid -> java.util.Optional.empty()),
+                new SessionLeaseStore(), pid -> java.util.Optional.empty()).diagnose(fixture.project);
+        assertTrue(doctorAfterProbe.findings().stream()
+                .noneMatch(f -> f.code() == DoctorFindingCode.STALE_SESSION_LEASE
+                        || f.code() == DoctorFindingCode.AMBIGUOUS_SESSION_LIVENESS
+                        || f.code() == DoctorFindingCode.DURABLE_STATE_AMBIGUOUS),
+                doctorAfterProbe.findings().toString());
+        fixture.handler.close();
     }
 
     @Test

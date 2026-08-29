@@ -491,6 +491,31 @@ class McpServerTest {
     }
 
     @Test
+    void stdioTransportFailureDurablyDisconnectsTerminalLease() throws Exception {
+        String connection = "conn-stdio-abnormal";
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", connection);
+        String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
+                + "\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
+        assertTrue(handler.handleMessage(ensure).contains("ready"));
+        assertTrue(new org.synesis.workspace.lifecycle.lease.SessionLeaseService()
+                .markTerminalAuthorityConfirmed(tempRoot, connection));
+
+        java.io.InputStream failingInput = new java.io.InputStream() {
+            @Override
+            public int read() throws java.io.IOException {
+                throw new java.io.IOException("synthetic transport failure");
+            }
+        };
+        McpStdioServer server = new McpStdioServer(handler, failingInput,
+                new PrintStream(new ByteArrayOutputStream()),
+                new PrintStream(new ByteArrayOutputStream()));
+
+        assertEquals(1, server.run());
+        assertEquals(org.synesis.workspace.lifecycle.lease.SessionLeaseState.TERMINAL_DISCONNECTED,
+                new SessionLeaseStore().load(tempRoot, connection).orElseThrow().leaseState());
+    }
+
+    @Test
     void testMcpReadFileAndApplyPatchEndToEnd() {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-mcp-tools");

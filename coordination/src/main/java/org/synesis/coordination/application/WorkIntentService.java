@@ -544,6 +544,10 @@ public final class WorkIntentService {
             WorkIntent intent = current.collaborationProjection().intent(intentId)
                     .orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
             if (!intent.participant().equals(owner)) throw new IOException("INTENT_OWNER_MISMATCH");
+            if (current.collaborationProjection().isParticipantTerminal(owner)
+                    || current.collaborationProjection().isParticipantTerminal(target)) {
+                throw new IOException("SESSION_TERMINAL");
+            }
             boolean activeTarget = current.collaborationProjection().participants().stream()
                     .anyMatch(participant -> participant.id().equals(target)
                             && participant.state() == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE)
@@ -576,6 +580,9 @@ public final class WorkIntentService {
                     .filter(candidate -> candidate.requestId().equals(requestId)).findFirst()
                     .orElseThrow(() -> new IOException("REQUEST_NOT_FOUND"));
             if (!request.target().equals(participant)) throw new IOException("REQUEST_TARGET_MISMATCH");
+            if (current.collaborationProjection().isParticipantTerminal(participant)) {
+                throw new IOException("SESSION_TERMINAL");
+            }
             if (request.status() != CoordinationRequest.Status.PENDING) {
                 if (request.status() != status) throw new IOException("REQUEST_ALREADY_RESOLVED");
                 if (status == CoordinationRequest.Status.ACCEPTED && request.kind() == CoordinationRequest.Kind.REVIEW) {

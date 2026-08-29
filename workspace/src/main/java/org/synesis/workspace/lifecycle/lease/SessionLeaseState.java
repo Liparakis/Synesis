@@ -28,6 +28,18 @@ public enum SessionLeaseState {
     AMBIGUOUS,
 
     /**
+     * The server has durably confirmed terminal authority, while the transport
+     * has not yet been classified as cleanly closed or abnormally absent.
+     */
+    TERMINAL_AUTHORITY_CONFIRMED,
+
+    /**
+     * Terminal authority was confirmed before the provider transport ended
+     * without a clean EOF; this history is not recovery eligible.
+     */
+    TERMINAL_DISCONNECTED,
+
+    /**
      * Session was closed cleanly on stdio EOF or graceful shutdown.
      */
     CLOSED_CLEANLY

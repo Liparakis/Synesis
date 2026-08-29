@@ -90,6 +90,7 @@ public final class McpStdioServer {
             cleanClose = true;
             return 0;
         } catch (Throwable failure) {
+            handler.closeAbnormally();
             err.println("[synesis-mcp] Stdio loop terminated with error: " + failure.getMessage());
             failure.printStackTrace(err);
             return 1;

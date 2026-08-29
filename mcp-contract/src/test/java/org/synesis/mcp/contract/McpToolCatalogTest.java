@@ -103,6 +103,18 @@ class McpToolCatalogTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void finishLaneMakesTerminalSessionSealingExplicitAndOptIn() {
+        McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
+                .filter(candidate -> candidate.wireName().equals(McpToolCatalog.FINISH_LANE))
+                .findFirst().orElseThrow();
+        Map<String, Object> properties = (Map<String, Object>) descriptor.inputSchema().get("properties");
+        assertTrue(properties.containsKey("terminalSession"));
+        assertTrue(String.valueOf(properties.get("terminalSession")).contains("opt-in"));
+        assertTrue(descriptor.description().contains("terminal session"));
+    }
+
+    @Test
     void identitiesAreDeterministicAndGuidanceDoesNotRecurse() {
         McpToolCatalog.Identity first = McpToolCatalog.identities(McpToolCatalog.descriptors());
         McpToolCatalog.Identity second = McpToolCatalog.identities(McpToolCatalog.descriptors());

@@ -134,6 +134,8 @@ public final class ProviderSupervisionService implements AutoCloseable {
                 if (cleanlyClosedLanes.contains(laneKey(laneId, observation.generation()))) {
                     return;
                 }
+                leaseService.markTerminalDisconnected(request.location().root(), request.binding().sessionId(),
+                        observation.pid());
                 onExit.accept(new ProcessExit(laneId, observation.provider(), observation.pid(), observation.exitCode(),
                         observation.generation(), System.currentTimeMillis()));
             });

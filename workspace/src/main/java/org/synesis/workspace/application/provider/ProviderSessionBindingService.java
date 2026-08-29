@@ -17,6 +17,8 @@ import java.util.UUID;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
@@ -480,6 +482,15 @@ public final class ProviderSessionBindingService {
                                     + binding.providerInstanceFingerprint() + " expected " + location.projectId() + "/"
                                     + identity.nodeId() + "/" + provider + "/" + fingerprint);
                 }
+                if ("TERMINAL".equals(binding.status()) || isSessionTerminal(location, binding.sessionId())) {
+                    throw new BindingException("SESSION_TERMINAL",
+                            "The exact provider session has an irreversible terminal fence");
+                }
+                if (cleanlyDetached(location, binding)) {
+                    Binding rebound = withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch();
+                    write(bindingPath, rebound);
+                    return new BindingResult(rebound, instanceEvidence == null || instanceEvidence.isBlank());
+                }
                 if (!binding.status()
                         .equals("REVOKED") && !binding.status()
                         .equals("COMPLETED")
@@ -560,6 +571,22 @@ public final class ProviderSessionBindingService {
                 "WORKSPACE_UNVERIFIED",
                 1,
                 null);
+    }
+
+    private static boolean cleanlyDetached(ProjectApplicationService.ProjectLocation location, Binding binding) {
+        Path coordination = location.root().resolve(".synesis/coordination");
+        if (!Files.isDirectory(coordination.resolve("events"))) {
+            return false;
+        }
+        try {
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            return new PredictionEventStore(coordination, location.projectId()).collaborationProjection()
+                    .participantState(participant)
+                    .map(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.DETACHED)
+                    .orElse(false);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static boolean workspaceGenerationFresh(ProjectApplicationService.ProjectLocation location,
@@ -836,6 +863,54 @@ public final class ProviderSessionBindingService {
         } catch (Exception failure) {
             throw new BindingException("SESSION_COMPLETE_FAILED",
                     "Could not complete provider connection binding", failure);
+        }
+    }
+
+    /** Marks one exact provider binding as terminal after its event-log fence commits.
+     * @param location initialized control project
+     * @param provider provider identifier
+     * @param sessionId exact durable session identifier
+     * @return true when marked or already terminal
+     * @throws BindingException when stored state cannot be read or persisted
+     */
+    public synchronized boolean terminalizeBySessionId(ProjectApplicationService.ProjectLocation location,
+            String provider, String sessionId) throws BindingException {
+        Objects.requireNonNull(location, "location");
+        requireText(provider, "provider");
+        requireText(sessionId, "sessionId");
+        try {
+            Binding binding = list(location, provider).stream()
+                    .filter(candidate -> sessionId.equals(candidate.sessionId()))
+                    .findFirst().orElse(null);
+            if (binding == null) return false;
+            if ("TERMINAL".equals(binding.status())) return true;
+            if (!"BOUND".equals(binding.status()) && !"COMPLETED".equals(binding.status())) return false;
+            Path bindingPath = location.synesisDirectory().resolve("local")
+                    .resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
+            if (!Files.isRegularFile(bindingPath)) return false;
+            write(bindingPath, binding.terminalize());
+            return true;
+        } catch (BindingException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BindingException("SESSION_TERMINALIZE_FAILED",
+                    "Could not persist provider session terminal marker", failure);
+        }
+    }
+
+    /** Returns the event-log terminal fence for an exact binding session.
+     * @param location initialized control project
+     * @param sessionId exact durable session identifier
+     * @return true when terminalized
+     * @throws BindingException when the event log is unreadable
+     */
+    public boolean isSessionTerminal(ProjectApplicationService.ProjectLocation location, String sessionId)
+            throws BindingException {
+        try {
+            return ProviderSessionTerminalizationService.isSessionTerminal(location, sessionId);
+        } catch (Exception failure) {
+            throw new BindingException("SESSION_TERMINAL_STATE_UNAVAILABLE",
+                    "Could not verify provider session terminal state", failure);
         }
     }
 
@@ -1282,6 +1357,19 @@ public final class ProviderSessionBindingService {
                     creationState, verificationState, "COMPLETED", "COMPLETED",
                     createdAtEpochMillis, completed, lastVerifiedProjectSequence,
                     providerTrustState, bindingVersion, Long.toString(completed));
+        }
+
+        /** Returns an irreversible terminal binding marker while preserving audit fields.
+         * @return terminal binding
+         */
+        public Binding terminalize() {
+            long terminalized = System.currentTimeMillis();
+            return new Binding(schemaVersion, sessionId, projectId, nodeId, provider,
+                    providerInstanceFingerprint, supervisorId, workerId, worktreeId,
+                    worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir,
+                    creationState, verificationState, "TERMINAL", "TERMINAL",
+                    createdAtEpochMillis, terminalized, lastVerifiedProjectSequence,
+                    providerTrustState, bindingVersion, Long.toString(terminalized));
         }
     }
 

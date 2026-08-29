@@ -234,7 +234,9 @@ public enum PredictionEventType {
     /** Unfences a prepared but unpublished completion at a new claim epoch. */
     COMPLETION_UNWOUND,
     /** Records an authenticated review decision for an immutable task snapshot. */
-    REVIEW_VALIDATION_RECORDED;
+    REVIEW_VALIDATION_RECORDED,
+    /** Commits an irreversible fence for one exact provider session. */
+    PROVIDER_SESSION_TERMINALIZED;
 
     /** Returns the stable persisted wire code for this event kind.
      * @return wire code
@@ -269,6 +271,7 @@ public enum PredictionEventType {
             case REPAIR_LANE_CREATED -> 68;
             case COMPLETION_UNWOUND -> 69;
             case REVIEW_VALIDATION_RECORDED -> 70;
+            case PROVIDER_SESSION_TERMINALIZED -> 71;
             default -> ordinal();
         };
     }

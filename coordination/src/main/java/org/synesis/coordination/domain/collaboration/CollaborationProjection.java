@@ -18,6 +18,7 @@ public final class CollaborationProjection {
     private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
     private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
     private final Map<UUID, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
+    private final Map<String, ProviderSessionTerminalPayload> terminalSessions = new LinkedHashMap<>();
     private final Map<String, Participant> participantHistory = new LinkedHashMap<>();
     private final Set<UUID> acknowledgedInboxItems = new HashSet<>();
     private boolean activated;
@@ -59,6 +60,8 @@ public final class CollaborationProjection {
             case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(event.payload()));
             case PARTICIPANT_DETACHED -> detached(CollaborationCodec.decodeHeartbeat(event.payload()));
             case REVIEW_VALIDATION_RECORDED -> review(ReviewValidationPayload.decode(event.payload()));
+            case PROVIDER_SESSION_TERMINALIZED -> terminalize(
+                    ProviderSessionTerminalPayload.decode(event.payload()), event.sequence());
             default -> {
             }
         }
@@ -74,6 +77,7 @@ public final class CollaborationProjection {
         candidate.intents.putAll(intents);
         candidate.requests.putAll(requests);
         candidate.noChangeCompletions.putAll(noChangeCompletions);
+        candidate.terminalSessions.putAll(terminalSessions);
         candidate.participantHistory.putAll(participantHistory);
         candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
         candidate.activated = activated;
@@ -133,6 +137,31 @@ public final class CollaborationProjection {
         return List.copyOf(noChangeCompletions.values());
     }
 
+    /** Returns whether an exact provider session has an irreversible terminal fence.
+     * @param sessionId exact provider session identity
+     * @return true when terminalized
+     */
+    public synchronized boolean isSessionTerminal(String sessionId) {
+        return terminalSessions.containsKey(Objects.requireNonNull(sessionId, "session ID"));
+    }
+
+    /** Returns whether a participant belongs to a terminal provider session.
+     * @param participant exact participant handle
+     * @return true when fenced
+     */
+    public synchronized boolean isParticipantTerminal(String participant) {
+        return terminalSessions.values().stream()
+                .anyMatch(payload -> payload.participant().equals(Objects.requireNonNull(participant, "participant")));
+    }
+
+    /** Returns the durable terminal proof for one exact provider session.
+     * @param sessionId exact provider session identity
+     * @return terminal proof, when present
+     */
+    public synchronized Optional<ProviderSessionTerminalPayload> terminalSession(String sessionId) {
+        return Optional.ofNullable(terminalSessions.get(Objects.requireNonNull(sessionId, "session ID")));
+    }
+
     /** Returns whether an inbox item has been acknowledged.
      * @param itemId server-issued item identifier
      * @return true when acknowledged
@@ -190,6 +219,9 @@ public final class CollaborationProjection {
     }
 
     private void announce(WorkIntent intent) throws IOException {
+        if (isParticipantTerminal(intent.participant())) {
+            throw new IOException("SESSION_TERMINAL");
+        }
         Participant existing = participantHistory.get(intent.participant());
         if (existing != null && existing.state() == Participant.State.REVOKED) {
             throw new IOException("SESSION_EPOCH_FENCED");
@@ -281,6 +313,9 @@ public final class CollaborationProjection {
     }
 
     private void request(CoordinationRequest request) throws IOException {
+        if (isParticipantTerminal(request.requester()) || isParticipantTerminal(request.target())) {
+            throw new IOException("SESSION_TERMINAL");
+        }
         if (requests.containsKey(request.requestId())) throw new IOException("REQUEST_EXISTS");
         if (!intents.containsKey(request.conflictingIntentId())) throw new IOException("INTENT_NOT_FOUND");
         requests.put(request.requestId(), request);
@@ -333,6 +368,7 @@ public final class CollaborationProjection {
     }
 
     private void heartbeat(String participant, long timestamp) throws IOException {
+        if (isParticipantTerminal(participant)) throw new IOException("SESSION_TERMINAL");
         Participant current = participantHistory.get(participant);
         if (current == null) throw new IOException("PARTICIPANT_NOT_FOUND");
         if (current.state() == Participant.State.REVOKED
@@ -387,6 +423,10 @@ public final class CollaborationProjection {
     }
 
     private void continued(CollaborationCodec.Continuation continuation) throws IOException {
+        if (isParticipantTerminal(continuation.sourceParticipant())
+                || isParticipantTerminal(continuation.targetParticipant())) {
+            throw new IOException("SESSION_TERMINAL");
+        }
         WorkIntent source = intents.get(continuation.sourceIntentId());
         if (source == null || !source.participant().equals(continuation.sourceParticipant())) {
             throw new IOException("CONTINUATION_SOURCE_NOT_FOUND");
@@ -443,6 +483,21 @@ public final class CollaborationProjection {
                 Participant.State.DETACHED, current.lastVerifiedActivity(), List.of(),
                 current.recoverySnapshotReference()));
         intents.entrySet().removeIf(entry -> entry.getValue().participant().equals(participant));
+    }
+
+    private void terminalize(ProviderSessionTerminalPayload payload, long eventSequence) throws IOException {
+        if (payload.validatedRevision() != eventSequence - 1L) {
+            throw new IOException("TERMINAL_REVISION_STALE");
+        }
+        ProviderSessionTerminalPayload previous = terminalSessions.get(payload.sessionId());
+        if (previous != null) {
+            if (!previous.equals(payload)) throw new IOException("TERMINAL_SESSION_CONFLICT");
+            return;
+        }
+        if (terminalSessions.values().stream().anyMatch(existing -> existing.participant().equals(payload.participant()))) {
+            throw new IOException("TERMINAL_PARTICIPANT_CONFLICT");
+        }
+        terminalSessions.put(payload.sessionId(), payload);
     }
 
     private static void rejectRevoked(Participant participant) throws IOException {

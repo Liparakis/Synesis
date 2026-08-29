@@ -338,6 +338,13 @@ public final class AgentSessionService {
                         java.util.Map.of("diagnostic", "PROVIDER_CONFIGURATION_CONFLICT"));
             }
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        } catch (ProviderSessionBindingService.BindingException ex) {
+            if ("SESSION_TERMINAL".equals(ex.code())) {
+                return new AgentResponse(AgentStatus.COMPLETED, null, null,
+                        java.util.Map.of("state", "SESSION_TERMINAL"));
+            }
+            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                    AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("reason", ex.code()));
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
         }

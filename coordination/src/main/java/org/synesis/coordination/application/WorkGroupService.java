@@ -61,6 +61,9 @@ public final class WorkGroupService {
             throws IOException, GeneralSecurityException {
         Objects.requireNonNull(grantId, "grantId");
         withLock(current -> {
+            if (current.collaborationProjection().isParticipantTerminal(participant)) {
+                throw new IOException("SESSION_TERMINAL");
+            }
             LaneGrant grant = current.workGroupProjection().grants().stream()
                     .filter(candidate -> candidate.grantId().equals(grantId)).findFirst()
                     .orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));

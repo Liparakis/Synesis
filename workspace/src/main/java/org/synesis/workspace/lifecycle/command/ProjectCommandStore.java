@@ -174,6 +174,36 @@ public final class ProjectCommandStore {
         return matching;
     }
 
+    /** Returns whether a verified worktree scope contains a non-terminal command.
+     * @param worktree exact physical worktree identity
+     * @return true when a command is still blocking
+     * @throws IOException when the scope contains malformed durable state
+     */
+    public boolean hasBlockingRecords(PhysicalWorktreeIdentity worktree) throws IOException {
+        Objects.requireNonNull(worktree, "worktree");
+        validateLocator(worktree.locator());
+        Path records = scopePath(worktree.locator()).resolve("records");
+        if (!Files.isDirectory(records)) return false;
+        try (var files = Files.list(records)) {
+            for (Path file : files.filter(path -> path.getFileName().toString().endsWith(".json")).toList()) {
+                Object parsed = ProviderJson.parse(Files.readString(file, StandardCharsets.UTF_8));
+                if (!(parsed instanceof Map<?, ?> raw)) throw new CommandFormatException("COMMAND_RECORD_NOT_OBJECT");
+                Map<String, Object> value = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (!(entry.getKey() instanceof String key)) throw new CommandFormatException("COMMAND_RECORD_KEY_INVALID");
+                    value.put(key, entry.getValue());
+                }
+                CommandDurableFormat.verify(value);
+                if (fromMap(value).blocking()) return true;
+            }
+        } catch (CommandFormatException failure) {
+            throw failure;
+        } catch (RuntimeException failure) {
+            throw new CommandFormatException("COMMAND_RECORD_CORRUPT", failure);
+        }
+        return false;
+    }
+
     private static void validateLocator(String locator) throws IOException {
         if (locator == null || locator.isBlank() || locator.length() > 256
                 || locator.contains("/") || locator.contains("\\")

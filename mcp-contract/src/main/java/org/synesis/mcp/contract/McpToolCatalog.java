@@ -448,7 +448,9 @@ public final class McpToolCatalog {
         finishProperties.put("participant", Map.of("type", "string",
                 "description", "Exact participant handle from get_next_action"));
         finishProperties.put("summary", Map.of("type", "string", "description", "Human-readable summary of completed task work"));
-        result.add(descriptor(FINISH_LANE, "Validates, publishes, integrates, and closes this isolated lane. A no_change outcome is an explicit, evidence-bound completion for a declared clean verification task; it is never inferred from provider exit.",
+        finishProperties.put("terminalSession", Map.of("type", "boolean",
+                "description", "Explicit opt-in: after this lane completes, request irreversible terminalization of this exact provider session; default false"));
+        result.add(descriptor(FINISH_LANE, "Validates, publishes, integrates, and closes this isolated lane. A no_change outcome is an explicit, evidence-bound completion for a declared clean verification task; it is never inferred from provider exit. An explicit terminal session request is evaluated separately and may be refused when any authority remains.",
                 objectSchema(finishProperties, List.of()),
                 "finish-lane", "MUTATING", List.of("SESSION_BINDING", "CLAIM", "SNAPSHOT"), 9));
         result.add(descriptor(CANCEL_LANE, "Permanently fences and cancels this isolated lane.",

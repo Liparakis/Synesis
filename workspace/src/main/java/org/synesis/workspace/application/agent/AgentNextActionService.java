@@ -1,5 +1,6 @@
 package org.synesis.workspace.application.agent;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionTerminalizationService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -125,6 +126,9 @@ public final class AgentNextActionService {
             location = projectService.locate(root);
             exactBinding = bindingService.find(
                     location, request.provider(), request.connectionInstanceId());
+            if (exactBinding.isPresent() && sessionIsTerminal(location, exactBinding.get())) {
+                return terminalSessionResponse(exactBinding.get().sessionId());
+            }
             if (exactBinding.isPresent() && "COMPLETED".equals(exactBinding.get().status())) {
                 AgentResponse reviewResponse = completedReviewAction(location, exactBinding.get().sessionId());
                 if (reviewResponse != null) {
@@ -181,6 +185,9 @@ public final class AgentNextActionService {
                     store = new org.synesis.coordination.persistence.PredictionEventStore(coordDir,
                             location.projectId());
                     exactBinding = bindingService.find(location, request.provider(), request.connectionInstanceId());
+                    if (exactBinding.isPresent() && sessionIsTerminal(location, exactBinding.get())) {
+                        return terminalSessionResponse(exactBinding.get().sessionId());
+                    }
                     if (exactBinding.isPresent() && "COMPLETED".equals(exactBinding.get().status())) {
                         AgentResponse reviewResponse = completedReviewAction(location, exactBinding.get().sessionId());
                         if (reviewResponse != null) {
@@ -487,6 +494,17 @@ public final class AgentNextActionService {
             }
             default -> AgentResponse.ready("isolated", pendingCount);
         };
+    }
+
+    private static boolean sessionIsTerminal(ProjectApplicationService.ProjectLocation location,
+            ProviderSessionBindingService.Binding binding) throws Exception {
+        return "TERMINAL".equals(binding.status())
+                || ProviderSessionTerminalizationService.isSessionTerminal(location, binding.sessionId());
+    }
+
+    private static AgentResponse terminalSessionResponse(String sessionId) {
+        return new AgentResponse(AgentStatus.COMPLETED, null, null,
+                Map.of("state", "SESSION_TERMINAL", "lane", sessionId));
     }
 
     private AgentResponse completedReviewAction(

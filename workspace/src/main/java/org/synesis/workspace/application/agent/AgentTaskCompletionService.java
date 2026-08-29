@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.agent;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.ProviderSessionTerminalizationService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
@@ -66,6 +67,7 @@ public final class AgentTaskCompletionService {
     private final ProjectProcessExecutor processExecutor;
     private final AgentNextActionService nextActionService;
     private final WorkspaceReadinessService readinessService;
+    private final ProviderSessionTerminalizationService terminalizationService;
 
     /**
      * Creates an agent task completion service.
@@ -81,6 +83,8 @@ public final class AgentTaskCompletionService {
         this.processExecutor = new ProjectProcessExecutor();
         this.nextActionService = new AgentNextActionService();
         this.readinessService = new WorkspaceReadinessService(bindingService);
+        this.terminalizationService = new ProviderSessionTerminalizationService(bindingService,
+                new org.synesis.workspace.lifecycle.lease.SessionLeaseService());
     }
 
     /**
@@ -97,6 +101,7 @@ public final class AgentTaskCompletionService {
      * @param expectedWorkGroupVersion current work-group version observed by the caller
      * @param expectedRevision     current event-log revision observed by the caller
      * @param expectedParticipant  exact participant handle observed by the caller
+     * @param terminalSession      explicit opt-in to seal the exact provider session after lane completion
      */
     public record CompleteTaskRequest(
             Path projectRoot,
@@ -109,7 +114,8 @@ public final class AgentTaskCompletionService {
             Long expectedClaimEpoch,
             Long expectedWorkGroupVersion,
             Long expectedRevision,
-            String expectedParticipant
+            String expectedParticipant,
+            boolean terminalSession
     ) {
         /**
          * Validates non-null core parameters.
@@ -130,7 +136,29 @@ public final class AgentTaskCompletionService {
         public CompleteTaskRequest(Path projectRoot, String provider, String connectionInstanceId,
                 String summary) {
             this(projectRoot, provider, connectionInstanceId, summary, CompletionOutcome.SNAPSHOT,
-                    null, null, null, null, null, null);
+                    null, null, null, null, null, null, false);
+        }
+
+        /** Constructs the pre-terminal-session request shape with terminal sealing disabled.
+         * @param projectRoot control project root
+         * @param provider provider identifier
+         * @param connectionInstanceId provider connection instance
+         * @param summary completion summary
+         * @param outcome completion outcome
+         * @param expectedIntentId exact intent evidence
+         * @param expectedWorkGroupId exact work-group evidence
+         * @param expectedClaimEpoch exact claim epoch
+         * @param expectedWorkGroupVersion exact work-group version
+         * @param expectedRevision exact event revision
+         * @param expectedParticipant exact participant evidence
+         */
+        public CompleteTaskRequest(Path projectRoot, String provider, String connectionInstanceId,
+                String summary, CompletionOutcome outcome, UUID expectedIntentId, UUID expectedWorkGroupId,
+                Long expectedClaimEpoch, Long expectedWorkGroupVersion, Long expectedRevision,
+                String expectedParticipant) {
+            this(projectRoot, provider, connectionInstanceId, summary, outcome, expectedIntentId,
+                    expectedWorkGroupId, expectedClaimEpoch, expectedWorkGroupVersion, expectedRevision,
+                    expectedParticipant, false);
         }
     }
 
@@ -443,6 +471,13 @@ public final class AgentTaskCompletionService {
                 // binding terminal (and retaining its worktree) prevents the
                 // next inbox read from attempting to reuse a stale lane.
                 bindingService.complete(location, request.provider(), request.connectionInstanceId());
+                AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
+                if (request.terminalSession()
+                        && terminalResult.result() instanceof Map<?, ?> terminalMap
+                        && "SESSION_TERMINATED".equals(String.valueOf(terminalMap.get("sessionTermination")))) {
+                    return terminalResult;
+                }
+                result = terminalResult;
                 // A completed lane may still be the only participant able to
                 // review an active sibling.  Project that existing review
                 // protocol before returning a terminal result, so the
@@ -548,7 +583,7 @@ public final class AgentTaskCompletionService {
                             Map.of("reason", "SESSION_COMPLETE_FAILED"));
                 }
                 return noChangeCompletionWithContinuation(location, request, current,
-                        alreadyCompleted, validation);
+                        alreadyCompleted, validation, readiness.binding(), identity);
             }
 
             Optional<WorkIntent> currentIntent = current.collaborationProjection()
@@ -585,7 +620,7 @@ public final class AgentTaskCompletionService {
             PredictionEventStore completedStore = new PredictionEventStore(
                     location.root().resolve(".synesis/coordination"), location.projectId());
             return noChangeCompletionWithContinuation(location, request, completedStore,
-                    completion, validation);
+                    completion, validation, binding, identity);
         } catch (Exception failure) {
             String reason = failure.getMessage() == null ? "NO_CHANGE_COMPLETION_FAILED" : failure.getMessage();
             if (isNoChangeDenial(reason)) {
@@ -604,8 +639,17 @@ public final class AgentTaskCompletionService {
             CompleteTaskRequest request,
             PredictionEventStore store,
             NoChangeCompletion completion,
-            ProjectProcessExecutor.ExecutionResult validation) {
+            ProjectProcessExecutor.ExecutionResult validation,
+            ProviderSessionBindingService.Binding binding,
+            NodeIdentity identity) {
         AgentResponse result = noChangeCompletionResult(store, completion, validation);
+        AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
+        if (request.terminalSession()
+                && terminalResult.result() instanceof Map<?, ?> terminalMap
+                && "SESSION_TERMINATED".equals(String.valueOf(terminalMap.get("sessionTermination")))) {
+            return terminalResult;
+        }
+        result = terminalResult;
         try {
             AgentResponse continuation = nextActionService.getNextAction(
                     new AgentNextActionService.NextActionRequest(
@@ -618,6 +662,31 @@ public final class AgentTaskCompletionService {
             // can recover any continuation projection.
         }
         return result;
+    }
+
+    private AgentResponse terminalSessionResult(AgentResponse completion, CompleteTaskRequest request,
+            ProjectApplicationService.ProjectLocation location,
+            ProviderSessionBindingService.Binding binding, NodeIdentity identity) {
+        if (!request.terminalSession()) return completion;
+        ProviderSessionTerminalizationService.SealResult seal;
+        try {
+            seal = terminalizationService.seal(location, binding, request.connectionInstanceId(), identity,
+                    "finish_lane_terminal_session");
+        } catch (Exception failure) {
+            seal = new ProviderSessionTerminalizationService.SealResult(
+                    ProviderSessionTerminalizationService.Outcome.SESSION_TERMINATION_BLOCKED,
+                    List.of("AUTHORITY_STATE_UNAVAILABLE"), -1L);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (completion.result() instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> result.put(String.valueOf(key), value));
+        } else if (completion.result() != null) {
+            result.put("completion", completion.result());
+        }
+        result.put("sessionTermination", seal.outcome().name());
+        if (!seal.blockers().isEmpty()) result.put("sessionTerminationBlockers", seal.blockers());
+        if (seal.eventSequence() >= 0L) result.put("terminalFenceSequence", seal.eventSequence());
+        return new AgentResponse(completion.status(), completion.reason(), completion.nextAction(), result);
     }
 
     private static AgentResponse noChangeCompletionResult(PredictionEventStore store,

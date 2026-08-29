@@ -197,10 +197,28 @@ public final class McpProtocolHandler {
     /** Marks a clean stdio shutdown and detaches this connection's lane. */
     public void close() {
         try {
-            leaseService.markClosedCleanly(activeProjectRoot, connectionInstanceId);
+            leaseService.markClosedCleanly(activeProjectRoot, connectionInstanceId,
+                    commandProcessIdentity.pid());
             collaborationService.detach(activeProjectRoot, provider, connectionInstanceId);
         } catch (Exception ignored) {
             // Recovery reconciles unclean or partially completed shutdowns.
+        }
+    }
+
+    /**
+     * Records an abnormal stdio shutdown for this exact MCP process.
+     *
+     * <p>The process identity fence prevents a later connection that reuses the
+     * connection identifier from claiming the earlier runtime's abnormal
+     * outcome.  Nonterminal leases remain in their existing stale/recovery
+     * lifecycle.
+     */
+    public void closeAbnormally() {
+        try {
+            leaseService.markTerminalDisconnected(activeProjectRoot, connectionInstanceId,
+                    commandProcessIdentity.pid());
+        } catch (Exception ignored) {
+            // Recovery reconciles an abnormal finalization that could not be persisted.
         }
     }
 
@@ -1147,11 +1165,14 @@ public final class McpProtocolHandler {
                     Long expectedWorkGroupVersion = optionalLongArgument(arguments, "workGroupVersion", 1);
                     Long expectedRevision = optionalLongArgument(arguments, "expectedRevision", 0);
                     String expectedParticipant = optionalStringArgument(arguments, "participant");
+                    boolean terminalSession = arguments != null
+                            && Boolean.TRUE.equals(arguments.get("terminalSession"));
                     AgentTaskCompletionService.CompleteTaskRequest completeReq =
                             new AgentTaskCompletionService.CompleteTaskRequest(
                                     activeProjectRoot, provider, connectionInstanceId, summary, outcome,
                                     expectedIntentId, expectedWorkGroupId, expectedClaimEpoch,
-                                    expectedWorkGroupVersion, expectedRevision, expectedParticipant);
+                                    expectedWorkGroupVersion, expectedRevision, expectedParticipant,
+                                    terminalSession);
                     agentResponse = taskCompletionService.completeTask(completeReq);
                 } catch (IllegalArgumentException invalidFinish) {
                     agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
