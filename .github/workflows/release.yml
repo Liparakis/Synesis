@@ -35,12 +35,12 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - { platform: windows-x64, runner: windows-2025, archive: zip }
-                    - { platform: windows-arm64, runner: windows-11-arm, archive: zip }
-                    - { platform: linux-x64, runner: ubuntu-24.04, archive: tar.gz }
-                    - { platform: linux-arm64, runner: ubuntu-24.04-arm, archive: tar.gz }
-                    - { platform: macos-x64, runner: macos-15-intel, archive: tar.gz }
-                    - { platform: macos-arm64, runner: macos-15, archive: tar.gz }
+                    - { platform: windows-x64, runner: windows-2025, file: synesis-windows-x64.exe }
+                    - { platform: windows-arm64, runner: windows-11-arm, file: synesis-windows-arm64.exe }
+                    - { platform: linux-x64, runner: ubuntu-24.04, file: synesis-linux-x64 }
+                    - { platform: linux-arm64, runner: ubuntu-24.04-arm, file: synesis-linux-arm64 }
+                    - { platform: macos-x64, runner: macos-15-intel, file: synesis-macos-x64 }
+                    - { platform: macos-arm64, runner: macos-15, file: synesis-macos-arm64 }
         runs-on: ${{ matrix.runner }}
         steps:
             -   uses: actions/checkout@v5
@@ -64,5 +64,5 @@ jobs:
             -   uses: actions/upload-artifact@v6
                 with:
                     name: synesis-${{ matrix.platform }}
-                    path: cli/build/distributions/synesis-0.1.0-dev.${{ github.run_number }}-${{ matrix.platform }}.${{ matrix.archive }}
+                    path: cli/build/distributions/${{ matrix.file }}
                     retention-days: 30

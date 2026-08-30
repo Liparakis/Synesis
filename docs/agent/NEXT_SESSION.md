@@ -58,11 +58,15 @@ reference, and current-state navigation links.
 - The next macOS smoke run failed because the extracted Unix
   `synesis-installer` did not retain its executable bit. Bundle assembly and
   smoke extraction now set/restore and validate that permission explicitly.
+- Final artifacts are now single self-extracting runnable files named
+  `synesis-<platform>-<architecture>` (with `.exe` on Windows), containing
+  the tested platform bundle as an appended payload. Bundle smoke tests launch
+  the standalone installer menu as well as the extracted bundle.
 - Exact next action: run
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-  inspect the hosted rerun for Java check success and clean bundle execution,
-  especially Unix installer permissions; then review the six platform
-  artifacts and exact staged boundary before final publication.
+  inspect the hosted rerun for Java check success and clean standalone
+  installer execution on all six targets; then review the artifact names and
+  exact staged boundary before final publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

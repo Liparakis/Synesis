@@ -43,6 +43,10 @@ Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded p
 
 **Requirements:** Java 25, the Gradle Wrapper, and Go 1.26.5 (for bootstrapper development).
 
+Release artifacts are platform-specific self-extracting installers. Double-click
+the Windows `.exe`, or run the corresponding Unix file from a terminal; the
+installer menu provides Install, Repair, and Uninstall.
+
 From the repository root:
 
 ```powershell

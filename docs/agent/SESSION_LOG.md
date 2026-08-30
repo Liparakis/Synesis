@@ -4546,3 +4546,19 @@ not run Codex or close SYN-041.
   and validates the Unix installer permission before invoking it.
 - Exact next action: inspect the hosted rerun for clean six-platform bundle
   execution and verify all artifact names/content.
+
+## 2026-08-30 — Single-file runnable release artifacts
+
+- Replaced the uploaded versioned ZIP/tar.gz files with one runnable artifact
+  per target: `synesis-windows-{x64,arm64}.exe`,
+  `synesis-linux-{x64,arm64}`, and `synesis-macos-{x64,arm64}`.
+- The Gradle task appends the tested platform archive to the native installer
+  using a bounded footer. The Go bootstrapper detects that footer, extracts
+  the embedded bundle to a temporary directory, and delegates menu,
+  install/repair, doctor, version, and uninstall commands to the embedded
+  installer. Install and repair receive the embedded local bundle implicitly.
+- Bundle smoke now launches the standalone artifact's menu entry point before
+  exercising the extracted bundle. The focused Go footer test passes; the
+  full bootstrap suite retains the three known migration-fixture failures.
+- Exact next action: inspect the hosted six-platform rerun for standalone
+  launch and artifact upload success.

@@ -10,6 +10,7 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.TaskAction
+import java.io.DataOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.time.Instant
@@ -397,6 +398,41 @@ tasks.register("platformArchive") {
 
 val bundleArchive = if (isWindows) platformZip else platformTarGz
 val bundleArchiveFile = bundleArchive.flatMap { it.archiveFile }
+val runnableInstallerFile = layout.buildDirectory.file(
+    "distributions/synesis-${bundlePlatform.get()}${if (bundlePlatform.get().startsWith("windows")) ".exe" else ""}"
+)
+val selfExtractMagic = "SYNESIS_SELF_EXTRACT_V1\n".toByteArray(StandardCharsets.UTF_8)
+
+val runnableInstaller = tasks.register("runnableInstaller") {
+    group = "distribution"
+    description = "Creates a single-file self-extracting Synesis installer."
+    notCompatibleWithConfigurationCache(
+        "Single-file installer assembly appends the platform archive to a native executable."
+    )
+    dependsOn(bundleArchive, nativeMcpLauncher)
+    inputs.file(bundleArchiveFile)
+    inputs.property("bundlePlatform", bundlePlatform)
+    outputs.file(runnableInstallerFile)
+    doLast {
+        val archive = bundleArchiveFile.get().asFile
+        val nativeInstaller = nativeMcpDirectory.get().asFile.resolve(bundlePlatform.get())
+            .resolve(if (bundlePlatform.get().startsWith("windows")) "synesis-installer.exe" else "synesis-installer")
+        val output = runnableInstallerFile.get().asFile
+        output.parentFile.mkdirs()
+        require(nativeInstaller.isFile) { "Native installer missing: $nativeInstaller" }
+        Files.copy(nativeInstaller.toPath(), output.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        Files.newOutputStream(output.toPath(), java.nio.file.StandardOpenOption.APPEND).use { stream ->
+            Files.copy(archive.toPath(), stream)
+            val footer = DataOutputStream(stream)
+            footer.write(selfExtractMagic)
+            footer.writeLong(archive.length())
+            footer.flush()
+        }
+        if (!bundlePlatform.get().startsWith("windows")) {
+            require(output.setExecutable(true)) { "Unable to mark runnable installer executable" }
+        }
+    }
+}
 
 tasks.register("bundleSmokeTest") {
     group = "verification"
@@ -404,10 +440,11 @@ tasks.register("bundleSmokeTest") {
     notCompatibleWithConfigurationCache(
         "Bundle smoke testing extracts archives and launches external processes."
     )
-    dependsOn(bundleArchive)
+    dependsOn(bundleArchive, runnableInstaller)
     doLast {
         val smokeRoot = Files.createTempDirectory("synesis-bundle-smoke-").toFile()
         val archive = bundleArchiveFile.get().asFile
+        val standaloneInstaller = runnableInstallerFile.get().asFile
         val extractedRoot = smokeRoot.resolve("bundle")
         if (!isWindows) {
             require(platformBundleDirectory.get().asFile.resolve("bin/synesis").canExecute()) {
@@ -449,6 +486,18 @@ tasks.register("bundleSmokeTest") {
         fun run(vararg arguments: String) = runWithExit(0, arguments)
         fun run(expectedExitCode: Int, vararg arguments: String) = runWithExit(expectedExitCode, arguments)
         try {
+            val standaloneCommand = if (isWindows) {
+                mutableListOf("cmd.exe", "/c", standaloneInstaller.absolutePath)
+            } else {
+                mutableListOf(standaloneInstaller.absolutePath)
+            }
+            val standaloneProcess = ProcessBuilder(standaloneCommand).directory(smokeRoot)
+                .redirectErrorStream(true).start()
+            standaloneProcess.outputStream.bufferedWriter().use { it.write("4\n") }
+            val standaloneOutput = standaloneProcess.inputStream.bufferedReader().readText()
+            require(standaloneProcess.waitFor() == 0 && "Synesis Installer" in standaloneOutput) {
+                "Single-file installer smoke test failed:\n$standaloneOutput"
+            }
             run("version")
             val installerCommand = if (isWindows) {
                 mutableListOf("cmd.exe", "/c", installer.absolutePath, "version")

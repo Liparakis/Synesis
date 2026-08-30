@@ -131,13 +131,19 @@ before Gradle executes them.
   extracted Unix `synesis-installer`. Bundle assembly now sets and validates
   executable permissions for both Unix native binaries, and smoke extraction
   restores the installer permission before invocation.
+- The requested final artifact shape is now implemented: each matrix job
+  appends its platform archive to the native installer and uploads one
+  self-extracting runnable file named `synesis-<platform>-<architecture>`
+  (Windows adds `.exe`). The bootstrapper extracts and delegates to its
+  embedded installer, while the bundle smoke test exercises the standalone
+  file's menu entry point.
 
 ## Immediate next action
 
 Run the hosted `check` and six-platform bundle matrix again, confirm the
-bundle tasks no longer report configuration-cache or Unix-permission failures,
-create a checkpoint, and review the exact staged artifact boundary before
-commit/push.
+self-extracting files launch on all six targets without configuration-cache or
+Unix-permission failures, create a checkpoint, and review the exact staged
+artifact boundary before commit/push.
 
 ## Current failures
 
