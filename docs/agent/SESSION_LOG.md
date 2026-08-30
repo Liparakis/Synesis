@@ -4634,3 +4634,13 @@ not run Codex or close SYN-041.
   an explicitly supplied tag remains supported.
 - Exact next action: validate, checkpoint, commit, push, and inspect the hosted
   branch workflow after the optional-input change.
+
+## 2026-08-30 — Release preparation checkout
+
+- A manual run failed in `gh release create --generate-notes` because the
+  release-preparation job had no repository checkout and GitHub CLI attempted
+  to inspect Git history from a non-repository working directory.
+- Added a full checkout with history to `prepare-release` before release
+  creation. The release-tag fallback behavior is unchanged.
+- Exact next action: validate, checkpoint, commit, push, and inspect the next
+  hosted release workflow run.
