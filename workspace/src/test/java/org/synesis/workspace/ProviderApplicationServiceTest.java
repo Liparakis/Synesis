@@ -90,7 +90,7 @@ final class ProviderApplicationServiceTest {
         try {
             var location = new ProjectApplicationService().init(root)
                     .location();
-            Path config = root.resolve(".mcp.json");
+            Path config = root.resolve(".claude/settings.json");
             Files.createDirectories(config.getParent());
             Files.writeString(config, "{broken");
             var result = new ProviderApplicationService().install(location, "claude");

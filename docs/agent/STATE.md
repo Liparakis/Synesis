@@ -13,6 +13,8 @@ references. Immutable historical evidence and checkpoint records are retained.
   Antigravity or Gemini integration references remain.
 - `git diff --check`: PASS.
 - `go test ./...` in an isolated test home: PASS.
+- Corrected the post-removal CI expectations: malformed Claude hook
+  configuration remains untouched, and healthy Claude status expects exit 0.
 - Gradle Java verification: BLOCKED before compilation by the host's loopback
   connection failure; retry with IPv4/no-daemon options produced the same
   failure.

@@ -8,7 +8,8 @@ checkpoints. No commit or push is authorized.
 
 Removal is complete. Operational source/test/script/current-document searches,
 diff validation, and isolated bootstrap Go tests pass. Gradle Java verification
-is blocked before compilation by the host's loopback connection failure.
+is blocked before compilation by the host's loopback connection failure. The
+post-removal CI expectation fixes are applied but not locally compiled.
 
 Exact next action: re-run `gradlew.bat :workspace:test :mcp:test :cli:test
 --no-daemon --console=plain` when the loopback failure is cleared; do not claim

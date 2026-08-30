@@ -1,3 +1,14 @@
+# 2026-08-30 — MAINT-002 strict-check failure corrections
+
+- Corrected the malformed-provider fixture to use Claude's hook configuration
+  (`.claude/settings.json`), matching the behavior under test and preserving
+  the intended `INVALID_CONFIG` result.
+- Corrected Claude status expectations in the bundle smoke task and bootstrap
+  smoke test from exit 1 to exit 0 because healthy status is successful.
+- Isolated bootstrap `go test ./...` passed. The focused Gradle test remains
+  blocked before compilation by the host's loopback connection failure.
+- Exact next action: rerun the strict Gradle check after loopback is available.
+
 # 2026-08-30 — MAINT-002 Antigravity provider integration removal
 
 - Removed Antigravity from active provider registry, provider lifecycle,

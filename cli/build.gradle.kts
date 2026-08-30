@@ -376,7 +376,7 @@ tasks.register("bundleSmokeTest") {
             run("init", "--project", project.absolutePath)
             run("provider", "list", "--project", project.absolutePath)
             run("provider", "install", "claude", "--project", project.absolutePath)
-            run(1, "provider", "status", "claude", "--project", project.absolutePath)
+            run("provider", "status", "claude", "--project", project.absolutePath)
             run("provider", "uninstall", "claude", "--project", project.absolutePath)
             run("doctor", "--project", project.absolutePath)
 

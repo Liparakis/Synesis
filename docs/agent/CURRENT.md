@@ -19,12 +19,17 @@ and environment fallbacks, provider migration and initialization branches,
 dedicated script and current documentation/tests. Preserved Claude, Codex, and
 historical audit records. Added ADR-0039 documenting the removal.
 
+Corrected the post-removal CI expectations: the malformed-provider fixture now
+targets Claude's hook configuration, and healthy Claude status expects exit 0.
+
 ## Verification
 
 - Operational source/test/script/current-document search: PASS; no
   Antigravity or Gemini integration references remain.
 - `git diff --check`: PASS.
 - `go test ./...` in an isolated test home: PASS.
+- Post-removal CI expectation fixes are covered by the corrected focused test
+  and bundle smoke configuration.
 - Gradle Java verification: BLOCKED before compilation by the host's loopback
   connection failure, including the IPv4/no-daemon retry.
 

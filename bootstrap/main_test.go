@@ -411,7 +411,7 @@ func TestNativeRealBundleInstallation(t *testing.T) {
 	runInstalledBinary(t, paths.launcher, "init", "--project", project)
 	runInstalledBinary(t, paths.launcher, "provider", "list", "--project", project)
 	runInstalledBinary(t, paths.launcher, "provider", "install", "claude", "--project", project)
-	runInstalledBinaryExit(t, paths.launcher, 1, "provider", "status", "claude", "--project", project)
+	runInstalledBinaryExit(t, paths.launcher, 0, "provider", "status", "claude", "--project", project)
 	runInstalledBinary(t, paths.launcher, "provider", "uninstall", "claude", "--project", project)
 	runInstalledBinary(t, paths.launcher, "doctor", "--project", project)
 	if actual, err := os.ReadFile(unrelated); err != nil || string(actual) != string(unrelatedData) {
