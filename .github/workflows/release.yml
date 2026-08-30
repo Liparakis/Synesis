@@ -52,14 +52,14 @@ jobs:
                         echo "release_tag may contain only letters, numbers, dots, underscores, and hyphens" >&2
                         exit 1
                     fi
-                    if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+                    if gh release view "${RELEASE_TAG}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
                         exit 0
                     fi
                     release_args=("${RELEASE_TAG}" --target "${GITHUB_SHA}" --title "${RELEASE_TAG}" --generate-notes)
                     if [[ "${AUTO_PRERELEASE}" == "true" ]]; then
                         release_args+=(--prerelease)
                     fi
-                    gh release create "${release_args[@]}" --repo "${GITHUB_REPOSITORY}"
+                    gh release create "${release_args[@]}" --repo "${{ github.repository }}"
 
     bundles:
         needs: [ java, prepare-release ]
@@ -94,9 +94,36 @@ jobs:
                 if: runner.os != 'Windows'
                 env:
                     JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
-            -   name: Publish raw runnable release asset
-                if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+            -   name: Publish raw runnable release asset (Windows)
+                if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os == 'Windows'
                 env:
                     GH_TOKEN: ${{ github.token }}
                     RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
-                run: gh release upload "${RELEASE_TAG}" "cli/build/distributions/${{ matrix.file }}" --repo "${GITHUB_REPOSITORY}" --clobber
+                shell: pwsh
+                run: |
+                    for ($attempt = 1; $attempt -le 12; $attempt++) {
+                        gh release upload "$env:RELEASE_TAG" "cli/build/distributions/${{ matrix.file }}" --repo "${{ github.repository }}" --clobber
+                        if ($LASTEXITCODE -eq 0) {
+                            exit 0
+                        }
+                        if ($attempt -lt 12) {
+                            Start-Sleep -Seconds 5
+                        }
+                    }
+                    exit $LASTEXITCODE
+            -   name: Publish raw runnable release asset (Unix)
+                if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os != 'Windows'
+                env:
+                    GH_TOKEN: ${{ github.token }}
+                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+                shell: bash
+                run: |
+                    for attempt in {1..12}; do
+                        if gh release upload "${RELEASE_TAG}" "cli/build/distributions/${{ matrix.file }}" --repo "${{ github.repository }}" --clobber; then
+                            exit 0
+                        fi
+                        if [[ "${attempt}" -lt 12 ]]; then
+                            sleep 5
+                        fi
+                    done
+                    exit 1

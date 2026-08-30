@@ -4664,3 +4664,15 @@ not run Codex or close SYN-041.
   `--repo "${GITHUB_REPOSITORY}"` flags to release view, create, and upload.
 - Exact next action: validate, checkpoint, commit, push, and inspect the next
   branch run for all six assets.
+
+## 2026-08-30 — Windows release upload shell syntax
+
+- The next branch run still built every platform and uploaded all four Unix
+  assets, but both Windows upload steps reported `release not found`.
+- The Windows logs showed that the upload command ran under PowerShell while
+  using Bash environment-variable syntax. The tag and repository were
+  therefore not passed to `gh` as intended. Split the publish step by shell,
+  use PowerShell environment access on Windows, use the GitHub repository
+  expression directly, and retry transient release visibility failures.
+- Exact next action: checkpoint, commit, push, and verify all six assets on the
+  next branch run.
