@@ -4654,3 +4654,13 @@ not run Codex or close SYN-041.
   because Actions artifacts would reintroduce ZIP downloads.
 - Exact next action: validate, checkpoint, commit, push, and inspect the branch
   run's generated prerelease assets.
+
+## 2026-08-30 — Explicit release repository
+
+- The branch release created successfully, and Linux/macOS raw assets uploaded,
+  but both Windows upload steps reported `release not found`.
+- The checkout remote still uses the repository's old `synesis-link` location;
+  Windows GitHub CLI resolution followed that stale remote. Added explicit
+  `--repo "${GITHUB_REPOSITORY}"` flags to release view, create, and upload.
+- Exact next action: validate, checkpoint, commit, push, and inspect the next
+  branch run for all six assets.
