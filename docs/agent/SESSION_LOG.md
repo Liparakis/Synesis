@@ -4575,3 +4575,14 @@ not run Codex or close SYN-041.
   `Unable to establish loopback connection`; hosted verification is required.
 - Exact next action: commit and push this correction, then inspect the hosted
   check and bundle jobs.
+
+## 2026-08-30 — Unix launcher newline correction
+
+- The hosted rerun passed the Java `check` job and both Windows bundle jobs,
+  but all Unix bundle smoke tests failed while validating the extracted CLI
+  version.
+- The generated Unix launcher used a Kotlin escaped string containing literal
+  `\\n` text instead of newline characters. Rewrote it as a multiline string
+  so the shebang and shell commands execute correctly after extraction.
+- Exact next action: checkpoint, push the launcher correction, and inspect the
+  complete six-platform hosted matrix.

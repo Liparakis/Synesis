@@ -354,7 +354,11 @@ val platformBundle = tasks.register("platformBundle") {
             "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
         )
         bin.resolve("synesis").writeText(
-            $$"#!/bin/sh\nAPP_HOME=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\nexport SYNESIS_LAUNCHER=\"$APP_HOME/bin/synesis\"\nexec \"$APP_HOME/runtime/bin/java\" --enable-native-access=ALL-UNNAMED -cp \"$APP_HOME/app/synesis-cli.jar:$APP_HOME/app/lib/*\" org.synesis.cli.SynesisCli \"$@\"\n"
+            $$"""#!/bin/sh
+APP_HOME="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+export SYNESIS_LAUNCHER="$APP_HOME/bin/synesis"
+exec "$APP_HOME/runtime/bin/java" --enable-native-access=ALL-UNNAMED -cp "$APP_HOME/app/synesis-cli.jar:$APP_HOME/app/lib/*" org.synesis.cli.SynesisCli "$@"
+"""
         )
         root.resolve("VERSION").writeText(bundleVersion.get() + "\n")
         root.resolve("README.md").writeText(
