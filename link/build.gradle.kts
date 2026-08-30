@@ -65,25 +65,28 @@ fun filesUnder(dir: File, extensions: Set<String>): List<File> =
     if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
     else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
 
+val linkRepositoryRoot = rootProject.layout.projectDirectory.asFile
+val linkFormatRoots = listOf(
+    layout.projectDirectory.dir("src").asFile,
+    linkRepositoryRoot.resolve("docs"),
+    layout.projectDirectory.file("build.gradle.kts").asFile,
+    linkRepositoryRoot.resolve("README.md"),
+    linkRepositoryRoot.resolve("AGENTS.md"),
+    linkRepositoryRoot.resolve("CONTRIBUTING.md"),
+    linkRepositoryRoot.resolve("SECURITY.md"),
+    linkRepositoryRoot.resolve("settings.gradle.kts"),
+    linkRepositoryRoot.resolve("build.gradle.kts")
+)
+
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in tracked source and documentation files."
     doLast {
         val extensions = setOf("java", "kt", "kts", "md", "xml", "toml")
-        val directoryRoots = listOf(
-            layout.projectDirectory.dir("src").asFile,
-            rootProject.layout.projectDirectory.dir("docs").asFile
-        )
-        val singleFileRoots = listOf(
-            layout.projectDirectory.file("build.gradle.kts").asFile,
-            rootProject.layout.projectDirectory.file("README.md").asFile,
-            rootProject.layout.projectDirectory.file("AGENTS.md").asFile,
-            rootProject.layout.projectDirectory.file("CONTRIBUTING.md").asFile,
-            rootProject.layout.projectDirectory.file("SECURITY.md").asFile,
-            rootProject.file("settings.gradle.kts"),
-            rootProject.file("build.gradle.kts")
-        )
-        val files = (directoryRoots + singleFileRoots).flatMap { filesUnder(it, extensions) }
+        val files = linkFormatRoots.flatMap { root ->
+            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+            else listOfNotNull(root.takeIf { it.isFile && it.extension in extensions })
+        }
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }

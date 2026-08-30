@@ -44,8 +44,9 @@ tasks.withType<Javadoc>().configureEach {
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in MCP contract sources."
+    val sourceDirectory = layout.projectDirectory.dir("src").asFile
     doLast {
-        val files = layout.projectDirectory.dir("src").asFile.walkTopDown()
+        val files = sourceDirectory.walkTopDown()
             .filter { it.isFile && it.extension == "java" }
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }

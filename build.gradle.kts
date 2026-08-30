@@ -4,6 +4,7 @@ plugins {
     base
 }
 
+val repositoryRoot = rootProject.layout.projectDirectory.asFile
 val maintainedMarkdownRoots = listOf(
     rootProject.layout.projectDirectory.file("README.md").asFile,
     rootProject.layout.projectDirectory.file("AGENTS.md").asFile,
@@ -20,11 +21,6 @@ val maintainedMarkdownRoots = listOf(
     rootProject.layout.projectDirectory.dir("docs/diagnostics").asFile,
     rootProject.layout.projectDirectory.dir("docs/security").asFile
 )
-
-fun maintainedMarkdownFiles(): List<File> = maintainedMarkdownRoots.flatMap { root ->
-    if (root.isFile) listOf(root)
-    else root.walkTopDown().filter { it.isFile && it.extension == "md" }.toList()
-}
 
 tasks.named("clean") {
     dependsOn(":link:clean")
@@ -51,7 +47,10 @@ tasks.register("repositoryHygieneCheck") {
     group = "verification"
     description = "Checks maintained Markdown links, paths, provider names, scripts, and MCP claims."
     doLast {
-        val files = maintainedMarkdownFiles().distinct().sortedBy { it.relativeTo(rootDir).path }
+        val files = maintainedMarkdownRoots.flatMap { root ->
+            if (root.isFile) listOf(root)
+            else root.walkTopDown().filter { it.isFile && it.extension == "md" }.toList()
+        }.distinct().sortedBy { it.relativeTo(repositoryRoot).path }
         require(files.isNotEmpty()) { "No maintained Markdown files found" }
         val failures = mutableListOf<String>()
         val linkPattern = Regex("\\[[^]]*]\\(([^)]+)\\)")
@@ -60,7 +59,7 @@ tasks.register("repositoryHygieneCheck") {
         val staleProviderPattern =
             Regex("(?i)synesis\\s+provider\\s+(?:install|status|uninstall|migrate)\\s+claude-code\\b")
         files.forEach { file ->
-            val relative = file.relativeTo(rootDir).invariantSeparatorsPath
+            val relative = file.relativeTo(repositoryRoot).invariantSeparatorsPath
             val text = file.readText()
             text.lineSequence().forEachIndexed { index, line ->
                 if (line.endsWith(" ") || line.endsWith("\t")) failures += "$relative:${index + 1}: trailing whitespace"
@@ -79,7 +78,7 @@ tasks.register("repositoryHygieneCheck") {
                 if (!resolved.exists()) failures += "$relative: missing Markdown target $raw"
             }
             scriptPattern.findAll(text).forEach { match ->
-                val script = rootDir.resolve(match.value.replace('/', File.separatorChar))
+                val script = repositoryRoot.resolve(match.value.replace('/', File.separatorChar))
                 if (!script.isFile) failures += "$relative: missing script ${match.value}"
             }
             if (staleProviderPattern.containsMatchIn(text)) failures += "$relative: canonical provider command uses claude-code"
@@ -87,7 +86,7 @@ tasks.register("repositoryHygieneCheck") {
                 if (match.groupValues[1] != "10") failures += "$relative: MCP tool count is ${match.groupValues[1]}, expected 10"
             }
         }
-        val scripts = rootProject.layout.projectDirectory.dir("scripts").asFile.listFiles()
+        val scripts = repositoryRoot.resolve("scripts").listFiles()
             ?.filter { it.isFile && it.extension in setOf("ps1", "cmd", "bat", "sh") }
             ?.map { it.nameWithoutExtension.lowercase() }
             ?: emptyList()

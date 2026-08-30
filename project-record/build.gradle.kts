@@ -47,9 +47,13 @@ fun filesUnder(dir: File, extensions: Set<String>): List<File> =
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in project-record sources."
+    val sourceDirectory = layout.projectDirectory.dir("src").asFile
+    val buildFile = layout.projectDirectory.file("build.gradle.kts").asFile
     doLast {
-        val files = filesUnder(layout.projectDirectory.dir("src").asFile, setOf("java", "kt", "kts")) +
-                filesUnder(layout.projectDirectory.file("build.gradle.kts").asFile, setOf("kts"))
+        val files = listOf(sourceDirectory, buildFile).flatMap { root ->
+            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in setOf("java", "kt", "kts") }.toList()
+            else listOfNotNull(root.takeIf { it.isFile && it.extension in setOf("java", "kt", "kts") })
+        }
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }

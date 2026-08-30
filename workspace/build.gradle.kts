@@ -55,9 +55,14 @@ fun linesContaining(dir: File, pattern: String): List<String> =
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in workspace sources."
+    val sourceDirectory = layout.projectDirectory.dir("src").asFile
+    val buildFile = layout.projectDirectory.file("build.gradle.kts").asFile
     doLast {
-        val files = filesUnder(layout.projectDirectory.dir("src").asFile, setOf("java", "kt", "kts")) +
-                filesUnder(layout.projectDirectory.file("build.gradle.kts").asFile, setOf("kts"))
+        val extensions = setOf("java", "kt", "kts")
+        val files = listOf(sourceDirectory, buildFile).flatMap { root ->
+            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+            else listOfNotNull(root.takeIf { it.isFile && it.extension in extensions })
+        }
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }
@@ -74,11 +79,11 @@ tasks.register("staticAnalysis") {
 tasks.register("architectureCheck") {
     group = "verification"
     description = "Checks workspace package and module import boundaries."
+    val projectRecordSource = layout.projectDirectory.dir("../project-record/src/main/java").asFile
     doLast {
-        val reverseHits = linesContaining(
-            layout.projectDirectory.dir("../project-record/src/main/java").asFile,
-            "org.synesis.workspace"
-        )
+        val reverseHits = projectRecordSource.walkTopDown()
+            .filter { it.isFile && it.extension == "java" }
+            .flatMap { file -> file.readLines().filter { it.contains("org.synesis.workspace") } }
         require(reverseHits.none()) { "Project-record imports workspace code: $reverseHits" }
     }
 }

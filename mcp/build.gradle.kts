@@ -54,9 +54,14 @@ fun linesContaining(dir: File, pattern: String): List<String> =
 tasks.register("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in MCP sources."
+    val sourceDirectory = layout.projectDirectory.dir("src").asFile
+    val buildFile = layout.projectDirectory.file("build.gradle.kts").asFile
     doLast {
-        val files = filesUnder(layout.projectDirectory.dir("src").asFile, setOf("java", "kt", "kts")) +
-                filesUnder(layout.projectDirectory.file("build.gradle.kts").asFile, setOf("kts"))
+        val extensions = setOf("java", "kt", "kts")
+        val files = listOf(sourceDirectory, buildFile).flatMap { root ->
+            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+            else listOfNotNull(root.takeIf { it.isFile && it.extension in extensions })
+        }
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }
@@ -73,17 +78,17 @@ tasks.register("staticAnalysis") {
 tasks.register("architectureCheck") {
     group = "verification"
     description = "Checks MCP subproject import boundaries."
+    val mcpSource = layout.projectDirectory.dir("src/main/java").asFile
+    val cliSource = layout.projectDirectory.dir("../cli/src/main/java").asFile
     doLast {
-        val cliHits = linesContaining(
-            layout.projectDirectory.dir("src/main/java").asFile,
-            "import org.synesis.cli"
-        )
+        val cliHits = mcpSource.walkTopDown()
+            .filter { it.isFile && it.extension == "java" }
+            .flatMap { file -> file.readLines().filter { it.contains("import org.synesis.cli") } }
         require(cliHits.none()) { "MCP imports CLI code: $cliHits" }
 
-        val reverseHits = linesContaining(
-            layout.projectDirectory.dir("../cli/src/main/java").asFile,
-            "import org.synesis.mcp"
-        )
+        val reverseHits = cliSource.walkTopDown()
+            .filter { it.isFile && it.extension == "java" }
+            .flatMap { file -> file.readLines().filter { it.contains("import org.synesis.mcp") } }
         require(reverseHits.none()) { "CLI imports MCP code: $reverseHits" }
     }
 }

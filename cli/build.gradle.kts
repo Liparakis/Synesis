@@ -28,6 +28,12 @@ val platformBundleDirectory =
     layout.buildDirectory.dir("platform-bundle/synesis-${bundleVersion.get()}-${bundlePlatform.get()}")
 val runtimeImageDirectory = layout.buildDirectory.dir("platform-runtime")
 val nativeMcpDirectory = layout.buildDirectory.dir("native-mcp")
+val githubSha = providers.environmentVariable("GITHUB_SHA").orElse("UNKNOWN")
+val runtimeVersion = Runtime.version().toString()
+val launcherBat = layout.buildDirectory.file("install/synesis/bin/synesis.bat")
+val launcherUnix = layout.buildDirectory.file("install/synesis/bin/synesis")
+val cliSourceDirectory = layout.projectDirectory.dir("src").asFile
+val cliBuildFile = layout.projectDirectory.file("build.gradle.kts").asFile
 
 val buildInfo = tasks.register("buildInfo") {
     description = ""
@@ -37,10 +43,8 @@ val buildInfo = tasks.register("buildInfo") {
         output.parentFile.mkdirs()
         output.writeText(
             "version=${bundleVersion.get()}\n" + "recordFormat=SDR2\n" + "reconciliationProtocol=PRP1\n" + "commit=${
-                providers.environmentVariable(
-                    "GITHUB_SHA"
-                ).orElse("UNKNOWN").get()
-            }\n" + "time=${Instant.now()}\n" + "platform=${bundlePlatform.get()}\n" + "javaRuntime=${Runtime.version()}\n"
+                githubSha.get()
+            }\n" + "time=${Instant.now()}\n" + "platform=${bundlePlatform.get()}\n" + "javaRuntime=$runtimeVersion\n"
         )
     }
 }
@@ -103,8 +107,8 @@ tasks.register("launcherSmoke") {
     description = "Checks that the standard Application launchers are generated."
     dependsOn(tasks.installDist)
     doLast {
-        require(layout.buildDirectory.file("install/synesis/bin/synesis.bat").get().asFile.isFile)
-        require(layout.buildDirectory.file("install/synesis/bin/synesis").get().asFile.isFile)
+        require(launcherBat.get().asFile.isFile)
+        require(launcherUnix.get().asFile.isFile)
     }
 }
 
@@ -173,9 +177,10 @@ tasks.register("formatCheck") {
     description = "Rejects trailing whitespace in CLI source and documentation."
     doLast {
         val extensions = setOf("java", "kt", "kts")
-        val files =
-            filesUnder(layout.projectDirectory.dir("src").asFile, extensions) +
-                    filesUnder(layout.projectDirectory.file("build.gradle.kts").asFile, extensions)
+        val files = (listOf(cliSourceDirectory, cliBuildFile)).flatMap { root ->
+            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+            else listOfNotNull(root.takeIf { it.isFile && it.extension in extensions })
+        }
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }

@@ -39,11 +39,14 @@ reference, and current-state navigation links.
   ordinary `check` no longer packages distributions, native launcher builds
   are target-scoped, Gradle configuration/build caching is enabled, and CI uses
   `gradle/actions/setup-gradle@v6` without duplicate `setup-java` caching.
+- Configuration-cache repair is implemented for the 18 task problems reported
+  by the user's `build` output; it needs a fresh `build` run to confirm that no
+  script or `Project` references remain reachable from the task actions.
 - Exact next action: run
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-  execute `./gradlew check --dependency-verification=strict` and one matrix
-  bundle job on a host where Gradle can establish loopback; preserve the
-  resulting timing/cache evidence before final publication.
+  execute `./gradlew build --dependency-verification=strict` twice on a host
+  where Gradle can establish loopback, then preserve the configuration-cache
+  reuse and task-timing evidence before final publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

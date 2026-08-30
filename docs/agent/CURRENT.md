@@ -50,6 +50,12 @@ Gradle daemon/configuration/build caches with a 24 GB heap ceiling, and upgrades
 GitHub Actions to `gradle/actions/setup-gradle@v6` caching. CI no longer runs
 `clean` before verification or builds both archive formats for one platform.
 
+The follow-up configuration-cache repair removes Gradle script/`Project`
+captures from every verification task reported by the user's `build` log,
+including build metadata, repository hygiene, format checks, and architecture
+checks. The task actions now operate on configuration-time-captured files and
+providers.
+
 ## Verification
 
 - Cleanup baseline: PASS; active residue search, hygiene, focused workspace
@@ -87,6 +93,10 @@ GitHub Actions to `gradle/actions/setup-gradle@v6` caching. CI no longer runs
 - Build-performance validation: workflow YAML parsing and `git diff --check`
   pass. Gradle task execution remains blocked before project configuration by
   the same host loopback failure, including direct Gradle 9.7.1 invocation.
+- Configuration-cache repair validation: the affected Gradle scripts pass
+  deferred validation, workflow parsing, whitespace checks, and Go vet. The
+  user's prior build log remains the only execution evidence for the original
+  failure; this shell still cannot start Gradle because of loopback failure.
 
 ## Immediate next action
 

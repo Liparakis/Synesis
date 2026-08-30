@@ -4448,3 +4448,21 @@ not run Codex or close SYN-041.
 - Exact next action: run the updated `check` and one platform bundle workflow on
   a host with working Gradle loopback, then inspect cache-hit and task-timing
   output before publication.
+
+## 2026-08-30 — Configuration-cache task-action repair
+
+- The user's Gradle `build` log showed 18 configuration-cache store problems:
+  custom verification and metadata actions retained Gradle script or
+  `Project` references even though 23 task outputs were already reused from
+  cache.
+- Reworked the affected root, CLI, Link, project-record, workspace,
+  coordination, MCP, and MCP-contract task actions to capture plain files and
+  providers during configuration and avoid script helper calls during task
+  execution.
+- Verification: deferred-register validation, workflow YAML parsing, diff
+  whitespace checks, and Go vet pass. A fresh Gradle run remains blocked in
+  this shell by `Unable to establish loopback connection`; the pasted IDE log
+  is the source evidence for the original cache-store failure.
+- Exact next action: run `./gradlew build --dependency-verification=strict`
+  twice on a host with working Gradle loopback and confirm configuration-cache
+  reuse without new problems.
