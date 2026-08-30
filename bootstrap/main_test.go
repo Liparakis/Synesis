@@ -416,6 +416,45 @@ func TestWindowsUserPathMergeIsCaseInsensitiveAndLossless(t *testing.T) {
 	}
 }
 
+func TestWindowsUserPathUpdateNotifiesExistingShells(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows PATH notification is platform-specific")
+	}
+	originalPath := os.Getenv("PATH")
+	t.Cleanup(func() { _ = os.Setenv("PATH", originalPath) })
+
+	paths := installPaths{bin: `C:\Users\ME\AppData\Local\Synesis\bin`}
+	previousRead := readWindowsUserPath
+	previousWrite := writeWindowsUserPath
+	previousNotify := notifyEnvironmentChanged
+	t.Cleanup(func() {
+		readWindowsUserPath = previousRead
+		writeWindowsUserPath = previousWrite
+		notifyEnvironmentChanged = previousNotify
+	})
+
+	readWindowsUserPath = func() (string, string, error) {
+		return `C:\Windows\System32`, "REG_SZ", nil
+	}
+	var written string
+	writeWindowsUserPath = func(value, _ string) error {
+		written = value
+		return nil
+	}
+	notified := false
+	notifyEnvironmentChanged = func() { notified = true }
+
+	if err := updateWindowsUserPath(paths, true); err != nil {
+		t.Fatal(err)
+	}
+	if written != `C:\Windows\System32;C:\Users\ME\AppData\Local\Synesis\bin` {
+		t.Fatalf("unexpected user PATH: %q", written)
+	}
+	if !notified {
+		t.Fatal("Windows environment change was not broadcast")
+	}
+}
+
 func TestNativeBootstrapProcess(t *testing.T) {
 	binary := os.Getenv("SYNESIS_BOOTSTRAP_BIN")
 	if binary == "" {

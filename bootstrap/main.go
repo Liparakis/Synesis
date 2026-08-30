@@ -1981,6 +1981,7 @@ func updateWindowsUserPath(paths installPaths, install bool) error {
 		if err := writeWindowsUserPath(merged, valueType); err != nil {
 			return err
 		}
+		notifyEnvironmentChanged()
 	}
 	os.Setenv("PATH", mergePath(os.Getenv("PATH"), paths.bin, true, install))
 	if install {
@@ -2076,7 +2077,11 @@ func writeUserFile(path string, data []byte) error {
 	return nil
 }
 
-func readWindowsUserPath() (string, string, error) {
+var readWindowsUserPath = readWindowsUserPathImpl
+
+var writeWindowsUserPath = writeWindowsUserPathImpl
+
+func readWindowsUserPathImpl() (string, string, error) {
 	if runtime.GOOS != "windows" {
 		return os.Getenv("PATH"), "", nil
 	}
@@ -2095,7 +2100,7 @@ func readWindowsUserPath() (string, string, error) {
 	return "", "REG_EXPAND_SZ", nil
 }
 
-func writeWindowsUserPath(value, valueType string) error {
+func writeWindowsUserPathImpl(value, valueType string) error {
 	if valueType != "REG_SZ" && valueType != "REG_EXPAND_SZ" {
 		valueType = "REG_EXPAND_SZ"
 	}

@@ -4676,3 +4676,18 @@ not run Codex or close SYN-041.
   expression directly, and retry transient release visibility failures.
 - Exact next action: checkpoint, commit, push, and verify all six assets on the
   next branch run.
+
+## 2026-08-31 — Windows PATH environment notification
+
+- A friend could install Synesis successfully but could not invoke `synesis`
+  from a shell afterward. The installer updated the per-user Windows PATH in
+  the registry but did not broadcast the environment-change notification, so
+  shells launched from an already-running desktop process could inherit the
+  old PATH.
+- Added a Windows `WM_SETTINGCHANGE` broadcast after a successful PATH write,
+  retained the explicit new-terminal guidance, and added a regression test for
+  the notification contract. Focused Windows PATH and bootstrap command tests
+  pass; unrelated full-suite migration fixture failures remain documented by
+  their existing test behavior.
+- Exact next action: checkpoint, commit, push, and report the installed-shell
+  usage and any remaining migration-test evidence honestly.
