@@ -26,8 +26,8 @@ evidence, ADRs, and checkpoint records remain retained.
 
 ## Immediate next action
 
-Checkpoint the documentation pass, inspect its exact local commit boundary,
-and stop without remote publication.
+Obtain explicit authorization before pushing local documentation commit
+`0d9500b`; make no further scope changes.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

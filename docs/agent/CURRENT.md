@@ -39,8 +39,8 @@ reconciliation; historical Antigravity records remain preserved.
 
 ## Immediate next action
 
-Checkpoint the documentation pass, inspect its exact local commit boundary,
-and stop without remote publication.
+Obtain explicit authorization before pushing local documentation commit
+`0d9500b`; make no further scope changes.
 
 ## Current failures
 

@@ -44,8 +44,8 @@
 - Current evidence: active documentation audit, source/CLI cross-check,
   repository hygiene, deferred-register validation, and active Markdown link
   validation pass. Historical records remain unchanged.
-- Exact next action: checkpoint the documentation pass, inspect its exact local
-  commit boundary, and stop without remote publication.
+- Exact next action: obtain explicit authorization before pushing local
+  documentation commit `0d9500b`; make no further scope changes.
 
 ## MAINT-001
 

@@ -20,7 +20,7 @@ reference, and current-state navigation links.
 - Documentation gates pass: repository hygiene, deferred-register validation,
   active Markdown links, and the source/CLI cross-check.
 
-- Exact next documentation action: checkpoint the documentation pass, inspect its exact local commit boundary, and stop without remote publication.
+- Exact next documentation action: obtain explicit authorization before pushing local documentation commit `0d9500b`; make no further scope changes.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 
