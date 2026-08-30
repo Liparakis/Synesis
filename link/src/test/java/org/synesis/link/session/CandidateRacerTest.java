@@ -104,6 +104,7 @@ final class CandidateRacerTest {
         }
     }
 
+    /** Represents one controllable candidate connection attempt. */
     private record StubAttempt(CompletableFuture<PeerSession> result, AtomicInteger cancelled)
             implements ConnectionAttempt {
 

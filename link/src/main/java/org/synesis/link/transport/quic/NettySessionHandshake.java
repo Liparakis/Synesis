@@ -344,6 +344,7 @@ public final class NettySessionHandshake {
         };
     }
 
+    /** Tracks bounded handshake state for one Netty stream. */
     private static final class StreamState {
 
         private final NodeIdentity localIdentity;
@@ -385,6 +386,7 @@ public final class NettySessionHandshake {
         }
     }
 
+    /** Processes authenticated handshake frames on a Netty stream. */
     private static final class HandshakeStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
         private final StreamState state;

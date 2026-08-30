@@ -300,6 +300,7 @@ public final class PredictionEventStore {
         }
     }
 
+    /** Represents the durable event-log head used for append validation. */
     private record Head(long sequence, byte[] digest) {
 
     }

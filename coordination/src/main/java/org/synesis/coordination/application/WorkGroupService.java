@@ -161,6 +161,7 @@ public final class WorkGroupService {
         }
     }
 
+    /** Encapsulates one append operation executed under the project lock. */
     @FunctionalInterface
     private interface AppendAction {
 

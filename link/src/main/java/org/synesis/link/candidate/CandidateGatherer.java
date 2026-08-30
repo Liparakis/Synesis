@@ -72,6 +72,7 @@ public final class CandidateGatherer implements AutoCloseable {
         timer.shutdownNow();
     }
 
+    /** Tracks one cancellable candidate-gathering operation. */
     private final class Operation implements CandidateCancellation {
 
         private final List<CandidateProvider> providers;

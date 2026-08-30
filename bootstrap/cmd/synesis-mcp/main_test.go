@@ -1,3 +1,4 @@
+// Tests installed and platform-bundle runtime layout resolution.
 package main
 
 import (

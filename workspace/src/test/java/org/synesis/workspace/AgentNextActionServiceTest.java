@@ -30,6 +30,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
+/** Exercises durable next-action projection and exact lifecycle guidance. */
 class AgentNextActionServiceTest {
 
     private Path controlRoot;

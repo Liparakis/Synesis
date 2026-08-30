@@ -1,3 +1,4 @@
+# Loads the durable agent contract and reports the current resumable task.
 [CmdletBinding()]
 param([string]$RepositoryRoot)
 Set-StrictMode -Version Latest

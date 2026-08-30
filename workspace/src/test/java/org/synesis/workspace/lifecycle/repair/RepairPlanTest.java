@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 
+/** Exercises repair-plan validation and bounded state transitions. */
 public class RepairPlanTest {
 
     @Test

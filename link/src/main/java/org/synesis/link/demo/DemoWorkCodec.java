@@ -145,6 +145,7 @@ public final class DemoWorkCodec {
         }
     }
 
+    /** Holds the validated fields decoded from one demo-work frame. */
     private record Parsed(UUID id, String text, DemoWorkStatus status) {
 
     }

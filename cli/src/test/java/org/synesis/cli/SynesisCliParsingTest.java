@@ -76,6 +76,7 @@ final class SynesisCliParsingTest {
                 .resolve("identity.bin")));
     }
 
+    /** Holds the isolated CLI invocation resources used by parsing tests. */
     private record Invocation(CliRuntime runtime, Path profile, ByteArrayOutputStream out,
                               ByteArrayOutputStream err) {
 

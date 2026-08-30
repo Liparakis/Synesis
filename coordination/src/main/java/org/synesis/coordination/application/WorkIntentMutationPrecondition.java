@@ -96,6 +96,7 @@ public record WorkIntentMutationPrecondition(
         }
     }
 
+    /** Lazily exposes the immutable hexadecimal formatter used by validation. */
     private static final class HexFormatHolder {
 
         private static final java.util.HexFormat HEX = java.util.HexFormat.of();

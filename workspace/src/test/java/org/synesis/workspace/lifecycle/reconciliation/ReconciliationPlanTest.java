@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
+/** Exercises reconciliation-plan integrity and lifecycle bounds. */
 class ReconciliationPlanTest {
 
     @Test

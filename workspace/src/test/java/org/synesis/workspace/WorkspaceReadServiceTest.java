@@ -15,6 +15,7 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.workspace.WorkspaceReadService;
 
+/** Exercises read-only workspace inspection and path-boundary behavior. */
 class WorkspaceReadServiceTest {
 
     private Path controlRoot;

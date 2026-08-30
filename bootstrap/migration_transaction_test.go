@@ -1,3 +1,4 @@
+// Tests migration planning, validation, and stable launcher compatibility.
 package main
 
 import (

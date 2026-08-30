@@ -7,6 +7,7 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 
+/** Exercises the source-only Link demonstration CLI contract. */
 final class DemoCliTest {
 
     @Test

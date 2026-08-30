@@ -23,6 +23,7 @@ import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
+/** Exercises MCP server framing, initialization, and tool dispatch. */
 @SuppressWarnings("TextBlockMigration")
 class McpServerTest {
 

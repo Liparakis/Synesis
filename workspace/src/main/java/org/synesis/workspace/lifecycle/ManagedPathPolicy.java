@@ -320,6 +320,7 @@ public final class ManagedPathPolicy {
         }
     }
 
+    /** Captures bounded command output used by managed-path decisions. */
     private record Result(int exitCode, String output) {
 
     }

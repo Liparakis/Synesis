@@ -173,6 +173,7 @@ public final class Ed25519Signer {
         return signingOperation.sign(message);
     }
 
+    /** Defers one checked signing operation behind the signer boundary. */
     @FunctionalInterface
     private interface SigningOperation {
 

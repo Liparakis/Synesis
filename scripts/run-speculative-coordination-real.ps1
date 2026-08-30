@@ -1,3 +1,5 @@
+# Runs the local coordination CLI against an isolated temporary project.
+# This is an explicit experimental harness, not a provider or production entry point.
 [CmdletBinding()]
 param(
     [string]$DemoRoot = (Join-Path $env:TEMP ("synesis-coordination-cli-" + [Guid]::NewGuid().ToString("N"))),

@@ -32,6 +32,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
+/** Exercises capability request validation and durable response projection. */
 class CapabilityNegotiationTest {
 
     @TempDir

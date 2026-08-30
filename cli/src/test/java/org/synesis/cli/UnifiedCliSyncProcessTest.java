@@ -394,18 +394,22 @@ final class UnifiedCliSyncProcessTest {
                 .contains("SYNC_RESULT=DUPLICATE"));
     }
 
+    /** Describes the two-project filesystem fixture used by sync tests. */
     private record ProjectState(Path root, Path host, Path join, String hostNodeId, String projectId, String recordId) {
 
     }
 
+    /** Captures one child CLI process result. */
     private record CommandResult(int exit, String output) {
 
     }
 
+    /** Captures the paired host/join synchronization result. */
     private record SyncRun(int joinExit, int hostExit, String joinOutput) {
 
     }
 
+    /** Holds the host invitation and stream consumed by a sync fixture. */
     private record HostCapture(String invitation, BufferedReader reader) {
 
     }

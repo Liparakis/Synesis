@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** Exercises deterministic path-scope matching and traversal rejection. */
 final class ScopeMatcherTest {
 
     @Test

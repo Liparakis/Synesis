@@ -760,6 +760,7 @@ public final class ProjectRuntimeHost implements AutoCloseable {
         }
     }
 
+    /** Owns runtime resources for one exact provider binding. */
     private final class BindingRuntime {
 
         private final String bindingSessionId;

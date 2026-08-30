@@ -18,6 +18,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.NodeIdentity;
 
+/** Verifies capability projections survive event-store restart and replay. */
 class CapabilityProjectionRestartTest {
 
     @Test

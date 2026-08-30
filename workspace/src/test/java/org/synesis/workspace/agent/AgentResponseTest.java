@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** Exercises provider-neutral agent response encoding and bounded fields. */
 class AgentResponseTest {
 
     @Test

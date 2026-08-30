@@ -1,3 +1,4 @@
+# Aggregates and validates a release-candidate artifact directory.
 param(
     [Parameter(Mandatory = $true)] [string] $InputDirectory,
     [string] $OutputDirectory = "build/release-candidate",

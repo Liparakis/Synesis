@@ -22,6 +22,7 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
+/** Exercises capability negotiation across two independent MCP processes. */
 @SuppressWarnings("TextBlockMigration")
 class TwoProcessCapabilityNegotiationProcessTest {
 

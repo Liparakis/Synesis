@@ -15,6 +15,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
 
+/** Exercises translation of provider outcomes into durable agent results. */
 class AgentOutcomeTranslatorTest {
 
     private AgentOutcomeTranslator translator;

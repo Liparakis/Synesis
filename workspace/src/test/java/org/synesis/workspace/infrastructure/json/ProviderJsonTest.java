@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** Exercises bounded provider JSON parsing and serialization. */
 class ProviderJsonTest {
 
     @Test

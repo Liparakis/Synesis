@@ -301,6 +301,7 @@ public final class SyncApplicationService {
         return config;
     }
 
+    /** Preserves bounded synchronization failure classification. */
     private static final class SyncFailure extends RuntimeException {
 
         @java.io.Serial

@@ -538,10 +538,12 @@ public final class ProjectProcessExecutor {
         }
     }
 
+    /** Captures bounded process output and whether retention was truncated. */
     private record Evidence(String text, long bytesRead, long bytesRetained, boolean truncated) {
 
     }
 
+    /** Collects one process stream under the configured output bound. */
     private static final class StreamCollector {
 
         private final ByteArrayOutputStream head = new ByteArrayOutputStream(HEAD_RETAINED_BYTES);

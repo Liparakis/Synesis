@@ -1,3 +1,4 @@
+# Runs repository and local-state diagnostics without mutating product state.
 [CmdletBinding()]
 param([string]$RepositoryRoot)
 Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'

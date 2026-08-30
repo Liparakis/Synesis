@@ -23,6 +23,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
+/** Verifies fail-closed MCP behavior for bounded failure scenarios. */
 @SuppressWarnings("TextBlockMigration")
 class Slice4FailureScenariosTest {
 

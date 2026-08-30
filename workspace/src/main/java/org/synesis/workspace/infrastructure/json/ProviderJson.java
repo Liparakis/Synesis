@@ -94,6 +94,7 @@ public final class ProviderJson {
                 .replace("\t", "\\t");
     }
 
+    /** Parses the bounded JSON subset used by provider configuration. */
     private static final class Parser {
 
         private final String text;

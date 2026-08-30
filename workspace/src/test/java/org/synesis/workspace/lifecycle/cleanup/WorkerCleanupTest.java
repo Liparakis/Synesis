@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
+/** Exercises worker cleanup eligibility and bounded deletion behavior. */
 class WorkerCleanupTest {
 
     private static void runGit(Path root, String... args) throws Exception {

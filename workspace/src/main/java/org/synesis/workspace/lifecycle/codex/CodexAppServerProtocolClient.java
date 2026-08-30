@@ -650,6 +650,7 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
 
     }
 
+    /** Tracks one request awaiting a bounded protocol response. */
     private record Pending(String id, String method, LifecycleControlRequestEnvelope.Classification classification,
                            String digest, String expectedThreadId, String expectedTurnId, long sentAtEpochMillis,
                            CompletableFuture<Response> future) {

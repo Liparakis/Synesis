@@ -425,6 +425,7 @@ public final class LifecycleInventoryService {
         }
     }
 
+    /** Holds the normalized identity of one Git worktree inventory entry. */
     private record GitWorktreeEntry(String path, String headCommit, String branch) {
 
     }

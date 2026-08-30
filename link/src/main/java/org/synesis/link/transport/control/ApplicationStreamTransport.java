@@ -127,6 +127,7 @@ public final class ApplicationStreamTransport {
         return bytes;
     }
 
+    /** Decodes application frames received by the client endpoint. */
     private static final class ClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
         private final byte[] payload;
@@ -186,6 +187,7 @@ public final class ApplicationStreamTransport {
         }
     }
 
+    /** Decodes application frames received by the server endpoint. */
     private static final class ServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
         private final PeerSession session;

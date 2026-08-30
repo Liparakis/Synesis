@@ -12,6 +12,7 @@ import java.util.concurrent.CompletionStage;
 import org.junit.jupiter.api.Test;
 import org.synesis.link.protocol.ProtocolVersion;
 
+/** Verifies authenticated application-stream binding ownership and state. */
 final class ApplicationStreamBindingTest {
 
     private static PeerSession session(boolean ready, boolean terminal) {
@@ -47,6 +48,7 @@ final class ApplicationStreamBindingTest {
                         .join());
     }
 
+    /** Provides a controlled authenticated binding for stream tests. */
     @SuppressWarnings("ClassCanBeRecord")
     private static final class StubControl implements PeerSession.ControlBinding {
 

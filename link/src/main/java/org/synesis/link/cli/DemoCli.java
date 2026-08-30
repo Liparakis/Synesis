@@ -348,10 +348,12 @@ public final class DemoCli {
                 + "--descriptor FILE --expected-node ID";
     }
 
+    /** Exposes candidate-gathering results in the demonstration CLI view. */
     private record CandidateGatheringResultView(List<Candidate> candidates) {
 
     }
 
+    /** Owns disposable TLS material used by the demonstration CLI. */
     @SuppressWarnings("ClassCanBeRecord")
     private static final class TlsMaterial implements AutoCloseable {
 

@@ -31,13 +31,12 @@
 ### Final source-level documentation and reconciliation — 2026-08-30
 
 - Status: ACTIVE
-- Scope: document meaningful production source contracts and invariants across
-  `bootstrap`, `cli`, `coordination`, `link`, `mcp`, `mcp-contract`,
-  `project-record`, `workspace`, and relevant install/bootstrap source, while
-  reconciling active documentation with current source, CLI, module boundaries,
-  provider IDs, the MCP contract, and verified limitations. Preserve ADRs,
-  checkpoints, evidence, accepted historical records, and backward-read
-  compatibility.
+- Scope: audit and document meaningful source contracts and invariants across
+  the complete tracked source tree: 572 Java files (409 production and 163
+  tests), 10 Go files, and 10 install/validation scripts. Reconcile active
+  documentation with current source, CLI, module boundaries, provider IDs, the
+  MCP contract, and verified limitations. Preserve ADRs, checkpoints,
+  evidence, accepted historical records, and backward-read compatibility.
 - Acceptance: important classes, interfaces, records, enums, annotations,
   exceptions, public/protected APIs, significant fields/constants, and
   non-obvious private logic are documented where semantics warrant it;
@@ -53,17 +52,19 @@
   release, and historical rewrite remain prohibited.
 - Current evidence: active documentation audit, source/CLI cross-check,
   repository hygiene, deferred-register validation, and active Markdown link
-  validation pass. Historical records remain unchanged. The source pass is
-  complete across 19 production files, with no behavior or public-API change.
-- Validation evidence: strict multi-module Javadocs, Go formatting/vet,
-  focused MCP catalog and terminal-lease tests, launcher smoke, platform
-  bundle/archive, and bundle smoke pass. The bootstrap suite retains three
+  validation pass. Historical records remain unchanged. The whole-tree source
+  pass is complete: all 572 Java files contain Javadoc, all detected Java type
+  declarations have documentation, and Go/script source has file-level
+  comments, with no behavior or public-API change.
+- Validation evidence: strict multi-module Javadocs, Go vet, focused MCP
+  contract/catalog and terminal-lease tests, launcher smoke, platform
+  bundle/archive, and bundle smoke pass. The baseline Go tree still has two
+  CRLF-normalization `gofmt -l` findings in the release aggregator; no
+  implementation formatting was added. The bootstrap suite retains three
   known migration-fixture failures; process-heavy MCP/workspace test
   selections stalled without assertion output and remain incomplete.
-- Exact next action: run the required documentation, hygiene, source/CLI
-  consistency, changed-module build/test, MCP contract, workspace lifecycle,
-  bootstrap, bundle, and smoke checks; classify host-blocked or
-  fixture-incomplete results honestly.
+- Exact next action: review the staged diff and CP-0590 checkpoint, then commit
+  and normally push the completed docs-only source pass.
 
 ## MAINT-001
 

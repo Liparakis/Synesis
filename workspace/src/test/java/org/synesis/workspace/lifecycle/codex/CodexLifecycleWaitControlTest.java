@@ -148,6 +148,7 @@ class CodexLifecycleWaitControlTest {
                 Map.of());
     }
 
+    /** Provides a controllable server for lifecycle wait tests. */
     private static final class FakeServer implements AutoCloseable {
 
         private final PipedInputStream serverInput;
@@ -225,6 +226,7 @@ class CodexLifecycleWaitControlTest {
         }
     }
 
+    /** Provides a controllable process abstraction for wait tests. */
     private static final class FakeProcess extends Process {
 
         private final InputStream stdout;

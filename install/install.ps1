@@ -1,3 +1,4 @@
+# Installs the verified Synesis bootstrapper for the current Windows user.
 $ErrorActionPreference = 'Stop'
 $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
 $platform = switch ($arch)

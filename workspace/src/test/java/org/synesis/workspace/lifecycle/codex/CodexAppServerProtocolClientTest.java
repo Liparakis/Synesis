@@ -134,6 +134,7 @@ class CodexAppServerProtocolClientTest {
         }
     }
 
+    /** Identifies an expected bounded protocol completion timeout in tests. */
     private static final class CompletionTimeout extends RuntimeException {
 
         @java.io.Serial
@@ -144,6 +145,7 @@ class CodexAppServerProtocolClientTest {
         }
     }
 
+    /** Identifies an expected protocol completion failure in tests. */
     private static final class CompletionFailure extends RuntimeException {
 
         @java.io.Serial
@@ -154,6 +156,7 @@ class CodexAppServerProtocolClientTest {
         }
     }
 
+    /** Owns disposable protocol-client resources for one lifecycle test. */
     private static final class Fixture implements AutoCloseable {
 
         private final PipedOutputStream stdout = new PipedOutputStream();

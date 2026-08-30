@@ -9,6 +9,7 @@ import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 
+/** Exercises stale-lease detection and bounded grace-period behavior. */
 class StaleAndGraceTest {
 
     @Test

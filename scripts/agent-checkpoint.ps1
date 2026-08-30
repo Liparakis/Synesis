@@ -1,3 +1,4 @@
+# Captures a durable, evidence-backed Synesis continuation checkpoint.
 [CmdletBinding()]
 param([string]$RepositoryRoot)
 Set-StrictMode -Version Latest

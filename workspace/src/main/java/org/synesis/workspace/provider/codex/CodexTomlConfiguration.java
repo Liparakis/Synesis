@@ -429,10 +429,12 @@ public final class CodexTomlConfiguration {
         }
     }
 
+    /** Represents one parsed TOML section and its source offset. */
     private record Section(String name, int offset) {
 
     }
 
+    /** Holds the bounded parse result used for lossless Codex TOML merging. */
     private record Parsed(Outcome outcome, int parentStart, int parentEnd, String parentDirect, String unrelated,
                           String synesis) {
 

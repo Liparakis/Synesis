@@ -129,6 +129,7 @@ final class LivenessTrackerTest {
                 .terminalTransitionCount());
     }
 
+    /** Provides deterministic monotonic time to liveness tests. */
     private static final class ManualClock implements MonotonicClock {
 
         private long nanos;
@@ -143,6 +144,7 @@ final class LivenessTrackerTest {
         }
     }
 
+    /** Runs scheduled liveness callbacks under test control. */
     private static final class ManualScheduler implements LivenessScheduler {
 
         private final ManualClock clock;
@@ -173,6 +175,7 @@ final class LivenessTrackerTest {
                     .count();
         }
 
+        /** Represents one cancellable scheduled liveness callback. */
         private static final class Task implements Cancellable {
 
             private final long at;

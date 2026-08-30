@@ -1386,16 +1386,19 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
+    /** Couples one owned App Server process with its protocol client. */
     private record Attachment(AppServerProcess process, CodexAppServerProtocolClient protocol,
                               CodexEvidenceJournal journal, long attachmentGeneration, long connectionGeneration) {
 
     }
 
+    /** Tracks one bounded caller wait for an exact Codex lifecycle turn. */
     private record Waiter(String expectedThreadId, String expectedTurnId,
                           CompletableFuture<CodexLifecycleHttpClient.Response> future) {
 
     }
 
+    /** Routes protocol events into the owning lifecycle state machine. */
     private final class Listener implements CodexAppServerProtocolClient.Listener {
 
         private final CompletableFuture<String> threadStarted;

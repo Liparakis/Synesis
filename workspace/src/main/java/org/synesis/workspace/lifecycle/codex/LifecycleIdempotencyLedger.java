@@ -615,6 +615,7 @@ public final class LifecycleIdempotencyLedger {
         }
     }
 
+    /** Persists idempotency entries in the lifecycle's bounded file store. */
     @SuppressWarnings({"ClassCanBeRecord", "DuplicatedCode"})
     private static final class FileDurableStore implements DurableStore {
 

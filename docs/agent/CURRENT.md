@@ -4,11 +4,11 @@
 
 - Task ID: MAINT-003
 - Status: ACTIVE.
-- Scope: document meaningful production source contracts and invariants across
-  `bootstrap`, `cli`, `coordination`, `link`, `mcp`, `mcp-contract`,
-  `project-record`, `workspace`, and relevant install/bootstrap source, while
-  reconciling active documentation with current source, CLI, module
-  boundaries, provider IDs, the MCP contract, and verified limitations.
+- Scope: audit and document meaningful source contracts and invariants across
+  the complete tracked source tree: 572 Java files (409 production and 163
+  tests), 10 Go files, and 10 install/validation scripts. Reconcile active
+  documentation with current source, CLI, module boundaries, provider IDs, the
+  MCP contract, and verified limitations.
   Preserve ADRs, checkpoints, evidence, accepted historical records,
   backward-read compatibility, and unrelated work.
 - Acceptance: important source types and APIs are documented where semantics
@@ -43,23 +43,25 @@ reconciliation; historical Antigravity records remain preserved.
   command reference, and current-state navigation links.
 - Documentation gates: `repositoryHygieneCheck`, deferred-register
   validation, active Markdown links, and the source/CLI cross-check PASS.
-- Source pass: bounded documentation updates are complete across 19 production
-  source files in persistence, lifecycle, MCP, provider, project-record,
-  transport, and bootstrap migration boundaries. The source inventory found no
-  undocumented public/protected type declarations requiring a broad rewrite;
-  routine CLI options and obvious locals remain intentionally uncommented.
+- Whole-tree source pass: all 572 Java files now contain Javadoc, all detected
+  Java type declarations have documentation, and the previously undocumented
+  49 test classes plus 61 nested/helper types were covered. All 10 Go files
+  and 10 install/validation scripts also have file-level comments. Routine
+  CLI options and obvious locals remain intentionally uncommented.
 - Validation after the source pass: strict multi-module `javadoc`,
-  `repositoryHygieneCheck`, deferred validation, `git diff --check`, Go
-  formatting/vet, MCP catalog tests, `TerminalLeaseStateTest`, launcher smoke,
-  platform bundle/archive, and bundle smoke PASS. The selected MCP suite and
-  broader workspace lifecycle selection stalled in process-heavy test workers
-  without assertion output and were interrupted; they remain incomplete.
+  `repositoryHygieneCheck`, deferred validation, `git diff --check`, Go vet,
+  MCP contract/catalog tests, `TerminalLeaseStateTest`, launcher smoke,
+  platform bundle/archive, and bundle smoke PASS. The baseline Go tree still
+  reports two CRLF-normalization `gofmt -l` findings in the release aggregator;
+  no implementation formatting was introduced in this docs-only pass. The
+  selected MCP suite and broader workspace lifecycle selection stalled in
+  process-heavy test workers without assertion output and were interrupted;
+  they remain incomplete.
 
 ## Immediate next action
 
-Run the required documentation, hygiene, source/CLI consistency, changed-module
-build/test, MCP contract, workspace lifecycle, bootstrap, bundle, and smoke
-checks; classify host-blocked or fixture-incomplete results honestly.
+Review the staged diff and CP-0590 checkpoint, then commit and normally push
+the completed docs-only source pass.
 
 ## Current failures
 

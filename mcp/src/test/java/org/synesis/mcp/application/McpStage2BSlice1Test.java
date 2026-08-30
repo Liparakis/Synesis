@@ -23,6 +23,7 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
+/** Exercises Stage 2B MCP request and response boundaries. */
 @SuppressWarnings("TextBlockMigration")
 class McpStage2BSlice1Test {
 

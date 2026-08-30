@@ -21,6 +21,7 @@ import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ProjectApplicationService;
 
+/** Exercises cleanup command safety checks and reported outcomes. */
 class CleanupCommandTest {
 
     private static Invocation createInvocation(Path profile) {
@@ -86,6 +87,7 @@ class CleanupCommandTest {
         assertTrue(stdout.contains("\"mutationsPerformed\":0"));
     }
 
+    /** Holds isolated streams and runtime for one cleanup command invocation. */
     private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
 
         private String output() {

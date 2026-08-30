@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
+/** Exercises durable cleanup-plan persistence and reload behavior. */
 class PlanPersistenceTest {
 
     @Test

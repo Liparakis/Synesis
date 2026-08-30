@@ -15,6 +15,7 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
+/** Verifies the authoritative ten-tool MCP catalog and its identities. */
 class McpToolCatalogTest {
 
     private static void git(Path root, String... arguments) throws Exception {

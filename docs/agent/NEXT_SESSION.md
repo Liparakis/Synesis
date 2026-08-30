@@ -2,12 +2,13 @@
 
 ## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
 
-MAINT-003 is the sole active task. Document meaningful source-level contracts
-and invariants across the production modules, then reconcile active
-documentation with current source, CLI, module boundaries, provider IDs, the
-MCP contract, and verified limitations. Preserve historical records, backward
-reads, Claude/Codex behavior, unrelated work, and the lifecycle stash. Do not
-create SYN-042 or start Claude integration.
+MAINT-003 is the sole active task. Audit and document meaningful source-level
+contracts and invariants across all 572 tracked Java files, 10 Go files, and 10
+install/validation scripts, then reconcile active documentation with current
+source, CLI, module boundaries, provider IDs, the MCP contract, and verified
+limitations. Preserve historical records, backward reads, Claude/Codex
+behavior, unrelated work, and the lifecycle stash. Do not create SYN-042 or
+start Claude integration.
 
 The cleanup baseline is complete and pushed in `aee96c3` and `48e0103`.
 Historical Antigravity records remain preserved. Known validation limits are
@@ -21,18 +22,18 @@ reference, and current-state navigation links.
 - Documentation gates pass: repository hygiene, deferred-register validation,
   active Markdown links, and the source/CLI cross-check.
 
-- Source pass completed in 19 production files, covering persistence,
-  lifecycle, MCP, provider, project-record, transport, and bootstrap
-  migration contracts without behavior or public-API changes.
+- Whole-tree source pass completed: all 572 Java files contain Javadoc, all
+  detected Java type declarations have documentation, and all Go/script source
+  files have file-level comments without behavior or public-API changes.
 - Validation PASS: strict multi-module Javadocs, hygiene/deferred/diff gates,
-  Go formatting/vet, MCP catalog tests, terminal lease test, launcher smoke,
-  platform bundle/archive, and bundle smoke. Bootstrap retains three known
+  Go vet, MCP contract/catalog tests, terminal lease test, launcher smoke,
+  platform bundle/archive, and bundle smoke. The baseline Go tree still has
+  two CRLF-normalization `gofmt -l` findings in the release aggregator; no
+  implementation formatting was added. Bootstrap retains three known
   migration-fixture failures; process-heavy MCP/workspace selections remain
   incomplete after bounded interruption.
-- Exact next action: run the required documentation, hygiene, source/CLI
-  consistency, changed-module build/test, MCP contract, workspace lifecycle,
-  bootstrap, bundle, and smoke checks; classify host-blocked or
-  fixture-incomplete results honestly.
+- Exact next action: review the staged diff and CP-0590 checkpoint, then commit
+  and normally push the completed docs-only source pass.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

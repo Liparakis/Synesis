@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
+/** Exercises safe cleanup of lifecycle temporary files. */
 class TemporaryFileCleanupTest {
 
     @Test

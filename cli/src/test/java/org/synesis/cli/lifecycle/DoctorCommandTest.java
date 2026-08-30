@@ -14,6 +14,7 @@ import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.terminal.ConsoleTerminal;
 
+/** Exercises the CLI doctor command's local diagnostics contract. */
 public class DoctorCommandTest {
 
     @Test

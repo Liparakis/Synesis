@@ -290,6 +290,7 @@ public final class ProjectCommandDiagnostics {
         }
     }
 
+    /** Aggregates bounded command namespace diagnostic counts. */
     private static final class Counters {
 
         private final Map<String, Integer> recordCounts = new HashMap<>();

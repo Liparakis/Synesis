@@ -1,3 +1,4 @@
+// Tests deterministic release-candidate aggregation and input validation.
 package main
 
 import (

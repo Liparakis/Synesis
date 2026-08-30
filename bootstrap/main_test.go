@@ -1,3 +1,4 @@
+// Tests signed bootstrap installation, update, rollback, and safety behavior.
 package main
 
 import (

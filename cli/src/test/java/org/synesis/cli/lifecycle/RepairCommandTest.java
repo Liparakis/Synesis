@@ -14,6 +14,7 @@ import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.terminal.ConsoleTerminal;
 
+/** Exercises repair command validation and diagnostic output. */
 public class RepairCommandTest {
 
     @Test

@@ -24,6 +24,7 @@ import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ProjectApplicationService;
 
+/** Verifies the CLI mutation boundary rejects unsafe workspace operations. */
 class FullMutationSafetyTest {
 
     private static Invocation createInvocation(Path profile) {
@@ -99,6 +100,7 @@ class FullMutationSafetyTest {
                 .contains("MUTATIONS_PERFORMED=0"));
     }
 
+    /** Holds isolated streams and runtime for one safety-boundary invocation. */
     private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
 
         private String output() {

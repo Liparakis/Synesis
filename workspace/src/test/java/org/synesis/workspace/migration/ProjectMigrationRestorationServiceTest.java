@@ -172,12 +172,14 @@ final class ProjectMigrationRestorationServiceTest {
                         .outcome());
     }
 
+    /** Encapsulates one migration action used by restoration tests. */
     @FunctionalInterface
     private interface MigrationAction {
 
         void apply(ProjectApplicationService.ProjectLocation location) throws Exception;
     }
 
+    /** Holds the disposable project state used by restoration tests. */
     private record Fixture(Path project, ProjectApplicationService.ProjectLocation location, Path note, Path admin,
                            ProjectMigrationService service, ProjectMigrationService.Plan plan) {
 

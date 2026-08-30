@@ -1,3 +1,4 @@
+# Validates repository fixtures without promoting them to product evidence.
 [CmdletBinding()]
 param([string]$RepositoryRoot)
 Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'

@@ -1,3 +1,4 @@
+# Validates deferred capabilities, TODO references, and public-claim boundaries.
 [CmdletBinding()]
 param([string]$RepositoryRoot)
 Set-StrictMode -Version Latest

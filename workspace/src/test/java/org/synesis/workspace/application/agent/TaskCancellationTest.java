@@ -16,6 +16,7 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
+/** Exercises task cancellation authorization and durable outcome handling. */
 class TaskCancellationTest {
 
     private static void git(Path root, String... arguments) throws Exception {

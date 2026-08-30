@@ -1149,10 +1149,12 @@ final class McpSyn039SliceTest {
         assertTrue(((List<?>) afterResult.get("reviewActions")).isEmpty(), afterResult.toString());
     }
 
+    /** Captures the durable IDs created by one collaboration fixture. */
     private record UUIDs(java.util.UUID groupId, java.util.UUID intentId) {
 
     }
 
+    /** Holds the owner and review-side handlers for snapshot admission tests. */
     private record ReviewFixture(Path project, Path ownerWorktree, McpProtocolHandler owner,
                                  McpProtocolHandler reviewer, UUID groupId, UUID intentId) {
 

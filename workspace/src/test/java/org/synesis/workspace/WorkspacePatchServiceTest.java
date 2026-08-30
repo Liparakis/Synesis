@@ -23,6 +23,7 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
 
+/** Exercises revision-checked workspace patch application. */
 @SuppressWarnings("ExtractMethodRecommender")
 class WorkspacePatchServiceTest {
 

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 
+/** Exercises lifecycle locks and concurrent cleanup coordination. */
 class LockAndConcurrencyTest {
 
     @Test

@@ -419,6 +419,7 @@ public final class ProcessTreeTerminator {
         }
     }
 
+    /** Supplies process-tree evidence using the local JDK process API. */
     private static final class JdkInspector implements Inspector {
 
         private static ObservedProcess observed(ProcessHandle handle, int depth) {

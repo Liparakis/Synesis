@@ -3,11 +3,12 @@
 ## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
 
 The repository cleanup is complete and pushed in `aee96c3` and `48e0103`.
-MAINT-003 is the active source-documentation slice: document meaningful
-contracts and invariants across the production modules, then reconcile active
-guides and current-state records with source, CLI, module boundaries, provider
-IDs, the ten-tool MCP contract, and verified limitations. Immutable historical
-evidence, ADRs, and checkpoint records remain retained.
+MAINT-003 is the active whole-tree source-documentation slice: document
+meaningful contracts and invariants across all 572 tracked Java files (409
+production and 163 tests), 10 Go files, and 10 install/validation scripts,
+then reconcile active guides and current-state records with source, CLI, module
+boundaries, provider IDs, the ten-tool MCP contract, and verified limitations.
+Immutable historical evidence, ADRs, and checkpoint records remain retained.
 
 ## Verification evidence
 
@@ -23,22 +24,22 @@ evidence, ADRs, and checkpoint records remain retained.
   summaries, project-layout metadata, provider maturity, CLI commands, and
   navigation links.
 - Documentation gates pass: repository hygiene, deferred-register validation,
-  active Markdown links, and the source/CLI cross-check. Source-level
-  documentation review is complete for the bounded high-value slice: 19
-  production source files now explain persistence, lifecycle, MCP, provider,
-  project-record, transport, and bootstrap migration contracts. No public or
-  protected type declaration was left without a Javadoc in the inventory.
+  active Markdown links, and the source/CLI cross-check. Whole-tree source
+  review is complete: all 572 Java files contain Javadoc, all detected Java
+  type declarations have documentation, and Go/script source has file-level
+  comments.
 - Validation PASS: strict multi-module `javadoc`, repository hygiene,
-  deferred validation, diff check, Go formatting/vet, MCP catalog tests,
+  deferred validation, diff check, Go vet, MCP contract/catalog tests,
   `TerminalLeaseStateTest`, launcher smoke, platform bundle/archive, and bundle
-  smoke. Process-heavy MCP/workspace selections stalled without assertion
-  output and were interrupted, so they remain incomplete.
+  smoke. The baseline Go tree still has two CRLF-normalization `gofmt -l`
+  findings in the release aggregator; no implementation formatting was added.
+  Process-heavy MCP/workspace selections stalled without assertion output and
+  were interrupted, so they remain incomplete.
 
 ## Immediate next action
 
-Run the required documentation, hygiene, source/CLI consistency, changed-module
-build/test, MCP contract, workspace lifecycle, bootstrap, bundle, and smoke
-checks; classify host-blocked or fixture-incomplete results honestly.
+Review the staged diff and CP-0590 checkpoint, then commit and normally push
+the completed docs-only source pass.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

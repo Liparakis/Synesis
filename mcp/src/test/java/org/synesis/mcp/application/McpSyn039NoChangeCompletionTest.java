@@ -467,6 +467,7 @@ final class McpSyn039NoChangeCompletionTest {
         return new Fixture(project, location, connection, handler, intent.intentId(), intent.workGroupId());
     }
 
+    /** Holds the isolated project and exact session identity for a no-change test. */
     private record Fixture(Path project, ProjectApplicationService.ProjectLocation location, String connection,
                            McpProtocolHandler handler, UUID intentId, UUID groupId) {
 

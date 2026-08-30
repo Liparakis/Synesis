@@ -22,6 +22,7 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
+/** Exercises fail-closed abandonment and durable reconciliation evidence. */
 class AbandonmentTest {
 
     private static void git(Path root, String... arguments) throws Exception {

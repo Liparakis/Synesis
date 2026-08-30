@@ -121,6 +121,7 @@ public final class DemoWorkTransport {
         return bytes;
     }
 
+    /** Handles demo-work frames received by the client endpoint. */
     private static final class ClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
         private final DemoWorkRequest request;
@@ -169,6 +170,7 @@ public final class DemoWorkTransport {
         }
     }
 
+    /** Handles demo-work frames received by the server endpoint. */
     private static final class ServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
         private final PeerSession session;

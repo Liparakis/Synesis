@@ -270,6 +270,7 @@ public final class AgentWorkflowReducer {
         return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
     }
 
+    /** Holds the reducer's normalized action and its explicit permissions. */
     private record LaneAction(String type, List<String> blockers, List<String> permittedOperations,
                               boolean retrySafe) {
 

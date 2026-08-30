@@ -91,6 +91,7 @@ final class CodexHookProcessTest {
         }
     }
 
+    /** Captures one hook subprocess result for protocol assertions. */
     private record CommandResult(int exit, String output) {
 
     }

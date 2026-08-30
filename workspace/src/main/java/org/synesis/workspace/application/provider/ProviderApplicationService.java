@@ -1153,6 +1153,7 @@ public final class ProviderApplicationService {
         }
     }
 
+    /** Holds provider MCP health status for readiness reporting. */
     private record McpHealth(boolean passed, String status) {
 
     }

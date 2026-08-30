@@ -18,6 +18,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 
+/** Exercises agent-session binding, renewal, and authority checks. */
 class AgentSessionServiceTest {
 
     private AgentSessionService sessionService;

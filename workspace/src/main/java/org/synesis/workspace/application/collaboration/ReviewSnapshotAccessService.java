@@ -373,6 +373,7 @@ public final class ReviewSnapshotAccessService {
         }
     }
 
+    /** Couples an authorized grant with the immutable snapshot it permits. */
     private record GrantSnapshot(LaneGrant grant, TaskSnapshotRecord snapshot) {
 
     }
