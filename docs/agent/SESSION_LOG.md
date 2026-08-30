@@ -4611,3 +4611,16 @@ not run Codex or close SYN-041.
   status checks pass; hosted workflow validation remains required.
 - Exact next action: checkpoint, commit, push, and inspect the tag/branch
   workflow behavior.
+
+## 2026-08-30 — Manual raw release publishing
+
+- The successful branch validation run correctly produced no downloadable file:
+  branch and pull-request runs build and smoke-test only, while raw release
+  publishing was gated to `v*` tags.
+- Added a `workflow_dispatch` button with a required `release_tag` input. A
+  manual run now creates or reuses that release and uploads the six raw
+  runnable assets directly; it does not use the ZIP-wrapping Actions artifact
+  service.
+- Updated the release documentation and ADR to describe the manual path.
+- Exact next action: validate the workflow diff, checkpoint, commit, push, and
+  inspect the hosted manual-trigger workflow path.
