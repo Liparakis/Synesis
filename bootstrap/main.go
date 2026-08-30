@@ -289,11 +289,30 @@ func extractEmbeddedBundle() (string, func(), error) {
 		return "", func() {}, err
 	}
 	bundle := flattenBundle(staging)
+	if err := restoreBundlePermissions(bundle); err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
 	if err := validateBundle(bundle); err != nil {
 		cleanup()
 		return "", func() {}, err
 	}
 	return bundle, cleanup, nil
+}
+
+// restoreBundlePermissions makes the executable files usable after archive
+// extraction on Unix hosts. Archive formats and extractors do not always
+// preserve executable mode bits, while Windows does not use them.
+func restoreBundlePermissions(bundle string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	for _, relative := range []string{"bin/synesis", "bin/synesis-installer", "runtime/bin/java"} {
+		if err := os.Chmod(filepath.Join(bundle, relative), 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func usage() { fmt.Println("synesis-installer [install|repair|uninstall|doctor|version]") }

@@ -4586,3 +4586,14 @@ not run Codex or close SYN-041.
   so the shebang and shell commands execute correctly after extraction.
 - Exact next action: checkpoint, push the launcher correction, and inspect the
   complete six-platform hosted matrix.
+
+## 2026-08-30 — Embedded Unix extraction permissions
+
+- The next hosted matrix still failed only on Unix with the same version-check
+  error; Windows remained green. The standalone installer extracted its bundle
+  and validated it before restoring Unix executable mode bits.
+- The self-extractor now restores `bin/synesis`, `bin/synesis-installer`, and
+  `runtime/bin/java` before bundle validation. `gofmt`, `go vet`, focused Go
+  tests, and whitespace validation pass.
+- Exact next action: checkpoint, push the extraction-permission fix, and
+  inspect the next hosted matrix.
