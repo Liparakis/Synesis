@@ -15,7 +15,7 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-class McpTool11Test {
+class McpToolCatalogTest {
 
     private static void git(Path root, String... arguments) throws Exception {
         String[] command = new String[arguments.length + 3];

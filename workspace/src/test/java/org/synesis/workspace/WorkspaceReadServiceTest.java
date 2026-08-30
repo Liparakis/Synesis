@@ -131,8 +131,7 @@ class WorkspaceReadServiceTest {
                 ".synesis/project.json",
                 ".synesis/local/profile",
                 ".git/HEAD",
-                ".codex/mcp.json",
-                ".agents/mcp.json"
+                ".codex/mcp.json"
         };
 
         for (String p : protectedPaths) {

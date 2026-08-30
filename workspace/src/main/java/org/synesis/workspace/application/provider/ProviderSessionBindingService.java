@@ -564,7 +564,7 @@ public final class ProviderSessionBindingService {
                                           .trim() : line.trim();
         String normalized = path.replace('\\', '/');
         return line.endsWith(".synesis") || line.contains(".synesis/")
-                || line.contains(".agents/hooks.json") || line.contains(".claude/settings.json")
+                || line.contains(".claude/settings.json")
                 || line.contains(".codex/hooks.json") || isPythonBytecodeCache(normalized);
     }
 

@@ -994,7 +994,7 @@ coordination unit tests | `ContractServiceTest` | pass | PASS (`:coordination:te
 workspace unit tests | `IntegrationCompatibilityServiceTest` and `IntegrationOrchestrationService` metadata gate |
 pass | PASS focused; Python adapter configured as `python -m pytest -q` | SYN-023 |
 | Raw 10-tool MCP names, decorated-name rejection, server namespace, and provider-facing documentation | MCP/CLI
-contract tests | `McpServerTest`, `McpStage2BSlice1Test`, `McpSyn028ContractTest`, `McpTool11Test`,
+contract tests | `McpServerTest`, `McpStage2BSlice1Test`, `McpSyn028ContractTest`, `McpToolCatalogTest`,
 `:cli:bundleSmokeTest` | pass | PASS (`:mcp:test`, migration/cleanup audit) | SYN-036 task 9 |
 | Real provider MCP collaboration acceptance and evidence classification | provider CLI plus installed MCP process
 acceptance | `docs/evidence/provider-collaboration-acceptance-2026-07-28.md` | pass | PASS real Codex claim/mutation,

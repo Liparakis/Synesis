@@ -91,7 +91,6 @@ public final class IntegrationWorkspaceService {
                 .trim()
                 .replace('\\', '/');
         return path.equals(".codex/hooks.json")
-                || path.equals(".agents/hooks.json")
                 || path.equals(".claude/settings.json")
                 || path.equals(".mcp.json")
                 || path.equals(".synesis/local/workspace-binding.json")

@@ -116,13 +116,13 @@ public final class WorkspacePatchService {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
-        // Protected internal target check (.synesis, .codex, .agents, .git)
+        // Protected internal target check (.synesis, .codex, .git)
         String normTarget = resolvedRelative.replace('\\', '/')
                 .toLowerCase();
         if (normTarget.startsWith(".synesis/") || normTarget.startsWith(".codex/")
-                || normTarget.startsWith(".agents/") || normTarget.startsWith(".git/")
+                || normTarget.startsWith(".git/")
                 || normTarget.equals(".synesis") || normTarget.equals(".codex")
-                || normTarget.equals(".agents") || normTarget.equals(".git")) {
+                || normTarget.equals(".git")) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROTECTED_CONFIGURATION, null, null);
         }
 

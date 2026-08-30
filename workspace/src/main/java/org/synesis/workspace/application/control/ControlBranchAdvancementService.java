@@ -71,8 +71,7 @@ public final class ControlBranchAdvancementService {
                     return !(path.equals("AGENTS.md") || path.equals(".synesis") || path.startsWith(".synesis/")
                             || path.equals(".mcp.json")
                             || path.equals(".codex") || path.startsWith(".codex/")
-                            || path.equals(".claude") || path.startsWith(".claude/")
-                            || path.equals(".agents") || path.startsWith(".agents/"));
+                            || path.equals(".claude") || path.startsWith(".claude/"));
                 });
     }
 

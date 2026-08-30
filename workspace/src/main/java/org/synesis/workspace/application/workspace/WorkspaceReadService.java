@@ -57,9 +57,9 @@ public final class WorkspaceReadService {
         String normalized = path.replace('\\', '/')
                 .toLowerCase(java.util.Locale.ROOT);
         return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/")
-                || normalized.startsWith(".agents/") || normalized.startsWith(".git/")
+                || normalized.startsWith(".git/")
                 || normalized.equals(".synesis") || normalized.equals(".codex")
-                || normalized.equals(".agents") || normalized.equals(".git");
+                || normalized.equals(".git");
     }
 
     private static void addReviewMetadata(Map<String, Object> result,
@@ -175,7 +175,7 @@ public final class WorkspaceReadService {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
-        // Protected internal path check (.synesis, .codex, .agents, .git)
+        // Protected internal path check (.synesis, .codex, .git)
         if (isInvalidOrProtectedPath(resolvedRelative)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }

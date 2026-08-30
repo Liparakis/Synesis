@@ -185,7 +185,7 @@ public final class TaskSnapshotService {
         // explicitly managed paths from the temporary index as well, covering
         // projects that accidentally track one of those files.
         runGitWithIndex(workdir, index, "add", "-A", "--", ".");
-        for (String managed : List.of(".synesis", ".codex", ".claude", ".agents", "AGENTS.md", ".mcp.json",
+        for (String managed : List.of(".synesis", ".codex", ".claude", "AGENTS.md", ".mcp.json",
                 "__pycache__", ":(glob)**/__pycache__/**")) {
             try {
                 runGitWithIndex(workdir, index, "reset", "--", managed);

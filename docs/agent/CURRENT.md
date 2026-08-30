@@ -1,42 +1,49 @@
 # Current Task
 
-## MAINT-002 Remove Antigravity provider integration — 2026-08-30
+## MAINT-002 Repository-wide architecture cleanup before final documentation — 2026-08-30
 
 - Task ID: MAINT-002
 - Status: ACTIVE.
-- Scope: remove Antigravity from operational provider wiring, hooks, MCP
-  discovery/configuration/migration, initialization, tests, scripts, and current
-  documentation while preserving Claude, Codex, and historical evidence.
-- Acceptance: operational searches contain no Antigravity integration; focused
-  builds/tests pass; historical evidence/checkpoints remain unchanged.
-- Existing user-owned changes remain protected. No commit or push is part of
-  this task.
+- Scope: remove only proven dead, unused, obsolete, duplicated, misnamed,
+  stale, unnecessary compatibility, or generated residue from the current
+  product surface. Preserve Claude, Codex, mcp-contract, historical
+  ADRs/checkpoints/evidence, backward-read compatibility, and unrelated work.
+- Acceptance: current source/config/CLI/tests/scripts/workflows/docs are
+  coherent; focused validation passes; exactly 10 MCP tools remain; cleanup is
+  committed and pushed; stop before the final documentation pass.
+- Existing user-owned changes and the unrelated lifecycle stash remain
+  protected. No release, tag, force push, or historical rewrite is allowed.
 
 ## Work completed
 
-Removed the Antigravity provider and hook adapters, CLI command, MCP discovery
-and environment fallbacks, provider migration and initialization branches,
-dedicated script and current documentation/tests. Preserved Claude, Codex, and
-historical audit records. Added ADR-0039 documenting the removal.
-
-Corrected the post-removal CI expectations: the malformed-provider fixture now
-targets Claude's hook configuration, and healthy Claude status expects exit 0.
+The prior Antigravity removal is preserved. The cleanup inventory identified
+`.agents/**` as stale provider-era compatibility residue and removed it from
+the active workspace policy, provider metadata, and focused path fixtures.
+Historical Antigravity records remain preserved.
 
 ## Verification
 
-- Operational source/test/script/current-document search: PASS; no
-  Antigravity or Gemini integration references remain.
-- `git diff --check`: PASS.
-- `go test ./...` in an isolated test home: PASS.
-- Post-removal CI expectation fixes are covered by the corrected focused test
-  and bundle smoke configuration.
-- Gradle Java verification: BLOCKED before compilation by the host's loopback
-  connection failure, including the IPv4/no-daemon retry.
+- Active provider-removal residue search: PASS; the only active Antigravity
+  mention documents its removal, and historical records remain preserved.
+- `repositoryHygieneCheck`, `git diff --check`, focused workspace regressions,
+  and the renamed ten-tool MCP catalog test: PASS.
+- Focused Gradle compilation and packaging: PASS with the host
+  temporary-directory workaround. The root `check` reached process-heavy MCP
+  tests without an assertion result and was stopped; it remains incomplete.
+- Bootstrap Go tests: FAIL in three existing update-migration fixture cases
+  with `update migrations not prepared`; unrelated Go packages passed.
 
 ## Immediate next action
 
-Re-run the focused Gradle Java tests when the host loopback failure is cleared;
-until then, do not claim Java compilation or test closure.
+Checkpoint the completed cleanup, inspect the exact staged boundary, then
+commit and push this authorized maintenance slice.
+
+## Current failures
+
+The bootstrap Go suite has three update-migration fixture failures reporting
+`update migrations not prepared`. The bounded root Java `check` reached
+process-heavy MCP tests without an assertion result and was stopped; that
+suite is incomplete.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

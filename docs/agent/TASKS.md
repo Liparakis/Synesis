@@ -2,23 +2,28 @@
 
 ## MAINT-002
 
-### Remove Antigravity provider integration — 2026-08-30
+### Repository-wide architecture cleanup before final documentation — 2026-08-30
 
 - Status: ACTIVE
-- Scope: remove the Antigravity provider from the supported provider registry,
-  hooks, MCP discovery/configuration/migration, project initialization, tests,
-  scripts, and current user-facing documentation. Preserve unrelated provider
-  behavior and immutable historical evidence/checkpoints.
-- Acceptance: no operational source, test, script, or current documentation
-  retains the Antigravity integration; Claude and Codex remain supported; the
-  affected builds and tests pass; historical evidence remains unchanged.
-  Current evidence passes operational search, diff validation, and bootstrap Go
-  tests; Gradle Java verification is blocked before compilation by host
-  loopback failure.
-- Existing user-owned changes must remain intact. No commit, push, release, or
-  unrelated refactor is authorized by this task.
-- Exact next action: re-run the focused Gradle Java tests when the host loopback
-  failure is cleared; do not claim Java verification until it runs.
+- Scope: inventory and remove only proven dead, unused, obsolete, duplicated,
+  misnamed, stale, unnecessary compatibility, or generated residue across the
+  current product surface. Preserve Claude, Codex, mcp-contract, historical
+  ADRs/checkpoints/evidence, backward-read compatibility, and unrelated work.
+  Do not start Claude integration, add MCP tools, or create SYN-042.
+- Acceptance: active source, tests, scripts, configuration, workflows, and
+  current docs describe the current architecture; affected validation passes;
+  exactly 10 MCP tools remain; cleanup is committed and pushed; the repository
+  is ready for the separate final documentation pass.
+  Current evidence passes operational residue search, diff validation,
+  repository hygiene, the focused workspace regressions, and the renamed
+  ten-tool MCP catalog test. The bootstrap Go suite still has three migration
+  fixture failures, and the bounded root Java check was stopped after a
+  process-heavy MCP test emitted no result.
+- Existing user-owned changes and the unrelated lifecycle stash must remain
+  intact. Commit and push are authorized for this cleanup slice; no release,
+  tag, force push, or historical rewrite is authorized.
+- Exact next action: checkpoint the completed cleanup, inspect the exact staged
+  boundary, then commit and push this authorized maintenance slice.
 
 ## MAINT-001
 

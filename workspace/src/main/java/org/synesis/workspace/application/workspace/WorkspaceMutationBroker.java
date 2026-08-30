@@ -307,9 +307,9 @@ public final class WorkspaceMutationBroker {
         String normalizedTarget = resolvedRelative.replace('\\', '/')
                 .toLowerCase();
         if (normalizedTarget.startsWith(".synesis/") || normalizedTarget.startsWith(".codex/")
-                || normalizedTarget.startsWith(".agents/") || normalizedTarget.startsWith(".git/")
-                || normalizedTarget.equals(".synesis") || normalizedTarget.equals(".codex") || normalizedTarget.equals(
-                ".agents") || normalizedTarget.equals(".git")) {
+                || normalizedTarget.startsWith(".git/")
+                || normalizedTarget.equals(".synesis") || normalizedTarget.equals(".codex")
+                || normalizedTarget.equals(".git")) {
             return evaluateAndRecord(false,
                     Decision.DENY_POLICY,
                     "PROTECTED_CONFIGURATION_TARGET",

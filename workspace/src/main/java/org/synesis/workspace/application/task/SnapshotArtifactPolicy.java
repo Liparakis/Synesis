@@ -90,7 +90,7 @@ public final class SnapshotArtifactPolicy {
             return Classification.MANAGED_CONTRACT;
         }
         if (normalized.equals(".mcp.json") || normalized.startsWith(".codex/")
-                || normalized.startsWith(".claude/") || normalized.startsWith(".agents/")
+                || normalized.startsWith(".claude/")
                 || normalized.startsWith(".synesis/local/") || normalized.startsWith(".synesis/shared/")
                 || normalized.startsWith(".synesis/coordination/")
                 || isPythonBytecodeCache(normalized)) {

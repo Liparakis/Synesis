@@ -318,8 +318,7 @@ class WorkspacePatchServiceTest {
         String[] protectedPaths = {
                 ".synesis/project.json",
                 ".git/HEAD",
-                ".codex/mcp.json",
-                ".agents/mcp.json"
+                ".codex/mcp.json"
         };
 
         for (String p : protectedPaths) {

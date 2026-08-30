@@ -35,9 +35,9 @@ public final class AgentOutcomeTranslator {
         String normalized = relativePath.replace('\\', '/')
                 .toLowerCase();
         return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/")
-                || normalized.startsWith(".agents/") || normalized.startsWith(".git/")
+                || normalized.startsWith(".git/")
                 || normalized.equals(".synesis") || normalized.equals(".codex")
-                || normalized.equals(".agents") || normalized.equals(".git");
+                || normalized.equals(".git");
     }
 
     private static String extractCapability(String message) {

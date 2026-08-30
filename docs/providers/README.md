@@ -1,6 +1,6 @@
 # Provider guides
 
-Synesis currently recognizes three provider IDs:
+Synesis currently recognizes two provider IDs:
 
 | Provider ID   | Support level                        | Configuration boundary                                    |
 |---------------|--------------------------------------|-----------------------------------------------------------|

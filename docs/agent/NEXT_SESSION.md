@@ -1,19 +1,21 @@
 # Next Session
 
-## MAINT-002 Remove Antigravity provider integration — 2026-08-30
+## MAINT-002 Repository-wide architecture cleanup before final documentation — 2026-08-30
 
-MAINT-002 is the sole active task. Remove Antigravity from operational source,
-tests, scripts, and current documentation; preserve historical evidence and
-checkpoints. No commit or push is authorized.
+MAINT-002 is the sole active task. Finish the evidence-backed repository-wide
+cleanup before the separate final documentation pass. Preserve current
+architecture, mcp-contract, exactly 10 MCP tools, historical records, backward
+reads, Claude/Codex behavior, unrelated work, and the lifecycle stash. Commit
+and push are authorized; do not create SYN-042 or start Claude integration.
 
-Removal is complete. Operational source/test/script/current-document searches,
-diff validation, and isolated bootstrap Go tests pass. Gradle Java verification
-is blocked before compilation by the host's loopback connection failure. The
-post-removal CI expectation fixes are applied but not locally compiled.
+Inventory confirmed no active Antigravity/Gemini integration beyond the
+current-state note documenting its removal. The unused `.agents/**`
+provider-era path handling and two active documentation inconsistencies have
+been corrected. Focused workspace/MCP tests, hygiene, compilation, and
+packaging pass; the bootstrap migration fixtures fail and the root process-
+heavy check is incomplete.
 
-Exact next action: re-run `gradlew.bat :workspace:test :mcp:test :cli:test
---no-daemon --console=plain` when the loopback failure is cleared; do not claim
-Java verification until it runs.
+- Exact next code action: checkpoint the completed cleanup, inspect the exact staged boundary, then commit and push this authorized maintenance slice.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 
