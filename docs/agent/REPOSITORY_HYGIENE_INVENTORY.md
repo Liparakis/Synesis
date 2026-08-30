@@ -21,15 +21,16 @@ record set; no historical file is made current by this inventory.
 | `scripts/agent-resume.ps1`, `agent-checkpoint.ps1`, `agent-doctor.ps1`, `agent-validate-deferred.ps1`, `agent-validate-fixtures.ps1`                                                  | durable-state/test helpers          | agents/developers             | scripts and contract                           | handwritten                   | active; referenced by startup/tests/docs                     | preserve entrypoints; harden only if needed             |
 | `scripts/aggregate-release-candidate.ps1`                                                                                                                                             | deleted release helper              | release maintainers           | superseded aggregate artifact design           | handwritten                   | deleted in cleanup commit `243f10b`                          | preserve historical references only                      |
 | `scripts/run-synesis-guardrail-experiment.ps1`, `run-speculative-coordination-real.ps1`                                                                                      | acceptance/experiment helpers       | maintainers                   | evidence reports and task records              | handwritten                   | historical or bounded acceptance; unique behavior            | preserve; do not consolidate without duplicate evidence |
-| `install/install.ps1`, `install/install.sh`                                                                                                                                           | legacy remote installer wrappers    | operators                     | legacy signed-manifest bootstrap path          | handwritten platform wrappers | retained source compatibility; not published by Actions       | prefer the native installer in each bundle                |
 | `gradlew.bat`                                                                                                                                                                         | generated build launcher            | all developers                | Gradle Wrapper                                 | generated                     | active; do not hand-rewrite                                  | preserve                                                |
 
 ## Counts and decisions
 
 - 353 tracked Markdown files were reviewed by path; 228 checkpoints, 33 ADRs,
   and 16 evidence Markdown files are immutable record sets.
-- 11 tracked script/launcher files were reviewed. No genuinely duplicate active
-  script entrypoint was proven. The installer pair is a required platform pair;
+- 9 tracked script/launcher files were reviewed. No genuinely duplicate active
+  script entrypoint was proven. The legacy remote installer wrappers were removed
+  after the native self-extracting platform bundles became the only published
+  release artifacts;
   the two experiment runners have different evidence scopes.
 - One historical `process-transcript.log` remains under evidence because it is
   part of a recorded acceptance run.
