@@ -1,11 +1,12 @@
 # State
 
-## MAINT-003 Final documentation reconciliation — 2026-08-30
+## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
 
 The repository cleanup is complete and pushed in `aee96c3` and `48e0103`.
-MAINT-003 is the separate active documentation slice: reconcile active guides
-and current-state records with source, CLI, module boundaries, provider IDs,
-the ten-tool MCP contract, and verified limitations. Immutable historical
+MAINT-003 is the active source-documentation slice: document meaningful
+contracts and invariants across the production modules, then reconcile active
+guides and current-state records with source, CLI, module boundaries, provider
+IDs, the ten-tool MCP contract, and verified limitations. Immutable historical
 evidence, ADRs, and checkpoint records remain retained.
 
 ## Verification evidence
@@ -22,12 +23,22 @@ evidence, ADRs, and checkpoint records remain retained.
   summaries, project-layout metadata, provider maturity, CLI commands, and
   navigation links.
 - Documentation gates pass: repository hygiene, deferred-register validation,
-  active Markdown links, and the source/CLI cross-check.
+  active Markdown links, and the source/CLI cross-check. Source-level
+  documentation review is complete for the bounded high-value slice: 19
+  production source files now explain persistence, lifecycle, MCP, provider,
+  project-record, transport, and bootstrap migration contracts. No public or
+  protected type declaration was left without a Javadoc in the inventory.
+- Validation PASS: strict multi-module `javadoc`, repository hygiene,
+  deferred validation, diff check, Go formatting/vet, MCP catalog tests,
+  `TerminalLeaseStateTest`, launcher smoke, platform bundle/archive, and bundle
+  smoke. Process-heavy MCP/workspace selections stalled without assertion
+  output and were interrupted, so they remain incomplete.
 
 ## Immediate next action
 
-Obtain explicit authorization before pushing local documentation commit
-`0d9500b`; make no further scope changes.
+Run the required documentation, hygiene, source/CLI consistency, changed-module
+build/test, MCP contract, workspace lifecycle, bootstrap, bundle, and smoke
+checks; classify host-blocked or fixture-incomplete results honestly.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+// migrationReference records the source fingerprint and durable plan state
+// for one provider or project migration.
 type migrationReference struct {
 	Kind       string `json:"kind"`
 	Provider   string `json:"provider,omitempty"`
@@ -24,6 +26,8 @@ type migrationReference struct {
 	SourceHash string `json:"sourceHash,omitempty"`
 }
 
+// preparedMigrations is the complete migration set required before update
+// activation can proceed.
 type preparedMigrations struct {
 	Providers   []migrationReference
 	Project     migrationReference

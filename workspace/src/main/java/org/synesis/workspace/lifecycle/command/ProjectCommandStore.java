@@ -17,6 +17,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 @SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandStore {
 
+    /** Canonical host-wide namespace under which command scopes are stored. */
     private final Path namespaceRoot;
 
     /**

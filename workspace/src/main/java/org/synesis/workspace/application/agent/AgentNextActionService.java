@@ -38,14 +38,24 @@ import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
  * Application service for retrieving the single highest-priority actionable coordination item
  * for an ambient MCP session.
  *
+ * <p>The returned action is a projection of durable collaboration state, not
+ * a suggestion generated from local timing. A concrete recommended tool and
+ * its arguments are the only lifecycle authority; an ordinary {@code WAIT}
+ * or {@code IMPLEMENT} response must not be upgraded by the caller into a
+ * guessed transition.</p>
+ *
  * @since 1.0
  */
 @SuppressWarnings({"DuplicatedCode", "ExtractMethodRecommender"})
 public final class AgentNextActionService {
 
+    /** Resolves project metadata and durable project-local paths. */
     private final ProjectApplicationService projectService;
+    /** Verifies the exact provider binding and assigned worktree. */
     private final WorkspaceReadinessService readinessService;
+    /** Adds durable continuation metadata to the projected response. */
     private final AgentWorkflowReducer workflowReducer;
+    /** Resolves and validates immutable review snapshots when authorized. */
     private final TaskSnapshotService snapshotService;
 
     /**
@@ -71,6 +81,10 @@ public final class AgentNextActionService {
 
     /**
      * Returns whether the exact bound session owns an active no-change lane.
+     *
+     * <p>This predicate is intentionally scoped to the exact participant and
+     * completion mode; a completed work group or another participant's lane
+     * cannot authorize no-change completion for the caller.</p>
      */
     private static boolean hasActiveNoChangeIntent(
             ProjectApplicationService.ProjectLocation location,

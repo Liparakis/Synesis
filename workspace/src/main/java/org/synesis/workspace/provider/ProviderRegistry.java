@@ -11,6 +11,7 @@ import org.synesis.workspace.provider.codex.CodexProviderIntegration;
  */
 public final class ProviderRegistry {
 
+    /** The only provider integrations currently installable by Synesis. */
     private static final List<ProviderIntegration> PROVIDERS = List.of(
             new ClaudeCodeProviderIntegration(), new CodexProviderIntegration());
 

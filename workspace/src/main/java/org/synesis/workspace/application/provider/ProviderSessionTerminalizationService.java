@@ -29,10 +29,17 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 
 /**
  * Commits an exact provider-session terminal fence after a fail-closed proof.
+ *
+ * <p>Terminalization is stronger than lane completion: it requires the exact
+ * provider session to have no remaining mutable, resumable, review, grant, or
+ * command authority. The event-log fence is authoritative; binding and lease
+ * markers are denormalized state that must never reopen that session.</p>
  */
 public final class ProviderSessionTerminalizationService {
 
+    /** Resolves and updates the exact durable provider binding. */
     private final ProviderSessionBindingService bindingService;
+    /** Maintains the process/liveness view associated with the binding. */
     private final SessionLeaseService leaseService;
 
     /**

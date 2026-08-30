@@ -30,17 +30,29 @@ import org.synesis.link.identity.NodeIdentity;
 @SuppressWarnings("DuplicatedCode")
 public final class PredictionEventStore {
 
+    /** Directory containing the immutable, sequence-numbered event files. */
     private final Path eventsDirectory;
+    /** Root used to derive sibling durable coordination state. */
     private final Path rootDirectory;
+    /** Project namespace every loaded and appended event must match. */
     private final UUID projectId;
+    /** Clock used for newly appended event timestamps. */
     private final Clock clock;
+    /** Projection for prediction-specific state. */
     private final PredictionProjection projection = new PredictionProjection();
+    /** Projection for task and coordination state. */
     private final CoordinationProjection coordinationProjection = new CoordinationProjection();
+    /** Projection for capability-request state. */
     private final CapabilityRequestProjection capabilityRequestProjection = new CapabilityRequestProjection();
+    /** Projection for completion and terminal outcome state. */
     private final TaskCompletionProjection taskCompletionProjection = new TaskCompletionProjection();
+    /** Projection for collaboration request and response state. */
     private final CollaborationProjection collaborationProjection = new CollaborationProjection();
+    /** Projection for work-group membership and handoff state. */
     private final WorkGroupProjection workGroupProjection = new WorkGroupProjection();
+    /** Projection for contract binding and publication state. */
     private final ContractProjection contractProjection = new ContractProjection();
+    /** Events replayed into this instance's in-memory projections. */
     private final List<PredictionEvent> events = new ArrayList<>();
 
     /**

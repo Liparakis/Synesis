@@ -13,6 +13,11 @@ import java.util.Objects;
 
 /**
  * Package-private bounded newline-delimited MCP frame reader.
+ *
+ * <p>Frames are decoded strictly as UTF-8 and are accepted only after a line
+ * terminator is received. Clean EOF between frames is distinct from partial
+ * EOF, which is a transport failure and must not be treated as graceful
+ * shutdown.</p>
  */
 final class McpFrameReader {
 
@@ -21,6 +26,7 @@ final class McpFrameReader {
      */
     static final int MAX_FRAME_BYTES = 32 * 1024 * 1024;
 
+    /** Stdio stream owned by the enclosing MCP server. */
     private final InputStream input;
 
     McpFrameReader(InputStream input) {

@@ -14,12 +14,19 @@ import org.synesis.workspace.infrastructure.process.ProcessInspector;
  * Service orchestrating provider-session lease registration, heartbeat renewals, clean shutdown,
  * and liveness evaluation.
  *
+ * <p>Transport finalization is serialized with the project append lock so the
+ * process identity, persisted lease state, and terminal-history decision are
+ * observed from one durable revision. A missing or reused process ID is
+ * evidence about liveness only; it never transfers session authority.</p>
+ *
  * @since 1.0
  */
 @SuppressWarnings("DuplicatedCode")
 public final class SessionLeaseService {
 
+    /** Durable lease reader/writer for the external project administration area. */
     private final SessionLeaseStore store;
+    /** Process evidence source used to distinguish absence from PID reuse. */
     private final ProcessInspector processInspector;
 
     /**
@@ -205,6 +212,10 @@ public final class SessionLeaseService {
     /**
      * Marks an existing lease as cleanly closed upon stdio EOF or graceful shutdown.
      *
+     * <p>The no-PID overload is retained for callers that only observe the
+     * connection. It will not overwrite an already terminal transport result;
+     * supervised callers should use the PID-checked overload.</p>
+     *
      * @param controlRoot          control project root path
      * @param connectionInstanceId connection instance ID
      */
@@ -238,6 +249,10 @@ public final class SessionLeaseService {
      * terminal-authority lease.  Nonterminal leases are deliberately left in
      * their existing stale/recovery lifecycle, and a clean terminal result
      * cannot be rewritten as abnormal.
+     *
+     * <p>The expected PID is checked while the append lock is held, preventing
+     * a late callback from a replaced process from classifying the replacement
+     * connection.</p>
      *
      * @param controlRoot          control project root path
      * @param connectionInstanceId exact connection instance ID
@@ -277,6 +292,11 @@ public final class SessionLeaseService {
      * Marks a lease cleanly closed only when it still refers to the expected
      * supervised process. A late callback from an older process therefore
      * cannot close a replacement lease on the same connection.
+     *
+     * <p>The process check and state transition are one locked operation. If a
+     * terminal-authority lease refers to a no-longer-observed process, the
+     * method records terminal disconnection and still returns {@code false}
+     * because the caller did not close the expected process.</p>
      *
      * @param controlRoot          control project root path
      * @param connectionInstanceId connection instance ID
@@ -331,6 +351,10 @@ public final class SessionLeaseService {
      * Persists the server-confirmed terminal-authority marker for one exact
      * connection.  The marker is monotonic and is never changed back to
      * {@link SessionLeaseState#ACTIVE} by a later lease renewal.
+     *
+     * <p>This marker is a durable authority fence, not a transport-close
+     * result. The subsequent clean or abnormal transport classification is
+     * recorded separately and must preserve the marker's terminal history.</p>
      *
      * @param controlRoot          control project root
      * @param connectionInstanceId exact connection identity

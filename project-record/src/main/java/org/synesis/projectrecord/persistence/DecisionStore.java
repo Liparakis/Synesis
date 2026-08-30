@@ -27,6 +27,8 @@ import org.synesis.projectrecord.domain.DecisionRecord;
  * <p>Revision files are written and forced before an atomically replaced head
  * file. Startup validates chains and rebuilds a missing or older head from
  * durable revisions. Corrupt bytes fail recovery rather than being guessed.
+ * Remote authentic revisions that do not extend the local head are quarantined
+ * and never silently become the current head.</p>
  */
 @SuppressWarnings("DuplicatedCode")
 public final class DecisionStore {
@@ -35,13 +37,21 @@ public final class DecisionStore {
      * Maximum head entries accepted by one read-only snapshot.
      */
     public static final int MAX_HEAD_SNAPSHOT = 1_024;
+    /** Maximum immutable revisions retained for one decision record. */
     private static final int MAX_REVISIONS_PER_RECORD = 64;
+    /** Binary marker used to reject non-head files as head pointers. */
     private static final int HEAD_MAGIC = 0x53444831;
+    /** Version of the compact head-pointer encoding. */
     private static final int HEAD_VERSION = 1;
+    /** Profile-local root containing revisions, heads, and quarantined conflicts. */
     private final Path root;
+    /** Project namespace every accepted revision must match. */
     private final UUID projectId;
+    /** Immutable revision files, grouped by decision identity. */
     private final Path decisions;
+    /** Atomically replaced pointers to the current revision of each decision. */
     private final Path heads;
+    /** Authentic divergent or invalid revisions retained for inspection. */
     private final Path conflicts;
 
     /**
@@ -154,6 +164,10 @@ public final class DecisionStore {
     /**
      * Appends one signed revision after validating the expected local base.
      *
+     * <p>The method is synchronized and writes the revision before replacing
+     * the head pointer. A duplicate is idempotent; a stale base or divergent
+     * chain is reported without changing the current head.</p>
+     *
      * @param record       candidate immutable revision
      * @param expectedBase caller's observed head, or null for a new record
      * @return deterministic append result
@@ -207,7 +221,8 @@ public final class DecisionStore {
     /**
      * Classifies and, when safe, applies a remote immutable revision.
      * Divergent but authentic revisions are quarantined without changing the
-     * local head.
+     * local head. Only the exact next revision extending the current digest is
+     * eligible for application.
      *
      * @param record authenticated candidate revision
      * @return deterministic remote classification

@@ -6,7 +6,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Describes one provider-specific configuration and hook contract.
+ * Describes one provider-specific configuration, hook, and MCP contract.
+ *
+ * <p>The default methods deliberately distinguish discovered MCP configuration
+ * from verified autonomous execution. An integration that cannot provide
+ * independently verified direct supervision must return an empty command and
+ * remain pull-safe.</p>
  */
 public interface ProviderIntegration {
 

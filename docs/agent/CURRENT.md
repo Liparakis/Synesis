@@ -1,20 +1,27 @@
 # Current Task
 
-## MAINT-003 Final documentation reconciliation — 2026-08-30
+## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
 
 - Task ID: MAINT-003
 - Status: ACTIVE.
-- Scope: reconcile active documentation with current source, CLI, module
-  boundaries, provider IDs, MCP contract, and verified limitations. Preserve
-  ADRs, checkpoints, evidence, accepted historical records, backward-read
-  compatibility, and unrelated work.
-- Acceptance: active docs are source-accurate and internally consistent;
-  historical records are unchanged; links and repository hygiene pass; no
-  production behavior, provider integration, MCP tool count, or architecture
+- Scope: document meaningful production source contracts and invariants across
+  `bootstrap`, `cli`, `coordination`, `link`, `mcp`, `mcp-contract`,
+  `project-record`, `workspace`, and relevant install/bootstrap source, while
+  reconciling active documentation with current source, CLI, module
+  boundaries, provider IDs, the MCP contract, and verified limitations.
+  Preserve ADRs, checkpoints, evidence, accepted historical records,
+  backward-read compatibility, and unrelated work.
+- Acceptance: important source types and APIs are documented where semantics
+  warrant it; comments explain meaning rather than syntax; stale comments are
+  corrected or removed; active docs are source-accurate; historical records
+  are unchanged; required documentation, hygiene, link, build, test, bundle,
+  and contract checks pass or are honestly classified; and no production
+  behavior, public API, provider integration, MCP tool count, or architecture
   boundary changes are introduced.
 - Existing user-owned changes and the unrelated lifecycle stash remain
   protected. No SYN-042, Claude integration, MCP tool addition, release, tag,
-  force push, or historical rewrite is allowed.
+  force push, or historical rewrite is allowed. Commit and normal push are
+  authorized after this pass is validated.
 
 ## Work completed
 
@@ -36,18 +43,31 @@ reconciliation; historical Antigravity records remain preserved.
   command reference, and current-state navigation links.
 - Documentation gates: `repositoryHygieneCheck`, deferred-register
   validation, active Markdown links, and the source/CLI cross-check PASS.
+- Source pass: bounded documentation updates are complete across 19 production
+  source files in persistence, lifecycle, MCP, provider, project-record,
+  transport, and bootstrap migration boundaries. The source inventory found no
+  undocumented public/protected type declarations requiring a broad rewrite;
+  routine CLI options and obvious locals remain intentionally uncommented.
+- Validation after the source pass: strict multi-module `javadoc`,
+  `repositoryHygieneCheck`, deferred validation, `git diff --check`, Go
+  formatting/vet, MCP catalog tests, `TerminalLeaseStateTest`, launcher smoke,
+  platform bundle/archive, and bundle smoke PASS. The selected MCP suite and
+  broader workspace lifecycle selection stalled in process-heavy test workers
+  without assertion output and were interrupted; they remain incomplete.
 
 ## Immediate next action
 
-Obtain explicit authorization before pushing local documentation commit
-`0d9500b`; make no further scope changes.
+Run the required documentation, hygiene, source/CLI consistency, changed-module
+build/test, MCP contract, workspace lifecycle, bootstrap, bundle, and smoke
+checks; classify host-blocked or fixture-incomplete results honestly.
 
 ## Current failures
 
 The bootstrap Go suite has three update-migration fixture failures reporting
-`update migrations not prepared`. The bounded root Java `check` reached
-process-heavy MCP tests without an assertion result and was stopped; that
-suite is incomplete.
+`update migrations not prepared`. The bounded module-check run reached
+process-heavy workspace tests without an assertion result and was stopped; the
+selected MCP and workspace lifecycle runs likewise remain incomplete. These
+are not source-documentation failures.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

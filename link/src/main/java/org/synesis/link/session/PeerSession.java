@@ -18,20 +18,37 @@ import org.synesis.link.protocol.ProtocolVersion;
  * key material are deliberately absent from this API. Mutable liveness and
  * stream lifecycle APIs are added only by their corresponding later slices.
  *
+ * <p>The session is the authenticated identity boundary: the remote node ID,
+ * public key, session ID, and epochs belong to this established session and
+ * must not be inferred from a route, channel, or later connection. Control
+ * attachment is single-assignment; the volatile bindings publish lifecycle
+ * state without exposing transport implementation objects.</p>
+ *
  * @since 1.0
  */
 public final class PeerSession {
 
+    /** Local authenticated node identity for this session. */
     private final String localNodeId;
+    /** Remote authenticated node identity, independent of network address. */
     private final String remoteNodeId;
+    /** Defensive copy of the remote key used during authentication. */
     private final byte[] remotePublicKey;
+    /** Unique identity of this established session, not a node identity. */
     private final UUID sessionId;
+    /** Monotonic local epoch used to distinguish session incarnations. */
     private final long localEpoch;
+    /** Remote epoch observed during authentication. */
     private final long remoteEpoch;
+    /** Protocol version negotiated before the session became usable. */
     private final ProtocolVersion version;
+    /** Time at which authenticated session establishment completed. */
     private final Instant establishedAt;
+    /** Single authenticated control binding, published after attachment. */
     private volatile ControlBinding control;
+    /** Optional demo binding derived from the control binding. */
     private volatile DemoWorkBinding demoWork;
+    /** Optional typed application-stream binding derived from control. */
     private volatile ApplicationStreamBinding applicationStream;
 
     PeerSession(String localNodeId, String remoteNodeId, byte[] remotePublicKey, UUID sessionId,

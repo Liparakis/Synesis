@@ -16,6 +16,12 @@ import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
  * Owns the bounded host-wide command namespace and its permanent lock objects.
+ *
+ * <p>The namespace is shared by project command lifecycles, while each scope
+ * and process anchor remains separately addressable. Opening it acquires the
+ * permanent namespace lock; callers must hold that lock while reconciling the
+ * index with scope, anchor, and lock records so a stale index cannot authorize
+ * a command by itself.</p>
  */
 @SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandNamespace implements AutoCloseable {
@@ -75,11 +81,17 @@ public final class ProjectCommandNamespace implements AutoCloseable {
     @SuppressWarnings("unused")
     public static final int MAX_RETRIES = 3;
 
+    /** Normalized host-wide namespace root. */
     private final Path root;
+    /** Integrity-protected summary of indexed scope and anchor counts. */
     private final Path indexPath;
+    /** Process-anchor directories used to bind command ownership to runtimes. */
     private final Path processScopesPath;
+    /** Permanent lock objects preventing unsafe scope reuse. */
     private final Path locksPath;
+    /** Per-scope command records and reservations. */
     private final Path scopesPath;
+    /** OS-backed lock held for this namespace handle's lifetime. */
     private final CommandPermanentLock namespaceLock;
 
     private ProjectCommandNamespace(Path root, CommandPermanentLock namespaceLock) throws IOException {
@@ -96,6 +108,10 @@ public final class ProjectCommandNamespace implements AutoCloseable {
 
     /**
      * Creates the namespace skeleton and acquires the permanent namespace lock.
+     *
+     * <p>Creation is bounded by the namespace limits and the returned handle
+     * must remain open for every operation that reconciles or mutates namespace
+     * metadata.</p>
      *
      * @param root host-wide command namespace root
      * @return open namespace with its OS lock held

@@ -67,6 +67,8 @@ type installPaths struct {
 	root, bin, launcher, rollback, versions, current, previous, admin, lock, plans, executions string
 }
 
+// activePointer is the atomically replaced pointer to the currently active
+// verified payload.
 type activePointer struct {
 	SchemaVersion    int    `json:"schemaVersion"`
 	Version          string `json:"version"`
@@ -76,6 +78,8 @@ type activePointer struct {
 	PreviousVersion  string `json:"previousVersion,omitempty"`
 }
 
+// updatePlan records the verified inputs and migration state for a resumable
+// prepare/execute update operation.
 type updatePlan struct {
 	SchemaVersion           int                  `json:"schemaVersion"`
 	PlanID                  string               `json:"planId"`
@@ -98,6 +102,8 @@ type updatePlan struct {
 	CanonicalHash           string               `json:"canonicalHash"`
 }
 
+// updateLock identifies the process holding the single installation mutation
+// lock and the operation it is performing.
 type updateLock struct {
 	SchemaVersion    int    `json:"schemaVersion"`
 	PID              int    `json:"pid"`
@@ -108,12 +114,15 @@ type updateLock struct {
 	InstallationRoot string `json:"installationRoot"`
 }
 
+// payloadFileEntry records one file in the extracted payload manifest.
 type payloadFileEntry struct {
 	Path   string `json:"path"`
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
 }
 
+// payloadManifest authenticates the complete file set of one extracted
+// versioned payload.
 type payloadManifest struct {
 	SchemaVersion      int                `json:"schemaVersion"`
 	Version            string             `json:"version"`

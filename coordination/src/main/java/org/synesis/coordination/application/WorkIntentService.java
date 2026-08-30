@@ -24,11 +24,19 @@ import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Application service for authenticated work intent and resource claims.
+ *
+ * <p>Mutating operations are synchronized within this service and append-log
+ * transitions acquire {@link ProjectAppendLock} around the complete
+ * read/validate/append sequence. Claims therefore represent durable,
+ * authenticated ownership decisions rather than an in-memory reservation;
+ * conflicts fail closed and do not grant authority to either contender.</p>
  */
 @SuppressWarnings("DuplicatedCode")
 public final class WorkIntentService {
 
+    /** Event store whose projections are the source of current claim state. */
     private final PredictionEventStore store;
+    /** Identity used to authenticate every event emitted by this service. */
     private final NodeIdentity signer;
 
     /**

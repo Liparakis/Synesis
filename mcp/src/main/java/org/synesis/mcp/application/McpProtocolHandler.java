@@ -64,11 +64,19 @@ import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
  * and tool invocation ({@code tools/call}). Normal tool responses return Stage 1 concise {@link AgentResponse}
  * payloads wrapped in standard MCP content frames.
  *
+ * <p>One handler belongs to one persistent MCP connection and therefore one
+ * provider binding. Session resolution, workspace authority, durable command
+ * admission, and lifecycle finalization remain behind the application
+ * services; this class only translates the wire request and response. The
+ * authoritative {@link McpToolCatalog} supplies the exact ten-tool surface.</p>
+ *
  * @since 1.0
  */
 public final class McpProtocolHandler {
 
+    /** Protocol version selected when a client omits its requested version. */
     private static final String DEFAULT_PROTOCOL_VERSION = "2024-11-05";
+    /** MCP protocol versions accepted by the handshake. */
     private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of(
             "2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25");
 
@@ -90,12 +98,19 @@ public final class McpProtocolHandler {
     private final SessionLeaseService leaseService;
     private final SessionLeasePolicy leasePolicy;
     private final ProviderManualService manualService;
+    /** Project root supplied by the launcher before MCP roots are resolved. */
     private final Path initialProjectRoot;
+    /** Stable provider ID associated with this connection's binding. */
     private final String provider;
+    /** Connection incarnation used to prevent cross-connection authority reuse. */
     private final String connectionInstanceId;
+    /** Process evidence captured once so later close callbacks remain PID-gated. */
     private final SessionProcessIdentity commandProcessIdentity;
+    /** Project root selected from the initialized request or roots notification. */
     private Path activeProjectRoot;
+    /** Whether initialize has successfully bound this connection to a session. */
     private boolean isSessionBound;
+    /** Durable command anchor refreshed only after verified session activity. */
     private ProjectCommandProcessAnchor commandProcessAnchor;
 
     /**
@@ -899,6 +914,11 @@ public final class McpProtocolHandler {
     /**
      * Processes a raw JSON-RPC message string and returns the JSON-RPC response frame string,
      * or {@code null} if the request was a notification.
+     *
+     * <p>Malformed input and handler failures are converted into JSON-RPC error
+     * responses where a request ID is available. Notification requests produce
+     * no response, while successful activity renews the exact bound session
+     * rather than a provider-wide fallback.</p>
      *
      * @param jsonMessage raw JSON-RPC request message
      * @return serialized JSON-RPC response frame, or {@code null} for notifications

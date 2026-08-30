@@ -28,24 +28,42 @@
 
 ## MAINT-003
 
-### Final documentation reconciliation — 2026-08-30
+### Final source-level documentation and reconciliation — 2026-08-30
 
 - Status: ACTIVE
-- Scope: reconcile active user/developer documentation with the current
-  source, CLI, module boundaries, provider IDs, MCP contract, and verified
-  limitations. Preserve ADRs, checkpoints, evidence, accepted historical
-  records, and backward-read compatibility.
-- Acceptance: active docs are source-accurate and internally consistent;
-  historical records are unchanged; links and repository hygiene pass; no
-  production behavior, provider integration, MCP tool count, or architecture
-  boundary changes are introduced.
+- Scope: document meaningful production source contracts and invariants across
+  `bootstrap`, `cli`, `coordination`, `link`, `mcp`, `mcp-contract`,
+  `project-record`, `workspace`, and relevant install/bootstrap source, while
+  reconciling active documentation with current source, CLI, module boundaries,
+  provider IDs, the MCP contract, and verified limitations. Preserve ADRs,
+  checkpoints, evidence, accepted historical records, and backward-read
+  compatibility.
+- Acceptance: important classes, interfaces, records, enums, annotations,
+  exceptions, public/protected APIs, significant fields/constants, and
+  non-obvious private logic are documented where semantics warrant it;
+  comments explain meaning rather than syntax; stale comments are corrected or
+  removed; active docs are source-accurate; historical records are unchanged;
+  required documentation, hygiene, link, build, test, bundle, and contract
+  checks pass or are honestly classified; and no production behavior, public
+  API, provider integration, MCP tool count, or architecture boundary changes
+  are introduced.
 - Do not create SYN-042, start Claude integration, add MCP tools, or publish
-  releases. Existing stash and unrelated work remain protected.
+  releases. Existing stash and unrelated work remain protected. Commit and
+  normal push are authorized after the pass is validated; force push, tag,
+  release, and historical rewrite remain prohibited.
 - Current evidence: active documentation audit, source/CLI cross-check,
   repository hygiene, deferred-register validation, and active Markdown link
-  validation pass. Historical records remain unchanged.
-- Exact next action: obtain explicit authorization before pushing local
-  documentation commit `0d9500b`; make no further scope changes.
+  validation pass. Historical records remain unchanged. The source pass is
+  complete across 19 production files, with no behavior or public-API change.
+- Validation evidence: strict multi-module Javadocs, Go formatting/vet,
+  focused MCP catalog and terminal-lease tests, launcher smoke, platform
+  bundle/archive, and bundle smoke pass. The bootstrap suite retains three
+  known migration-fixture failures; process-heavy MCP/workspace test
+  selections stalled without assertion output and remain incomplete.
+- Exact next action: run the required documentation, hygiene, source/CLI
+  consistency, changed-module build/test, MCP contract, workspace lifecycle,
+  bootstrap, bundle, and smoke checks; classify host-blocked or
+  fixture-incomplete results honestly.
 
 ## MAINT-001
 

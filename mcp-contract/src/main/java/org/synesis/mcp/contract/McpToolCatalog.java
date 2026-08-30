@@ -17,7 +17,9 @@ import java.util.Objects;
  * <p>One immutable descriptor set drives wire compatibility, catalog content,
  * generated tools/list entries, and provider-facing guidance inputs. The
  * guidance artifact digest is intentionally computed by the renderer over its
- * output and is never included in either catalog identity.</p>
+ * output and is never included in either catalog identity. The catalog
+ * contains exactly ten tools; adding or removing a descriptor is a protocol
+ * surface change and must update the corresponding contract tests.</p>
  *
  * @since 1.0
  */

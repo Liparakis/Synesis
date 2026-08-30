@@ -37,8 +37,11 @@ import org.synesis.workspace.lifecycle.GitProcessRunner;
 @SuppressWarnings("DuplicatedCode")
 public final class ReviewSnapshotAccessService {
 
+    /** Resolves the project and creates only disposable review worktrees. */
     private final ProjectApplicationService projectService;
+    /** Enforces exact connection and review-authority identity. */
     private final SessionAuthorityResolver authorityResolver;
+    /** Runs read-only commands inside the immutable review workspace. */
     private final ProjectProcessExecutor processExecutor;
     /**
      * Creates an immutable review access service.
