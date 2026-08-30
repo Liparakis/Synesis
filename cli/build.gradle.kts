@@ -188,6 +188,9 @@ tasks.register("launcherSmoke") {
 val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
     group = "distribution"
     description = "Builds native MCP and installer launchers for the requested platforms."
+    notCompatibleWithConfigurationCache(
+        "Native cross-platform launcher packaging uses execution-time process and file APIs."
+    )
     inputs.files(rootProject.fileTree("bootstrap") {
         include("*.go")
         include("go.mod")
@@ -267,6 +270,9 @@ tasks.register("staticAnalysis") {
 val runtimeImage = tasks.register("runtimeImage") {
     group = "distribution"
     description = "Builds the minimal native jlink runtime for the current host."
+    notCompatibleWithConfigurationCache(
+        "Runtime-image packaging resolves and invokes the selected Java toolchain at execution time."
+    )
     dependsOn(tasks.installDist)
     outputs.dir(runtimeImageDirectory)
     doLast {
@@ -298,6 +304,9 @@ val runtimeImage = tasks.register("runtimeImage") {
 val platformBundle = tasks.register("platformBundle") {
     group = "distribution"
     description = "Assembles a self-contained Synesis application bundle."
+    notCompatibleWithConfigurationCache(
+        "Bundle assembly uses execution-time archive and filesystem operations."
+    )
     dependsOn(runtimeImage, tasks.installDist, nativeMcpLauncher, ":mcp:jar")
     outputs.dir(platformBundleDirectory)
     doLast {
@@ -385,6 +394,9 @@ val bundleArchiveFile = bundleArchive.flatMap { it.archiveFile }
 tasks.register("bundleSmokeTest") {
     group = "verification"
     description = "Extracts and runs the platform archive outside the source tree."
+    notCompatibleWithConfigurationCache(
+        "Bundle smoke testing extracts archives and launches external processes."
+    )
     dependsOn(bundleArchive)
     doLast {
         val smokeRoot = Files.createTempDirectory("synesis-bundle-smoke-").toFile()

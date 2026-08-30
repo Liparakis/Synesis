@@ -51,11 +51,15 @@ reference, and current-state navigation links.
   but eight `:cli:test` process tests failed because the generated launcher
   distribution was no longer staged. A `testInstallDist` task now stages the
   Java distribution for those tests without invoking native release builds.
+- The first bundle matrix after that fix exposed configuration-cache failures
+  in the release-only packaging/smoke tasks. Those tasks are explicitly
+  marked incompatible and bundle workflow commands now pass
+  `--no-configuration-cache`; the Java check keeps configuration-cache use.
 - Exact next action: run
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-  inspect the hosted rerun for `:cli:test` and configuration-cache reuse. If
-  green, run the six-platform bundle/archive smoke and review the exact
-  staged artifact boundary before final publication.
+  inspect the hosted rerun for Java check success and clean bundle execution;
+  then review the six platform artifacts and exact staged boundary before
+  final publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

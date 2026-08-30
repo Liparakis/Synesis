@@ -4518,3 +4518,20 @@ not run Codex or close SYN-041.
 - Disabled the Gradle Actions Job Summary for the Java verification job with
   the supported `add-job-summary: never` setting; Gradle caching remains
   enabled.
+
+## 2026-08-30 — Bundle configuration-cache boundary
+
+- The first bundle matrix after the launcher-test fix failed in
+  `:cli:runtimeImage` and reported five configuration-cache problems across
+  the native launcher, runtime image, platform bundle, and bundle smoke tasks.
+  The failures were caused by execution-time Gradle `Project`/script access in
+  release-only packaging actions.
+- Marked those four release-only tasks explicitly incompatible with the
+  configuration cache and added `--no-configuration-cache` to both platform
+  branches of the bundle workflow. The Java verification job retains
+  configuration-cache use and both Java and bundle Gradle summaries are now
+  disabled.
+- Local Gradle verification remains blocked before configuration by
+  `Unable to establish loopback connection`; hosted rerun is required.
+- Exact next action: inspect the hosted rerun for clean Java and bundle jobs,
+  then review all six artifact names and contents.

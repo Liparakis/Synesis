@@ -122,13 +122,17 @@ before Gradle executes them.
   execution remains blocked by the host loopback failure.
 - The Gradle Actions summary is disabled for the Java verification job while
   Gradle state caching remains enabled.
+- The first post-fix bundle run exposed five configuration-cache problems in
+  the release-only native/runtime/bundle/smoke tasks, including execution-time
+  `Task.project` access. Those tasks are now explicitly marked as
+  configuration-cache-incompatible, and bundle workflow invocations use
+  `--no-configuration-cache`; the ordinary Java `check` remains cached.
 
 ## Immediate next action
 
-Run the hosted `check` again and confirm the eight launcher-process tests pass;
-then run the six-platform Gradle bundle/archive smoke on a host where Gradle
-can establish its loopback connection, create a checkpoint, and review the
-exact staged artifact boundary before commit/push.
+Run the hosted `check` and six-platform bundle matrix again, confirm the
+bundle tasks no longer report configuration-cache failures, create a
+checkpoint, and review the exact staged artifact boundary before commit/push.
 
 ## Current failures
 
