@@ -37,7 +37,7 @@ administrator privileges, preserving unrelated entries case-insensitively and
 without truncation. Linux and macOS add a small managed block to `~/.profile`
 and update the installer process PATH; a new terminal may be required.
 
-The CI release candidate contains normalized bootstrap names such as
-`synesis-bootstrap-linux-x64` and `synesis-bootstrap-windows-x64.exe` beside
-the manifest and checksums. A future tagged GitHub Release may publish the
-same platform files individually; no public release URL is claimed here.
+CI publishes platform-specific bootstrap artifacts such as
+`synesis-bootstrap-linux-x64` and `synesis-bootstrap-windows-x64.exe`, along
+with the separate metadata artifact containing the manifest and checksums. No
+public release URL is claimed here.

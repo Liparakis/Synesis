@@ -53,8 +53,8 @@ The root Gradle build includes seven Java modules: `:link`, `:project-record`,
 | `:cli` | Picocli command surface, terminal rendering, installation composition, and packaging. |
 
 The release workflow builds six development-only Java bundles and six
-cross-compiled Go bootstrappers, then aggregates them into an internal
-`synesis-release-candidate` artifact. No public release is claimed.
+cross-compiled Go bootstrappers, then publishes each platform artifact
+individually with separate metadata. No public release is claimed.
 
 The bootstrap installation model uses a stable OS user-data root with the
 launcher in `bin/`. Install/update operations stage in a sibling directory and

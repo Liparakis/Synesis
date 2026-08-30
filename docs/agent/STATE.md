@@ -8,7 +8,7 @@ for explicit handoff because the repository requires one active task. Its
 whole-tree source-documentation slice was committed as `2b32aa8` and pushed to
 `origin/master`. The pass documented
 meaningful contracts and invariants across all 572 tracked Java files (409
-production and 163 tests), 10 Go files, and 10 install/validation scripts,
+production and 163 tests), 8 Go files, and 9 install/validation scripts,
 then reconciled active guides and current-state records with source, CLI, module
 boundaries, provider IDs, the ten-tool MCP contract, and verified limitations.
 Immutable historical evidence, ADRs, and checkpoint records remain retained.

@@ -35,7 +35,7 @@
   task is explicitly promoted.
 - Scope: audit and document meaningful source contracts and invariants across
   the complete tracked source tree: 572 Java files (409 production and 163
-  tests), 10 Go files, and 10 install/validation scripts. Reconcile active
+  tests), 8 Go files, and 9 install/validation scripts. Reconcile active
   documentation with current source, CLI, module boundaries, provider IDs, the
   MCP contract, and verified limitations. Preserve ADRs, checkpoints,
   evidence, accepted historical records, and backward-read compatibility.

@@ -7,7 +7,7 @@ explicit handoff because the repository requires one active task. The
 whole-tree source pass was committed as `2b32aa8` and pushed to
 `origin/master`; the working tree is clean. It covered
 meaningful source-level contracts and invariants across all 572 tracked Java
-files, 10 Go files, and 10 install/validation scripts. Preserve historical
+files, 8 Go files, and 9 install/validation scripts. Preserve historical
 records, backward reads, Claude/Codex behavior, unrelated work, and the
 lifecycle stash. Do not create SYN-042 or start Claude integration.
 
@@ -29,7 +29,8 @@ reference, and current-state navigation links.
 - Validation PASS: strict multi-module Javadocs, hygiene/deferred/diff gates,
   Go vet, MCP contract/catalog tests, terminal lease test, launcher smoke,
   platform bundle/archive, and bundle smoke. The baseline Go tree still has
-  two CRLF-normalization `gofmt -l` findings in the release aggregator; no
+  one existing CRLF-normalization `gofmt -l` finding in the
+  `provision-acceptance-key` command; no
   implementation formatting was added. Bootstrap retains three known
   migration-fixture failures; process-heavy MCP/workspace selections remain
   incomplete after bounded interruption.

@@ -8,7 +8,7 @@
   task is explicitly promoted.
 - Scope: audit and document meaningful source contracts and invariants across
   the complete tracked source tree: 572 Java files (409 production and 163
-  tests), 10 Go files, and 10 install/validation scripts. Reconcile active
+  tests), 8 Go files, and 9 install/validation scripts. Reconcile active
   documentation with current source, CLI, module boundaries, provider IDs, the
   MCP contract, and verified limitations.
   Preserve ADRs, checkpoints, evidence, accepted historical records,
@@ -50,15 +50,16 @@ The whole-tree source documentation pass is complete and was committed as
   validation, active Markdown links, and the source/CLI cross-check PASS.
 - Whole-tree source pass: all 572 Java files now contain Javadoc, all detected
   Java type declarations have documentation, and the previously undocumented
-  49 test classes plus 61 nested/helper types were covered. All 10 Go files
-  and 10 install/validation scripts also have file-level comments. Routine
+  49 test classes plus 61 nested/helper types were covered. All remaining 8 Go
+  files and 9 install/validation scripts also have file-level comments. Routine
   CLI options and obvious locals remain intentionally uncommented.
 - Validation after the source pass: strict multi-module `javadoc`,
   `repositoryHygieneCheck`, deferred validation, `git diff --check`, Go vet,
   MCP contract/catalog tests, `TerminalLeaseStateTest`, launcher smoke,
   platform bundle/archive, and bundle smoke PASS. The baseline Go tree still
-  reports two CRLF-normalization `gofmt -l` findings in the release aggregator;
-  no implementation formatting was introduced in this docs-only pass. The
+  reports one existing CRLF-normalization `gofmt -l` finding in the
+  `provision-acceptance-key` command; no implementation formatting was introduced
+  in this docs-only pass. The
   selected MCP suite and broader workspace lifecycle selection stalled in
   process-heavy test workers without assertion output and were interrupted;
   they remain incomplete.
