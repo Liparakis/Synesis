@@ -4644,3 +4644,13 @@ not run Codex or close SYN-041.
   creation. The release-tag fallback behavior is unchanged.
 - Exact next action: validate, checkpoint, commit, push, and inspect the next
   hosted release workflow run.
+
+## 2026-08-30 — Retain branch-push bundles
+
+- A branch-push run visibly built all six bundles but showed no files because
+  raw publishing was still limited to tags and manual dispatches.
+- Changed push runs to create numbered `build-<run_number>` prereleases and
+  upload the six raw runnable assets there. Pull requests remain validation-only
+  because Actions artifacts would reintroduce ZIP downloads.
+- Exact next action: validate, checkpoint, commit, push, and inspect the branch
+  run's generated prerelease assets.

@@ -3,17 +3,18 @@
 `.github/workflows/release.yml` checks the Java project, caches Gradle's
 dependency and compilation state, and builds and smoke-tests self-contained
 bundles on the six target runners. Each bundle contains the Java runtime, CLI,
-native MCP launcher, and native installer for its target platform. On `v*`
-tags, or when started manually with a release tag, the workflow publishes the
-six runnable files directly as GitHub Release assets, without an Actions-
-artifact ZIP wrapper.
+native MCP launcher, and native installer for its target platform. When a
+branch or `v*` tag is pushed, or when started manually, the workflow publishes
+the six runnable files directly as GitHub Release assets, without an
+Actions-artifact ZIP wrapper. Branch pushes use numbered `build-<run-number>`
+prereleases.
 
 Tagged releases expose exactly six raw platform assets:
 `synesis-windows-x64.exe`, `synesis-windows-arm64.exe`,
 `synesis-linux-x64`, `synesis-linux-arm64`, `synesis-macos-x64`, and
 `synesis-macos-arm64`. Manual runs may use a supplied release tag; without one,
-the workflow creates a numbered manual prerelease automatically. Branch and
-pull-request runs validate the files without publishing them. The workflow does not create an aggregated
+the workflow creates a numbered manual prerelease automatically. Pull-request
+runs validate the files without publishing them. The workflow does not create an aggregated
 release-candidate directory, separate bootstrap artifact, metadata artifact,
 or install-script directory. Each runnable file contains the platform bundle as an appended,
 verified payload, including the application jars, bundled Java runtime, native

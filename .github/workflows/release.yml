@@ -36,7 +36,7 @@ jobs:
                 if: runner.os != 'Windows'
 
     prepare-release:
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         runs-on: ubuntu-24.04
         steps:
             -   uses: actions/checkout@v5
@@ -45,8 +45,8 @@ jobs:
             -   name: Create GitHub release
                 env:
                     GH_TOKEN: ${{ github.token }}
-                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || github.ref_name }}
-                    AUTO_PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && !inputs.release_tag }}
+                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+                    AUTO_PRERELEASE: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && !inputs.release_tag) }}
                 run: |
                     if [[ ! "${RELEASE_TAG}" =~ ^[A-Za-z0-9._-]+$ ]]; then
                         echo "release_tag may contain only letters, numbers, dots, underscores, and hyphens" >&2
@@ -95,8 +95,8 @@ jobs:
                 env:
                     JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
             -   name: Publish raw runnable release asset
-                if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+                if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
                 env:
                     GH_TOKEN: ${{ github.token }}
-                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || github.ref_name }}
+                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
                 run: gh release upload "${RELEASE_TAG}" "cli/build/distributions/${{ matrix.file }}" --clobber

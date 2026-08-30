@@ -29,15 +29,16 @@ default; an explicit metadata option also removes the installer-owned Link
 identity and administrative state. Project directories are never recursively
 discovered or deleted by the installer.
 
-Tagged GitHub releases and manual workflow runs publish exactly six raw release
-assets named for the runnable files: `synesis-windows-x64.exe`,
+Branch pushes, tagged GitHub releases, and manual workflow runs publish exactly
+six raw release assets named for the runnable files: `synesis-windows-x64.exe`,
 `synesis-windows-arm64.exe`, `synesis-linux-x64`, `synesis-linux-arm64`,
 `synesis-macos-x64`, and `synesis-macos-arm64`. Manual runs require a release
 tag only when a custom release name is desired; without one, it creates a
-numbered manual prerelease automatically. The workflow does not use Actions
+numbered manual prerelease automatically. Branch pushes create numbered
+`build-<run-number>` prereleases. The workflow does not use Actions
 artifact uploads for these files, because that service always wraps downloads
-in a ZIP container. Branch and pull-request runs build and smoke-test the files
-without publishing them. The separate bootstrap and manifest artifact uploads,
+in a ZIP container. Pull-request runs build and smoke-test the files without
+publishing them. The separate bootstrap and manifest artifact uploads,
 aggregate release candidate, and install-script distribution are removed from
 the workflow.
 Gradle caching is enabled on the Java setup steps.
