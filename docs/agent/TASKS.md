@@ -31,6 +31,8 @@
 ### Final source-level documentation and reconciliation — 2026-08-30
 
 - Status: ACTIVE
+- Handoff: source pass complete; retain this task until the next authorized
+  task is explicitly promoted.
 - Scope: audit and document meaningful source contracts and invariants across
   the complete tracked source tree: 572 Java files (409 production and 163
   tests), 10 Go files, and 10 install/validation scripts. Reconcile active
@@ -50,12 +52,13 @@
   releases. Existing stash and unrelated work remain protected. Commit and
   normal push are authorized after the pass is validated; force push, tag,
   release, and historical rewrite remain prohibited.
-- Current evidence: active documentation audit, source/CLI cross-check,
+- Current evidence: completed documentation audit, source/CLI cross-check,
   repository hygiene, deferred-register validation, and active Markdown link
   validation pass. Historical records remain unchanged. The whole-tree source
   pass is complete: all 572 Java files contain Javadoc, all detected Java type
   declarations have documentation, and Go/script source has file-level
-  comments, with no behavior or public-API change.
+  comments, with no behavior or public-API change. Commit `2b32aa8` is pushed
+  to `origin/master` and the working tree is clean.
 - Validation evidence: strict multi-module Javadocs, Go vet, focused MCP
   contract/catalog and terminal-lease tests, launcher smoke, platform
   bundle/archive, and bundle smoke pass. The baseline Go tree still has two
@@ -63,8 +66,9 @@
   implementation formatting was added. The bootstrap suite retains three
   known migration-fixture failures; process-heavy MCP/workspace test
   selections stalled without assertion output and remain incomplete.
-- Exact next action: review the staged diff and CP-0590 checkpoint, then commit
-  and normally push the completed docs-only source pass.
+- Exact next action: run `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`, then explicitly promote the next authorized task
+  before any implementation.
 
 ## MAINT-001
 

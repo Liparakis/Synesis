@@ -3,7 +3,9 @@
 ## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
 
 - Task ID: MAINT-003
-- Status: ACTIVE.
+- Status: ACTIVE
+- Handoff: source pass complete; retain this task until the next authorized
+  task is explicitly promoted.
 - Scope: audit and document meaningful source contracts and invariants across
   the complete tracked source tree: 572 Java files (409 production and 163
   tests), 10 Go files, and 10 install/validation scripts. Reconcile active
@@ -26,8 +28,11 @@
 ## Work completed
 
 The prior Antigravity removal and repository cleanup are complete and pushed in
-`aee96c3` and `48e0103`. This task begins the separate active-documentation
+`aee96c3` and `48e0103`. This task completed the separate active-documentation
 reconciliation; historical Antigravity records remain preserved.
+
+The whole-tree source documentation pass is complete and was committed as
+`2b32aa8` and pushed to `origin/master`. The working tree is clean.
 
 ## Verification
 
@@ -60,8 +65,8 @@ reconciliation; historical Antigravity records remain preserved.
 
 ## Immediate next action
 
-Review the staged diff and CP-0590 checkpoint, then commit and normally push
-the completed docs-only source pass.
+Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
+explicitly promote the next authorized task before any implementation.
 
 ## Current failures
 

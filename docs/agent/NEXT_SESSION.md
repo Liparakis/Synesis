@@ -2,13 +2,14 @@
 
 ## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
 
-MAINT-003 is the sole active task. Audit and document meaningful source-level
-contracts and invariants across all 572 tracked Java files, 10 Go files, and 10
-install/validation scripts, then reconcile active documentation with current
-source, CLI, module boundaries, provider IDs, the MCP contract, and verified
-limitations. Preserve historical records, backward reads, Claude/Codex
-behavior, unrelated work, and the lifecycle stash. Do not create SYN-042 or
-start Claude integration.
+MAINT-003 source work is complete and verified, but remains ACTIVE only for
+explicit handoff because the repository requires one active task. The
+whole-tree source pass was committed as `2b32aa8` and pushed to
+`origin/master`; the working tree is clean. It covered
+meaningful source-level contracts and invariants across all 572 tracked Java
+files, 10 Go files, and 10 install/validation scripts. Preserve historical
+records, backward reads, Claude/Codex behavior, unrelated work, and the
+lifecycle stash. Do not create SYN-042 or start Claude integration.
 
 The cleanup baseline is complete and pushed in `aee96c3` and `48e0103`.
 Historical Antigravity records remain preserved. Known validation limits are
@@ -32,8 +33,9 @@ reference, and current-state navigation links.
   implementation formatting was added. Bootstrap retains three known
   migration-fixture failures; process-heavy MCP/workspace selections remain
   incomplete after bounded interruption.
-- Exact next action: review the staged diff and CP-0590 checkpoint, then commit
-  and normally push the completed docs-only source pass.
+- Exact next action: run `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-resume.ps1`, then explicitly promote the next authorized task
+  before any implementation.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

@@ -3,10 +3,13 @@
 ## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
 
 The repository cleanup is complete and pushed in `aee96c3` and `48e0103`.
-MAINT-003 is the active whole-tree source-documentation slice: document
+MAINT-003 source work is complete and verified; the task remains ACTIVE only
+for explicit handoff because the repository requires one active task. Its
+whole-tree source-documentation slice was committed as `2b32aa8` and pushed to
+`origin/master`. The pass documented
 meaningful contracts and invariants across all 572 tracked Java files (409
 production and 163 tests), 10 Go files, and 10 install/validation scripts,
-then reconcile active guides and current-state records with source, CLI, module
+then reconciled active guides and current-state records with source, CLI, module
 boundaries, provider IDs, the ten-tool MCP contract, and verified limitations.
 Immutable historical evidence, ADRs, and checkpoint records remain retained.
 
@@ -38,8 +41,8 @@ Immutable historical evidence, ADRs, and checkpoint records remain retained.
 
 ## Immediate next action
 
-Review the staged diff and CP-0590 checkpoint, then commit and normally push
-the completed docs-only source pass.
+Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
+explicitly promote the next authorized task before any implementation.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 
