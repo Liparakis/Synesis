@@ -33,7 +33,8 @@ Tagged GitHub releases and manual workflow runs publish exactly six raw release
 assets named for the runnable files: `synesis-windows-x64.exe`,
 `synesis-windows-arm64.exe`, `synesis-linux-x64`, `synesis-linux-arm64`,
 `synesis-macos-x64`, and `synesis-macos-arm64`. Manual runs require a release
-tag and create or update that release. The workflow does not use Actions
+tag only when a custom release name is desired; without one, it creates a
+numbered manual prerelease automatically. The workflow does not use Actions
 artifact uploads for these files, because that service always wraps downloads
 in a ZIP container. Branch and pull-request runs build and smoke-test the files
 without publishing them. The separate bootstrap and manifest artifact uploads,

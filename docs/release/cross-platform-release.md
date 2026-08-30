@@ -11,9 +11,9 @@ artifact ZIP wrapper.
 Tagged releases expose exactly six raw platform assets:
 `synesis-windows-x64.exe`, `synesis-windows-arm64.exe`,
 `synesis-linux-x64`, `synesis-linux-arm64`, `synesis-macos-x64`, and
-`synesis-macos-arm64`. Manual runs use the supplied release tag and create the
-release if it does not exist. Branch and pull-request runs validate the files
-without publishing them. The workflow does not create an aggregated
+`synesis-macos-arm64`. Manual runs may use a supplied release tag; without one,
+the workflow creates a numbered manual prerelease automatically. Branch and
+pull-request runs validate the files without publishing them. The workflow does not create an aggregated
 release-candidate directory, separate bootstrap artifact, metadata artifact,
 or install-script directory. Each runnable file contains the platform bundle as an appended,
 verified payload, including the application jars, bundled Java runtime, native

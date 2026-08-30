@@ -4624,3 +4624,13 @@ not run Codex or close SYN-041.
 - Updated the release documentation and ADR to describe the manual path.
 - Exact next action: validate the workflow diff, checkpoint, commit, push, and
   inspect the hosted manual-trigger workflow path.
+
+## 2026-08-30 — Optional manual release tag
+
+- The manual release input was unnecessarily mandatory even though the bundle
+  build itself does not need a tag.
+- Made `release_tag` optional. A blank manual run now uses a numbered
+  `manual-<run_number>` prerelease, so all six raw files are still published;
+  an explicitly supplied tag remains supported.
+- Exact next action: validate, checkpoint, commit, push, and inspect the hosted
+  branch workflow after the optional-input change.
