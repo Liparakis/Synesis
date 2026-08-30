@@ -4535,3 +4535,14 @@ not run Codex or close SYN-041.
   `Unable to establish loopback connection`; hosted rerun is required.
 - Exact next action: inspect the hosted rerun for clean Java and bundle jobs,
   then review all six artifact names and contents.
+
+## 2026-08-30 — Unix installer executable permission
+
+- The macOS bundle smoke reached archive extraction and failed to launch
+  `synesis-installer` with `Permission denied`; Java, native builds, runtime
+  image, and bundle assembly had already completed.
+- Bundle assembly now explicitly marks both Unix native binaries executable and
+  validates the installer before archiving. Bundle smoke extraction restores
+  and validates the Unix installer permission before invoking it.
+- Exact next action: inspect the hosted rerun for clean six-platform bundle
+  execution and verify all artifact names/content.

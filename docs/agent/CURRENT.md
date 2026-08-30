@@ -127,12 +127,17 @@ before Gradle executes them.
   `Task.project` access. Those tasks are now explicitly marked as
   configuration-cache-incompatible, and bundle workflow invocations use
   `--no-configuration-cache`; the ordinary Java `check` remains cached.
+- The subsequent macOS bundle smoke exposed a missing executable bit on the
+  extracted Unix `synesis-installer`. Bundle assembly now sets and validates
+  executable permissions for both Unix native binaries, and smoke extraction
+  restores the installer permission before invocation.
 
 ## Immediate next action
 
 Run the hosted `check` and six-platform bundle matrix again, confirm the
-bundle tasks no longer report configuration-cache failures, create a
-checkpoint, and review the exact staged artifact boundary before commit/push.
+bundle tasks no longer report configuration-cache or Unix-permission failures,
+create a checkpoint, and review the exact staged artifact boundary before
+commit/push.
 
 ## Current failures
 

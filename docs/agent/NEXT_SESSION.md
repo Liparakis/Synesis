@@ -55,11 +55,14 @@ reference, and current-state navigation links.
   in the release-only packaging/smoke tasks. Those tasks are explicitly
   marked incompatible and bundle workflow commands now pass
   `--no-configuration-cache`; the Java check keeps configuration-cache use.
+- The next macOS smoke run failed because the extracted Unix
+  `synesis-installer` did not retain its executable bit. Bundle assembly and
+  smoke extraction now set/restore and validate that permission explicitly.
 - Exact next action: run
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-  inspect the hosted rerun for Java check success and clean bundle execution;
-  then review the six platform artifacts and exact staged boundary before
-  final publication.
+  inspect the hosted rerun for Java check success and clean bundle execution,
+  especially Unix installer permissions; then review the six platform
+  artifacts and exact staged boundary before final publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

@@ -339,7 +339,14 @@ val platformBundle = tasks.register("platformBundle") {
         require(nativeLauncher.isFile) { "Native MCP launcher missing for ${bundlePlatform.get()}: $nativeLauncher" }
         require(nativeInstaller.isFile) { "Native installer missing for ${bundlePlatform.get()}: $nativeInstaller" }
         copy { from(nativeLauncher, nativeInstaller); into(bin) }
-        if (!bundlePlatform.get().startsWith("windows")) bin.resolve("synesis-mcp").setExecutable(true)
+        if (!bundlePlatform.get().startsWith("windows")) {
+            require(bin.resolve("synesis-mcp").setExecutable(true)) {
+                "Unable to mark Unix MCP launcher executable"
+            }
+            require(bin.resolve("synesis-installer").setExecutable(true)) {
+                "Unable to mark Unix installer executable"
+            }
+        }
         bin.resolve("synesis.cmd").writeText(
             "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
         )
@@ -406,6 +413,9 @@ tasks.register("bundleSmokeTest") {
             require(platformBundleDirectory.get().asFile.resolve("bin/synesis").canExecute()) {
                 "Unix bundle launcher is not executable before archiving"
             }
+            require(platformBundleDirectory.get().asFile.resolve("bin/synesis-installer").canExecute()) {
+                "Unix installer is not executable before archiving"
+            }
             require(runtimeImageDirectory.get().asFile.resolve("bin/java").canExecute()) {
                 "Bundled Unix Java runtime is not executable before archiving"
             }
@@ -420,6 +430,7 @@ tasks.register("bundleSmokeTest") {
         require(installer.isFile) { "Native installer missing from bundle: $installer" }
         if (!isWindows) {
             require(launcher.setExecutable(true)) { "Unable to restore Unix launcher permissions after extraction" }
+            require(installer.setExecutable(true)) { "Unable to restore Unix installer permissions after extraction" }
             require(bundleRoot.resolve("runtime/bin/java").setExecutable(true)) {
                 "Unable to restore bundled Java runtime permissions after extraction"
             }
