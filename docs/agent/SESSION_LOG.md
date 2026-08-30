@@ -4481,3 +4481,16 @@ not run Codex or close SYN-041.
   required.
 - Exact next action: run `./gradlew build --dependency-verification=strict`
   twice and confirm the configuration cache stores and reuses successfully.
+
+## 2026-08-30 — Optional root-document hygiene inputs
+
+- The user's post-repair build reached task execution but failed because
+  `CONTRIBUTING.md` is absent from this checkout while both root hygiene and
+  Link format checks still registered it as an input.
+- Both managed root-document lists now filter nonexistent files before being
+  attached to Gradle tasks; existing documents and documentation directories
+  remain checked.
+- Verification: diff, deferred, workflow YAML, and Go vet gates pass. A fresh
+  Gradle run remains required on the user's working Gradle host.
+- Exact next action: rerun `./gradlew build --dependency-verification=strict`
+  and confirm no missing-file or configuration-cache problems remain.

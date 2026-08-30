@@ -29,7 +29,7 @@ val maintainedMarkdownRoots = listOf(
     rootProject.layout.projectDirectory.dir("docs/cli").asFile,
     rootProject.layout.projectDirectory.dir("docs/diagnostics").asFile,
     rootProject.layout.projectDirectory.dir("docs/security").asFile
-)
+).filter { it.exists() }
 
 abstract class RepositoryHygieneTask : DefaultTask() {
     @get:Internal

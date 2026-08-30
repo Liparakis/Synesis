@@ -82,7 +82,7 @@ val linkFormatRoots = listOf(
     linkRepositoryRoot.resolve("SECURITY.md"),
     linkRepositoryRoot.resolve("settings.gradle.kts"),
     linkRepositoryRoot.resolve("build.gradle.kts")
-)
+).filter { it.exists() }
 
 abstract class TrailingWhitespaceTask : DefaultTask() {
     @get:InputFiles

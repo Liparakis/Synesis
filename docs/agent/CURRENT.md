@@ -61,6 +61,11 @@ actions: CLI build metadata, CLI format checking, Link format checking, and
 repository hygiene. Those actions now use isolated custom task types with
 Gradle-managed inputs and task actions that do not capture the build script.
 
+The following run exposed an independent missing-file issue: both the root
+hygiene task and Link format task listed optional root documents that are not
+present in this checkout. Their managed file roots now filter to existing files
+before Gradle executes them.
+
 ## Verification
 
 - Cleanup baseline: PASS; active residue search, hygiene, focused workspace
@@ -105,6 +110,9 @@ Gradle-managed inputs and task actions that do not capture the build script.
 - Residual four-problem repair validation: isolated task-type changes pass
   diff, deferred, workflow, and Go gates; a fresh Gradle cache-store run is
   still required.
+- Missing optional-document repair validation: root-file inventory and
+  non-Gradle repository gates pass; the reported `CONTRIBUTING.md` failure is
+  addressed by filtering absent roots.
 
 ## Immediate next action
 
