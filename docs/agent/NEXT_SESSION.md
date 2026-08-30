@@ -1,15 +1,16 @@
 # Next Session
 
-## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
+## MAINT-003 Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
-MAINT-003 source work is complete and verified, but remains ACTIVE only for
-explicit handoff because the repository requires one active task. The
+MAINT-003 source work is complete and verified; its user-authorized packaging
+slice remains ACTIVE. The
 whole-tree source pass was committed as `2b32aa8` and pushed to
 `origin/master`; the working tree is clean. It covered
 meaningful source-level contracts and invariants across all 572 tracked Java
 files, 8 Go files, and 9 install/validation scripts. Preserve historical
 records, backward reads, Claude/Codex behavior, unrelated work, and the
-lifecycle stash. Do not create SYN-042 or start Claude integration.
+lifecycle stash. Do not create SYN-042 or start Claude integration. ADR-0048
+records the self-contained bundle installer decision.
 
 The cleanup baseline is complete and pushed in `aee96c3` and `48e0103`.
 Historical Antigravity records remain preserved. Known validation limits are

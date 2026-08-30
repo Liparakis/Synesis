@@ -21,6 +21,7 @@ jobs:
                 with:
                     distribution: microsoft
                     java-version: '25'
+                    cache: gradle
             -   run: ./gradlew.bat clean check --dependency-verification=strict
                 if: runner.os == 'Windows'
             -   run: ./gradlew clean check --dependency-verification=strict
@@ -45,6 +46,7 @@ jobs:
                 with:
                     distribution: microsoft
                     java-version: '25'
+                    cache: gradle
             -   uses: actions/setup-go@v6
                 with:
                     go-version: '1.26.5'
@@ -57,125 +59,6 @@ jobs:
                     JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
             -   uses: actions/upload-artifact@v6
                 with:
-                    name: synesis-bundle-${{ matrix.platform }}
+                    name: synesis-${{ matrix.platform }}
                     path: cli/build/distributions/synesis-0.1.0-dev.${{ github.run_number }}-${{ matrix.platform }}.${{ matrix.archive }}
-                    retention-days: 30
-
-    bootstrap:
-        strategy:
-            matrix:
-                include:
-                    - { platform: windows-x64, goos: windows, goarch: amd64, suffix: .exe }
-                    - { platform: windows-arm64, goos: windows, goarch: arm64, suffix: .exe }
-                    - { platform: linux-x64, goos: linux, goarch: amd64, suffix: '' }
-                    - { platform: linux-arm64, goos: linux, goarch: arm64, suffix: '' }
-                    - { platform: macos-x64, goos: darwin, goarch: amd64, suffix: '' }
-                    - { platform: macos-arm64, goos: darwin, goarch: arm64, suffix: '' }
-        runs-on: ubuntu-24.04
-        steps:
-            -   uses: actions/checkout@v5
-            -   uses: actions/setup-go@v6
-                with:
-                    go-version: '1.26.5'
-                    cache-dependency-path: bootstrap/go.mod
-            -   run: gofmt -w .
-                working-directory: bootstrap
-            -   run: go test ./...
-                working-directory: bootstrap
-            -   run: mkdir -p dist && GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags='-s -w' -o dist/synesis-bootstrap-0.1.0-dev.${{ github.run_number }}-${{ matrix.platform }}${{ matrix.suffix }} .
-                working-directory: bootstrap
-            -   uses: actions/upload-artifact@v6
-                with:
-                    name: synesis-bootstrap-${{ matrix.platform }}
-                    path: bootstrap/dist/synesis-bootstrap-0.1.0-dev.${{ github.run_number }}-${{ matrix.platform }}${{ matrix.suffix }}
-                    retention-days: 30
-
-    bootstrap-native:
-        runs-on: ubuntu-24.04
-        steps:
-            -   uses: actions/checkout@v5
-            -   uses: actions/setup-go@v6
-                with:
-                    go-version: '1.26.5'
-                    cache-dependency-path: bootstrap/go.mod
-            -   run: mkdir -p dist && go build -trimpath -ldflags='-s -w' -o dist/synesis-bootstrap-native .
-                working-directory: bootstrap
-            -   run: go test ./...
-                working-directory: bootstrap
-                env:
-                    SYNESIS_BOOTSTRAP_BIN: ${{ github.workspace }}/bootstrap/dist/synesis-bootstrap-native
-
-    manifest:
-        needs: [ bundles, bootstrap, bootstrap-native ]
-        runs-on: ubuntu-24.04
-        steps:
-            -   uses: actions/checkout@v5
-            -   uses: actions/setup-go@v6
-                with:
-                    go-version: '1.26.5'
-                    cache-dependency-path: bootstrap/go.mod
-            -   uses: actions/download-artifact@v7
-                with:
-                    path: artifacts
-            -   run: |
-                    python - <<'PY'
-                    import hashlib, json, pathlib, os
-                    root = pathlib.Path('artifacts')
-                    files = sorted(p for p in root.rglob('*') if p.is_file())
-                    version = f"0.1.0-dev.{os.environ['GITHUB_RUN_NUMBER']}"
-                    entries = {}
-                    for path in files:
-                        if path.name.endswith(('.zip', '.tar.gz')):
-                            platform = path.parent.name.removeprefix('synesis-bundle-')
-                            entries[platform] = {'url': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'size': path.stat().st_size}
-                    if len(entries) != 6: raise SystemExit(f'expected 6 bundles, got {len(entries)}')
-                    manifest = {'schemaVersion': 1, 'channel': 'dev', 'version': version, 'publishedAt': 'developmentOnly', 'minimumBootstrapVersion': '0.1.0', 'developmentOnly': os.environ.get('GITHUB_REF_TYPE') != 'tag', 'artifacts': entries}
-                    encoded = json.dumps(manifest, sort_keys=True, separators=(',', ':')) + '\n'
-                    pathlib.Path('manifest.json').write_text(encoded)
-                    pathlib.Path('bootstrap/manifest.json').write_text(encoded)
-                    with pathlib.Path('checksums.txt').open('w') as out:
-                        for p in files: out.write(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n")
-                    PY
-            -   name: Sign protected tag manifest
-                if: startsWith(github.ref, 'refs/tags/')
-                env:
-                    SYNESIS_MANIFEST_PRIVATE_KEY_B64: ${{ secrets.SYNESIS_MANIFEST_PRIVATE_KEY_B64 }}
-                run: test -n "$SYNESIS_MANIFEST_PRIVATE_KEY_B64" && go run ./cmd/sign-manifest
-                working-directory: bootstrap
-            -   name: Verify manifest and artifact consistency
-                env:
-                    GITHUB_REF_TYPE: ${{ github.ref_type }}
-                run: |
-                    python - <<'PY'
-                    import base64, hashlib, json, pathlib, os
-                    manifest = json.loads(pathlib.Path('manifest.json').read_text())
-                    files = {p.name: p for p in pathlib.Path('artifacts').rglob('*') if p.is_file()}
-                    if set(manifest['artifacts']) != {'windows-x64', 'windows-arm64', 'linux-x64', 'linux-arm64', 'macos-x64', 'macos-arm64'}:
-                        raise SystemExit('manifest platform set mismatch')
-                    for platform, entry in manifest['artifacts'].items():
-                        path = files.get(pathlib.Path(entry['url']).name)
-                        if path is None or path.stat().st_size != entry['size']:
-                            raise SystemExit(f'artifact size missing/mismatch: {platform}')
-                        if hashlib.sha256(path.read_bytes()).hexdigest() != entry['sha256']:
-                            raise SystemExit(f'artifact hash mismatch: {platform}')
-                    signature_path = pathlib.Path('bootstrap/manifest.json.sig')
-                    signature = signature_path.read_text().strip() if signature_path.exists() else ''
-                    if os.environ['GITHUB_REF_TYPE'] == 'tag':
-                        if len(base64.b64decode(signature, validate=True)) != 64:
-                            raise SystemExit('tag manifest signature is not Ed25519-sized')
-                    elif signature:
-                        raise SystemExit('branch manifest must remain unsigned')
-                    print('MANIFEST_AGGREGATION=PASS')
-                    PY
-            -   run: |
-                    if [ ! -f bootstrap/manifest.json.sig ]; then touch bootstrap/manifest.json.sig; fi
-                    cp bootstrap/manifest.json .
-                    cp bootstrap/manifest.json.sig .
-            -   uses: actions/upload-artifact@v6
-                with:
-                    name: synesis-release-metadata
-                    path: |
-                        manifest.json
-                        manifest.json.sig
-                        checksums.txt
                     retention-days: 30

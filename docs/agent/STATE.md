@@ -1,10 +1,10 @@
 # State
 
-## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
+## MAINT-003 Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
 The repository cleanup is complete and pushed in `aee96c3` and `48e0103`.
-MAINT-003 source work is complete and verified; the task remains ACTIVE only
-for explicit handoff because the repository requires one active task. Its
+MAINT-003 source work is complete and verified; its user-authorized release
+packaging slice is now active. Its
 whole-tree source-documentation slice was committed as `2b32aa8` and pushed to
 `origin/master`. The pass documented
 meaningful contracts and invariants across all 572 tracked Java files (409
@@ -12,6 +12,9 @@ production and 163 tests), 8 Go files, and 9 install/validation scripts,
 then reconciled active guides and current-state records with source, CLI, module
 boundaries, provider IDs, the ten-tool MCP contract, and verified limitations.
 Immutable historical evidence, ADRs, and checkpoint records remain retained.
+ADR-0048 records the self-contained installer decision. Bundles now carry a
+native `synesis-installer`, and the release workflow publishes only the six
+`synesis-<platform>` bundle artifacts with Gradle caching.
 
 ## Verification evidence
 
@@ -35,14 +38,20 @@ Immutable historical evidence, ADRs, and checkpoint records remain retained.
   deferred validation, diff check, Go vet, MCP contract/catalog tests,
   `TerminalLeaseStateTest`, launcher smoke, platform bundle/archive, and bundle
   smoke. The baseline Go tree still has two CRLF-normalization `gofmt -l`
-  findings in the release aggregator; no implementation formatting was added.
+  finding in `cmd/provision-acceptance-key`; no implementation formatting was
+  added.
   Process-heavy MCP/workspace selections stalled without assertion output and
   were interrupted, so they remain incomplete.
+- Focused local bundle install/repair/uninstall tests and native installer
+  compilation pass. Gradle bundle execution is blocked locally by
+  `Unable to establish loopback connection`; this is an environment failure,
+  not a claimed bundle pass.
 
 ## Immediate next action
 
-Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-explicitly promote the next authorized task before any implementation.
+Run the focused Go tests and the six-platform Gradle bundle/archive smoke on a
+host where Gradle can establish its loopback connection, then checkpoint and
+review the exact staged release files.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

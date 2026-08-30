@@ -28,30 +28,32 @@
 
 ## MAINT-003
 
-### Final source-level documentation and reconciliation — 2026-08-30
+### Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
 - Status: ACTIVE
-- Handoff: source pass complete; retain this task until the next authorized
-  task is explicitly promoted.
+- Handoff: source pass complete; user-authorized release packaging is active
+  until verification and publication are complete.
 - Scope: audit and document meaningful source contracts and invariants across
   the complete tracked source tree: 572 Java files (409 production and 163
   tests), 8 Go files, and 9 install/validation scripts. Reconcile active
   documentation with current source, CLI, module boundaries, provider IDs, the
   MCP contract, and verified limitations. Preserve ADRs, checkpoints,
-  evidence, accepted historical records, and backward-read compatibility.
+  evidence, accepted historical records, and backward-read compatibility. The
+  user-authorized slice also covers the self-contained native installer, exact
+  bundle artifact names, and Gradle caching.
 - Acceptance: important classes, interfaces, records, enums, annotations,
   exceptions, public/protected APIs, significant fields/constants, and
   non-obvious private logic are documented where semantics warrant it;
   comments explain meaning rather than syntax; stale comments are corrected or
   removed; active docs are source-accurate; historical records are unchanged;
   required documentation, hygiene, link, build, test, bundle, and contract
-  checks pass or are honestly classified; and no production behavior, public
-  API, provider integration, MCP tool count, or architecture boundary changes
+  checks pass or are honestly classified; the installer contract is met; and
+  no provider integration, MCP tool count, or architecture boundary changes
   are introduced.
-- Do not create SYN-042, start Claude integration, add MCP tools, or publish
-  releases. Existing stash and unrelated work remain protected. Commit and
-  normal push are authorized after the pass is validated; force push, tag,
-  release, and historical rewrite remain prohibited.
+- Do not create SYN-042, start Claude integration, or add MCP tools. Existing
+  stash and unrelated work remain protected. Commit and normal push are
+  authorized after the packaging pass is validated; force push, tag, release,
+  and historical rewrite remain prohibited.
 - Current evidence: completed documentation audit, source/CLI cross-check,
   repository hygiene, deferred-register validation, and active Markdown link
   validation pass. Historical records remain unchanged. The whole-tree source

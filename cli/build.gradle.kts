@@ -111,8 +111,8 @@ tasks.register("launcherSmoke") {
 
 val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
     group = "distribution"
-    description = "Builds native stdio MCP launchers for Windows and Linux."
-    inputs.dir(rootProject.file("bootstrap/cmd/synesis-mcp"))
+    description = "Builds native MCP and installer launchers for every release platform."
+    inputs.dir(rootProject.file("bootstrap"))
     outputs.dir(nativeMcpDirectory)
     doLast {
         val outputRoot = nativeMcpDirectory.get().asFile
@@ -129,20 +129,23 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
         for ((name, target) in platforms) {
             val outputDirectory = outputRoot.resolve(name)
             outputDirectory.mkdirs()
-            val output = outputDirectory.resolve(if (target.first == "windows") "synesis-mcp.exe" else "synesis-mcp")
+            val suffix = if (target.first == "windows") ".exe" else ""
             val environment = mutableMapOf<String, String>()
             environment["GOOS"] = target.first
             environment["GOARCH"] = target.second
             environment["CGO_ENABLED"] = "0"
-            val process = ProcessBuilder(
-                "go", "build", "-trimpath", "-o", output.absolutePath, "./cmd/synesis-mcp"
-            ).directory(source).redirectErrorStream(true).apply {
-                environment().putAll(environment)
-            }.start()
-            val outputText = process.inputStream.bufferedReader().readText()
-            require(process.waitFor() == 0) { "native MCP launcher build failed for $name: $outputText" }
-            require(output.isFile) { "native MCP launcher missing for $name: $output" }
-            if (target.first != "windows") output.setExecutable(true)
+            for ((binaryName, packagePath) in listOf("synesis-mcp$suffix" to "./cmd/synesis-mcp", "synesis-installer$suffix" to ".")) {
+                val output = outputDirectory.resolve(binaryName)
+                val process = ProcessBuilder(
+                    "go", "build", "-trimpath", "-ldflags=-s -w", "-o", output.absolutePath, packagePath
+                ).directory(source).redirectErrorStream(true).apply {
+                    environment().putAll(environment)
+                }.start()
+                val outputText = process.inputStream.bufferedReader().readText()
+                require(process.waitFor() == 0) { "native launcher build failed for $name/$binaryName: $outputText" }
+                require(output.isFile) { "native launcher missing for $name/$binaryName: $output" }
+                if (target.first != "windows") output.setExecutable(true)
+            }
         }
         val hostArtifact = outputRoot.resolve(hostPlatform).resolve(if (isWindows) "synesis-mcp.exe" else "synesis-mcp")
         val installedBin = layout.buildDirectory.dir("install/synesis/bin").get().asFile
@@ -239,8 +242,11 @@ val platformBundle = tasks.register("platformBundle") {
         bin.mkdirs()
         val nativeLauncher = nativeMcpDirectory.get().asFile.resolve(bundlePlatform.get())
             .resolve(if (bundlePlatform.get().startsWith("windows")) "synesis-mcp.exe" else "synesis-mcp")
+        val nativeInstaller = nativeMcpDirectory.get().asFile.resolve(bundlePlatform.get())
+            .resolve(if (bundlePlatform.get().startsWith("windows")) "synesis-installer.exe" else "synesis-installer")
         require(nativeLauncher.isFile) { "Native MCP launcher missing for ${bundlePlatform.get()}: $nativeLauncher" }
-        copy { from(nativeLauncher); into(bin) }
+        require(nativeInstaller.isFile) { "Native installer missing for ${bundlePlatform.get()}: $nativeInstaller" }
+        copy { from(nativeLauncher, nativeInstaller); into(bin) }
         if (!bundlePlatform.get().startsWith("windows")) bin.resolve("synesis-mcp").setExecutable(true)
         bin.resolve("synesis.cmd").writeText(
             "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
@@ -249,7 +255,10 @@ val platformBundle = tasks.register("platformBundle") {
             $$"#!/bin/sh\nAPP_HOME=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\nexport SYNESIS_LAUNCHER=\"$APP_HOME/bin/synesis\"\nexec \"$APP_HOME/runtime/bin/java\" --enable-native-access=ALL-UNNAMED -cp \"$APP_HOME/app/synesis-cli.jar:$APP_HOME/app/lib/*\" org.synesis.cli.SynesisCli \"$@\"\n"
         )
         root.resolve("VERSION").writeText(bundleVersion.get() + "\n")
-        root.resolve("README.md").writeText("Run bin/synesis (Unix) or bin/synesis.cmd (Windows).\n")
+        root.resolve("README.md").writeText(
+            "Run bin/synesis-installer (Unix) or bin/synesis-installer.exe (Windows) to install, repair, or uninstall.\n" +
+                    "After installation, run bin/synesis (Unix) or bin/synesis.cmd (Windows).\n"
+        )
         root.resolve("LICENSE").writeText(rootProject.file("LICENSE").readText())
         root.resolve("manifest.json").writeText(
             "{\"schemaVersion\":1,\"version\":\"${bundleVersion.get()}\",\"platform\":\"${bundlePlatform.get()}\"}\n"
@@ -310,6 +319,8 @@ tasks.register("bundleSmokeTest") {
         }
         val bundleRoot = extractedRoot.resolve(platformBundleDirectory.get().asFile.name)
         val launcher = bundleRoot.resolve("bin").resolve(if (isWindows) "synesis.cmd" else "synesis")
+        val installer = bundleRoot.resolve("bin").resolve(if (isWindows) "synesis-installer.exe" else "synesis-installer")
+        require(installer.isFile) { "Native installer missing from bundle: $installer" }
         if (!isWindows) {
             require(launcher.setExecutable(true)) { "Unable to restore Unix launcher permissions after extraction" }
             require(bundleRoot.resolve("runtime/bin/java").setExecutable(true)) {
@@ -331,6 +342,16 @@ tasks.register("bundleSmokeTest") {
         fun run(expectedExitCode: Int, vararg arguments: String) = runWithExit(expectedExitCode, arguments)
         try {
             run("version")
+            val installerCommand = if (isWindows) {
+                mutableListOf("cmd.exe", "/c", installer.absolutePath, "version")
+            } else {
+                mutableListOf(installer.absolutePath, "version")
+            }
+            val installerResult = ProcessBuilder(installerCommand).directory(smokeRoot).redirectErrorStream(true).start()
+            val installerOutput = installerResult.inputStream.bufferedReader().readText()
+            require(installerResult.waitFor() == 0 && "SYNESIS_BOOTSTRAP_VERSION=" in installerOutput) {
+                "Native installer version check failed:\n$installerOutput"
+            }
             val project = smokeRoot.resolve("project")
             require(project.mkdirs()) { "Unable to create smoke project: $project" }
             fun git(vararg arguments: String) {

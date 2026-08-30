@@ -1,25 +1,28 @@
 # Current Task
 
-## MAINT-003 Final source-level documentation and reconciliation — 2026-08-30
+## MAINT-003 Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
 - Task ID: MAINT-003
 - Status: ACTIVE
-- Handoff: source pass complete; retain this task until the next authorized
-  task is explicitly promoted.
+- Handoff: source pass complete; the user-authorized release packaging slice is
+  active and must be checkpointed before handoff.
 - Scope: audit and document meaningful source contracts and invariants across
   the complete tracked source tree: 572 Java files (409 production and 163
   tests), 8 Go files, and 9 install/validation scripts. Reconcile active
   documentation with current source, CLI, module boundaries, provider IDs, the
   MCP contract, and verified limitations.
   Preserve ADRs, checkpoints, evidence, accepted historical records,
-  backward-read compatibility, and unrelated work.
+  backward-read compatibility, and unrelated work. The user additionally
+  authorized a self-contained platform bundle installer, artifact renaming,
+  and Gradle caching.
 - Acceptance: important source types and APIs are documented where semantics
   warrant it; comments explain meaning rather than syntax; stale comments are
-  corrected or removed; active docs are source-accurate; historical records
-  are unchanged; required documentation, hygiene, link, build, test, bundle,
-  and contract checks pass or are honestly classified; and no production
-  behavior, public API, provider integration, MCP tool count, or architecture
-  boundary changes are introduced.
+  corrected or removed; active docs are source-accurate; each platform bundle
+  contains a runnable native installer offering install, repair, and uninstall;
+  install does not install providers; repair preserves project/workspace data;
+  the metadata wipe is explicit; Actions publishes six `synesis-<platform>`
+  bundle artifacts with Gradle caching; and verification is honestly
+  classified.
 - Existing user-owned changes and the unrelated lifecycle stash remain
   protected. No SYN-042, Claude integration, MCP tool addition, release, tag,
   force push, or historical rewrite is allowed. Commit and normal push are
@@ -32,7 +35,13 @@ The prior Antigravity removal and repository cleanup are complete and pushed in
 reconciliation; historical Antigravity records remain preserved.
 
 The whole-tree source documentation pass is complete and was committed as
-`2b32aa8` and pushed to `origin/master`. The working tree is clean.
+`2b32aa8` and pushed to `origin/master`. The working tree was clean before this
+packaging slice.
+
+The user-authorized packaging slice adds a native installer to each bundle,
+uses local bundles for install/repair, adds an explicit metadata-removal option
+to uninstall, and removes separate bootstrap/metadata uploads from the release
+workflow. The exact design is recorded in ADR-0048.
 
 ## Verification
 
@@ -63,11 +72,17 @@ The whole-tree source documentation pass is complete and was committed as
   selected MCP suite and broader workspace lifecycle selection stalled in
   process-heavy test workers without assertion output and were interrupted;
   they remain incomplete.
+- Packaging validation: native installer build, focused local
+  install/repair/uninstall tests, Go vet, and workflow/diff review pass. The
+  Gradle bundle task is currently blocked locally by Gradle's `Unable to
+  establish loopback connection`; hosted Gradle bundle execution remains the
+  required final evidence.
 
 ## Immediate next action
 
-Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-explicitly promote the next authorized task before any implementation.
+Run the focused Go tests and the six-platform Gradle bundle/archive smoke on a
+host where Gradle can establish its loopback connection, then create a
+checkpoint and review the exact staged artifact boundary before commit/push.
 
 ## Current failures
 

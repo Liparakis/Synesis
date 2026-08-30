@@ -155,7 +155,7 @@ func TestBootstrapInstallUpdateRollbackDoctorAndUninstall(t *testing.T) {
 	if err := os.MkdirAll(paths.root+".staging-leftover", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := runUninstall([]string{"--install-dir", installRoot}); err != nil {
+	if err := runUninstall([]string{"--install-dir", installRoot, "--remove-metadata"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(projectMarker); err != nil {
@@ -163,6 +163,55 @@ func TestBootstrapInstallUpdateRollbackDoctorAndUninstall(t *testing.T) {
 	}
 	if fileExists(paths.root) || fileExists(paths.rollback) {
 		t.Fatal("uninstall retained installation state")
+	}
+}
+
+func TestLocalBundleInstallRepairAndMetadataToggle(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	archive := writeBundleArchive(t, root, "0.1.0")
+	extracted := filepath.Join(root, "extracted")
+	if err := os.MkdirAll(extracted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(archive); err != nil {
+		t.Fatal(err)
+	} else if err := extractArchive(bytes.NewReader(data), extracted); err != nil {
+		t.Fatal(err)
+	} else if _, _, _, err := loadLocalBundle(flattenBundle(extracted)); err != nil {
+		t.Fatalf("local bundle directory rejected: %v", err)
+	}
+	installRoot := filepath.Join(root, "install")
+	if err := runInstall("install", []string{"--bundle", archive, "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(paths.root, "Link"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.root, "Link", "identity.pub"), []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRepair([]string{"--bundle", archive, "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runUninstall([]string{"--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	if !fileExists(paths.root) || !fileExists(filepath.Join(paths.root, "Link", "identity.pub")) {
+		t.Fatal("default uninstall did not preserve installer metadata")
+	}
+	if fileExists(paths.bin) || fileExists(paths.versions) {
+		t.Fatal("default uninstall retained application payload")
+	}
+	if err := runUninstall([]string{"--install-dir", installRoot, "--remove-metadata"}); err != nil {
+		t.Fatal(err)
+	}
+	if fileExists(paths.root) {
+		t.Fatal("metadata removal retained installation root")
 	}
 }
 

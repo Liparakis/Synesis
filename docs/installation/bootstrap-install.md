@@ -1,43 +1,38 @@
-# Bootstrap installation
+# Bundle installation
 
-The installer scripts require a configured artifact host; this repository does
-not claim ownership of `get.synesis.dev`.
+Download the GitHub Actions artifact for your platform, extract it, and run the
+native installer from its `bin` directory:
 
-```powershell
-$env:SYNESIS_BOOTSTRAP_BASE_URL = 'https://your-controlled-host.example/synesis'
-irm "$env:SYNESIS_BOOTSTRAP_BASE_URL/install.ps1" | iex
-```
+- Windows: `bin/synesis-installer.exe`
+- Linux/macOS: `bin/synesis-installer`
 
-```bash
-SYNESIS_BOOTSTRAP_BASE_URL=https://your-controlled-host.example/synesis \
-  curl -fsSL "$SYNESIS_BOOTSTRAP_BASE_URL/install.sh" | sh
-```
+Running the installer without arguments opens a menu with Install, Repair, and
+Uninstall. It operates on the extracted local bundle and does not require a
+manifest or network access.
 
-The bootstrapper installs one flat stable bundle under the OS user-data root:
+The installer places Synesis under the OS user-data root:
 
 - Windows: `%LOCALAPPDATA%\Synesis`
 - Linux: `$XDG_DATA_HOME/Synesis` or `~/.local/share/Synesis`
 - macOS: `~/Library/Application Support/Synesis`
 
-The root contains `bin/`, `runtime/`, application files, and `VERSION`; its
-launcher is `bin/synesis.cmd` on Windows or `bin/synesis` on Unix. A signed
-manifest, detached signature, artifact size/SHA-256, safe extraction, staged
-launcher validation, atomic activation, and one temporary rollback root are
-required. Successful updates never retain old application copies. Uninstall
-removes only the stable Synesis root and owned PATH state, preserving user
-projects and their `.synesis` directories.
+Install adds the application and user PATH entry only; it does not install or
+configure any provider. Repair reinstalls the verified application payload and
+preserves project workspaces, project `.synesis` directories, and provider
+metadata. Uninstall removes application files and PATH state by default. Its
+metadata option additionally removes the installer-owned Link identity and
+administrative state. Project/workspace data is never scanned or deleted by the
+installer because it can live anywhere on disk and is user-owned.
 
-The next install or update migrates the old `current` plus `versions/<version>`
-layout only after the new flat bundle validates. Temporary siblings are named
-`Synesis.staging-<random>` and `Synesis.rollback` and are removed after
-successful activation or uninstall.
+The installer uses versioned payloads and an atomic active pointer. Temporary
+siblings are named `Synesis.staging-<random>` and `Synesis.rollback` and are
+removed after successful activation or uninstall.
 
 Windows adds `%LOCALAPPDATA%\Synesis\bin` to the user PATH without
 administrator privileges, preserving unrelated entries case-insensitively and
 without truncation. Linux and macOS add a small managed block to `~/.profile`
 and update the installer process PATH; a new terminal may be required.
 
-CI publishes platform-specific bootstrap artifacts such as
-`synesis-bootstrap-linux-x64` and `synesis-bootstrap-windows-x64.exe`, along
-with the separate metadata artifact containing the manifest and checksums. No
-public release URL is claimed here.
+GitHub Actions publishes six artifacts named `synesis-<platform>` such as
+`synesis-linux-x64` and `synesis-windows-x64`. Each contains its own native
+installer and runnable application bundle.

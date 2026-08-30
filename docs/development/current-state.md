@@ -42,19 +42,19 @@ workspace/session authority remains isolated per provider connection.
 The root Gradle build includes seven Java modules: `:link`, `:project-record`,
 `:coordination`, `:workspace`, `:mcp-contract`, `:mcp`, and `:cli`.
 
-| Module | Responsibility |
-|---|---|
-| `:link` | Identity, authenticated QUIC sessions, control readiness, liveness, and application streams. |
-| `:project-record` | Signed SDR2 records, constraints, scope matching, local storage, and PRP1 reconciliation. |
-| `:coordination` | Durable coordination protocol and work-group/lane state. |
-| `:workspace` | Project/provider/session lifecycle, worktrees, guardrails, snapshots, integration, and diagnostics. |
-| `:mcp-contract` | Stable raw MCP tool catalog and schemas. |
-| `:mcp` | MCP stdio JSON-RPC transport and handler dispatch. |
-| `:cli` | Picocli command surface, terminal rendering, installation composition, and packaging. |
+| Module            | Responsibility                                                                                      |
+|-------------------|-----------------------------------------------------------------------------------------------------|
+| `:link`           | Identity, authenticated QUIC sessions, control readiness, liveness, and application streams.        |
+| `:project-record` | Signed SDR2 records, constraints, scope matching, local storage, and PRP1 reconciliation.           |
+| `:coordination`   | Durable coordination protocol and work-group/lane state.                                            |
+| `:workspace`      | Project/provider/session lifecycle, worktrees, guardrails, snapshots, integration, and diagnostics. |
+| `:mcp-contract`   | Stable raw MCP tool catalog and schemas.                                                            |
+| `:mcp`            | MCP stdio JSON-RPC transport and handler dispatch.                                                  |
+| `:cli`            | Picocli command surface, terminal rendering, installation composition, and packaging.               |
 
-The release workflow builds six development-only Java bundles and six
-cross-compiled Go bootstrappers, then publishes each platform artifact
-individually with separate metadata. No public release is claimed.
+The release workflow builds six development-only Java bundles, embeds a native
+installer and MCP launcher for each target, and publishes exactly six platform
+artifacts named `synesis-<platform>`. No public release is claimed.
 
 The bootstrap installation model uses a stable OS user-data root with the
 launcher in `bin/`. Install/update operations stage in a sibling directory and

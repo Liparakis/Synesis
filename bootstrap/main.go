@@ -6,6 +6,7 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"crypto/ed25519"
@@ -132,7 +133,10 @@ type payloadManifest struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
+		if err := runInstallerMenu(); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
+			os.Exit(1)
+		}
 		return
 	}
 	switch os.Args[1] {
@@ -140,6 +144,11 @@ func main() {
 		fmt.Printf("SYNESIS_BOOTSTRAP_VERSION=%s\n", bootstrapVersion)
 	case "install", "update":
 		if err := runInstall(os.Args[1], os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
+			os.Exit(1)
+		}
+	case "repair":
+		if err := runRepair(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
 			os.Exit(1)
 		}
@@ -159,7 +168,66 @@ func main() {
 	}
 }
 
-func usage() { fmt.Println("synesis-bootstrap install|update|uninstall|doctor|version") }
+func usage() { fmt.Println("synesis-installer [install|repair|uninstall|doctor|version]") }
+
+// runInstallerMenu provides the double-click entry point shipped in every
+// platform bundle. It deliberately operates only on the bundle containing the
+// running installer, so installation never needs a network manifest and never
+// installs a provider as a side effect.
+func runInstallerMenu() error {
+	bundle, err := runningBundleRoot()
+	if err != nil {
+		return err
+	}
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Synesis Installer")
+	fmt.Println("1) Install")
+	fmt.Println("2) Repair")
+	fmt.Println("3) Uninstall")
+	fmt.Println("4) Exit")
+	fmt.Print("Choose an option: ")
+	choice, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	switch strings.TrimSpace(choice) {
+	case "1":
+		return runInstall("install", []string{"--bundle", bundle})
+	case "2":
+		return runRepair([]string{"--bundle", bundle})
+	case "3":
+		fmt.Print("Also remove Synesis metadata (identity and installer state)? [y/N]: ")
+		answer, readErr := reader.ReadString('\n')
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			return readErr
+		}
+		args := []string{}
+		if strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes") {
+			args = append(args, "--remove-metadata")
+		}
+		return runUninstall(args)
+	case "4", "":
+		return nil
+	default:
+		return errors.New("invalid installer choice")
+	}
+}
+
+func runningBundleRoot() (string, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return "", errors.New("unable to locate installer bundle")
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		return "", errors.New("unable to resolve installer bundle")
+	}
+	bundle := filepath.Dir(filepath.Dir(executable))
+	if err := validateBundle(bundle); err != nil {
+		return "", fmt.Errorf("installer is not inside a valid Synesis bundle: %w", err)
+	}
+	return bundle, nil
+}
 
 // runInstall implements both "install" and "update": fetch and verify the
 // manifest, resolve the platform-appropriate artifact, verify its checksum,
@@ -192,6 +260,28 @@ func runInstall(operation string, args []string) error {
 	}
 	if operation == "update" && !*prepare && !*rollback {
 		return errors.New("update requires --prepare or --execute")
+	}
+	if *bundlePath != "" {
+		if operation == "update" {
+			return errors.New("local bundles support install or repair; use a signed manifest for update")
+		}
+		archive, m, manifestData, err := loadLocalBundle(*bundlePath)
+		if err != nil {
+			return err
+		}
+		if *prepare {
+			id, err := prepareUpdatePlan(paths, m, manifestData, nil, archive, *acceptance)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("UPDATE_RESULT=PREPARED\nPLAN_ID=%s\n", id)
+			return nil
+		}
+		if err := activateVersioned(paths, m, manifestData, archive, operation, nil); err != nil {
+			return err
+		}
+		fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
+		return nil
 	}
 	if *manifestURL == "" {
 		return errors.New("SYNESIS_MANIFEST_URL or --manifest is required")
@@ -235,6 +325,152 @@ func runInstall(operation string, args []string) error {
 	}
 	fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
 	return nil
+}
+
+// runRepair reinstalls the bundled application payload without invoking any
+// provider lifecycle command or modifying project workspaces. Installation
+// bookkeeping (the active payload pointer and integrity manifest) is updated
+// because those records are required to activate the repaired binaries safely.
+func runRepair(args []string) error {
+	flags := flag.NewFlagSet("repair", flag.ContinueOnError)
+	bundlePath := flags.String("bundle", "", "local bundle directory or archive")
+	installDir := flags.String("install-dir", "", "installation root")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *bundlePath == "" {
+		var err error
+		*bundlePath, err = runningBundleRoot()
+		if err != nil {
+			return errors.New("repair requires --bundle when the installer is not inside a bundle")
+		}
+	}
+	archive, m, manifestData, err := loadLocalBundle(*bundlePath)
+	if err != nil {
+		return err
+	}
+	paths, err := installationPaths(*installDir)
+	if err != nil {
+		return err
+	}
+	if !fileExists(paths.root) {
+		return errors.New("no Synesis installation found to repair")
+	}
+	if err := activateVersioned(paths, m, manifestData, archive, "repair", nil); err != nil {
+		return err
+	}
+	fmt.Printf("REPAIR_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
+	return nil
+}
+
+// loadLocalBundle turns an extracted bundle or a downloaded bundle archive
+// into the same verified input used by the signed-manifest installer. Local
+// installation is intentionally self-contained: the archive is not fetched
+// and no provider command is run.
+func loadLocalBundle(path string) ([]byte, manifest, []byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, manifest{}, nil, err
+	}
+	var archive []byte
+	if info.IsDir() {
+		archive, err = archiveBundle(path)
+	} else {
+		archive, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return nil, manifest{}, nil, err
+	}
+	if int64(len(archive)) > maxExtractedSize {
+		return nil, manifest{}, nil, errors.New("bundle is too large")
+	}
+	staging, err := os.MkdirTemp("", "synesis-local-bundle-")
+	if err != nil {
+		return nil, manifest{}, nil, err
+	}
+	defer os.RemoveAll(staging)
+	if err := extractArchive(bytes.NewReader(archive), staging); err != nil {
+		return nil, manifest{}, nil, err
+	}
+	bundle := flattenBundle(staging)
+	versionData, err := os.ReadFile(filepath.Join(bundle, "VERSION"))
+	if err != nil {
+		return nil, manifest{}, nil, errors.New("local bundle missing VERSION")
+	}
+	version := strings.TrimSpace(string(versionData))
+	if !validVersion(version) {
+		return nil, manifest{}, nil, errors.New("local bundle VERSION invalid")
+	}
+	if err := validateBundleVersion(bundle, version); err != nil {
+		return nil, manifest{}, nil, err
+	}
+	data, err := json.Marshal(manifest{
+		SchemaVersion: 1,
+		Channel:       "local",
+		Version:       version,
+		PublishedAt:   "local",
+		Artifacts: map[string]artifact{platformID(): {
+			URL:    "local",
+			SHA256: digest(archive),
+			Size:   int64(len(archive)),
+		}},
+	})
+	if err != nil {
+		return nil, manifest{}, nil, err
+	}
+	var m manifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, manifest{}, nil, err
+	}
+	return archive, m, data, nil
+}
+
+func archiveBundle(root string) ([]byte, error) {
+	buffer := new(bytes.Buffer)
+	writer := zip.NewWriter(buffer)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("local bundle contains unsupported entry")
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = filepath.ToSlash(relative)
+		header.Method = zip.Deflate
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+		input, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(entry, input)
+		closeErr := input.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
+	})
+	if err != nil {
+		_ = writer.Close()
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
 }
 
 // verifyManifestAuthenticity enforces the project's trust policy for a
@@ -783,7 +1019,17 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 	}()
 	previous, sourceHash, err = readPointer(paths, paths.current)
 	if err != nil {
-		return err
+		if operation != "repair" {
+			return err
+		}
+		// Repair is allowed to recover from a damaged payload manifest or
+		// binary, but it still requires a structurally valid current pointer so
+		// it cannot guess which installation it is replacing.
+		previous, sourceHash, err = readLoosePointer(paths, paths.current)
+		if err != nil {
+			return err
+		}
+		sourceHash = ""
 	}
 	staging, err := os.MkdirTemp(filepath.Dir(paths.root), filepath.Base(paths.root)+".staging-")
 	if err != nil {
@@ -865,6 +1111,23 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "INSTALLED_SMOKE_TEST_PASSED", "")
 	}
 	return nil
+}
+
+func readLoosePointer(paths installPaths, path string) (*activePointer, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	var pointer activePointer
+	if err := json.Unmarshal(data, &pointer); err != nil || pointer.SchemaVersion != 1 || !validVersion(pointer.Version) || !validPayloadToken(pointer.PayloadDirectory) {
+		return nil, "", errors.New("active pointer invalid")
+	}
+	root := filepath.Join(paths.versions, pointer.PayloadDirectory)
+	inside, err := filepath.Abs(root)
+	if err != nil || !pathWithin(paths.versions, inside) {
+		return nil, "", errors.New("active pointer payload path invalid")
+	}
+	return &pointer, digest(data), nil
 }
 
 func writePayloadManifest(bundle, version string, sourceManifest []byte) error {
@@ -1465,6 +1728,7 @@ func runDoctor(args []string) error {
 func runUninstall(args []string) error {
 	flags := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	installDir := flags.String("install-dir", "", "installation root")
+	removeMetadata := flags.Bool("remove-metadata", false, "also remove installer-owned metadata and identity")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -1478,8 +1742,14 @@ func runUninstall(args []string) error {
 	if err := pathUpdater(paths, false); err != nil {
 		return err
 	}
-	if err := removeInstallationTree(paths.root); err != nil {
-		return err
+	if *removeMetadata {
+		if err := removeInstallationTree(paths.root); err != nil {
+			return err
+		}
+	} else {
+		if err := removeInstalledPayload(paths); err != nil {
+			return err
+		}
 	}
 	if err := removeInstallationTree(paths.rollback); err != nil {
 		return err
@@ -1500,7 +1770,32 @@ func runUninstall(args []string) error {
 			}
 		}
 	}
-	fmt.Println("UNINSTALL_RESULT=SUCCESS", "USER_PROJECTS_PRESERVED=true")
+	fmt.Println("UNINSTALL_RESULT=SUCCESS", "USER_PROJECTS_PRESERVED=true", "METADATA_REMOVED="+strconv.FormatBool(*removeMetadata))
+	return nil
+}
+
+// removeInstalledPayload removes only application binaries and version
+// payloads. The Link identity and bootstrap admin records are installer-owned
+// metadata and remain available for a later reinstall unless the user opts in
+// to --remove-metadata.
+func removeInstalledPayload(paths installPaths) error {
+	for _, path := range []string{
+		paths.bin,
+		filepath.Join(paths.root, "app"),
+		filepath.Join(paths.root, "runtime"),
+		paths.versions,
+		paths.current,
+		paths.previous,
+		filepath.Join(paths.root, "current"),
+		filepath.Join(paths.root, "VERSION"),
+		filepath.Join(paths.root, "README.md"),
+		filepath.Join(paths.root, "LICENSE"),
+		filepath.Join(paths.root, "manifest.json"),
+	} {
+		if err := removeInstallationTree(path); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
