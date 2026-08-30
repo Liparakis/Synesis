@@ -101,6 +101,7 @@ generated files, transcripts, and machine-specific paths out of commits.
 | Provider guides            | [docs/providers/README.md](docs/providers/README.md)                     |
 | Architecture               | [docs/architecture/README.md](docs/architecture/README.md)               |
 | Operations                 | [docs/operations/README.md](docs/operations/README.md)                   |
+| Current repository state   | [docs/development/current-state.md](docs/development/current-state.md)   |
 | Development & verification | [docs/development/build-and-test.md](docs/development/build-and-test.md) |
 | Security model             | [docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)           |
 | Release & signing notes    | [docs/release/RELEASE_READINESS.md](docs/release/RELEASE_READINESS.md)   |

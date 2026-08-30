@@ -1,44 +1,46 @@
 # Current Task
 
-## MAINT-002 Repository-wide architecture cleanup before final documentation — 2026-08-30
+## MAINT-003 Final documentation reconciliation — 2026-08-30
 
-- Task ID: MAINT-002
+- Task ID: MAINT-003
 - Status: ACTIVE.
-- Scope: remove only proven dead, unused, obsolete, duplicated, misnamed,
-  stale, unnecessary compatibility, or generated residue from the current
-  product surface. Preserve Claude, Codex, mcp-contract, historical
-  ADRs/checkpoints/evidence, backward-read compatibility, and unrelated work.
-- Acceptance: current source/config/CLI/tests/scripts/workflows/docs are
-  coherent; focused validation passes; exactly 10 MCP tools remain; cleanup is
-  committed and pushed; stop before the final documentation pass.
+- Scope: reconcile active documentation with current source, CLI, module
+  boundaries, provider IDs, MCP contract, and verified limitations. Preserve
+  ADRs, checkpoints, evidence, accepted historical records, backward-read
+  compatibility, and unrelated work.
+- Acceptance: active docs are source-accurate and internally consistent;
+  historical records are unchanged; links and repository hygiene pass; no
+  production behavior, provider integration, MCP tool count, or architecture
+  boundary changes are introduced.
 - Existing user-owned changes and the unrelated lifecycle stash remain
-  protected. No release, tag, force push, or historical rewrite is allowed.
+  protected. No SYN-042, Claude integration, MCP tool addition, release, tag,
+  force push, or historical rewrite is allowed.
 
 ## Work completed
 
-The prior Antigravity removal is preserved. The cleanup inventory identified
-`.agents/**` as stale provider-era compatibility residue and removed it from
-the active workspace policy, provider metadata, and focused path fixtures.
-Historical Antigravity records remain preserved.
+The prior Antigravity removal and repository cleanup are complete and pushed in
+`aee96c3` and `48e0103`. This task begins the separate active-documentation
+reconciliation; historical Antigravity records remain preserved.
 
 ## Verification
 
-- Active provider-removal residue search: PASS; the only active Antigravity
-  mention documents its removal, and historical records remain preserved.
-- `repositoryHygieneCheck`, `git diff --check`, focused workspace regressions,
-  and the renamed ten-tool MCP catalog test: PASS.
-- Focused Gradle compilation and packaging: PASS with the host
-  temporary-directory workaround. The root `check` reached process-heavy MCP
-  tests without an assertion result and was stopped; it remains incomplete.
-- Bootstrap Go tests: FAIL in three existing update-migration fixture cases
-  with `update migrations not prepared`; unrelated Go packages passed.
-- Cleanup commit `aee96c3` is pushed to `origin/master`; no final
-  documentation work is included.
+- Cleanup baseline: PASS; active residue search, hygiene, focused workspace
+  regressions, ten-tool MCP catalog test, compilation, and packaging passed.
+- Historical Antigravity records remain preserved; the only active mention is
+  the current-state removal note.
+- Known validation limits carried forward: three bootstrap migration fixture
+  failures (`update migrations not prepared`) and an incomplete root Java
+  `check` stopped during process-heavy MCP tests.
+- Documentation audit corrections: current-state module/provider/configuration
+  summary, project-layout metadata description, provider-maturity matrix, CLI
+  command reference, and current-state navigation links.
+- Documentation gates: `repositoryHygieneCheck`, deferred-register
+  validation, active Markdown links, and the source/CLI cross-check PASS.
 
 ## Immediate next action
 
-Stop this cleanup task and hand off to a separately authorized final
-documentation pass; do not broaden the code cleanup.
+Checkpoint the documentation pass, inspect its exact local commit boundary,
+and stop without remote publication.
 
 ## Current failures
 

@@ -16,7 +16,7 @@ is never repaired or overwritten automatically.
         link/                    # private node identity and Link state
         project.conf             # local peer configuration
         records/                 # local record store
-      providers/                 # future provider installation state
+      providers/                 # machine-local provider metadata and health
       runtime/                   # machine/runtime state
 ```
 

@@ -1,21 +1,26 @@
 # Next Session
 
-## MAINT-002 Repository-wide architecture cleanup before final documentation — 2026-08-30
+## MAINT-003 Final documentation reconciliation — 2026-08-30
 
-MAINT-002 is the sole active task. Finish the evidence-backed repository-wide
-cleanup before the separate final documentation pass. Preserve current
-architecture, mcp-contract, exactly 10 MCP tools, historical records, backward
-reads, Claude/Codex behavior, unrelated work, and the lifecycle stash. Commit
-and push are authorized; do not create SYN-042 or start Claude integration.
+MAINT-003 is the sole active task. Reconcile active documentation with current
+source, CLI, module boundaries, provider IDs, MCP contract, and verified
+limitations. Preserve historical records, backward reads, Claude/Codex
+behavior, unrelated work, and the lifecycle stash. Do not create SYN-042 or
+start Claude integration.
 
-Inventory confirmed no active Antigravity/Gemini integration beyond the
-current-state note documenting its removal. The unused `.agents/**`
-provider-era path handling and two active documentation inconsistencies have
-been corrected. Focused workspace/MCP tests, hygiene, compilation, and
-packaging pass; the bootstrap migration fixtures fail and the root process-
-heavy check is incomplete.
+The cleanup baseline is complete and pushed in `aee96c3` and `48e0103`.
+Historical Antigravity records remain preserved. Known validation limits are
+the three bootstrap migration fixture failures and the incomplete process-heavy
+root Java check.
 
-- Exact next code action: stop this cleanup task and hand off to a separately authorized final documentation pass; do not broaden the code cleanup.
+The documentation audit has corrected the current-state module/provider summary,
+project-layout metadata description, provider-maturity matrix, CLI command
+reference, and current-state navigation links.
+
+- Documentation gates pass: repository hygiene, deferred-register validation,
+  active Markdown links, and the source/CLI cross-check.
+
+- Exact next documentation action: checkpoint the documentation pass, inspect its exact local commit boundary, and stop without remote publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

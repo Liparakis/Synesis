@@ -1,6 +1,6 @@
 # Claude Code
 
-Install the canonical provider ID with:
+Install the canonical `claude` provider ID with:
 
 ```powershell
 synesis provider install claude

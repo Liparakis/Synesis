@@ -4,7 +4,7 @@
 
 ### Repository-wide architecture cleanup before final documentation — 2026-08-30
 
-- Status: ACTIVE
+- Status: DONE
 - Scope: inventory and remove only proven dead, unused, obsolete, duplicated,
   misnamed, stale, unnecessary compatibility, or generated residue across the
   current product surface. Preserve Claude, Codex, mcp-contract, historical
@@ -23,8 +23,29 @@
 - Existing user-owned changes and the unrelated lifecycle stash must remain
   intact. Commit and push are authorized for this cleanup slice; no release,
   tag, force push, or historical rewrite is authorized.
-- Exact next action: stop this cleanup task and hand off to a separately
-  authorized final documentation pass; do not broaden the code cleanup.
+- Evidence: PASS; cleanup commit `aee96c3`, handoff commit `48e0103`, and
+  checkpoint `docs/agent/checkpoints/CP-0582.md`.
+
+## MAINT-003
+
+### Final documentation reconciliation — 2026-08-30
+
+- Status: ACTIVE
+- Scope: reconcile active user/developer documentation with the current
+  source, CLI, module boundaries, provider IDs, MCP contract, and verified
+  limitations. Preserve ADRs, checkpoints, evidence, accepted historical
+  records, and backward-read compatibility.
+- Acceptance: active docs are source-accurate and internally consistent;
+  historical records are unchanged; links and repository hygiene pass; no
+  production behavior, provider integration, MCP tool count, or architecture
+  boundary changes are introduced.
+- Do not create SYN-042, start Claude integration, add MCP tools, or publish
+  releases. Existing stash and unrelated work remain protected.
+- Current evidence: active documentation audit, source/CLI cross-check,
+  repository hygiene, deferred-register validation, and active Markdown link
+  validation pass. Historical records remain unchanged.
+- Exact next action: checkpoint the documentation pass, inspect its exact local
+  commit boundary, and stop without remote publication.
 
 ## MAINT-001
 

@@ -1,83 +1,79 @@
-# Synesis Repository State Audit
+# Synesis current state
 
 **Date**: August 30, 2026
-**Repository Branch**: `master`
-**Latest repository state**: repository cleanup after removal of the inactive
-Antigravity integration; `SYN-014E` remains paused.
-**Verification note**: the hygiene preflight at `a67dd00` exposed a stale
-workspace architecture assertion and a parallel Gradle test-result race; those
-are not fixed by this documentation-only workstream.
+**Repository branch**: `master`
+**Current baseline**: the Antigravity integration has been removed, the
+repository cleanup is pushed, and this pass is reconciling active
+documentation with the implemented product.
 
-The stdio MCP server exposes exactly 10 tools. `claude` is the canonical
-provider ID; Claude Code uses the canonical `claude` ID and `hook claude` command. One persistent MCP
-connection owns one provider binding, reads are revision-bearing, and worker
-contexts are isolated.
+Synesis is a local-first coordination and constraint-enforcement layer for
+independently running AI coding agents. The stdio MCP server exposes exactly
+10 raw tools. The supported provider IDs are `claude` and `codex`; both
+integrations are currently `EXPERIMENTAL`, and MCP transport evidence is tracked
+separately from real provider-hook enforcement.
 
----
-
-## 1. Executive Summary & Task Status Audit
-
-### Active Capability Summary
-
-- **Unified CLI / project state (`SYN-009A`)**:
-    - `:cli` is the sole application distribution and exposes `synesis init`,
-      project/constraint/sync/check-action/hook commands.
-    - `:workspace` is a library with application services and no launcher.
-    - Project discovery walks upward through `.synesis/project.json`; local
-      profile and runtime state live below `.synesis/local`.
-- **`:project-record` Module**:
-    - `DecisionRecord`: Canonical signed SDR2 record format (`0x53445232`, `VERSION = 2`) with explicit `RecordType` (
-      `DECISION` vs `PROJECT_CONSTRAINT`) and binary `ConstraintPayload`.
-    - `ProjectConstraint`: Domain model with `filterEffectiveActive` excluding superseded constraints; scope evaluation
-      via `ScopeMatcher`.
-- **`:workspace` Module**:
-    - Application services own orchestration; public command ownership is now in `:cli`.
-    - `ClaudeCodeHookAdapter`: Conforms to official Claude Code v2.1+ `PreToolUse` contract. Emits `hookSpecificOutput`
-      with `permissionDecision: "deny"`, handles absolute paths via `resolveRelativePath`, and emits `additionalContext`
-      for warnings.
-- **Integration & Validation Suite**:
-    - `docs/integration/claude-code-hook.json`: Project-local Claude Code hook configuration example.
-    - `scripts/run-synesis-guardrail-experiment.ps1`: Automated experiment runner proving PreToolUse hook denial and
-      target file preservation.
-    - `docs/validation/baseline-vs-synesis-experiment.md`: Experiment specification and metric results.
-    - Provider lifecycle is available through `synesis provider`; Claude Code is
-      `EXPERIMENTAL`, and provider metadata is local-only.
-      Codex is listed as `EXPERIMENTAL`; its bounded `apply_patch` adapter and
-      project-local lifecycle are synthetic/process verified, while trust review
-      and real-agent enforcement remain unverified.
+One persistent MCP connection owns one provider binding and one isolated worker
+context. Reads are revision-bearing, patches require the matching revision, and
+workspace/session authority remains isolated per provider connection.
 
 ---
 
-## 2. Module & Capability Breakdown
+## 1. Executive Summary
 
-### Distribution state
+- The unified `:cli` distribution owns command parsing and terminal output;
+  `:workspace` supplies the shared application services.
+- `:project-record` owns signed SDR2 records, typed constraints, scope
+  matching, and local record storage.
+- `:coordination` owns durable claims, lanes, work groups, inboxes, and
+  completion semantics.
+- `:mcp-contract` owns the exact ten-tool catalog and wire schemas; `:mcp`
+  owns stdio JSON-RPC transport and dispatch.
+- Project discovery walks upward through `.synesis/project.json`; private
+  identity, provider metadata, and runtime state remain under
+  `.synesis/local/`.
+- `synesis provider` currently exposes the canonical IDs `claude` and `codex`.
+  Both are experimental: installation and synthetic checks are not proof of
+  real provider trust or universal hook enforcement.
 
-The release workflow builds six native Java bundles and six cross-compiled Go
-bootstrappers, then exposes one aggregated `synesis-release-candidate` Actions
-artifact for maintainers. Platform-specific files remain inside that artifact
-and may later be published individually as GitHub Release assets. No public
-release is claimed.
+---
 
-The bootstrap installation model is one flat stable OS user-data root with the
-bundle launcher inside `bin/`. Install/update stage in a sibling directory and
-keep only one temporary rollback root during activation. The legacy pointer and
-version-directory layout is migration-only and is not retained after success.
+## 2. Module and distribution breakdown
 
-### A. Implemented and Tested (`:link`, `:cli`, `:project-record`, `:workspace`)
+The root Gradle build includes seven Java modules: `:link`, `:project-record`,
+`:coordination`, `:workspace`, `:mcp-contract`, `:mcp`, and `:cli`.
 
-| Category                    | Module            | Implementation Classes                                       | Verified Guarantees                                                                                                                                    |
-|:----------------------------|:------------------|:-------------------------------------------------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Node Identity & Crypto**  | `:link`           | `NodeIdentity`, `Ed25519Signer`                              | Ed25519 keypair generation, local persistence, canonical signing, public-key verification, safe node ID derivation.                                    |
-| **Session & Transport**     | `:link`           | `PeerSession`, `SessionAuthenticator`, `NettyControlStream`  | QUIC session establishment, ALPN negotiation, replay guard, reciprocal CONTROL_READY, graceful close.                                                  |
-| **Domain & Constraints**    | `:project-record` | `DecisionRecord` (SDR2), `ProjectConstraint`, `ScopeMatcher` | Immutable canonical signed SDR2 records, explicit typed constraint payloads, supersession filtering, deterministic scope path matcher.                 |
-| **Local Store & PRP1 Sync** | `:project-record` | `DecisionStore`, `ProjectReconciliationSync`                 | File-based record store, magic prefix `0x50525031` PRP1 project-wide reconciliation over authenticated Link application streams.                       |
-| **Workspace & Guardrails**  | `:workspace`      | application services, hook adapters                          | Guided onboarding (`sync host`/`sync join`), typed constraints, `check-action` guardrail, official provider hook adapters (exit 0 for JSON responses). |
+| Module | Responsibility |
+|---|---|
+| `:link` | Identity, authenticated QUIC sessions, control readiness, liveness, and application streams. |
+| `:project-record` | Signed SDR2 records, constraints, scope matching, local storage, and PRP1 reconciliation. |
+| `:coordination` | Durable coordination protocol and work-group/lane state. |
+| `:workspace` | Project/provider/session lifecycle, worktrees, guardrails, snapshots, integration, and diagnostics. |
+| `:mcp-contract` | Stable raw MCP tool catalog and schemas. |
+| `:mcp` | MCP stdio JSON-RPC transport and handler dispatch. |
+| `:cli` | Picocli command surface, terminal rendering, installation composition, and packaging. |
 
-### B. Documented Limitations & Harness Enforcement Boundaries
+The release workflow builds six development-only Java bundles and six
+cross-compiled Go bootstrappers, then aggregates them into an internal
+`synesis-release-candidate` artifact. No public release is claimed.
 
-- **Real-Agent Run**: Codex CLI `0.140.0` is authenticated, but project hook
-  trust was not established in the attempted
-  noninteractive run, so Codex real-agent enforcement is `NOT_COMPLETED`.
+The bootstrap installation model uses a stable OS user-data root with the
+launcher in `bin/`. Install/update operations stage in a sibling directory and
+retain one temporary rollback root during activation. Legacy pointer and
+version-directory layouts are migration-only.
+
+### Implemented boundaries
+
+- `:link` provides authenticated transport and session primitives.
+- `:project-record` provides signed durable project records and constraints.
+- `:workspace` provides local project/provider lifecycle and guardrails.
+- `:mcp-contract`, `:mcp`, and `:cli` expose bounded adapters over shared
+  application services.
+
+## 3. Documented limitations and enforcement boundaries
+
+- **Real-agent validation**: the attempted noninteractive Codex run did not
+  establish project-hook trust, so real-agent enforcement remains
+  `NOT_COMPLETED`.
 - **Harness Integration Scope**: Synesis enforces constraints at integration points that invoke its guardrail (
   `check-action` or `hook claude`).
 - **Claude Code Adapter Scope**: Enforces supported structured file-edit tools (`Edit`, `Write`, `str_replace_editor`,

@@ -1,28 +1,33 @@
 # State
 
-## MAINT-002 Remove Antigravity provider integration — 2026-08-30
+## MAINT-003 Final documentation reconciliation — 2026-08-30
 
-The request is authorized as a separate active maintenance slice. The initial
-inventory found provider-registry, MCP fallback discovery, provider migration,
-project initialization, hook, test, script, and current-documentation
-references. Immutable historical evidence and checkpoint records are retained.
+The repository cleanup is complete and pushed in `aee96c3` and `48e0103`.
+MAINT-003 is the separate active documentation slice: reconcile active guides
+and current-state records with source, CLI, module boundaries, provider IDs,
+the ten-tool MCP contract, and verified limitations. Immutable historical
+evidence, ADRs, and checkpoint records remain retained.
 
 ## Verification evidence
 
-- Operational source/test/script/current-document search: PASS; no
-  Antigravity or Gemini integration references remain.
-- `git diff --check`: PASS.
-- `go test ./...` in an isolated test home: PASS.
-- Corrected the post-removal CI expectations: malformed Claude hook
-  configuration remains untouched, and healthy Claude status expects exit 0.
-- Gradle Java verification: BLOCKED before compilation by the host's loopback
-  connection failure; retry with IPv4/no-daemon options produced the same
-  failure.
+- Cleanup baseline: active residue search, `repositoryHygieneCheck`, focused
+  workspace regressions, the ten-tool MCP catalog test, compilation, and
+  packaging PASS.
+- Known limits: three bootstrap update-migration fixture failures report
+  `update migrations not prepared`; the root Java `check` was stopped during
+  process-heavy MCP tests without an assertion result.
+- Historical Antigravity references remain preserved and are not active
+  product support.
+- Documentation audit corrections cover current-state module/provider/config
+  summaries, project-layout metadata, provider maturity, CLI commands, and
+  navigation links.
+- Documentation gates pass: repository hygiene, deferred-register validation,
+  active Markdown links, and the source/CLI cross-check.
 
 ## Immediate next action
 
-Re-run the focused Gradle Java tests when the host loopback failure is cleared;
-until then, do not claim Java compilation or test closure.
+Checkpoint the documentation pass, inspect its exact local commit boundary,
+and stop without remote publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 
