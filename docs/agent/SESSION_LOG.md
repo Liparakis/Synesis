@@ -4597,3 +4597,17 @@ not run Codex or close SYN-041.
   tests, and whitespace validation pass.
 - Exact next action: checkpoint, push the extraction-permission fix, and
   inspect the next hosted matrix.
+
+## 2026-08-30 — Raw release asset publishing
+
+- The hosted matrix passed, but the user correctly noted that
+  `actions/upload-artifact` always wraps even a single file in a ZIP download.
+- Removed Actions artifact uploads from the release workflow. `v*` tag runs
+  now create or reuse a GitHub Release and upload each
+  `synesis-<platform>-<architecture>` executable directly as a raw release
+  asset; branch and pull-request runs retain build and smoke-test validation.
+- Updated the release ADR and artifact documentation to describe the raw
+  release-asset contract. Diff, deferred-register validation, and repository
+  status checks pass; hosted workflow validation remains required.
+- Exact next action: checkpoint, commit, push, and inspect the tag/branch
+  workflow behavior.

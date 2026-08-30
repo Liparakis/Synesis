@@ -12,9 +12,10 @@
 The runner labels are current GitHub-hosted labels; if a runner is unavailable,
 the workflow must report `NOT_SUPPORTED_BY_RUNNER` rather than claim execution.
 
-GitHub Actions publishes each row independently as the artifact
-`synesis-<platform>` (for example, `synesis-windows-x64`). Each artifact
-contains one runnable self-extracting file with the CLI, bundled Java runtime,
-native MCP launcher, and native installer. The installer is self-contained and
-does not auto-install a provider. No separate bootstrap, metadata,
+Tagged GitHub releases publish each row independently as a raw release asset
+named by the runnable file (for example, `synesis-windows-x64.exe`). The file
+itself is the self-extracting installer with the CLI, bundled Java runtime,
+native MCP launcher, and native installer; it is not wrapped in a ZIP by the
+workflow. Branch and pull-request runs build and smoke-test the files but do
+not publish downloadable artifacts. No separate bootstrap, metadata,
 aggregate-release-candidate, or install-script artifact is produced.

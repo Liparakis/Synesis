@@ -29,10 +29,15 @@ default; an explicit metadata option also removes the installer-owned Link
 identity and administrative state. Project directories are never recursively
 discovered or deleted by the installer.
 
-GitHub Actions publishes exactly six artifacts named `synesis-<platform>`. The
-separate bootstrap and manifest artifact uploads, aggregate release candidate,
-and install-script distribution are removed from the workflow. Gradle caching
-is enabled on the Java setup steps.
+Tagged GitHub releases publish exactly six raw release assets named for the
+runnable files: `synesis-windows-x64.exe`, `synesis-windows-arm64.exe`,
+`synesis-linux-x64`, `synesis-linux-arm64`, `synesis-macos-x64`, and
+`synesis-macos-arm64`. The workflow does not use Actions artifact uploads for
+these files, because that service always wraps downloads in a ZIP container.
+Branch and pull-request runs build and smoke-test the files without publishing
+them. The separate bootstrap and manifest artifact uploads, aggregate release
+candidate, and install-script distribution are removed from the workflow.
+Gradle caching is enabled on the Java setup steps.
 
 ## Consequences
 

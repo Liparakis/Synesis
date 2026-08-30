@@ -3,16 +3,19 @@
 `.github/workflows/release.yml` checks the Java project, caches Gradle's
 dependency and compilation state, and builds and smoke-tests self-contained
 bundles on the six target runners. Each bundle contains the Java runtime, CLI,
-native MCP launcher, and native installer for its target platform. The workflow
-prepares artifacts for branches and tags; it does not publish a public release.
+native MCP launcher, and native installer for its target platform. On `v*`
+tags, the workflow publishes the six runnable files directly as GitHub Release
+assets, without an Actions-artifact ZIP wrapper.
 
-Ordinary GitHub Actions runs expose exactly six platform outputs individually:
-`synesis-<platform>` artifacts containing one self-extracting runnable
-installer named `synesis-<platform>` (with `.exe` on Windows). The workflow
-does not create an aggregated release-candidate directory, separate bootstrap
-artifact, metadata artifact, or install-script directory. Each runnable file
-contains the platform bundle as an appended, verified payload, including the
-application jars, bundled Java runtime, native MCP launcher, and installer.
+Tagged releases expose exactly six raw platform assets:
+`synesis-windows-x64.exe`, `synesis-windows-arm64.exe`,
+`synesis-linux-x64`, `synesis-linux-arm64`, `synesis-macos-x64`, and
+`synesis-macos-arm64`. Branch and pull-request runs validate the files without
+publishing them. The workflow does not create an aggregated release-candidate
+directory, separate bootstrap artifact, metadata artifact, or install-script
+directory. Each runnable file contains the platform bundle as an appended,
+verified payload, including the application jars, bundled Java runtime, native
+MCP launcher, and installer.
 
 Double-click the Windows `.exe`, or run the Unix file from a terminal. The
 installer menu offers Install, Repair, and Uninstall without requiring an
