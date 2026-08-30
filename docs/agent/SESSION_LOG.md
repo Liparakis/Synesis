@@ -4494,3 +4494,21 @@ not run Codex or close SYN-041.
   Gradle run remains required on the user's working Gradle host.
 - Exact next action: rerun `./gradlew build --dependency-verification=strict`
   and confirm no missing-file or configuration-cache problems remain.
+
+## 2026-08-30 — Hosted launcher-test regression
+
+- GitHub Actions run `33325552193` confirmed the prior configuration-cache
+  repair: the cache entry stored successfully and `47` check tasks completed,
+  with `25` reused from cache.
+- The same run failed at `:cli:test` because eight process-level tests invoke
+  `build/install/synesis/bin/synesis`, and the performance change had removed
+  the test dependency on `installDist`. This is a build-task regression, not a
+  product assertion failure.
+- Added `cli:testInstallDist`, a Java-only `Sync` staging task that generates
+  the application launcher and runtime classpath for tests without invoking
+  the native MCP/installer builds. Release `installDist` and bundle tasks keep
+  their native launcher dependency.
+- Local Gradle verification remains blocked before configuration by
+  `Unable to establish loopback connection`; hosted rerun is required.
+- Exact next action: inspect the hosted rerun for `:cli:test` and then perform
+  the six-platform bundle/archive smoke if the check is green.

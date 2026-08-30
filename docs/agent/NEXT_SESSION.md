@@ -47,11 +47,15 @@ reference, and current-state navigation links.
   isolated custom task types with managed inputs.
 - Optional root-document inputs are now filtered to existing files after the
   user reported missing `CONTRIBUTING.md` failures in both hygiene tasks.
+- Hosted CI run `33325552193` confirmed configuration-cache storage succeeds,
+  but eight `:cli:test` process tests failed because the generated launcher
+  distribution was no longer staged. A `testInstallDist` task now stages the
+  Java distribution for those tests without invoking native release builds.
 - Exact next action: run
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
-  execute `./gradlew build --dependency-verification=strict` twice on a host
-  where Gradle can establish loopback, then preserve the configuration-cache
-  reuse and task-timing evidence before final publication.
+  inspect the hosted rerun for `:cli:test` and configuration-cache reuse. If
+  green, run the six-platform bundle/archive smoke and review the exact
+  staged artifact boundary before final publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

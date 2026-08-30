@@ -8,6 +8,7 @@ import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.TaskAction
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -152,6 +153,26 @@ tasks.withType<Javadoc>().configureEach {
 tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    dependsOn("testInstallDist")
+}
+
+// Process-level CLI tests exercise the generated Java launcher. Stage the
+// application distribution they need without invoking the native MCP and
+// installer builds reserved for release packaging.
+tasks.register<Sync>("testInstallDist") {
+    group = "verification"
+    description = "Stages the Java application distribution for process tests."
+    dependsOn(tasks.jar, tasks.startScripts)
+    into(layout.buildDirectory.dir("install/synesis"))
+    from(tasks.startScripts) {
+        into("bin")
+    }
+    from(tasks.jar) {
+        into("lib")
+    }
+    from(configurations.runtimeClasspath) {
+        into("lib")
+    }
 }
 
 tasks.register("launcherSmoke") {

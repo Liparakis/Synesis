@@ -113,12 +113,20 @@ before Gradle executes them.
 - Missing optional-document repair validation: root-file inventory and
   non-Gradle repository gates pass; the reported `CONTRIBUTING.md` failure is
   addressed by filtering absent roots.
+- Hosted CI run `33325552193` confirmed the configuration cache now stores
+  successfully (`47 actionable tasks`, with `25 from cache`), but `:cli:test`
+  failed in eight process-level tests because the earlier performance change
+  removed the generated `build/install/synesis` distribution. The fix adds a
+  lightweight `testInstallDist` staging task for the Java launcher tests while
+  keeping native MCP and installer builds on release-only paths. Local Gradle
+  execution remains blocked by the host loopback failure.
 
 ## Immediate next action
 
-Run the focused Go tests and the six-platform Gradle bundle/archive smoke on a
-host where Gradle can establish its loopback connection, then create a
-checkpoint and review the exact staged artifact boundary before commit/push.
+Run the hosted `check` again and confirm the eight launcher-process tests pass;
+then run the six-platform Gradle bundle/archive smoke on a host where Gradle
+can establish its loopback connection, create a checkpoint, and review the
+exact staged artifact boundary before commit/push.
 
 ## Current failures
 
