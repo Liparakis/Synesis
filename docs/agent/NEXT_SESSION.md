@@ -15,7 +15,7 @@ been corrected. Focused workspace/MCP tests, hygiene, compilation, and
 packaging pass; the bootstrap migration fixtures fail and the root process-
 heavy check is incomplete.
 
-- Exact next code action: checkpoint the completed cleanup, inspect the exact staged boundary, then commit and push this authorized maintenance slice.
+- Exact next code action: stop this cleanup task and hand off to a separately authorized final documentation pass; do not broaden the code cleanup.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

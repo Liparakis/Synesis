@@ -32,11 +32,13 @@ Historical Antigravity records remain preserved.
   tests without an assertion result and was stopped; it remains incomplete.
 - Bootstrap Go tests: FAIL in three existing update-migration fixture cases
   with `update migrations not prepared`; unrelated Go packages passed.
+- Cleanup commit `aee96c3` is pushed to `origin/master`; no final
+  documentation work is included.
 
 ## Immediate next action
 
-Checkpoint the completed cleanup, inspect the exact staged boundary, then
-commit and push this authorized maintenance slice.
+Stop this cleanup task and hand off to a separately authorized final
+documentation pass; do not broaden the code cleanup.
 
 ## Current failures
 

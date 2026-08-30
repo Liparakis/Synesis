@@ -18,12 +18,13 @@
   repository hygiene, the focused workspace regressions, and the renamed
   ten-tool MCP catalog test. The bootstrap Go suite still has three migration
   fixture failures, and the bounded root Java check was stopped after a
-  process-heavy MCP test emitted no result.
+  process-heavy MCP test emitted no result. Cleanup commit `aee96c3` is pushed
+  to `origin/master`; no final documentation work is included.
 - Existing user-owned changes and the unrelated lifecycle stash must remain
   intact. Commit and push are authorized for this cleanup slice; no release,
   tag, force push, or historical rewrite is authorized.
-- Exact next action: checkpoint the completed cleanup, inspect the exact staged
-  boundary, then commit and push this authorized maintenance slice.
+- Exact next action: stop this cleanup task and hand off to a separately
+  authorized final documentation pass; do not broaden the code cleanup.
 
 ## MAINT-001
 
