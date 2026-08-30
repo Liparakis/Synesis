@@ -13,6 +13,8 @@ import org.gradle.api.tasks.TaskAction
 import java.io.DataOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -420,8 +422,8 @@ val runnableInstaller = tasks.register("runnableInstaller") {
         val output = runnableInstallerFile.get().asFile
         output.parentFile.mkdirs()
         require(nativeInstaller.isFile) { "Native installer missing: $nativeInstaller" }
-        Files.copy(nativeInstaller.toPath(), output.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-        Files.newOutputStream(output.toPath(), java.nio.file.StandardOpenOption.APPEND).use { stream ->
+        Files.copy(nativeInstaller.toPath(), output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        Files.newOutputStream(output.toPath(), StandardOpenOption.APPEND).use { stream ->
             Files.copy(archive.toPath(), stream)
             val footer = DataOutputStream(stream)
             footer.write(selfExtractMagic)

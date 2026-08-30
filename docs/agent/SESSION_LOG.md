@@ -4562,3 +4562,16 @@ not run Codex or close SYN-041.
   full bootstrap suite retains the three known migration-fixture failures.
 - Exact next action: inspect the hosted six-platform rerun for standalone
   launch and artifact upload success.
+
+## 2026-08-30 — Gradle Kotlin DSL import correction
+
+- Hosted `check` failed during Kotlin DSL compilation because the runnable
+  installer task referenced `java.nio.file.StandardCopyOption` and
+  `java.nio.file.StandardOpenOption` inline.
+- Imported both file-option types explicitly and changed the two call sites to
+  use the imported names. Repository validation, deferred-register validation,
+  `go vet`, and the focused bootstrap tests pass.
+- Local Gradle verification remains blocked before configuration by
+  `Unable to establish loopback connection`; hosted verification is required.
+- Exact next action: commit and push this correction, then inspect the hosted
+  check and bundle jobs.
