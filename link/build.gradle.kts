@@ -1,4 +1,10 @@
 import org.gradle.internal.os.OperatingSystem
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 
 plugins {
     `java-library`
@@ -78,20 +84,33 @@ val linkFormatRoots = listOf(
     linkRepositoryRoot.resolve("build.gradle.kts")
 )
 
-tasks.register("formatCheck") {
-    group = "verification"
-    description = "Rejects trailing whitespace in tracked source and documentation files."
-    doLast {
-        val extensions = setOf("java", "kt", "kts", "md", "xml", "toml")
-        val files = linkFormatRoots.flatMap { root ->
-            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
-            else listOfNotNull(root.takeIf { it.isFile && it.extension in extensions })
-        }
-        val offenders = files.filter { source ->
+abstract class TrailingWhitespaceTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val files: ConfigurableFileCollection
+
+    @TaskAction
+    fun check() {
+        val offenders = files.files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }
         require(offenders.isEmpty()) { "Trailing whitespace: ${offenders.joinToString()}" }
     }
+}
+
+tasks.register<TrailingWhitespaceTask>("formatCheck") {
+    group = "verification"
+    description = "Rejects trailing whitespace in tracked source and documentation files."
+    files.from(linkFormatRoots.map { root ->
+        if (root.isDirectory) fileTree(root) {
+            include("**/*.java")
+            include("**/*.kt")
+            include("**/*.kts")
+            include("**/*.md")
+            include("**/*.xml")
+            include("**/*.toml")
+        } else root
+    })
 }
 
 tasks.register("staticAnalysis") {

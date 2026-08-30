@@ -1,4 +1,14 @@
 import org.gradle.internal.os.OperatingSystem
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.time.Instant
@@ -35,18 +45,60 @@ val launcherUnix = layout.buildDirectory.file("install/synesis/bin/synesis")
 val cliSourceDirectory = layout.projectDirectory.dir("src").asFile
 val cliBuildFile = layout.projectDirectory.file("build.gradle.kts").asFile
 
-val buildInfo = tasks.register("buildInfo") {
-    description = ""
-    outputs.dir(buildInfoDirectory)
-    doLast {
-        val output = buildInfoDirectory.get().file("synesis-build.properties").asFile
+abstract class GenerateBuildInfoTask : DefaultTask() {
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val version: Property<String>
+
+    @get:Input
+    abstract val commit: Property<String>
+
+    @get:Input
+    abstract val platform: Property<String>
+
+    @get:Input
+    abstract val javaRuntime: Property<String>
+
+    @TaskAction
+    fun generate() {
+        val output = outputDirectory.get().file("synesis-build.properties").asFile
         output.parentFile.mkdirs()
         output.writeText(
-            "version=${bundleVersion.get()}\n" + "recordFormat=SDR2\n" + "reconciliationProtocol=PRP1\n" + "commit=${
-                githubSha.get()
-            }\n" + "time=${Instant.now()}\n" + "platform=${bundlePlatform.get()}\n" + "javaRuntime=$runtimeVersion\n"
+            "version=${version.get()}\n" +
+                    "recordFormat=SDR2\n" +
+                    "reconciliationProtocol=PRP1\n" +
+                    "commit=${commit.get()}\n" +
+                    "time=${Instant.now()}\n" +
+                    "platform=${platform.get()}\n" +
+                    "javaRuntime=${javaRuntime.get()}\n"
         )
     }
+}
+
+abstract class TrailingWhitespaceTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val files: ConfigurableFileCollection
+
+    @TaskAction
+    fun check() {
+        val offenders = files.files.filter { source ->
+            source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
+        }
+        require(offenders.isEmpty()) { "Trailing whitespace: ${offenders.joinToString()}" }
+    }
+}
+
+val buildInfo = tasks.register<GenerateBuildInfoTask>("buildInfo") {
+    description = ""
+    outputs.dir(buildInfoDirectory)
+    outputDirectory.set(buildInfoDirectory)
+    version.set(bundleVersion)
+    commit.set(githubSha)
+    platform.set(bundlePlatform)
+    javaRuntime.set(runtimeVersion)
 }
 
 java {
@@ -172,20 +224,17 @@ fun filesUnder(dir: File, extensions: Set<String>): List<File> =
     if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
     else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
 
-tasks.register("formatCheck") {
+tasks.register<TrailingWhitespaceTask>("formatCheck") {
     group = "verification"
     description = "Rejects trailing whitespace in CLI source and documentation."
-    doLast {
-        val extensions = setOf("java", "kt", "kts")
-        val files = (listOf(cliSourceDirectory, cliBuildFile)).flatMap { root ->
-            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
-            else listOfNotNull(root.takeIf { it.isFile && it.extension in extensions })
-        }
-        val offenders = files.filter { source ->
-            source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
-        }
-        require(offenders.isEmpty()) { "Trailing whitespace: ${offenders.joinToString()}" }
-    }
+    files.from(
+        fileTree(cliSourceDirectory) {
+            include("**/*.java")
+            include("**/*.kt")
+            include("**/*.kts")
+        },
+        cliBuildFile,
+    )
 }
 
 tasks.register("staticAnalysis") {

@@ -4466,3 +4466,18 @@ not run Codex or close SYN-041.
 - Exact next action: run `./gradlew build --dependency-verification=strict`
   twice on a host with working Gradle loopback and confirm configuration-cache
   reuse without new problems.
+
+## 2026-08-30 — Residual configuration-cache task captures
+
+- The user's next `build` run reduced the cache-store failure from 18 problems
+  to four: `:cli:buildInfo`, `:cli:formatCheck`, `:link:formatCheck`, and
+  `:repositoryHygieneCheck` still retained Gradle script references.
+- Converted those actions to isolated `DefaultTask` subclasses with managed
+  `@Input`, `@InputFiles`, `@InputDirectory`, and `@OutputDirectory` properties;
+  task actions now use only their own deserialized state.
+- Verification: deferred validation, workflow YAML parsing, diff whitespace
+  checks, and Go vet pass. This shell still cannot execute Gradle because of
+  `Unable to establish loopback connection`; user-side `build` rerun is still
+  required.
+- Exact next action: run `./gradlew build --dependency-verification=strict`
+  twice and confirm the configuration cache stores and reuses successfully.

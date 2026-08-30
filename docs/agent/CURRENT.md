@@ -56,6 +56,11 @@ including build metadata, repository hygiene, format checks, and architecture
 checks. The task actions now operate on configuration-time-captured files and
 providers.
 
+The user's next run narrowed the remaining failure to four `DefaultTask`
+actions: CLI build metadata, CLI format checking, Link format checking, and
+repository hygiene. Those actions now use isolated custom task types with
+Gradle-managed inputs and task actions that do not capture the build script.
+
 ## Verification
 
 - Cleanup baseline: PASS; active residue search, hygiene, focused workspace
@@ -97,6 +102,9 @@ providers.
   deferred validation, workflow parsing, whitespace checks, and Go vet. The
   user's prior build log remains the only execution evidence for the original
   failure; this shell still cannot start Gradle because of loopback failure.
+- Residual four-problem repair validation: isolated task-type changes pass
+  diff, deferred, workflow, and Go gates; a fresh Gradle cache-store run is
+  still required.
 
 ## Immediate next action
 
