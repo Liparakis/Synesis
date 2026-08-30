@@ -43,6 +43,13 @@ uses local bundles for install/repair, adds an explicit metadata-removal option
 to uninstall, and removes separate bootstrap/metadata uploads from the release
 workflow. The exact design is recorded in ADR-0048.
 
+The build-performance slice removes release packaging from the ordinary Java
+`check`, removes the CLI test dependency on `installDist`, limits each native
+launcher invocation to the requested bundle and host platforms, enables the
+Gradle daemon/configuration/build caches with a 24 GB heap ceiling, and upgrades
+GitHub Actions to `gradle/actions/setup-gradle@v6` caching. CI no longer runs
+`clean` before verification or builds both archive formats for one platform.
+
 ## Verification
 
 - Cleanup baseline: PASS; active residue search, hygiene, focused workspace
@@ -77,6 +84,9 @@ workflow. The exact design is recorded in ADR-0048.
   Gradle bundle task is currently blocked locally by Gradle's `Unable to
   establish loopback connection`; hosted Gradle bundle execution remains the
   required final evidence.
+- Build-performance validation: workflow YAML parsing and `git diff --check`
+  pass. Gradle task execution remains blocked before project configuration by
+  the same host loopback failure, including direct Gradle 9.7.1 invocation.
 
 ## Immediate next action
 
@@ -90,7 +100,9 @@ The bootstrap Go suite has three update-migration fixture failures reporting
 `update migrations not prepared`. The bounded module-check run reached
 process-heavy workspace tests without an assertion result and was stopped; the
 selected MCP and workspace lifecycle runs likewise remain incomplete. These
-are not source-documentation failures.
+are not source-documentation failures. Local Gradle task execution is blocked
+before configuration by `Unable to establish loopback connection`; this is a
+host/tooling blocker, not evidence against the build-script changes.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

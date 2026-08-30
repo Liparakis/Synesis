@@ -3,8 +3,20 @@
 Requirements: Java 25, the Gradle Wrapper, and Go 1.26.5 for bootstrapper work.
 
 ```powershell
-.\gradlew.bat check --no-daemon
+.\gradlew.bat check --dependency-verification=strict
 ```
+
+`check` intentionally covers Java verification only. It does not assemble or
+smoke-test release distributions. Run the explicit distribution checks when
+working on packaging or release artifacts:
+
+```powershell
+.\gradlew.bat :cli:distributionCheck --dependency-verification=strict
+```
+
+Gradle keeps its daemon, parallel execution, configuration cache, build cache,
+and file-system watching enabled by default in this repository. Avoid `clean`
+for iterative builds because it discards the outputs those caches can reuse.
 
 The Go module is `bootstrap`; run its checks from that directory:
 

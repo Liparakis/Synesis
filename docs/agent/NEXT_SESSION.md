@@ -35,9 +35,15 @@ reference, and current-state navigation links.
   implementation formatting was added. Bootstrap retains three known
   migration-fixture failures; process-heavy MCP/workspace selections remain
   incomplete after bounded interruption.
-- Exact next action: run `powershell -ExecutionPolicy Bypass -File
-  scripts/agent-resume.ps1`, then explicitly promote the next authorized task
-  before any implementation.
+- Build-performance slice is implemented but not locally Gradle-verified:
+  ordinary `check` no longer packages distributions, native launcher builds
+  are target-scoped, Gradle configuration/build caching is enabled, and CI uses
+  `gradle/actions/setup-gradle@v6` without duplicate `setup-java` caching.
+- Exact next action: run
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then
+  execute `./gradlew check --dependency-verification=strict` and one matrix
+  bundle job on a host where Gradle can establish loopback; preserve the
+  resulting timing/cache evidence before final publication.
 
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 

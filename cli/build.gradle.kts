@@ -96,7 +96,6 @@ tasks.withType<Javadoc>().configureEach {
 tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
-    dependsOn(tasks.installDist)
 }
 
 tasks.register("launcherSmoke") {
@@ -111,14 +110,21 @@ tasks.register("launcherSmoke") {
 
 val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
     group = "distribution"
-    description = "Builds native MCP and installer launchers for every release platform."
-    inputs.dir(rootProject.file("bootstrap"))
+    description = "Builds native MCP and installer launchers for the requested platforms."
+    inputs.files(rootProject.fileTree("bootstrap") {
+        include("*.go")
+        include("go.mod")
+        include("go.sum")
+        include("cmd/synesis-mcp/*.go")
+    })
+    inputs.property("bundlePlatform", bundlePlatform)
+    inputs.property("hostPlatform", hostPlatform)
     outputs.dir(nativeMcpDirectory)
     doLast {
         val outputRoot = nativeMcpDirectory.get().asFile
         delete(outputRoot)
         val source = rootProject.file("bootstrap")
-        val platforms = listOf(
+        val platforms = mapOf(
             "windows-x64" to ("windows" to "amd64"),
             "windows-arm64" to ("windows" to "arm64"),
             "linux-x64" to ("linux" to "amd64"),
@@ -126,7 +132,9 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
             "macos-x64" to ("darwin" to "amd64"),
             "macos-arm64" to ("darwin" to "arm64")
         )
-        for ((name, target) in platforms) {
+        val requestedPlatforms = linkedSetOf(bundlePlatform.get(), hostPlatform)
+        for (name in requestedPlatforms) {
+            val target = platforms[name] ?: error("Unsupported native launcher platform: $name")
             val outputDirectory = outputRoot.resolve(name)
             outputDirectory.mkdirs()
             val suffix = if (target.first == "windows") ".exe" else ""
@@ -296,14 +304,16 @@ tasks.register("platformArchive") {
     dependsOn(platformZip, platformTarGz)
 }
 
+val bundleArchive = if (isWindows) platformZip else platformTarGz
+val bundleArchiveFile = bundleArchive.flatMap { it.archiveFile }
+
 tasks.register("bundleSmokeTest") {
     group = "verification"
     description = "Extracts and runs the platform archive outside the source tree."
-    dependsOn("platformArchive")
+    dependsOn(bundleArchive)
     doLast {
         val smokeRoot = Files.createTempDirectory("synesis-bundle-smoke-").toFile()
-        val archive = if (isWindows) platformZip.get().archiveFile.get().asFile
-        else platformTarGz.get().archiveFile.get().asFile
+        val archive = bundleArchiveFile.get().asFile
         val extractedRoot = smokeRoot.resolve("bundle")
         if (!isWindows) {
             require(platformBundleDirectory.get().asFile.resolve("bin/synesis").canExecute()) {
@@ -439,5 +449,11 @@ tasks.register("bundleSmokeTest") {
 }
 
 tasks.check {
+    dependsOn(tasks.javadoc, "formatCheck", "staticAnalysis")
+}
+
+tasks.register("distributionCheck") {
+    group = "verification"
+    description = "Runs distribution launcher and archive smoke checks explicitly."
     dependsOn(tasks.javadoc, "formatCheck", "staticAnalysis", "launcherSmoke", "bundleSmokeTest")
 }

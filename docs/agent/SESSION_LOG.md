@@ -4428,3 +4428,23 @@ not run Codex or close SYN-041.
   are not being hidden with broad suppressions.
 - Evidence: IntelliJ analyzer passes and build output from this session;
   checkpoint CP-0571.md remains preserved.
+
+## 2026-08-30 — Gradle and release build performance
+
+- Removed release archive and bundle smoke work from the ordinary `check` path;
+  added explicit `:cli:distributionCheck` coverage for packaging validation.
+- Removed the CLI test-to-`installDist` dependency and changed native launcher
+  generation from all six platforms to the requested bundle platform plus the
+  local host platform when different. Narrowed native task inputs to relevant
+  Go sources and platform properties.
+- Enabled the Gradle daemon, parallel workers, build cache, configuration cache,
+  file-system watching, and a 24 GB maximum Gradle heap. Replaced duplicate
+  setup-java Gradle caching in Actions with `gradle/actions/setup-gradle@v6`,
+  removed redundant CI `clean`, and made bundle smoke select one archive format.
+- Verification: workflow YAML parsing and `git diff --check` pass. Both the
+  wrapper and direct Gradle 9.7.1 fail before configuration with
+  `Unable to establish loopback connection`; hosted CI remains required for
+  Gradle execution evidence.
+- Exact next action: run the updated `check` and one platform bundle workflow on
+  a host with working Gradle loopback, then inspect cache-hit and task-timing
+  output before publication.

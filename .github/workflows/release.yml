@@ -21,10 +21,10 @@ jobs:
                 with:
                     distribution: microsoft
                     java-version: '25'
-                    cache: gradle
-            -   run: ./gradlew.bat clean check --dependency-verification=strict
+            -   uses: gradle/actions/setup-gradle@v6
+            -   run: ./gradlew.bat check --dependency-verification=strict
                 if: runner.os == 'Windows'
-            -   run: ./gradlew clean check --dependency-verification=strict
+            -   run: ./gradlew check --dependency-verification=strict
                 if: runner.os != 'Windows'
 
     bundles:
@@ -46,14 +46,14 @@ jobs:
                 with:
                     distribution: microsoft
                     java-version: '25'
-                    cache: gradle
+            -   uses: gradle/actions/setup-gradle@v6
             -   uses: actions/setup-go@v6
                 with:
                     go-version: '1.26.5'
                     cache-dependency-path: bootstrap/go.mod
-            -   run: ./gradlew.bat :cli:bundleSmokeTest :cli:platformArchive -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict
+            -   run: ./gradlew.bat :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict
                 if: runner.os == 'Windows'
-            -   run: ./gradlew :cli:bundleSmokeTest :cli:platformArchive -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict
+            -   run: ./gradlew :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict
                 if: runner.os != 'Windows'
                 env:
                     JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
