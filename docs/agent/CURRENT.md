@@ -1,9 +1,42 @@
 # Current Task
 
+## MAINT-002 Remove Antigravity provider integration — 2026-08-30
+
+- Task ID: MAINT-002
+- Status: ACTIVE.
+- Scope: remove Antigravity from operational provider wiring, hooks, MCP
+  discovery/configuration/migration, initialization, tests, scripts, and current
+  documentation while preserving Claude, Codex, and historical evidence.
+- Acceptance: operational searches contain no Antigravity integration; focused
+  builds/tests pass; historical evidence/checkpoints remain unchanged.
+- Existing user-owned changes remain protected. No commit or push is part of
+  this task.
+
+## Work completed
+
+Removed the Antigravity provider and hook adapters, CLI command, MCP discovery
+and environment fallbacks, provider migration and initialization branches,
+dedicated script and current documentation/tests. Preserved Claude, Codex, and
+historical audit records. Added ADR-0039 documenting the removal.
+
+## Verification
+
+- Operational source/test/script/current-document search: PASS; no
+  Antigravity or Gemini integration references remain.
+- `git diff --check`: PASS.
+- `go test ./...` in an isolated test home: PASS.
+- Gradle Java verification: BLOCKED before compilation by the host's loopback
+  connection failure, including the IPv4/no-daemon retry.
+
+## Immediate next action
+
+Re-run the focused Gradle Java tests when the host loopback failure is cleared;
+until then, do not claim Java compilation or test closure.
+
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 
 - Task ID: MAINT-001
-- Status: ACTIVE.
+- Status: PAUSED while MAINT-002 is active.
 - Scope: behavior-preserving cleanup of current IntelliJ file-inspection
   findings; SYN-041 remains closed and its terminal-session semantics are not
   being broadened.

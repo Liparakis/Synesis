@@ -6,9 +6,7 @@ rewrite malformed configuration.
 
 Provider checks include metadata, configuration parsing, managed hook count,
 launcher/profile existence, and isolated synthetic protected/unrelated hook
-checks. Known limitations are warnings: Antigravity `run_command` mutations
-are not inspected, Antigravity real-agent re-planning is not completed, and
-Claude Code remains experimental.
+checks. Claude Code remains experimental.
 Codex trust is reported as `REVIEW_REQUIRED`/`UNKNOWN`; project-local Codex
 hooks require explicit `/hooks` review, and Codex remains `DEGRADED` until a
 real authenticated denial/re-plan/hash experiment is recorded.

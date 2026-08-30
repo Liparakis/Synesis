@@ -85,7 +85,7 @@ final class ProviderProcessSupervisorTest {
      * Provider integrations expose only documented noninteractive argv.
      */
     @Test
-    void exposesDeclaredProviderDriversWithoutClaimingAntigravitySupport() {
+    void exposesDeclaredProviderDrivers() {
         Path worktree = Path.of("C:\\lane");
         assertEquals("codex",
                 new CodexProviderIntegration().autonomousCommand(worktree, "probe")
@@ -95,8 +95,5 @@ final class ProviderProcessSupervisorTest {
                 new ClaudeCodeProviderIntegration().autonomousCommand(worktree, "probe")
                         .orElseThrow()
                         .getFirst());
-        assertTrue(new org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration()
-                .autonomousCommand(worktree, "probe")
-                .isEmpty());
     }
 }

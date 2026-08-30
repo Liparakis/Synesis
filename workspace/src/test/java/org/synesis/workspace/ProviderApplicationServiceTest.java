@@ -59,7 +59,7 @@ final class ProviderApplicationServiceTest {
 
     @Test
     void registryIsDeterministicAndListsCodexAsExperimental() {
-        assertEquals(java.util.List.of("antigravity", "claude", "codex"),
+        assertEquals(java.util.List.of("claude", "codex"),
                 ProviderRegistry.providers()
                         .stream()
                         .map(ProviderIntegration::id)
@@ -79,58 +79,6 @@ final class ProviderApplicationServiceTest {
                         .trustStatus());
         assertTrue(ProviderRegistry.find("codex")
                 .requiresRealValidation());
-        assertEquals("UNVALIDATED",
-                ProviderRegistry.find("antigravity")
-                        .trustStatus());
-        assertTrue(ProviderRegistry.find("antigravity")
-                .requiresRealValidation());
-    }
-
-    @Test
-    void antigravityLifecyclePreservesUnrelatedConfiguration() throws Exception {
-        Path root = Files.createTempDirectory("provider-lifecycle-");
-        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
-        String previous = System.getProperty("synesis.launcher");
-        System.setProperty("synesis.launcher", launcher.toString());
-        try {
-            ProjectApplicationService projectService = new ProjectApplicationService();
-            var location = projectService.init(root)
-                    .location();
-            Path config = root.resolve(".agents/hooks.json");
-            Files.createDirectories(config.getParent());
-            Files.writeString(config, "{\"unrelated\":{\"value\":true},\"synesis-guardrail\":{\"PreToolUse\":[]}}\n");
-            ProviderApplicationService service = new ProviderApplicationService();
-
-            var installed = service.install(location, "antigravity");
-            assertEquals("DEGRADED",
-                    installed.values()
-                            .get("PROVIDER_INSTALL_RESULT"));
-            Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
-            assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
-            assertFalse(Files.readString(config)
-                    .contains("versions"));
-            assertEquals("DEGRADED",
-                    service.status(location, "antigravity")
-                            .values()
-                            .get("PROVIDER_STATUS"));
-            assertEquals("UNVALIDATED",
-                    service.status(location, "antigravity")
-                            .values()
-                            .get("TRUST_STATUS"));
-            assertEquals("SUCCESS",
-                    service.uninstall(location, "antigravity")
-                            .values()
-                            .get("PROVIDER_UNINSTALL_RESULT"));
-            assertTrue(Files.exists(config));
-            Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
-            assertEquals(Boolean.TRUE, ((Map<?, ?>) after.get("unrelated")).get("value"));
-        } finally {
-            if (previous == null) {
-                System.clearProperty("synesis.launcher");
-            } else {
-                System.setProperty("synesis.launcher", previous);
-            }
-        }
     }
 
     @Test
@@ -142,10 +90,10 @@ final class ProviderApplicationServiceTest {
         try {
             var location = new ProjectApplicationService().init(root)
                     .location();
-            Path config = root.resolve(".agents/hooks.json");
+            Path config = root.resolve(".mcp.json");
             Files.createDirectories(config.getParent());
             Files.writeString(config, "{broken");
-            var result = new ProviderApplicationService().install(location, "antigravity");
+            var result = new ProviderApplicationService().install(location, "claude");
             assertEquals("INVALID_CONFIG",
                     result.values()
                             .get("PROVIDER_INSTALL_RESULT"));
@@ -429,76 +377,4 @@ final class ProviderApplicationServiceTest {
         }
     }
 
-    @Test
-    void antigravityMcpConfigurationTargetsProviderLevelAndMigratesObsoleteScopes() throws Exception {
-        Path root = Files.createTempDirectory("antigravity-mcp-test-");
-        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
-        String previous = System.getProperty("synesis.launcher");
-        System.setProperty("synesis.launcher", launcher.toString());
-        try {
-            // Create obsolete project-local files
-            Path agentsMcp = root.resolve(".agents/mcp.json");
-            Files.createDirectories(agentsMcp.getParent());
-            Files.writeString(agentsMcp, "{\"mcpServers\":{\"synesis\":{\"command\":\"old.cmd\"}}}\n");
-
-            Path geminiMcp = root.resolve(".gemini/mcp.json");
-            Files.createDirectories(geminiMcp.getParent());
-            Files.writeString(geminiMcp,
-                    "{\"mcpServers\":{\"synesis\":{\"command\":\"old.cmd\"},\"unrelated\":{\"command\":\"other.cmd\"}}}\n");
-
-            var location = new ProjectApplicationService().init(root)
-                    .location();
-            ProviderApplicationService service = new ProviderApplicationService();
-            service.install(location, "antigravity");
-
-            // Verify provider-global config does not bind to the most recently
-            // installed project; MCP initialize roots choose the project per
-            // connection.
-            var provider = org.synesis.workspace.provider.ProviderRegistry.find("antigravity");
-            Path userMcp = provider.mcpConfigurationPath(root);
-            assertTrue(Files.exists(userMcp));
-            Map<?, ?> parsedUser = (Map<?, ?>) ProviderJson.parse(Files.readString(userMcp));
-            Map<?, ?> userServers = (Map<?, ?>) parsedUser.get("mcpServers");
-            assertTrue(userServers.containsKey("synesis"));
-            Map<?, ?> synesisEntry = (Map<?, ?>) userServers.get("synesis");
-            assertTrue(synesisEntry.get("args") instanceof java.util.List<?> args
-                    && args.size() == 3
-                    && "mcp".equals(args.get(0))
-                    && "--provider".equals(args.get(1))
-                    && "antigravity".equals(args.get(2)));
-            assertFalse(synesisEntry.containsKey("connectionInstanceId"));
-
-            Path obsoleteProviderMcp = userMcp.getParent()
-                    .getParent()
-                    .resolve("antigravity/mcp_config.json");
-            if (Files.exists(obsoleteProviderMcp)) {
-                Map<?, ?> parsedMirror = (Map<?, ?>) ProviderJson.parse(Files.readString(obsoleteProviderMcp));
-                Object mirrorServers = parsedMirror.get("mcpServers");
-                assertTrue(!(mirrorServers instanceof Map<?, ?> servers) || !servers.containsKey("synesis"));
-            }
-
-            // Verify obsolete project-local pure synesis file was deleted
-            assertFalse(Files.exists(agentsMcp));
-
-            // Verify project-local file with unrelated entry preserved unrelated key but removed synesis
-            assertTrue(Files.exists(geminiMcp));
-            Map<?, ?> parsedGemini = (Map<?, ?>) ProviderJson.parse(Files.readString(geminiMcp));
-            Map<?, ?> geminiServers = (Map<?, ?>) parsedGemini.get("mcpServers");
-            assertFalse(geminiServers.containsKey("synesis"));
-            assertTrue(geminiServers.containsKey("unrelated"));
-
-            // Verify provider trust remains UNVALIDATED (does not promote real maturity)
-            assertEquals("UNVALIDATED",
-                    service.status(location, "antigravity")
-                            .values()
-                            .get("TRUST_STATUS"));
-            assertTrue(provider.requiresRealValidation());
-        } finally {
-            if (previous == null) {
-                System.clearProperty("synesis.launcher");
-            } else {
-                System.setProperty("synesis.launcher", previous);
-            }
-        }
-    }
 }

@@ -23,7 +23,6 @@ import org.synesis.cli.command.coordination.CoordinationServeCommand;
 import org.synesis.cli.command.coordination.CoordinationStatusCommand;
 import org.synesis.cli.command.coordination.EventsCommand;
 import org.synesis.cli.command.coordination.EventsFollowCommand;
-import org.synesis.cli.command.hook.HookAntigravityCommand;
 import org.synesis.cli.command.hook.HookClaudeCodeCommand;
 import org.synesis.cli.command.hook.HookCodexCommand;
 import org.synesis.cli.command.hook.HookCommand;
@@ -231,9 +230,6 @@ public final class SynesisCli {
                 .get("integration")
                 .addSubcommand("gate", new IntegrationGateCommand(runtime));
         command.addSubcommand("hook", new HookCommand());
-        command.getSubcommands()
-                .get("hook")
-                .addSubcommand("antigravity", new HookAntigravityCommand(runtime));
         command.getSubcommands()
                 .get("hook")
                 .addSubcommand("claude", new HookClaudeCodeCommand(runtime));

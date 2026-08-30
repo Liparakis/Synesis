@@ -1,10 +1,30 @@
 # Tasks
 
+## MAINT-002
+
+### Remove Antigravity provider integration — 2026-08-30
+
+- Status: ACTIVE
+- Scope: remove the Antigravity provider from the supported provider registry,
+  hooks, MCP discovery/configuration/migration, project initialization, tests,
+  scripts, and current user-facing documentation. Preserve unrelated provider
+  behavior and immutable historical evidence/checkpoints.
+- Acceptance: no operational source, test, script, or current documentation
+  retains the Antigravity integration; Claude and Codex remain supported; the
+  affected builds and tests pass; historical evidence remains unchanged.
+  Current evidence passes operational search, diff validation, and bootstrap Go
+  tests; Gradle Java verification is blocked before compilation by host
+  loopback failure.
+- Existing user-owned changes must remain intact. No commit, push, release, or
+  unrelated refactor is authorized by this task.
+- Exact next action: re-run the focused Gradle Java tests when the host loopback
+  failure is cleared; do not claim Java verification until it runs.
+
 ## MAINT-001
 
 ### IntelliJ analyzer cleanup — 2026-08-29
 
-- Status: ACTIVE
+- Status: PAUSED while MAINT-002 is active
 - Scope: reduce the current IntelliJ file-inspection findings across the
   repository without changing public behavior, protocol guarantees, module
   boundaries, or the accepted SYN-041 result.

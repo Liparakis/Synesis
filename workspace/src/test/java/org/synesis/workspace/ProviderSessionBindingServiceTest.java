@@ -52,7 +52,7 @@ final class ProviderSessionBindingServiceTest {
         var first = service.ensure(location, "codex", "chat-a");
         var resumed = service.ensure(location, "codex", "chat-a");
         var second = service.ensure(location, "codex", "chat-b");
-        var otherProvider = service.ensure(location, "antigravity", "chat-a");
+        var otherProvider = service.ensure(location, "claude", "chat-a");
 
         assertEquals(projectId,
                 first.binding()
@@ -409,35 +409,4 @@ final class ProviderSessionBindingServiceTest {
         }
     }
 
-    @Test
-    void antigravityHookBootstrapsProjectSessionBeforePolicyEvaluation() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-antigravity-hook-");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        String peer = new IdentityBootstrap(location.profile()
-                .resolve("link")).loadOrCreate()
-                .identity()
-                .nodeId();
-        ProjectConfig config = new ProjectConfig(location.projectId(), java.util.Set.of(peer));
-        config.save(location.profile()
-                .resolve("project.conf"));
-        String event = "{\"conversationId\":\"antigravity-chat-a\",\"workspacePaths\":[\""
-                + root.toString()
-                .replace("\\", "\\\\") + "\"],\"name\":\"write_to_file\",\"TargetFile\":\""
-                + root.resolve("free.txt")
-                .toString()
-                .replace("\\", "\\\\") + "\"}";
-
-        HookApplicationService.HookExecutionResult result = new HookApplicationService().antigravity(root,
-                root.resolve(".synesis/local/profile"),
-                new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-
-        assertEquals("INVALID_INPUT", result.outcome());
-        assertTrue(result.responseJson()
-                .contains("GIT_HEAD_UNAVAILABLE"));
-        try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
-            assertTrue(paths.findAny()
-                    .isPresent());
-        }
-    }
 }

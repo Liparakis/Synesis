@@ -3,21 +3,20 @@
 | Provider    | Project detection      | Session bootstrap                              | Worktree proof | Mutation interception                 | Safe-boundary delivery | MCP Discovery Status  |
 |-------------|------------------------|------------------------------------------------|----------------|---------------------------------------|------------------------|-----------------------|
 | Codex       | synthetic/project hook | automatic local binding; real trust incomplete | missing        | synthetic only; real trust incomplete | missing                | MCP_CONFIRMED_WORKING |
-| Antigravity | synthetic/project hook | automatic local binding; real trust incomplete | missing        | synthetic; real hook bypass observed  | missing                | MCP_CONFIG_DISCOVERED |
 | Claude Code | existing hook adapter  | not planned in SYN-013                         | not planned    | existing adapter only                 | not planned            | MCP_CONFIRMED_WORKING |
 
 ---
 
 ## Provider MCP Capability Audit Matrix (Stage 2A Slice 1)
 
-| Capability / Attribute                         | Codex                                           | Antigravity                                        |
-|------------------------------------------------|-------------------------------------------------|----------------------------------------------------|
-| Local stdio MCP servers supported              | VERIFIED                                        | VERIFIED                                           |
-| Actual configuration location                  | VERIFIED (`.codex/mcp.json`)                    | VERIFIED (`.agents/mcp.json` / `.gemini/mcp.json`) |
-| Actual configuration schema                    | VERIFIED (`mcpServers.<name>.command/args/env`) | VERIFIED (`mcpServers.<name>.command/args/env`)    |
-| Project-local configuration supported          | VERIFIED                                        | VERIFIED                                           |
-| Command and argument arrays                    | VERIFIED                                        | VERIFIED                                           |
-| Environment variables supported                | VERIFIED                                        | VERIFIED                                           |
+| Capability / Attribute                         | Codex                                           |
+|------------------------------------------------|-------------------------------------------------|
+| Local stdio MCP servers supported              | VERIFIED                                        |
+| Actual configuration location                  | VERIFIED (`.codex/mcp.json`)                    |
+| Actual configuration schema                    | VERIFIED (`mcpServers.<name>.command/args/env`) |
+| Project-local configuration supported          | VERIFIED                                        |
+| Command and argument arrays                    | VERIFIED                                        |
+| Environment variables supported                | VERIFIED                                        |
 | Provider automatically launches MCP process    | VERIFIED                                        | VERIFIED                                           |
 | Visible terminal created                       | VERIFIED (No - headless pipes)                  | VERIFIED (No - headless pipes)                     |
 | Project/workspace root communicated            | PARTIAL (cwd or `--project` arg)                | PARTIAL (cwd or `--project` arg)                   |

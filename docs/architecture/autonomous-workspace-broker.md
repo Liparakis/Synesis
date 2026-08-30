@@ -19,9 +19,8 @@ An adapter must expose `discoverProject`, `bootstrap`, `proveWorkspace`,
 working directory or an equivalent authenticated tool context); a generated
 path in a prompt is insufficient.
 
-Codex remains experimental pending trusted real `/hooks` evidence. Antigravity
-remains unvalidated because the recorded real run bypassed the project hook.
-Claude is deferred. Unsupported providers are explicitly read-only.
+Codex remains experimental pending trusted real `/hooks` evidence. Claude is
+experimental. Unsupported providers are explicitly read-only.
 
 ## Dirty and failure behavior
 

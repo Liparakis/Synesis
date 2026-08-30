@@ -1,5 +1,19 @@
 # Next Session
 
+## MAINT-002 Remove Antigravity provider integration — 2026-08-30
+
+MAINT-002 is the sole active task. Remove Antigravity from operational source,
+tests, scripts, and current documentation; preserve historical evidence and
+checkpoints. No commit or push is authorized.
+
+Removal is complete. Operational source/test/script/current-document searches,
+diff validation, and isolated bootstrap Go tests pass. Gradle Java verification
+is blocked before compilation by the host's loopback connection failure.
+
+Exact next action: re-run `gradlew.bat :workspace:test :mcp:test :cli:test
+--no-daemon --console=plain` when the loopback failure is cleared; do not claim
+Java verification until it runs.
+
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 
 The IntelliJ baseline was 1,072 findings across 576 Java files (767 warnings

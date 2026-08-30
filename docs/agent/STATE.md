@@ -1,5 +1,27 @@
 # State
 
+## MAINT-002 Remove Antigravity provider integration — 2026-08-30
+
+The request is authorized as a separate active maintenance slice. The initial
+inventory found provider-registry, MCP fallback discovery, provider migration,
+project initialization, hook, test, script, and current-documentation
+references. Immutable historical evidence and checkpoint records are retained.
+
+## Verification evidence
+
+- Operational source/test/script/current-document search: PASS; no
+  Antigravity or Gemini integration references remain.
+- `git diff --check`: PASS.
+- `go test ./...` in an isolated test home: PASS.
+- Gradle Java verification: BLOCKED before compilation by the host's loopback
+  connection failure; retry with IPv4/no-daemon options produced the same
+  failure.
+
+## Immediate next action
+
+Re-run the focused Gradle Java tests when the host loopback failure is cleared;
+until then, do not claim Java compilation or test closure.
+
 ## MAINT-001 IntelliJ analyzer cleanup — 2026-08-29
 
 The full IntelliJ file-level baseline was 1,072 findings across 576 Java files:

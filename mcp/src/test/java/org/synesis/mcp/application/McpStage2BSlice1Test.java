@@ -62,22 +62,21 @@ class McpStage2BSlice1Test {
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         AgentSessionService sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
-                "antigravity",
+                "claude",
                 "inst-mcp-1",
                 null,
                 false));
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
-        var bindings = bindingService.list(location, "antigravity");
+        var bindings = bindingService.list(location, "claude");
         if (!bindings.isEmpty() && bindings.getLast()
                 .worktreePath() != null) {
             bindingService.verifyWorkspaceTrust(location,
-                    "antigravity",
+                    "claude",
                     bindings.getLast()
                             .sessionId(),
                     Path.of(bindings.getLast()
@@ -129,7 +128,7 @@ class McpStage2BSlice1Test {
                 identity);
         store.append(taskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(), cmd3.encoded(), identity);
 
-        handler = new McpProtocolHandler(sessionService, projectRoot, "antigravity", "inst-mcp-1");
+        handler = new McpProtocolHandler(sessionService, projectRoot, "claude", "inst-mcp-1");
     }
 
     @Test

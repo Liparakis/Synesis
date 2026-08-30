@@ -12,9 +12,9 @@ synesis
   sync host|join
   constraint create
   workspace check-action|verify|mutate
-  hook antigravity|claude|codex
+  hook claude|codex
   doctor | cleanup | reconcile | repair | migrate
-  mcp --provider <codex|antigravity|claude>
+  mcp --provider <codex|claude>
 ```
 
 Ordinary project commands discover `.synesis` from the current directory. An

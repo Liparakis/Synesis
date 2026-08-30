@@ -11,7 +11,7 @@
    cleanup in `:coordination`. Gate: crash/restart, duplicate startup, dirty
    worktree, moved repository, and branch deletion tests.
 3. **Provider adapters.** Extend `ProviderIntegration` with capability probes;
-   add Codex and Antigravity bootstrap/transition/injection implementations only
+   add Codex and Claude bootstrap/transition/injection implementations only
    where real evidence supports them. Gate: trusted real-agent proof; otherwise
    explicit read-only status.
 4. **Intent and ownership.** Add task-intent records, provisional claims,
@@ -58,4 +58,3 @@ remove only Synesis-managed hooks/local state during rollback.
 No remote enrollment, multi-machine coordination, PostgreSQL, broker, relay,
 MCP surface, global agent, shared worktree, remote execution, or production
 Claude support.
-

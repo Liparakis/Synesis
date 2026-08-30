@@ -8,7 +8,6 @@ import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
 import org.synesis.workspace.provider.codex.CodexNativePatchRouter;
@@ -44,11 +43,6 @@ public final class HookApplicationService {
                 "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\""
                         + reason + "\"}}",
                 reason);
-    }
-
-    private static HookExecutionResult deniedAntigravity(String reason) {
-        return new HookExecutionResult("INVALID_INPUT", "{\"decision\":\"deny\",\"reason\":\""
-                + reason + "\"}", reason);
     }
 
     private static String read(InputStream input) throws java.io.IOException {
@@ -131,47 +125,6 @@ public final class HookApplicationService {
         ClaudeCodeHookAdapter.Result result = new ClaudeCodeHookAdapter(profile).processStream(input);
         return new HookExecutionResult(result.outcome()
                 .name(), result.responseJson(), result.humanReason());
-    }
-
-    /**
-     * Processes one Antigravity hook event.
-     *
-     * @param profile local profile directory
-     * @param input   provider event stream
-     * @return structured hook result
-     */
-    public HookExecutionResult antigravity(Path profile, InputStream input) {
-        AntigravityHookAdapter.Result result = new AntigravityHookAdapter(profile).processStream(input);
-        return new HookExecutionResult(result.outcome()
-                .name(), result.responseJson(), result.humanReason());
-    }
-
-    /**
-     * Bootstraps a project-scoped Antigravity session before processing a hook.
-     *
-     * @param projectRoot initialized project root
-     * @param profile     local profile used by the adapter
-     * @param input       provider event stream
-     * @return structured hook result
-     */
-    public HookExecutionResult antigravity(Path projectRoot, Path profile, InputStream input) {
-        try {
-            String json = read(input);
-            Path eventCwd = workspacePath(json, projectRoot);
-            var location = new ProjectApplicationService().require(controlRoot(eventCwd));
-            ProviderSessionBindingService.BindingResult binding = bindings.ensure(location, "antigravity",
-                    evidence(json));
-            ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location,
-                    binding.binding(), eventCwd);
-            if (!workspace.verified()) {
-                return deniedAntigravity(workspace.code());
-            }
-            HookExecutionResult result = antigravity(profile,
-                    new java.io.ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
-            return withBinding(result, binding);
-        } catch (Exception failure) {
-            return deniedAntigravity("Synesis could not establish a trusted project session.");
-        }
     }
 
     /**

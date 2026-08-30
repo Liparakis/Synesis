@@ -119,14 +119,13 @@ class Slice4FailureScenariosTest {
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
 
         var location = new ProjectApplicationService().locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
 
         sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
-                "antigravity",
+                "claude",
                 "inst-req-1",
                 null,
                 false));
@@ -139,11 +138,11 @@ class Slice4FailureScenariosTest {
         git(projectRoot, "add", ".");
         commitIfNeeded(projectRoot);
 
-        var bindings1 = bindingService.list(location, "antigravity");
+        var bindings1 = bindingService.list(location, "claude");
         if (!bindings1.isEmpty() && bindings1.getLast()
                 .worktreePath() != null) {
             bindingService.verifyWorkspaceTrust(location,
-                    "antigravity",
+                    "claude",
                     bindings1.getLast()
                             .sessionId(),
                     Path.of(bindings1.getLast()
@@ -238,11 +237,11 @@ class Slice4FailureScenariosTest {
                                 identity)
                         .encoded(), identity);
 
-        requesterHandler = new McpProtocolHandler(sessionService, projectRoot, "antigravity", "inst-req-1");
+        requesterHandler = new McpProtocolHandler(sessionService, projectRoot, "claude", "inst-req-1");
         ownerHandler = new McpProtocolHandler(sessionService, projectRoot, "codex", "inst-owner-1");
 
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        collaboration.announce(projectRoot, "antigravity", "inst-req-1",
+        collaboration.announce(projectRoot, "claude", "inst-req-1",
                 "Implement the product CLI", "Publish the CLI implementation",
                 List.of(ResourceSelector.pathExact("ProductCli.java")));
         collaboration.announce(projectRoot, "codex", "inst-owner-1",

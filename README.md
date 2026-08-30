@@ -34,7 +34,6 @@ Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded p
 
   | Provider     | ID              | Maturity                             |
   |--------------|-----------------|--------------------------------------|
-  | Antigravity  | `antigravity`   | `beta`                               |
   | Codex        | `codex`         | `experimental`, trust-review limited |
   | Claude Code  | `claude`        | `experimental`                       |
 

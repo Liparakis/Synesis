@@ -54,13 +54,6 @@ final class ProviderMcpConfigurationService {
                 atomicWrite(configPath, ProviderJson.write(root) + System.lineSeparator());
             }
 
-            if ("antigravity".equals(provider.id())) {
-                cleanObsoleteAntigravityProviderConfig();
-            }
-            cleanObsoleteProjectFile(location.root()
-                    .resolve(".agents/mcp.json"));
-            cleanObsoleteProjectFile(location.root()
-                    .resolve(".gemini/mcp.json"));
             return unchanged ? "UNCHANGED" : "INSTALLED";
         } catch (Exception failure) {
             return "MALFORMED_CONFIG";
@@ -83,30 +76,6 @@ final class ProviderMcpConfigurationService {
                 }
             } catch (Exception ignored) {
             }
-        }
-        if ("antigravity".equals(provider.id())) {
-            String userHome = System.getProperty("user.home");
-            if (userHome != null && !userHome.isBlank()) {
-                try {
-                    cleanObsoleteAntigravityProviderConfig();
-                } catch (IOException ignored) {
-                }
-            }
-            cleanObsoleteProjectFile(location.root()
-                    .resolve(".agents/mcp.json"));
-            cleanObsoleteProjectFile(location.root()
-                    .resolve(".gemini/mcp.json"));
-        }
-    }
-
-    private void cleanObsoleteAntigravityProviderConfig() throws IOException {
-        String userHome = System.getProperty("user.home");
-        if (userHome == null || userHome.isBlank()) {
-            return;
-        }
-        Path mirror = Path.of(userHome, ".gemini", "antigravity", "mcp_config.json");
-        if (Files.exists(mirror)) {
-            removeEntry(mirror);
         }
     }
 

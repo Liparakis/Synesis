@@ -1,7 +1,7 @@
 # Provider-session migration
 
 An initialized project may predate provider-session bindings. Migration is
-automatic on the next provider install or first Codex/Antigravity hook:
+automatic on the next provider install or first Codex hook:
 
 1. Synesis validates the existing project ID and project-local node identity.
 2. It preserves the profile, provider metadata, and unrelated hook entries.

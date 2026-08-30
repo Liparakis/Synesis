@@ -108,7 +108,7 @@ class IntegrationQueueTest {
         store = new PredictionEventStore(location.root()
                 .resolve(".synesis/coordination"), location.projectId());
         new WorkIntentService(store, identity).announce(new WorkIntent(goodLane, location.projectId(), "agt_good",
-                "antigravity", goodTask, "good", "integrated", base,
+                "claude", goodTask, "good", "integrated", base,
                 List.of(ResourceSelector.pathExact("src/good.py")), 1, group, WorkIntent.Status.ANNOUNCED));
         store = new PredictionEventStore(location.root()
                 .resolve(".synesis/coordination"), location.projectId());
@@ -171,7 +171,7 @@ class IntegrationQueueTest {
         new WorkIntentService(store, identity).announce(new WorkIntent(dependentLane,
                 location.projectId(),
                 "agt_dependent",
-                "antigravity",
+                "claude",
                 dependentTask,
                 "dependent",
                 "dependent integrated",

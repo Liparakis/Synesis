@@ -84,8 +84,6 @@ public final class ProviderManualService {
                     .resolve(MANUAL_DIRECTORY);
             case "claude" -> home.resolve(".claude/skills")
                     .resolve(MANUAL_DIRECTORY);
-            case "antigravity" -> home.resolve(".gemini/config/skills")
-                    .resolve(MANUAL_DIRECTORY);
             default -> throw new IllegalArgumentException("unknown provider: " + provider);
         };
     }

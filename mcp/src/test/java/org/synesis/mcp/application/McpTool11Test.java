@@ -44,7 +44,7 @@ class McpTool11Test {
         new ProjectApplicationService().init(projectRoot);
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();

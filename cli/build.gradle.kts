@@ -375,9 +375,9 @@ tasks.register("bundleSmokeTest") {
             git("commit", "-m", "Initial smoke baseline")
             run("init", "--project", project.absolutePath)
             run("provider", "list", "--project", project.absolutePath)
-            run("provider", "install", "antigravity", "--project", project.absolutePath)
-            run(1, "provider", "status", "antigravity", "--project", project.absolutePath)
-            run("provider", "uninstall", "antigravity", "--project", project.absolutePath)
+            run("provider", "install", "claude", "--project", project.absolutePath)
+            run(1, "provider", "status", "claude", "--project", project.absolutePath)
+            run("provider", "uninstall", "claude", "--project", project.absolutePath)
             run("doctor", "--project", project.absolutePath)
 
             // Installed stdio MCP smoke test

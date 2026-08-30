@@ -13,7 +13,7 @@ untrusted; repository state and verification evidence are authoritative.
   coordination, lifecycle diagnostics, and the local development distribution.
 - The stdio MCP server exposes exactly 10 tools. One persistent MCP connection
   owns one provider binding and one isolated worker context.
-- Supported provider IDs are `antigravity`, `claude`, and `codex`.
+- Supported provider IDs are `claude` and `codex`.
   Provider installation and hooks use those canonical IDs only.
 - MCP reads are revision-bearing and patches must provide the matching revision.
   Do not edit another worker's worktree or the control checkout directly.

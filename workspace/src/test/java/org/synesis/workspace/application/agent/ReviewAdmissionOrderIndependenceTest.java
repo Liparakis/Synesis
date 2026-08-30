@@ -50,7 +50,7 @@ final class ReviewAdmissionOrderIndependenceTest {
         ClaimResult producer;
         ClaimResult reviewer;
         if (reviewerFirst) {
-            reviewer = collaboration.announce(project, "antigravity", reviewerConnection,
+            reviewer = collaboration.announce(project, "claude", reviewerConnection,
                     "Review producer source", "Review the producer snapshot",
                     List.of(ResourceSelector.pathExact("tests/todo_test.py")), null,
                     WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
@@ -72,7 +72,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                     List.of(ResourceSelector.pathExact("src/todo.py")), null,
                     WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of());
             reviewer = collaboration.announce(project,
-                    "antigravity",
+                    "claude",
                     reviewerConnection,
                     "Review producer source",
                     "Review the producer snapshot",
@@ -88,7 +88,7 @@ final class ReviewAdmissionOrderIndependenceTest {
 
         AgentNextActionService next = new AgentNextActionService();
         AgentResponse reviewerAdmission = next.getNextAction(new AgentNextActionService.NextActionRequest(
-                project, "antigravity", reviewerConnection));
+                    project, "claude", reviewerConnection));
         Map<String, Object> reviewerResult = map(reviewerAdmission.result());
         Map<String, Object> workflow = map(reviewerResult.get("workflow"));
         Map<String, Object> arguments = map(workflow.get("arguments"));
@@ -103,7 +103,7 @@ final class ReviewAdmissionOrderIndependenceTest {
         assertFalse(producerBefore.toJson()
                 .contains("REVIEW_ADMISSION_REQUIRED"), producerBefore.toJson());
 
-        CoordinationRequest request = collaboration.request(project, "antigravity", reviewerConnection,
+        CoordinationRequest request = collaboration.request(project, "claude", reviewerConnection,
                 producer.intent()
                         .intentId(), CoordinationRequest.Kind.REVIEW, "Review the producer snapshot");
         collaboration.respond(project, "codex", producerConnection, request.requestId(),
@@ -119,7 +119,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                 .orElseThrow();
         String reviewerParticipant = WorkspaceCollaborationService.participantHandle(
                 new ProviderSessionBindingService().find(new ProjectApplicationService().locate(project),
-                                "antigravity", reviewerConnection)
+                                "claude", reviewerConnection)
                         .orElseThrow()
                         .sessionId());
         collaboration.consumeLaneGrant(project,
@@ -167,7 +167,7 @@ final class ReviewAdmissionOrderIndependenceTest {
      */
     private static void installProviders() throws Exception {
         new ProviderManualService().install("codex");
-        new ProviderManualService().install("antigravity");
+        new ProviderManualService().install("claude");
     }
 
     /**
@@ -176,7 +176,7 @@ final class ReviewAdmissionOrderIndependenceTest {
     private static AgentSessionServiceFixture establishSessions(Path project, String prefix) throws Exception {
         AgentSessionServiceFixture sessions = new AgentSessionServiceFixture(project, prefix);
         sessions.ensure("codex", prefix + "-producer");
-        sessions.ensure("antigravity", prefix + "-reviewer");
+        sessions.ensure("claude", prefix + "-reviewer");
         if (prefix.equals("three")) {
             sessions.ensure("codex", prefix + "-unrelated");
         }
@@ -252,7 +252,7 @@ final class ReviewAdmissionOrderIndependenceTest {
         installProviders();
         AgentSessionServiceFixture sessions = establishSessions(project, "reviewer-before-producer");
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        ClaimResult reviewer = collaboration.announce(project, "antigravity", "reviewer-before-producer-reviewer",
+        ClaimResult reviewer = collaboration.announce(project, "claude", "reviewer-before-producer-reviewer",
                 "Review the producer source", "Inspect the producer snapshot",
                 List.of(ResourceSelector.pathExact("tests/todo_test.py")), null,
                 WorkIntent.CompletionMode.NO_CHANGE_ALLOWED, WorkIntent.Role.REVIEWER,
@@ -261,7 +261,7 @@ final class ReviewAdmissionOrderIndependenceTest {
 
         AgentNextActionService next = new AgentNextActionService();
         AgentResponse waiting = next.getNextAction(new AgentNextActionService.NextActionRequest(
-                project, "antigravity", "reviewer-before-producer-reviewer"));
+                project, "claude", "reviewer-before-producer-reviewer"));
         assertEquals(AgentNextAction.WAIT, waiting.nextAction(), waiting.toJson());
         assertEquals(AgentReason.VALIDATION_REQUIRED, waiting.reason());
         Map<String, Object> waitingResult = map(waiting.result());
@@ -270,14 +270,14 @@ final class ReviewAdmissionOrderIndependenceTest {
                 .contains("NO_CHANGE_COMPLETION_READY"), waiting.toJson());
 
         var location = new ProjectApplicationService().locate(project);
-        var reviewerBinding = new ProviderSessionBindingService().find(location, "antigravity",
+        var reviewerBinding = new ProviderSessionBindingService().find(location, "claude",
                         "reviewer-before-producer-reviewer")
                 .orElseThrow();
         var store = new PredictionEventStore(location.root()
                 .resolve(".synesis/coordination"), location.projectId());
         AgentResponse prematureCompletion = new AgentTaskCompletionService().completeTask(
                 new AgentTaskCompletionService.CompleteTaskRequest(project,
-                        "antigravity",
+                        "claude",
                         "reviewer-before-producer-reviewer",
                         "must wait",
                         AgentTaskCompletionService.CompletionOutcome.NO_CHANGE,
@@ -313,7 +313,7 @@ final class ReviewAdmissionOrderIndependenceTest {
         assertTrue(producer.acquired());
 
         AgentResponse admission = next.getNextAction(new AgentNextActionService.NextActionRequest(
-                project, "antigravity", "reviewer-before-producer-reviewer"));
+                project, "claude", "reviewer-before-producer-reviewer"));
         Map<String, Object> admissionResult = map(admission.result());
         Map<String, Object> workflow = map(admissionResult.get("workflow"));
         Map<String, Object> arguments = map(workflow.get("arguments"));
@@ -328,7 +328,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                 .toString(), payload.get("reviewedIntentId"), admission.toJson());
         assertEquals(WorkspaceCollaborationService.participantHandle(
                         new ProviderSessionBindingService().find(new ProjectApplicationService().locate(project),
-                                        "antigravity", "reviewer-before-producer-reviewer")
+                                        "claude", "reviewer-before-producer-reviewer")
                                 .orElseThrow()
                                 .sessionId()),
                 payload.get("reviewerParticipant"));
@@ -354,7 +354,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                 List.of(ResourceSelector.pathExact("src/producer.py")), null,
                 WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of());
         var reviewer = collaboration.announce(project,
-                "antigravity",
+                "claude",
                 "three-reviewer",
                 "Review producer source",
                 "Review the producer snapshot",
@@ -379,7 +379,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                         .workGroupId());
 
         AgentResponse response = new AgentNextActionService().getNextAction(
-                new AgentNextActionService.NextActionRequest(project, "antigravity", "three-reviewer"));
+                new AgentNextActionService.NextActionRequest(project, "claude", "three-reviewer"));
         assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction(), response.toJson());
         Map<String, Object> result = (Map<String, Object>) response.result();
         Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");

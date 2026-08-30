@@ -49,7 +49,7 @@ class McpSyn028ContractTest {
             new ProjectApplicationService().init(project);
             new ProviderManualService().install("codex");
             new ProviderManualService().install("claude");
-            new ProviderManualService().install("antigravity");
+            new ProviderManualService().install("claude");
             McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), project, "codex", "syn028");
             String list = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}");
             assertEquals(10, list.split("\"name\":\"").length - 1);

@@ -45,7 +45,6 @@ class McpServerTest {
         new org.synesis.workspace.application.ProjectApplicationService().init(tempRoot);
         new ProviderManualService().install("codex");
         new ProviderManualService().install("claude");
-        new ProviderManualService().install("antigravity");
     }
 
     @Test
@@ -325,8 +324,8 @@ class McpServerTest {
         Path dummyCwd = tempRoot.getParent(); // Incorrect cwd (not project root)
         McpProtocolHandler handler = new McpProtocolHandler(sessionService,
                 dummyCwd,
-                "antigravity",
-                "conn-antigravity-1");
+                "claude",
+                "conn-claude-1");
 
         String initReq =
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + tempRoot.toUri()
@@ -347,8 +346,8 @@ class McpServerTest {
         Path dummyCwd = tempRoot.getParent();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService,
                 dummyCwd,
-                "antigravity",
-                "conn-antigravity-2");
+                "claude",
+                "conn-claude-2");
 
         String initReq =
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"workspaceFolders\":[{\"uri\":\""
@@ -364,8 +363,8 @@ class McpServerTest {
         Path dummyCwd = tempRoot.getParent();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService,
                 dummyCwd,
-                "antigravity",
-                "conn-antigravity-3");
+                "claude",
+                "conn-claude-3");
 
         String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"roots\":[{\"uri\":\""
                 + tempRoot.toUri() + "\",\"name\":\"test\"}]}}";
@@ -389,7 +388,7 @@ class McpServerTest {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService,
                 tempRoot.getParent(),
-                "antigravity",
+                "claude",
                 "conn-ambiguous");
 
         String initReq =
@@ -408,7 +407,6 @@ class McpServerTest {
     void testWorktreeRootPathIsNotAcceptedAsControlProject() throws Exception {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex", "conn-1");
-        handler.setAntigravityProjectsDir(Files.createTempDirectory("synesis-test-empty-projects-"));
         String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         handler.handleMessage(callReq);
 
@@ -422,9 +420,8 @@ class McpServerTest {
 
         McpProtocolHandler worktreeHandler = new McpProtocolHandler(sessionService,
                 tempRoot.getParent(),
-                "antigravity",
+                "claude",
                 "conn-wt-test");
-        worktreeHandler.setAntigravityProjectsDir(Files.createTempDirectory("synesis-test-empty-projects-2-"));
         String initReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
                 + worktreePath.toUri() + "\"}}";
         worktreeHandler.handleMessage(initReq);
@@ -437,7 +434,7 @@ class McpServerTest {
     void testMissingProjectJsonReturnsWorkspaceNotReady() throws Exception {
         Path uninit = Files.createTempDirectory("synesis-uninit-root-");
         AgentSessionService sessionService = new AgentSessionService();
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, uninit, "antigravity", "conn-uninit");
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, uninit, "claude", "conn-uninit");
 
         String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String callResponse = handler.handleMessage(callReq);
@@ -469,7 +466,7 @@ class McpServerTest {
     void testRootsListChangedNotificationUpdatesUnboundContext() {
         AgentSessionService sessionService = new AgentSessionService();
         Path dummyCwd = tempRoot.getParent();
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, dummyCwd, "antigravity", "conn-changed-1");
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, dummyCwd, "claude", "conn-changed-1");
 
         String notif =
                 "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{\"workspaceFolders\":[{\"uri\":\""
@@ -482,7 +479,7 @@ class McpServerTest {
     @Test
     void testConflictingRootNotificationAfterSessionBindingIsRejected() {
         AgentSessionService sessionService = new AgentSessionService();
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-bound-1");
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "claude", "conn-bound-1");
 
         String callReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         String response = handler.handleMessage(callReq);
@@ -599,7 +596,7 @@ class McpServerTest {
     @Test
     void testMcpReadFileAndApplyPatchEndToEnd() {
         AgentSessionService sessionService = new AgentSessionService();
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-mcp-tools");
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "claude", "conn-mcp-tools");
 
         // 1. Ensure Session
         String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
@@ -632,13 +629,13 @@ class McpServerTest {
         String modifyReq =
                 "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"expectedHash\":\""
                         + hash
-                        + "\",\"edits\":[{\"find\":\"World\",\"replace\":\"Antigravity\",\"expectedOccurrences\":1}]}}}";
+                        + "\",\"edits\":[{\"find\":\"World\",\"replace\":\"Claude\",\"expectedOccurrences\":1}]}}}";
         String modifyResp = handler.handleMessage(modifyReq);
         assertTrue(modifyResp.contains("completed"));
 
         // 5. Read Modified File
         String readModResp = handler.handleMessage(readReq);
-        assertTrue(readModResp.contains("Hello MCP Antigravity"));
+        assertTrue(readModResp.contains("Hello MCP Claude"));
 
         // 6. Run Command (direct argv)
         String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"run_command\",\"arguments\":{\"argv\":[\"git\",\"status\",\"--porcelain\"]}}}";
@@ -663,7 +660,7 @@ class McpServerTest {
     @Test
     void runCommandWithoutClaimsRenewsLeaseAndPersistsTerminalResult() {
         AgentSessionService sessionService = new AgentSessionService();
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity",
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "claude",
                 "conn-mcp-no-claims");
 
         String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
@@ -682,7 +679,7 @@ class McpServerTest {
     @Test
     void providerShapedPathAliasesRemainRevisionChecked() {
         AgentSessionService sessionService = new AgentSessionService();
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "antigravity", "conn-aliases");
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "claude", "conn-aliases");
 
         String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}";
         assertTrue(handler.handleMessage(ensureReq)

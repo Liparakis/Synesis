@@ -61,7 +61,6 @@ groups remain available for unrelated or competing experiments.
 | Two-process coordination                                   | DEMO_ONLY               | `run-speculative-coordination-real.ps1` manually drives CLI                          |
 | Project init and identity                                  | PARTIAL                 | `ProjectApplicationService`, `InitCommand`; no ambient runtime/hooks/AGENTS contract |
 | Codex mutation hook                                        | PARTIAL/UNSAFE_TO_REUSE | synthetic tests pass; real trust/enforcement evidence missing                        |
-| Antigravity mutation hook                                  | UNSAFE_TO_REUSE         | real protected edit changed the file; no hook invocation observed                    |
 | Autonomous bootstrap, workspace transition, inbox delivery | MISSING                 | no provider capability evidence                                                      |
 
 The missing identity link is now explicit and local: a provider hook loads the

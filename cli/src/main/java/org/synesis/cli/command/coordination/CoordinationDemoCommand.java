@@ -26,7 +26,7 @@ import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
-import org.synesis.workspace.provider.antigravity.AntigravityHookAdapter;
+import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -190,7 +190,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
         System.out.println("timestamp=" + now() + " REQUEST_OWNER_RESULT=" + hookResult.outcome() + " "
                 + hookResult.humanReason());
         System.out.println("UNAUTHORIZED_MUTATION_OCCURRED=false");
-        if (hookResult.outcome() != AntigravityHookAdapter.Outcome.REQUEST_OWNER) {
+        if (hookResult.outcome() != ClaudeCodeHookAdapter.Outcome.REQUEST_OWNER) {
             return 1;
         }
         UUID predictionId = UUID.randomUUID();
@@ -219,16 +219,17 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
         }
     }
 
-    private AntigravityHookAdapter.Result getResult(NodeIdentity identity, Path protectedScope) {
+    private ClaudeCodeHookAdapter.Result getResult(NodeIdentity identity, Path protectedScope) {
         OwnershipRegistry ownership = new OwnershipRegistry();
         ownership.claim("workspace.prediction-query", new OwnershipRegistry.Owner(ownerNode, ownerSupervisor, 1));
-        AntigravityHookAdapter hook = new AntigravityHookAdapter(profile, ownership, identity.nodeId());
-        String hookJson = "{\"name\":\"replace_file_content\",\"TargetFile\":\""
+        ClaudeCodeHookAdapter hook = new ClaudeCodeHookAdapter(profile, ownership, identity.nodeId());
+        String hookJson = "{\"tool_name\":\"Edit\",\"cwd\":\""
+                + worktree.toString()
+                .replace("\\", "\\\\")
+                + "\",\"tool_input\":{\"file_path\":\""
                 + protectedScope.toString()
                 .replace("\\", "\\\\")
-                + "\",\"Description\":\"capability=workspace.prediction-query\",\"workspacePaths\":[\""
-                + worktree.toString()
-                .replace("\\", "\\\\") + "\"]}";
+                + "\"}}";
         return hook.processJson(hookJson);
     }
 

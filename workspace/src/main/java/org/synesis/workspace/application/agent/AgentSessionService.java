@@ -304,7 +304,7 @@ public final class AgentSessionService {
      * Request payload for ambient session resolution.
      *
      * @param projectRoot          canonical control project root path
-     * @param provider             stable provider name (e.g. "codex", "antigravity")
+     * @param provider             stable provider name (e.g. "codex", "claude")
      * @param connectionInstanceId unique process connection-instance ID
      * @param taskIntent           optional task intent description
      * @param refresh              {@code true} if a session refresh is explicitly requested

@@ -73,16 +73,11 @@ public final class RecoverySnapshotService {
                     .findFirst()
                     .orElse(null);
             if (binding == null) {
-                for (String provider : List.of("antigravity", "claude")) {
-                    binding = new ProviderSessionBindingService().list(location, provider)
-                            .stream()
-                            .filter(candidate -> sessionId.equals(candidate.sessionId()))
-                            .findFirst()
-                            .orElse(null);
-                    if (binding != null) {
-                        break;
-                    }
-                }
+                binding = new ProviderSessionBindingService().list(location, "claude")
+                        .stream()
+                        .filter(candidate -> sessionId.equals(candidate.sessionId()))
+                        .findFirst()
+                        .orElse(null);
             }
         } catch (ProviderSessionBindingService.BindingException failure) {
             throw new IOException("RECOVERY_BINDING_UNAVAILABLE", failure);

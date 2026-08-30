@@ -4,9 +4,6 @@ From an initialized project, the unified launcher supports:
 
 ```powershell
 synesis provider list
-synesis provider install antigravity
-synesis provider status antigravity
-synesis provider uninstall antigravity
 synesis provider install claude
 synesis provider status claude
 synesis provider uninstall claude
@@ -16,30 +13,26 @@ synesis provider uninstall codex
 ```
 
 Use `--project <path>` for an explicit project directory. Provider metadata is
-local-only under `.synesis/local/providers/`. Antigravity writes its managed
-hook to `<project>/.agents/hooks.json`; Claude Code writes to
-`<project>/.claude/settings.json`. Unrelated JSON fields and hooks are kept.
+local-only under `.synesis/local/providers/`. Claude Code writes its managed
+hook to `<project>/.claude/settings.json`. Unrelated JSON fields and hooks are
+kept.
 Codex writes its managed hook to `<project>/.codex/hooks.json` and includes a
 Windows-specific launcher command.
 
 Each provider has one canonical MCP scope: Codex uses the user
-`%USERPROFILE%\\.codex\\config.toml`, Claude Code uses the project
-`.mcp.json`, and Antigravity uses `%USERPROFILE%\\.gemini\\config\\mcp_config.json`
-without a project-bound argument; Antigravity selects the active project from
-MCP initialize roots (or its bounded process-working-directory fallback).
-Installation migrates stale Synesis
-entries from obsolete scopes without removing unrelated servers.
+`%USERPROFILE%\\.codex\\config.toml`, and Claude Code uses the project
+`.mcp.json`. Installation updates only the canonical Synesis entry and preserves
+unrelated servers.
 
 Installation performs isolated synthetic block/allow checks. It does not run a
-real provider agent. Antigravity remains `BETA` until a real agent denial and
-successful re-plan are recorded; Claude Code and Codex remain `EXPERIMENTAL`.
+real provider agent. Claude Code and Codex remain `EXPERIMENTAL`.
 Codex additionally requires project hook trust review in `/hooks`; installation
 does not modify Codex trust state and status remains `DEGRADED` until real
 validation.
 
 Installation also creates the first project/provider session binding. The first
-Codex hook (`session_id`) or Antigravity hook (`conversationId`) resumes that
-binding or creates a distinct one automatically. `provider status` reports
+Codex hook (`session_id`) resumes that binding or creates a distinct one
+automatically. `provider status` reports
 `SESSION_BINDING`, `SESSION_ID`, `SUPERVISOR_ID`, `WORKER_ID`,
 `SESSION_PROJECT_ID`, `SESSION_NODE_ID`, `SESSION_TRUST`, and
 `SESSION_EVIDENCE`. `SESSION_EVIDENCE=FALLBACK` means the provider did not

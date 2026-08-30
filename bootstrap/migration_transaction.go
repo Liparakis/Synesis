@@ -34,7 +34,6 @@ func collectPreparedMigrations(paths installPaths) (preparedMigrations, error) {
 	refs := preparedMigrations{}
 	for _, provider := range []struct{ id, path string }{
 		{"codex", filepath.Join(userHome(), ".codex", "config.toml")},
-		{"antigravity", filepath.Join(userHome(), ".gemini", "config", "mcp_config.json")},
 	} {
 		ref, err := inspectProviderMigration(paths, provider.id, provider.path)
 		if err != nil {

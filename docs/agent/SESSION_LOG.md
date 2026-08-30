@@ -1,3 +1,20 @@
+# 2026-08-30 — MAINT-002 Antigravity provider integration removal
+
+- Removed Antigravity from active provider registry, provider lifecycle,
+  project initialization, MCP discovery/configuration/migration, hook/CLI
+  paths, bootstrap migration references, tests, scripts, and current docs.
+- Deleted the dedicated Antigravity adapters, hook command/tests, experiment
+  runner, integration docs, and provider guide. Preserved historical ADR,
+  validation, checkpoint, evidence, and durable task records as audit history.
+- Added `docs/adr/0039-remove-antigravity-provider-integration.md` and updated
+  the repository hygiene inventory for the deleted experiment runner.
+- Operational terminology search and `git diff --check` passed. Isolated
+  `go test ./...` under `bootstrap` passed. Gradle Java verification failed
+  before compilation with `Unable to establish loopback connection`, including
+  an IPv4/no-daemon retry.
+- Exact next action: rerun `gradlew.bat :workspace:test :mcp:test :cli:test
+  --no-daemon --console=plain` after the host loopback failure is cleared.
+
 # 2026-08-29 — MAINT-001 IntelliJ analyzer cleanup continuation
 
 - Corrected one inverted Optional check found during targeted re-analysis.

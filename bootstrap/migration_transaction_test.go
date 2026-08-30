@@ -17,8 +17,8 @@ func TestMigrationPlanReferencesRemainScoped(t *testing.T) {
 	if refs.Project.State != "NO_PROJECT" {
 		t.Fatalf("project scope unexpectedly discovered: %#v", refs.Project)
 	}
-	if len(refs.Providers) != 2 || refs.Providers[0].State != "MISSING" || refs.Providers[1].State != "MISSING" {
-		t.Fatalf("provider references were not classified independently: %#v", refs.Providers)
+	if len(refs.Providers) != 1 || refs.Providers[0].Provider != "codex" || refs.Providers[0].State != "MISSING" {
+		t.Fatalf("provider references did not match the supported provider set: %#v", refs.Providers)
 	}
 }
 

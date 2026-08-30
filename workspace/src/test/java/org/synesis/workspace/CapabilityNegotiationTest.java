@@ -69,10 +69,10 @@ class CapabilityNegotiationTest {
         nextActionService = new AgentNextActionService();
 
         var location = projectService.locate(projectRoot);
-        // Bind session for requester (antigravity) and owner (codex)
+        // Bind session for requester (claude) and owner (codex)
         AgentSessionService sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
-                "antigravity",
+                "claude",
                 "inst-1",
                 null,
                 false));
@@ -82,11 +82,11 @@ class CapabilityNegotiationTest {
                 null,
                 false));
 
-        var bindings1 = bindingService.list(location, "antigravity");
+        var bindings1 = bindingService.list(location, "claude");
         if (!bindings1.isEmpty() && bindings1.getLast()
                 .worktreePath() != null) {
             bindingService.verifyWorkspaceTrust(location,
-                    "antigravity",
+                    "claude",
                     bindings1.getLast()
                             .sessionId(),
                     Path.of(bindings1.getLast()
@@ -167,7 +167,7 @@ class CapabilityNegotiationTest {
 
         // 1. Requester describes required capability
         CapabilityRequestService.DescribeCapabilityRequest descReq = new CapabilityRequestService.DescribeCapabilityRequest(
-                projectRoot, "antigravity", "inst-1", "catalog.product-query", contract, null, null);
+                projectRoot, "claude", "inst-1", "catalog.product-query", contract, null, null);
         AgentResponse descResp = requestService.describeRequiredCapability(descReq);
 
         assertEquals(AgentStatus.WAITING, descResp.status());
@@ -196,7 +196,7 @@ class CapabilityNegotiationTest {
 
         // 4. Requester checks get_next_action -> receives implementation_unavailable
         AgentNextActionService.NextActionRequest reqNextReq = new AgentNextActionService.NextActionRequest(
-                projectRoot, "antigravity", "inst-1");
+                projectRoot, "claude", "inst-1");
         AgentResponse reqNextResp = nextActionService.getNextAction(reqNextReq);
 
         assertEquals(AgentStatus.WAITING, reqNextResp.status());
@@ -216,7 +216,7 @@ class CapabilityNegotiationTest {
 
         // Requester creates request
         CapabilityRequestService.DescribeCapabilityRequest descReq = new CapabilityRequestService.DescribeCapabilityRequest(
-                projectRoot, "antigravity", "inst-1", "catalog.product-query", contract, null, null);
+                projectRoot, "claude", "inst-1", "catalog.product-query", contract, null, null);
         AgentResponse descResp = requestService.describeRequiredCapability(descReq);
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) descResp.result();
@@ -236,7 +236,7 @@ class CapabilityNegotiationTest {
 
         // Requester checks get_next_action -> receives revision_required
         AgentNextActionService.NextActionRequest reqNextReq = new AgentNextActionService.NextActionRequest(
-                projectRoot, "antigravity", "inst-1");
+                projectRoot, "claude", "inst-1");
         AgentResponse reqNextResp = nextActionService.getNextAction(reqNextReq);
 
         assertEquals(AgentStatus.READY, reqNextResp.status());
@@ -245,7 +245,7 @@ class CapabilityNegotiationTest {
 
         // Requester accepts revision
         CapabilityRequestService.DescribeCapabilityRequest acceptRevReq = new CapabilityRequestService.DescribeCapabilityRequest(
-                projectRoot, "antigravity", "inst-1", null, null, handle, "accept");
+                projectRoot, "claude", "inst-1", null, null, handle, "accept");
         AgentResponse acceptRevResp = requestService.describeRequiredCapability(acceptRevReq);
 
         assertEquals(AgentStatus.WAITING, acceptRevResp.status());
@@ -255,11 +255,11 @@ class CapabilityNegotiationTest {
     @Test
     void activeIntentLineageCanAuthorizeCapabilityWithoutLegacySemanticOwnership() throws Exception {
         new ProviderManualService().install("codex");
-        new ProviderManualService().install("antigravity");
+        new ProviderManualService().install("claude");
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         collaboration.announce(projectRoot, "codex", "inst-2", "Implement task tracker",
                 "Publish the source implementation", List.of(ResourceSelector.pathExact("src/task_tracker.py")));
-        collaboration.announce(projectRoot, "antigravity", "inst-1", "Implement task tracker tests",
+        collaboration.announce(projectRoot, "claude", "inst-1", "Implement task tracker tests",
                 "Publish tests after the source contract is accepted",
                 List.of(ResourceSelector.pathExact("tests/task_tracker_test.py")));
 
@@ -286,7 +286,7 @@ class CapabilityNegotiationTest {
                 List.of("the dependent test lane can import the published implementation"));
         AgentResponse response = requestService.describeRequiredCapability(
                 new CapabilityRequestService.DescribeCapabilityRequest(
-                        projectRoot, "antigravity", "inst-1", "task-tracker", contract,
+                        projectRoot, "claude", "inst-1", "task-tracker", contract,
                         null, null, ownerLineage));
 
         assertEquals(AgentStatus.WAITING, response.status());

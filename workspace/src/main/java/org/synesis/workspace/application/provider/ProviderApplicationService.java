@@ -33,7 +33,6 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
-import org.synesis.workspace.provider.antigravity.AntigravityProviderIntegration;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 
 /**
@@ -708,9 +707,6 @@ public final class ProviderApplicationService {
                 Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(),
                         ignored -> new LinkedHashMap<>()));
                 List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
-                if (provider instanceof AntigravityProviderIntegration antigravity && isWindows()) {
-                    antigravity.writeWrapper(profile);
-                }
                 already = hooks.stream()
                         .filter(provider::isManagedHook)
                         .count() == 1
@@ -1114,8 +1110,6 @@ public final class ProviderApplicationService {
                         .replace('-', '_') + "=" + state);
             }
         }
-        lines.add("WARN=Antigravity run_command mutations are not inspected.");
-        lines.add("WARN=Antigravity real-agent re-planning validation is not completed.");
         lines.add("WARN=Claude Code integration remains EXPERIMENTAL.");
         lines.add("WARN=Codex project hooks require explicit trust and real-agent validation.");
         boolean recordsHealthy = recordStoreHealthy(location);

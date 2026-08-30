@@ -441,9 +441,6 @@ public final class ProjectApplicationService {
                         providerService.ensureMcpConfig(existing,
                                 org.synesis.workspace.provider.ProviderRegistry.find("codex"),
                                 launcher);
-                        providerService.ensureMcpConfig(existing,
-                                org.synesis.workspace.provider.ProviderRegistry.find("antigravity"),
-                                launcher);
                     }
                     return new InitResult(InitStatus.ALREADY_INITIALIZED,
                             existing,
@@ -492,9 +489,6 @@ public final class ProjectApplicationService {
                     Path launcher = providerService.launcherPath();
                     providerService.ensureMcpConfig(location,
                             org.synesis.workspace.provider.ProviderRegistry.find("codex"),
-                            launcher);
-                    providerService.ensureMcpConfig(location,
-                            org.synesis.workspace.provider.ProviderRegistry.find("antigravity"),
                             launcher);
                 }
             } catch (Exception ignored) {

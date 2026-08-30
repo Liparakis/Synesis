@@ -113,7 +113,7 @@ class AgentNextActionServiceTest {
 
     @Test
     void testSurfacesOwnerRequestConciselyAndFiltersOtherWorkers() throws Exception {
-        prepareSessionAndTrust("antigravity", "conn-na-3");
+        prepareSessionAndTrust("claude", "conn-na-3");
 
         Path coordDir = controlRoot.resolve(".synesis/local/coordination");
         Files.createDirectories(coordDir);
@@ -124,7 +124,7 @@ class AgentNextActionServiceTest {
                         "capability",
                         "catalog.product-query",
                         "workerId",
-                        "antigravity",
+                        "claude",
                         "details",
                         java.util.Map.of("inputs", "query", "output", "result")),
                 java.util.Map.of("type", "NEEDS_CAPABILITY", "capability", "other.service", "workerId", "other-worker")
@@ -133,7 +133,7 @@ class AgentNextActionServiceTest {
 
         AgentNextActionService service = new AgentNextActionService();
         AgentNextActionService.NextActionRequest req = new AgentNextActionService.NextActionRequest(
-                controlRoot, "antigravity", "conn-na-3");
+                controlRoot, "claude", "conn-na-3");
 
         AgentResponse response = service.getNextAction(req);
         assertEquals(AgentStatus.WAITING, response.status());
@@ -185,13 +185,13 @@ class AgentNextActionServiceTest {
     @Test
     void unclaimedSessionCannotReceiveReviewAdmissionWithoutExplicitRole() throws Exception {
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
 
         AgentSessionService sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "claim-owner", null, false));
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
-                controlRoot, "antigravity", "claim-contender", null, false));
+                controlRoot, "claude", "claim-contender", null, false));
 
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         collaboration.announce(controlRoot, "codex", "claim-owner", "Implement source", "Publish source",
@@ -199,7 +199,7 @@ class AgentNextActionServiceTest {
 
         AgentNextActionService service = new AgentNextActionService();
         AgentResponse response = service.getNextAction(new AgentNextActionService.NextActionRequest(
-                controlRoot, "antigravity", "claim-contender"));
+                controlRoot, "claude", "claim-contender"));
 
         assertEquals(AgentStatus.BLOCKED, response.status());
         assertFalse(response.toJson()
@@ -210,19 +210,19 @@ class AgentNextActionServiceTest {
     @SuppressWarnings("unchecked")
     void activeReviewerIntentStillReceivesReviewAdmissionForSharedWorkGroup() throws Exception {
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
 
         AgentSessionService sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "active-owner", null, false));
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
-                controlRoot, "antigravity", "active-reviewer", null, false));
+                controlRoot, "claude", "active-reviewer", null, false));
 
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var ownerClaim = collaboration.announce(controlRoot, "codex", "active-owner",
                 "Implement source", "Publish source",
                 List.of(ResourceSelector.pathExact("src/task_tracker.py")));
-        var reviewerClaim = collaboration.announce(controlRoot, "antigravity", "active-reviewer",
+        var reviewerClaim = collaboration.announce(controlRoot, "claude", "active-reviewer",
                 "Review source", "Validate the published source",
                 List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")),
                 ownerClaim.intent()
@@ -235,7 +235,7 @@ class AgentNextActionServiceTest {
 
         AgentNextActionService service = new AgentNextActionService();
         AgentResponse response = service.getNextAction(new AgentNextActionService.NextActionRequest(
-                controlRoot, "antigravity", "active-reviewer"));
+                controlRoot, "claude", "active-reviewer"));
 
         assertEquals(AgentStatus.READY, response.status());
         assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());
@@ -347,11 +347,11 @@ class AgentNextActionServiceTest {
     @SuppressWarnings("unchecked")
     void reviewerFirstIntentTargetsThePublishedPeerSnapshot() throws Exception {
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("antigravity");
+        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
 
         AgentSessionService sessionService = new AgentSessionService();
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
-                controlRoot, "antigravity", "reviewer-first", null, false));
+                controlRoot, "claude", "reviewer-first", null, false));
         sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(
                 controlRoot, "codex", "owner-second", null, false));
 
@@ -360,7 +360,7 @@ class AgentNextActionServiceTest {
         var ownerBinding = bindings.find(location, "codex", "owner-second")
                 .orElseThrow();
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        var reviewerClaim = collaboration.announce(controlRoot, "antigravity", "reviewer-first",
+        var reviewerClaim = collaboration.announce(controlRoot, "claude", "reviewer-first",
                 "Review source", "Validate the published source",
                 List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")), null,
                 WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
@@ -394,7 +394,7 @@ class AgentNextActionServiceTest {
                 identity.nodeId(), snapshot.encode(), identity);
 
         AgentResponse response = new AgentNextActionService().getNextAction(
-                new AgentNextActionService.NextActionRequest(controlRoot, "antigravity", "reviewer-first"));
+                new AgentNextActionService.NextActionRequest(controlRoot, "claude", "reviewer-first"));
 
         assertEquals(AgentStatus.READY, response.status());
         assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());

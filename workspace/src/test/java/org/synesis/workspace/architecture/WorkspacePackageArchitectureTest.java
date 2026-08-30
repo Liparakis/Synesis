@@ -82,7 +82,6 @@ class WorkspacePackageArchitectureTest {
         assertFalse(contracts.isEmpty());
         assertTrue(contracts.stream()
                 .noneMatch(source -> source.contains("provider.codex")
-                        || source.contains("provider.antigravity")
                         || source.contains("provider.claude")));
     }
 

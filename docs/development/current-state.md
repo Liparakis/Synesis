@@ -39,8 +39,8 @@ contexts are isolated.
     - `scripts/run-synesis-guardrail-experiment.ps1`: Automated experiment runner proving PreToolUse hook denial and
       target file preservation.
     - `docs/validation/baseline-vs-synesis-experiment.md`: Experiment specification and metric results.
-    - Provider lifecycle is available through `synesis provider`; Antigravity is
-      `BETA`, Claude Code is `EXPERIMENTAL`, and provider metadata is local-only.
+    - Provider lifecycle is available through `synesis provider`; Claude Code is
+      `EXPERIMENTAL`, and provider metadata is local-only.
       Codex is listed as `EXPERIMENTAL`; its bounded `apply_patch` adapter and
       project-local lifecycle are synthetic/process verified, while trust review
       and real-agent enforcement remain unverified.
@@ -74,8 +74,8 @@ version-directory layout is migration-only and is not retained after success.
 
 ### B. Documented Limitations & Harness Enforcement Boundaries
 
-- **Real-Agent Run**: Antigravity evidence is recorded; Codex CLI `0.140.0` is
-  authenticated, but project hook trust was not established in the attempted
+- **Real-Agent Run**: Codex CLI `0.140.0` is authenticated, but project hook
+  trust was not established in the attempted
   noninteractive run, so Codex real-agent enforcement is `NOT_COMPLETED`.
 - **Harness Integration Scope**: Synesis enforces constraints at integration points that invoke its guardrail (
   `check-action` or `hook claude`).

@@ -97,7 +97,6 @@ public final class McpProtocolHandler {
     private Path activeProjectRoot;
     private boolean isSessionBound;
     private ProjectCommandProcessAnchor commandProcessAnchor;
-    private Path antigravityProjectsDir;
 
     /**
      * Creates an MCP protocol handler.
@@ -154,10 +153,6 @@ public final class McpProtocolHandler {
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         this.commandProcessIdentity = Objects.requireNonNull(processIdentity, "processIdentity");
-        String userHome = System.getProperty("user.home");
-        this.antigravityProjectsDir = (userHome != null)
-                ? Path.of(userHome, ".gemini", "config", "projects")
-                : null;
     }
 
     /**
@@ -837,16 +832,6 @@ public final class McpProtocolHandler {
     }
 
     /**
-     * Overrides the Antigravity per-project config directory used during fallback root scanning.
-     * Package-private for use in unit tests.
-     *
-     * @param dir override path, or {@code null} to disable the scan
-     */
-    void setAntigravityProjectsDir(Path dir) {
-        this.antigravityProjectsDir = dir;
-    }
-
-    /**
      * Returns the currently resolved active control project root path.
      *
      * @return active control project root path
@@ -988,7 +973,7 @@ public final class McpProtocolHandler {
             List<Path> paramCandidates = extractCandidateRoots(params);
             Path resolved = resolveProjectRootFromCandidates(paramCandidates);
 
-            // Fallback: scan Antigravity per-project configs and env vars when params yield nothing
+            // Fallback: scan supported environment variables when params yield nothing
             if (resolved == null) {
                 List<Path> fallbackCandidates = extractFallbackCandidates();
                 resolved = resolveProjectRootFromCandidates(fallbackCandidates);
@@ -1091,9 +1076,9 @@ public final class McpProtocolHandler {
     }
 
     /**
-     * Collects fallback candidate project roots from environment variables, the Antigravity
-     * per-project config directory, the explicit {@code --project} argument, and the process
-     * working directory. Only called when MCP {@code initialize} params yield no initialized root.
+     * Collects fallback candidate project roots from supported environment variables, the explicit
+     * {@code --project} argument, and the process working directory. Only called when MCP
+     * {@code initialize} params yield no initialized root.
      *
      * @return list of fallback candidate paths
      */
@@ -1109,7 +1094,6 @@ public final class McpProtocolHandler {
         String[] envKeys = {
                 "WORKSPACE_ROOT", "WORKSPACE_FOLDER", "WORKSPACE_DIR",
                 "PROJECT_ROOT", "PROJECT_DIR",
-                "GEMINI_WORKSPACE", "ANTIGRAVITY_WORKSPACE", "ANTIGRAVITY_PROJECT",
                 "VSCODE_WORKSPACE_FOLDER", "INIT_CWD", "PWD"
         };
         for (String envKey : envKeys) {
@@ -1126,38 +1110,6 @@ public final class McpProtocolHandler {
         if (initialProjectRoot != null && !candidates.contains(initialProjectRoot)) {
             candidates.add(initialProjectRoot.toAbsolutePath()
                     .normalize());
-        }
-
-        // Scan Antigravity per-project configs (~/.gemini/config/projects/*.json)
-        try {
-            if (antigravityProjectsDir != null && java.nio.file.Files.isDirectory(antigravityProjectsDir)) {
-                try (java.util.stream.Stream<Path> files = java.nio.file.Files.list(antigravityProjectsDir)) {
-                    files.filter(f -> f.getFileName()
-                                    .toString()
-                                    .endsWith(".json"))
-                            .forEach(configFile -> {
-                                try {
-                                    String json = java.nio.file.Files.readString(configFile);
-                                    int idx = 0;
-                                    while ((idx = json.indexOf("\"folderUri\"", idx)) != -1) {
-                                        int colon = json.indexOf(':', idx);
-                                        int quote1 = json.indexOf('"', colon + 1);
-                                        int quote2 = json.indexOf('"', quote1 + 1);
-                                        if (colon != -1 && quote1 != -1 && quote2 != -1) {
-                                            String uri = json.substring(quote1 + 1, quote2);
-                                            Path p = parseUriOrPath(uri);
-                                            if (p != null && !candidates.contains(p)) {
-                                                candidates.add(p);
-                                            }
-                                        }
-                                        idx = quote2 + 1;
-                                    }
-                                } catch (Exception ignored) {
-                                }
-                            });
-                }
-            }
-        } catch (Exception ignored) {
         }
 
         // Current working directory (last resort)

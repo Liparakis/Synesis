@@ -4,7 +4,7 @@
    acceptance contract, and durable task state.
 2. **SYN-014 foundation:** idempotent init v2, hidden runtime, session registry,
    worktree broker, status/doctor, and crash recovery.
-3. **SYN-015 provider proof:** Codex and Antigravity capability probes and real
+3. **SYN-015 provider proof:** Codex and Claude capability probes and real
    trusted workspace/mutation evidence; unsupported providers stay read-only.
 4. **SYN-016 autonomous lifecycle:** task intent, ownership negotiation,
    REQUEST_OWNER contract flow, owner inbox delivery, and natural responses.
@@ -12,4 +12,3 @@
    validation, retirement, dependency invalidation, and external acceptance.
 6. **Later:** remote enrollment, multi-machine coordination, Claude support,
    federation, and alternate persistence only after evidence activates them.
-

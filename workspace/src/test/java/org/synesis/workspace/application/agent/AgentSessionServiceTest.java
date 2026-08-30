@@ -93,11 +93,11 @@ class AgentSessionServiceTest {
     }
 
     @Test
-    void testCodexAndAntigravityBindingsRemainDistinct() throws Exception {
+    void testCodexAndClaudeBindingsRemainDistinct() throws Exception {
         AgentSessionService.SessionResolutionRequest codexReq = new AgentSessionService.SessionResolutionRequest(
                 tempRoot, "codex", "conn-instance-shared-id", null, false);
         AgentSessionService.SessionResolutionRequest agReq = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "antigravity", "conn-instance-shared-id", null, false);
+                tempRoot, "claude", "conn-instance-shared-id", null, false);
 
         AgentSessionService.AgentSessionContext codexCtx = sessionService.resolveSessionContext(codexReq);
         AgentSessionService.AgentSessionContext agCtx = sessionService.resolveSessionContext(agReq);
@@ -106,7 +106,7 @@ class AgentSessionServiceTest {
         assertEquals("codex",
                 codexCtx.binding()
                         .provider());
-        assertEquals("antigravity",
+        assertEquals("claude",
                 agCtx.binding()
                         .provider());
     }

@@ -54,22 +54,8 @@ public final class ProviderConfigMigrationService {
                 .normalize();
     }
 
-    private static boolean antigravityEntryCurrent(Object existing, Path launcher) {
-        if (!(existing instanceof Map<?, ?> entry)) {
-            return false;
-        }
-        if (!Objects.equals(String.valueOf(entry.get("command")), launcher.toString())) {
-            return false;
-        }
-        if (!(entry.get("args") instanceof List<?> args) || args.size() != 3) {
-            return false;
-        }
-        return "mcp".equals(args.get(0)) && "--provider".equals(args.get(1))
-                && "antigravity".equals(args.get(2));
-    }
-
     private static ProviderIntegration provider(String id) {
-        if (!"codex".equals(id) && !"antigravity".equals(id)) {
+        if (!"codex".equals(id)) {
             throw new IllegalArgumentException("unsupported provider");
         }
         return ProviderRegistry.find(id);
@@ -253,13 +239,7 @@ public final class ProviderConfigMigrationService {
      * @return provider entries
      */
     public List<Entry> inspect() {
-        List<Entry> result = new ArrayList<>();
-        for (ProviderIntegration provider : ProviderRegistry.providers()) {
-            if ("codex".equals(provider.id()) || "antigravity".equals(provider.id())) {
-                result.add(inspect(provider));
-            }
-        }
-        return List.copyOf(result);
+        return List.of(inspect(ProviderRegistry.find("codex")));
     }
 
     /**
@@ -483,59 +463,7 @@ public final class ProviderConfigMigrationService {
                 return new Entry("codex", config.toString(), safeHash(config), Outcome.MALFORMED, launcher.toString());
             }
         }
-        try {
-            if (!Files.exists(config)) {
-                return new Entry(provider.id(), config.toString(), "", Outcome.MISSING, launcher.toString());
-            }
-            if (Files.isSymbolicLink(config) || Files.readAttributes(config,
-                            java.nio.file.attribute.BasicFileAttributes.class)
-                    .isOther()
-                    || isReparsePoint(config)) {
-                return new Entry(provider.id(),
-                        config.toString(),
-                        hash(config),
-                        Outcome.REQUIRES_HUMAN_REVIEW,
-                        launcher.toString());
-            }
-            String raw = Files.readString(config);
-            Map<String, Object> root = read(raw);
-            Object serversValue = root.get("mcpServers");
-            if (!(serversValue instanceof Map<?, ?>)) {
-                return new Entry(provider.id(),
-                        config.toString(),
-                        hash(raw),
-                        Outcome.MIGRATION_REQUIRED,
-                        launcher.toString());
-            }
-            @SuppressWarnings("unchecked") Map<String, Object> servers = (Map<String, Object>) serversValue;
-            long synesis = servers.keySet()
-                    .stream()
-                    .filter(k -> k.equals("synesis") || k.startsWith("synesis-"))
-                    .count();
-            if (synesis > 1) {
-                return new Entry(provider.id(),
-                        config.toString(),
-                        hash(raw),
-                        Outcome.DUPLICATE_SYNSESIS_ENTRY,
-                        launcher.toString());
-            }
-            Object existing = servers.get("synesis");
-            Map<String, Object> desired = provider.managedMcpServer(launcher, config.getParent());
-            boolean same = "antigravity".equals(provider.id())
-                    ? antigravityEntryCurrent(existing, launcher)
-                    : equivalent(desired, existing);
-            return new Entry(provider.id(),
-                    config.toString(),
-                    hash(raw),
-                    same ? Outcome.UP_TO_DATE : Outcome.MIGRATION_REQUIRED,
-                    launcher.toString());
-        } catch (Exception failure) {
-            return new Entry(provider.id(),
-                    config.toString(),
-                    safeHash(config),
-                    Outcome.MALFORMED,
-                    launcher.toString());
-        }
+        throw new IllegalStateException("unsupported provider configuration: " + provider.id());
     }
 
     private Path planPath(Path dir, String id) {
