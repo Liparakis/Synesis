@@ -120,6 +120,8 @@ before Gradle executes them.
   lightweight `testInstallDist` staging task for the Java launcher tests while
   keeping native MCP and installer builds on release-only paths. Local Gradle
   execution remains blocked by the host loopback failure.
+- The Gradle Actions summary is disabled for the Java verification job while
+  Gradle state caching remains enabled.
 
 ## Immediate next action
 

@@ -4512,3 +4512,9 @@ not run Codex or close SYN-041.
   `Unable to establish loopback connection`; hosted rerun is required.
 - Exact next action: inspect the hosted rerun for `:cli:test` and then perform
   the six-platform bundle/archive smoke if the check is green.
+
+## 2026-08-30 — Java Actions summary removal
+
+- Disabled the Gradle Actions Job Summary for the Java verification job with
+  the supported `add-job-summary: never` setting; Gradle caching remains
+  enabled.
