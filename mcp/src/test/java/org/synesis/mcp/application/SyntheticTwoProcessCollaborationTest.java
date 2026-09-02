@@ -105,11 +105,17 @@ class SyntheticTwoProcessCollaborationTest {
         git(projectRoot, "add", ".");
         git(projectRoot, "commit", "-m", "Initial commit");
 
-        new ProjectApplicationService().init(projectRoot);
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        projectService.init(projectRoot);
+        var location = projectService.locate(projectRoot);
+        McpProviderTestSupport.install(location, "codex");
+        McpProviderTestSupport.install(location, "claude");
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
+        git(projectRoot, "add", ".");
+        commitIfNeeded(projectRoot);
 
-        var location = new ProjectApplicationService().locate(projectRoot);
+        location = projectService.locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
 
         AgentSessionService sessionService = new AgentSessionService();
@@ -148,8 +154,8 @@ class SyntheticTwoProcessCollaborationTest {
                             .worktreePath()));
         }
 
-        b1 = bindings1.getLast();
-        b2 = bindings2.getLast();
+        b1 = bindingService.find(location, "claude", "inst-req-1").orElseThrow();
+        b2 = bindingService.find(location, "codex", "inst-owner-1").orElseThrow();
 
         var identity = new IdentityBootstrap(location.profile()
                 .resolve("link")).loadOrCreate()

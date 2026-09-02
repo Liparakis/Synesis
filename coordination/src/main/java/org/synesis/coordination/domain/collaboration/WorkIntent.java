@@ -25,6 +25,7 @@ import java.util.UUID;
  * @param completionMode        declared completion contract for this intent
  * @param role                  semantic role of the intent in the work group
  * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
+ * @param knownDependencies     capability identifiers this intent explicitly requires
  */
 public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          String provider, UUID taskId, String goal,
@@ -32,7 +33,8 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          List<ResourceSelector> selectors, long version,
                          UUID workGroupId, UUID authorityLineageId,
                          Status status, CompletionMode completionMode,
-                         Role role, List<ResourceSelector> reviewTargetSelectors) {
+                         Role role, List<ResourceSelector> reviewTargetSelectors,
+                         List<String> knownDependencies) {
 
     /**
      * Constructs a singleton work-group intent when no parent group is supplied.
@@ -172,6 +174,15 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                 completionMode, role, List.of());
     }
 
+    /** Constructs an intent with the historical review-target shape. */
+    public WorkIntent(UUID intentId, UUID projectId, String participant,
+            String provider, UUID taskId, String goal, String acceptance, String baseCommit,
+            List<ResourceSelector> selectors, long version, UUID workGroupId, UUID authorityLineageId,
+            Status status, CompletionMode completionMode, Role role, List<ResourceSelector> reviewTargetSelectors) {
+        this(intentId, projectId, participant, provider, taskId, goal, acceptance, baseCommit, selectors, version,
+                workGroupId, authorityLineageId, status, completionMode, role, reviewTargetSelectors, List.of());
+    }
+
     /**
      * Validates bounds and immutable collections.
      */
@@ -202,6 +213,12 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
             throw new IllegalArgumentException("review target selector bound");
         }
         reviewTargetSelectors = List.copyOf(reviewTargetSelectors);
+        Objects.requireNonNull(knownDependencies, "knownDependencies");
+        if (knownDependencies.size() > 50 || knownDependencies.stream().anyMatch(value -> value == null || value.isBlank()
+                || value.length() > 128)) {
+            throw new IllegalArgumentException("known dependency bound");
+        }
+        knownDependencies = List.copyOf(knownDependencies);
         if (role == Role.PRODUCER && !reviewTargetSelectors.isEmpty()) {
             throw new IllegalArgumentException("producer intent cannot declare review targets");
         }

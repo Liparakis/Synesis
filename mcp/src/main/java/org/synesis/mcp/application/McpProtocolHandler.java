@@ -100,6 +100,8 @@ public final class McpProtocolHandler {
     private final ProviderManualService manualService;
     /** Project root supplied by the launcher before MCP roots are resolved. */
     private final Path initialProjectRoot;
+    /** Whether the launcher explicitly pinned the initial project root. */
+    private final boolean projectRootPinned;
     /** Stable provider ID associated with this connection's binding. */
     private final String provider;
     /** Connection incarnation used to prevent cross-connection authority reuse. */
@@ -110,6 +112,8 @@ public final class McpProtocolHandler {
     private Path activeProjectRoot;
     /** Whether initialize has successfully bound this connection to a session. */
     private boolean isSessionBound;
+    /** Fail-closed root-authority diagnostic set before provider admission. */
+    private String projectRootAuthorityFailure;
     /** Durable command anchor refreshed only after verified session activity. */
     private ProjectCommandProcessAnchor commandProcessAnchor;
 
@@ -125,7 +129,8 @@ public final class McpProtocolHandler {
             Path projectRoot,
             String provider,
             String connectionInstanceId) {
-        this(sessionService, projectRoot, provider, connectionInstanceId, captureProcessIdentity(connectionInstanceId));
+        this(sessionService, projectRoot, provider, connectionInstanceId,
+                captureProcessIdentity(connectionInstanceId), false);
     }
 
     /**
@@ -142,6 +147,34 @@ public final class McpProtocolHandler {
             String provider,
             String connectionInstanceId,
             SessionProcessIdentity processIdentity) {
+        this(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, false);
+    }
+
+    McpProtocolHandler(AgentSessionService sessionService,
+            Path projectRoot,
+            String provider,
+            String connectionInstanceId,
+            boolean projectRootPinned) {
+        this(sessionService, projectRoot, provider, connectionInstanceId,
+                captureProcessIdentity(connectionInstanceId), projectRootPinned);
+    }
+
+    /**
+     * Creates an MCP protocol handler with explicit launcher-root provenance.
+     *
+     * @param sessionService       application session service
+     * @param projectRoot          initial launcher project root path
+     * @param provider             stable provider name
+     * @param connectionInstanceId unique process connection-instance ID
+     * @param processIdentity      one immutable identity captured for this MCP process
+     * @param projectRootPinned    whether {@code projectRoot} came from an explicit launcher setting
+     */
+    public McpProtocolHandler(AgentSessionService sessionService,
+            Path projectRoot,
+            String provider,
+            String connectionInstanceId,
+            SessionProcessIdentity processIdentity,
+            boolean projectRootPinned) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
         this.readService = new WorkspaceReadService();
         this.patchService = new WorkspacePatchService();
@@ -164,6 +197,7 @@ public final class McpProtocolHandler {
         this.leasePolicy = new SessionLeasePolicy();
         this.manualService = new ProviderManualService();
         this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
+        this.projectRootPinned = projectRootPinned;
         this.activeProjectRoot = projectRoot;
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
@@ -449,6 +483,7 @@ public final class McpProtocolHandler {
                         .stream()
                         .map(McpProtocolHandler::selectorMap)
                         .toList());
+        result.put("knownDependencies", intent.knownDependencies());
         return result;
     }
 
@@ -1153,24 +1188,38 @@ public final class McpProtocolHandler {
      * @return resolved control project root, or {@code null} if none or ambiguous
      */
     public Path resolveProjectRootFromCandidates(List<Path> candidates) {
+        if (projectRootAuthorityFailure != null) {
+            return activeProjectRoot;
+        }
+        String userHome = System.getProperty("user.home");
+        Path homePath = (userHome != null && !userHome.isBlank()) ? Path.of(userHome)
+                                                                    .toAbsolutePath()
+                                                                    .normalize() : null;
+        if (projectRootPinned) {
+            McpProjectRootAuthority.Selection selection =
+                    McpProjectRootAuthority.select(initialProjectRoot, candidates, homePath);
+            if (selection.rejected()) {
+                projectRootAuthorityFailure = selection.rejection();
+                System.err.println("SYNESIS_DIAGNOSTIC=" + selection.rejection());
+                return initialProjectRoot;
+            }
+            return selection.root();
+        }
+
         if (candidates == null || candidates.isEmpty()) {
             return null;
         }
 
         List<Path> initializedRoots = new java.util.ArrayList<>();
-        String userHome = System.getProperty("user.home");
-        Path homePath = (userHome != null && !userHome.isBlank()) ? Path.of(userHome)
-                                                                    .toAbsolutePath()
-                                                                    .normalize() : null;
 
         for (Path candidate : candidates) {
             try {
                 Path normalized = candidate.toAbsolutePath()
                         .normalize();
-                String normStr = normalized.toString()
-                        .replace('\\', '/');
-                if (normStr.contains("/.synesis/local/worktrees/")) {
-                    continue; // Reject assigned worktree path as control project root
+                if (McpProjectRootAuthority.isAssignedWorkspace(normalized)) {
+                    projectRootAuthorityFailure = "PROJECT_ROOT_ASSIGNED_WORKTREE_REJECTED";
+                    System.err.println("SYNESIS_DIAGNOSTIC=" + projectRootAuthorityFailure);
+                    return activeProjectRoot;
                 }
                 if (normalized.equals(homePath)) {
                     continue; // Reject user home directory as control project root
@@ -1185,12 +1234,14 @@ public final class McpProtocolHandler {
         }
 
         if (initializedRoots.size() == 1) {
+            projectRootAuthorityFailure = null;
             return initializedRoots.getFirst();
         }
 
         if (initializedRoots.size() > 1) {
             System.err.println("SYNESIS_DIAGNOSTIC=PROJECT_ROOT_AMBIGUOUS count=" + initializedRoots.size());
-            return Path.of(System.getProperty("java.io.tmpdir"));
+            projectRootAuthorityFailure = "PROJECT_ROOT_AMBIGUOUS";
+            return activeProjectRoot;
         }
 
         return null;
@@ -1201,6 +1252,10 @@ public final class McpProtocolHandler {
     }
 
     private AgentResponse runDurableCommand(ProjectCommandService.CommandRequest request, Object requestId) {
+        if (projectRootAuthorityFailure != null) {
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY,
+                    AgentNextAction.ENSURE_SESSION, Map.of("error", projectRootAuthorityFailure));
+        }
         ProjectApplicationService.ProjectLocation location;
         WorkspaceReadinessService.ReadinessResult readiness;
         try {
@@ -1310,6 +1365,14 @@ public final class McpProtocolHandler {
         }
         name = "synesis." + name;
         Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
+
+        if (projectRootAuthorityFailure != null) {
+            AgentResponse mismatch = new AgentResponse(AgentStatus.RETRY_REQUIRED,
+                    AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION,
+                    Map.of("error", projectRootAuthorityFailure));
+            Map<String, Object> textContent = Map.of("type", "text", "text", mismatch.toJson());
+            return createResultResponse(id, Map.of("content", List.of(textContent)));
+        }
 
         AgentResponse agentResponse;
         boolean durableCommand = name.equals("synesis." + McpToolCatalog.RUN_COMMAND);
@@ -1434,7 +1497,8 @@ public final class McpProtocolHandler {
                                     taskIntent == null ? WorkIntent.CompletionMode.SNAPSHOT_REQUIRED
                                             : taskIntent.completionMode(),
                                     taskIntent == null ? WorkIntent.Role.PRODUCER : taskIntent.role(),
-                                    taskIntent == null ? List.of() : taskIntent.reviewTargetSelectors());
+                                    taskIntent == null ? List.of() : taskIntent.reviewTargetSelectors(),
+                                    taskIntent == null ? List.of() : taskIntent.knownDependencies());
                             if (!claimResult.acquired()) {
                                 Map<String, Object> details = new LinkedHashMap<>();
                                 details.put("conflicts",

@@ -178,11 +178,11 @@ final class McpSyn039NoChangeCompletionTest {
         assertEquals("completed", completed.get("status"), completed.toString());
         Map<String, Object> result = (Map<String, Object>) completed.get("result");
         assertEquals("SESSION_TERMINATED", result.get("sessionTermination"), result.toString());
+        var terminalBinding = new ProviderSessionBindingService().find(fixture.location(), "codex",
+                fixture.connection()).orElseThrow();
         assertTrue(fixture.store()
                 .collaborationProjection()
-                .isSessionTerminal(new ProviderSessionBindingService().list(fixture.location(), "codex")
-                        .getFirst()
-                        .sessionId()));
+                .isSessionTerminal(terminalBinding.sessionId()));
 
         var lease = new SessionLeaseStore().load(fixture.project, fixture.connection())
                 .orElseThrow();
@@ -445,6 +445,7 @@ final class McpSyn039NoChangeCompletionTest {
         git(project, "commit", "-m", "baseline");
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(project)
                 .location();
+        McpProviderTestSupport.install(location, "codex");
         new ProviderManualService().install("codex");
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), project, "codex", connection);
         Map<String, Object> task = new LinkedHashMap<>();

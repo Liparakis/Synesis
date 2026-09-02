@@ -65,6 +65,7 @@ final class CodexHookProcessTest {
     void generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned() throws Exception {
         Path project = Files.createTempDirectory("synesis-codex-process-");
         try {
+            git(project, "init");
             assertEquals(0, run(project, "init", "--project", project.toString()).exit());
             assertEquals(0, run(project, "project", "create", "--project", project.toString(), "--peer",
                     "sl1-" + "0".repeat(64)).exit());
@@ -79,16 +80,30 @@ final class CodexHookProcessTest {
             assertTrue(blocked.output()
                     .contains("\"permissionDecision\":\"deny\""), blocked.output());
             assertTrue(blocked.output()
-                    .contains("GIT_HEAD_UNAVAILABLE"), blocked.output());
+                    .contains("WORKSPACE_UNVERIFIED"), blocked.output());
 
             CommandResult allowed = hook(project,
                     event(project, "*** Begin Patch\n*** Add File: docs/readme.txt\n*** End Patch"));
             assertEquals(0, allowed.exit(), allowed.output());
             assertTrue(allowed.output()
-                    .contains("GIT_HEAD_UNAVAILABLE"), allowed.output());
+                    .contains("WORKSPACE_UNVERIFIED"), allowed.output());
         } finally {
             cleanup(project);
         }
+    }
+
+    private static void git(Path project, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = project.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command)
+                .redirectErrorStream(true)
+                .start();
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        String output = DistributionLauncherTest.output(process);
+        assertEquals(0, process.exitValue(), output);
     }
 
     /** Captures one hook subprocess result for protocol assertions. */

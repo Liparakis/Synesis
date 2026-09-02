@@ -1,5 +1,64 @@
 # Next Session
 
+## SYN-047 fresh minimal two-agent collaboration acceptance — 2026-09-02
+
+SYN-047 is active. Use a separate fresh project and the rebuilt local Synesis
+distribution to prove one bootstrap agent can admit exactly two independent
+Codex workers with disjoint minimal claims and lawful coordination.
+
+Do not alter provider migration, stale-session cleanup, or the preserved KogMaw
+fixture. Do not manually create identifiers, edit durable state, or drive
+worker lifecycle actions outside projected Synesis actions.
+
+SYN-046 is complete and committed as `b03b2b2`; its evidence and post-commit
+verification pass. Immediate next action: build/expose that distribution,
+create the fresh fixture, and launch only the bootstrap task.
+
+## SYN-045 explicit MCP project authority — 2026-09-02
+
+SYN-045 is complete for its bounded Codex linked-worktree admission defect.
+Keep the explicit MCP launcher `--project` control checkout authoritative;
+verify provider-reported roots belong to the same Git common directory and
+Synesis project, and retain all existing provider and assigned-worktree gates.
+Do not copy `.synesis/local`, install a second identity into app worktrees,
+globally canonicalize project discovery, edit durable state, or restart the
+blocked pair.
+
+Completion evidence is recorded in
+`docs/evidence/syn045-codex-linked-worktree-bootstrap-2026-09-02.md` and
+checkpoint `docs/agent/checkpoints/CP-0626.md`. The broader fixture remains
+incomplete because its bootstrap commit was not published before worker
+creation; preserve that evidence and do not copy or manually integrate
+branches. SYN-043 is paused while SYN-046 is active and its current
+uncommitted source remains protected.
+
+## SYN-043 dependency-admission continuation — 2026-08-31
+
+SYN-043 remains paused while SYN-046 is active. Its existing dependency path
+is preserved:
+preserve `knownDependencies` through admission/replay, project a clear
+`NEEDS_CAPABILITY` action, and let the provider issue a typed capability request
+through the existing ten-tool lifecycle. Do not infer dependencies from prose,
+copy worktrees, edit durable state, or add tools.
+
+Immediate next action: inspect the terminal outcome of the already-running
+two-Codex pair and classify the worker/task-liveness boundary. Do not manually
+drive lifecycle actions, copy worktrees, edit durable state, or start another
+pair.
+
+## SYN-044 provider/Git admission — 2026-08-31
+
+The current bounded task is to require a Git repository before user-facing
+`synesis init`, then require a durable, non-broken provider integration before
+session binding or any session-bound work. Preserve unborn-Git baseline
+bootstrap, do not auto-create provider sessions from `synesis init`, and
+preserve the uncommitted SYN-043 dependency-admission slice.
+
+Immediate next action: inspect the final diff and create a checkpoint for the
+verified fail-fast Git prerequisite and matching generated `AGENTS.md`
+provider instructions, preserving the pre-existing uncommitted SYN-043 changes
+before any selective commit.
+
 ## MAINT-003 Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
 MAINT-003 source work is complete and verified; its user-authorized packaging
@@ -1848,3 +1907,11 @@ provider/harness distribution or project-pin defect if that evidence proves
 one; do not change production lifecycle code speculatively. Keep the Git stall,
 bootstrap migration failures, and Doctor warnings separate. Do not push or
 create SYN-040.
+# SYN-043 dependency-admission continuation
+
+SYN-043 is active for the narrow fix that preserves `knownDependencies` from
+MCP task admission into durable work-intent state and the existing capability
+request continuation. Do not use Synesis MCP tools or add project control-plane
+state while working in this checkout. The immediate next action is to inspect
+the current diff, run the focused dependency-admission regression, and update
+the checkpoint with exact results.

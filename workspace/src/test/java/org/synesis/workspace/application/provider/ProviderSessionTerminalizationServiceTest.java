@@ -24,6 +24,7 @@ import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.test.ProviderTestSupport;
 
 /**
  * Verifies exact-session terminal sealing and its fail-closed blockers.
@@ -38,8 +39,10 @@ class ProviderSessionTerminalizationServiceTest {
         org.synesis.workspace.test.TestGit.run(root, "config", "user.email", "synesis-test@example.invalid");
         org.synesis.workspace.test.TestGit.run(root, "config", "user.name", "Synesis Test");
         org.synesis.workspace.test.TestGit.run(root, "commit", "-m", "baseline");
-        return new ProjectApplicationService().init(root)
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
                 .location();
+        ProviderTestSupport.install(location, "codex");
+        return location;
     }
 
     @Test
@@ -77,7 +80,10 @@ class ProviderSessionTerminalizationServiceTest {
                         .leaseState());
         assertEquals("TERMINAL",
                 bindingService.list(location, "codex")
-                        .getFirst()
+                        .stream()
+                        .filter(candidate -> candidate.sessionId().equals(binding.sessionId()))
+                        .findFirst()
+                        .orElseThrow()
                         .status());
 
         var ensure = new AgentSessionService().ensureSession(new AgentSessionService.SessionResolutionRequest(

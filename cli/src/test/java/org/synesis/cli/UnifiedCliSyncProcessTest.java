@@ -49,9 +49,25 @@ final class UnifiedCliSyncProcessTest {
 
     private static Path initProject(Path project) throws Exception {
         Files.createDirectories(project);
+        git(project, "init");
         CommandResult result = run(project, "init", "--project", project.toString());
         assertEquals(0, result.exit(), result.output());
         return project;
+    }
+
+    private static void git(Path project, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = project.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command)
+                .redirectErrorStream(true)
+                .start();
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream()
+                .readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
     }
 
     private static SyncRun sync(ProjectState state, String record) throws Exception {

@@ -178,7 +178,11 @@ public final class AgentWorkflowReducer {
                     return Map.of("tool", "request_coordination", "arguments", Map.of(
                             "kind", kind, "payload", payload));
                 }
-                return Map.of("tool", "request_coordination", "arguments", Map.of());
+                // A dependency declaration does not contain enough semantic
+                // information to manufacture a capability contract.  Leave
+                // the choice with the provider until it supplies the complete
+                // typed payload required by the strict MCP schema.
+                return null;
             }
             case ENSURE_SESSION -> {
                 return Map.of("tool", "ensure_session", "arguments", Map.of());

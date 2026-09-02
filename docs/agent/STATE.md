@@ -1,5 +1,104 @@
 # State
 
+## SYN-047 fresh minimal two-agent collaboration acceptance — 2026-09-02
+
+SYN-047 is the single active task. It is an acceptance-only exercise on a
+separate fresh project using the rebuilt local Synesis distribution. One
+bootstrap agent performs normal Git/Synesis/provider setup and starts exactly
+two workers with disjoint minimal claims.
+
+Acceptance requires provider admission, two independent worker lanes, disjoint
+claims, minimal non-overlapping changes, lawful Synesis coordination, and
+relevant verification. No protocol machinery or manual internal state changes
+are permitted.
+
+SYN-046 is complete with commit `b03b2b2`, evidence, and post-commit tests.
+SYN-043 remains paused with incomplete end-to-end evidence. The existing KogMaw
+fixture remains untouched.
+
+## Immediate next action
+
+Build and expose the committed local distribution, create a separate fresh
+fixture, and launch only the bootstrap task; preserve the existing KogMaw
+fixture.
+
+## SYN-045 explicit MCP project authority — 2026-09-02
+
+SYN-045 is complete for its bounded acceptance. The defect was reproduced with a fresh
+Codex task pair: an ordinary provider-created linked worktree shared the
+control checkout's canonical Git common directory but omitted ignored
+`.synesis/local` and `.codex/hooks.json`, so admission read the wrong root and
+returned `provider_integration_required` / `workspace_not_ready` before visible
+work.
+
+The bounded fix preserves an explicit launcher-pinned control checkout as the
+authority root and verifies any provider-reported root against that Git and
+project identity. Focused MCP/session coverage, bundle creation, installer
+repair, and a fresh installed-runtime pair admission passed. The pair reached
+two distinct Synesis worktrees and disjoint claims. The bootstrap lane then
+created commit `8225b9f` but stopped before publishing/integrating it, so the
+workers correctly found only control commit `36bc543` and stopped without
+guessing or copying files. A Luna review confirmed that the later no-argument
+recovery response was expected: a new connection cannot inherit another
+participant's intent without the original claims or an explicit continuation
+grant.
+
+SYN-046 is now the single active task for the first-project initialization
+rollback boundary. SYN-043 remains preserved and paused with its existing
+uncommitted changes. The deferred register was reviewed and no deferred item is
+activated.
+
+## Immediate next action
+
+Review the SYN-046 hunks and create a checkpoint; do not stage unrelated
+mixed-tree changes or modify the preserved KogMaw fixture.
+
+## SYN-043 explicit dependency continuation — 2026-09-01
+
+SYN-043 is paused while SYN-046 is active. Its uncommitted implementation carries
+`knownDependencies` through intent payload version 6 and MCP admission,
+preserves it during replay, exposes it in the provider-safe next-action
+projection, and filters owner actions by authority lineage. The native bootstrap
+fix makes the stable MCP launcher validate and follow the active versioned
+payload; repair refreshed the installed stable launcher and a live probe
+confirmed the child Java command line uses that active payload.
+
+The fresh two-Codex acceptance run is still incomplete. Synesis shows two
+independent ACTIVE participants with disjoint claims in
+`C:\Users\Liparakis\Desktop\FuckAssTestProject`. Worker A's isolated
+worktree contains an uncommitted domain/persistence slice; Worker B's isolated
+worktree remains at the skeleton, with no capability publication, integration,
+or terminal state observed after the bounded wait. The app task registry did
+not expose ready task IDs for this pair, so the remaining boundary is worker
+task liveness rather than a proven MCP payload mismatch.
+
+## Immediate next action
+
+Preserve the current pair and classify its terminal outcome; do not manually
+drive Synesis lifecycle actions, copy worktrees, edit durable state, or start a
+replacement pair.
+
+## SYN-044 provider/Git admission — 2026-08-31
+
+The provider admission gate is implemented and verified. `AgentSessionService`
+checks the selected provider's durable installation metadata and existing
+status before `ProviderSessionBindingService.ensure`; `WorkspaceReadinessService`
+rechecks the same predicate for subsequent workspace operations. Missing,
+unknown, obsolete, and broken integrations return the stable blocked reason
+`provider_integration_required`; Codex's existing degraded trust-review state
+remains admissible. The user-facing `synesis init` path now fails before state
+creation when the target is not a usable Git repository, while an unborn Git
+repository remains eligible for the existing initial baseline commit. Generated
+`AGENTS.md` guidance names the matching Claude Code/Codex provider install.
+Focused admission/init tests and the complete CLI suite pass; the prior full
+workspace (322 tests) and full MCP (79 tests) suites passed with the short
+Windows Gradle temp root. A post-slice aggregate workspace rerun became
+process-heavy and silent and was stopped without a failure report; it is
+incomplete evidence, not a pass claim.
+Checkpoint CP-0619 records the pre-final documentation state; the remaining
+tree includes unrelated uncommitted SYN-043 changes and must be staged
+selectively.
+
 ## MAINT-003 Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
 The repository cleanup is complete and pushed in `aee96c3` and `48e0103`.
@@ -2653,3 +2752,8 @@ a new production readiness defect. Exact next action: run the fresh unattended
 two-agent Todo acceptance with both MCP processes independently verified
 current/project-pinned, then preserve the first post-publication lifecycle
 blocker. Do not create SYN-040 or push.
+# Historical task override
+
+The earlier SYN-043 active-task override is retained as historical context.
+SYN-046 is the current single active implementation slice; preserve the
+uncommitted SYN-043 work and do not stage it as part of SYN-046.

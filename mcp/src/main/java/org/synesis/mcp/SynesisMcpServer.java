@@ -28,7 +28,9 @@ public final class SynesisMcpServer {
      */
     public static int execute(String[] arguments) {
         String provider = boundedEnvironment("SYNESIS_MCP_PROVIDER", "codex");
-        Path projectRoot = Path.of(boundedEnvironment("SYNESIS_MCP_PROJECT", "."))
+        String configuredProject = boundedEnvironmentOrNull("SYNESIS_MCP_PROJECT");
+        boolean projectRootPinned = configuredProject != null;
+        Path projectRoot = Path.of(configuredProject == null ? "." : configuredProject)
                 .toAbsolutePath()
                 .normalize();
         String connectionInstanceId = boundedEnvironment("SYNESIS_MCP_CONNECTION_INSTANCE_ID",
@@ -38,10 +40,21 @@ public final class SynesisMcpServer {
             String arg = arguments[i];
             if ("--provider".equals(arg) && i + 1 < arguments.length) {
                 provider = arguments[++i].trim();
-            } else if ("--project".equals(arg) && i + 1 < arguments.length) {
-                projectRoot = Path.of(arguments[++i])
-                        .toAbsolutePath()
-                        .normalize();
+            } else if ("--project".equals(arg)) {
+                if (i + 1 >= arguments.length || arguments[i + 1].isBlank()
+                        || arguments[i + 1].startsWith("--")) {
+                    System.err.println("SYNESIS_MCP_STARTUP_REJECTED=PROJECT_ARGUMENT_REQUIRED");
+                    return 2;
+                }
+                try {
+                    projectRoot = Path.of(arguments[++i])
+                            .toAbsolutePath()
+                            .normalize();
+                    projectRootPinned = true;
+                } catch (RuntimeException invalidProject) {
+                    System.err.println("SYNESIS_MCP_STARTUP_REJECTED=PROJECT_ARGUMENT_INVALID");
+                    return 2;
+                }
             } else if ("--connection-instance-id".equals(arg) && i + 1 < arguments.length) {
                 connectionInstanceId = arguments[++i].trim();
             }
@@ -58,7 +71,7 @@ public final class SynesisMcpServer {
         AgentSessionService sessionService = new AgentSessionService();
         SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider,
-                connectionInstanceId, processIdentity);
+                connectionInstanceId, processIdentity, projectRootPinned);
         McpStdioServer server = new McpStdioServer(handler);
 
         return server.run();
@@ -67,6 +80,11 @@ public final class SynesisMcpServer {
     private static String boundedEnvironment(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() || value.length() > 8_192 ? fallback : value.trim();
+    }
+
+    private static String boundedEnvironmentOrNull(String name) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() || value.length() > 8_192 ? null : value.trim();
     }
 
     private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {

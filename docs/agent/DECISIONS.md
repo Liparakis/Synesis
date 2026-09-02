@@ -55,4 +55,8 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0036: Strict repair ownership boundary preserving signed event log, control checkout, and provider config —
   accepted for SYN-014D.
 - ADR-0037: Versioned immutable installation with atomic pointer activation — accepted for SYN-014E.
-
+- ADR-0051: Explicit MCP project authority across linked Git worktrees — accepted for SYN-045; an initialized launcher-pinned control checkout remains authoritative, equivalent provider roots are verified by project ID and Git common directory, and mismatched or Synesis-assigned roots fail closed.
+- ADR-0052: Transactional first project initialization — accepted for SYN-046;
+  the existing managed baseline safety gate runs before new project-local
+  `.synesis` state is created, preserving clean retry behavior after a rejected
+  checkout.

@@ -3,6 +3,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,7 +13,9 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
+	"unicode"
 )
 
 const synesisMainClass = "org.synesis.cli.SynesisCli"
@@ -74,6 +79,11 @@ type runtimeLayout struct {
 func resolveLayout(executable string) (runtimeLayout, error) {
 	bin := filepath.Dir(executable)
 	root := filepath.Dir(bin)
+	activeRoot, err := resolveActivePayload(root)
+	if err != nil {
+		return runtimeLayout{}, err
+	}
+	root = activeRoot
 	if runtimeClasspath := filepath.Join(root, "runtime", "bin", javaName()); fileExists(runtimeClasspath) {
 		appJar := filepath.Join(root, "app", "synesis-cli.jar")
 		libGlob := filepath.Join(root, "app", "lib", "*")
@@ -88,6 +98,68 @@ func resolveLayout(executable string) (runtimeLayout, error) {
 		return runtimeLayout{}, fmt.Errorf("Synesis lib directory missing: %s", filepath.Join(root, "lib"))
 	}
 	return runtimeLayout{classpath: libGlob, workingDirectory: root}, nil
+}
+
+// resolveActivePayload makes the provider-facing launcher follow the same
+// verified version pointer as the stable CLI launcher. The native MCP binary
+// is intentionally kept stable so provider configuration does not change on
+// every update, but the Java runtime it starts must come from the active
+// versioned payload.
+func resolveActivePayload(root string) (string, error) {
+	pointerPath := filepath.Join(root, "current.json")
+	data, err := os.ReadFile(pointerPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return root, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read active pointer: %w", err)
+	}
+	var pointer struct {
+		SchemaVersion    int    `json:"schemaVersion"`
+		Version          string `json:"version"`
+		PayloadDirectory string `json:"payloadDirectory"`
+		ManifestHash     string `json:"manifestHash"`
+	}
+	if err := json.Unmarshal(data, &pointer); err != nil ||
+		pointer.SchemaVersion != 1 || pointer.Version == "" ||
+		!validPayloadDirectory(pointer.PayloadDirectory) || pointer.ManifestHash == "" {
+		return "", errors.New("active pointer invalid")
+	}
+	versionsRoot := filepath.Join(root, "versions")
+	payloadRoot := filepath.Join(versionsRoot, pointer.PayloadDirectory)
+	if !pathWithin(versionsRoot, payloadRoot) || !directoryExists(payloadRoot) {
+		return "", errors.New("active pointer payload invalid")
+	}
+	manifestPath := filepath.Join(payloadRoot, "manifest.json")
+	manifest, err := os.ReadFile(manifestPath)
+	if err != nil || digest(manifest) != pointer.ManifestHash {
+		return "", errors.New("active payload manifest invalid")
+	}
+	return payloadRoot, nil
+}
+
+func validPayloadDirectory(value string) bool {
+	if value == "" || len(value) > 160 || filepath.IsAbs(value) || filepath.VolumeName(value) != "" {
+		return false
+	}
+	for _, character := range value {
+		if !(unicode.IsLetter(character) || unicode.IsDigit(character) || strings.ContainsRune(".-_", character)) {
+			return false
+		}
+	}
+	return value != "." && value != ".." && !strings.Contains(value, "..")
+}
+
+func pathWithin(parent, child string) bool {
+	parent, _ = filepath.Abs(parent)
+	child, _ = filepath.Abs(child)
+	relative, err := filepath.Rel(parent, child)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
+}
+
+func digest(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 func resolveJava(bundled string) (string, error) {

@@ -93,6 +93,12 @@ public enum AgentReason {
     PROVIDER_CONFIGURATION_CONFLICT("provider_configuration_conflict"),
 
     /**
+     * The selected provider integration has not been installed and verified
+     * for this project.
+     */
+    PROVIDER_INTEGRATION_REQUIRED("provider_integration_required"),
+
+    /**
      * Response from capability owner is pending.
      */
     OWNER_RESPONSE_PENDING("owner_response_pending"),

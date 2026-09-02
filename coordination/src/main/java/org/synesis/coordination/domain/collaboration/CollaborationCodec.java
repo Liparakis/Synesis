@@ -21,6 +21,7 @@ public final class CollaborationCodec {
     private static final int MAGIC_INTENT_V3 = 0x53494e33;
     private static final int MAGIC_INTENT_V4 = 0x53494e34;
     private static final int MAGIC_INTENT_V5 = 0x53494e35;
+    private static final int MAGIC_INTENT_V6 = 0x53494e36;
     private static final int MAGIC_RELEASE = 0x53524c31;
     private static final int MAGIC_NO_CHANGE_COMPLETION = 0x534e4331;
     private static final int MAGIC_REQUEST = 0x53525131;
@@ -44,7 +45,7 @@ public final class CollaborationCodec {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC_INTENT_V5);
+            out.writeInt(MAGIC_INTENT_V6);
             uuid(out, intent.intentId());
             uuid(out, intent.projectId());
             uuid(out, intent.workGroupId());
@@ -74,6 +75,10 @@ public final class CollaborationCodec {
                         .ordinal());
                 text(out, selector.value());
             }
+            out.writeInt(intent.knownDependencies().size());
+            for (String dependency : intent.knownDependencies()) {
+                text(out, dependency);
+            }
             out.flush();
             return bytes.toByteArray();
         } catch (IOException impossible) {
@@ -93,7 +98,7 @@ public final class CollaborationCodec {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
             if (magic != MAGIC_INTENT && magic != MAGIC_INTENT_V2 && magic != MAGIC_INTENT_V3
-                    && magic != MAGIC_INTENT_V4 && magic != MAGIC_INTENT_V5) {
+                    && magic != MAGIC_INTENT_V4 && magic != MAGIC_INTENT_V5 && magic != MAGIC_INTENT_V6) {
                 throw new IOException("unsupported intent format");
             }
             UUID intentId = readUuid(in);
@@ -101,7 +106,7 @@ public final class CollaborationCodec {
             UUID workGroupId = magic == MAGIC_INTENT || magic == MAGIC_INTENT_V2 ?
                     (magic == MAGIC_INTENT_V2 ? readUuid(in) : intentId) : readUuid(in);
             UUID authorityLineageId = magic == MAGIC_INTENT_V3 || magic == MAGIC_INTENT_V4
-                    || magic == MAGIC_INTENT_V5
+                    || magic == MAGIC_INTENT_V5 || magic == MAGIC_INTENT_V6
                     ? readUuid(in) : WorkIntent.defaultAuthorityLineage(intentId);
             String participant = readText(in);
             String provider = readText(in);
@@ -123,11 +128,12 @@ public final class CollaborationCodec {
                 selectors.add(new ResourceSelector(ResourceSelector.Kind.values()[kind], readText(in)));
             }
             WorkIntent.CompletionMode completionMode = magic == MAGIC_INTENT_V4 || magic == MAGIC_INTENT_V5
+                    || magic == MAGIC_INTENT_V6
                     ? WorkIntent.CompletionMode.fromWireCode(in.readUnsignedByte())
                     : WorkIntent.CompletionMode.SNAPSHOT_REQUIRED;
             WorkIntent.Role role = WorkIntent.Role.PRODUCER;
             List<ResourceSelector> reviewTargetSelectors = List.of();
-            if (magic == MAGIC_INTENT_V5) {
+            if (magic == MAGIC_INTENT_V5 || magic == MAGIC_INTENT_V6) {
                 role = WorkIntent.Role.fromWireCode(in.readUnsignedByte());
                 int reviewTargetCount = in.readInt();
                 if (reviewTargetCount < 0 || reviewTargetCount > 128) {
@@ -142,12 +148,24 @@ public final class CollaborationCodec {
                     reviewTargetSelectors.add(new ResourceSelector(ResourceSelector.Kind.values()[kind], readText(in)));
                 }
             }
+            List<String> knownDependencies = List.of();
+            if (magic == MAGIC_INTENT_V6) {
+                int dependencyCount = in.readInt();
+                if (dependencyCount < 0 || dependencyCount > 50) {
+                    throw new IOException("known dependency bound");
+                }
+                List<String> decoded = new ArrayList<>(dependencyCount);
+                for (int index = 0; index < dependencyCount; index++) {
+                    decoded.add(readText(in));
+                }
+                knownDependencies = decoded;
+            }
             if (in.available() != 0) {
                 throw new IOException("trailing intent bytes");
             }
             return new WorkIntent(intentId, projectId, participant, provider, taskId, goal, acceptance,
                     baseCommit, selectors, version, workGroupId, authorityLineageId,
-                    WorkIntent.Status.ANNOUNCED, completionMode, role, reviewTargetSelectors);
+                    WorkIntent.Status.ANNOUNCED, completionMode, role, reviewTargetSelectors, knownDependencies);
         } catch (RuntimeException | java.io.EOFException failure) {
             throw new IOException("malformed intent", failure);
         }

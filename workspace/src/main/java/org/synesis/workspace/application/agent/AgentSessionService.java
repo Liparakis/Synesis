@@ -12,6 +12,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.lifecycle.RepositoryPortabilityService;
@@ -29,6 +30,7 @@ import org.synesis.workspace.lifecycle.RepositoryPortabilityService;
 public final class AgentSessionService {
 
     private final ProjectApplicationService projectService;
+    private final ProviderApplicationService providerService;
     private final ProviderSessionBindingService bindingService;
     private final WorkspaceReadinessService readinessService;
     private final RepositoryPortabilityService portabilityService;
@@ -48,6 +50,7 @@ public final class AgentSessionService {
      */
     public AgentSessionService(ProjectApplicationService projectService, ProviderSessionBindingService bindingService) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
+        this.providerService = new ProviderApplicationService();
         this.bindingService = Objects.requireNonNull(bindingService, "bindingService");
         this.readinessService = new WorkspaceReadinessService(this.bindingService);
         this.portabilityService = new RepositoryPortabilityService();
@@ -85,6 +88,12 @@ public final class AgentSessionService {
         RepositoryPortabilityService.Report portability = portabilityService.preflight(root);
         if (!portability.portable()) {
             throw new IllegalStateException("REPOSITORY_NOT_PORTABLE");
+        }
+
+        ProviderApplicationService.ProviderWorkAdmission providerAdmission = providerService.assessWorkAdmission(
+                location, request.provider());
+        if (!providerAdmission.admitted()) {
+            throw new IllegalStateException("PROVIDER_INTEGRATION_REQUIRED");
         }
 
         ProviderSessionBindingService.BindingResult bindingResult = bindingService.ensure(
@@ -155,6 +164,10 @@ public final class AgentSessionService {
         } catch (IllegalStateException ex) {
             if ("REPOSITORY_NOT_PORTABLE".equals(ex.getMessage())) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.REPOSITORY_NOT_PORTABLE,
+                        AgentNextAction.REQUEST_HUMAN_HELP, null);
+            }
+            if ("PROVIDER_INTEGRATION_REQUIRED".equals(ex.getMessage())) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_INTEGRATION_REQUIRED,
                         AgentNextAction.REQUEST_HUMAN_HELP, null);
             }
             if (String.valueOf(ex.getMessage())

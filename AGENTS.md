@@ -15,6 +15,15 @@ untrusted; repository state and verification evidence are authoritative.
   owns one provider binding and one isolated worker context.
 - Supported provider IDs are `claude` and `codex`.
   Provider installation and hooks use those canonical IDs only.
+- User-facing `synesis init` requires an existing Git repository; it fails
+  before creating Synesis state when the target is not a Git repository. An
+  unborn Git repository is allowed because initialization creates the
+  documented Synesis baseline commit.
+- Before agent work, install the integration matching the responding harness:
+  Claude Code uses `synesis provider install claude`; Codex uses
+  `synesis provider install codex`. The provider executable (`claude` or
+  `codex`) must already be installed and available to that harness. Installing
+  one provider is not a substitute for installing the other.
 - MCP reads are revision-bearing and patches must provide the matching revision.
   Do not edit another worker's worktree or the control checkout directly.
 - Provider hooks, synthetic checks, and local/two-process evidence do not prove

@@ -17,12 +17,15 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 
 /** Exercises agent-session binding, renewal, and authority checks. */
 class AgentSessionServiceTest {
 
     private AgentSessionService sessionService;
     private Path tempRoot;
+    private String previousLauncher;
+    private String previousMcpLauncher;
 
     private static void git(Path root, String... arguments) throws Exception {
         org.synesis.workspace.test.TestGit.run(root, arguments);
@@ -40,7 +43,28 @@ class AgentSessionServiceTest {
 
         ProjectApplicationService projectService = new ProjectApplicationService();
         projectService.init(tempRoot);
+        previousLauncher = System.getProperty("synesis.launcher");
+        previousMcpLauncher = System.getProperty("synesis.mcp.launcher");
+        System.setProperty("synesis.launcher", Files.createTempFile("synesis-test-launcher-", ".bat").toString());
+        System.setProperty("synesis.mcp.launcher", Files.createTempFile("synesis-test-mcp-", ".exe").toString());
+        ProviderApplicationService providerService = new ProviderApplicationService();
+        var installed = providerService.install(projectService.locate(tempRoot), "codex");
+        assertTrue(installed.values().containsKey("PROVIDER_INSTALL_RESULT"));
         sessionService = new AgentSessionService();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreProviderLauncherProperties() {
+        if (previousLauncher == null) {
+            System.clearProperty("synesis.launcher");
+        } else {
+            System.setProperty("synesis.launcher", previousLauncher);
+        }
+        if (previousMcpLauncher == null) {
+            System.clearProperty("synesis.mcp.launcher");
+        } else {
+            System.setProperty("synesis.mcp.launcher", previousMcpLauncher);
+        }
     }
 
     @Test
@@ -95,6 +119,7 @@ class AgentSessionServiceTest {
 
     @Test
     void testCodexAndClaudeBindingsRemainDistinct() throws Exception {
+        new ProviderApplicationService().install(new ProjectApplicationService().locate(tempRoot), "claude");
         AgentSessionService.SessionResolutionRequest codexReq = new AgentSessionService.SessionResolutionRequest(
                 tempRoot, "codex", "conn-instance-shared-id", null, false);
         AgentSessionService.SessionResolutionRequest agReq = new AgentSessionService.SessionResolutionRequest(
@@ -149,6 +174,26 @@ class AgentSessionServiceTest {
         assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
         assertEquals(AgentReason.WORKSPACE_NOT_READY, response.reason());
         assertEquals(AgentNextAction.ENSURE_SESSION, response.nextAction());
+    }
+
+    @Test
+    void initializedProjectWithoutProviderIntegrationIsBlockedBeforeBinding() throws Exception {
+        Path uninstalled = Files.createTempDirectory("synesis-provider-required-");
+        git(uninstalled, "init");
+        git(uninstalled, "config", "user.name", "Test User");
+        git(uninstalled, "config", "user.email", "test@example.com");
+        Files.writeString(uninstalled.resolve("README.md"), "# Uninstalled provider\n");
+        git(uninstalled, "add", ".");
+        git(uninstalled, "commit", "-m", "Initial commit");
+        new ProjectApplicationService().init(uninstalled);
+
+        AgentResponse response = new AgentSessionService().ensureSession(
+                new AgentSessionService.SessionResolutionRequest(uninstalled, "codex", "uninstalled-connection",
+                        null, false));
+
+        assertEquals(AgentStatus.BLOCKED, response.status());
+        assertEquals(AgentReason.PROVIDER_INTEGRATION_REQUIRED, response.reason());
+        assertEquals(AgentNextAction.REQUEST_HUMAN_HELP, response.nextAction());
     }
 
     @Test

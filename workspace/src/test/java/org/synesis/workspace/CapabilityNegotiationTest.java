@@ -29,8 +29,8 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
-import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.test.ProviderTestSupport;
 
 /** Exercises capability request validation and durable response projection. */
 class CapabilityNegotiationTest {
@@ -63,6 +63,8 @@ class CapabilityNegotiationTest {
 
         projectService = new ProjectApplicationService();
         projectService.init(projectRoot);
+        ProviderTestSupport.install(projectService.locate(projectRoot), "claude");
+        ProviderTestSupport.install(projectService.locate(projectRoot), "codex");
 
         bindingService = new ProviderSessionBindingService();
         requestService = new CapabilityRequestService();
@@ -255,8 +257,6 @@ class CapabilityNegotiationTest {
 
     @Test
     void activeIntentLineageCanAuthorizeCapabilityWithoutLegacySemanticOwnership() throws Exception {
-        new ProviderManualService().install("codex");
-        new ProviderManualService().install("claude");
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         collaboration.announce(projectRoot, "codex", "inst-2", "Implement task tracker",
                 "Publish the source implementation", List.of(ResourceSelector.pathExact("src/task_tracker.py")));

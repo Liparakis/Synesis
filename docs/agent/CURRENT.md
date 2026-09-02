@@ -1,5 +1,215 @@
 # Current Task
 
+## SYN-047 Fresh minimal two-agent collaboration acceptance — 2026-09-02
+
+- Task ID: SYN-047
+- Status: ACTIVE
+- Scope: validate the smallest useful end-to-end Codex collaboration on a
+  fresh Git project using the rebuilt local Synesis distribution. One bootstrap
+  agent performs normal setup and starts exactly two independent workers with
+  disjoint visible responsibilities; the workers join, claim, make minimal
+  non-overlapping changes, coordinate through Synesis, and complete lawfully.
+
+## Immediate next action
+
+Build and expose the committed local distribution, create a separate fresh
+fixture, and launch only the bootstrap task; preserve the existing KogMaw
+fixture.
+
+## Acceptance criteria
+
+- The fresh project is Git-backed and Synesis-initialized.
+- Codex provider admission is installed and usable.
+- One bootstrap lane and exactly two worker lanes are admitted with disjoint
+  claims.
+- Both workers make minimal non-overlapping changes and complete lawfully.
+- Relevant checks, diff validation, and deferred validation pass.
+
+## Architecture and scope
+
+This is an acceptance-only slice against the existing local workflow. No new
+protocol or service is authorized. Provider migration, stale-session cleanup,
+and the existing KogMaw workgroup remain separate.
+
+## Current evidence
+
+SYN-046 corrected the first-bootstrap partial-state boundary and committed it
+as `b03b2b2`. The existing KogMaw project remains an active, degraded fixture;
+this task must use a separate fresh project and the rebuilt distribution.
+
+## Work completed
+
+SYN-047 is promoted after the verified SYN-046 initialization correction. The
+bootstrap prompt will be minimal and will delegate the two worker lanes; this
+chat will not implement their product changes or manually drive their
+lifecycle.
+
+## Verification
+
+SYN-046 verification is recorded in its evidence and checkpoint. SYN-047
+verification is pending a fresh fixture and must use the committed distribution.
+
+## Current failures
+
+The existing KogMaw acceptance fixture has active participants, stale leases,
+and a provider-migration warning; it is preserved and must not be modified by
+SYN-047. The source checkout still contains other user-owned changes that are
+being committed only because the user explicitly requested consolidation.
+
+## SYN-045 Preserve explicit MCP project authority across provider-created Git worktrees — 2026-09-02
+
+- Task ID: SYN-045
+- Status: DONE
+- Scope: prevent provider-reported MCP roots from replacing an explicit
+  launcher-pinned control checkout unless they are verified as the same Git and
+  Synesis project, while continuing to use the control checkout for provider
+  admission and Synesis workspace allocation.
+
+## Completion record
+
+The bounded root-authority correction is complete and recorded in
+`docs/evidence/syn045-codex-linked-worktree-bootstrap-2026-09-02.md` and
+checkpoint `docs/agent/checkpoints/CP-0626.md`. Its incomplete broader
+task-tracker fixture remains preserved as evidence and is not restarted.
+
+## Acceptance criteria
+
+- A Codex app linked worktree sharing the configured repository cannot make an
+  installed control-checkout provider appear `NOT_INSTALLED`.
+- Unrelated initialized roots and Synesis-assigned worktrees remain rejected.
+- Missing provider installation at the configured control checkout remains
+  blocked.
+- Session admission still allocates distinct isolated Synesis worktrees.
+- Focused tests, diff validation, and an installed-runtime fresh-pair check pass.
+
+## Current evidence
+
+The clean `ToPouliTouTzala` control checkout reports Codex provider metadata,
+profile, hook, and a bound session. Its two Codex-created linked worktrees share
+the same canonical Git common directory but lack ignored provider/profile/hook
+state and initially reported `NOT_INSTALLED`, causing
+`provider_integration_required` before either worker could mutate repository
+files. The explicit launcher-root fix now keeps the control checkout
+authoritative and verifies equivalent provider roots by project ID and Git
+common directory. No manual state copy or bypass was performed.
+
+## Work completed
+
+Added the read-only explicit MCP root-authority resolver, fail-closed startup
+handling, latched root-mismatch guards, focused linked-worktree regressions,
+and the corresponding ADR. The installed runtime was rebuilt and repaired
+through the normal installer workflow.
+
+## Verification
+
+Focused MCP root-selection coverage (12), startup coverage (2), selected
+existing MCP coverage (7), and the focused workspace provider test (9) passed.
+The platform bundle completed and the repaired installed MCP executable
+matched the bundle SHA-256. A fresh installed-runtime pair reached distinct
+Synesis worktrees and disjoint claims.
+
+## Current failures
+
+The broader task-tracker acceptance is incomplete: the bootstrap lane committed
+`8225b9f` in its own Synesis worktree but did not publish/integrate it before
+creating the workers, so their lanes started from control commit `36bc543`.
+Both workers stopped safely without edits. A new parent connection's empty
+recovery could not restore the old claim, which Luna confirmed is expected
+fail-closed behavior. Preserve this fixture; do not copy files, manually
+integrate branches, edit durable state, or restart the pair.
+
+## SYN-043 Preserve explicit worker dependencies during MCP admission — 2026-08-31
+
+- Task ID: SYN-043
+- Status: PAUSED while SYN-046 is active
+- Scope: carry `knownDependencies` from the existing `ensure_session` task
+  admission path into durable work-intent state and expose the existing
+  capability-request continuation. Preserve backward event decoding, the
+  existing capability/contract lifecycle, isolated worktrees, and the exact
+  ten-tool MCP catalog.
+
+## Immediate next action
+
+Preserve the bounded live two-Codex result, allow only the already-running pair
+to reach a terminal state, and then classify the remaining task-launch or
+worker-liveness boundary without manually driving Synesis or starting another
+pair.
+
+## Work completed
+
+The slice adds intent payload version 6, carries `knownDependencies` through MCP
+admission and collaboration announcement, preserves the field during codec
+replay, exposes the dependency in the provider-facing projection, and routes
+capability-owner actions by authority lineage. The bootstrap slice also makes
+the stable native MCP launcher resolve and validate the active versioned
+payload, and repair refreshes its stable copy.
+
+## Verification
+
+The codec, focused workspace, MCP, and isolated bootstrap suites passed. The
+rebuilt bundle was repaired into the installed runtime, and a native MCP probe
+confirmed that the child Java process uses the active versioned payload. The
+fresh live run reached two disjoint Synesis claims with both sessions ACTIVE;
+Worker A created its domain/persistence slice, while Worker B has not yet
+created files or published a capability. The pair has not integrated or
+terminalized, so this is not a whole-acceptance pass.
+
+## Current failures
+
+The remaining evidence boundary is worker/task liveness and normal capability
+publication in the already-running pair. Do not copy worktrees, edit durable
+Synesis state, manually transition lifecycle records, or launch a replacement
+pair.
+
+## SYN-044 Require installed provider integration before any agent work — 2026-08-31
+
+- Task ID: SYN-044
+- Status: DONE
+- Scope: require a Git repository before user-facing `synesis init`, and add
+  a fail-closed provider-integration admission check before session binding
+  and to the shared readiness path, preserving unborn-Git baseline bootstrap,
+  degraded Codex semantics, and the unrelated SYN-043 dependency-admission
+  changes.
+
+## Immediate next action
+
+Preserve checkpoint CP-0622 and keep the provider/Git changes separate from
+SYN-043 implementation work.
+
+## Work completed
+
+Added a provider work-admission predicate backed by the existing provider
+status records. Session binding now fails closed before worktree allocation
+when the selected provider is missing, unknown, obsolete, or broken; the
+shared workspace readiness predicate applies the same gate after binding.
+Added the stable `provider_integration_required` response reason and focused
+coverage for initialization-only, installed/degraded, and uninstalled states.
+Updated workspace and MCP fixtures to use normal project provider installation
+instead of treating the global Synesis manual as an integration.
+
+Added a read-only Git repository preflight to the user-facing `synesis init`
+command. It fails with `GIT_REQUIRED` before creating `.synesis` state when
+Git metadata is missing or unreadable, while preserving the existing unborn
+repository baseline commit. Updated generated `AGENTS.md` guidance and the
+root contract with matching Claude Code/Codex provider installation commands.
+Recorded the boundary in ADR-0050.
+
+## Verification
+
+Using `TEMP`/`TMP=C:\\Temp\\synesis-gradle`, the focused workspace and CLI init
+tests pass after this slice, and the complete `:cli:test` suite passes. The
+prior full workspace (322 tests) and full MCP (79 tests) suites passed before
+this slice. A post-slice aggregate `:workspace:test` rerun was stopped after
+becoming process-heavy and silent; it produced no failure report before being
+stopped and is incomplete evidence, not a pass claim. `git diff --check` and
+the deferred register/checkpoint validator passed.
+
+## Current failures
+
+No SYN-044 test failures remain. The working tree still contains unrelated
+pre-existing SYN-043 implementation and documentation changes; do not stage
+or commit those as part of SYN-044.
+
 ## MAINT-003 Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
 - Task ID: MAINT-003

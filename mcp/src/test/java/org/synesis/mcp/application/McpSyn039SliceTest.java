@@ -59,7 +59,9 @@ final class McpSyn039SliceTest {
         git(project, "add", ".");
         git(project, "commit", "-m", "baseline");
 
-        new ProjectApplicationService().init(project);
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        ProjectApplicationService.ProjectLocation initialized = projectService.init(project).location();
+        McpProviderTestSupport.install(initialized, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService sessions = new AgentSessionService();
         sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
@@ -267,7 +269,9 @@ final class McpSyn039SliceTest {
         git(project, "add", ".");
         git(project, "commit", "-m", "baseline");
 
-        new ProjectApplicationService().init(project);
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        var initialized = projectService.init(project).location();
+        McpProviderTestSupport.install(initialized, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService sessions = new AgentSessionService();
         sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
@@ -505,7 +509,9 @@ final class McpSyn039SliceTest {
         git(project, "add", ".");
         git(project, "commit", "-m", "baseline");
 
-        new ProjectApplicationService().init(project);
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        var initialized = projectService.init(project).location();
+        McpProviderTestSupport.install(initialized, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService ownerSessions = new AgentSessionService();
         AgentSessionService reviewerSessions = new AgentSessionService();

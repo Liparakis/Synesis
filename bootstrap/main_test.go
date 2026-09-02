@@ -207,6 +207,13 @@ func TestLocalBundleInstallRepairAndMetadataToggle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mcpLauncher := filepath.Join(paths.bin, mcpLauncherName())
+	if data, err := os.ReadFile(mcpLauncher); err != nil || string(data) != "MCP_LAUNCHER=0.1.0\n" {
+		t.Fatalf("installed MCP launcher = %q, err=%v", string(data), err)
+	}
+	if err := os.WriteFile(mcpLauncher, []byte("stale launcher"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(paths.root, "Link"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -215,6 +222,9 @@ func TestLocalBundleInstallRepairAndMetadataToggle(t *testing.T) {
 	}
 	if err := runRepair([]string{"--bundle", archive, "--install-dir", installRoot}); err != nil {
 		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(mcpLauncher); err != nil || string(data) != "MCP_LAUNCHER=0.1.0\n" {
+		t.Fatalf("repaired MCP launcher = %q, err=%v", string(data), err)
 	}
 	if err := runUninstall([]string{"--install-dir", installRoot}); err != nil {
 		t.Fatal(err)
@@ -636,6 +646,7 @@ func writeBundleArchive(t *testing.T, root, version string) string {
 	} else {
 		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\nif [ \"$1\" = version ]; then echo SYNESIS_VERSION="+version+"; fi\nif [ \"$1\" = doctor ]; then echo DOCTOR=PASS; fi\n"), 0o755)
 	}
+	addZipFile(t, writer, filepath.ToSlash(filepath.Join("bin", mcpLauncherName())), []byte("MCP_LAUNCHER="+version+"\n"), 0o755)
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -660,6 +671,7 @@ func writeDoctorFailureBundleArchive(t *testing.T, root, version string) string 
 	} else {
 		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\nif [ \"$1\" = version ]; then echo SYNESIS_VERSION="+version+"; fi\nif [ \"$1\" = doctor ]; then exit 1; fi\n"), 0o755)
 	}
+	addZipFile(t, writer, filepath.ToSlash(filepath.Join("bin", mcpLauncherName())), []byte("MCP_LAUNCHER="+version+"\n"), 0o755)
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}

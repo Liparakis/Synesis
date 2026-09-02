@@ -34,6 +34,8 @@ public final class InitCommand implements Callable<Integer> {
     public Integer call() {
         try {
             Path root = project == null ? Path.of(".") : Path.of(project);
+            runtime.projectService()
+                    .requireGitRepository(root);
             ProjectApplicationService.InitResult result = runtime.projectService()
                     .init(root);
             var location = result.location();
@@ -62,6 +64,8 @@ public final class InitCommand implements Callable<Integer> {
         } catch (ProjectApplicationService.ProjectApplicationException failure) {
             runtime.terminal()
                     .stdout("INIT_RESULT=CONFLICT");
+            runtime.terminal()
+                    .stderr("ERROR_CODE=" + failure.code());
             runtime.terminal()
                     .stderr("REASON=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;

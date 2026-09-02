@@ -307,7 +307,7 @@ func restoreBundlePermissions(bundle string) error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	for _, relative := range []string{"bin/synesis", "bin/synesis-installer", "runtime/bin/java"} {
+	for _, relative := range []string{"bin/synesis", "bin/synesis-installer", "bin/synesis-mcp", "runtime/bin/java"} {
 		if err := os.Chmod(filepath.Join(bundle, relative), 0o755); err != nil {
 			return err
 		}
@@ -1219,6 +1219,9 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 	if err != nil {
 		return err
 	}
+	if err := syncStableMcpLauncher(paths, target); err != nil {
+		return err
+	}
 	if err := writeStableLauncher(paths); err != nil {
 		return err
 	}
@@ -1401,6 +1404,26 @@ exit $LASTEXITCODE
 		return err
 	}
 	return os.Chmod(paths.launcher, 0o755)
+}
+
+// syncStableMcpLauncher keeps the provider registration stable while updating
+// its native launcher to the version-aware implementation shipped by the
+// active bundle. The launcher itself follows current.json at process start,
+// so it can safely select the immutable payload activated below.
+func syncStableMcpLauncher(paths installPaths, payload string) error {
+	source := filepath.Join(payload, "bin", mcpLauncherName())
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("read bundled MCP launcher: %w", err)
+	}
+	target := filepath.Join(paths.bin, mcpLauncherName())
+	if err := atomicWrite(target, data); err != nil {
+		return err
+	}
+	if runtime.GOOS != "windows" {
+		return os.Chmod(target, 0o755)
+	}
+	return nil
 }
 
 func rollbackVersioned(paths installPaths) error {
@@ -1796,6 +1819,10 @@ func validateBundle(bundle string) error {
 	if info, err := os.Stat(launcher); err != nil || !info.Mode().IsRegular() {
 		return errors.New("bundle missing stable launcher")
 	}
+	mcpLauncher := filepath.Join(bundle, "bin", mcpLauncherName())
+	if info, err := os.Stat(mcpLauncher); err != nil || !info.Mode().IsRegular() {
+		return errors.New("bundle missing MCP launcher")
+	}
 	return runBundleVersion(bundle)
 }
 
@@ -1804,6 +1831,13 @@ func launcherName() string {
 		return "synesis.cmd"
 	}
 	return "synesis"
+}
+
+func mcpLauncherName() string {
+	if runtime.GOOS == "windows" {
+		return "synesis-mcp.exe"
+	}
+	return "synesis-mcp"
 }
 
 func runBundleVersion(bundle string) error {

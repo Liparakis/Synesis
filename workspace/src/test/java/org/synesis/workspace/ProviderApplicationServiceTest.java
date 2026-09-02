@@ -14,9 +14,11 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
+import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderIntegration;
@@ -279,6 +281,47 @@ final class ProviderApplicationServiceTest {
         } finally {
             restoreProperty("synesis.launcher", previousLauncher);
             restoreProperty("synesis.mcp.launcher", previousMcp);
+        }
+    }
+
+    @Test
+    void workAdmissionRejectsInitializationOnlyMcpConfiguration() throws Exception {
+        Path root = Files.createTempDirectory("provider-admission-");
+        git(root, "init");
+        git(root, "config", "user.name", "Test User");
+        git(root, "config", "user.email", "test@example.com");
+        Files.writeString(root.resolve("README.md"), "# Admission\n");
+        git(root, "add", ".");
+        git(root, "commit", "-m", "Initial commit");
+
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        var location = projectService.init(root).location();
+        ProviderApplicationService service = new ProviderApplicationService();
+
+        var beforeInstall = service.assessWorkAdmission(location, "codex");
+        assertFalse(beforeInstall.admitted());
+        assertEquals("NOT_INSTALLED", beforeInstall.status());
+        assertEquals(AgentStatus.BLOCKED,
+                new AgentSessionService().ensureSession(new AgentSessionService.SessionResolutionRequest(root,
+                        "codex", "uninstalled", null, false)).status());
+
+        Path launcher = Files.createTempFile("synesis-admission-launcher-", ".bat");
+        String previous = System.getProperty("synesis.launcher");
+        System.setProperty("synesis.launcher", launcher.toString());
+        try {
+            service.install(location, "codex");
+            assertTrue(service.assessWorkAdmission(location, "codex").admitted());
+            var installedReadiness = new WorkspaceReadinessService().assess(location, "codex", "missing-connection");
+            assertEquals(AgentReason.SESSION_NOT_READY, installedReadiness.response().reason());
+            service.uninstall(location, "codex");
+            var removedReadiness = new WorkspaceReadinessService().assess(location, "codex", "missing-connection");
+            assertEquals(AgentReason.PROVIDER_INTEGRATION_REQUIRED, removedReadiness.response().reason());
+        } finally {
+            if (previous == null) {
+                System.clearProperty("synesis.launcher");
+            } else {
+                System.setProperty("synesis.launcher", previous);
+            }
         }
     }
 

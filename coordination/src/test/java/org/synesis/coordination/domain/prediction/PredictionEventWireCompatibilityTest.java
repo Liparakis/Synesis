@@ -46,4 +46,19 @@ class PredictionEventWireCompatibilityTest {
                 PredictionEvent.decode(event.encoded())
                         .type());
     }
+
+    @Test
+    void knownDependenciesSurviveIntentEncodingAndReplay() throws Exception {
+        UUID project = UUID.randomUUID();
+        WorkIntent intent = new WorkIntent(UUID.randomUUID(), project, "agt-requester", "codex", UUID.randomUUID(),
+                "build service", "service tests", "base", List.of(ResourceSelector.pathExact("src/service")), 1,
+                UUID.randomUUID(), UUID.randomUUID(), WorkIntent.Status.ANNOUNCED,
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(),
+                List.of("domain.persistence"));
+
+        WorkIntent replayed = CollaborationCodec.decodeIntent(CollaborationCodec.encodeIntent(intent));
+
+        assertEquals(List.of("domain.persistence"), replayed.knownDependencies());
+        assertEquals(intent.intentId(), replayed.intentId());
+    }
 }

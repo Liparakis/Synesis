@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -26,9 +27,11 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.test.ProviderTestSupport;
 
 /** Exercises durable next-action projection and exact lifecycle guidance. */
 class AgentNextActionServiceTest {
@@ -52,7 +55,10 @@ class AgentNextActionServiceTest {
         git(controlRoot, "add", ".");
         git(controlRoot, "commit", "-m", "Initial commit");
 
-        new ProjectApplicationService().init(controlRoot);
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(controlRoot)
+                .location();
+        ProviderTestSupport.install(location, "codex");
+        ProviderTestSupport.install(location, "claude");
     }
 
     private void prepareSessionAndTrust(String provider, String connId) throws Exception {
@@ -82,6 +88,113 @@ class AgentNextActionServiceTest {
         String json = response.toJson();
         assertTrue(json.contains("\"pending\":0"));
         assertFalse(json.contains(controlRoot.toString()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void explicitDependencyProjectsCapabilityGuidanceWithoutEmptyRequest() throws Exception {
+        prepareSessionAndTrust("codex", "dependency-requester");
+        prepareSessionAndTrust("claude", "dependency-owner");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requester = collaboration.announce(controlRoot, "codex", "dependency-requester",
+                "Implement task-tracker integration", "Use the domain capability when available",
+                List.of(ResourceSelector.pathExact("src/service")), null,
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(),
+                List.of("tasktracker.domain"));
+        collaboration.announce(controlRoot, "claude", "dependency-owner",
+                "Implement the task-tracker domain", "Publish the domain capability",
+                List.of(ResourceSelector.pathExact("src/domain")), requester.intent().workGroupId());
+
+        AgentResponse response = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "dependency-requester"));
+
+        assertEquals(AgentStatus.NEEDS_CAPABILITY, response.status(), response.toJson());
+        assertEquals(AgentReason.OWNER_REQUIRED, response.reason());
+        assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
+        Map<String, Object> result = (Map<String, Object>) response.result();
+        assertEquals("tasktracker.domain", result.get("capability"));
+        assertEquals(List.of("inputs", "output", "requiredBehavior", "acceptanceTests"),
+                result.get("requiredFields"));
+        Map<String, Object> currentIntent = (Map<String, Object>) result.get("currentIntent");
+        assertEquals(List.of("tasktracker.domain"), currentIntent.get("knownDependencies"));
+
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        assertEquals("REVISE_SCOPE", workflow.get("type"));
+        assertFalse(workflow.containsKey("recommendedTool"), response.toJson());
+        assertFalse(workflow.containsKey("arguments"), response.toJson());
+    }
+
+    @Test
+    void requesterDoesNotReceiveItsOwnCapabilityRequestAsOwnerAction() throws Exception {
+        prepareSessionAndTrust("codex", "requester-owner-filter");
+        prepareSessionAndTrust("claude", "requester-owner-filter-owner");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requester = collaboration.announce(controlRoot, "codex", "requester-owner-filter",
+                "Implement task-tracker service", "Use the domain capability",
+                List.of(ResourceSelector.pathExact("src/service")), null,
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(),
+                List.of("tasktracker.domain"));
+        collaboration.announce(controlRoot, "claude", "requester-owner-filter-owner",
+                "Implement task-tracker domain", "Provide the domain capability",
+                List.of(ResourceSelector.pathExact("src/domain")), requester.intent().workGroupId(),
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+
+        CapabilityContract contract = new CapabilityContract(
+                "Task title and description",
+                "Task and repository contract",
+                List.of("Create TODO tasks", "Enforce valid status transitions"),
+                List.of("Invalid input is rejected"));
+        AgentResponse requestResponse = new CapabilityRequestService().describeRequiredCapability(
+                new CapabilityRequestService.DescribeCapabilityRequest(
+                        controlRoot, "codex", "requester-owner-filter", "tasktracker.domain", contract, null, null));
+        assertEquals(AgentStatus.WAITING, requestResponse.status(), requestResponse.toJson());
+
+        AgentResponse requesterNext = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "requester-owner-filter"));
+        assertEquals(AgentNextAction.WAIT, requesterNext.nextAction(), requesterNext.toJson());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, requesterNext.reason());
+
+        AgentResponse ownerNext = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "claude", "requester-owner-filter-owner"));
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNext.nextAction(), ownerNext.toJson());
+    }
+
+    @Test
+    void sameProviderRequesterDoesNotReceiveCapabilityOwnerAction() throws Exception {
+        prepareSessionAndTrust("codex", "same-provider-requester");
+        prepareSessionAndTrust("codex", "same-provider-owner");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requester = collaboration.announce(controlRoot, "codex", "same-provider-requester",
+                "Implement task-tracker service", "Use the domain capability",
+                List.of(ResourceSelector.pathExact("src/service")), null,
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(),
+                List.of("tasktracker.domain"));
+        collaboration.announce(controlRoot, "codex", "same-provider-owner",
+                "Implement task-tracker domain", "Provide the domain capability",
+                List.of(ResourceSelector.pathExact("src/domain")), requester.intent().workGroupId(),
+                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+
+        CapabilityContract contract = new CapabilityContract(
+                "Task title and description",
+                "Task and repository contract",
+                List.of("Create TODO tasks", "Enforce valid status transitions"),
+                List.of("Invalid input is rejected"));
+        AgentResponse requestResponse = new CapabilityRequestService().describeRequiredCapability(
+                new CapabilityRequestService.DescribeCapabilityRequest(
+                        controlRoot, "codex", "same-provider-requester", "tasktracker.domain", contract, null, null));
+        assertEquals(AgentStatus.WAITING, requestResponse.status(), requestResponse.toJson());
+
+        AgentResponse requesterNext = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "same-provider-requester"));
+        assertEquals(AgentNextAction.WAIT, requesterNext.nextAction(), requesterNext.toJson());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, requesterNext.reason());
+
+        AgentResponse ownerNext = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "same-provider-owner"));
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNext.nextAction(), ownerNext.toJson());
     }
 
     @Test

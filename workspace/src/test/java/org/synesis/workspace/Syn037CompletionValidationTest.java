@@ -21,11 +21,11 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.agent.AgentTaskCompletionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectCommandService;
-import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 import org.synesis.workspace.test.PortableTestCommand;
+import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
 
 /**
@@ -114,7 +114,7 @@ class Syn037CompletionValidationTest {
         git(root, "add", ".synesis/project.json");
         git(root, "commit", "-m", "configure validation");
         RepositoryPrivateStateService.ensure(root);
-        new ProviderManualService().install("codex");
+        ProviderTestSupport.install(projectService.locate(root), "codex");
 
         AgentSessionService sessions = new AgentSessionService();
         AgentResponse session = sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(

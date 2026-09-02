@@ -27,8 +27,8 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
-import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
 
 /**
@@ -41,7 +41,7 @@ final class ReviewAdmissionOrderIndependenceTest {
      */
     private static ReviewRun run(Path project, boolean reviewerFirst) throws Exception {
         initializeProject(project);
-        installProviders();
+        installProviders(project);
         establishSessions(project, reviewerFirst ? "reviewer-first" : "producer-first");
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         String producerConnection = reviewerFirst ? "reviewer-first-producer" : "producer-first-producer";
@@ -165,9 +165,10 @@ final class ReviewAdmissionOrderIndependenceTest {
     /**
      * Installs the provider adapters required by the isolated fixture.
      */
-    private static void installProviders() throws Exception {
-        new ProviderManualService().install("codex");
-        new ProviderManualService().install("claude");
+    private static void installProviders(Path project) throws Exception {
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(project);
+        ProviderTestSupport.install(location, "codex");
+        ProviderTestSupport.install(location, "claude");
     }
 
     /**
@@ -249,7 +250,7 @@ final class ReviewAdmissionOrderIndependenceTest {
     @Test
     void reviewerFirstWaitsForProducerBeforeNoChangeCompletion(@TempDir Path temp) throws Exception {
         Path project = initializeProject(temp.resolve("reviewer-before-producer"));
-        installProviders();
+        installProviders(project);
         AgentSessionServiceFixture sessions = establishSessions(project, "reviewer-before-producer");
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         ClaimResult reviewer = collaboration.announce(project, "claude", "reviewer-before-producer-reviewer",
@@ -341,7 +342,7 @@ final class ReviewAdmissionOrderIndependenceTest {
     @SuppressWarnings("unchecked")
     void reviewerTargetSelectorDoesNotChooseFirstUnrelatedProducer(@TempDir Path temp) throws Exception {
         Path project = initializeProject(temp.resolve("three-participant"));
-        installProviders();
+        installProviders(project);
         establishSessions(project, "three");
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
 

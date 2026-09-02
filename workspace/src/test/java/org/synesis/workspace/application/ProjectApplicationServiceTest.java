@@ -1,6 +1,7 @@
 package org.synesis.workspace.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,6 +36,9 @@ final class ProjectApplicationServiceTest {
         String agents = Files.readString(root.resolve("AGENTS.md"));
         assertTrue(agents.startsWith("<!-- SYNESIS-BEGIN -->"));
         assertTrue(agents.contains("This repository uses Synesis."));
+        assertTrue(agents.contains("synesis provider install claude"));
+        assertTrue(agents.contains("synesis provider install codex"));
+        assertTrue(agents.contains("The matching `claude` or `codex` executable must already be installed"));
         assertTrue(agents.contains("use Synesis MCP for all reads, writes, and commands"));
         assertTrue(agents.contains("Native provider hooks are optional"));
         assertTrue(agents.contains(
@@ -118,6 +122,29 @@ final class ProjectApplicationServiceTest {
                 assertThrows(ProjectApplicationService.ProjectApplicationException.class,
                         () -> service.locate(malformed));
         assertEquals("MALFORMED", malformedFailure.code());
+    }
+
+    @Test
+    void requireGitRepositoryRejectsNonGitDirectoryWithoutCreatingState() throws Exception {
+        Path root = Files.createTempDirectory("synesis-git-required-");
+        ProjectApplicationService service = new ProjectApplicationService();
+
+        ProjectApplicationService.ProjectApplicationException failure = assertThrows(
+                ProjectApplicationService.ProjectApplicationException.class,
+                () -> service.requireGitRepository(root));
+
+        assertEquals("GIT_REQUIRED", failure.code());
+        assertFalse(Files.exists(root.resolve(".synesis")));
+    }
+
+    @Test
+    void requireGitRepositoryAcceptsUnbornRepositoryForBaselineBootstrap() throws Exception {
+        Path root = Files.createTempDirectory("synesis-unborn-preflight-");
+        git(root, "init");
+
+        assertDoesNotThrow(() -> new ProjectApplicationService().requireGitRepository(root));
+        assertEquals("GIT_INITIAL_COMMIT_CREATED",
+                new ProjectApplicationService().init(root).gitHeadStatus());
     }
 
     @Test

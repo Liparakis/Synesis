@@ -32,6 +32,7 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
 import org.synesis.workspace.test.PortableTestCommand;
+import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
 
 /**
@@ -74,7 +75,7 @@ final class MultiChatLogicalWorkspaceTest {
         git(root, "add", ".");
         git(root, "commit", "-m", "base");
 
-        new ProviderManualService().install("codex");
+        ProviderTestSupport.install(location, "codex");
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         bindings.ensure(location, "codex", "terminal-owner");
         bindings.ensure(location, "codex", "terminal-late");
@@ -129,7 +130,7 @@ final class MultiChatLogicalWorkspaceTest {
         git(root, "add", ".");
         git(root, "commit", "-m", "base");
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
-        new ProviderManualService().install("codex");
+        ProviderTestSupport.install(location, "codex");
         var laneA = bindings.ensure(location, "codex", "chat-a")
                 .binding();
         var laneB = bindings.ensure(location, "codex", "chat-b")
@@ -248,7 +249,7 @@ final class MultiChatLogicalWorkspaceTest {
         Files.writeString(root.resolve("src/conflict.py"), "control-base\n");
         git(root, "add", ".");
         git(root, "commit", "-m", "base");
-        new ProviderManualService().install("codex");
+        ProviderTestSupport.install(location, "codex");
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         var sourceBinding = bindings.ensure(location, "codex", "repair-source")
                 .binding();

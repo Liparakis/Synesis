@@ -52,7 +52,8 @@ public final class ProjectApplicationService {
 
             - Use Synesis tools for project reads, file changes, and commands.
             - One persistent MCP connection owns one provider binding and one isolated worker context.
-            - After synesis.ensure_session succeeds, keep the provider in the current project directory and use Synesis MCP for all reads, writes, and commands. Synesis applies those operations internally in the assigned worktree; do not switch branches, cd, or edit another worker's worktree manually. Native provider hooks are optional and may be unavailable in desktop harnesses, so never assume a native mutation was routed. If a native tool is used and Synesis reports workspace_mismatch, stop native mutations and verify state through synesis.read_file.
+            - After synesis init succeeds, install the integration matching the responding harness before starting work: Claude Code uses `synesis provider install claude`, and Codex uses `synesis provider install codex`. The matching `claude` or `codex` executable must already be installed and available to that harness; installing one provider is not a substitute for the other.
+            - After synesis.ensure_session succeeds, keep the provider in the current project directory and use Synesis MCP for all reads, writes, and commands. Synesis applies those operations internally in the assigned worktree; do not switch branches, cd, or edit another worker's worktree manually. Native provider hooks are optional and may be unavailable in desktop harnesses, but they do not replace the required Synesis integration, so never assume a native mutation was routed. If a native tool is used and Synesis reports workspace_mismatch, stop native mutations and verify state through synesis.read_file.
             - Reads carry revisions; provide the matching revision when applying a patch.
             - Do not modify the control checkout or another worker's files directly.
             - When Synesis reports an identity, ownership, freshness, or workspace failure, stop mutation and inspect read-only state.
@@ -401,6 +402,33 @@ public final class ProjectApplicationService {
                     "Could not maintain repository-private Synesis exclusions", failure);
         }
         return location;
+    }
+
+    /**
+     * Verifies the explicit project directory is a usable Git repository.
+     *
+     * <p>An unborn repository is valid here: {@link #init(Path)} can create
+     * Synesis's documented initial baseline commit for it. This method only
+     * rejects a missing or invalid repository, and performs no project or Git
+     * mutation.</p>
+     *
+     * @param projectRoot explicit project directory
+     * @throws ProjectApplicationException with code {@code GIT_REQUIRED} when
+     *         the directory is not a usable Git repository
+     */
+    public void requireGitRepository(Path projectRoot) throws ProjectApplicationException {
+        Path root = directory(projectRoot, "project directory");
+        if (!Files.exists(root.resolve(".git"))) {
+            throw new ProjectApplicationException("GIT_REQUIRED",
+                    "synesis init requires a Git repository; run git init before retrying");
+        }
+        try {
+            git(root, "rev-parse", "--git-dir");
+        } catch (Exception failure) {
+            throw new ProjectApplicationException("GIT_REQUIRED",
+                    "synesis init requires a usable Git repository; Git metadata could not be read",
+                    failure);
+        }
     }
 
     /**

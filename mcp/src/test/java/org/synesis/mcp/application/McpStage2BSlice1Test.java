@@ -60,7 +60,11 @@ class McpStage2BSlice1Test {
         git(projectRoot, "add", ".");
         git(projectRoot, "commit", "-m", "Initial commit");
 
-        new ProjectApplicationService().init(projectRoot);
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        projectService.init(projectRoot);
+        var location = projectService.locate(projectRoot);
+        McpProviderTestSupport.install(location, "codex");
+        McpProviderTestSupport.install(location, "claude");
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
 
@@ -71,7 +75,7 @@ class McpStage2BSlice1Test {
                 null,
                 false));
 
-        var location = new ProjectApplicationService().locate(projectRoot);
+        location = projectService.locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
         var bindings = bindingService.list(location, "claude");
         if (!bindings.isEmpty() && bindings.getLast()

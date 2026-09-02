@@ -839,6 +839,31 @@ public final class ProviderApplicationService {
         return result;
     }
 
+    /**
+     * Evaluates whether a provider integration may admit agent work.
+     *
+     * <p>A project-local MCP entry alone is not an installation: initialization
+     * may create that entry before the provider hook and metadata exist. Codex's
+     * documented {@code DEGRADED} trust-review state remains admissible, while
+     * missing metadata or any broken/unknown status fails closed.</p>
+     *
+     * @param location initialized project location
+     * @param id       canonical provider identifier
+     * @return bounded provider work-admission result
+     */
+    public ProviderWorkAdmission assessWorkAdmission(ProjectApplicationService.ProjectLocation location,
+            String id) {
+        Objects.requireNonNull(location, "location");
+        ProviderResult result = status(location, id);
+        String state = result.values()
+                .get("PROVIDER_STATUS");
+        boolean metadataPresent = "true".equalsIgnoreCase(result.values()
+                .get("METADATA_PRESENT"));
+        boolean admissibleState = "HEALTHY".equals(state) || "DEGRADED".equals(state);
+        return new ProviderWorkAdmission(metadataPresent && admissibleState,
+                state == null ? "UNKNOWN" : state);
+    }
+
     private ProviderResult statusInternal(ProjectApplicationService.ProjectLocation location, String id) {
         ProviderIntegration provider = provider(id);
         if (provider == null) {
@@ -1167,6 +1192,22 @@ public final class ProviderApplicationService {
      */
     public record ProviderRow(String id, ProviderSupportLevel supportLevel, String status) {
 
+    }
+
+    /**
+     * Result of the provider integration gate used before session admission.
+     *
+     * @param admitted whether agent work may be admitted
+     * @param status   current provider status classification
+     */
+    public record ProviderWorkAdmission(boolean admitted, String status) {
+
+        /**
+         * Validates the bounded status value.
+         */
+        public ProviderWorkAdmission {
+            Objects.requireNonNull(status, "status");
+        }
     }
 
     /**

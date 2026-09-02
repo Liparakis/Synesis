@@ -116,14 +116,15 @@ final class McpSyn039RejectedContinuationTest {
         git(project, "add", ".");
         git(project, "commit", "-m", "baseline");
 
-        new ProjectApplicationService().init(project);
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        ProjectApplicationService.ProjectLocation location = projectService.init(project).location();
+        McpProviderTestSupport.install(location, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService sessions = new AgentSessionService();
         sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
                 project, "codex", "syn039-owner", null, false));
         sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
                 project, "codex", "syn039-reviewer", null, false));
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(project);
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         for (var binding : bindings.list(location, "codex")) {
             if (binding.worktreePath() != null) {

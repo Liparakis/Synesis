@@ -1181,6 +1181,7 @@ public final class AgentNextActionService {
                         .stream()
                         .map(AgentNextActionService::selectorMap)
                         .toList());
+        map.put("knownDependencies", intent.knownDependencies());
         return map;
     }
 
@@ -1589,8 +1590,17 @@ public final class AgentNextActionService {
                             AgentNextAction.ENSURE_SESSION, claimRequired);
                 }
 
-                List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerPending = capProj.findPendingForOwner(
-                        callerNodeId);
+                boolean coordinationActivated = store.collaborationProjection().activated();
+                var callerIntent = store.collaborationProjection().activeIntents().stream()
+                        .filter(intent -> intent.participant().equals(callerParticipant))
+                        .findFirst();
+                List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerPending = capProj
+                        .findPendingForOwner(callerNodeId).stream()
+                        .filter(candidate -> !coordinationActivated
+                                || callerIntent.map(intent -> intent.authorityLineageId()
+                                        .equals(candidate.authorityLineageId()))
+                                        .orElse(false))
+                        .toList();
 
                 // Slice 3: Check active integration projection states
                 var taskCompProj = store.taskCompletionProjection();
@@ -1620,6 +1630,25 @@ public final class AgentNextActionService {
                                 AgentReason.INTEGRATION_PENDING,
                                 AgentNextAction.WAIT,
                                 result);
+                    }
+                }
+                if (callerIntent.isPresent() && !callerIntent.get().knownDependencies().isEmpty()) {
+                    var requestedCapabilities = capProj.findAllForRequester(callerNodeId).stream()
+                            .map(org.synesis.coordination.domain.capability.CapabilityRequestRecord::capability)
+                            .collect(java.util.stream.Collectors.toSet());
+                    String missingDependency = callerIntent.get().knownDependencies().stream()
+                            .filter(dependency -> !requestedCapabilities.contains(dependency))
+                            .findFirst().orElse(null);
+                    if (missingDependency != null) {
+                        Map<String, Object> result = new LinkedHashMap<>();
+                        result.put("capability", missingDependency);
+                        result.put("requiredFields", List.of("inputs", "output", "requiredBehavior", "acceptanceTests"));
+                        result.put("pending", callerIntent.get().knownDependencies().size());
+                        result.put("currentIntent", intentMap(callerIntent.get()));
+                        result.put("knownDependencies", callerIntent.get().knownDependencies());
+                        result.put("coordinationKind", "capability_request");
+                        return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED,
+                                AgentNextAction.REQUEST_COORDINATION, result);
                     }
                 }
                 if (!ownerPending.isEmpty()) {
@@ -1652,8 +1681,13 @@ public final class AgentNextActionService {
                 }
 
                 // Slice 2: owner must respond to a validation revision
-                List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> validationRevList = capProj.findValidationRevisionForOwner(
-                        callerNodeId);
+                List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> validationRevList = capProj
+                        .findValidationRevisionForOwner(callerNodeId).stream()
+                        .filter(candidate -> !coordinationActivated
+                                || callerIntent.map(intent -> intent.authorityLineageId()
+                                        .equals(candidate.authorityLineageId()))
+                                        .orElse(false))
+                        .toList();
                 if (!validationRevList.isEmpty()) {
                     org.synesis.coordination.domain.capability.CapabilityRequestRecord topReq = validationRevList.getFirst();
                     Map<String, Object> result = new LinkedHashMap<>();

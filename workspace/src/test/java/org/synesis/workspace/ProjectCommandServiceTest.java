@@ -17,6 +17,7 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.project.ProjectCommandService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.test.PortableTestCommand;
+import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
 
 /**
@@ -40,7 +41,9 @@ class ProjectCommandServiceTest {
         Files.writeString(controlRoot.resolve("src/Product.java"), "public class Product {}\n");
         git(controlRoot, "add", ".");
         git(controlRoot, "commit", "-m", "Initial commit");
-        new ProjectApplicationService().init(controlRoot);
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(controlRoot)
+                .location();
+        ProviderTestSupport.install(location, "codex");
     }
 
     private void ensureSession(String connection) {

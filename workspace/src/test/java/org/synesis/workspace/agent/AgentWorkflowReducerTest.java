@@ -133,4 +133,27 @@ final class AgentWorkflowReducerTest {
         assertFalse(workflow.containsKey("arguments"));
         assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
     }
+
+    /**
+     * A missing capability exposes the contract fields without inventing an
+     * executable request whose payload is incomplete.
+     */
+    @Test
+    void missingCapabilityDoesNotRecommendUnshapedRequest() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+                Path.of("."), "codex", "connection-1");
+        AgentResponse missing = reducer.decorate(request,
+                new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED,
+                        AgentNextAction.REQUEST_COORDINATION,
+                        Map.of("capability", "tasktracker.domain",
+                                "requiredFields", java.util.List.of("inputs", "output",
+                                        "requiredBehavior", "acceptanceTests"))));
+
+        Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) missing.result()).get("workflow");
+        assertEquals("REVISE_SCOPE", workflow.get("type"));
+        assertFalse(workflow.containsKey("recommendedTool"));
+        assertFalse(workflow.containsKey("arguments"));
+        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("request_coordination"));
+    }
 }

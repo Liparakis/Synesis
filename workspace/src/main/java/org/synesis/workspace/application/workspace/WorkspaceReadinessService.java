@@ -7,6 +7,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 /**
@@ -22,6 +23,7 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 public final class WorkspaceReadinessService {
 
     private final ProviderSessionBindingService bindingService;
+    private final ProviderApplicationService providerService;
 
     /**
      * Creates a readiness service with the default binding service.
@@ -37,6 +39,7 @@ public final class WorkspaceReadinessService {
      */
     public WorkspaceReadinessService(ProviderSessionBindingService bindingService) {
         this.bindingService = Objects.requireNonNull(bindingService, "bindingService");
+        this.providerService = new ProviderApplicationService();
     }
 
     private static ReadinessResult unavailable(AgentReason reason, String internalReason) {
@@ -82,6 +85,11 @@ public final class WorkspaceReadinessService {
     private ReadinessResult assess(ProjectApplicationService.ProjectLocation location,
             String provider, String connectionInstanceId, boolean allowControlBaseAdvance) {
         try {
+            ProviderApplicationService.ProviderWorkAdmission providerAdmission = providerService.assessWorkAdmission(
+                    location, provider);
+            if (!providerAdmission.admitted()) {
+                return unavailableProvider(provider, providerAdmission.status());
+            }
             var bindingOptional = bindingService.find(location, provider, connectionInstanceId);
             if (bindingOptional.isEmpty()) {
                 return unavailable(AgentReason.SESSION_NOT_READY, "SESSION_NOT_READY");
@@ -123,6 +131,14 @@ public final class WorkspaceReadinessService {
         } catch (Exception failure) {
             return unavailable(AgentReason.WORKSPACE_NOT_READY, "WORKSPACE_UNVERIFIED");
         }
+    }
+
+    private static ReadinessResult unavailableProvider(String provider, String status) {
+        AgentResponse response = new AgentResponse(AgentStatus.BLOCKED,
+                AgentReason.PROVIDER_INTEGRATION_REQUIRED,
+                AgentNextAction.REQUEST_HUMAN_HELP,
+                java.util.Map.of("provider", provider, "status", status));
+        return new ReadinessResult(false, null, null, response, "PROVIDER_INTEGRATION_REQUIRED");
     }
 
     /**

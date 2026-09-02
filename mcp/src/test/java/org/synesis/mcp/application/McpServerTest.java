@@ -16,9 +16,12 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
@@ -28,6 +31,7 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 class McpServerTest {
 
     private Path tempRoot;
+    private String previousUserHome;
 
     private static void git(Path root, String... arguments) throws Exception {
         GitProcessRunner.run(root, arguments);
@@ -35,6 +39,8 @@ class McpServerTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        previousUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", Files.createTempDirectory("synesis-mcp-provider-home-").toString());
         tempRoot = Files.createTempDirectory("synesis-mcp-test-");
         git(tempRoot, "init");
         git(tempRoot, "config", "user.name", "Test User");
@@ -43,9 +49,21 @@ class McpServerTest {
         git(tempRoot, "add", ".");
         git(tempRoot, "commit", "-m", "Initial commit");
 
-        new org.synesis.workspace.application.ProjectApplicationService().init(tempRoot);
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        ProjectApplicationService.ProjectLocation location = projectService.init(tempRoot).location();
+        new ProviderApplicationService().install(location, "codex");
+        new ProviderApplicationService().install(location, "claude");
         new ProviderManualService().install("codex");
         new ProviderManualService().install("claude");
+    }
+
+    @AfterEach
+    void restoreUserHome() {
+        if (previousUserHome == null) {
+            System.clearProperty("user.home");
+        } else {
+            System.setProperty("user.home", previousUserHome);
+        }
     }
 
     @Test
@@ -116,6 +134,24 @@ class McpServerTest {
         assertFalse(responseJson.contains("sessionId"));
         assertFalse(responseJson.contains("worktreePath"));
         assertFalse(responseJson.contains(tempRoot.toString()));
+    }
+
+    @Test
+    void ensureSessionCarriesExplicitDependenciesIntoNextAction() {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(),
+                tempRoot, "codex", "conn-known-dependency");
+        String ensure = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"service implementation\",\"acceptance\":\"uses domain capability\",\"knownDependencies\":[\"tasktracker.domain\"],\"claims\":[{\"kind\":\"path_exact\",\"path\":\"src/service.java\"}]}}}}";
+
+        assertTrue(handler.handleMessage(ensure).contains("ready"));
+
+        String next = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}");
+
+        assertTrue(next.contains("needs_capability"), next);
+        assertTrue(next.contains("tasktracker.domain"), next);
+        assertTrue(next.contains("requiredBehavior"), next);
+        assertTrue(next.contains("acceptanceTests"), next);
+        assertFalse(next.contains("COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"), next);
     }
 
     @Test

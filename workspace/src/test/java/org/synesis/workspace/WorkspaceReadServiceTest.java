@@ -14,6 +14,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.workspace.WorkspaceReadService;
+import org.synesis.workspace.test.ProviderTestSupport;
 
 /** Exercises read-only workspace inspection and path-boundary behavior. */
 class WorkspaceReadServiceTest {
@@ -39,7 +40,9 @@ class WorkspaceReadServiceTest {
         git(controlRoot, "add", ".");
         git(controlRoot, "commit", "-m", "Initial commit");
 
-        new ProjectApplicationService().init(controlRoot);
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(controlRoot)
+                .location();
+        ProviderTestSupport.install(location, "codex");
     }
 
     @Test

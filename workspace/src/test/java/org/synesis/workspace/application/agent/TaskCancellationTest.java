@@ -15,6 +15,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.test.ProviderTestSupport;
 
 /** Exercises task cancellation authorization and durable outcome handling. */
 class TaskCancellationTest {
@@ -33,9 +34,10 @@ class TaskCancellationTest {
         Files.writeString(projectRoot.resolve("README.md"), "# Test Repo\n");
         git(projectRoot, "add", ".");
         git(projectRoot, "commit", "-m", "Initial commit");
-        new ProjectApplicationService().init(projectRoot);
-
         ProjectApplicationService projectService = new ProjectApplicationService();
+        ProjectApplicationService.ProjectLocation initialized = projectService.init(projectRoot).location();
+        ProviderTestSupport.install(initialized, "codex");
+
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
         var location = projectService.locate(projectRoot);
         bindingService.ensure(location, "codex", "conn-cancel");

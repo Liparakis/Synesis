@@ -22,6 +22,7 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
+import org.synesis.workspace.test.ProviderTestSupport;
 
 /** Exercises revision-checked workspace patch application. */
 @SuppressWarnings("ExtractMethodRecommender")
@@ -69,7 +70,9 @@ class WorkspacePatchServiceTest {
         git(controlRoot, "add", ".");
         git(controlRoot, "commit", "-m", "Initial commit");
 
-        new ProjectApplicationService().init(controlRoot);
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(controlRoot)
+                .location();
+        ProviderTestSupport.install(location, "codex");
     }
 
     @Test

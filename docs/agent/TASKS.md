@@ -1,5 +1,159 @@
 # Tasks
 
+## SYN-047
+
+### Fresh minimal two-agent collaboration acceptance — 2026-09-02
+
+- Status: ACTIVE
+- Scope: validate the smallest useful end-to-end Codex collaboration on a
+  fresh Git project using the rebuilt local Synesis distribution. One bootstrap
+  agent must perform the normal Git/Synesis/provider setup and start exactly
+  two independent workers with disjoint visible responsibilities; the workers
+  must join, claim only their assigned paths, make minimal non-overlapping
+  changes, coordinate through Synesis, and complete lawfully.
+- Acceptance: the fresh project is Git-backed and Synesis-initialized; Codex
+  provider admission is installed and usable; one bootstrap lane and exactly
+  two worker lanes are admitted; worker claims are disjoint; both workers can
+  perform their assigned minimal changes without conflict; relevant checks
+  pass; and no internal Synesis identifiers or durable state are manually
+  invented, edited, or bypassed.
+- Do not reset, delete, release, or manually repair the existing KogMaw
+  workgroup; do not broaden this smoke acceptance into application feature
+  implementation; do not add protocol machinery or bypass provider gates.
+- Deferred-register review: no deferred capability is activated. This is an
+  acceptance-only exercise against the existing local workflow.
+- Exact next action: build and expose the committed local distribution, create
+  a separate fresh fixture, and launch only the bootstrap task; preserve the
+  existing KogMaw fixture.
+
+## SYN-046
+
+### Make first project initialization rollback-safe before baseline commit — 2026-09-02
+
+- Status: DONE / VERIFIED
+- Scope: ensure a new project initialization performs all non-mutating validation
+  before creating project-local `.synesis` state, and leaves no partial project
+  state when the managed Git baseline transaction is rejected before mutation.
+  Preserve the existing Git prerequisite, unborn-repository baseline behavior,
+  provider admission gate, provider configuration contract, private Git
+  exclusions, and managed baseline recovery protocol.
+- Acceptance: a dirty Git checkout rejected by the baseline safety gate does not
+  receive `.synesis` directories, project metadata, identity state, or a new
+  commit; a successful unborn-Git initialization still creates the documented
+  baseline and local state; existing initialized projects remain idempotent; and
+  focused project/CLI regressions plus diff and deferred-register checks pass.
+- Do not add a second transaction protocol, delete pre-existing project state,
+  auto-initialize Git, auto-create provider sessions, alter provider migration or
+  stale-session semantics, edit durable Synesis state directly, or broaden this
+  task into external worker orchestration.
+- Deferred-register review: no deferred capability is activated. This is a
+  bounded ordering correction in the existing local initialization transaction.
+- Evidence: `docs/evidence/syn046-transactional-first-init-2026-09-02.md`.
+  The dirty-checkout regression, complete project-initialization test class,
+  focused CLI initialization tests, diff check, and deferred-register check
+  pass. The mixed-tree diff was reviewed, only the SYN-046 implementation
+  slice was staged, and commit `b03b2b2` records the source/evidence boundary.
+- Completion evidence: commit `b03b2b2` and checkpoint `CP-0631`; the
+  post-commit project/CLI verification, diff, and deferred-register checks
+  pass. Further KogMaw acceptance is tracked separately by SYN-047.
+
+## SYN-045
+
+### Preserve explicit MCP project authority across provider-created Git worktrees — 2026-09-02
+
+- Status: DONE
+- Scope: keep the explicit launcher `--project` control checkout authoritative
+  when Codex reports an ordinary linked Git worktree during MCP initialization.
+  Accept a reported root only after proving it belongs to the same Git common
+  directory and initialized Synesis project, then retain the canonical control
+  checkout for provider admission, session binding, leases, and coordination.
+  Preserve the provider-install gate, Synesis-assigned-worktree rejection,
+  isolated worker allocation, and the exact ten-tool MCP catalog.
+- Acceptance: a control checkout with an installed Codex integration remains
+  admissible when a Codex task starts in an external linked worktree that lacks
+  ignored `.synesis/local` and `.codex/hooks.json`; an unrelated initialized
+  repository cannot override the configured control checkout; a
+  Synesis-assigned worktree cannot become the control root; a genuinely missing
+  control-checkout provider integration remains blocked; focused MCP/session
+  regressions pass; and a rebuilt installed runtime admits a fresh two-Codex
+  acceptance pair into distinct isolated Synesis workspaces.
+- Do not copy project-local provider state into Codex worktrees, weaken provider
+  admission, globally reinterpret every linked worktree as a control checkout,
+  edit durable Synesis state, change provider/session ownership semantics, add
+  MCP tools, or restart the already-blocked acceptance pair.
+- Deferred-register review: no deferred capability is activated. This is a
+  bounded correction to existing project pinning and provider admission.
+- Evidence: `docs/evidence/syn045-codex-linked-worktree-bootstrap-2026-09-02.md`.
+  Focused root-selection, startup, workspace, bundle, and installed-runtime
+  checks pass. The fresh pair was admitted into distinct lanes and claims, but
+  the broader application fixture remains incomplete because the bootstrap
+  lane was not published before its workers were created.
+- Completion evidence: `docs/evidence/syn045-codex-linked-worktree-bootstrap-2026-09-02.md`
+  and checkpoint `docs/agent/checkpoints/CP-0626.md`. Focused root-selection,
+  startup, workspace, bundle, and installed-runtime checks pass. The fresh pair
+  reached distinct isolated lanes and claims. The broader task-tracker fixture
+  remains an incomplete acceptance record, not an implementation gap in this
+  bounded root-authority task.
+
+## SYN-044
+
+### Require installed provider integration before any agent work — 2026-08-31
+
+- Status: DONE
+- Scope: make Git repository presence a fail-fast `synesis init` prerequisite
+  and provider integration installation a fail-closed admission prerequisite
+  for session creation and all session-bound workspace, command, and
+  coordination work. Preserve unborn-Git baseline bootstrap, existing
+  provider installation behavior, the ten-tool MCP catalog, and unrelated
+  in-progress SYN-043 changes.
+- Acceptance: a freshly initialized project without the selected provider's
+  durable integration record cannot create a session or perform work; a
+  non-Git directory is rejected by the user-facing `synesis init` before it
+  creates Synesis state; an unborn Git repository can still receive the
+  documented initial baseline commit; an installed but degraded Codex
+  integration remains usable according to its existing trust contract; broken,
+  unknown, or removed integrations are denied; matching Claude Code/Codex
+  installation guidance is present in generated `AGENTS.md`; and focused
+  regression tests plus diff/hygiene checks pass.
+- Do not auto-create provider sessions during `synesis init`, silently
+  initialize Git, bypass provider installation, edit Synesis durable state
+  directly, or broaden this slice into external Codex desktop task
+  orchestration.
+- Evidence: PASS; focused admission/init tests, complete `:cli:test`, diff and
+  deferred-register checks passed; checkpoint `docs/agent/checkpoints/CP-0622.md`.
+
+## SYN-043
+
+### Preserve explicit worker dependencies during MCP admission — 2026-08-31
+
+- Status: PAUSED while SYN-046 is active
+- Scope: carry `knownDependencies` from the existing `ensure_session` task
+  admission path into the durable work-intent record and expose the existing
+  capability-request continuation. Preserve backward event decoding, the
+  existing capability/contract lifecycle, isolated worktrees, and the exact
+  ten-tool MCP catalog.
+- Acceptance: dependency declarations survive admission and replay; requester
+  and owner routing use existing capability semantics; the requester receives
+  the appropriate capability action and can continue after lawful publication
+  and validation; unsupported `collaboration_status` fields remain rejected;
+  focused regression coverage passes; no new MCP tool or lifecycle redesign is
+  introduced.
+- Do not infer dependencies from prose, create a second dependency model, edit
+  durable state directly, copy worktrees, or change provider/session ownership.
+- Current evidence: PASS for dependency admission, codec replay, provider-safe
+  next-action projection, and same-provider owner-routing regressions. The
+  native MCP bootstrap now follows the active version pointer and repair copies
+  the current bundled MCP launcher; live worker process trees use the active
+  payload. A fresh two-Codex run reached two disjoint claims, but after a
+  bounded wait Worker A still has only an uncommitted domain/persistence slice,
+  Worker B has no visible changes, and no capability publication or integration
+  occurred. The end-to-end acceptance remains incomplete.
+- Exact next action: preserve this live-run evidence and investigate task
+  launch/worker liveness only after the current pair reaches a terminal state;
+  do not manually drive lifecycle actions, copy worktrees, or start another
+  pair as part of this task.
+
+
 ## MAINT-002
 
 ### Repository-wide architecture cleanup before final documentation — 2026-08-30
@@ -30,7 +184,7 @@
 
 ### Final source-level documentation, packaging, and reconciliation — 2026-08-30
 
-- Status: ACTIVE
+- Status: PAUSED while SYN-043 is active
 - Handoff: source pass complete; user-authorized release packaging is active
   until verification and publication are complete.
 - Scope: audit and document meaningful source contracts and invariants across
