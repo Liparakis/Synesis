@@ -53,6 +53,18 @@ The runtime/provider artifacts and SHA-256 values were:
 | `lib\mcp-contract-0.1.0-SNAPSHOT.jar` | `2b72e65fbb61ad8febffa9428b5b219d0e553add856a4c77b61333655c55e132` |
 | `lib\project-record-0.1.0-SNAPSHOT.jar` | `50a45aefc11fc11bd0e99aa7f239be5feba22e019f2853d075c1260380dcc95f` |
 | `lib\workspace-0.1.0-SNAPSHOT.jar` | `5921cfc5253e7ea4a4a2b9945cf744e2b52a09519bea720ced41d813b9169f07` |
+| `lib\core-3.5.4.jar` | `71de5d89341b5fcf5dd89da7f44e84d825d0e084cdf3ec77c9abe26b0f0ceb13` |
+| `lib\netty-buffer-4.2.16.Final.jar` | `cc36ae9fbd0b03fe755eb4eb4424ca53b59cfd297d7fd47d49e5b1059beded6c` |
+| `lib\netty-codec-base-4.2.16.Final.jar` | `feb410225938d9970de6b624a0c031d079804fa5cc5e1ec6e9298f16db5998a7` |
+| `lib\netty-codec-classes-quic-4.2.16.Final.jar` | `9b2856532681b109ecc1d15ba81341665fea4ba1aab78788e3d74c1aff38ca00` |
+| `lib\netty-codec-native-quic-4.2.16.Final-windows-x86_64.jar` | `ebe477b5374382f0d34583907b7441dc59c52492c890f946154deff47883041d` |
+| `lib\netty-codec-native-quic-4.2.16.Final.jar` | `cf2d2a587ea7e45f130ccd2a132e70e048979bc20e25efdbf332c2f18abe5230` |
+| `lib\netty-common-4.2.16.Final.jar` | `9825ee68a0dc4cd2b53e2f532502401b2211bad9b77e8b04882d9e64487283ff` |
+| `lib\netty-handler-4.2.16.Final.jar` | `a259ca496da05ac1981f95cd856211f894a328056a6129e9cd70dbbd5df401f7` |
+| `lib\netty-resolver-4.2.16.Final.jar` | `c9eca6a99036485cf1d186b4a6a595b0a54c53808319ee03924270eae04c32bb` |
+| `lib\netty-transport-4.2.16.Final.jar` | `cfa3f654caff906653385f4b7ddaa539d795b78f5711a622482b17d2b73484c0` |
+| `lib\netty-transport-native-unix-common-4.2.16.Final.jar` | `41ca8fe192083d17917be7ddcecded4da4fc1db1d1656d03d0bcb14e2f431155` |
+| `lib\picocli-4.7.7.jar` | `f86e30fffd10d2b13b8caa8d4b237a7ee61f2ffccf5b1941de718b765d235bf8` |
 
 The installed Codex provider used the absolute rebuilt paths through normal
 provider installation. Its fixture metadata was
