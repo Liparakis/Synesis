@@ -16,11 +16,11 @@ worktrees, invent IDs, or redesign review/Doctor.
 
 ## Immediate next action
 
-Build and install a clean local distribution from the current source, record
-source/built/installed hashes, and prove the installed MCP runtime matches the
-build. Then run the focused fresh MCP Defect B admission/replay regression;
-change dependency production code only if a concrete failing boundary is
-identified.
+Read `docs/evidence/syn049-completion-dependency-acceptance-2026-09-03.md`,
+preserve fixture `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`,
+and do not restart or re-admit its workers. The scoped Defect A and Defect B
+checks passed; the remaining review/session lifecycle stall is a separate
+follow-up and must not be fixed speculatively in SYN-049.
 
 ## SYN-048 unpinned linked-worktree provider admission — 2026-09-02
 

@@ -20,6 +20,10 @@ verification are bounded corrections to existing implemented seams. No
 deferred capability is activated, and no new connectivity, orchestration,
 provider, or review/Doctor capability is promoted.
 
+The fresh SYN-049 run proved those two scoped seams but stopped at a separate
+post-compliance review/session lifecycle stall. That observation is evidence
+only; it does not activate or authorize a review/Doctor redesign.
+
 ## SL-D-031 — Serverless direct internet connectivity
 
 **Status:** DEFERRED

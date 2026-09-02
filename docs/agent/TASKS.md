@@ -65,6 +65,17 @@
   require a second model; an eleventh tool is needed; historical state must be
   rewritten; or acceptance would require worktree copying or a bypass.
 
+## SYN-049 verification outcome — 2026-09-03
+
+The clean rebuilt artifact was hash-matched to the worker runtime. Defect A
+focused and real multi-mutation completion evidence passed. Defect B passed the
+real MCP admission, durable reload, `NEEDS_CAPABILITY`, and existing
+capability-publication path; no dependency production edit was required. The
+fresh two-worker run remains PARTIAL because a separate post-compliance
+review/session lifecycle stall prevented Worker B's final finish and WorkGroup
+terminalization. Preserve that fixture and do not redesign review/Doctor under
+SYN-049.
+
 ## SYN-048
 
 ### Resolve unpinned linked-worktree MCP roots to the control checkout — 2026-09-02

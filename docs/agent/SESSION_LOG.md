@@ -4691,3 +4691,43 @@ not run Codex or close SYN-041.
   their existing test behavior.
 - Exact next action: checkpoint, commit, push, and report the installed-shell
   usage and any remaining migration-test evidence honestly.
+
+## 2026-09-03 — SYN-049 completion/dependency acceptance
+
+- Source HEAD before this task was `2ad246adcd4737b65f08e2edcee2082e5329c799`.
+  Planning and separate ADRs were recorded in `54b6018`; explicit completion
+  implementation and focused regressions were committed in `a789af6`.
+- Defect A is independently verified: old completion policy fields/types were
+  removed, intent codec V7 rejects V1–V6 with fresh-initialization guidance,
+  ordinary polls remain `IMPLEMENT` after multiple mutations, and only a
+  call-local `completionRequested:true` request can project the exact
+  server-generated `finish_lane` action. Existing stale-state fences and
+  snapshot/no-change checks remain active.
+- A clean `:cli:installDist` rebuild from source
+  `a789af671e6bf168436a61b4119d305af9db407e` completed using the documented
+  Windows/JDK loopback mitigation. Built artifact hashes and the absolute
+  installed paths are recorded in
+  `docs/evidence/syn049-completion-dependency-acceptance-2026-09-03.md`.
+- Defect B was verified against that hash-matched installed runtime. The real
+  MCP admission/replay path preserved structured
+  `tasktracker.domain.persistence`, projected `NEEDS_CAPABILITY`, and reused
+  the existing durable capability request/publication path. No dependency
+  production edit was justified or made.
+- Fresh fixture:
+  `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`;
+  baseline `17db31357e44b54180f1692ac5dd52ed44776cd2`; project
+  `48ec29de-3433-4b10-8074-fbb49a0b524c`. Worker A made three substantive
+  slices with ordinary `IMPLEMENT` after each, refreshed a stale projected
+  finish payload, and completed its snapshot publication. Worker B's explicit
+  capability dependency became actionable; B consumed A's published public
+  contract and passed its application tests after multiple implementation
+  slices.
+- The full WorkGroup did not terminalize. Both existing worker bindings later
+  required fresh claims after `session_not_ready → ensure_session({}) →
+  coordination_intent_required`; re-admission would change the acceptance, so
+  no re-admission, manual ID/state edit, worktree copy, forced integration, or
+  bypass was attempted. Doctor ended `DEGRADED` with six warnings and no
+  mutations. The separate review/session stall is recorded as evidence only.
+- Exact next action: preserve the fresh fixture and evidence; promote any
+  review/session lifecycle repair as a separate bounded task before making
+  further production changes. Do not claim SYN-049 whole-WorkGroup completion.

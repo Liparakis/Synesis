@@ -24,10 +24,10 @@ behavior remains separate unless the final compliant acceptance reproduces it.
 
 ## Immediate next action
 
-Build and install a clean local distribution from the current source, record
-source/built/installed hashes, and prove artifact identity. Then execute the
-focused fresh MCP Defect B admission/replay regression; patch dependency
-production code only at a concrete failing boundary.
+Preserve fixture `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`
+and the evidence record. Do not re-admit or restart its workers. If work on the
+post-compliance review/session lifecycle is desired, promote it as a separate
+bounded task; do not change SYN-049 production code speculatively.
 
 ## SYN-048 unpinned linked-worktree provider admission — 2026-09-02
 

@@ -11,11 +11,10 @@
 
 ## Immediate next action
 
-Create a clean local distribution from the current source, record the source
-HEAD and built/installed artifact SHA-256 values, and prove the installed MCP
-runtime matches that build. Then run the focused fresh MCP Defect B admission
-and replay regression. Change dependency production code only if that
-hash-matched path identifies a concrete first failing boundary.
+Preserve the fresh `SynesisTaskTrackerRealAcceptance-20260903-08` evidence and
+do not re-admit or restart either worker. Review the recorded post-compliance
+review/session lifecycle blocker as a separate follow-up only if it is
+explicitly promoted; no further SYN-049 production edit is justified.
 
 ## Acceptance criteria
 
@@ -41,9 +40,11 @@ MCP tool, provider integration, or review/Doctor redesign is authorized.
 
 The source currently forwards `knownDependencies` through MCP admission,
 `WorkIntent`, `WORK_INTENT_ANNOUNCED`, codec replay, and
-`CapabilityRequestProjection`; no active source drop is proven. The prior
-SYN-047 fixture remains paused and preserved. The dependency regression must
-use a freshly rebuilt and hash-matched installed distribution.
+`CapabilityRequestProjection`; no active source drop is proven. A clean
+distribution from source `a789af671e6bf168436a61b4119d305af9db407e` was
+installed by absolute artifact path and the fresh MCP regression passed. The
+full evidence is in
+`docs/evidence/syn049-completion-dependency-acceptance-2026-09-03.md`.
 
 ## Work completed
 
@@ -53,8 +54,9 @@ encoding, explicit finish projection, and the existing execution fences and
 terminal outcomes. Snapshot publishability uses the server-recorded lane base
 commit so multiple committed lane mutations are evaluated together. Focused
 coordination, MCP contract, MCP admission, and workspace regressions pass.
-The source Defect B path is unchanged because its forwarding behavior must be
-verified against the rebuilt installed distribution first.
+The rebuilt MCP Defect B path also passes, so its forwarding production code
+was not changed. The fresh real run proved both scoped behaviors but remains
+PARTIAL at the separate review/session lifecycle stall.
 
 ## Current failures
 
@@ -62,8 +64,11 @@ Plain Gradle startup still needs the documented local
 `-Djdk.net.unixdomain.tmpdir=C:\\tmp` host mitigation for this Windows/JDK
 environment; this is not a product/build-semantics change. A broad,
 process-heavy MCP selection was stopped without an assertion result and is
-incomplete evidence, not a passing result. The rebuilt-artifact Defect B
-acceptance and fresh two-worker run remain outstanding.
+incomplete evidence, not a passing result. The fresh two-worker run is
+PARTIAL: A completed the explicit finish path and B consumed A's published
+contract, but the separate review/session lifecycle prevented B's final finish
+and WorkGroup terminalization. Doctor ended DEGRADED with six warnings and no
+mutations.
 
 ## SYN-048 Completion record — 2026-09-02
 
