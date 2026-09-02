@@ -22,7 +22,6 @@ import java.util.UUID;
  * @param workGroupId           logical work-group parent
  * @param authorityLineageId    durable authority lineage shared by authorized successor lanes
  * @param status                lifecycle status
- * @param completionMode        declared completion contract for this intent
  * @param role                  semantic role of the intent in the work group
  * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
  * @param knownDependencies     capability identifiers this intent explicitly requires
@@ -32,8 +31,7 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          String acceptance, String baseCommit,
                          List<ResourceSelector> selectors, long version,
                          UUID workGroupId, UUID authorityLineageId,
-                         Status status, CompletionMode completionMode,
-                         Role role, List<ResourceSelector> reviewTargetSelectors,
+                         Status status, Role role, List<ResourceSelector> reviewTargetSelectors,
                          List<String> knownDependencies) {
 
     /**
@@ -57,7 +55,7 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
             List<ResourceSelector> selectors, long version, Status status) {
         this(intentId, projectId, participant, provider, taskId, goal, acceptance,
                 baseCommit, selectors, version, intentId, defaultAuthorityLineage(intentId), status,
-                CompletionMode.SNAPSHOT_REQUIRED, Role.PRODUCER, List.of());
+                Role.PRODUCER, List.of(), List.of());
     }
 
     /**
@@ -84,12 +82,11 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
             UUID workGroupId, Status status) {
         this(intentId, projectId, participant, provider, taskId, goal, acceptance,
                 baseCommit, selectors, version, workGroupId,
-                defaultAuthorityLineage(intentId), status, CompletionMode.SNAPSHOT_REQUIRED,
-                Role.PRODUCER, List.of());
+                defaultAuthorityLineage(intentId), status, Role.PRODUCER, List.of(), List.of());
     }
 
     /**
-     * Constructs an intent with explicit authority lineage and the default snapshot contract.
+     * Constructs an intent with explicit authority lineage and the default producer role.
      *
      * @param intentId           intent ID
      * @param projectId          project ID
@@ -112,36 +109,7 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
             UUID workGroupId, UUID authorityLineageId, Status status) {
         this(intentId, projectId, participant, provider, taskId, goal, acceptance,
                 baseCommit, selectors, version, workGroupId, authorityLineageId, status,
-                CompletionMode.SNAPSHOT_REQUIRED, Role.PRODUCER, List.of());
-    }
-
-    /**
-     * Constructs an intent with an explicit completion contract and default producer role.
-     *
-     * @param intentId           intent ID
-     * @param projectId          project ID
-     * @param participant        participant
-     * @param provider           provider
-     * @param taskId             task ID
-     * @param goal               goal
-     * @param acceptance         acceptance
-     * @param baseCommit         base commit
-     * @param selectors          selectors
-     * @param version            intent version
-     * @param workGroupId        work-group ID
-     * @param authorityLineageId authority lineage
-     * @param status             lifecycle status
-     * @param completionMode     completion contract
-     */
-    public WorkIntent(UUID intentId, UUID projectId, String participant,
-            String provider, UUID taskId, String goal,
-            String acceptance, String baseCommit,
-            List<ResourceSelector> selectors, long version,
-            UUID workGroupId, UUID authorityLineageId, Status status,
-            CompletionMode completionMode) {
-        this(intentId, projectId, participant, provider, taskId, goal, acceptance,
-                baseCommit, selectors, version, workGroupId, authorityLineageId, status,
-                completionMode, Role.PRODUCER, List.of());
+                Role.PRODUCER, List.of(), List.of());
     }
 
     /**
@@ -160,7 +128,6 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
      * @param workGroupId        work-group ID
      * @param authorityLineageId authority lineage
      * @param status             lifecycle status
-     * @param completionMode     completion contract
      * @param role               semantic role
      */
     public WorkIntent(UUID intentId, UUID projectId, String participant,
@@ -168,19 +135,19 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
             String acceptance, String baseCommit,
             List<ResourceSelector> selectors, long version,
             UUID workGroupId, UUID authorityLineageId, Status status,
-            CompletionMode completionMode, Role role) {
+            Role role) {
         this(intentId, projectId, participant, provider, taskId, goal, acceptance,
                 baseCommit, selectors, version, workGroupId, authorityLineageId, status,
-                completionMode, role, List.of());
+                role, List.of(), List.of());
     }
 
     /** Constructs an intent with the historical review-target shape. */
     public WorkIntent(UUID intentId, UUID projectId, String participant,
             String provider, UUID taskId, String goal, String acceptance, String baseCommit,
             List<ResourceSelector> selectors, long version, UUID workGroupId, UUID authorityLineageId,
-            Status status, CompletionMode completionMode, Role role, List<ResourceSelector> reviewTargetSelectors) {
+            Status status, Role role, List<ResourceSelector> reviewTargetSelectors) {
         this(intentId, projectId, participant, provider, taskId, goal, acceptance, baseCommit, selectors, version,
-                workGroupId, authorityLineageId, status, completionMode, role, reviewTargetSelectors, List.of());
+                workGroupId, authorityLineageId, status, role, reviewTargetSelectors, List.of());
     }
 
     /**
@@ -206,7 +173,6 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
             throw new IllegalArgumentException("intent version must be positive");
         }
         Objects.requireNonNull(status, "status");
-        Objects.requireNonNull(completionMode, "completionMode");
         Objects.requireNonNull(role, "role");
         Objects.requireNonNull(reviewTargetSelectors, "reviewTargetSelectors");
         if (reviewTargetSelectors.size() > 128) {
@@ -333,77 +299,4 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
         }
     }
 
-    /**
-     * Declares whether successful completion requires an immutable snapshot.
-     */
-    public enum CompletionMode {
-        /**
-         * Completion must publish the normal immutable task snapshot.
-         */
-        SNAPSHOT_REQUIRED("snapshot_required", 1),
-        /**
-         * Completion may release the intent when the verified worktree is clean.
-         */
-        NO_CHANGE_ALLOWED("no_change_allowed", 2);
-
-        private final String wireValue;
-        private final int wireCode;
-
-        CompletionMode(String wireValue, int wireCode) {
-            this.wireValue = wireValue;
-            this.wireCode = wireCode;
-        }
-
-        /**
-         * Parses the explicit protocol value.
-         *
-         * @param value protocol value
-         * @return completion mode
-         * @throws IllegalArgumentException for an unknown value
-         */
-        public static CompletionMode fromWire(String value) {
-            Objects.requireNonNull(value, "completion mode");
-            String normalized = value.trim()
-                    .toLowerCase(java.util.Locale.ROOT);
-            return switch (normalized) {
-                case "snapshot", "snapshot_required" -> SNAPSHOT_REQUIRED;
-                case "no_change", "no_change_allowed" -> NO_CHANGE_ALLOWED;
-                default -> throw new IllegalArgumentException("unknown completion mode: " + value);
-            };
-        }
-
-        /**
-         * Parses the stable binary payload code.
-         *
-         * @param code binary code
-         * @return completion mode
-         * @throws IOException for an unknown code
-         */
-        public static CompletionMode fromWireCode(int code) throws IOException {
-            for (CompletionMode mode : values()) {
-                if (mode.wireCode == code) {
-                    return mode;
-                }
-            }
-            throw new IOException("unknown completion mode code");
-        }
-
-        /**
-         * Returns the stable protocol value.
-         *
-         * @return lowercase protocol value
-         */
-        public String wireValue() {
-            return wireValue;
-        }
-
-        /**
-         * Returns the stable binary payload code.
-         *
-         * @return binary code
-         */
-        public int wireCode() {
-            return wireCode;
-        }
-    }
 }

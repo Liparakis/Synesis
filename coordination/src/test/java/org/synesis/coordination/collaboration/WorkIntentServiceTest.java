@@ -261,7 +261,7 @@ final class WorkIntentServiceTest {
                 "Review task tracker", "Review the immutable producer snapshot", "base-commit",
                 List.of(ResourceSelector.pathExact("tests/task_tracker_test.py")), 1, producer.workGroupId(),
                 WorkIntent.defaultAuthorityLineage(reviewerId), WorkIntent.Status.ANNOUNCED,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("src/task_tracker.py")));
 
         assertTrue(service.announce(producer)

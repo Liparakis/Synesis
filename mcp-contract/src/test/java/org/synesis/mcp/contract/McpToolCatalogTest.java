@@ -99,6 +99,10 @@ class McpToolCatalogTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> properties = (Map<String, Object>) descriptor.inputSchema()
                 .get("properties");
+        assertTrue(properties.containsKey("completionRequested"));
+        assertFalse(properties.containsKey("completionMode"));
+        assertTrue(String.valueOf(properties.get("completionRequested"))
+                .contains("call only"));
         @SuppressWarnings("unchecked")
         Map<String, Object> integrationCheck = (Map<String, Object>) properties.get("integrationCheck");
         assertTrue(String.valueOf(integrationCheck.get("description"))
@@ -125,6 +129,8 @@ class McpToolCatalogTest {
         Map<String, Object> properties = (Map<String, Object>) task.get("properties");
         assertTrue(String.valueOf(properties.get("claims"))
                 .contains("Intent and ownership selectors"));
+        assertTrue(String.valueOf(properties.get("knownDependencies"))
+                .contains("Explicit capability identifiers"));
         assertTrue(String.valueOf(properties.get("likelyScopes"))
                 .contains("do not announce intent"));
     }

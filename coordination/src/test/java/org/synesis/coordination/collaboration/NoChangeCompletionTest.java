@@ -31,8 +31,7 @@ final class NoChangeCompletionTest {
         return new WorkIntent(intentId, project, participant, "codex", UUID.randomUUID(),
                 "Verify the repository", "Verification succeeds without mutation", "base-commit",
                 List.of(ResourceSelector.pathExact(path)), 1, group, WorkIntent.defaultAuthorityLineage(intentId),
-                WorkIntent.Status.ANNOUNCED,
-                WorkIntent.CompletionMode.NO_CHANGE_ALLOWED);
+                WorkIntent.Status.ANNOUNCED);
     }
 
     private static NoChangeCompletion completion(Path temp, UUID project, WorkIntent intent) throws Exception {

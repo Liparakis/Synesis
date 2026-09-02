@@ -690,11 +690,12 @@ public final class AgentTaskCompletionService {
                         binding.sessionId(),
                         laneIntent.map(WorkIntent::version)
                                 .orElse(1L),
-                        laneIntent.map(WorkIntent::authorityLineageId)
-                                .orElse(org.synesis.coordination.domain.collaboration.WorkIntent
-                                        .defaultAuthorityLineage(taskId)),
-                        List.of(),
-                        reviewRequired);
+                         laneIntent.map(WorkIntent::authorityLineageId)
+                                 .orElse(org.synesis.coordination.domain.collaboration.WorkIntent
+                                         .defaultAuthorityLineage(taskId)),
+                         List.of(),
+                         reviewRequired,
+                         laneIntent.map(WorkIntent::baseCommit).orElse(null));
             } catch (IllegalStateException immutabilityError) {
                 // Task snapshot is immutable and content changed after completion
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);
@@ -1084,7 +1085,8 @@ public final class AgentTaskCompletionService {
                     currentIntent.goal(), currentIntent.acceptance(), currentIntent.baseCommit(),
                     currentIntent.selectors(), currentIntent.version() + 1, currentIntent.workGroupId(),
                     currentIntent.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
-                    currentIntent.completionMode(), currentIntent.role(), currentIntent.reviewTargetSelectors());
+                    currentIntent.role(), currentIntent.reviewTargetSelectors(),
+                    currentIntent.knownDependencies());
             CompletionUnwoundPayload payload = new CompletionUnwoundPayload(prepared, replacement);
             try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.root()
                     .resolve(".synesis/coordination"))) {
@@ -1154,7 +1156,7 @@ public final class AgentTaskCompletionService {
             return switch (value.trim()
                     .toLowerCase(java.util.Locale.ROOT)) {
                 case "snapshot" -> SNAPSHOT;
-                case "no_change", "no_change_allowed" -> NO_CHANGE;
+                case "no_change" -> NO_CHANGE;
                 default -> throw new IllegalArgumentException("unknown completion outcome: " + value);
             };
         }

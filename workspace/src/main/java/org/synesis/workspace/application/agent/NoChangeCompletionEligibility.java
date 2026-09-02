@@ -49,9 +49,6 @@ final class NoChangeCompletionEligibility {
                 .equals(participant)) {
             return denied("NO_CHANGE_PARTICIPANT_MISMATCH");
         }
-        if (intent.completionMode() != WorkIntent.CompletionMode.NO_CHANGE_ALLOWED) {
-            return denied("NO_CHANGE_NOT_AUTHORIZED");
-        }
         if (AgentNextActionService.hasUnresolvedReviewObligation(store, intent)) {
             return denied("NO_CHANGE_REVIEWER_PENDING");
         }

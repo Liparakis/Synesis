@@ -99,12 +99,11 @@ public final class WorkspaceCollaborationService {
             String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId)
             throws Exception {
         return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors,
-                workGroupId, WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
-                WorkIntent.Role.PRODUCER, List.of(), List.of());
+                workGroupId, WorkIntent.Role.PRODUCER, List.of(), List.of());
     }
 
     /**
-     * Announces an intent with an explicit completion contract.
+     * Announces an intent with explicit review-routing metadata.
      *
      * @param projectRoot          project root
      * @param provider             provider ID
@@ -113,41 +112,17 @@ public final class WorkspaceCollaborationService {
      * @param acceptance           acceptance criteria
      * @param selectors            claims
      * @param workGroupId          group ID
-     * @param completionMode       completion contract
+     * @param role                 semantic role
+     * @param reviewTargetSelectors non-ownership review selectors
      * @return claim result
      * @throws Exception resolution or append failure
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
             String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
-            WorkIntent.CompletionMode completionMode)
+            WorkIntent.Role role, List<ResourceSelector> reviewTargetSelectors)
             throws Exception {
         return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, workGroupId,
-                completionMode, WorkIntent.Role.PRODUCER, List.of(), List.of());
-    }
-
-    /**
-     * Announces an intent with explicit review-routing metadata and no dependency declarations.
-     *
-     * @param projectRoot           project root
-     * @param provider              provider ID
-     * @param connectionInstanceId  connection ID
-     * @param goal                  goal
-     * @param acceptance             acceptance criteria
-     * @param selectors              ownership selectors
-     * @param workGroupId            group ID
-     * @param completionMode         completion contract
-     * @param role                   semantic role
-     * @param reviewTargetSelectors  non-ownership review selectors
-     * @return claim result
-     * @throws Exception resolution or append failure
-     */
-    public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
-            String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
-            WorkIntent.CompletionMode completionMode, WorkIntent.Role role,
-            List<ResourceSelector> reviewTargetSelectors)
-            throws Exception {
-        return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, workGroupId,
-                completionMode, role, reviewTargetSelectors, List.of());
+                role, reviewTargetSelectors, List.of());
     }
 
     /**
@@ -160,7 +135,6 @@ public final class WorkspaceCollaborationService {
      * @param acceptance            acceptance criteria
      * @param selectors             ownership selectors for this intent
      * @param workGroupId           group ID
-     * @param completionMode        completion contract
      * @param role                  semantic producer or reviewer role
      * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
      * @param knownDependencies     capability identifiers explicitly required by this intent
@@ -169,7 +143,7 @@ public final class WorkspaceCollaborationService {
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId,
             String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId,
-            WorkIntent.CompletionMode completionMode, WorkIntent.Role role,
+            WorkIntent.Role role,
             List<ResourceSelector> reviewTargetSelectors, List<String> knownDependencies)
             throws Exception {
         ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
@@ -216,7 +190,6 @@ public final class WorkspaceCollaborationService {
                 acceptance == null ? "Unspecified acceptance" : acceptance,
                 binding.baseCommit(), selectors, 1, group, WorkIntent.defaultAuthorityLineage(intentId),
                 WorkIntent.Status.ANNOUNCED,
-                completionMode == null ? WorkIntent.CompletionMode.SNAPSHOT_REQUIRED : completionMode,
                 role == null ? WorkIntent.Role.PRODUCER : role,
                 reviewTargetSelectors == null ? List.of() : reviewTargetSelectors,
                 knownDependencies == null ? List.of() : knownDependencies);
@@ -326,7 +299,7 @@ public final class WorkspaceCollaborationService {
                     participantHandle(binding.sessionId()), provider, snapshot.taskId(), source.goal(),
                     source.acceptance(), binding.baseCommit(), source.selectors(), source.version() + 1,
                     source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
-                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, source.role(), source.reviewTargetSelectors());
+                    source.role(), source.reviewTargetSelectors(), source.knownDependencies());
             integration.materializeRepairRepresentation(location.root(), Path.of(binding.worktreePath()),
                     expectedControlHead, snapshot);
             new WorkIntentService(store, identity).createRepairLane(appendLock, repairIntentId,
@@ -862,7 +835,7 @@ public final class WorkspaceCollaborationService {
                 UUID.nameUUIDFromBytes((connectionInstanceId + ":" + targetIntentId).getBytes(StandardCharsets.UTF_8)),
                 source.goal(), source.acceptance(), binding.baseCommit(), source.selectors(),
                 source.version() + 1, source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
-                source.completionMode(), source.role(), source.reviewTargetSelectors());
+                source.role(), source.reviewTargetSelectors(), source.knownDependencies());
         CollaborationCodec.Continuation continuation = new CollaborationCodec.Continuation(
                 grantId,
                 sourceIntentId,

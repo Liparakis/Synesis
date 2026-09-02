@@ -472,9 +472,6 @@ public final class McpProtocolHandler {
         result.put("status",
                 intent.status()
                         .name());
-        result.put("completionMode",
-                intent.completionMode()
-                        .wireValue());
         result.put("role",
                 intent.role()
                         .wireValue());
@@ -571,6 +568,16 @@ public final class McpProtocolHandler {
             return null;
         }
         if (!(arguments.get(key) instanceof String value)) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return value;
+    }
+
+    private static boolean optionalBooleanArgument(Map<String, Object> arguments, String key) {
+        if (arguments == null || !arguments.containsKey(key) || arguments.get(key) == null) {
+            return false;
+        }
+        if (!(arguments.get(key) instanceof Boolean value)) {
             throw new IllegalArgumentException("invalid " + key);
         }
         return value;
@@ -1377,8 +1384,7 @@ public final class McpProtocolHandler {
         boolean durableCommand = name.equals("synesis." + McpToolCatalog.RUN_COMMAND);
         boolean noChangeCompletion = name.equals("synesis." + McpToolCatalog.FINISH_LANE)
                 && arguments != null && arguments.get("outcome") instanceof String outcome
-                && ("no_change".equalsIgnoreCase(outcome)
-                || "no_change_allowed".equalsIgnoreCase(outcome));
+                && "no_change".equalsIgnoreCase(outcome);
         boolean snapshotCompletion = name.equals("synesis." + McpToolCatalog.FINISH_LANE);
         // finish_lane carries an optimistic event-log revision in its
         // projected evidence.  The ordinary lease heartbeat appends a
@@ -1493,8 +1499,6 @@ public final class McpProtocolHandler {
                                     connectionInstanceId, taskIntent == null ? null : taskIntent.goal(),
                                     taskIntent == null ? null : taskIntent.acceptance(), selectors,
                                     taskIntent == null ? null : taskIntent.workGroupId(),
-                                    taskIntent == null ? WorkIntent.CompletionMode.SNAPSHOT_REQUIRED
-                                            : taskIntent.completionMode(),
                                     taskIntent == null ? WorkIntent.Role.PRODUCER : taskIntent.role(),
                                     taskIntent == null ? List.of() : taskIntent.reviewTargetSelectors(),
                                     taskIntent == null ? List.of() : taskIntent.knownDependencies());
@@ -1638,6 +1642,15 @@ public final class McpProtocolHandler {
                 }
             }
             case "synesis." + McpToolCatalog.GET_NEXT_ACTION -> {
+                boolean completionRequested;
+                try {
+                    completionRequested = optionalBooleanArgument(arguments, "completionRequested");
+                } catch (IllegalArgumentException invalidCompletionRequest) {
+                    agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP,
+                            Map.of("reason", "INVALID_COMPLETION_REQUEST"));
+                    break;
+                }
                 if (arguments != null && arguments.get("integrationCheck") instanceof Map<?, ?> check) {
                     try {
                         String head = String.valueOf(check.get("controlHead"));
@@ -1670,7 +1683,7 @@ public final class McpProtocolHandler {
                     }
                 } else {
                     AgentNextActionService.NextActionRequest nextReq = new AgentNextActionService.NextActionRequest(
-                            activeProjectRoot, provider, connectionInstanceId);
+                            activeProjectRoot, provider, connectionInstanceId, completionRequested);
                     agentResponse = nextActionService.getNextAction(nextReq);
                 }
             }
@@ -2056,7 +2069,7 @@ public final class McpProtocolHandler {
         String goal = (String) map.get("goal");
         String acceptance = (String) map.get("acceptance");
         List<String> likelyScopes = (List<String>) map.get("likelyScopes");
-        List<String> knownDependencies = (List<String>) map.get("knownDependencies");
+        List<String> knownDependencies = parseKnownDependencies(map.get("knownDependencies"));
         UUID workGroupId = null;
         if (map.get("workGroupId") instanceof String value && !value.isBlank()) {
             try {
@@ -2064,13 +2077,8 @@ public final class McpProtocolHandler {
             } catch (IllegalArgumentException ignored) {
             }
         }
-        WorkIntent.CompletionMode completionMode = WorkIntent.CompletionMode.SNAPSHOT_REQUIRED;
-        Object rawCompletionMode = map.get("completionMode");
-        if (rawCompletionMode != null) {
-            if (!(rawCompletionMode instanceof String value)) {
-                throw new IllegalArgumentException("completion mode must be a string");
-            }
-            completionMode = WorkIntent.CompletionMode.fromWire(value);
+        if (map.containsKey("completionMode")) {
+            throw new IllegalArgumentException("completionMode was removed; use get_next_action completionRequested");
         }
         WorkIntent.Role role = WorkIntent.Role.PRODUCER;
         Object rawRole = map.get("role");
@@ -2085,7 +2093,36 @@ public final class McpProtocolHandler {
         }
         List<ResourceSelector> reviewTargetSelectors = parseSelectorList(map.get("reviewTargets"));
         return new AgentSessionService.AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies,
-                workGroupId, completionMode, role, reviewTargetSelectors);
+                workGroupId, role, reviewTargetSelectors);
+    }
+
+    /**
+     * Parses the bounded structured capability identifiers supplied at admission.
+     *
+     * @param rawDependencies raw task field
+     * @return immutable dependency identifiers
+     * @throws IllegalArgumentException when the field is not a bounded string list
+     */
+    private static List<String> parseKnownDependencies(Object rawDependencies) {
+        if (rawDependencies == null) {
+            return List.of();
+        }
+        if (!(rawDependencies instanceof List<?> entries)) {
+            throw new IllegalArgumentException("knownDependencies must be an array");
+        }
+        if (entries.size() > 50) {
+            throw new IllegalArgumentException("knownDependencies exceeds 50 items");
+        }
+        List<String> dependencies = new java.util.ArrayList<>(entries.size());
+        for (Object entry : entries) {
+            if (!(entry instanceof String dependency)
+                    || dependency.isBlank()
+                    || dependency.length() > 128) {
+                throw new IllegalArgumentException("knownDependencies entries must be bounded strings");
+            }
+            dependencies.add(dependency);
+        }
+        return List.copyOf(dependencies);
     }
 
     /**

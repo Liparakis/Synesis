@@ -31,7 +31,7 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
 /**
- * Verifies the explicit SYN-039 no-change completion workflow at the MCP boundary.
+ * Verifies the explicit no-change completion workflow at the MCP boundary.
  */
 final class McpSyn039NoChangeCompletionTest {
 
@@ -75,9 +75,10 @@ final class McpSyn039NoChangeCompletionTest {
     @Test
     @SuppressWarnings("unchecked")
     void projectedNoChangeFinishReleasesClaimsAndCompletesGroup(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-no-change", true);
+        Fixture fixture = prepare(temp, "syn039-no-change");
 
-        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         assertEquals("finish_lane", projection.get("nextAction"), projection.toString());
         Map<String, Object> projectedResult = (Map<String, Object>) projection.get("result");
         assertEquals(true, projectedResult.get("noChangeCompletionAvailable"));
@@ -136,8 +137,9 @@ final class McpSyn039NoChangeCompletionTest {
     @Test
     @SuppressWarnings("unchecked")
     void explicitNoChangeReplayIsStable(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-no-change-replay", true);
-        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        Fixture fixture = prepare(temp, "syn039-no-change-replay");
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         Map<String, Object> workflow = (Map<String, Object>) ((Map<String, Object>) projection.get("result")).get(
                 "workflow");
         Map<String, Object> finishArguments = (Map<String, Object>) workflow.get("arguments");
@@ -166,8 +168,9 @@ final class McpSyn039NoChangeCompletionTest {
     @Test
     @SuppressWarnings("unchecked")
     void packagedBoundaryTerminalSealClassifiesLaterAbnormalTransportAsHistory(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn041-terminal-boundary", true);
-        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        Fixture fixture = prepare(temp, "syn041-terminal-boundary");
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         Map<String, Object> workflow = (Map<String, Object>) ((Map<String, Object>) projection.get("result")).get(
                 "workflow");
         Map<String, Object> finishArguments = new LinkedHashMap<>((Map<String, Object>) workflow.get("arguments"));
@@ -240,7 +243,7 @@ final class McpSyn039NoChangeCompletionTest {
 
     @Test
     void providerExitDoesNotInferNoChangeCompletion(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-no-change-exit", true);
+        Fixture fixture = prepare(temp, "syn039-no-change-exit");
         fixture.handler.close();
 
         PredictionEventStore store = fixture.store();
@@ -266,13 +269,13 @@ final class McpSyn039NoChangeCompletionTest {
     @Test
     @SuppressWarnings("unchecked")
     void dirtyNoChangeLaneIsRejectedWithoutRelease(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-no-change-dirty", true);
+        Fixture fixture = prepare(temp, "syn039-no-change-dirty");
         var binding = new ProviderSessionBindingService().find(fixture.location(), "codex", fixture.connection())
                 .orElseThrow();
         assertNotNull(binding.worktreePath());
         Path worktree = Path.of(binding.worktreePath());
         Map<String, Object> cleanProjection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
-                "{}")));
+                "{\"completionRequested\":true}")));
         Map<String, Object> cleanWorkflow = (Map<String, Object>) ((Map<String, Object>) cleanProjection.get("result")).get(
                 "workflow");
         Map<String, Object> finishArguments = (Map<String, Object>) cleanWorkflow.get("arguments");
@@ -302,11 +305,12 @@ final class McpSyn039NoChangeCompletionTest {
     @Test
     @SuppressWarnings("unchecked")
     void staleWorkspaceGenerationIsRejectedWithoutRelease(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-no-change-generation", true);
+        Fixture fixture = prepare(temp, "syn039-no-change-generation");
         var binding = new ProviderSessionBindingService().find(fixture.location(), "codex", fixture.connection())
                 .orElseThrow();
         Path worktree = Path.of(binding.worktreePath());
-        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         Map<String, Object> workflow = (Map<String, Object>) ((Map<String, Object>) projection.get("result")).get(
                 "workflow");
         Map<String, Object> finishArguments = (Map<String, Object>) workflow.get("arguments");
@@ -337,7 +341,7 @@ final class McpSyn039NoChangeCompletionTest {
     @Test
     @SuppressWarnings("unchecked")
     void cleanNoChangeLaneCompletesAfterControlBaseAdvances(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-no-change-control-advance", true);
+        Fixture fixture = prepare(temp, "syn039-no-change-control-advance");
         innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
         Files.writeString(fixture.project.resolve("control-advance.txt"), "integrated elsewhere\n");
         git(fixture.project, "add", "control-advance.txt");
@@ -347,7 +351,8 @@ final class McpSyn039NoChangeCompletionTest {
         assertFalse(stale.ready());
         assertEquals("CONTROL_BASE_ADVANCED", stale.internalReason());
 
-        Map<String, Object> refreshed = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> refreshed = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         assertEquals("finish_lane", refreshed.get("nextAction"), refreshed.toString());
         Map<String, Object> refreshedResult = (Map<String, Object>) refreshed.get("result");
         assertEquals(true, refreshedResult.get("noChangeCompletionAvailable"));
@@ -373,35 +378,40 @@ final class McpSyn039NoChangeCompletionTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void snapshotIntentRejectsExplicitNoChangeOutcome(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-snapshot-contract", false);
-        var binding = new ProviderSessionBindingService().find(fixture.location(), "codex", fixture.connection())
-                .orElseThrow();
-        PredictionEventStore store = fixture.store();
-        var intent = store.collaborationProjection()
-                .intent(fixture.intentId())
-                .orElseThrow();
-        var group = store.workGroupProjection()
-                .group(fixture.groupId())
-                .orElseThrow();
-        Map<String, Object> arguments = new LinkedHashMap<>();
-        arguments.put("outcome", "no_change");
-        arguments.put("intentId",
-                intent.intentId()
-                        .toString());
-        arguments.put("workGroupId",
-                group.workGroupId()
-                        .toString());
-        arguments.put("claimEpoch", intent.version());
-        arguments.put("workGroupVersion", group.version());
-        arguments.put("expectedRevision", store.headSequence());
-        arguments.put("participant", WorkspaceCollaborationService.participantHandle(binding.sessionId()));
+    void noChangeOutcomeRequiresTheServerProjectedFinishAction(@TempDir Path temp) throws Exception {
+        Fixture fixture = prepare(temp, "syn039-snapshot-contract");
+        Map<String, Object> ordinary = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        assertFalse("finish_lane".equals(ordinary.get("nextAction")), ordinary.toString());
+        Map<String, Object> explicitFalse = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":false}")));
+        assertFalse("finish_lane".equals(explicitFalse.get("nextAction")), explicitFalse.toString());
 
-        Map<String, Object> rejected = innerResult(fixture.handler.handleMessage(toolCall("finish_lane",
-                ProviderJson.write(arguments))));
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
+        assertEquals("finish_lane", projection.get("nextAction"), projection.toString());
+        Map<String, Object> result = (Map<String, Object>) projection.get("result");
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        assertEquals("no_change", arguments.get("outcome"), arguments.toString());
+        assertEquals("completed",
+                innerResult(fixture.handler.handleMessage(toolCall("finish_lane", ProviderJson.write(arguments))))
+                        .get("status"));
+    }
+
+    @Test
+    void removedCompletionModeIsRejectedAtAdmission(@TempDir Path temp) throws Exception {
+        Fixture fixture = prepare(temp, "syn039-removed-completion-mode");
+        Map<String, Object> task = new LinkedHashMap<>();
+        task.put("goal", "Verify the repository");
+        task.put("acceptance", "Verification succeeds");
+        task.put("claims", List.of(Map.of("kind", "path_exact", "path", "verification.txt")));
+        task.put("completionMode", "snapshot_required");
+
+        Map<String, Object> rejected = innerResult(fixture.handler.handleMessage(toolCall("ensure_session",
+                ProviderJson.write(Map.of("task", task)))));
         assertEquals("blocked", rejected.get("status"), rejected.toString());
         assertEquals("policy_denied", rejected.get("reason"), rejected.toString());
-        assertEquals("NO_CHANGE_NOT_AUTHORIZED", ((Map<String, Object>) rejected.get("result")).get("reason"));
+        assertEquals("INVALID_TASK_INTENT", ((Map<?, ?>) rejected.get("result")).get("reason"));
         assertTrue(fixture.store()
                 .collaborationProjection()
                 .intent(fixture.intentId())
@@ -411,8 +421,9 @@ final class McpSyn039NoChangeCompletionTest {
     @Test
     @SuppressWarnings("unchecked")
     void malformedParticipantRemainsFailClosed(@TempDir Path temp) throws Exception {
-        Fixture fixture = prepare(temp, "syn039-no-change-participant", true);
-        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        Fixture fixture = prepare(temp, "syn039-no-change-participant");
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         Map<String, Object> workflow = (Map<String, Object>) ((Map<String, Object>) projection.get("result")).get(
                 "workflow");
         Map<String, Object> finishArguments = new LinkedHashMap<>((Map<String, Object>) workflow.get("arguments"));
@@ -434,7 +445,7 @@ final class McpSyn039NoChangeCompletionTest {
                 .isEmpty());
     }
 
-    private Fixture prepare(Path temp, String connection, boolean noChange) throws Exception {
+    private Fixture prepare(Path temp, String connection) throws Exception {
         Path project = temp.resolve("project");
         Files.createDirectories(project);
         git(project, "init");
@@ -451,7 +462,6 @@ final class McpSyn039NoChangeCompletionTest {
         Map<String, Object> task = new LinkedHashMap<>();
         task.put("goal", "Verify the repository");
         task.put("acceptance", "Verification succeeds without repository mutation");
-        task.put("completionMode", noChange ? "no_change_allowed" : "snapshot_required");
         task.put("claims", List.of(Map.of("kind", "path_exact", "path", "verification.txt")));
         Map<String, Object> ensure = new LinkedHashMap<>();
         ensure.put("task", task);

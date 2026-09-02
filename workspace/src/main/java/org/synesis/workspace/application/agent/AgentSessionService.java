@@ -201,9 +201,8 @@ public final class AgentSessionService {
      * @param goal                  concise goal description
      * @param acceptance            concise acceptance criteria
      * @param likelyScopes          likely file or package scopes
-     * @param knownDependencies     known dependent capabilities or task IDs
+     * @param knownDependencies     capability identifiers explicitly required by this task
      * @param workGroupId           optional logical work-group identifier
-     * @param completionMode        declared completion contract
      * @param role                  semantic producer or reviewer role
      * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
      */
@@ -213,7 +212,6 @@ public final class AgentSessionService {
             List<String> likelyScopes,
             List<String> knownDependencies,
             UUID workGroupId,
-            WorkIntent.CompletionMode completionMode,
             WorkIntent.Role role,
             List<ResourceSelector> reviewTargetSelectors
     ) {
@@ -231,12 +229,17 @@ public final class AgentSessionService {
             if (likelyScopes != null && likelyScopes.size() > 50) {
                 throw new IllegalArgumentException("likelyScopes exceeds 50 items");
             }
-            if (knownDependencies != null && knownDependencies.size() > 50) {
+            if (knownDependencies == null) {
+                knownDependencies = List.of();
+            }
+            if (knownDependencies.size() > 50) {
                 throw new IllegalArgumentException("knownDependencies exceeds 50 items");
             }
-            completionMode = completionMode == null
-                    ? WorkIntent.CompletionMode.SNAPSHOT_REQUIRED
-                    : completionMode;
+            if (knownDependencies.stream()
+                    .anyMatch(value -> value == null || value.isBlank() || value.length() > 128)) {
+                throw new IllegalArgumentException("knownDependencies entries must be bounded strings");
+            }
+            knownDependencies = List.copyOf(knownDependencies);
             role = role == null ? WorkIntent.Role.PRODUCER : role;
             reviewTargetSelectors = reviewTargetSelectors == null
                     ? List.of() : List.copyOf(reviewTargetSelectors);
@@ -257,11 +260,11 @@ public final class AgentSessionService {
         public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes,
                 List<String> knownDependencies) {
             this(goal, acceptance, likelyScopes, knownDependencies, null,
-                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of());
+                    WorkIntent.Role.PRODUCER, List.of());
         }
 
         /**
-         * Constructs an intent with an explicit parent work group and the default snapshot contract.
+         * Constructs an intent with an explicit parent work group.
          *
          * @param goal              concise goal
          * @param acceptance        acceptance criteria
@@ -273,43 +276,7 @@ public final class AgentSessionService {
         public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes,
                 List<String> knownDependencies, UUID workGroupId) {
             this(goal, acceptance, likelyScopes, knownDependencies, workGroupId,
-                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of());
-        }
-
-        /**
-         * Constructs an intent with an explicit completion contract and default producer role.
-         *
-         * @param goal              concise goal
-         * @param acceptance        acceptance criteria
-         * @param likelyScopes      likely scopes
-         * @param knownDependencies known dependencies
-         * @param workGroupId       logical work-group identifier
-         * @param completionMode    completion contract
-         */
-        @SuppressWarnings("unused")
-        public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes,
-                List<String> knownDependencies, UUID workGroupId, WorkIntent.CompletionMode completionMode) {
-            this(goal, acceptance, likelyScopes, knownDependencies, workGroupId, completionMode,
                     WorkIntent.Role.PRODUCER, List.of());
-        }
-
-        /**
-         * Constructs an intent with an explicit semantic role and no review target selectors.
-         *
-         * @param goal              concise goal
-         * @param acceptance        acceptance criteria
-         * @param likelyScopes      likely scopes
-         * @param knownDependencies known dependencies
-         * @param workGroupId       logical work-group identifier
-         * @param completionMode    completion contract
-         * @param role              semantic role
-         */
-        @SuppressWarnings("unused")
-        public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes,
-                List<String> knownDependencies, UUID workGroupId, WorkIntent.CompletionMode completionMode,
-                WorkIntent.Role role) {
-            this(goal, acceptance, likelyScopes, knownDependencies, workGroupId, completionMode,
-                    role, List.of());
         }
     }
 

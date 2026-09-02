@@ -261,12 +261,36 @@ public final class TaskSnapshotService {
      */
     public boolean hasPublishableChanges(Path workerWorktreePath,
             List<ResourceSelector> claims) throws IOException {
+        return hasPublishableChanges(workerWorktreePath, claims, null);
+    }
+
+    /**
+     * Checks whether a worker worktree contains publishable changes relative to
+     * the authoritative lane baseline.
+     *
+     * <p>The lane may contain several committed mutations as well as a current
+     * working-tree mutation. Using the declared baseline keeps all of those
+     * changes in the publication decision; deriving {@code HEAD^} would inspect
+     * only the most recent commit and could incorrectly turn an earlier
+     * substantive mutation into a no-change completion.</p>
+     *
+     * @param workerWorktreePath absolute worker worktree path
+     * @param claims             current lane claims
+     * @param laneBaseCommit     server-recorded lane baseline, or {@code null}
+     *                           when no lane baseline is available
+     * @return {@code true} when at least one claimed source change is present
+     * @throws IOException if Git inspection fails
+     */
+    public boolean hasPublishableChanges(Path workerWorktreePath,
+            List<ResourceSelector> claims, String laneBaseCommit) throws IOException {
         Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
         Objects.requireNonNull(claims, "claims");
         boolean dirty = !runGitOutput(workerWorktreePath,
                 "status", "--porcelain", "--untracked-files=all").isBlank();
         String headCommit = gitRevParse(workerWorktreePath);
-        String baseCommit = dirty ? headCommit : deriveBaseCommit(workerWorktreePath);
+        String baseCommit = laneBaseCommit == null || laneBaseCommit.isBlank()
+                ? dirty ? headCommit : deriveBaseCommit(workerWorktreePath)
+                : laneBaseCommit;
         List<String> allChangedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
         SnapshotArtifactPolicy.Manifest manifest = artifactPolicy.classify(allChangedPaths);
         if (!manifest.valid()) {
@@ -469,6 +493,51 @@ public final class TaskSnapshotService {
             String bindingIdentity, long claimEpoch, UUID authorityLineageId,
             List<String> handoffLineage, boolean reviewRequired
     ) throws IOException {
+        return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId,
+                workerWorktreePath, controlRoot, summary, existingOpt, activeCapabilities, claims,
+                workGroupId, laneId, participant, bindingIdentity, claimEpoch, authorityLineageId,
+                handoffLineage, reviewRequired, null);
+    }
+
+    /**
+     * Creates a snapshot relative to the server-recorded lane baseline.
+     *
+     * <p>This overload is used by the completion path after the lane intent has
+     * been revalidated. It preserves every committed and uncommitted mutation
+     * made since admission while retaining the existing snapshot materialization
+     * and portability gates.</p>
+     *
+     * @param taskId             task ID
+     * @param nodeId             node ID
+     * @param supervisorId       supervisor ID
+     * @param workerId           worker ID
+     * @param providerSessionId  provider session ID
+     * @param workerWorktreePath absolute worker worktree path
+     * @param controlRoot        control root
+     * @param summary            completion summary
+     * @param existingOpt        existing immutable snapshot for the exact revision
+     * @param activeCapabilities capability records
+     * @param claims             lane claims
+     * @param workGroupId        logical work-group ID
+     * @param laneId             lane intent ID
+     * @param participant        participant handle
+     * @param bindingIdentity    exact provider binding identity
+     * @param claimEpoch         current claim epoch
+     * @param authorityLineageId current authority lineage
+     * @param handoffLineage     handoff references
+     * @param reviewRequired     whether review acceptance gates integration
+     * @param laneBaseCommit     server-recorded lane baseline
+     * @return immutable snapshot
+     * @throws IOException if Git inspection fails
+     */
+    public TaskSnapshotRecord createSnapshot(
+            UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
+            Path workerWorktreePath, Path controlRoot, String summary,
+            Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
+            List<ResourceSelector> claims, UUID workGroupId, UUID laneId, String participant,
+            String bindingIdentity, long claimEpoch, UUID authorityLineageId,
+            List<String> handoffLineage, boolean reviewRequired, String laneBaseCommit
+    ) throws IOException {
         Objects.requireNonNull(taskId, "taskId");
         Objects.requireNonNull(nodeId, "nodeId");
         Objects.requireNonNull(supervisorId, "supervisorId");
@@ -488,7 +557,9 @@ public final class TaskSnapshotService {
         }
         boolean dirty = !runGitOutput(workerWorktreePath, "status", "--porcelain").isBlank();
         String headCommit = gitRevParse(workerWorktreePath);
-        String baseCommit = dirty ? headCommit : deriveBaseCommit(workerWorktreePath);
+        String baseCommit = laneBaseCommit == null || laneBaseCommit.isBlank()
+                ? dirty ? headCommit : deriveBaseCommit(workerWorktreePath)
+                : laneBaseCommit;
         List<String> allChangedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
         SnapshotArtifactPolicy.Manifest artifactManifest = artifactPolicy.classify(allChangedPaths);
         if (!artifactManifest.valid()) {

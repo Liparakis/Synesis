@@ -434,8 +434,8 @@ public final class CollaborationProjection {
         WorkIntent correction = new WorkIntent(current.intentId(), current.projectId(), current.participant(),
                 current.provider(), current.taskId(), current.goal(), current.acceptance(), current.baseCommit(),
                 current.selectors(), current.version() + 1L, current.workGroupId(),
-                current.authorityLineageId(), WorkIntent.Status.ANNOUNCED, current.completionMode(),
-                current.role(), current.reviewTargetSelectors());
+                current.authorityLineageId(), WorkIntent.Status.ANNOUNCED, current.role(),
+                current.reviewTargetSelectors(), current.knownDependencies());
         intents.put(correction.intentId(), correction);
         Participant participant = participantHistory.get(current.participant());
         if (participant == null) {
@@ -489,9 +489,9 @@ public final class CollaborationProjection {
                 current.workGroupId(),
                 current.authorityLineageId(),
                 current.status(),
-                current.completionMode(),
                 current.role(),
-                current.reviewTargetSelectors());
+                current.reviewTargetSelectors(),
+                current.knownDependencies());
         intents.put(current.intentId(), transferred);
         Participant previous = participantHistory.get(current.participant());
         if (previous != null) {
@@ -668,7 +668,6 @@ public final class CollaborationProjection {
                 || !current.authorityLineageId()
                 .equals(completion.authorityLineageId())
                 || current.version() != completion.claimEpoch()
-                || current.completionMode() != WorkIntent.CompletionMode.NO_CHANGE_ALLOWED
                 || !current.baseCommit()
                 .equals(completion.workspaceCommit())) {
             throw new IOException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");

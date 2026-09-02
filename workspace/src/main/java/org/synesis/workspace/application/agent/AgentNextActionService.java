@@ -80,13 +80,13 @@ public final class AgentNextActionService {
     }
 
     /**
-     * Returns whether the exact bound session owns an active no-change lane.
+     * Returns whether the exact bound session owns an active intent.
      *
      * <p>This predicate is intentionally scoped to the exact participant and
-     * completion mode; a completed work group or another participant's lane
-     * cannot authorize no-change completion for the caller.</p>
+     * active intent; a completed work group or another participant's lane
+     * cannot authorize continuation for the caller.</p>
      */
-    private static boolean hasActiveNoChangeIntent(
+    private static boolean hasActiveIntent(
             ProjectApplicationService.ProjectLocation location,
             ProviderSessionBindingService.Binding binding) {
         try {
@@ -102,8 +102,7 @@ public final class AgentNextActionService {
                     .activeIntents()
                     .stream()
                     .anyMatch(intent -> intent.participant()
-                            .equals(participant)
-                            && intent.completionMode() == WorkIntent.CompletionMode.NO_CHANGE_ALLOWED);
+                            .equals(participant));
         } catch (Exception ignored) {
             return false;
         }
@@ -408,6 +407,43 @@ public final class AgentNextActionService {
         }
         return matching.stream()
                 .anyMatch(producer -> !hasCompletedReview(store, reviewer, producer));
+    }
+
+    /**
+     * Returns whether the caller's declared capabilities or active capability
+     * requests still prevent completion of the exact intent.
+     *
+     * @param store        current durable projection
+     * @param intent       exact active intent
+     * @param nodeId       caller node identity
+     * @param supervisorId caller supervisor identity
+     * @param workerId     caller worker identity
+     * @return {@code true} when a declared or active capability obligation remains
+     */
+    private static boolean hasUnresolvedCapabilityObligation(
+            org.synesis.coordination.persistence.PredictionEventStore store,
+            WorkIntent intent, String nodeId, String supervisorId, String workerId) {
+        if (intent == null || nodeId == null || supervisorId == null || workerId == null) {
+            return true;
+        }
+        var projection = store.capabilityRequestProjection();
+        List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> requesterRequests =
+                projection.findAllForRequester(nodeId)
+                        .stream()
+                        .filter(request -> request.matchesRequester(nodeId, supervisorId, workerId))
+                        .toList();
+        Set<String> requestedCapabilities = requesterRequests.stream()
+                .map(org.synesis.coordination.domain.capability.CapabilityRequestRecord::capability)
+                .collect(java.util.stream.Collectors.toSet());
+        if (intent.knownDependencies()
+                .stream()
+                .anyMatch(dependency -> !requestedCapabilities.contains(dependency))) {
+            return true;
+        }
+        return requesterRequests.stream()
+                .anyMatch(request -> request.state()
+                        != org.synesis.coordination.domain.capability.CapabilityLifecycleState.VALIDATED)
+                || !projection.allValidationContexts().isEmpty();
     }
 
     /**
@@ -896,7 +932,8 @@ public final class AgentNextActionService {
 
     private static Map<String, Object> snapshotPublicationAction(
             org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
-            Path assignedWorktree, TaskSnapshotService snapshotService) {
+            Path assignedWorktree, TaskSnapshotService snapshotService,
+            String nodeId, String supervisorId, String workerId) {
         var collaboration = store.collaborationProjection();
         var completion = store.taskCompletionProjection();
         for (var intent : collaboration.activeIntents()) {
@@ -912,7 +949,7 @@ public final class AgentNextActionService {
                 continue;
             }
             try {
-                if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors())) {
+                if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors(), intent.baseCommit())) {
                     continue;
                 }
             } catch (Exception ignored) {
@@ -936,10 +973,19 @@ public final class AgentNextActionService {
                     && AgentTaskCompletionService.reviewRequired(store, intent, participantId)) {
                 continue;
             }
+            if (hasUnresolvedCapabilityObligation(store, intent, nodeId, supervisorId, workerId)) {
+                continue;
+            }
             boolean snapshotPublished = completion.findSnapshotForTaskRevision(
                             intent.taskId(), intent.intentId(), intent.version())
                     .isPresent();
             if (snapshotPublished) {
+                continue;
+            }
+            WorkGroup group = store.workGroupProjection()
+                    .group(intent.workGroupId())
+                    .orElse(null);
+            if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
                 continue;
             }
             Map<String, Object> result = new LinkedHashMap<>();
@@ -955,6 +1001,12 @@ public final class AgentNextActionService {
             result.put("nextProtocolAction", "finish_lane");
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("summary", "Publish the completed immutable snapshot");
+            payload.put("intentId", intent.intentId().toString());
+            payload.put("workGroupId", intent.workGroupId().toString());
+            payload.put("claimEpoch", intent.version());
+            payload.put("workGroupVersion", group.version());
+            payload.put("expectedRevision", store.headSequence());
+            payload.put("participant", participantId);
             boolean correction = completion.allSnapshots()
                     .stream()
                     .anyMatch(snapshot ->
@@ -972,19 +1024,6 @@ public final class AgentNextActionService {
                                     .orElse(TaskCompletionState.ACTIVE)
                                     == TaskCompletionState.REVIEW_REJECTED);
             if (correction) {
-                WorkGroup group = store.workGroupProjection()
-                        .group(intent.workGroupId())
-                        .orElse(null);
-                payload.put("intentId",
-                        intent.intentId()
-                                .toString());
-                payload.put("workGroupId",
-                        intent.workGroupId()
-                                .toString());
-                payload.put("claimEpoch", intent.version());
-                payload.put("workGroupVersion", group == null ? 0L : group.version());
-                payload.put("expectedRevision", store.headSequence());
-                payload.put("participant", participantId);
                 payload.put("authorityLineageId",
                         intent.authorityLineageId()
                                 .toString());
@@ -1019,8 +1058,7 @@ public final class AgentNextActionService {
         for (WorkIntent intent : store.collaborationProjection()
                 .activeIntents()) {
             if (!intent.participant()
-                    .equals(participantId)
-                    || intent.completionMode() != WorkIntent.CompletionMode.NO_CHANGE_ALLOWED) {
+                    .equals(participantId)) {
                 continue;
             }
             NoChangeCompletionEligibility.Result eligibility = NoChangeCompletionEligibility.assess(
@@ -1105,7 +1143,7 @@ public final class AgentNextActionService {
                 // remains gated on reviewer admission and consumption.
                 if (assignedWorktree != null) {
                     try {
-                        if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors())) {
+                        if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors(), intent.baseCommit())) {
                             continue;
                         }
                     } catch (Exception ignored) {
@@ -1171,9 +1209,6 @@ public final class AgentNextActionService {
         map.put("status",
                 intent.status()
                         .name());
-        map.put("completionMode",
-                intent.completionMode()
-                        .wireValue());
         map.put("role",
                 intent.role()
                         .wireValue());
@@ -1464,8 +1499,9 @@ public final class AgentNextActionService {
                     .status())
                     && "CONTROL_BASE_ADVANCED".equals(readiness.internalReason())
                     && (bindingService.hasConfirmedUncommittedWork(exactBinding.get())
-                    || hasActiveNoChangeIntent(location, exactBinding.get()))) {
-                AgentResponse staleAction = staleCoordinationAction(location, exactBinding.get());
+                    || hasActiveIntent(location, exactBinding.get()))) {
+                AgentResponse staleAction = staleCoordinationAction(location, exactBinding.get(),
+                        request.completionRequested());
                 if (staleAction != null) {
                     return staleAction;
                 }
@@ -1543,18 +1579,6 @@ public final class AgentNextActionService {
                 if (reviewPendingResponse != null) {
                     return reviewPendingResponse;
                 }
-                Map<String, Object> publishedSnapshotCompletion = publishedSnapshotCompletionAction(
-                        store, callerParticipant);
-                if (publishedSnapshotCompletion != null) {
-                    return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
-                            AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
-                }
-                Map<String, Object> publicationAction = snapshotPublicationAction(
-                        store, callerParticipant, assignedWorktree, snapshotService);
-                if (publicationAction != null) {
-                    return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
-                            AgentNextAction.FINISH_LANE, publicationAction);
-                }
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> pendingCoordination = (List<Map<String, Object>>) collaboration.get(
                         "pendingCoordination");
@@ -1577,12 +1601,27 @@ public final class AgentNextActionService {
                             AgentNextAction.WAIT, ownerWait);
                 }
 
-                Map<String, Object> noChangeAction = noChangeCompletionAction(
-                        store, callerParticipant, callerNodeId, binding.supervisorId(),
-                        binding.workerId(), assignedWorktree, snapshotService);
-                if (noChangeAction != null) {
-                    return new AgentResponse(AgentStatus.READY, null,
-                            AgentNextAction.FINISH_LANE, noChangeAction);
+                if (request.completionRequested()) {
+                    Map<String, Object> publishedSnapshotCompletion = publishedSnapshotCompletionAction(
+                            store, callerParticipant, callerNodeId, binding.supervisorId(), binding.workerId());
+                    if (publishedSnapshotCompletion != null) {
+                        return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                                AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
+                    }
+                    Map<String, Object> publicationAction = snapshotPublicationAction(
+                            store, callerParticipant, assignedWorktree, snapshotService,
+                            callerNodeId, binding.supervisorId(), binding.workerId());
+                    if (publicationAction != null) {
+                        return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                                AgentNextAction.FINISH_LANE, publicationAction);
+                    }
+                    Map<String, Object> noChangeAction = noChangeCompletionAction(
+                            store, callerParticipant, callerNodeId, binding.supervisorId(),
+                            binding.workerId(), assignedWorktree, snapshotService);
+                    if (noChangeAction != null) {
+                        return new AgentResponse(AgentStatus.READY, null,
+                                AgentNextAction.FINISH_LANE, noChangeAction);
+                    }
                 }
 
                 // A session that has not established its own active intent is
@@ -1995,7 +2034,7 @@ public final class AgentNextActionService {
 
     private AgentResponse staleCoordinationAction(
             ProjectApplicationService.ProjectLocation location,
-            ProviderSessionBindingService.Binding binding) {
+            ProviderSessionBindingService.Binding binding, boolean completionRequested) {
         try {
             Path coordination = location.root()
                     .resolve(".synesis/coordination");
@@ -2028,21 +2067,8 @@ public final class AgentNextActionService {
             if (reviewPendingResponse != null) {
                 return reviewPendingResponse;
             }
-            Map<String, Object> publishedSnapshotCompletion = publishedSnapshotCompletionAction(
-                    store, participant);
-            if (publishedSnapshotCompletion != null) {
-                return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
-                        AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
-            }
-
             Path assignedWorktree = binding.worktreePath() == null
                     ? null : Path.of(binding.worktreePath());
-            Map<String, Object> publicationAction = snapshotPublicationAction(
-                    store, participant, assignedWorktree, snapshotService);
-            if (publicationAction != null) {
-                return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
-                        AgentNextAction.FINISH_LANE, publicationAction);
-            }
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> pendingCoordination =
@@ -2063,17 +2089,32 @@ public final class AgentNextActionService {
                 return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
                         AgentNextAction.WAIT, ownerWait);
             }
-            org.synesis.link.identity.NodeIdentity callerIdentity =
-                    new org.synesis.link.identity.IdentityBootstrap(location.profile()
-                            .resolve("link"))
-                            .loadOrCreate()
-                            .identity();
-            Map<String, Object> noChangeAction = noChangeCompletionAction(
-                    store, participant, callerIdentity.nodeId(), binding.supervisorId(),
-                    binding.workerId(), assignedWorktree, snapshotService);
-            if (noChangeAction != null) {
-                return new AgentResponse(AgentStatus.READY, null,
-                        AgentNextAction.FINISH_LANE, noChangeAction);
+            if (completionRequested) {
+                org.synesis.link.identity.NodeIdentity callerIdentity =
+                        new org.synesis.link.identity.IdentityBootstrap(location.profile()
+                                .resolve("link"))
+                                .loadOrCreate()
+                                .identity();
+                Map<String, Object> publishedSnapshotCompletion = publishedSnapshotCompletionAction(
+                        store, participant, callerIdentity.nodeId(), binding.supervisorId(), binding.workerId());
+                if (publishedSnapshotCompletion != null) {
+                    return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                            AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
+                }
+                Map<String, Object> publicationAction = snapshotPublicationAction(
+                        store, participant, assignedWorktree, snapshotService,
+                        callerIdentity.nodeId(), binding.supervisorId(), binding.workerId());
+                if (publicationAction != null) {
+                    return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                            AgentNextAction.FINISH_LANE, publicationAction);
+                }
+                Map<String, Object> noChangeAction = noChangeCompletionAction(
+                        store, participant, callerIdentity.nodeId(), binding.supervisorId(),
+                        binding.workerId(), assignedWorktree, snapshotService);
+                if (noChangeAction != null) {
+                    return new AgentResponse(AgentStatus.READY, null,
+                            AgentNextAction.FINISH_LANE, noChangeAction);
+                }
             }
             return null;
         } catch (Exception ignored) {
@@ -2095,17 +2136,24 @@ public final class AgentNextActionService {
      *
      * @param store         durable project event store
      * @param participantId exact caller participant
+     * @param nodeId        caller node identity
+     * @param supervisorId  caller supervisor identity
+     * @param workerId      caller worker identity
      * @return projected finish payload, or {@code null} when no accepted
      *         published snapshot awaits producer completion
      */
     private static Map<String, Object> publishedSnapshotCompletionAction(
-            org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+            String nodeId, String supervisorId, String workerId) {
         if (participantId == null || participantId.isBlank()) {
             return null;
         }
         for (WorkIntent intent : store.collaborationProjection()
                 .activeIntents()) {
             if (!participantId.equals(intent.participant()) || intent.role() != WorkIntent.Role.PRODUCER) {
+                continue;
+            }
+            if (hasUnresolvedCapabilityObligation(store, intent, nodeId, supervisorId, workerId)) {
                 continue;
             }
             TaskSnapshotRecord snapshot = store.taskCompletionProjection()
@@ -2120,8 +2168,20 @@ public final class AgentNextActionService {
             if (state != TaskCompletionState.REVIEW_ACCEPTED && state != TaskCompletionState.INTEGRATED) {
                 continue;
             }
+            WorkGroup group = store.workGroupProjection()
+                    .group(intent.workGroupId())
+                    .orElse(null);
+            if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
+                continue;
+            }
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("summary", "Publish the completed immutable snapshot");
+            payload.put("intentId", intent.intentId().toString());
+            payload.put("workGroupId", intent.workGroupId().toString());
+            payload.put("claimEpoch", intent.version());
+            payload.put("workGroupVersion", group.version());
+            payload.put("expectedRevision", store.headSequence());
+            payload.put("participant", participantId);
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("state", state.name());
@@ -2248,11 +2308,13 @@ public final class AgentNextActionService {
      * @param projectRoot          control project root path
      * @param provider             provider identifier
      * @param connectionInstanceId connection instance identifier
+     * @param completionRequested  whether this invocation explicitly requests completion projection
      */
     public record NextActionRequest(
             Path projectRoot,
             String provider,
-            String connectionInstanceId
+            String connectionInstanceId,
+            boolean completionRequested
     ) {
 
         /**
@@ -2262,6 +2324,17 @@ public final class AgentNextActionService {
             Objects.requireNonNull(projectRoot, "projectRoot");
             Objects.requireNonNull(provider, "provider");
             Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        }
+
+        /**
+         * Constructs an ordinary implementation/inbox poll.
+         *
+         * @param projectRoot          control project root path
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection instance identifier
+         */
+        public NextActionRequest(Path projectRoot, String provider, String connectionInstanceId) {
+            this(projectRoot, provider, connectionInstanceId, false);
         }
     }
 

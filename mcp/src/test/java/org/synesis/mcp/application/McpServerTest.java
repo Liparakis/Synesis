@@ -17,6 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.junit.jupiter.api.Test;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -107,7 +108,7 @@ class McpServerTest {
     }
 
     @Test
-    void toolsListAdvertisesExactlyElevenRawNamesAndRejectsDecoratedCalls() {
+    void toolsListAdvertisesExactlyTenRawNamesAndRejectsDecoratedCalls() {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-raw");
         String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}");
         assertEquals(10, response.split("\"name\":\"").length - 1);
@@ -137,7 +138,7 @@ class McpServerTest {
     }
 
     @Test
-    void ensureSessionCarriesExplicitDependenciesIntoNextAction() {
+    void ensureSessionCarriesExplicitDependenciesIntoDurableNextAction() throws Exception {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(),
                 tempRoot, "codex", "conn-known-dependency");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"service implementation\",\"acceptance\":\"uses domain capability\",\"knownDependencies\":[\"tasktracker.domain\"],\"claims\":[{\"kind\":\"path_exact\",\"path\":\"src/service.java\"}]}}}}";
@@ -152,6 +153,38 @@ class McpServerTest {
         assertTrue(next.contains("requiredBehavior"), next);
         assertTrue(next.contains("acceptanceTests"), next);
         assertFalse(next.contains("COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"), next);
+
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(tempRoot);
+        PredictionEventStore reopened = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        var intent = reopened.collaborationProjection()
+                .activeIntents()
+                .stream()
+                .filter(candidate -> candidate.knownDependencies().contains("tasktracker.domain"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(List.of("tasktracker.domain"), intent.knownDependencies());
+
+        PredictionEventStore restarted = new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId());
+        assertEquals(List.of("tasktracker.domain"), restarted.collaborationProjection()
+                .intent(intent.intentId())
+                .orElseThrow()
+                .knownDependencies());
+    }
+
+    @Test
+    void malformedStructuredDependenciesFailClosedAtAdmission() {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(),
+                tempRoot, "codex", "conn-malformed-dependencies");
+        String request = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\","
+                + "\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{"
+                + "\"goal\":\"service implementation\",\"acceptance\":\"uses domain capability\","
+                + "\"knownDependencies\":[\"\",7],\"claims\":[{\"kind\":\"path_exact\","
+                + "\"path\":\"src/service.java\"}]}}}}";
+
+        String response = handler.handleMessage(request);
+        assertTrue(response.contains("INVALID_TASK_INTENT"), response);
     }
 
     @Test

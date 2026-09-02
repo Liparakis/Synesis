@@ -39,6 +39,10 @@ class ProviderManualServiceTest {
             assertTrue(content.contains("When `get_next_action` projects `WAIT`"));
             assertTrue(content.contains("Do not report success or stop merely because your own lane is complete"));
             assertTrue(content.contains("call `ensure_session` with `task.goal`, `task.acceptance`, and `task.claims`"));
+            assertTrue(content.contains("task.knownDependencies"));
+            assertTrue(content.contains("NEEDS_CAPABILITY"));
+            assertTrue(content.contains("{\"completionRequested\":true}"));
+            assertTrue(content.contains("request is evaluated for that call only"));
             assertTrue(content.contains("likelyScopes` is descriptive only"));
             assertTrue(content.contains("A ready session without claims is not permission to mutate task files"));
             Files.writeString(manual, Files.readString(manual) + "tampered\n");

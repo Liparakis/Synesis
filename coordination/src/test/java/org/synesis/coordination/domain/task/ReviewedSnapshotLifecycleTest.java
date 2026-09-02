@@ -62,8 +62,7 @@ final class ReviewedSnapshotLifecycleTest {
         NodeIdentity identity = NodeIdentity.generate();
         WorkIntent intent = new WorkIntent(laneId, projectId, "agt-owner", "codex", taskId,
                 "implement", "acceptance", "base", List.of(ResourceSelector.pathExact("src/a.py")),
-                1, groupId, WorkIntent.defaultAuthorityLineage(laneId), WorkIntent.Status.ANNOUNCED,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED);
+                1, groupId, WorkIntent.defaultAuthorityLineage(laneId), WorkIntent.Status.ANNOUNCED);
 
         PredictionEventStore store = new PredictionEventStore(temp, projectId);
         assertTrue(new WorkIntentService(store, identity).announce(intent)
@@ -170,8 +169,7 @@ final class ReviewedSnapshotLifecycleTest {
         NodeIdentity identity = NodeIdentity.generate();
         WorkIntent intent = new WorkIntent(laneId, projectId, "agt-owner", "codex", taskId,
                 "implement", "acceptance", "base", List.of(ResourceSelector.pathExact("src/a.py")),
-                1, groupId, WorkIntent.defaultAuthorityLineage(laneId), WorkIntent.Status.ANNOUNCED,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED);
+                1, groupId, WorkIntent.defaultAuthorityLineage(laneId), WorkIntent.Status.ANNOUNCED);
 
         PredictionEventStore store = new PredictionEventStore(temp, projectId);
         assertTrue(new WorkIntentService(store, identity).announce(intent)

@@ -144,7 +144,7 @@ final class McpSyn039RejectedContinuationTest {
                 .intentId();
         var reviewerClaim = collaboration.announce(project, "codex", "syn039-reviewer", "Review Todo",
                 "Review the immutable Todo snapshot", List.of(ResourceSelector.pathExact("test_todo.py")),
-                groupId, org.synesis.coordination.domain.collaboration.WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                groupId,
                 org.synesis.coordination.domain.collaboration.WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("todo.py")));
         assertTrue(reviewerClaim.acquired());
@@ -181,7 +181,8 @@ final class McpSyn039RejectedContinuationTest {
         Files.writeString(ownerWorktree.resolve("todo.py"),
                 "def add_todo(items, item):\n    return [*items, item]\n\n"
                         + "def complete_todo(items, index):\n    return items[:index] + items[index + 1:]\n");
-        Map<String, Object> publication = innerResult(owner.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> publication = innerResult(owner.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         Map<String, Object> publicationResult = map(publication.get("result"));
         Map<String, Object> finishArguments = map(map(publicationResult.get("workflow")).get("arguments"));
         Map<String, Object> firstCompletion = innerResult(owner.handleMessage(
@@ -201,9 +202,10 @@ final class McpSyn039RejectedContinuationTest {
                         .orElseThrow());
         Map<String, Object> firstReplay = innerResult(owner.handleMessage(
                 toolCall("finish_lane", ProviderJson.write(finishArguments))));
-        Map<String, Object> firstReplayResult = map(firstReplay.get("result"));
-        assertEquals("waiting", firstReplay.get("status"), firstReplay.toString());
-        assertEquals(firstSnapshot.snapshotId(), firstReplayResult.get("snapshotId"), firstReplay.toString());
+        assertEquals("retry_required", firstReplay.get("status"), firstReplay.toString());
+        assertEquals("task_not_ready", firstReplay.get("reason"), firstReplay.toString());
+        assertEquals("SNAPSHOT_COMPLETION_EVIDENCE_STALE",
+                map(firstReplay.get("result")).get("reason"), firstReplay.toString());
         store = store(project);
         assertEquals(1,
                 store.taskCompletionProjection()
@@ -312,7 +314,8 @@ final class McpSyn039RejectedContinuationTest {
         assertEquals("completed", correctionResponse.get("status"), correctionResponse.toString());
         assertTrue(Files.readString(ownerWorktree.resolve("todo.py"))
                 .contains("raise IndexError(index)"));
-        Map<String, Object> secondPublication = innerResult(owner.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> secondPublication = innerResult(owner.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}")));
         Map<String, Object> secondPublicationResult = map(secondPublication.get("result"));
         Map<String, Object> secondFinish = map(map(secondPublicationResult.get("workflow")).get("arguments"));
         assertEquals(2L, ((Number) secondFinish.get("claimEpoch")).longValue());

@@ -341,7 +341,7 @@ public final class WorkIntentService {
     }
 
     /**
-     * Completes one explicitly no-change-allowed intent and reevaluates its group.
+     * Completes one explicitly requested no-change outcome and reevaluates its group.
      *
      * <p>This is the only coordination transition that may release an intent
      * without a snapshot. The caller supplies optimistic evidence, while this
@@ -397,9 +397,6 @@ public final class WorkIntentService {
                     || !intent.baseCommit()
                     .equals(completion.workspaceCommit())) {
                 throw new IOException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
-            }
-            if (intent.completionMode() != WorkIntent.CompletionMode.NO_CHANGE_ALLOWED) {
-                throw new IOException("NO_CHANGE_NOT_AUTHORIZED");
             }
             WorkGroup group = current.workGroupProjection()
                     .group(intent.workGroupId())

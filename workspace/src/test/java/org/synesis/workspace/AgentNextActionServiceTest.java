@@ -30,6 +30,7 @@ import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.test.ProviderTestSupport;
 
@@ -91,13 +92,14 @@ class AgentNextActionServiceTest {
     }
 
     @Test
-    void committedProducerWithoutReviewReceivesFinishProjection() throws Exception {
+    void committedProducerNeedsExplicitCompletionRequestForFinishProjection() throws Exception {
         prepareSessionAndTrust("codex", "committed-producer");
 
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var claim = collaboration.announce(controlRoot, "codex", "committed-producer",
                 "Implement the product change", "Publish the completed product change",
-                List.of(ResourceSelector.pathExact("src/Product.java")));
+                List.of(ResourceSelector.pathExact("src/Product.java"),
+                        ResourceSelector.pathExact("src/ProductTest.java")));
 
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
@@ -106,16 +108,68 @@ class AgentNextActionServiceTest {
         Path worker = Path.of(binding.worktreePath());
         Files.writeString(worker.resolve("src/Product.java"), "public class Product { int version = 2; }\n");
         git(worker, "add", "src/Product.java");
-        git(worker, "commit", "-m", "worker product change");
+        git(worker, "commit", "-m", "worker product model change");
 
-        AgentResponse response = new AgentNextActionService().getNextAction(
+        AgentNextActionService nextActionService = new AgentNextActionService();
+        AgentResponse response = nextActionService.getNextAction(
                 new AgentNextActionService.NextActionRequest(controlRoot, "codex", "committed-producer"));
 
         assertEquals(AgentStatus.READY, response.status(), response.toJson());
-        assertEquals(AgentReason.SNAPSHOT_PUBLICATION_REQUIRED, response.reason(), response.toJson());
-        assertEquals(AgentNextAction.FINISH_LANE, response.nextAction(), response.toJson());
+        assertEquals("IMPLEMENT",
+                ((Map<?, ?>) response.result()).get("workflow") instanceof Map<?, ?> workflow
+                        ? workflow.get("type")
+                        : null,
+                response.toJson());
+        assertFalse(response.toJson().contains("SNAPSHOT_PUBLICATION_REQUIRED"), response.toJson());
+        assertFalse(response.toJson().contains("finish_lane"), response.toJson());
+
+        Files.writeString(worker.resolve("src/Product.java"),
+                "public class Product { int version = 3; String label = \"tracked\"; }\n");
+        git(worker, "add", "src/Product.java");
+        git(worker, "commit", "-m", "worker product behavior change");
+        AgentResponse afterSecondMutation = nextActionService.getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "committed-producer"));
+        assertEquals(AgentStatus.READY, afterSecondMutation.status(), afterSecondMutation.toJson());
+        assertEquals("IMPLEMENT",
+                ((Map<?, ?>) afterSecondMutation.result()).get("workflow") instanceof Map<?, ?> workflow
+                        ? workflow.get("type")
+                        : null,
+                afterSecondMutation.toJson());
+        assertFalse(afterSecondMutation.toJson().contains("finish_lane"), afterSecondMutation.toJson());
+
+        Files.writeString(worker.resolve("src/ProductTest.java"),
+                "public class ProductTest { void acceptsTrackedProduct() {} }\n");
+        git(worker, "add", "src/ProductTest.java");
+        git(worker, "commit", "-m", "worker product tests");
+        AgentResponse afterTests = nextActionService.getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "committed-producer"));
+        assertEquals(AgentStatus.READY, afterTests.status(), afterTests.toJson());
+        assertEquals("IMPLEMENT",
+                ((Map<?, ?>) afterTests.result()).get("workflow") instanceof Map<?, ?> workflow
+                        ? workflow.get("type")
+                        : null,
+                afterTests.toJson());
+        assertFalse(afterTests.toJson().contains("finish_lane"), afterTests.toJson());
+
+        assertTrue(new TaskSnapshotService().hasPublishableChanges(worker, claim.intent().selectors(),
+                claim.intent().baseCommit()),
+                "base=" + claim.intent().baseCommit() + ", head="
+                        + org.synesis.workspace.test.TestGit.output(worker, "rev-parse", "HEAD")
+                        + ", diff=" + org.synesis.workspace.test.TestGit.output(worker, "diff", "--name-only",
+                                claim.intent().baseCommit(), "HEAD"));
+
+        AgentResponse completionRequest = nextActionService.getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "committed-producer", true));
+        assertEquals(AgentReason.SNAPSHOT_PUBLICATION_REQUIRED, completionRequest.reason(),
+                completionRequest.toJson());
+        assertEquals(AgentNextAction.FINISH_LANE, completionRequest.nextAction(), completionRequest.toJson());
         assertEquals(claim.intent().intentId().toString(),
-                ((Map<?, ?>) response.result()).get("intentId"));
+                ((Map<?, ?>) completionRequest.result()).get("intentId"));
+
+        AgentResponse ordinaryPollAfterRequest = nextActionService.getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "committed-producer"));
+        assertFalse(ordinaryPollAfterRequest.toJson().contains("finish_lane"),
+                ordinaryPollAfterRequest.toJson());
     }
 
     @Test
@@ -128,7 +182,7 @@ class AgentNextActionServiceTest {
         var requester = collaboration.announce(controlRoot, "codex", "dependency-requester",
                 "Implement task-tracker integration", "Use the domain capability when available",
                 List.of(ResourceSelector.pathExact("src/service")), null,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(),
+                WorkIntent.Role.PRODUCER, List.of(),
                 List.of("tasktracker.domain"));
         collaboration.announce(controlRoot, "claude", "dependency-owner",
                 "Implement the task-tracker domain", "Publish the domain capability",
@@ -162,12 +216,12 @@ class AgentNextActionServiceTest {
         var requester = collaboration.announce(controlRoot, "codex", "requester-owner-filter",
                 "Implement task-tracker service", "Use the domain capability",
                 List.of(ResourceSelector.pathExact("src/service")), null,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(),
+                WorkIntent.Role.PRODUCER, List.of(),
                 List.of("tasktracker.domain"));
         collaboration.announce(controlRoot, "claude", "requester-owner-filter-owner",
                 "Implement task-tracker domain", "Provide the domain capability",
                 List.of(ResourceSelector.pathExact("src/domain")), requester.intent().workGroupId(),
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+                WorkIntent.Role.PRODUCER, List.of(), List.of());
 
         CapabilityContract contract = new CapabilityContract(
                 "Task title and description",
@@ -198,12 +252,12 @@ class AgentNextActionServiceTest {
         var requester = collaboration.announce(controlRoot, "codex", "same-provider-requester",
                 "Implement task-tracker service", "Use the domain capability",
                 List.of(ResourceSelector.pathExact("src/service")), null,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(),
+                WorkIntent.Role.PRODUCER, List.of(),
                 List.of("tasktracker.domain"));
         collaboration.announce(controlRoot, "codex", "same-provider-owner",
                 "Implement task-tracker domain", "Provide the domain capability",
                 List.of(ResourceSelector.pathExact("src/domain")), requester.intent().workGroupId(),
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+                WorkIntent.Role.PRODUCER, List.of(), List.of());
 
         CapabilityContract contract = new CapabilityContract(
                 "Task title and description",
@@ -368,7 +422,7 @@ class AgentNextActionServiceTest {
                 "Review source", "Validate the published source",
                 List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")),
                 ownerClaim.intent()
-                        .workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                        .workGroupId(),
                 WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("src/task_tracker.py")));
         assertEquals(ownerClaim.intent()
                         .workGroupId(),
@@ -428,7 +482,7 @@ class AgentNextActionServiceTest {
                 "Review source", "Validate the completed source snapshot",
                 List.of(ResourceSelector.pathExact("tests/ProductTest.java")),
                 ownerClaim.intent()
-                        .workGroupId(), WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+                        .workGroupId(),
                 WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("src/Product.java")));
         assertEquals(ownerClaim.intent()
                         .workGroupId(),
@@ -505,7 +559,7 @@ class AgentNextActionServiceTest {
         var reviewerClaim = collaboration.announce(controlRoot, "claude", "reviewer-first",
                 "Review source", "Validate the published source",
                 List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")), null,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("src/task_tracker.py")));
         var ownerClaim = collaboration.announce(controlRoot, "codex", "owner-second",
                 "Implement source", "Publish the completed source",
@@ -581,7 +635,7 @@ class AgentNextActionServiceTest {
         var completedClaim = collaboration.announce(controlRoot, "codex", "completed-reviewer",
                 "Review the sibling implementation", "Review the immutable sibling snapshot",
                 List.of(ResourceSelector.pathExact("tests/completed_review.py")), null,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("src/sibling.py")));
         var ownerClaim = collaboration.announce(controlRoot,
                 "codex",

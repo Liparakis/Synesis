@@ -53,7 +53,7 @@ final class ReviewAdmissionOrderIndependenceTest {
             reviewer = collaboration.announce(project, "claude", reviewerConnection,
                     "Review producer source", "Review the producer snapshot",
                     List.of(ResourceSelector.pathExact("tests/todo_test.py")), null,
-                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.REVIEWER,
+                    WorkIntent.Role.REVIEWER,
                     List.of(ResourceSelector.pathExact("src/todo.py")));
             producer = collaboration.announce(project,
                     "codex",
@@ -63,14 +63,14 @@ final class ReviewAdmissionOrderIndependenceTest {
                     List.of(ResourceSelector.pathExact("src/todo.py")),
                     reviewer.intent()
                             .workGroupId(),
-                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+
                     WorkIntent.Role.PRODUCER,
                     List.of());
         } else {
             producer = collaboration.announce(project, "codex", producerConnection,
                     "Produce source", "Publish source snapshot",
                     List.of(ResourceSelector.pathExact("src/todo.py")), null,
-                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of());
+                    WorkIntent.Role.PRODUCER, List.of());
             reviewer = collaboration.announce(project,
                     "claude",
                     reviewerConnection,
@@ -79,7 +79,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                     List.of(ResourceSelector.pathExact("tests/todo_test.py")),
                     producer.intent()
                             .workGroupId(),
-                    WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+
                     WorkIntent.Role.REVIEWER,
                     List.of(ResourceSelector.pathExact("src/todo.py")));
         }
@@ -136,7 +136,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                 .worktreePath());
         Files.writeString(producerWorktree.resolve("src/todo.py"), "changed\n");
         AgentResponse producerAfter = next.getNextAction(new AgentNextActionService.NextActionRequest(
-                project, "codex", producerConnection));
+                project, "codex", producerConnection, true));
         return new ReviewRun(producer.intent()
                 .intentId(), reviewerParticipant, producerAfter,
                 producerBefore, String.valueOf(payload.get("intentId")), grant, reviewerAdmission);
@@ -256,7 +256,7 @@ final class ReviewAdmissionOrderIndependenceTest {
         ClaimResult reviewer = collaboration.announce(project, "claude", "reviewer-before-producer-reviewer",
                 "Review the producer source", "Inspect the producer snapshot",
                 List.of(ResourceSelector.pathExact("tests/todo_test.py")), null,
-                WorkIntent.CompletionMode.NO_CHANGE_ALLOWED, WorkIntent.Role.REVIEWER,
+                WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("src/todo.py")));
         assertTrue(reviewer.acquired());
 
@@ -308,7 +308,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                 List.of(ResourceSelector.pathExact("src/todo.py")),
                 reviewer.intent()
                         .workGroupId(),
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+
                 WorkIntent.Role.PRODUCER,
                 List.of());
         assertTrue(producer.acquired());
@@ -349,11 +349,11 @@ final class ReviewAdmissionOrderIndependenceTest {
         var unrelated = collaboration.announce(project, "codex", "three-unrelated",
                 "Produce unrelated source", "Publish unrelated source snapshot",
                 List.of(ResourceSelector.pathExact("src/unrelated.py")), null,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of());
+                WorkIntent.Role.PRODUCER, List.of());
         var producer = collaboration.announce(project, "codex", "three-producer",
                 "Produce source", "Publish source snapshot",
                 List.of(ResourceSelector.pathExact("src/producer.py")), null,
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED, WorkIntent.Role.PRODUCER, List.of());
+                    WorkIntent.Role.PRODUCER, List.of());
         var reviewer = collaboration.announce(project,
                 "claude",
                 "three-reviewer",
@@ -362,7 +362,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                 List.of(ResourceSelector.pathExact("tests/reviewer.py")),
                 producer.intent()
                         .workGroupId(),
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
+
                 WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("src/producer.py")));
         assertTrue(unrelated.acquired());

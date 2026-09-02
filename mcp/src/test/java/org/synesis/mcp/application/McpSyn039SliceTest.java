@@ -300,7 +300,6 @@ final class McpSyn039SliceTest {
                 List.of(ResourceSelector.pathExact("test_todo.py")),
                 claim.intent()
                         .workGroupId(),
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
                 WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("todo.py")));
         UUIDs ids = new UUIDs(claim.intent()
@@ -420,7 +419,8 @@ final class McpSyn039SliceTest {
 
         Files.writeString(ownerWorktree.resolve("todo.py"),
                 "def add_todo(items, item):\n    return [*items, item]\n\n\ndef complete_todo(items, item):\n    return [value for value in items if value != item]\n");
-        String ownerPublication = owner.handleMessage(toolCall("get_next_action", "{}"));
+        String ownerPublication = owner.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}"));
         assertTrue(ownerPublication.contains("snapshot_publication_required"), ownerPublication);
         assertTrue(ownerPublication.contains("finish_lane"), ownerPublication);
         assertTrue(ownerPublication.contains(ids.groupId.toString()), ownerPublication);
@@ -537,7 +537,6 @@ final class McpSyn039SliceTest {
                 List.of(ResourceSelector.pathExact("test_todo.py")),
                 claim.intent()
                         .workGroupId(),
-                WorkIntent.CompletionMode.SNAPSHOT_REQUIRED,
                 WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("todo.py")));
         McpProtocolHandler owner = new McpProtocolHandler(ownerSessions, project, "codex", "separate-owner");
@@ -593,7 +592,8 @@ final class McpSyn039SliceTest {
         Files.write(fixture.ownerWorktree.resolve("__pycache__/todo.cpython-313.pyc"),
                 new byte[]{0x42, 0x43, 0x48});
 
-        String ownerPublication = fixture.owner.handleMessage(toolCall("get_next_action", "{}"));
+        String ownerPublication = fixture.owner.handleMessage(toolCall("get_next_action",
+                "{\"completionRequested\":true}"));
         Map<String, Object> projection = innerResult(ownerPublication);
         assertEquals("snapshot_publication_required", projection.get("reason"));
         assertEquals("finish_lane", projection.get("nextAction"));
@@ -604,7 +604,13 @@ final class McpSyn039SliceTest {
         Map<String, Object> workflow = (Map<String, Object>) projectedResult.get("workflow");
         assertEquals("finish_lane", workflow.get("recommendedTool"));
         Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
-        assertEquals(Map.of("summary", "Publish the completed immutable snapshot"), arguments);
+        assertEquals("Publish the completed immutable snapshot", arguments.get("summary"));
+        assertEquals(fixture.intentId.toString(), arguments.get("intentId"));
+        assertEquals(fixture.groupId.toString(), arguments.get("workGroupId"));
+        assertEquals(1L, ((Number) arguments.get("claimEpoch")).longValue());
+        assertEquals(1L, ((Number) arguments.get("workGroupVersion")).longValue());
+        assertTrue(arguments.containsKey("expectedRevision"), arguments.toString());
+        assertTrue(arguments.containsKey("participant"), arguments.toString());
 
         String published = fixture.owner.handleMessage(toolCall("finish_lane", ProviderJson.write(arguments)));
         Map<String, Object> publishedResult = (Map<String, Object>) innerResult(published).get("result");
@@ -637,7 +643,8 @@ final class McpSyn039SliceTest {
                         + "    return [value for value in items if value != item]\n");
 
         Map<String, Object> projection = innerResult(
-                fixture.owner.handleMessage(toolCall("get_next_action", "{}")));
+                fixture.owner.handleMessage(toolCall("get_next_action",
+                        "{\"completionRequested\":true}")));
         assertEquals("snapshot_publication_required", projection.get("reason"), projection.toString());
         assertEquals("finish_lane", projection.get("nextAction"), projection.toString());
         Map<String, Object> projectedResult = (Map<String, Object>) projection.get("result");
