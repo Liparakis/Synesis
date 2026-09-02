@@ -1,5 +1,41 @@
 # Tasks
 
+## SYN-048
+
+### Resolve unpinned linked-worktree MCP roots to the control checkout — 2026-09-02
+
+- Status: DONE / VERIFIED
+- Scope: close the proven fresh-worker admission gap where a Codex MCP
+  connection launched without an explicit project pin discovers an ordinary
+  linked Git worktree and evaluates the provider integration against that
+  worktree instead of the verified main checkout. Resolve only an unpinned
+  linked worktree that proves the same initialized Synesis project and Git
+  common directory back to its main checkout before provider admission and
+  session binding.
+- Acceptance: a fresh Git/Synesis project with a control-checkout Codex
+  integration admits an unpinned MCP connection whose advertised root is an
+  ordinary linked worktree; unrelated repositories, Synesis-assigned
+  worktrees, project-ID mismatches, and missing control-checkout provider
+  integration remain fail-closed; focused root/session/provider regressions,
+  diff validation, and deferred-register checks pass; no durable Synesis state
+  or internal identifier is manually edited.
+- Do not weaken the provider gate, copy `.synesis/local` or provider metadata
+  into linked worktrees, infer control roots from unrelated paths, alter the
+  ten-tool MCP catalog, or touch the existing KogMaw fixture. Preserve the
+  blocked fresh acceptance fixture as evidence and use a new fixture for the
+  post-fix acceptance.
+- Deferred-register review: no deferred capability is activated. This is a
+  bounded correction to existing unpinned Git-root discovery.
+- Evidence: `docs/evidence/syn048-unpinned-linked-root-2026-09-02.md`. The
+  read-only resolver and focused regression pass; explicit-root, missing
+  provider, and legacy discovery guard tests pass; the local distribution was
+  rebuilt successfully. The complete MCP test class remains incomplete because
+  it exceeded the bounded wait.
+- Completion evidence: SYN-048 is complete for the bounded source correction.
+  Resume SYN-047 only with a new fresh fixture and this rebuilt distribution.
+- Exact next action: run the fresh SYN-047 two-worker acceptance and preserve
+  KogMaw plus the blocked earlier fixture.
+
 ## SYN-047
 
 ### Fresh minimal two-agent collaboration acceptance — 2026-09-02
@@ -22,9 +58,16 @@
   implementation; do not add protocol machinery or bypass provider gates.
 - Deferred-register review: no deferred capability is activated. This is an
   acceptance-only exercise against the existing local workflow.
-- Exact next action: build and expose the committed local distribution, create
-  a separate fresh fixture, and launch only the bootstrap task; preserve the
-  existing KogMaw fixture.
+- Exact next action: create a new separate fresh fixture using the rebuilt local
+  distribution and launch only the bootstrap task; preserve KogMaw and the
+  blocked earlier fixture.
+- Evidence: the fresh fixture at
+  `C:\Users\Liparakis\Documents\Codex\2026-09-02\kogmawcollabsmoke`
+  initialized Git and Synesis and launched exactly two worker tasks, but both
+  were blocked at `provider_integration_required` while their MCP context
+  reported `codex=NOT_INSTALLED`. The control checkout reported metadata,
+  hook, MCP configuration, and MCP health present. The fixture remains clean;
+  no worker file or durable state was manually changed.
 
 ## SYN-046
 

@@ -1,8 +1,27 @@
 # State
 
+## SYN-048 unpinned linked-worktree provider admission — 2026-09-02
+
+SYN-048 is complete and verified. The fresh SYN-047 smoke run proved a
+specific source defect: the control checkout had a valid Codex integration and
+MCP health, but a worker MCP connection without an explicit project pin
+evaluated provider admission against an ordinary linked worktree and reported
+`provider_integration_required` / `NOT_INSTALLED`.
+
+The bounded fix resolves that linked worktree to its verified main checkout
+using the existing initialized-project and Git-common-directory evidence. The
+focused regression and guard tests pass; broad MCP-class execution remains
+incomplete because it exceeded the bounded wait. It preserves explicit pin
+mismatch rejection, assigned-worktree rejection, and the provider gate.
+
+## Immediate next action
+
+Run SYN-047 once on a new separate fresh project using the rebuilt local
+distribution; preserve KogMaw plus the blocked SYN-047 fixture.
+
 ## SYN-047 fresh minimal two-agent collaboration acceptance — 2026-09-02
 
-SYN-047 is the single active task. It is an acceptance-only exercise on a
+SYN-047 is active. It is an acceptance-only exercise on a
 separate fresh project using the rebuilt local Synesis distribution. One
 bootstrap agent performs normal Git/Synesis/provider setup and starts exactly
 two workers with disjoint minimal claims.
@@ -18,9 +37,8 @@ fixture remains untouched.
 
 ## Immediate next action
 
-Build and expose the committed local distribution, create a separate fresh
-fixture, and launch only the bootstrap task; preserve the existing KogMaw
-fixture.
+Run the fresh acceptance on a new separate project using the rebuilt
+distribution; preserve the existing KogMaw and blocked earlier fixture.
 
 ## SYN-045 explicit MCP project authority — 2026-09-02
 

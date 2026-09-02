@@ -12,8 +12,8 @@
 
 ## Immediate next action
 
-Build and expose the committed local distribution, create a separate fresh
-fixture, and launch only the bootstrap task; preserve the existing KogMaw
+Create a new separate fresh fixture with the rebuilt local distribution and
+launch only the bootstrap task; preserve KogMaw and the blocked earlier
 fixture.
 
 ## Acceptance criteria
@@ -33,28 +33,41 @@ and the existing KogMaw workgroup remain separate.
 
 ## Current evidence
 
-SYN-046 corrected the first-bootstrap partial-state boundary and committed it
-as `b03b2b2`. The existing KogMaw project remains an active, degraded fixture;
-this task must use a separate fresh project and the rebuilt distribution.
+SYN-048 corrected the unpinned linked-worktree admission defect and recorded
+the passing focused evidence in
+`docs/evidence/syn048-unpinned-linked-root-2026-09-02.md`. The prior fresh
+SYN-047 run at `C:\Users\Liparakis\Documents\Codex\2026-09-02\kogmawcollabsmoke`
+remains blocked and preserved; this acceptance uses a new fixture.
 
 ## Work completed
 
-SYN-047 is promoted after the verified SYN-046 initialization correction. The
-bootstrap prompt will be minimal and will delegate the two worker lanes; this
-chat will not implement their product changes or manually drive their
-lifecycle.
+The local CLI distribution is rebuilt and the bootstrap prompt will delegate
+the two worker lanes. This chat will not implement their product changes or
+manually drive their lifecycle.
 
-## Verification
+## SYN-048 Completion record — 2026-09-02
 
-SYN-046 verification is recorded in its evidence and checkpoint. SYN-047
-verification is pending a fresh fixture and must use the committed distribution.
+- Task ID: SYN-048
+- Status: DONE / VERIFIED
+- Scope: correct the proven provider-admission mismatch for an unpinned MCP
+  connection launched from an ordinary linked Git worktree, while preserving
+  explicit project pinning, assigned-worktree rejection, provider admission,
+  and the ten-tool surface.
 
-## Current failures
+## Acceptance criteria
 
-The existing KogMaw acceptance fixture has active participants, stale leases,
-and a provider-migration warning; it is preserved and must not be modified by
-SYN-047. The source checkout still contains other user-owned changes that are
-being committed only because the user explicitly requested consolidation.
+- An unpinned initialized linked worktree sharing the control checkout's Git
+  common directory resolves to the main checkout before provider admission.
+- Unrelated roots, project-ID mismatches, Synesis-assigned worktrees, and a
+  missing control-checkout provider integration remain rejected.
+- Focused tests, diff validation, and deferred-register validation pass.
+
+## Completion evidence
+
+The bounded read-only resolver, focused regression, guard tests, and strict
+local distribution rebuild are recorded in
+`docs/evidence/syn048-unpinned-linked-root-2026-09-02.md`. The complete MCP
+test class remains incomplete because it exceeded the bounded wait.
 
 ## SYN-045 Preserve explicit MCP project authority across provider-created Git worktrees — 2026-09-02
 

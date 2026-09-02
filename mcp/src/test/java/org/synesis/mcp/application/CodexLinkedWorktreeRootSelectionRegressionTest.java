@@ -72,6 +72,24 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
     }
 
     @Test
+    void unpinnedLinkedWorktreeResolvesToMainControlRootBeforeProviderAdmission() throws Exception {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(),
+                fixture.linkedWorktree(),
+                "codex",
+                "codex-unpinned-linked-root-regression",
+                false);
+
+        handler.handleMessage(initializeRequest(fixture.linkedWorktree()));
+        String response = toolText(handler.handleMessage(ensureSessionRequest()));
+
+        assertAll(
+                () -> assertEquals(fixture.controlRoot(), handler.activeProjectRoot(),
+                        "an unpinned linked worktree must resolve to its main checkout"),
+                () -> assertTrue(response.contains("\"status\":\"ready\""), response),
+                () -> assertTrue(response.contains("\"workspace\":\"isolated\""), response));
+    }
+
+    @Test
     void unrelatedInitializedRepositoryCannotReplacePinnedControlRoot() throws Exception {
         Path unrelated = Files.createTempDirectory("synesis-unrelated-root-");
         initializeGitRepository(unrelated, "Unrelated repository");

@@ -1,5 +1,25 @@
 # Next Session
 
+## SYN-048 unpinned linked-worktree provider admission — 2026-09-02
+
+SYN-048 is complete and verified. The correction for the proven admission
+mismatch in which an unpinned MCP connection launched from an ordinary linked
+Git worktree evaluated the Codex provider against that worktree instead of the
+initialized main checkout resolves only a same-project,
+same-Git-common-directory linked root to the main checkout. Explicit pin
+mismatch rejection, assigned-worktree rejection, the provider gate, and the
+ten-tool catalog remain preserved.
+
+Do not copy `.synesis/local`, provider metadata, or hooks into linked roots; do
+not edit durable state or touch KogMaw. Focused regression coverage and narrow
+guard tests pass; the complete MCP class remains incomplete after a bounded
+timeout.
+
+## Immediate next action
+
+Create a new fresh SYN-047 fixture with the rebuilt distribution and launch only
+the bootstrap task.
+
 ## SYN-047 fresh minimal two-agent collaboration acceptance — 2026-09-02
 
 SYN-047 is active. Use a separate fresh project and the rebuilt local Synesis
@@ -11,8 +31,8 @@ fixture. Do not manually create identifiers, edit durable state, or drive
 worker lifecycle actions outside projected Synesis actions.
 
 SYN-046 is complete and committed as `b03b2b2`; its evidence and post-commit
-verification pass. Immediate next action: build/expose that distribution,
-create the fresh fixture, and launch only the bootstrap task.
+verification pass. Create a new fresh fixture, launch only the bootstrap task,
+and preserve the existing KogMaw and blocked smoke fixtures.
 
 ## SYN-045 explicit MCP project authority — 2026-09-02
 

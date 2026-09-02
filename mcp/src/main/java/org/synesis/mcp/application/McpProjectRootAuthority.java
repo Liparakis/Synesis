@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 
 /**
  * Compares provider-advertised roots with an explicitly pinned MCP control
@@ -69,6 +70,64 @@ final class McpProjectRootAuthority {
                 || normalized.startsWith(reservedWorkspaces)
                 || real.startsWith(reservedWorkspaces)
                 || Files.isRegularFile(normalized.resolve(ASSIGNED_WORKSPACE_MARKER));
+    }
+
+    /**
+     * Resolves an advertised project root to the main checkout that owns its
+     * Git common directory.
+     *
+     * <p>A normal checkout is already the control checkout.  A linked
+     * worktree is resolved through Git's read-only worktree projection and is
+     * accepted only when exactly one listed main checkout has the same
+     * initialized Synesis project identity.</p>
+     *
+     * @param advertisedRoot provider-advertised project root
+     * @return the matching main checkout, or {@code null} when it cannot be
+     *         proven uniquely
+     */
+    static Path resolveMainCheckout(Path advertisedRoot) {
+        ProjectIdentity advertised = inspect(advertisedRoot, false);
+        if (advertised == null) {
+            return null;
+        }
+        if (Files.isDirectory(advertised.root().resolve(".git"))) {
+            return advertised.root();
+        }
+        if (!Files.isRegularFile(advertised.root().resolve(".git"))) {
+            return null;
+        }
+
+        try {
+            GitProcessRunner.Result result = GitProcessRunner.runResult(advertised.root(),
+                    "worktree", "list", "--porcelain");
+            if (result.exitCode() != 0) {
+                return null;
+            }
+            Path resolved = null;
+            for (String line : result.output().lines().toList()) {
+                if (!line.startsWith("worktree ")) {
+                    continue;
+                }
+                String listedText = line.substring("worktree ".length()).trim();
+                if (listedText.isEmpty()) {
+                    continue;
+                }
+                Path listedRoot = normalize(Path.of(listedText));
+                ProjectIdentity main = inspect(listedRoot, true);
+                if (main == null
+                        || !advertised.projectId().equals(main.projectId())
+                        || !advertised.gitCommonDirectory().equals(main.gitCommonDirectory())) {
+                    continue;
+                }
+                if (resolved != null && !resolved.equals(main.root())) {
+                    return null;
+                }
+                resolved = main.root();
+            }
+            return resolved;
+        } catch (Exception unavailable) {
+            return null;
+        }
     }
 
     private static ProjectIdentity inspect(Path root, boolean requireMainCheckout) {

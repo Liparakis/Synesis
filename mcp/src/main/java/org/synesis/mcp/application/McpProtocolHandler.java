@@ -1224,10 +1224,9 @@ public final class McpProtocolHandler {
                 if (normalized.equals(homePath)) {
                     continue; // Reject user home directory as control project root
                 }
-                if (java.nio.file.Files.exists(normalized.resolve(".synesis/project.json"))) {
-                    if (!initializedRoots.contains(normalized)) {
-                        initializedRoots.add(normalized);
-                    }
+                Path mainCheckout = McpProjectRootAuthority.resolveMainCheckout(normalized);
+                if (mainCheckout != null && !initializedRoots.contains(mainCheckout)) {
+                    initializedRoots.add(mainCheckout);
                 }
             } catch (Exception ignored) {
             }
