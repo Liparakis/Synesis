@@ -121,6 +121,28 @@ final class ProjectApplicationServiceTest {
     }
 
     @Test
+    void rejectsDirtyGitCheckoutWithoutCreatingProjectState() throws Exception {
+        Path root = Files.createTempDirectory("synesis-dirty-init-");
+        git(root, "init");
+        git(root, "config", "user.name", "Test User");
+        git(root, "config", "user.email", "test@example.com");
+        Files.writeString(root.resolve("README.md"), "# Baseline\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "initial commit");
+        String head = git(root, "rev-parse", "--verify", "HEAD");
+        Files.writeString(root.resolve("bootstrap.txt"), "uncommitted bootstrap work\n");
+
+        ProjectApplicationService.ProjectApplicationException failure = assertThrows(
+                ProjectApplicationService.ProjectApplicationException.class,
+                () -> new ProjectApplicationService().init(root));
+
+        assertEquals("CONTROL_CHECKOUT_DIRTY", failure.code());
+        assertFalse(Files.exists(root.resolve(".synesis")));
+        assertEquals(head, git(root, "rev-parse", "--verify", "HEAD"));
+        assertTrue(git(root, "status", "--porcelain").contains("?? bootstrap.txt"));
+    }
+
+    @Test
     void projectCreateUsesShareableProjectId() throws Exception {
         ProjectApplicationService service = new ProjectApplicationService();
         Path root = Files.createTempDirectory("synesis-project-");

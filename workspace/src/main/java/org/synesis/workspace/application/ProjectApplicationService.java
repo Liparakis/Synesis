@@ -406,6 +406,10 @@ public final class ProjectApplicationService {
     /**
      * Initializes a project without overwriting existing state.
      *
+     * <p>For a Git repository, the managed baseline safety gate runs before
+     * project-local state is created. A rejected checkout therefore remains
+     * uninitialized and can be corrected and retried without cleanup.</p>
+     *
      * @param projectRoot target directory
      * @return structured initialization result
      * @throws ProjectApplicationException if the target is invalid or conflicts with existing state
@@ -457,9 +461,9 @@ public final class ProjectApplicationService {
         UUID projectId = UUID.randomUUID();
         try {
             // Install the exact common-directory exclusions before creating
-            // any local or coordination runtime paths.
+            // any project-local or coordination runtime paths. The exclusions
+            // are Git-private and do not create .synesis state.
             RepositoryPrivateStateService.ensure(root);
-            Files.createDirectories(synesis);
             Path profile = synesis.resolve("local/profile");
             Instant createdAt = Instant.now();
             String metadataContent = metadataJson(projectId, createdAt);
@@ -472,6 +476,10 @@ public final class ProjectApplicationService {
                 gitHeadStatus = "UNBORN".equals(baseline.originalHead())
                         ? "GIT_INITIAL_COMMIT_CREATED" : "GIT_HEAD_VALID";
             } else {
+                // Internal non-Git fixtures intentionally bypass the
+                // user-facing Git preflight and therefore have no baseline
+                // transaction to create the project directory.
+                Files.createDirectories(synesis);
                 writeMetadata(metadata, projectId);
                 ensureAgentsFile(root);
                 gitHeadStatus = "GIT_HEAD_UNAVAILABLE";
