@@ -1,49 +1,69 @@
 # Current Task
 
-## SYN-047 Fresh minimal two-agent collaboration acceptance — 2026-09-02
+## SYN-049 Pre-release explicit completion and dependency actionability — 2026-09-02
 
-- Task ID: SYN-047
+- Task ID: SYN-049
 - Status: ACTIVE
-- Scope: validate the smallest useful end-to-end Codex collaboration on a
-  fresh Git project using the rebuilt local Synesis distribution. One bootstrap
-  agent performs normal setup and starts exactly two independent workers with
-  disjoint visible responsibilities; the workers join, claim, make minimal
-  non-overlapping changes, coordinate through Synesis, and complete lawfully.
+- Scope: independently correct and verify explicit completion lifecycle
+  semantics (Defect A) and structured dependency preservation/actionability
+  through the rebuilt MCP path (Defect B). Preserve the existing capability,
+  review, integration, provider, authority, and ten-tool architecture.
 
 ## Immediate next action
 
-Create a new separate fresh fixture with the rebuilt local distribution and
-launch only the bootstrap task; preserve KogMaw and the blocked earlier
-fixture.
+Create a clean local distribution from the current source, record the source
+HEAD and built/installed artifact SHA-256 values, and prove the installed MCP
+runtime matches that build. Then run the focused fresh MCP Defect B admission
+and replay regression. Change dependency production code only if that
+hash-matched path identifies a concrete first failing boundary.
 
 ## Acceptance criteria
 
-- The fresh project is Git-backed and Synesis-initialized.
-- Codex provider admission is installed and usable.
-- One bootstrap lane and exactly two worker lanes are admitted with disjoint
-  claims.
-- Both workers make minimal non-overlapping changes and complete lawfully.
-- Relevant checks, diff validation, and deferred validation pass.
+- Defect A: multiple mutations and tests remain `IMPLEMENT`; only a
+  call-local `completionRequested:true` request can project exact
+  `finish_lane` after current-state revalidation; old modes/formats fail
+  loudly; existing fences/outcomes and the ten-tool catalog remain intact.
+- Defect B: structured dependencies survive the real rebuilt MCP admission,
+  durable replay, and `NEEDS_CAPABILITY` projection; the existing capability
+  request/publication/review/integration path makes the requester actionable.
+- A fresh two-worker task-tracker acceptance proves both defects together with
+  no manual IDs/state, worktree copying, protocol bypass, or speculative
+  review/Doctor changes.
 
 ## Architecture and scope
 
-This is an acceptance-only slice against the existing local workflow. No new
-protocol or service is authorized. Provider migration, stale-session cleanup,
-and the existing KogMaw workgroup remain separate.
+This is a bounded evolution of the existing local modular monolith. ADR-0053
+owns Defect A and ADR-0054 owns Defect B. No new dependency graph, service,
+MCP tool, provider integration, or review/Doctor redesign is authorized.
+`GOONSQUAD`, KogMaw, and all historical fixtures remain preserved evidence.
 
 ## Current evidence
 
-SYN-048 corrected the unpinned linked-worktree admission defect and recorded
-the passing focused evidence in
-`docs/evidence/syn048-unpinned-linked-root-2026-09-02.md`. The prior fresh
-SYN-047 run at `C:\Users\Liparakis\Documents\Codex\2026-09-02\kogmawcollabsmoke`
-remains blocked and preserved; this acceptance uses a new fixture.
+The source currently forwards `knownDependencies` through MCP admission,
+`WorkIntent`, `WORK_INTENT_ANNOUNCED`, codec replay, and
+`CapabilityRequestProjection`; no active source drop is proven. The prior
+SYN-047 fixture remains paused and preserved. The dependency regression must
+use a freshly rebuilt and hash-matched installed distribution.
 
 ## Work completed
 
-The local CLI distribution is rebuilt and the bootstrap prompt will delegate
-the two worker lanes. This chat will not implement their product changes or
-manually drive their lifecycle.
+Planning and separate ADRs are recorded in SYN-049, ADR-0053, and ADR-0054.
+Defect A now uses a call-local `completionRequested` request, V7 intent
+encoding, explicit finish projection, and the existing execution fences and
+terminal outcomes. Snapshot publishability uses the server-recorded lane base
+commit so multiple committed lane mutations are evaluated together. Focused
+coordination, MCP contract, MCP admission, and workspace regressions pass.
+The source Defect B path is unchanged because its forwarding behavior must be
+verified against the rebuilt installed distribution first.
+
+## Current failures
+
+Plain Gradle startup still needs the documented local
+`-Djdk.net.unixdomain.tmpdir=C:\\tmp` host mitigation for this Windows/JDK
+environment; this is not a product/build-semantics change. A broad,
+process-heavy MCP selection was stopped without an assertion result and is
+incomplete evidence, not a passing result. The rebuilt-artifact Defect B
+acceptance and fresh two-worker run remain outstanding.
 
 ## SYN-048 Completion record — 2026-09-02
 

@@ -1,5 +1,27 @@
 # Next Session
 
+## SYN-049 pre-release completion/dependency correction — 2026-09-02
+
+SYN-049 is the single active task. Defect A and Defect B remain separately
+testable. ADR-0053 governs explicit call-local completion requests; ADR-0054
+governs rebuilt-artifact verification of structured capability dependencies
+through the existing durable lifecycle.
+
+The source currently forwards `knownDependencies` from MCP parsing through
+admission, `WorkIntent`, durable announcement, codec replay, and
+`CapabilityRequestProjection`; do not add duplicate forwarding unless the
+fresh hash-matched MCP regression identifies a first failing boundary. Do not
+fabricate capability requests, infer dependencies, edit durable state, copy
+worktrees, invent IDs, or redesign review/Doctor.
+
+## Immediate next action
+
+Build and install a clean local distribution from the current source, record
+source/built/installed hashes, and prove the installed MCP runtime matches the
+build. Then run the focused fresh MCP Defect B admission/replay regression;
+change dependency production code only if a concrete failing boundary is
+identified.
+
 ## SYN-048 unpinned linked-worktree provider admission — 2026-09-02
 
 SYN-048 is complete and verified. The correction for the proven admission

@@ -1,5 +1,34 @@
 # State
 
+## SYN-049 pre-release completion/dependency correction — 2026-09-02
+
+SYN-049 is the single active task. It contains two independent defects:
+
+* Defect A replaces mutation-driven/caller-selected completion with a
+  call-local `completionRequested` request and full existing-state
+  revalidation before `finish_lane` projection.
+* Defect B verifies that structured `knownDependencies` survive the rebuilt
+  MCP admission path into durable `WorkIntent` state and the existing
+  `NEEDS_CAPABILITY` / capability-request lifecycle.
+
+The source path for Defect B is already present through MCP parsing, admission,
+`WorkspaceCollaborationService`, `WorkIntent`, `WORK_INTENT_ANNOUNCED`, codec
+replay, and `CapabilityRequestProjection`; no source-level drop is currently
+proven. A fresh rebuilt/installed artifact with recorded hashes is a hard gate
+before any dependency production edit. Admission must not fabricate a full
+capability contract or request.
+
+SYN-047 is paused with its failed fixture preserved. KogMaw and GOONSQUAD are
+historical evidence and are not to be reset, mutated, or reused. Review/Doctor
+behavior remains separate unless the final compliant acceptance reproduces it.
+
+## Immediate next action
+
+Build and install a clean local distribution from the current source, record
+source/built/installed hashes, and prove artifact identity. Then execute the
+focused fresh MCP Defect B admission/replay regression; patch dependency
+production code only at a concrete failing boundary.
+
 ## SYN-048 unpinned linked-worktree provider admission — 2026-09-02
 
 SYN-048 is complete and verified. The fresh SYN-047 smoke run proved a

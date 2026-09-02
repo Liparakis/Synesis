@@ -60,3 +60,9 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   the existing managed baseline safety gate runs before new project-local
   `.synesis` state is created, preserving clean retry behavior after a rejected
   checkout.
+- ADR-0053: Explicit call-local completion requests — accepted for SYN-049;
+  remove caller-selected completion policies and require explicit,
+  revalidated completion projection.
+- ADR-0054: Preserve structured capability dependencies through admission —
+  accepted for SYN-049; verify the rebuilt MCP path first and reuse the
+  existing durable capability lifecycle, patching only a proven boundary.

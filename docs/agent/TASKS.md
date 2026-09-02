@@ -1,5 +1,70 @@
 # Tasks
 
+## SYN-049
+
+### Pre-release explicit completion and dependency actionability — 2026-09-02
+
+- Status: ACTIVE
+- Scope: make completion an explicit, call-local worker request and verify
+  that structured capability dependencies survive the rebuilt MCP admission
+  path into the existing durable capability lifecycle. Defect A and Defect B
+  are separate acceptance sections and must remain independently testable.
+- Defect A acceptance: remove `WorkIntent.CompletionMode`, its
+  `snapshot_required`/`no_change_allowed` wire aliases, and `completionMode`
+  from contracts, durable records, projections, provider guidance, and
+  generated schemas; ordinary `get_next_action({})` remains `IMPLEMENT` after
+  any number of mutations; only
+  `get_next_action({completionRequested:true})` may project the exact
+  server-generated `finish_lane` action after current authority, revision,
+  worktree, review, capability, and coordination revalidation; stale execution
+  fences and snapshot/no-change outcomes remain intact; removed durable formats
+  fail loudly and require fresh initialization; the MCP catalog remains ten
+  tools.
+- Defect B acceptance: record source/build/install artifact provenance, then
+  exercise the real MCP admission path with structured `knownDependencies`.
+  Prove the dependency survives parsing, `WorkIntent` creation, durable
+  encode/decode, restart reconstruction, and `NEEDS_CAPABILITY` projection;
+  exercise the existing `capability_request` lifecycle using a full
+  `CapabilityContract`; patch dependency production code only if the rebuilt
+  regression identifies a concrete first failing boundary.
+- Required tests: focused completion lifecycle, stale-fence, durable-format,
+  MCP schema/catalog, dependency admission/replay/projection, capability
+  request, requester continuation, independent-lane, malformed-input, and
+  provider-guidance regressions, followed by one fresh real task-tracker
+  acceptance using the rebuilt hash-verified Codex integration.
+- Fresh acceptance: preserve `GOONSQUAD` and prior fixtures; Worker A owns
+  domain/persistence and Worker B owns service/API/reporting. B declares an
+  explicit structured domain/persistence capability dependency. Both workers
+  make multiple lawful mutations, A demonstrates repeated `IMPLEMENT` before
+  explicit completion, the existing capability/review/integration lifecycle
+  exposes A's published contract to B, both complete through projected actions,
+  application tests pass, Git is clean, and the WorkGroup reaches its intended
+  terminal state.
+- Boundaries: do not infer dependencies from prose/files/participants; do not
+  fabricate capability requests, add a dependency graph or MCP tool, copy
+  worktrees, edit durable state, invent Synesis IDs, bypass authority gates, or
+  redesign review/Doctor unless the compliant acceptance reproduces a separate
+  defect. Historical state and fixtures remain untouched; fresh
+  initialization is required for the new durable format.
+- Dependencies: SYN-047 evidence preserved; SYN-048 DONE; existing
+  `CapabilityRequestService`, `CapabilityRequestProjection`, `WorkIntent`
+  codec, completion, review, integration, provider, and ten-tool MCP
+  contracts.
+- Deferred-register review: no deferred capability is activated. This is a
+  bounded pre-release correction and verification of existing lifecycle and
+  capability seams.
+- Implementation order: (1) update this task and ADR-0053/ADR-0054 plus all
+  current-state records; (2) write failing Defect A tests and remove the old
+  completion policy; (3) rebuild and hash the installed runtime; (4) run the
+  focused real MCP Defect B regression and patch only a proven boundary;
+  (5) complete capability and guidance coverage; (6) run the fresh two-worker
+  acceptance; (7) validate, document, commit bounded changes, and push only
+  after all scoped evidence is green.
+- Stop conditions: artifact provenance cannot be matched; rebuilt MCP
+  behavior contradicts the confirmed architecture; dependency repair would
+  require a second model; an eleventh tool is needed; historical state must be
+  rewritten; or acceptance would require worktree copying or a bypass.
+
 ## SYN-048
 
 ### Resolve unpinned linked-worktree MCP roots to the control checkout — 2026-09-02
@@ -40,7 +105,7 @@
 
 ### Fresh minimal two-agent collaboration acceptance — 2026-09-02
 
-- Status: ACTIVE
+- Status: PAUSED while SYN-049 is active
 - Scope: validate the smallest useful end-to-end Codex collaboration on a
   fresh Git project using the rebuilt local Synesis distribution. One bootstrap
   agent must perform the normal Git/Synesis/provider setup and start exactly
@@ -58,9 +123,9 @@
   implementation; do not add protocol machinery or bypass provider gates.
 - Deferred-register review: no deferred capability is activated. This is an
   acceptance-only exercise against the existing local workflow.
-- Exact next action: create a new separate fresh fixture using the rebuilt local
-  distribution and launch only the bootstrap task; preserve KogMaw and the
-  blocked earlier fixture.
+- Exact next action: preserve this historical acceptance evidence and resume
+  only after SYN-049 completes its independent completion/dependency fixes;
+  do not restart or mutate this fixture.
 - Evidence: the fresh fixture at
   `C:\Users\Liparakis\Documents\Codex\2026-09-02\kogmawcollabsmoke`
   initialized Git and Synesis and launched exactly two worker tasks, but both
