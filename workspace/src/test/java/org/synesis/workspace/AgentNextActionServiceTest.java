@@ -91,6 +91,34 @@ class AgentNextActionServiceTest {
     }
 
     @Test
+    void committedProducerWithoutReviewReceivesFinishProjection() throws Exception {
+        prepareSessionAndTrust("codex", "committed-producer");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var claim = collaboration.announce(controlRoot, "codex", "committed-producer",
+                "Implement the product change", "Publish the completed product change",
+                List.of(ResourceSelector.pathExact("src/Product.java")));
+
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
+        var binding = bindingService.find(location, "codex", "committed-producer")
+                .orElseThrow();
+        Path worker = Path.of(binding.worktreePath());
+        Files.writeString(worker.resolve("src/Product.java"), "public class Product { int version = 2; }\n");
+        git(worker, "add", "src/Product.java");
+        git(worker, "commit", "-m", "worker product change");
+
+        AgentResponse response = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "committed-producer"));
+
+        assertEquals(AgentStatus.READY, response.status(), response.toJson());
+        assertEquals(AgentReason.SNAPSHOT_PUBLICATION_REQUIRED, response.reason(), response.toJson());
+        assertEquals(AgentNextAction.FINISH_LANE, response.nextAction(), response.toJson());
+        assertEquals(claim.intent().intentId().toString(),
+                ((Map<?, ?>) response.result()).get("intentId"));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void explicitDependencyProjectsCapabilityGuidanceWithoutEmptyRequest() throws Exception {
         prepareSessionAndTrust("codex", "dependency-requester");

@@ -262,7 +262,7 @@ public final class AgentTaskCompletionService {
     /**
      * Determines whether this exact lane revision is subject to review authority.
      */
-    private static boolean reviewRequired(PredictionEventStore store, WorkIntent intent,
+    static boolean reviewRequired(PredictionEventStore store, WorkIntent intent,
             String participantHandle) {
         boolean exactGrant = store.workGroupProjection()
                 .grants()

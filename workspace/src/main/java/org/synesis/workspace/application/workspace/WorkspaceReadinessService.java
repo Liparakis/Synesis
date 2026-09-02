@@ -61,7 +61,7 @@ public final class WorkspaceReadinessService {
      */
     public ReadinessResult assess(ProjectApplicationService.ProjectLocation location,
             String provider, String connectionInstanceId) {
-        return assess(location, provider, connectionInstanceId, false);
+        return assess(location, provider, connectionInstanceId, false, false);
     }
 
     /**
@@ -79,11 +79,30 @@ public final class WorkspaceReadinessService {
      */
     public ReadinessResult assessNoChange(ProjectApplicationService.ProjectLocation location,
             String provider, String connectionInstanceId) {
-        return assess(location, provider, connectionInstanceId, true);
+        return assess(location, provider, connectionInstanceId, true, false);
+    }
+
+    /**
+     * Resolves a completion-only lane whose clean worker HEAD may contain a
+     * committed descendant of the admission base.
+     *
+     * <p>This path is intentionally narrower than ordinary readiness: it is
+     * used to project completion and publish an immutable snapshot, while
+     * ordinary reads, patches, and commands remain generation-strict.</p>
+     *
+     * @param location             initialized project location
+     * @param provider             stable provider identifier
+     * @param connectionInstanceId provider connection identity
+     * @return readiness result containing the exact binding when ready
+     */
+    public ReadinessResult assessCompletion(ProjectApplicationService.ProjectLocation location,
+            String provider, String connectionInstanceId) {
+        return assess(location, provider, connectionInstanceId, true, true);
     }
 
     private ReadinessResult assess(ProjectApplicationService.ProjectLocation location,
-            String provider, String connectionInstanceId, boolean allowControlBaseAdvance) {
+            String provider, String connectionInstanceId, boolean allowControlBaseAdvance,
+            boolean allowCommittedGeneration) {
         try {
             ProviderApplicationService.ProviderWorkAdmission providerAdmission = providerService.assessWorkAdmission(
                     location, provider);
@@ -106,7 +125,9 @@ public final class WorkspaceReadinessService {
                     .toAbsolutePath()
                     .normalize();
             ProviderSessionBindingService.WorkspaceCheck workspaceCheck =
-                    allowControlBaseAdvance
+                    allowCommittedGeneration
+                            ? bindingService.verifyCompletionWorkspace(location, binding, worktree)
+                            : allowControlBaseAdvance
                             ? bindingService.verifyNoChangeWorkspace(location, binding, worktree)
                             : bindingService.verifyWorkspace(location, binding, worktree);
             if (!workspaceCheck.verified()) {

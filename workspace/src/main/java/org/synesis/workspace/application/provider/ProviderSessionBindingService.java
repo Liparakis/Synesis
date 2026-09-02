@@ -1021,7 +1021,7 @@ public final class ProviderSessionBindingService {
      */
     public synchronized WorkspaceCheck verifyWorkspace(ProjectApplicationService.ProjectLocation location,
             Binding binding, Path cwd) {
-        return verifyWorkspace(location, binding, cwd, true);
+        return verifyWorkspace(location, binding, cwd, true, false);
     }
 
     /**
@@ -1040,11 +1040,33 @@ public final class ProviderSessionBindingService {
      */
     public synchronized WorkspaceCheck verifyNoChangeWorkspace(
             ProjectApplicationService.ProjectLocation location, Binding binding, Path cwd) {
-        return verifyWorkspace(location, binding, cwd, false);
+        return verifyWorkspace(location, binding, cwd, false, false);
+    }
+
+    /**
+     * Verifies a clean producer lane whose HEAD is a committed descendant of
+     * its admission base without authorizing ordinary workspace mutation.
+     *
+     * <p>Completion only needs to inspect and publish the immutable committed
+     * delta. It therefore permits the worker HEAD to advance while retaining
+     * the exact assigned worktree, branch, Git ancestry, and common repository
+     * checks. Ordinary reads, patches, and commands continue to use the
+     * strict generation check in {@link #verifyWorkspace(ProjectApplicationService.ProjectLocation,
+     * Binding, Path)}.</p>
+     *
+     * @param location project location
+     * @param binding  session binding
+     * @param cwd      provider event working directory
+     * @return workspace verification result
+     */
+    public synchronized WorkspaceCheck verifyCompletionWorkspace(
+            ProjectApplicationService.ProjectLocation location, Binding binding, Path cwd) {
+        return verifyWorkspace(location, binding, cwd, false, true);
     }
 
     private WorkspaceCheck verifyWorkspace(ProjectApplicationService.ProjectLocation location,
-            Binding binding, Path cwd, boolean requireCurrentControlBase) {
+            Binding binding, Path cwd, boolean requireCurrentControlBase,
+            boolean allowCommittedGeneration) {
         if (binding == null || binding.worktreePath() == null || binding.worktreePath()
                 .isBlank()) {
             return new WorkspaceCheck(false, binding == null ? "WORKSPACE_UNVERIFIED" : binding.lastSeenState());
@@ -1082,8 +1104,9 @@ public final class ProviderSessionBindingService {
             if (!isBaseAncestor(assigned, binding.baseCommit())) {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             }
-            if (!binding.baseCommit()
-                    .equals(git(assigned, "rev-parse", "HEAD"))) {
+            String currentWorkerHead = git(assigned, "rev-parse", "HEAD");
+            if (!binding.baseCommit().equals(currentWorkerHead)
+                    && (!allowCommittedGeneration || !isWorktreeClean(binding))) {
                 return new WorkspaceCheck(false, "WORKSPACE_GENERATION_MISMATCH");
             }
             if (requireCurrentControlBase && !binding.baseCommit()

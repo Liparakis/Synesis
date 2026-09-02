@@ -932,7 +932,8 @@ public final class AgentNextActionService {
                             .equals(participantId)
                             && store.workGroupProjection()
                             .grantConsumed(grant.grantId()));
-            if (!reviewGrantConsumed) {
+            if (!reviewGrantConsumed
+                    && AgentTaskCompletionService.reviewRequired(store, intent, participantId)) {
                 continue;
             }
             boolean snapshotPublished = completion.findSnapshotForTaskRevision(
@@ -1432,6 +1433,18 @@ public final class AgentNextActionService {
                                         .sessionId()));
             }
             readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
+            if (!readiness.ready()
+                    && "WORKSPACE_GENERATION_MISMATCH".equals(readiness.internalReason())) {
+                // A worker may commit its completed change before polling the
+                // completion inbox. Ordinary readiness must reject that
+                // generation for mutation, while this read-only projection
+                // may validate a clean descendant for snapshot publication.
+                WorkspaceReadinessService.ReadinessResult completionReadiness = readinessService.assessCompletion(
+                        location, request.provider(), request.connectionInstanceId());
+                if (completionReadiness.ready()) {
+                    readiness = completionReadiness;
+                }
+            }
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED,
                     AgentReason.WORKSPACE_NOT_READY,
