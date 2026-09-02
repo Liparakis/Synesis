@@ -1543,6 +1543,12 @@ public final class AgentNextActionService {
                 if (reviewPendingResponse != null) {
                     return reviewPendingResponse;
                 }
+                Map<String, Object> publishedSnapshotCompletion = publishedSnapshotCompletionAction(
+                        store, callerParticipant);
+                if (publishedSnapshotCompletion != null) {
+                    return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                            AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
+                }
                 Map<String, Object> publicationAction = snapshotPublicationAction(
                         store, callerParticipant, assignedWorktree, snapshotService);
                 if (publicationAction != null) {
@@ -2022,6 +2028,12 @@ public final class AgentNextActionService {
             if (reviewPendingResponse != null) {
                 return reviewPendingResponse;
             }
+            Map<String, Object> publishedSnapshotCompletion = publishedSnapshotCompletionAction(
+                    store, participant);
+            if (publishedSnapshotCompletion != null) {
+                return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+                        AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
+            }
 
             Path assignedWorktree = binding.worktreePath() == null
                     ? null : Path.of(binding.worktreePath());
@@ -2067,6 +2079,61 @@ public final class AgentNextActionService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /**
+     * Projects the idempotent finish required after a reviewed snapshot is
+     * accepted, including when the original worker lane remains dirty.
+     *
+     * <p>{@code finish_lane} snapshots the visible lane into an immutable
+     * commit and deliberately does not require the harness to commit its
+     * worktree first.  Once review accepts that snapshot, the producer still
+     * needs one exact finish call to drive integration and release its
+     * binding.  This projection is therefore based only on the durable
+     * snapshot and current producer intent; it never authorizes another
+     * mutable workspace operation.</p>
+     *
+     * @param store         durable project event store
+     * @param participantId exact caller participant
+     * @return projected finish payload, or {@code null} when no accepted
+     *         published snapshot awaits producer completion
+     */
+    private static Map<String, Object> publishedSnapshotCompletionAction(
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+        if (participantId == null || participantId.isBlank()) {
+            return null;
+        }
+        for (WorkIntent intent : store.collaborationProjection()
+                .activeIntents()) {
+            if (!participantId.equals(intent.participant()) || intent.role() != WorkIntent.Role.PRODUCER) {
+                continue;
+            }
+            TaskSnapshotRecord snapshot = store.taskCompletionProjection()
+                    .findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version())
+                    .orElse(null);
+            if (snapshot == null) {
+                continue;
+            }
+            TaskCompletionState state = store.taskCompletionProjection()
+                    .snapshotState(snapshot.snapshotId())
+                    .orElse(TaskCompletionState.ACTIVE);
+            if (state != TaskCompletionState.REVIEW_ACCEPTED && state != TaskCompletionState.INTEGRATED) {
+                continue;
+            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("summary", "Publish the completed immutable snapshot");
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("state", state.name());
+            result.put("snapshotAlreadyPublished", true);
+            result.put("snapshot", snapshotMap(snapshot));
+            result.put("currentIntent", intentMap(intent));
+            result.put("nextProtocolAction", "finish_lane");
+            result.put("nextProtocolKind", "snapshot_completion");
+            result.put("nextProtocolPayload", payload);
+            return result;
+        }
+        return null;
     }
 
     /**

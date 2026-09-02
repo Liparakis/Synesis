@@ -623,9 +623,29 @@ public final class AgentTaskCompletionService {
                     .snapshotState(existingOpt.get()
                             .snapshotId())
                     .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.INTEGRATED) {
-                return completionResult(store, existingOpt.get(), participantHandle,
+                AgentResponse result = completionResult(store, existingOpt.get(), participantHandle,
                         new AgentResponse(AgentStatus.COMPLETED, null, null,
                                 Map.of("task", "already_integrated")), null);
+                releaseClaims(request, collaborationService);
+                bindingService.complete(location, request.provider(), request.connectionInstanceId());
+                AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
+                if (request.terminalSession()
+                        && terminalResult.result() instanceof Map<?, ?> terminalMap
+                        && "SESSION_TERMINATED".equals(String.valueOf(terminalMap.get("sessionTermination")))) {
+                    return terminalResult;
+                }
+                try {
+                    AgentResponse continuation = nextActionService.getNextAction(
+                            new AgentNextActionService.NextActionRequest(
+                                    location.root(), request.provider(), request.connectionInstanceId()));
+                    if (continuation.nextAction() != null) {
+                        return continuationWithCompletion(terminalResult, continuation);
+                    }
+                } catch (Exception ignored) {
+                    // The durable integrated result is authoritative; a later
+                    // inbox read can recover any review continuation.
+                }
+                return terminalResult;
             }
 
             boolean reviewRequired = laneIntent.map(intent -> reviewRequired(store, intent, participantHandle))
