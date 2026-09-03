@@ -24,6 +24,14 @@ binding/lease, authority, CLI/provider-mode, and generated-guidance seams. Map
 the smallest production insertion points and their owning modules, then begin
 the first implementation slice only after that map is recorded.
 
+The source map is recorded in
+`docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`: no generic runtime
+authenticator or managed attachment type currently exists; the bounded seams
+are the existing exact binding resolver, `ProjectRuntimeHost`,
+`CodexAppServerLifecycleService.ProcessLauncher`, Codex configuration writer,
+and CLI/provider reporting. Next implement the provider-neutral attachment
+state/fencing slice.
+
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050

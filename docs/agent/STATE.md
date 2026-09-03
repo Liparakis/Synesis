@@ -24,6 +24,13 @@ Complete the source-backed insertion-point map, record it in the SYN-051
 checkpoint/evidence, then implement the smallest provider-neutral attachment
 state/fencing slice followed by the Codex managed-home adapter.
 
+The map is complete at
+`docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. It confirms that
+the generic runtime-authentication and managed attachment types are absent;
+the existing exact binding resolver, project Codex host, lifecycle launcher,
+Codex configuration writer, and CLI/provider surfaces are the bounded
+insertion points. No authority fallback or second identity graph is needed.
+
 ## SYN-050 provider-session continuity — 2026-09-03
 
 SYN-050 is complete as a feasibility/design gate. Its provider-neutral core

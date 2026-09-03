@@ -18,6 +18,11 @@ Inspect and map the existing runtime-authentication, `ProjectRuntimeHost`,
 smallest insertion points before production edits. Stop if safe isolated Codex
 authentication, exact thread resume, or proof hygiene cannot be achieved.
 
+That source map is now recorded in
+`docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The next code slice
+is the provider-neutral versioned attachment state/authentication and
+generation-fencing service, followed by the Codex managed-home adapter.
+
 ## SYN-050 provider-session continuity — 2026-09-03
 
 SYN-050 is complete as a feasibility/design gate. Its provider-neutral core

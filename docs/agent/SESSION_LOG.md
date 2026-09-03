@@ -4949,3 +4949,17 @@ not run Codex or close SYN-041.
   implementation. No production code has changed in this planning slice.
 - Immediate next action: map existing runtime/provider/binding/authority
   insertion points before implementation.
+
+# 2026-09-03 — SYN-051 source insertion map completed
+
+- Verified no generic `RuntimeAuthenticator`, Codex managed adapter,
+  `MANAGED_CONTINUITY` mode, managed home, or proof store exists in source.
+- Mapped the bounded insertion points: exact binding/authority services,
+  `ProjectRuntimeHost`, `CodexAppServerLifecycleService.ProcessLauncher`,
+  Codex TOML/provider configuration, and CLI/provider reporting.
+- Confirmed the existing lifecycle checkpoint already owns process/thread,
+  revision, and attachment/connection generations but is not a managed
+  attachment record. Evidence:
+  `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`.
+- Exact next action: implement the smallest provider-neutral versioned
+  attachment state/authentication and generation-fencing slice.
