@@ -1,3 +1,14 @@
+# 2026-09-03 — SYN-050 provider-session continuity planning
+
+- Promoted the separate post-SYN-049 MCP restart continuity defect to bounded
+  task SYN-050 and marked SYN-049 PARTIAL; Defects A and B remain preserved
+  evidence and are not reopened.
+- Added proposed ADR-0055 and synchronized TASKS, CURRENT, STATE, NEXT_SESSION,
+  DEFERRED, and the ADR index. No production code or preserved fixture changed.
+- Immediate next action: trace startup connection identity, provider metadata,
+  durable binding fields, exact authority resolution, disconnect/wake/rebind,
+  and existing recovery before selecting a continuity design.
+
 # 2026-08-30 — MAINT-002 strict-check failure corrections
 
 - Corrected the malformed-provider fixture to use Claude's hook configuration

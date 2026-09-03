@@ -1,9 +1,41 @@
 # Current Task
 
+## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
+
+- Task ID: SYN-050
+- Status: ACTIVE
+- SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
+  and are not reopened.
+- Scope: trace and, only after an accepted ADR design, implement the smallest
+  safe continuity mechanism for the same Codex provider conversation to recover
+  its existing Synesis authority after an MCP process restart. Preserve exact
+  connection fencing and reject unrelated, concurrent, stale, replayed, and
+  terminal recovery attempts.
+
+## Immediate next action
+
+Trace the actual MCP startup identity, provider metadata, binding persistence,
+authority lookup, disconnect, wake, and recovery paths. Do not restart or
+re-admit the preserved SYN-049 fixture, and do not make production edits until
+ADR-0055 selects a design supported by current source evidence.
+
+## Acceptance boundary
+
+The same-conversation restart must recover the original participant/session and
+WorkIntent without duplicate claims or re-admission; unrelated and concurrent
+processes must fail closed; races have one winner; stale/replayed proof and
+terminal sessions remain fenced; and the recovered lane must complete through
+the existing explicit-completion, review, integration, and ten-tool lifecycle.
+
+No latest-session fallback, inferred authority, durable-state rewrite, worktree
+copy, manual Synesis identifier, new MCP tool, or unrelated Review/Doctor
+redesign is permitted. ADR-0055 is the design gate.
+
 ## SYN-049 Pre-release explicit completion and dependency actionability — 2026-09-02
 
+- Status: PARTIAL; preserve the completed Defect A/Defect B evidence and the
+  fresh fixture. Do not re-admit or restart either worker.
 - Task ID: SYN-049
-- Status: ACTIVE
 - Scope: independently correct and verify explicit completion lifecycle
   semantics (Defect A) and structured dependency preservation/actionability
   through the rebuilt MCP path (Defect B). Preserve the existing capability,

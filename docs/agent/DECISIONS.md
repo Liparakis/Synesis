@@ -66,3 +66,7 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0054: Preserve structured capability dependencies through admission —
   accepted for SYN-049; verify the rebuilt MCP path first and reuse the
   existing durable capability lifecycle, patching only a proven boundary.
+- ADR-0055: Provider-session continuity across MCP process restart — proposed
+  for SYN-050; preserve exact connection authority and select a source-backed
+  stable identity or audited continuity/handoff only after the trust-boundary
+  trace.

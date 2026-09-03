@@ -4,7 +4,7 @@
 
 ### Pre-release explicit completion and dependency actionability — 2026-09-02
 
-- Status: ACTIVE
+- Status: PARTIAL
 - Scope: make completion an explicit, call-local worker request and verify
   that structured capability dependencies survive the rebuilt MCP admission
   path into the existing durable capability lifecycle. Defect A and Defect B
@@ -75,6 +75,70 @@ fresh two-worker run remains PARTIAL because a separate post-compliance
 review/session lifecycle stall prevented Worker B's final finish and WorkGroup
 terminalization. Preserve that fixture and do not redesign review/Doctor under
 SYN-049.
+
+## SYN-050
+
+### Provider-session continuity across MCP process restart — 2026-09-03
+
+- Status: ACTIVE
+- Scope: determine and implement the smallest safe mechanism that lets the
+  same Codex provider conversation recover its existing Synesis session
+  authority after an MCP process restart, while rejecting unrelated,
+  concurrent, stale, replayed, and terminal-session recovery attempts.
+- Relationship to SYN-049: SYN-049 remains PARTIAL and is not reopened. Defect
+  A (explicit completion) and Defect B (structured dependency actionability)
+  remain accepted separately. The preserved
+  `SynesisTaskTrackerRealAcceptance-20260903-08` fixture is evidence only until
+  continuity is proven; it must not be restarted, re-admitted, rewritten, or
+  manually repaired.
+- Planning acceptance: trace MCP startup, provider metadata, binding fields,
+  exact authority lookup, clean/abnormal disconnect, wake/rebind, and existing
+  recovery paths; distinguish diagnostic correlation from authority-bearing
+  continuity proof; evaluate stable conversation-scoped identity and explicit
+  audited handoff; select one design in ADR-0055 before production edits.
+- Safety invariants: exact connection identity remains authority-sensitive;
+  no latest-provider/session fallback; stale and terminal bindings remain
+  fenced; lifecycle history remains monotonic; recovery creates no duplicate
+  participant, WorkIntent, or claim; live dual authority is rejected or
+  explicitly handed off; replay and race attempts fail closed; the MCP catalog
+  remains exactly ten tools.
+- Implementation acceptance: a lawful same-conversation restart recovers the
+  original authority without re-admission or a new WorkIntent, an unrelated
+  process is rejected, a live original cannot be silently shadowed, races have
+  one winner, stale/replayed proof fails, terminal sessions remain terminal,
+  and the recovered lane can continue through explicit completion and the
+  existing review/integration lifecycle.
+- Required tests: startup/identity, provider binding, authority resolution,
+  clean and abnormal disconnect, recovery/rebind/wake, live-original, race,
+  replay/stale proof, terminal session, restart-plus-completion, and ten-tool
+  regressions. Reuse existing recovery machinery; do not add a new MCP tool or
+  provider identity architecture.
+- Acceptance evidence: rebuild and install from a recorded source commit with
+  matching artifact hashes; record connection, binding, participant, WorkIntent,
+  revision, and final lifecycle evidence without exposing secrets or inventing
+  identifiers. Resume SYN-049 only if its existing durable evidence is
+  compatible with the selected design; otherwise use a fresh continuity
+  fixture and explain the incompatibility.
+- Boundaries: do not weaken `SessionAuthorityResolver`, select the latest
+  session/participant, infer authority from a stable value alone, rewrite old
+  durable state, mutate historical fixtures, copy worktrees, manually create
+  Synesis IDs, bypass lifecycle gates, redesign unrelated Review/Doctor
+  behavior, or self-host the Synesis source repository.
+- Deferred-register review: no deferred capability is activated. This is a
+  bounded provider-session continuity correction at the existing MCP/provider
+  authority seam.
+- Implementation order: (1) record this task and ADR-0055 plus current-state
+  records; (2) trace the current continuity and trust boundary; (3) evaluate
+  both legitimate design classes and finalize ADR-0055; (4) write focused
+  regressions; (5) implement the smallest safe fix; (6) rebuild/hash/install;
+  (7) run the preserved-fixture or fresh continuity acceptance; (8) run
+  Doctor/reconciliation diagnostics; (9) document, checkpoint, and commit only
+  bounded green changes.
+- Stop conditions: continuity proof cannot be derived from available provider
+  metadata; the design requires weakening exact authority lookup or selecting
+  the latest session; two live processes could share authority; historical
+  state needs rewriting; an eleventh tool is needed; SYN-049 needs re-admission;
+  or any safety gate requires bypassing.
 
 ## SYN-048
 

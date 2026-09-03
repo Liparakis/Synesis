@@ -13,6 +13,14 @@ Promotion requires an activation trigger, the listed evidence, an explicit task
 with acceptance criteria, and exactly one `ACTIVE` task. Historical IDs and
 dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/DEFERRED_FUNCTIONALITY_HISTORY.md).
 
+## SYN-050 review — 2026-09-03
+
+SYN-050 promotes no deferred capability. It is a bounded correction at the
+existing provider/MCP session-continuity and authority-recovery seam. The
+strict exact-connection fence, monotonic provider lifecycle, and ten-tool MCP
+surface remain in scope; no broad provider identity architecture,
+connectivity, or Review/Doctor redesign is activated.
+
 ## SYN-049 review — 2026-09-02
 
 The explicit completion lifecycle and structured dependency-admission

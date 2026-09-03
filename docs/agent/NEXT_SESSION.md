@@ -1,8 +1,26 @@
 # Next Session
 
+## SYN-050 provider-session continuity — 2026-09-03
+
+SYN-050 is the single active task. SYN-049 is PARTIAL; its explicit completion
+and structured dependency results remain preserved and are not reopened.
+
+## Immediate next action
+
+Trace MCP startup identity creation, provider metadata, durable binding fields,
+exact authority resolution, disconnect/wake/rebind, and existing recovery
+machinery. Finalize ADR-0055 by selecting between stable conversation-scoped
+identity and explicit audited continuity/handoff before production edits.
+
+Preserve the SYN-049 fixture
+`C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`.
+Do not restart or re-admit its workers, rewrite `.synesis`, copy worktrees,
+invent IDs, weaken exact authority, or redesign Review/Doctor. Stop if safe
+continuity proof is unavailable or dual authority cannot be fenced.
+
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 
-SYN-049 is the single active task. Defect A and Defect B remain separately
+SYN-049 is PARTIAL. Defect A and Defect B remain separately
 testable. ADR-0053 governs explicit call-local completion requests; ADR-0054
 governs rebuilt-artifact verification of structured capability dependencies
 through the existing durable lifecycle.

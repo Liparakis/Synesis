@@ -1,8 +1,37 @@
 # State
 
+## SYN-050 provider-session continuity — 2026-09-03
+
+SYN-050 is the single active task. SYN-049 is PARTIAL and remains closed to
+new Defect A/Defect B production edits. SYN-050 covers only the separate
+provider-session continuity defect observed when a Codex MCP process restarts
+and the same conversation returns with a new connection identity.
+
+The first phase is source reconstruction, not implementation. Establish the
+actual startup identity creation, provider metadata available across restart,
+durable binding fields, exact `SessionAuthorityResolver` predicate,
+disconnect/wake/rebind behavior, and any existing recovery proof. Keep exact
+connection authority and participant/session fencing intact. Evaluate stable
+conversation-scoped identity and audited continuity/handoff separately in
+ADR-0055; production changes require a selected design supported by source
+evidence.
+
+The preserved fixture
+`C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`
+is not to be restarted, re-admitted, rewritten, copied, or manually repaired.
+No durable Synesis state, internal identifier, or provider authority may be
+manually changed. No new MCP tool or Review/Doctor redesign is in scope.
+
+## Immediate next action
+
+Trace the continuity and trust boundary, then update ADR-0055 with the selected
+safe design before writing production code. Stop if current provider metadata
+cannot establish continuity without weakening exact authority lookup or
+allowing dual authority.
+
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 
-SYN-049 is the single active task. It contains two independent defects:
+SYN-049 is PARTIAL and contains two independently accepted defects:
 
 * Defect A replaces mutation-driven/caller-selected completion with a
   call-local `completionRequested` request and full existing-state
