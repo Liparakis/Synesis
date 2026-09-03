@@ -84,14 +84,15 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 
 - Status: ACTIVE
 - Lifecycle state: DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED
-- Coordination state: Result C; design investigation complete and
-  implementation blocked because ordinary Codex stdio MCP has no trusted
-  provider-to-MCP conversation identity or equivalent non-model-visible
+- Coordination state: Result A under the provider-neutral architecture choices;
+  implementation remains blocked for ordinary Codex stdio because it has no
+  trusted provider-to-MCP conversation identity or equivalent non-model-visible
   audited continuity proof
-- Scope: determine and implement the smallest safe mechanism that lets the
-  same Codex provider conversation recover its existing Synesis session
-  authority after an MCP process restart, while rejecting unrelated,
-  concurrent, stale, replayed, and terminal-session recovery attempts.
+- Scope: define and, only after the required provider contract exists,
+  implement the smallest provider-neutral runtime-authentication mechanism that
+  lets an authenticated replacement runtime recover an existing Synesis logical
+  worker while rejecting unrelated, concurrent, stale, replayed, and terminal
+  recovery attempts.
 - Relationship to SYN-049: SYN-049 remains PARTIAL and is not reopened. Defect
   A (explicit completion) and Defect B (structured dependency actionability)
   remain accepted separately. The preserved
@@ -101,8 +102,9 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 - Planning acceptance: trace MCP startup, provider metadata, binding fields,
   exact authority lookup, clean/abnormal disconnect, wake/rebind, and existing
   recovery paths; distinguish diagnostic correlation from authority-bearing
-  continuity proof; evaluate provider-derived identity and a Synesis-issued
-  capability; select one design in ADR-0055 before production edits.
+  continuity proof; evaluate provider-authenticated, Synesis-managed, and
+  anonymous profiles; select one provider-neutral design in ADR-0055 before
+  production edits.
 - Trace result: the normal MCP process receives only an explicit connection
   environment value or a random UUID. The Codex hook sees conversation/session
   evidence, but does not pass it to MCP; the static Codex MCP configuration
@@ -110,11 +112,12 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   single-use, snapshot-backed transfer to a new participant/intent, not
   same-session reattachment. A server-side rotating capability is expressible,
   but the only current carrier is model-visible tool context; no ordinary
-  Codex non-model-visible conversation channel exists. No safe design can be
-  selected from the current MCP trust boundary. The expanded
+  Codex non-model-visible conversation channel exists. Result A is the smallest
+  source-backed architecture, while its ordinary-Codex implementation remains
+  blocked. The expanded
   source trace is
   `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
-- Design decision: Result C. Do not implement a bearer token, project-local
+- Design decision: Result A. Do not implement a bearer token, project-local
   secret, latest-binding fallback, or provider-independent rebind. The
   model-carried option cannot prove reliable same-conversation retention after
   compaction/restart and cannot prevent an obtained bearer from being replayed
@@ -133,10 +136,11 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   sessions must fail closed; the lane must continue through explicit
   completion, review, publication, integration, and terminal lifecycle.
 - Conditional tests: startup/identity, provider binding, authority resolution,
-  clean and abnormal disconnect, recovery/rebind/wake, live-original, race,
-  replay/stale proof, terminal session, restart-plus-completion, and ten-tool
-  regressions. Reuse existing recovery machinery; do not add a new MCP tool or
-  provider identity architecture.
+  provider-profile capability reporting, clean and abnormal disconnect,
+  recovery/rebind/wake, live-original, race, replay/stale proof, terminal
+  session, restart-plus-completion, and ten-tool regressions. Reuse existing
+  recovery machinery; do not add a new MCP tool or put provider identity logic
+  in the core.
 - Acceptance evidence, when unblocked: rebuild and install from a recorded
   source commit with matching artifact hashes; record connection, binding,
   participant, WorkIntent, revision, and final lifecycle evidence without
@@ -151,21 +155,22 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 - Deferred-register review: no deferred capability is activated. This is a
   bounded provider-session continuity correction at the existing MCP/provider
   authority seam.
-- Implementation order: (1) record this completed capability design and amend
-  ADR-0055/current-state records; (2) stop at Result C until the provider
-  supplies the missing trusted primitive; (3) after that primitive exists,
-  revalidate the provider contract and choose the smallest existing
-  `ensure_session`/binding seam; (4) design one durable generation fence and
-  atomic rotation; (5) write focused regressions; (6) implement only the
-  accepted slice; (7) rebuild/hash/install; (8) run a fresh restart/race/
-  terminal acceptance and the preserved SYN-049 completion acceptance; (9)
-  validate, checkpoint, and commit bounded green changes.
+- Implementation order: (1) record the provider-neutral Result A design and
+  amend ADR-0055/current-state records; (2) stop until a provider-authenticated
+  or genuinely Synesis-managed continuity primitive is available; (3) after
+  that primitive exists, revalidate the provider contract and choose the
+  smallest existing `ensure_session`/binding seam; (4) design one durable
+  generation fence and atomic rotation; (5) write focused provider-profile and
+  authorization-preservation regressions; (6) implement only the accepted
+  slice; (7) rebuild/hash/install; (8) run fresh restart/race/terminal and
+  multi-provider acceptance plus the preserved SYN-049 completion acceptance;
+  (9) validate, checkpoint, and commit bounded green changes.
 - Current stop: no production code or tests were changed. A Synesis-issued
   capability cannot be accepted at the ordinary Codex stdio boundary because
   the same conversation has no provider-controlled, non-model-visible way to
-  receive and present it after restart. Resume only after the provider
-  integration supplies that proof; then re-evaluate process-generation lease
-  fencing before implementation.
+  receive and present it after restart. Result A is selected as the core
+  architecture, but implementation resumes only after the provider integration
+  supplies that proof; then re-evaluate process-generation lease fencing.
 - Stop conditions: continuity proof cannot be derived from available provider
   metadata; the design requires weakening exact authority lookup or selecting
   the latest session; two live processes could share authority; historical

@@ -2,9 +2,11 @@
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task. Its design investigation is
-complete with Result C; implementation is blocked pending a trusted provider
-identity or equivalent non-model-visible continuity contract.
+SYN-050 is the single ACTIVE primary task. Its provider-neutral design
+investigation selects Result A (existing core plus a generic runtime-
+authentication seam); implementation is blocked for the current ordinary
+Codex stdio profile pending a trusted provider identity or equivalent
+non-model-visible continuity contract.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
@@ -13,8 +15,9 @@ preserved and are not reopened.
 
 Obtain or verify a provider integration contract that supplies an exact
 per-conversation identity or equivalent non-model-visible audited continuity
-proof to the normal MCP process. The current trace found neither input; a
-model-visible bearer is not sufficient. Do not edit production, restart
+proof to the normal MCP process, or a genuinely Synesis-managed attachment
+channel. The current trace found neither input; a model-visible bearer is not
+sufficient. Do not edit production, restart
 SYN-049, rewrite `.synesis`, copy worktrees, invent IDs, weaken exact
 authority, or redesign Review/Doctor until that prerequisite is available.
 

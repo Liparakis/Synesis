@@ -1,12 +1,16 @@
-# SYN-050 provider-session continuity capability design — 2026-09-03
+# SYN-050 provider-neutral runtime authentication / continuity design — 2026-09-03
 
-Status: DESIGN COMPLETE / RESULT C / IMPLEMENTATION BLOCKED. This is a
-source-backed design decision only. No production code, `.synesis` state,
-provider state, historical fixture, or worker lane was changed.
+Status: DESIGN COMPLETE / RESULT A (architecture) / IMPLEMENTATION BLOCKED for
+the current ordinary Codex stdio profile. This is a source-backed design
+decision only. No production code, `.synesis` state, provider state,
+historical fixture, or worker lane was changed.
 
 ## 1. Starting state and provenance
 
-- Starting source HEAD: `01e0e71056f025c3a8f5a9716fdb9f03596fb8be`.
+- Original trace source HEAD: `01e0e71056f025c3a8f5a9716fdb9f03596fb8be`.
+- This design revision started from clean source HEAD
+  `2434a5e5b1070d547abcaa888cd4b21c336402d5`; the revision itself changes
+  documentation only.
 - Branch: `master`; working tree was clean.
 - Preserved stash: `stash@{0}` (`preserve unrelated process portability work`).
 - The Synesis source checkout is not being used as a Synesis-managed target and
@@ -258,18 +262,31 @@ different conversation/local process cannot obtain it
   future credential record would need ownership/provenance protection, not a
   plain project file.
 
-## 11. Decision
+## 11. Decision under the A/B/C/D architecture choices
 
-**Result C — still blocked on a provider contract.**
+**Result A — existing core plus a generic runtime-authentication seam.**
 
-Synesis can specify a hash-backed, single-use, generation-fenced continuity
-protocol, but ordinary Codex cannot currently retain and present its proof in a
-way that is both automatic for the same conversation and unavailable to an
-unrelated conversation. The existing App Server exact-thread resume is a
-separate supervised architecture (Result D does not solve the ordinary stdio
-acceptance). Implementing a model-visible token, latest-binding fallback, or
-project-local secret would create a false success and weaken the stated trust
-boundary.
+The existing `Binding.sessionId`/participant/WorkIntent model is already a
+durable logical-worker layer, and `SessionAuthorityResolver` is already the
+strict authorization gate. A provider-neutral authentication result can be
+inserted before that gate without making a process, connection, thread, or
+provider session ID the logical worker identity. A provider-specific adapter is
+an edge concern behind that generic seam; it does not require a larger identity
+model refactor.
+
+The implementation is still blocked for ordinary Codex stdio: that transport
+cannot currently retain and present a proof that is automatic for the same
+conversation and unavailable to an unrelated conversation. The existing App
+Server exact-thread resume is a separate supervised architecture; it is useful
+evidence for one adapter-shaped path, but does not make Result D true for
+ordinary stdio. Implementing a model-visible token, latest-binding fallback,
+or project-local secret would create a false success and weaken the stated
+trust boundary.
+
+Earlier SYN-050 notes used “Result C” as shorthand for “blocked on a provider
+contract.” That shorthand is not the A/B/C/D meaning requested by this design
+pass. Under the requested choices, the source-backed architecture decision is
+Result A and the operational disposition is implementation-blocked.
 
 The missing provider primitive is one of:
 
@@ -299,8 +316,9 @@ acceptance. Do not touch historical fixtures or add an MCP tool.
 
 ## 13. Planning and validation result
 
-- ADR-0055 should be amended, not superseded: it remains the single bounded
-  provider-session continuity decision record and now records Result C.
+- ADR-0055 was amended, not superseded: it remains the single bounded
+  provider-session continuity decision record and now records Result A under
+  the requested A/B/C/D architecture choices.
 - SYN-050 remains `ACTIVE`, `DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED`.
 - No deferred capability is promoted; no broad milestone is created.
 - Provider-facing guidance was not changed because no safe continuity workflow
@@ -310,3 +328,231 @@ acceptance. Do not touch historical fixtures or add an MCP tool.
   source tracing, `codex --version`, and `codex mcp get synesis`.
 - No production tests were run or changed; running them would not alter this
   design result.
+
+## 14. Provider-neutral contract and capability classes
+
+The following is a conceptual contract, not an accepted Java API. The core
+should receive a verified result with the logical binding target, proof origin,
+scope, and current attachment generation. It must not receive an unverified
+provider string, thread ID, PID, or public Synesis ID and treat that value as
+authentication.
+
+```text
+provider/runtime adapter
+    → authenticate new or continuation attachment
+    → verified runtime-authentication result
+    → existing exact binding/authority resolution
+    → existing claims, WorkIntent, review, completion, and lifecycle
+```
+
+The generic seam needs the semantic operations “authenticate new,”
+“authenticate continuation,” “verify current attachment,” and “detach,” but
+the names and request/response records remain deliberately undecided. Its
+result may identify the durable binding and transport generation; it may not
+grant path claims, review authority, completion authority, or task permission.
+
+`RuntimeAdapter` is therefore needed conceptually at the provider boundary when
+provider evidence differs. The core remains provider-neutral. A local Runtime
+Broker is not required for provider-authenticated mode and is not selected now.
+It becomes a possible Result-B extension only when Synesis controls a private,
+authenticated launch/attachment channel for a provider that has no trusted
+identity. A broker that merely reads a project file or a model-visible token
+would not solve the trust problem.
+
+| Provider capability class | Authentication root | Continuity result |
+| --- | --- | --- |
+| Provider-authenticated | Provider-controlled, verifiable per-conversation/session assertion | Full restart continuity can be supported after exact scope and generation checks. |
+| Synesis-managed | Synesis-controlled launcher/broker plus protected attachment credential | Managed continuity can be supported if the provider boundary is actually mediated and the credential is not model-visible. |
+| Anonymous/session-bound | None at the runtime boundary | Current transport may coordinate, but restart continuity is explicitly unsupported; use a new admission or the existing audited recovery path. |
+
+Current classifications are conservative: ordinary Codex stdio is anonymous
+at this continuity boundary; the Codex App Server route is a separate
+provider-supervised, adapter-shaped path with exact stored thread/turn and
+attachment generations; Claude Code's hook metadata is not yet an ordinary
+MCP authentication channel; and generic stdio MCP has no trust root.
+
+## 15. Restart cases and lifecycle semantics
+
+The provider-neutral state model is conceptual and maps onto current binding,
+participant, lease, and App Server states rather than introducing a second
+parallel lifecycle:
+
+```text
+UNATTACHED → AUTHENTICATING → ATTACHED(generation=N)
+                         ↘ rejected
+ATTACHED → DISCONNECTED / current lease state
+DISCONNECTED → REAUTHENTICATING → ATTACHED(generation=N+1)
+                                      ↘ rejected
+any terminal binding/session → TERMINAL (never reattached)
+```
+
+- If only MCP C1 restarts while a trusted provider runtime remains alive, its
+  adapter may authenticate C2 as a new transport attachment. Synesis then
+  revalidates the exact binding and advances one current attachment generation;
+  C1 becomes stale. Without provider proof, C2 must not rebind.
+- If the provider runtime also restarts, the surviving trust root must be a
+  persistent provider assertion or a Synesis-managed protected launch/broker
+  credential. A PID, command line, worktree, thread ID, or newest binding is
+  insufficient.
+- If all provider-side state dies and a human later resumes a conversation,
+  only the provider or a Synesis-managed attachment channel can prove that it
+  is the same logical worker. With neither, seamless continuity is
+  unsupported; a new authenticated worker or the existing snapshot-backed
+  recovery transfer is the honest result.
+- A clean `DETACHED` connection remains a released lane, and
+  `RECOVERY_HELD` remains the existing snapshot/grant transfer state. Neither
+  is silently reinterpreted as same-session reattachment.
+
+## 16. Authentication, authorization, and attachment fencing
+
+Authentication answers only:
+
+```text
+runtime R may speak as logical binding S at current attachment generation G
+```
+
+Authorization continues to answer whether S may read or mutate a path, consume
+a capability grant, publish, review, complete, or integrate. The existing
+`SessionAuthorityResolver` can remain strict: the authenticated result should
+feed an exact current binding/generation lookup, while the resolver continues
+to reject missing, terminal, stale, or mismatched authority and never selects
+the latest provider binding.
+
+The source has no generic attachment generation today. `WorkIntent.version`
+is a claim/intent epoch, `Binding.bindingVersion` is not currently a
+cross-process takeover proof, `SessionLeaseRecord` is keyed to connection
+evidence and liveness, and App Server `attachmentGeneration`/
+`connectionGeneration` fences only its supervised lifecycle. A future generic
+implementation should reuse one proven binding/event generation if possible;
+otherwise it may add one durable current-attachment field or event, but must
+not create a parallel claim epoch. The transition must atomically compare the
+current generation, authenticate the proof, fence the old attachment, and
+record the new generation.
+
+The existing provider binding JSON and signed coordination event store provide
+different kinds of durability. A future authenticated reattachment will likely
+need an auditable binding event or an extension of an existing binding event
+that records proof scope, generation transition, and supersession. Exact event
+names are not selected. The current `PROVIDER_SESSION_TERMINALIZED` event,
+lease states, and App Server journals remain intact.
+
+## 17. Proof inventory and trusted roots
+
+| Proof candidate | Issuer/verifier | Confidentiality and replay assessment | Decision |
+| --- | --- | --- | --- |
+| Provider-signed or provider-authenticated assertion | Provider adapter verifies provider root | Can be non-model-visible, scoped, and renewed by provider; must carry conversation binding and expiry/rotation semantics | Preferred provider-authenticated input when actually exposed. |
+| Synesis-issued rotating capability | Synesis issues; core stores a hash and consumes/rotates it | Good server-side replay properties only if presented through a trusted channel; a model-visible bearer is copyable and not conversation-authenticating | Valid protocol shape, unavailable carrier in ordinary Codex stdio. |
+| Launcher-injected secret or signed attachment ticket | Synesis launcher/broker verifies protected process handoff | Requires private process channel, OS protection, scope, one-winner consume, and crash-safe rotation; a plain file/env value is shared | Candidate only for a genuinely Synesis-managed mode. |
+| NodeIdentity/Ed25519 signature | Existing Synesis node key verifies signed Link/events | Authenticates the Synesis node/event signer, not the provider conversation; must not be repurposed without an explicit binding contract | Reusable event-authentication primitive, not current continuity proof. |
+| Thread/session/connection/PID/worktree/public ID | Caller or runtime supplies it | Stable or observable values have no trusted issuer, are replayable/selectable, and do not separate same-human chats | Diagnostic/selector data only; rejected as proof. |
+
+Any accepted credential must be scoped to project, provider adapter, logical
+binding/session, authority lineage, and current generation; expire or rotate;
+be unusable after consumption; avoid transcript/log exposure; and support
+multiple independent workers without shared authority. If the proof cannot be
+kept confidential from the model and unrelated processes, the provider profile
+must remain session-bound.
+
+## 18. Threat model conclusions
+
+- Same-human Chat A, B, and C remain separate unless an authenticated protocol
+  deliberately relates them. Same repository/provider/worktree knowledge is
+  not enough.
+- An unrelated local process cannot inherit a worker by learning project,
+  participant, WorkIntent, workgroup, path, or newest-state identifiers.
+- A stale C1 cannot act after C2 wins. A delayed C1 request must fail against
+  the new generation.
+- Two continuation attempts are serialized with one durable winner; losing and
+  replayed proofs fail closed.
+- Provider adapters must verify provider-controlled evidence, not accept
+  caller-supplied identity strings as trusted.
+- Model-visible continuity material is a leakable bearer and is not an
+  acceptable sole trust boundary.
+- Cloning a project must not clone a live attachment credential. A future
+  credential belongs in protected administration state with provenance, not a
+  normal project file.
+- Machine restart is not automatically in scope: it requires a provider or
+  managed root that survives the restart and an explicit local credential
+  protection/recovery policy. Otherwise the result is session-bound.
+
+## 19. Responsibility boundaries
+
+**Core:** durable logical binding/session identity; exact attachment lookup;
+generation fencing and one-winner takeover; terminal rejection; existing
+claims, authorization, coordination, review, completion, and signed audit
+state.
+
+**Provider adapter:** obtain and verify provider-specific assertions; translate
+provider lifecycle/restart signals into the generic authentication result;
+preserve provider-specific confidentiality and expiry rules; never grant
+Synesis claims directly.
+
+**Optional managed broker:** protect and rotate Synesis-managed attachment
+credentials; mediate an explicitly controlled launch/reattach boundary; record
+auditable handoff evidence; never plan work, assign tasks, orchestrate fleets,
+or replace normal provider UX. No broker is authorized by this pass.
+
+## 20. Architecture choice and conditional roadmap
+
+Result A is the selected architecture because the source already separates a
+durable logical binding from disposable transport evidence and already has the
+strict authorization seam needed after authentication. Result B is an optional
+provider-specific deployment profile, not a reason to put broker logic in the
+core now. Result C (larger identity refactor) is not justified by the source;
+Result D is false for ordinary stdio because App Server continuity is isolated
+to its supervised path.
+
+The smallest future implementation order is:
+
+1. obtain a provider contract and classify each provider profile;
+2. reopen this ADR and define the generic authentication result at the existing
+   `ensure_session`/session-resolution ingress;
+3. reuse or add one durable attachment-generation/audit seam, with atomic
+   proof validation, rotation, and old-generation fencing;
+4. implement one provider adapter and its private carrier; add a managed broker
+   only if that provider boundary is truly controlled;
+5. add focused authorization-preservation, replay/race, restart, terminal, and
+   provider-profile tests;
+6. rebuild, hash, install, and prove artifact provenance before runtime
+   acceptance;
+7. run the fresh restart and multi-provider acceptance, then the preserved
+   SYN-049 lifecycle acceptance if its evidence remains compatible.
+
+No stage authorizes a new MCP tool, latest-binding fallback, worker-facing
+manual identifier, durable-state rewrite, or production change before the
+provider contract is verified.
+
+## 21. Future acceptance model
+
+The first compliant acceptance must use disposable state and record the
+provider contract, source/build/install provenance, and durable revisions. It
+must prove:
+
+```text
+same worker, MCP bridge restart
+  → authenticated C2 attaches
+  → same binding/participant/WorkIntent/claims
+  → C1 fenced
+
+same human, different chat
+  → cannot attach to A
+
+provider runtime restart
+  → only a provider or managed trust root may continue A
+
+two takeover races
+  → exactly one generation wins
+
+old/replayed proof or terminal worker
+  → rejected
+
+Codex provider-authenticated or managed profile
+Claude provider-authenticated or managed profile
+generic anonymous MCP
+  → explicit refusal of seamless restart continuity
+```
+
+After attachment proof, the lane must pass through the unchanged exact
+authority, claims, completion, review, integration, and terminal fences. No
+worktree copy, manual ID, metadata edit, forced transition, or protocol bypass
+is valid evidence.

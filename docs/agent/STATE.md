@@ -2,9 +2,10 @@
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task. Its design investigation is
-complete with Result C, but implementation is blocked pending a trusted
-provider identity or equivalent non-model-visible continuity contract. SYN-049
+SYN-050 is the single ACTIVE primary task. Its provider-neutral design
+investigation selects Result A (existing core plus a generic runtime-authentication
+seam), but implementation is blocked pending a trusted provider identity or
+equivalent non-model-visible continuity contract. SYN-049
 is PARTIAL and remains closed to new Defect A/Defect B production edits; its
 implementation and direct scoped acceptance are complete, but its original
 whole-WorkGroup terminalization criterion was not met.
@@ -23,7 +24,8 @@ provider-controlled, non-model-visible carrier for the same conversation to
 present it after restart. Keep exact connection authority and
 participant/session fencing intact. ADR-0055 and
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
-record Result C; production changes require the provider primitive first.
+record Result A and the current ordinary-Codex implementation gate; production
+changes require the provider primitive first.
 
 The preserved fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`

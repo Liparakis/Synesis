@@ -1,3 +1,25 @@
+# 2026-09-03 — SYN-050 provider-neutral runtime authentication design
+
+- Re-ran the bounded architecture pass from clean source HEAD
+  `2434a5e5b1070d547abcaa888cd4b21c336402d5`. No production code, `.synesis`
+  state, provider state, or preserved fixture changed.
+- Expanded the existing SYN-050 design record to cover provider-authenticated,
+  Synesis-managed, and anonymous capability classes; restart cases; trust roots;
+  proof confidentiality/rotation; race and terminal semantics; core/adapter/
+  broker responsibilities; and the future acceptance model.
+- Corrected the architecture label: under the requested A/B/C/D choices the
+  source-backed choice is Result A (existing core plus a generic
+  runtime-authentication seam). The current ordinary Codex stdio profile is
+  still implementation-blocked because it exposes no trusted,
+  non-model-visible continuity carrier.
+- Amended ADR-0055 and synchronized TASKS, CURRENT, STATE, GOAL, NEXT_SESSION,
+  DEFERRED, and the ADR index. Deferred-register, fixture-preservation, resume,
+  cited-path, and diff checks pass; CP-0640 records this documentation-only
+  slice. Doctor retains its known historical warnings.
+- Exact next action: obtain or verify a provider-authenticated or genuinely
+  Synesis-managed continuity contract, then reopen ADR-0055 before production
+  implementation.
+
 # 2026-09-03 — SYN-049/SYN-050 bookkeeping reconciliation
 
 - Kept SYN-049 PARTIAL because its original acceptance requires final Worker B

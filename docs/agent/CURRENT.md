@@ -3,16 +3,17 @@
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050
-- Status: ACTIVE; DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED; Result C pending
-  a trusted provider-to-stdio-MCP conversation identity or equivalent
+- Status: ACTIVE; DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED; Result A under the
+  provider-neutral architecture choices. The ordinary Codex stdio profile is
+  blocked pending a trusted provider-to-MCP conversation identity or equivalent
   non-model-visible audited continuity proof
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
   and are not reopened.
-- Scope: trace and, only after an accepted ADR design, implement the smallest
-  safe continuity mechanism for the same Codex provider conversation to recover
-  its existing Synesis authority after an MCP process restart. Preserve exact
-  connection fencing and reject unrelated, concurrent, stale, replayed, and
-  terminal recovery attempts.
+- Scope: define and, only after a verified provider contract and accepted ADR,
+  implement the smallest provider-neutral runtime-authentication mechanism for
+  an authenticated replacement runtime to recover an existing Synesis logical
+  worker. Preserve exact connection fencing and reject unrelated, concurrent,
+  stale, replayed, and terminal recovery attempts.
 
 ## Immediate next action
 
@@ -40,8 +41,9 @@ ADR-0055 and
 record the expanded capability evaluation. A high-entropy, hash-backed,
 single-use capability is server-side expressible, but ordinary Codex offers no
 provider-controlled non-model-visible way for the same conversation to receive
-and present it after restart. Result C is therefore selected; no production
-files changed.
+and present it after restart. Result A is selected as the smallest
+provider-neutral core architecture; its ordinary-Codex implementation remains
+blocked. No production files changed.
 
 ## Acceptance boundary
 
@@ -62,17 +64,20 @@ redesign is permitted. ADR-0055 records the completed design-gate result.
 Mapped the source-backed durable `Binding.sessionId`/participant/WorkIntent
 chain, the ephemeral MCP connection/process evidence, the exact resolver and
 lease coupling, and the separate Codex App Server wake/thread path. Evaluated a
-Synesis-issued high-entropy, hash-backed, single-use rotating capability and
-all currently available Codex carriers. Amended ADR-0055 and synchronized the
-task/current-state records in
+Synesis-issued high-entropy, hash-backed, single-use rotating capability, the
+provider-authenticated/Synesis-managed/anonymous capability classes, and all
+currently available Codex carriers. Selected Result A as the provider-neutral
+core architecture while keeping implementation blocked for the current
+ordinary stdio profile. Amended ADR-0055 and synchronized the task/current-state
+records in
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
 No production code, provider configuration, durable Synesis state, or fixture
 was changed.
 
 ## Current failures
 
-The provider primitive required for Result C is not available at ordinary
-Codex stdio MCP startup. A model-visible bearer cannot provide reliable
+The provider primitive required to implement Result A is not available at
+ordinary Codex stdio MCP startup. A model-visible bearer cannot provide reliable
 same-conversation retention or prevent another process from using a copied
 credential, and the existing recovery path transfers to a new participant/
 WorkIntent. The eventual implementation and SYN-049 terminal acceptance

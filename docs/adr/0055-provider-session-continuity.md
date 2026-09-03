@@ -1,7 +1,8 @@
-# ADR-0055: Provider-session continuity across MCP process restart
+# ADR-0055: Provider-neutral runtime authentication and session continuity
 
-Status: Design investigation complete; Result C; implementation blocked pending
-a provider continuity contract. No production design is accepted.
+Status: Design investigation complete; Result A under the A/B/C/D choices;
+implementation blocked for the current ordinary Codex stdio profile pending a
+trusted provider continuity contract. No production design is accepted.
 
 ## Context
 
@@ -113,17 +114,28 @@ attachment/connection generations and can resume an exact thread. It is a
 separate App Server architecture and cannot silently supply identity to normal
 stdio MCP.
 
-## Decision
+## Decision under the A/B/C/D architecture choices
 
-**Result C — still blocked on a provider contract.**
+**Result A — existing core plus a generic runtime-authentication seam.**
 
-No safe minimal fix is possible in Synesis alone for the target ordinary Codex
-stdio path. Synesis can specify a hash-backed, rotating, generation-fenced
-continuity protocol, but it cannot prove that the same Codex conversation will
-automatically retain and present the proof after an MCP restart while an
-unrelated conversation cannot obtain it. A model-visible token, latest-binding
-fallback, or project-local secret would be a false fix and would weaken the
-authority boundary.
+No safe implementation is possible in Synesis alone for the current ordinary
+Codex stdio path. Synesis can specify a hash-backed, rotating,
+generation-fenced continuity protocol, but it cannot prove that the same Codex
+conversation will automatically retain and present the proof after an MCP
+restart while an unrelated conversation cannot obtain it. A model-visible
+token, latest-binding fallback, or project-local secret would be a false fix
+and would weaken the authority boundary.
+
+The source already separates durable logical binding/session state from
+ephemeral connection/process evidence, and it already has the strict
+`SessionAuthorityResolver` authorization gate. A provider-neutral
+authentication result can be inserted before that gate. A provider-specific
+adapter belongs at the edge; a larger identity refactor is not justified.
+
+The earlier shorthand “Result C” meant “blocked on a provider contract.” It is
+not the A/B/C/D classification used by this ADR revision. Under that
+classification, the architecture is Result A and the current implementation
+disposition is blocked.
 
 The missing provider primitive is an automatically injected, authenticated
 per-conversation identity or confidential continuity assertion for every
@@ -153,7 +165,7 @@ concurrency-aware, and usable without asking the model to copy a secret.
 
 ## Conditional implementation plan
 
-This plan is not authorized by the current Result C. After the missing
+This plan is not authorized by the current implementation gate. After the missing
 provider primitive exists, re-open this ADR and revalidate its trust contract.
 Then use `ensure_session` as the candidate ingress, extend the actual
 `McpProtocolHandler`/`SessionResolutionRequest`/`AgentSessionService`/
@@ -166,6 +178,67 @@ replay, late requests, terminal sessions, wake interaction, and the final
 SYN-049 completion acceptance. Rebuild and prove installed artifact
 provenance before any real fixture run. Do not add an MCP tool or alter
 historical fixtures.
+
+## Provider-neutral boundary
+
+The conceptual, not-yet-public API is:
+
+```text
+provider adapter or managed attachment boundary
+    → authenticate new/continuation runtime
+    → verified logical binding + attachment generation
+    → existing strict authority resolution
+    → existing claims and coordination lifecycle
+```
+
+Authentication may establish only which durable logical binding a runtime may
+speak for and which current attachment generation it holds. It must not grant
+claims, review, completion, publication, integration, or task permissions.
+
+`RuntimeAdapter` is needed conceptually to verify provider-specific evidence.
+A local Runtime Broker is optional only for a genuinely Synesis-managed
+provider boundary; it is not required for provider-authenticated mode and is
+not authorized by this ADR. Anonymous providers remain session-bound.
+
+| Profile | Root of trust | Supported continuity |
+| --- | --- | --- |
+| Provider-authenticated | Verifiable provider-controlled conversation/session assertion | Full continuity after scope, replay, and generation checks. |
+| Synesis-managed | Protected Synesis launcher/broker attachment credential | Continuity only when Synesis truly mediates the provider boundary. |
+| Anonymous | No runtime authentication root | Current transport only; restart continuity is unsupported. |
+
+Ordinary Codex stdio is currently in the anonymous profile at this boundary.
+Codex App Server is a separate supervised adapter-shaped path with exact
+thread/turn and attachment/connection generations. Claude hook metadata is
+provider correlation, not yet ordinary-MCP authentication. Neither thread ID
+nor hook metadata becomes the core identity.
+
+## Attachment and failure invariants
+
+- A new attachment must authenticate before it can select the existing binding.
+- A successful replacement advances one current attachment generation and
+  fences the old generation; two races have one durable winner.
+- A live or ambiguously live old attachment is not silently taken over.
+- A consumed or stale proof is rejected; rotation is crash-safe or fails closed.
+- Terminal binding/session/participant state is irreversible. `DETACHED` and
+  `RECOVERY_HELD` retain their current meanings and are not reinterpreted as
+  same-session reattachment.
+- `SessionAuthorityResolver` remains exact and never falls back to the latest
+  provider binding. Existing claim epochs, event revisions, workgroup versions,
+  and execution-time fences remain in force.
+- Any future durable attachment record/event must be project-, provider-,
+  binding-, lineage-, and generation-scoped and must not expose a live secret in
+  ordinary project files or model-visible context.
+
+## Conditional implementation order
+
+This ADR does not authorize implementation until the provider contract exists.
+The next implementation order is: verify the provider root; reopen and
+revalidate this ADR; add the smallest generic authentication input at the
+existing session-resolution ingress; reuse or add one durable attachment
+generation/audit seam; implement one provider adapter; add a broker only if a
+controlled provider boundary requires it; then test replay, races, stale and
+terminal state, restart, and preservation of existing authorization. Rebuild
+and hash the installed artifact before any disposable runtime acceptance.
 
 ## Explicit non-decisions
 

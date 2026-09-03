@@ -63,13 +63,14 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0053: Explicit call-local completion requests — accepted for SYN-049;
   remove caller-selected completion policies and require explicit,
   revalidated completion projection.
-- ADR-0055: Provider-session continuity across MCP process restart — design
-  investigation complete, Result C / implementation blocked; the normal Codex
-  stdio MCP path does not receive a trusted conversation identity or equivalent
-  non-model-visible continuity proof. A server-side rotating capability is
-  expressible but cannot be safely carried by the current provider, and the
-  existing audited recovery path is a new-participant transfer rather than
-  same-session reattachment. See the expanded capability design evidence.
+- ADR-0055: Provider-neutral runtime authentication and session continuity —
+  Result A (existing core plus a generic authentication seam); implementation is
+  blocked for ordinary Codex stdio because it does not receive a trusted
+  conversation identity or equivalent non-model-visible continuity proof. A
+  server-side rotating capability is expressible but cannot be safely carried
+  by the current provider, and the existing audited recovery path is a
+  new-participant transfer rather than same-session reattachment. See the
+  expanded capability design evidence.
 - ADR-0054: Preserve structured capability dependencies through admission —
   accepted for SYN-049; verify the rebuilt MCP path first and reuse the
   existing durable capability lifecycle, patching only a proven boundary.
