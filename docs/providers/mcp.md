@@ -28,3 +28,9 @@ intent/ownership announcement. Claims must be disjoint; Synesis rejects
 overlapping ownership. `likelyScopes` is descriptive planning information only
 and does not announce intent or acquire claims. There is no separate announce
 tool in the ten-tool MCP surface.
+
+Provider continuity is explicit. A normal MCP process is `SESSION_BOUND`; a
+managed Codex process is `MANAGED_CONTINUITY` only after startup authenticates
+the exact existing binding, thread, generation, and server-issued proof. The
+proof is delivered through the allow-listed process environment and is never
+written to configuration, repository state, prompts, output, or diagnostics.

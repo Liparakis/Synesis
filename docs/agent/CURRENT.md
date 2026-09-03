@@ -19,18 +19,19 @@
 
 ## Immediate next action
 
-Inspect the existing runtime-authentication, provider-launch, Codex App Server,
-binding/lease, authority, CLI/provider-mode, and generated-guidance seams. Map
-the smallest production insertion points and their owning modules, then begin
-the first implementation slice only after that map is recorded.
+Establish clean build/install artifact provenance from a committed SYN-051
+implementation and verify safe keyring-backed Codex authentication. The
+current host reports file-backed `auth.json`; do not copy it. If safe isolated
+authentication is unavailable, record the hard stop and do not run managed
+Codex acceptance.
 
 The source map is recorded in
-`docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`: no generic runtime
-authenticator or managed attachment type currently exists; the bounded seams
-are the existing exact binding resolver, `ProjectRuntimeHost`,
-`CodexAppServerLifecycleService.ProcessLauncher`, Codex configuration writer,
-and CLI/provider reporting. Next implement the provider-neutral attachment
-state/fencing slice.
+`docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The first
+implementation slice now provides versioned hash-only attachment records,
+cryptographically random proof issuance, exact binding/thread/generation
+authentication, atomic replacement fencing, dedicated Codex homes, selected
+`env_vars` delivery, MCP startup authentication, continuity-mode reporting,
+and provider guidance. Focused tests and strict Javadocs pass.
 
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 

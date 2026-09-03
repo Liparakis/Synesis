@@ -4963,3 +4963,25 @@ not run Codex or close SYN-041.
   `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`.
 - Exact next action: implement the smallest provider-neutral versioned
   attachment state/authentication and generation-fencing slice.
+
+# 2026-09-03 — SYN-051 first managed-continuity implementation slice
+
+- Implemented provider-neutral versioned managed attachment records with
+  hash-only 256-bit proofs, exact binding/thread/generation predicates,
+  terminal fencing, disconnected reattachment, and cross-process atomic
+  compare-and-replace generation rotation.
+- Implemented isolated Codex runtime homes and keyring-only configuration with
+  `env_vars = ["SYNESIS_ATTACH_PROOF"]`; raw proof is retained only for the
+  trusted launch environment. MCP startup now authenticates proof-bearing
+  processes against the exact existing binding and recorded thread/generation.
+- Added explicit continuity-mode reporting and provider guidance. No new MCP
+  tool, coordination identity, or authority fallback was introduced.
+- Verification: focused continuity/runtime-home/manual tests PASS; MCP server
+  startup tests PASS; workspace and MCP strict Javadocs PASS. A broader mixed
+  workspace/MCP/CLI run hung without output and was stopped; it is not counted
+  as passing.
+- Host authentication inspection found `auth.json` without a keyring setting.
+  Do not copy it. Real authenticated managed-Codex acceptance is blocked until
+  safe isolated keyring-backed authentication is available.
+- Exact next action: commit this slice, rebuild/install, record matched
+  provenance hashes, and preserve the authentication blocker if unchanged.

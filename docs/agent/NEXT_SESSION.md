@@ -12,16 +12,15 @@ historical durable state.
 
 ## Immediate next action
 
-Inspect and map the existing runtime-authentication, `ProjectRuntimeHost`,
-`BindingRuntime`, `CodexAppServerLifecycleService`, binding/lease,
-`SessionAuthorityResolver`, CLI/provider mode, and guidance seams. Record the
-smallest insertion points before production edits. Stop if safe isolated Codex
-authentication, exact thread resume, or proof hygiene cannot be achieved.
+Commit the implemented SYN-051 slice, rebuild/install from that commit, and
+record exact artifact hashes and installation target. Then verify the Codex
+keyring strategy. If it is unavailable, stop with the hard-block evidence;
+do not copy file-backed auth or claim managed acceptance.
 
 That source map is now recorded in
-`docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The next code slice
-is the provider-neutral versioned attachment state/authentication and
-generation-fencing service, followed by the Codex managed-home adapter.
+`docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The first code
+slice is implemented and focused tests/Javadocs pass. The next step is
+provenance and authentication gating.
 
 ## SYN-050 provider-session continuity — 2026-09-03
 

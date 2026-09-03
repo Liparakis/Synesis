@@ -29,6 +29,7 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.constraint.ConstraintApplicationService;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
@@ -96,10 +97,39 @@ public final class ProviderApplicationService {
                         : new ProviderSessionBindingService().isFallbackEvidence(location, provider, binding);
                 values.put("SESSION_EVIDENCE", fallback ? "FALLBACK" : "EXPLICIT");
             }
+            values.put("CONTINUITY_MODE", continuityMode(location, provider));
         } catch (Exception failure) {
             values.put("SESSION_BINDING", "BROKEN");
         }
         return new ProviderResult(result.exitCode(), values);
+    }
+
+    private static String continuityMode(ProjectApplicationService.ProjectLocation location, String provider) {
+        if (!"codex".equals(provider)) {
+            return "SESSION_BOUND";
+        }
+        Path directory = location.synesisDirectory().resolve("local/runtime/managed-continuity");
+        if (!Files.isDirectory(directory)) {
+            return "SESSION_BOUND";
+        }
+        try (var paths = Files.list(directory)) {
+            boolean managed = paths.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .map(path -> {
+                        try {
+                            return new org.synesis.workspace.application.provider.continuity.ManagedAttachmentStore(path)
+                                    .read()
+                                    .orElse(null);
+                        } catch (IOException invalid) {
+                            return null;
+                        }
+                    })
+                    .anyMatch(record -> record != null && provider.equals(record.provider())
+                            && record.status() != ManagedAttachmentRecord.Status.TERMINAL);
+            return managed ? "MANAGED_CONTINUITY" : "SESSION_BOUND";
+        } catch (IOException unavailable) {
+            return "SESSION_BOUND";
+        }
     }
 
     private static boolean hasProvenInterception(ProjectApplicationService.ProjectLocation location,

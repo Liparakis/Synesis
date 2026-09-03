@@ -10,24 +10,25 @@ generation fencing. ADR-0056 records the decision. SYN-050 is preserved as the
 PASS-A feasibility gate; SYN-049 remains PARTIAL and its fixture is evidence
 only.
 
-Before production mutation, map the existing runtime-authentication,
-`ProjectRuntimeHost`, `BindingRuntime`, Codex lifecycle, binding/lease,
-`SessionAuthorityResolver`, CLI, and guidance seams. Preserve exact authority,
-the ten-tool MCP surface, ordinary `SESSION_BOUND` behavior, and all historical
-fixtures. Stop if safe isolated Codex authentication or exact thread resume
-cannot be delivered without plaintext proof persistence or an authority
-fallback.
+The implementation preserves exact authority, the ten-tool MCP surface,
+ordinary `SESSION_BOUND` behavior, and all historical fixtures. It adds the
+provider-neutral versioned attachment state/fencing slice, isolated Codex
+homes, keyring-only configuration, MCP proof authentication, mode reporting,
+and provider guidance. Stop if safe isolated Codex authentication or exact
+thread resume cannot be delivered without plaintext proof persistence or an
+authority fallback.
 
 ## Immediate next action
 
-Complete the source-backed insertion-point map, record it in the SYN-051
-checkpoint/evidence, then implement the smallest provider-neutral attachment
-state/fencing slice followed by the Codex managed-home adapter.
+Commit this bounded implementation slice, then rebuild the distribution and
+record source/artifact/install hashes. Inspect the resulting provider
+authentication strategy before attempting any managed runtime acceptance.
 
 The map is complete at
 `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. It confirms that
-the generic runtime-authentication and managed attachment types are absent;
-the existing exact binding resolver, project Codex host, lifecycle launcher,
+the provider-neutral runtime-authentication and managed attachment types are
+implemented at the bounded seams: exact binding resolver, project Codex host,
+lifecycle launcher,
 Codex configuration writer, and CLI/provider surfaces are the bounded
 insertion points. No authority fallback or second identity graph is needed.
 

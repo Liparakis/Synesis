@@ -4,7 +4,12 @@ import java.nio.file.Path;
 import java.util.UUID;
 import org.synesis.mcp.application.McpProtocolHandler;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.RuntimeAuthenticator;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
@@ -62,9 +67,20 @@ public final class SynesisMcpServer {
 
         long pid = ProcessHandle.current()
                 .pid();
+        String attachmentProof = boundedEnvironmentOrNull("SYNESIS_ATTACH_PROOF");
+        String continuityMode = "SESSION_BOUND";
+        if (attachmentProof != null) {
+            try {
+                authorizeManagedAttachment(projectRoot, provider, connectionInstanceId, attachmentProof);
+                continuityMode = "MANAGED_CONTINUITY";
+            } catch (Exception rejected) {
+                System.err.println("SYNESIS_MCP_STARTUP_REJECTED=MANAGED_ATTACHMENT_REJECTED");
+                return 2;
+            }
+        }
         System.err.println(
                 "SYNESIS_MCP_STARTUP pid=" + pid + " version=0.1.0-SNAPSHOT commit=bc334ac conn=" + connectionInstanceId
-                        + " provider=" + provider + " cwd=" + Path.of(".")
+                        + " provider=" + provider + " continuityMode=" + continuityMode + " cwd=" + Path.of(".")
                         .toAbsolutePath()
                         .normalize());
 
@@ -75,6 +91,23 @@ public final class SynesisMcpServer {
         McpStdioServer server = new McpStdioServer(handler);
 
         return server.run();
+    }
+
+    private static RuntimeAuthenticator.AuthenticatedRuntime authorizeManagedAttachment(Path projectRoot,
+            String provider, String connectionInstanceId, String attachmentProof) throws Exception {
+        if (!"codex".equals(provider)) {
+            throw new IllegalArgumentException("managed continuity provider unsupported");
+        }
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService().find(location, provider,
+                connectionInstanceId).orElseThrow(() -> new IllegalStateException("managed binding missing"));
+        ManagedAttachmentService service = new ManagedAttachmentService();
+        var store = ManagedAttachmentService.storeFor(location, binding.sessionId());
+        ManagedAttachmentRecord record = store.read()
+                .orElseThrow(() -> new IllegalStateException("managed attachment missing"));
+        RuntimeAuthenticator.AttachmentRequest request = new RuntimeAuthenticator.AttachmentRequest(provider,
+                binding.sessionId(), record.threadId(), record.generation(), attachmentProof);
+        return service.authenticate(location, request, location.projectId().toString(), store);
     }
 
     private static String boundedEnvironment(String name, String fallback) {

@@ -45,6 +45,8 @@ class ProviderManualServiceTest {
             assertTrue(content.contains("request is evaluated for that call only"));
             assertTrue(content.contains("likelyScopes` is descriptive only"));
             assertTrue(content.contains("A ready session without claims is not permission to mutate task files"));
+            assertTrue(content.contains("managed Codex continuity is `MANAGED_CONTINUITY`"));
+            assertTrue(content.contains("do not fall back to a different identity"));
             Files.writeString(manual, Files.readString(manual) + "tampered\n");
             assertFalse(service.attest("codex")
                     .valid());
