@@ -49,6 +49,12 @@ final class ManagedAttachmentServiceTest {
 
         assertEquals("thread-owned", issued.record().threadId());
         assertEquals(ProviderContinuityMode.MANAGED_CONTINUITY, issued.record().mode());
+        assertEquals(ManagedAttachmentRecord.Status.PENDING_ACTIVATION, store.read().orElseThrow().status());
+        assertThrows(IllegalStateException.class, () -> new ManagedAttachmentService().authenticate(location,
+                new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-owned", 1L,
+                        issued.proof()), location.projectId().toString(), store));
+        new ManagedAttachmentService().activate(store, 1L);
+        assertEquals(ManagedAttachmentRecord.Status.ACTIVE, store.read().orElseThrow().status());
     }
 
     @Test

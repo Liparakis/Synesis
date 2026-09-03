@@ -91,8 +91,11 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
             String projectId, String provider, String bindingSessionId, String runtimeHomeId,
             ProviderThreadOwnershipRecord ownership, ManagedAttachmentStore store) throws Exception {
         verifyOwnership(ownership, projectId, provider, bindingSessionId);
-        return issue(location, projectId, provider, bindingSessionId, ownership.providerThreadId(), runtimeHomeId,
-                store);
+        IssuedAttachment issued = issue(location, projectId, provider, bindingSessionId, ownership.providerThreadId(),
+                runtimeHomeId, store);
+        ManagedAttachmentRecord pending = withStatus(issued.record(), ManagedAttachmentRecord.Status.PENDING_ACTIVATION);
+        store.write(pending);
+        return new IssuedAttachment(issued.proof(), pending);
     }
 
     /**
@@ -196,8 +199,28 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         if (!ownership.providerThreadId().equals(request.threadId())) {
             throw failure("managed_provider_thread_mismatch");
         }
-        return reattach(location, request, expectedProjectId, ownership.providerThreadId(), runtimeHomeId, store,
-                priorAttachmentProvenStopped);
+        IssuedAttachment issued = reattach(location, request, expectedProjectId, ownership.providerThreadId(),
+                runtimeHomeId, store, priorAttachmentProvenStopped);
+        ManagedAttachmentRecord pending = withStatus(issued.record(), ManagedAttachmentRecord.Status.PENDING_ACTIVATION);
+        store.write(pending);
+        return new IssuedAttachment(issued.proof(), pending);
+    }
+
+    /**
+     * Activates a pending generation after the trusted lifecycle has verified
+     * the exact provider-thread response and readback.
+     *
+     * @param store exact attachment store
+     * @param expectedGeneration generation verified by the broker
+     * @throws Exception when the record is missing, stale, or already fenced
+     */
+    public synchronized void activate(ManagedAttachmentStore store, long expectedGeneration) throws Exception {
+        ManagedAttachmentRecord prior = store.read().orElseThrow(() -> failure("attachment_missing"));
+        if (prior.generation() != expectedGeneration
+                || prior.status() != ManagedAttachmentRecord.Status.PENDING_ACTIVATION) {
+            throw failure("managed_attachment_activation_rejected");
+        }
+        store.write(withStatus(prior, ManagedAttachmentRecord.Status.ACTIVE));
     }
 
     /**
@@ -265,6 +288,13 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                 || !bindingSessionId.equals(ownership.bindingSessionId())) {
             throw new IllegalStateException("provider_thread_ownership_rejected");
         }
+    }
+
+    private static ManagedAttachmentRecord withStatus(ManagedAttachmentRecord prior,
+            ManagedAttachmentRecord.Status status) {
+        return new ManagedAttachmentRecord(prior.schemaVersion(), prior.projectId(), prior.provider(), prior.mode(),
+                prior.bindingSessionId(), prior.threadId(), prior.generation(), prior.proofHash(),
+                prior.runtimeHomeId(), status, prior.revision() + 1L, System.currentTimeMillis());
     }
 
     private static IllegalStateException failure(String diagnostic) {

@@ -69,3 +69,53 @@ then integrate it through `CodexAppServerLifecycleService` and prove a trusted
 thread-scoped managed MCP proof carrier before attempting real managed
 acceptance. Preserve `UNSAFE_FILE_AUTH` and ordinary `SESSION_BOUND` behavior
 until those gates pass.
+
+## Bounded runtime-boundary follow-on — current result
+
+The preceding blocker section records the state before the authorized
+follow-on implementation. It is superseded for the current source tree by
+the following bounded result; the historical feasibility claims above remain
+unchanged.
+
+**Classification: PARTIAL.**
+
+`WindowsJobObjectProcessTreeSupervisor` is now production source. On Windows,
+Java 25 FFM binds `kernel32` and uses `CreateJobObjectW`,
+`SetInformationJobObject`, `CreatePipe`, `CreateProcessW`,
+`AssignProcessToJobObject`, `ResumeThread`, `TerminateJobObject`,
+`WaitForSingleObject`, `QueryInformationJobObject`, `IsProcessInJob`,
+`GetProcessId`, `GetExitCodeProcess`, `ReadFile`, `WriteFile`, and
+`CloseHandle`. The Job uses only `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; no
+breakaway flag is enabled. The process creation flags are
+`CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT`, and assignment occurs before
+resume. The supervisor owns the Job, root process, primary-thread, and pipe
+handles. Its definitive predicate is root wait signaled, Job wait signaled,
+and `ActiveProcesses == 0`; native query/wait failure is ambiguous and does
+not activate a successor. Job membership plus retained process handles, not
+PID disappearance, is the ownership predicate.
+
+`CodexAppServerLifecycleService` now carries the supervisor on managed
+`AppServerProcess` attachments and delegates managed startup failure, process
+exit, hard stop, owner shutdown, and failed-attachment cleanup to Job teardown.
+The existing ordinary launcher and legacy terminator remain available for
+ordinary/fake process paths. A real Windows focused test launched a Java root
+that spawned a `cmd.exe` descendant, observed both while live, then proved
+both dead after explicit Job teardown and Job accounting reached zero.
+
+The managed Codex launcher now supplies a launch-local override for
+`mcp_servers.synesis.env_vars=["SYNESIS_ATTACH_PROOF"]` while placing the raw
+proof only in the App Server environment. The normal Codex config is not
+rewritten and no proof is placed in arguments. Ownership-derived attachment
+records use `PENDING_ACTIVATION`; the trusted lifecycle verifies exact thread
+response/readback and only then activates `ACTIVE`. Early authentication is
+therefore rejected by the existing managed admission predicate.
+
+Focused Gradle tests passed for the real Windows supervisor, lifecycle
+package, attachment service, and exact managed MCP proof gate. A broad MCP
+selection was stopped after several minutes without progress; it is recorded
+as incomplete, not passing. The installed Codex version is `codex-cli
+0.145.0`, but no rebuilt distribution was installed and no real Codex A/B
+proof/restart acceptance was run. SYN-051 remains PARTIAL; full acceptance is
+not authorized. The exact next action is to rebuild/hash/install the current
+source and run only the focused real Codex child-proof, A1-to-A2 recovery,
+fresh-proof rotation, and Worker B-isolation probe.

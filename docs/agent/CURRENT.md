@@ -1,5 +1,36 @@
 # Current Task
 
+## SYN-051 runtime-boundary follow-on — 2026-09-03
+
+The bounded production slice is **PARTIAL**. Java 25 FFM now supplies a
+Windows-only Job Object supervisor with suspended root creation, assignment
+before resume, kill-on-close, native waits, and Job accounting. Managed
+Codex lifecycle launch and teardown use that supervisor. Managed proofs use
+launch-local `env_vars` from the App Server environment and remain pending
+until exact broker-pinned thread response/readback verification. Focused
+source/build, lifecycle, attachment, admission, and real root-plus-descendant
+containment checks pass; real Codex A/B proof delivery and restart acceptance
+remain outstanding.
+
+## Immediate next action
+
+Rebuild and install the current source with matching hashes, then run only the
+focused real Codex child-proof, A1-to-A2 restart, fresh-proof, and Worker B
+isolation probe. Do not run full task-tracker acceptance.
+
+## Work completed
+
+Implemented the Windows Job Object supervisor, lifecycle integration, pending
+managed-proof activation fence, launch-local Codex `env_vars` carrier, focused
+tests, ADR-0062, and updated SYN-051 evidence/planning records.
+
+## Current failures
+
+No focused implementation test failure remains. Real Codex child proof/A-B
+restart acceptance and rebuilt install provenance are still unperformed. The
+package-wide MCP and workspace test selections were stopped after no progress
+and are incomplete, not passing.
+
 ## SYN-051 shared-normal-home production slice — 2026-09-03
 
 The explicit user authorization selects the PASS-B shared-normal-provider-home
@@ -711,7 +742,7 @@ host/tooling blocker, not evidence against the build-script changes.
 
 ## Immediate next action
 
-Continue with a separately reviewed high-confidence warning batch and preserve
+Run a separately reviewed high-confidence warning batch and preserve
 intentional lifecycle, polling, reflection, and public-API behavior. The latest
 full pass is recorded in checkpoint CP-0573.
 

@@ -2,6 +2,14 @@
 
 | Area | Check | Result | Evidence |
 |---|---|---|---|
+| Windows Job launch | Root plus descendant created inside one Job; assignment precedes resume; teardown proves empty | PASS on real Windows runtime | `WindowsJobObjectProcessTreeSupervisorTest` |
+| Lifecycle integration | Managed App Server launch/exit/failure/shutdown routes through supervisor; ordinary launcher remains unchanged | Source-compiled; focused lifecycle tests pass | `CodexAppServerLifecycleService`, `CodexLifecycleWaitControlTest` |
+| Proof activation fence | Early managed proof is pending/rejected; exact thread readback activates current generation | PASS focused JUnit | `ManagedAttachmentServiceTest`, `SynesisMcpServerTest` |
+| Proof carrier | Launch-local `env_vars` selects `SYNESIS_ATTACH_PROOF`; no global config rewrite | Source review only; real Codex child probe pending | `ManagedCodexProcessLauncher`, ADR-0062 |
+| Real managed A/B restart | Real Codex A/B turns, A1 Job death, A2 fresh proof/generation, B isolation | NOT RUN | next session |
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
 | Provider-thread ownership | Two bindings race for one Codex thread; one durable owner remains | PASS by direct Java runtime check; Gradle JUnit incomplete | `ProviderThreadOwnershipStoreTest`, `SYN-051-shared-normal-home-implementation-2026-09-03.md` |
 | Managed thread pin | Active owner accepts exact thread and rejects a changed thread | PASS by direct Java runtime check; Gradle JUnit incomplete | `ManagedCodexThreadBrokerTest`, same evidence |
 | Managed admission | Exact managed binding without proof is rejected; managed resolution requires active record | Source-compiled; Gradle JUnit incomplete | `SynesisMcpServerTest`, same evidence |

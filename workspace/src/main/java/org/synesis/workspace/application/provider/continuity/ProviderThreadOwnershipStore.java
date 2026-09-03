@@ -170,7 +170,11 @@ public final class ProviderThreadOwnershipStore {
         return result[0];
     }
 
-    /** @return ownership record directory */
+    /**
+     * Returns the ownership record directory.
+     *
+     * @return ownership record directory
+     */
     public Path directory() {
         return directory;
     }

@@ -1,5 +1,17 @@
 # Goal
 
+- Current bounded runtime-boundary slice (2026-09-03): **PARTIAL**. A
+  Windows-only Java 25 FFM Job Object supervisor is integrated through the
+  managed Codex lifecycle with suspended creation, assignment before resume,
+  kill-on-close, native waits, and Job accounting. Managed proofs use
+  launch-local Codex `env_vars` from the App Server environment and remain
+  pending until the broker-pinned thread is verified. Focused source/build and
+  real root-plus-descendant containment evidence passes; real Codex child
+  proof delivery and A/B restart acceptance remain outstanding.
+- Exact continuation: rebuild/install with matching hashes, then run the
+  focused real Codex proof-carrier and A1-to-A2/B-isolation probe only. Full
+  task-tracker acceptance is not authorized.
+
 - Selected implementation direction (2026-09-03): PASS-B shared normal
   provider-home managed continuity is authorized. Synesis, not Codex, enforces
   worker authority through unique durable `(provider, providerThreadId)`

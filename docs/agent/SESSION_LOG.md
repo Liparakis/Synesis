@@ -5114,3 +5114,17 @@ not run Codex or close SYN-041.
   and ADR-0059. No Synesis MCP/coordination call, production source/auth
   policy change, credential access, fixture change, `.synesis` rewrite, or
   push occurred.
+- 2026-09-03 — SYN-051 bounded runtime-boundary implementation follow-on:
+  added the Windows-only Java 25 FFM Job Object supervisor and integrated it
+  into managed Codex lifecycle launch, process-exit cleanup, hard stop, and
+  owner shutdown. The root is created suspended, assigned to a new
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` Job, then resumed; native process/pipe
+  handles are retained, and teardown proves root wait plus Job accounting
+  `ActiveProcesses == 0`. Added launch-local Codex `env_vars` proof selection
+  and `PENDING_ACTIVATION` until exact broker-pinned thread response/readback.
+  Real Windows root-plus-descendant containment passed; focused lifecycle,
+  MCP admission, and attachment tests passed. A package-wide MCP selection
+  was stopped after several minutes without progress and remains incomplete.
+  No real Codex A/B/restart acceptance or artifact installation was run.
+  Exact next action: rebuild/hash artifacts and run the focused real Codex
+  child-proof plus A1-to-A2/B-isolation probe only.

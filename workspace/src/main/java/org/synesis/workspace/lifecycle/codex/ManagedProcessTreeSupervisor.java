@@ -44,7 +44,30 @@ public interface ManagedProcessTreeSupervisor {
      */
     boolean teardownAndProveEmpty(Process process) throws IOException;
 
-    /** Supervisor that refuses unsafe uncontained managed launches. */
+    /**
+     * Returns the production supervisor for the current platform.
+     *
+     * <p>Managed launches remain fail-closed on platforms without an
+     * implemented containment primitive.</p>
+     *
+     * @return Windows Job Object supervisor, or an unavailable supervisor
+     */
+    static ManagedProcessTreeSupervisor platformDefault() {
+        if (WindowsJobObjectProcessTreeSupervisor.isWindows()) {
+            try {
+                return new WindowsJobObjectProcessTreeSupervisor();
+            } catch (IOException failure) {
+                return unavailable();
+            }
+        }
+        return unavailable();
+    }
+
+    /**
+     * Returns a supervisor that refuses unsafe uncontained managed launches.
+     *
+     * @return fail-closed unavailable supervisor
+     */
     static ManagedProcessTreeSupervisor unavailable() {
         return new ManagedProcessTreeSupervisor() {
             @Override

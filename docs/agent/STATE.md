@@ -1,5 +1,31 @@
 # State
 
+## SYN-051 runtime-boundary implementation follow-on — 2026-09-03
+
+This bounded slice is **PARTIAL**. The production Windows supervisor is now
+implemented with Java 25 FFM calls into `kernel32`: each managed root is
+created with `CREATE_SUSPENDED`, configured in a new Job with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, assigned before `ResumeThread`, and
+retained with native process and pipe handles. Teardown uses Job termination,
+native waits, and `QueryInformationJobObject` accounting; a failed query or
+non-empty Job remains fail-closed. The lifecycle service delegates managed
+launch, startup failure, process exit, hard stop, and owner shutdown to this
+boundary.
+
+Managed proof delivery is launch-local: the normal Codex home is unchanged,
+the proof is placed only in the App Server environment, and a per-launch
+Codex `env_vars` override selects `SYNESIS_ATTACH_PROOF` for the Synesis MCP
+child. Attachment records are `PENDING_ACTIVATION` until exact thread
+response/readback verification, then the trusted launcher activates the
+generation. Early proof authentication is rejected by the existing ACTIVE
+record check.
+
+## Immediate next action
+
+Rebuild/install from the resulting source commit, record source/artifact
+hashes, then run only the focused real Codex proof-carrier and A1-to-A2/B
+restart probe. Full task-tracker acceptance remains unauthorized.
+
 ## SYN-051 shared-normal-home production slice — 2026-09-03
 
 The selected PASS-B architecture is now the active implementation boundary by

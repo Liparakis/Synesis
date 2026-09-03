@@ -1,5 +1,40 @@
 # Tasks
 
+## SYN-051 bounded runtime-boundary follow-on — 2026-09-03
+
+- Status: ACTIVE / PARTIAL
+- Scope: implement only the Windows Job Object process-tree boundary and the
+  launch-local exact-generation MCP proof carrier for the already selected
+  shared-normal-home architecture. Preserve the durable ownership, broker,
+  generation, admission, authority, and ten-tool decisions above.
+- Implemented: Java 25 FFM `kernel32` Job Object supervision creates each root
+  suspended, applies kill-on-close limits, assigns before resume, retains
+  native process/pipe handles, and proves root death plus zero active Job
+  processes. `CodexAppServerLifecycleService` uses that supervisor for managed
+  launch, failure, shutdown, and process-exit teardown. Managed attachment
+  proofs remain process-local and are selected by launch-local Codex
+  `mcp_servers.synesis.env_vars=["SYNESIS_ATTACH_PROOF"]`; durable activation
+  is pending until exact thread response/readback verification.
+- Verification: strict workspace/MCP compilation, focused lifecycle and
+  attachment tests, and a real Windows root-plus-descendant Job teardown test
+  pass. The package-wide MCP test selection was stopped after several minutes
+  without progress and is incomplete, not passing. No real Codex A/B restart
+  acceptance or artifact installation was run.
+- Remaining gate: prove the exact stock Codex App Server/MCP child carrier,
+  A/B proof isolation, real model turns, A1-to-A2 recovery, and Worker B
+  survival using rebuilt hash-matched artifacts. Until then SYN-051 remains
+  PARTIAL and full acceptance is not authorized.
+- No push, tag, release, task-tracker acceptance, SYN-049 closure, provider
+  credential access, `.synesis` edit, or historical rewrite.
+
+## Immediate next action
+
+Run a fresh disposable hash-matched real Codex focused probe against this
+runtime boundary: verify launch-local proof delivery to the exact MCP child,
+pending-before-pin rejection, A/B cross-proof rejection, and one managed
+restart with Worker B isolated. Stop immediately on any failed containment,
+proof join, or restart predicate; do not run full task-tracker acceptance.
+
 ## SYN-051
 
 ### Bounded shared-normal-home MANAGED_CONTINUITY implementation — 2026-09-03

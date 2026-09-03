@@ -39,6 +39,7 @@ tasks.withType<Javadoc>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
     val forkOverride = project.findProperty("synesisTestForks")?.toString()?.toIntOrNull()
     maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }

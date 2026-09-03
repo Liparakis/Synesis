@@ -1,5 +1,31 @@
 # Next Session
 
+## SYN-051 runtime-boundary follow-on — 2026-09-03
+
+The bounded production slice is **PARTIAL**. Java 25 FFM now provides a
+Windows-only Job Object supervisor with assignment-before-resume,
+kill-on-close, native process/pipe handles, root wait, Job wait, and
+`ActiveProcesses == 0` proof. `CodexAppServerLifecycleService` is wired to
+the supervisor for managed launch and teardown. Managed proof delivery uses
+the same normal Codex home plus launch-local `env_vars`; the raw proof is
+never written to global config or command arguments. A managed record remains
+`PENDING_ACTIVATION` until the exact pinned thread response/readback is
+verified, then the trusted lifecycle activates it.
+
+Focused workspace lifecycle, attachment, MCP admission, strict compile, and
+real Windows root-plus-descendant containment checks pass. A broad MCP test
+selection was stopped after no progress and is incomplete. No real Codex
+managed A/B/restart acceptance, rebuilt install provenance, or full
+task-tracker acceptance has been run.
+
+## Immediate next action
+
+- Exact next code action: create rebuilt hash-matched artifacts and run the
+  smallest real Codex probe
+  that proves exact child proof delivery, A/B proof isolation, early-proof
+  rejection, exact-thread/generation join, A1 Job death, fresh A2 proof, and
+Worker B survival. Stop on any failed gate and do not start full acceptance.
+
 ## SYN-051 shared-normal-home production slice — 2026-09-03
 
 The prior shared-home feasibility rejection is superseded as a product

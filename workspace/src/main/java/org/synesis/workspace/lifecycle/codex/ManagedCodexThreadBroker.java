@@ -27,12 +27,20 @@ public final class ManagedCodexThreadBroker {
         }
     }
 
-    /** @return exact binding that owns the pin */
+    /**
+     * Returns the exact binding that owns the pin.
+     *
+     * @return exact binding session identifier
+     */
     public String bindingSessionId() {
         return ownership.bindingSessionId();
     }
 
-    /** @return provider-owned exact thread selector */
+    /**
+     * Returns the provider-owned exact thread selector.
+     *
+     * @return pinned provider thread identifier
+     */
     public String pinnedThreadId() {
         return ownership.providerThreadId();
     }

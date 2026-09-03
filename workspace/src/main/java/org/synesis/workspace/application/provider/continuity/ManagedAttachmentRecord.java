@@ -35,6 +35,8 @@ public record ManagedAttachmentRecord(int schemaVersion, String projectId, Strin
     public enum Status {
         /** Current attachment is accepted. */
         ACTIVE,
+        /** Proof exists but the trusted provider-thread join is not complete. */
+        PENDING_ACTIVATION,
         /** No current process is attached, but replacement may be authenticated. */
         DISCONNECTED,
         /** Binding or logical session is terminal and cannot be revived. */
