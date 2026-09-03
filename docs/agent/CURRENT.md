@@ -20,11 +20,13 @@
 ## Immediate next action
 
 Artifact provenance is complete and recorded in
-`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. Verify
-safe keyring-backed Codex authentication before any managed acceptance. The
-current host reports file-backed `auth.json`; do not copy it. If safe isolated
-authentication is unavailable, preserve the hard stop and do not run managed
-Codex acceptance.
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. The
+provider-authentication compatibility pass is recorded in
+`docs/evidence/SYN-051-keyring-auth-compatibility-2026-09-03.md`. Codex
+`0.145.0` reports the normal home as file-backed, explicit keyring mode has no
+credentials, and a fresh isolated home fails its real model turn with HTTP
+401. Preserve the hard stop; do not copy `auth.json`, perform destructive
+provider migration, or run managed Codex acceptance.
 
 The source map is recorded in
 `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The first
@@ -37,8 +39,33 @@ and provider guidance. Focused tests and strict Javadocs pass.
 The committed build/install provenance is recorded in
 `docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`.
 Source/runtime/install hashes match. The current Codex home is file-backed
-(`auth.json`) without a keyring setting, so safe authenticated managed runtime
-acceptance is blocked and no credential copy is permitted.
+(`auth.json`) without a keyring credential. The provider's Windows
+keyring-backed storage is scoped to each `CODEX_HOME`, so the existing login is
+not a supported shared carrier for fresh managed homes. Safe authenticated
+managed runtime acceptance is blocked and no credential copy is permitted.
+
+## Work completed
+
+Verified the installed `codex-cli 0.145.0` behavior and the existing
+hash-matched SYN-051 distribution. Normal file-backed Codex authentication
+completed a minimal model turn. Explicit keyring status found no credentials;
+a fresh isolated `CODEX_HOME` contained no copied auth and failed its real
+model turn with HTTP 401. Exact provider source confirms Windows keyring auth
+uses a per-home key and encrypted home-local auth store. Evidence is recorded
+in `docs/evidence/SYN-051-keyring-auth-compatibility-2026-09-03.md`. No
+production source, credential, `.synesis` state, or historical fixture changed.
+
+## Current failures
+
+The safe isolated provider-authentication gate failed. The current normal
+login remains file-backed and the managed adapter must continue to classify it
+as `UNSAFE_FILE_AUTH`. The provider's Windows keyring path is not an
+account-wide carrier across fresh isolated homes; using separate homes would
+require provider credential duplication or a supported cross-home mechanism,
+neither of which is established. A focused Gradle regression invocation also
+failed before test execution with `java.io.IOException: Unable to establish
+loopback connection`, including after the IPv4 preference retry. Do not run
+managed acceptance or weaken the security boundary.
 
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 

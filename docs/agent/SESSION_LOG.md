@@ -4997,3 +4997,30 @@ not run Codex or close SYN-041.
   The managed adapter returns `UNSAFE_FILE_AUTH`; the safe-authentication stop
   condition is therefore active. No auth file was read, copied, logged, or
   modified, and no managed acceptance was attempted.
+
+# 2026-09-03 — SYN-051 provider-authentication compatibility hard stop
+
+- Verified the installed provider as `codex-cli 0.145.0` and confirmed the
+  existing hash-matched SYN-051 distribution still matches its recorded
+  source/build/install provenance.
+- The normal provider smoke turn passed using the existing file-backed login.
+  Explicit `cli_auth_credentials_store=keyring` status reported no
+  credentials, while `auto` continued to report the existing ChatGPT login.
+  Redacted Doctor classified the normal home as `File`; no matching
+  Codex/OpenAI Windows Credential Manager metadata was observed.
+- A fresh disposable isolated `CODEX_HOME` contained no copied auth file.
+  Explicit keyring status reported `Not logged in`, and the real model probe
+  failed with HTTP 401 for missing bearer authentication. The provider source
+  shows Windows keyring auth is home-scoped through a per-`CODEX_HOME` key and
+  encrypted home-local auth store, so it cannot serve as the intended shared
+  carrier for fresh managed homes.
+- No provider credential was read into Synesis, copied, logged, hashed,
+  migrated, or modified. No managed worker or Synesis acceptance was started.
+  Evidence: `docs/evidence/SYN-051-keyring-auth-compatibility-2026-09-03.md`.
+- A focused Gradle regression retry remained blocked before test execution by
+  `java.io.IOException: Unable to establish loopback connection`, including
+  after the IPv4 preference mitigation. This is incomplete test evidence,
+  not a pass.
+- Exact next action: retain the `UNSAFE_FILE_AUTH` hard stop until a
+  provider-supported cross-home authentication mechanism is available and
+  verified; do not run managed acceptance or weaken the security boundary.

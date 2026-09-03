@@ -14,14 +14,19 @@ historical durable state.
 
 The SYN-051 slice is committed as `fd45049`; rebuild/install provenance and
 matching hashes are recorded in
-`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. Verify
-the Codex keyring strategy. If it is unavailable, stop with the hard-block
-evidence; do not copy file-backed auth or claim managed acceptance.
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. The
+provider-authentication compatibility pass is recorded in
+`docs/evidence/SYN-051-keyring-auth-compatibility-2026-09-03.md`: explicit
+keyring mode has no current credentials and a fresh isolated home cannot
+perform an authenticated model turn. Preserve this hard stop; do not copy
+file-backed auth, perform destructive migration, or claim managed acceptance.
 
 That source map is now recorded in
 `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The first code
 slice is implemented, focused tests/Javadocs pass, and provenance is complete.
-The next step is the safe authentication gate.
+The next step is to retain the safe-authentication gate as blocked until a
+provider-supported cross-home authentication mechanism is available and
+verified.
 
 ## SYN-050 provider-session continuity — 2026-09-03
 

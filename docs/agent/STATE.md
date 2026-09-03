@@ -21,17 +21,25 @@ authority fallback.
 Build/install provenance for `fd45049` is recorded in
 `docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`; produced
 and installed runtime jars match by SHA-256 and the installed launcher runs.
-The current Codex authentication strategy is `UNSAFE_FILE_AUTH` because
-`auth.json` exists without a keyring setting. No credential was copied or
-modified, so authenticated managed runtime acceptance is blocked.
+The current Codex authentication strategy remains `UNSAFE_FILE_AUTH`. The
+bounded compatibility pass verified with Codex `0.145.0` that the normal home
+is file-backed, explicit keyring mode has no credentials, and a fresh isolated
+home cannot authenticate or perform a real model turn without its own
+provider-authenticated home state. The Windows keyring backend is home-scoped
+through the provider's `CODEX_HOME`-derived key and encrypted home-local auth
+store, so it is not a shared account-wide carrier for the managed homes. No
+credential was copied, logged, hashed, migrated, or modified.
 
 ## Immediate next action
 
 The bounded implementation is committed as `fd45049`, and build/install
 provenance is recorded in
-`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. The next
-decision is the safe keyring-authentication gate; do not copy file-backed
-`auth.json` or attempt managed acceptance while `UNSAFE_FILE_AUTH` remains.
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. The
+provider-authentication compatibility evidence is recorded in
+`docs/evidence/SYN-051-keyring-auth-compatibility-2026-09-03.md`. The safe
+isolated-authentication gate failed, so preserve the hard stop; do not copy
+file-backed `auth.json`, perform destructive provider migration, or attempt
+managed acceptance while `UNSAFE_FILE_AUTH` remains.
 
 The map is complete at
 `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. It confirms that
