@@ -1,5 +1,19 @@
 # Next Session
 
+## SYN-051 broker follow-on — 2026-09-03
+
+The broker-pinned normal-home feasibility spike is complete as **PASS-B**:
+exact provider-thread pinning and pre-Codex wrong-thread rejection passed, but
+App Server-only death orphaned the disposable MCP child. No production code,
+auth policy, `.synesis` state, fixture, or Synesis MCP path changed.
+
+## Immediate next action
+
+Obtain a verified owned process-tree teardown/liveness design and explicit
+authorization for a fresh real Synesis attachment probe. Until then preserve
+`UNSAFE_FILE_AUTH`, the dedicated-home implementation, strict authority
+resolution, and the managed-acceptance hard stop.
+
 ## SYN-051 bounded stock-Codex MANAGED_CONTINUITY implementation — 2026-09-03
 
 SYN-051 is the single ACTIVE task. Implement only the approved Codex App

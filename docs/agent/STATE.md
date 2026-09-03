@@ -1,5 +1,24 @@
 # State
 
+## SYN-051 broker follow-on — 2026-09-03
+
+The bounded broker-pinned stock-Codex feasibility spike is **PASS-B**. A
+disposable lifecycle-only broker using the normal Codex home/auth pinned each
+dedicated App Server to one exact durable provider thread, rejected wrong
+thread selection locally before outbound protocol transmission, rotated
+proofs, and serialized successor takeover. Killing App Server alone orphaned
+the disposable MCP child (`parentPid=-1`); reliable owned process-tree teardown
+and liveness classification remain required. This does not weaken
+`UNSAFE_FILE_AUTH`, authorize production integration, or unblock managed
+acceptance. See the evidence record and ADR-0058. No Synesis MCP call or
+Synesis-source broker was used.
+
+## Immediate next action
+
+Preserve the PASS-B result and hard stops. Require a verified process-tree
+supervisor and explicit authorization for a real Synesis attachment probe
+before any production policy or lifecycle integration change.
+
 ## SYN-051 bounded stock-Codex MANAGED_CONTINUITY implementation — 2026-09-03
 
 SYN-051 is now the single ACTIVE primary task. The implementation is bounded

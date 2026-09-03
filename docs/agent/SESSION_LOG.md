@@ -1,3 +1,19 @@
+- 2026-09-03 — SYN-051 bounded broker-pinned stock-Codex feasibility spike:
+  retained normal provider home/auth and launched dedicated App Server A/B
+  processes through a disposable lifecycle-only broker outside the repository.
+  A/B exact threads, real authenticated turns, selected per-process proof
+  delivery, exclusive stdio ownership, immutable pinning, local pre-Codex
+  wrong-thread rejection, exact A2/B2 resume, fresh-proof rotation, live-owner
+  and ambiguous-liveness refusal, and one-winner successor locking passed.
+  Broker death was cleaned up in the bounded inventory; App Server-only death
+  orphaned the disposable MCP child (`parentPid=-1`), so classification is
+  PASS-B pending owned process-tree teardown/liveness proof. No Synesis MCP or
+  coordination call, production source/auth policy change, credential access,
+  fixture change, `.synesis` rewrite, or push occurred. Evidence is
+  `docs/evidence/SYN-051-broker-pinned-thread-feasibility-2026-09-03.md` and
+  ADR-0058. Exact next action: obtain the process-tree primitive and authorize
+  a fresh real Synesis attachment probe before any integration.
+
 # 2026-09-03 — SYN-050 stock Codex isolated-runtime feasibility result
 
 - Continued from clean source HEAD `f17a4628ee86ad4dea5bc6ea23b393b7465e2847`
