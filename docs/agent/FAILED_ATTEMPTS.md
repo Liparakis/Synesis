@@ -1,5 +1,19 @@
 # Failed Attempts
 
+## 2026-09-04 — SYN-051 compatibility retry input mismatch
+
+- The first compatibility retry used a stale installed distribution whose
+  native MCP launcher was absent because the `nativeMcpLauncher` output
+  directory was incorrectly considered up-to-date. Forcing that build artifact
+  regenerated the exact executable; no production source explanation was
+  inferred from the missing artifact.
+- The patched real A run then started Synesis MCP successfully and reported
+  `mcpServer/startupStatus=ready`. The real prompt requested `compat-a5.txt`,
+  but the durable participant/WorkIntent claim was `compat-a4.txt`; Synesis
+  returned `internal_failure` and made no unauthorized mutation. This is a
+  harness-input mismatch, not evidence of a pending-transport or authority
+  bypass defect. Do not broaden acceptance from this run.
+
 ## 2026-09-04 — SYN-051 real-runtime validation first failure
 
 - Exact committed source `dc9231fd48971d72e0cf3a810f68f3e503f5398b` built and

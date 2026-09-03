@@ -1,5 +1,53 @@
 # SYN-051 shared-normal-home implementation slice — 2026-09-03
 
+## 2026-09-04 — production compatibility fix and real A boundary
+
+**Classification: PARTIAL / compatibility boundary PASS.** The bounded fix
+separates managed MCP transport admission from Synesis authority activation.
+`PENDING_ACTIVATION` is accepted only after exact proof, provider, binding,
+thread, generation, and `BOUND` checks; an exclusive generation-scoped OS lock
+prevents a duplicate transport. The handler initializes and exposes the same
+ten tools, but re-reads exact active binding/generation state before every
+managed tool call. Pending `ensure_session` and mutation calls perform only
+the strict read-only binding check in `SessionAuthorityResolver`, then return
+a deterministic blocked response without creating session authority or
+dispatching application work; after trusted lifecycle activation, the same
+handler promotes in place.
+
+The managed launcher also adds the exact non-secret
+`SYNESIS_MCP_CONNECTION_INSTANCE_ID` through Codex's explicit per-server
+environment override. The proof remains selected through `env_vars` and is
+never written to configuration, arguments, logs, or durable records.
+
+Focused JUnit tests passed for pending/active/invalid/stale/terminal
+attachment admission, duplicate transport locking, quarantine, promotion,
+catalog size, and server startup. Strict compilation and `:cli:installDist`
+passed; built and installed hashes matched:
+
+```text
+workspace 69A381E347653AE84156E5F6084BF2FC5B45BD362918FF429FF23565F54F6AAC
+mcp       DDDC6DF0DECC0530DC30D6809DED118B9CF0E801AD7238B73AA53AB90BAE0BFD
+cli       623FA0D04265D2F9020EAF35F0437B194A6DB78896212C790C6DE20620511EA8
+mcp exe   5AFDAE178EB947663E0DF274F320EB2196DDDC56C62B585EEC451CC1DB6533F9
+```
+
+Fresh real A used `C:\Users\Liparakis\Desktop\SkibidiToilert`, binding
+`session-72ed7536-ff66-431d-ae97-fcdf27f678c3`, provider thread
+`01a06949-dcb7-79f2-a489-167ad1d1640d`, generation 1, and proof digest
+`438d99902939ae1c656654d8f923bd24d711a7495859d6c27c121cfa4ae17793`.
+The harness/App Server/MCP PIDs were 6124/20412/15464 and all three were
+observed in the same Windows Job. Startup reached MCP `ready`; attachment
+became `ACTIVE`; a real Codex turn invoked Synesis `ensure_session`. The turn
+then failed closed because the prompt requested `compat-a5.txt` while the
+durable lane claimed `compat-a4.txt`; no unauthorized mutation occurred.
+The exact disposable harness was stopped and its child tree disappeared.
+Worker B, A/B isolation, A1/A2 restart, and full acceptance remain unrun.
+
+The prior first failure remains preserved below: stock Codex startup ordering
+was correctly identified, but the former strict startup rejection was at the
+wrong layer. The compatibility fix did not weaken proof validation or grant
+pending authority.
+
 ## 2026-09-04 real-runtime validation — first failure
 
 **Classification: FAIL — stopped on the first material runtime failure.**

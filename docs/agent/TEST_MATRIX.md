@@ -1,3 +1,16 @@
+# SYN-051 production compatibility fix — 2026-09-04
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Pending transport | Proof-bearing `PENDING_ACTIVATION` transport initializes without authority | PASS focused; PASS real startup boundary | `ManagedAttachmentServiceTest`, `McpServerTest`, real generation-1 journal |
+| Pending authority | `ensure_session` and mutation tools remain blocked before activation | PASS focused JUnit | `McpServerTest.pendingManagedTransportStaysQuarantinedThenPromotesInPlace` |
+| Promotion | Same handler/connection becomes active after exact durable activation | PASS focused; real post-activation MCP call reached Synesis | same test and `SkibidiToilert/probe-runtime/session-72ed.../evidence/generation-1.jsonl` |
+| Selector carrier | Managed launcher forwards non-secret connection selector explicitly while proof uses `env_vars` | PASS source/build and real MCP `ready` | `ManagedCodexProcessLauncher`, real startup status |
+| Duplicate transport | One connection wins per pending generation; slot is reusable after close | PASS focused JUnit | `ManagedAttachmentServiceTest` |
+| Real containment | Harness, App Server, MCP child observed in one Windows Job | PASS real A retry | PIDs 6124/20412/15464; `IsProcessInJob=IN_JOB` |
+| Real model turn | Codex turn invoked Synesis; requested mutation failed closed on mismatched claim path | PARTIAL / harness input mismatch | real generation-1 journal |
+| Broader acceptance | Worker B, A/B, A1/A2, full tracker | NOT RUN | explicit scope boundary |
+
 # SYN-051 shared-normal-home implementation slice — 2026-09-03
 
 ## Real-runtime validation — 2026-09-04

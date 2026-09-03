@@ -69,10 +69,17 @@ public final class SynesisMcpServer {
                 .pid();
         String attachmentProof = boundedEnvironmentOrNull("SYNESIS_ATTACH_PROOF");
         String continuityMode = "SESSION_BOUND";
+        ManagedAttachmentRecord managedAttachment = null;
+        ManagedAttachmentService.TransportLease transportLease = null;
         if (attachmentProof != null) {
             try {
-                authorizeManagedAttachment(projectRoot, provider, connectionInstanceId, attachmentProof);
-                continuityMode = "MANAGED_CONTINUITY";
+                managedAttachment = authorizeManagedAttachment(projectRoot, provider, connectionInstanceId,
+                        attachmentProof);
+                ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
+                transportLease = new ManagedAttachmentService().acquireTransport(location,
+                        managedAttachment.bindingSessionId(), managedAttachment.generation());
+                continuityMode = managedAttachment.status() == ManagedAttachmentRecord.Status.PENDING_ACTIVATION
+                        ? "MANAGED_CONTINUITY_QUARANTINED" : "MANAGED_CONTINUITY";
             } catch (Exception rejected) {
                 System.err.println("SYNESIS_MCP_STARTUP_REJECTED=MANAGED_ATTACHMENT_REJECTED");
                 return 2;
@@ -94,13 +101,24 @@ public final class SynesisMcpServer {
         AgentSessionService sessionService = new AgentSessionService();
         SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider,
-                connectionInstanceId, processIdentity, projectRootPinned, attachmentProof != null);
+                connectionInstanceId, processIdentity, projectRootPinned, managedAttachment != null,
+                managedAttachment);
         McpStdioServer server = new McpStdioServer(handler);
 
-        return server.run();
+        try {
+            return server.run();
+        } finally {
+            if (transportLease != null) {
+                try {
+                    transportLease.close();
+                } catch (Exception ignored) {
+                    // The MCP result is already determined by the stdio loop.
+                }
+            }
+        }
     }
 
-    private static RuntimeAuthenticator.AuthenticatedRuntime authorizeManagedAttachment(Path projectRoot,
+    private static ManagedAttachmentRecord authorizeManagedAttachment(Path projectRoot,
             String provider, String connectionInstanceId, String attachmentProof) throws Exception {
         if (!"codex".equals(provider)) {
             throw new IllegalArgumentException("managed continuity provider unsupported");
@@ -110,11 +128,14 @@ public final class SynesisMcpServer {
                 connectionInstanceId).orElseThrow(() -> new IllegalStateException("managed binding missing"));
         ManagedAttachmentService service = new ManagedAttachmentService();
         var store = ManagedAttachmentService.storeFor(location, binding.sessionId());
+        if (!"BOUND".equalsIgnoreCase(binding.status())) {
+            throw new IllegalStateException("managed binding is not active");
+        }
         ManagedAttachmentRecord record = store.read()
                 .orElseThrow(() -> new IllegalStateException("managed attachment missing"));
         RuntimeAuthenticator.AttachmentRequest request = new RuntimeAuthenticator.AttachmentRequest(provider,
                 binding.sessionId(), record.threadId(), record.generation(), attachmentProof);
-        return service.authenticate(location, request, location.projectId().toString(), store);
+        return service.authenticateTransport(location, request, location.projectId().toString(), store);
     }
 
     /**

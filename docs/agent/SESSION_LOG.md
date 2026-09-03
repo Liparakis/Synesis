@@ -1,3 +1,13 @@
+- 2026-09-04 — SYN-051 bounded production compatibility fix passed the real
+  transport boundary. Pending proof-bearing MCP transport initialized before
+  activation without authority; exact thread resume activated generation 1;
+  MCP became ready and the App Server/MCP child were both observed inside the
+  same Windows Job. The real turn invoked Synesis but failed closed because
+  the disposable prompt used `compat-a5.txt` while the durable lane claim was
+  `compat-a4.txt`. Focused tests, strict build/install, and matching hashes
+  passed. Worker B, A/B isolation, restart, and full acceptance were not run.
+  Next action is checkpoint and commit this bounded slice.
+
 - 2026-09-04 — SYN-051 bounded real-runtime validation stopped on the first
   material failure. The exact commit built cleanly; `:cli:installDist`
   produced workspace, MCP, and CLI jars whose installed copies matched by
@@ -5143,3 +5153,16 @@ not run Codex or close SYN-041.
   No real Codex A/B/restart acceptance or artifact installation was run.
   Exact next action: rebuild/hash artifacts and run the focused real Codex
   child-proof plus A1-to-A2/B-isolation probe only.
+- 2026-09-04 — SYN-051 bounded production compatibility fix. Added
+  proof-bearing pending transport authentication with no authority,
+  generation-scoped exclusive transport locking, dynamic exact managed
+  binding/generation admission on every tool call, and explicit forwarding of
+  the non-secret connection selector through Codex per-server environment
+  configuration. Focused tests, strict compile/install, and matching artifact
+  hashes passed. A fresh real A run on `SkibidiToilert` reached Synesis MCP
+  `ready`, resumed the exact broker-pinned thread, activated generation 1, and
+  invoked real Synesis from a Job-contained MCP child. The turn failed closed
+  because the disposable prompt used `compat-a5.txt` while the durable lane
+  claim was `compat-a4.txt`; no unauthorized file mutation occurred. Worker B,
+  A/B isolation, restart, and full acceptance were not run. Next action is
+  checkpoint and commit this bounded slice.

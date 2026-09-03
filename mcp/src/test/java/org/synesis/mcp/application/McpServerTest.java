@@ -24,6 +24,10 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipStore;
+import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
@@ -105,6 +109,41 @@ class McpServerTest {
         assertTrue(responseJson.contains("\"name\":\"apply_patch\""));
         assertTrue(responseJson.contains("\"name\":\"run_command\""));
         assertTrue(responseJson.contains("\"name\":\"get_next_action\""));
+    }
+
+    @Test
+    void pendingManagedTransportStaysQuarantinedThenPromotesInPlace() throws Exception {
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(tempRoot);
+        var binding = new ProviderSessionBindingService().ensure(location, "codex", "pending-connection")
+                .binding();
+        var ownership = ProviderThreadOwnershipStore.storeFor(location).acquire(location.projectId().toString(),
+                "codex", "pending-thread", binding.sessionId());
+        var issued = new ManagedAttachmentService().issueFromOwnership(location, location.projectId().toString(),
+                "codex", binding.sessionId(), "normal-provider-home", ownership,
+                ManagedAttachmentService.storeFor(location, binding.sessionId()));
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex",
+                "pending-connection", new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"), true, true,
+                issued.record());
+
+        assertTrue(handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}")
+                .contains("synesis"));
+        String tools = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
+        assertEquals(10, tools.split("\"name\":\"").length - 1);
+
+        String pendingEnsure = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}");
+        assertTrue(pendingEnsure.contains("managed_attachment_pending"), pendingEnsure);
+        String pendingMutation = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"README.md\"}}}");
+        assertTrue(pendingMutation.contains("managed_attachment_pending"), pendingMutation);
+        assertTrue(new SessionLeaseStore().load(tempRoot, "pending-connection").isEmpty());
+        assertTrue(new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId())
+                .collaborationProjection().activeIntents().isEmpty());
+
+        new ManagedAttachmentService().activate(ManagedAttachmentService.storeFor(location, binding.sessionId()), 1L);
+        String activeEnsure = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}");
+        assertTrue(activeEnsure.contains("ready"), activeEnsure);
     }
 
     @Test

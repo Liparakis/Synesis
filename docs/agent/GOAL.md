@@ -1,14 +1,15 @@
 # Goal
 
-- Real-runtime validation result (2026-09-04): **STOPPED / PARTIAL**. Exact
-  build/install provenance passed and fresh `SkibidiToilert` initialization
-  passed. Real managed App Server A was Job-contained and resumed the exact
-  thread, but stock Codex launched the Synesis MCP child before attachment
-  activation; the child correctly failed closed while the record was
-  `PENDING_ACTIVATION`. No managed authority or real turn was established.
-- Exact next action: review a proof-preserving solution to the observed
-  pre-thread MCP startup ordering, with no proof-gate weakening and no
-  acceptance rerun until explicitly authorized.
+- Real-runtime compatibility result (2026-09-04): **PARTIAL / boundary PASS**.
+  Pending proof-bearing MCP transport now survives stock Codex early startup
+  without authority, and the same connection promotes after exact thread
+  verification and activation. Fresh `SkibidiToilert` A evidence reached MCP
+  `ready`, exact thread resume, activation, and real Synesis `ensure_session`
+  inside one Job-contained process tree. The disposable turn itself failed
+  closed on a mismatched claim path (`compat-a5` versus durable `compat-a4`);
+  broader acceptance remains unrun.
+- Exact next action: checkpoint and commit this compatibility slice, then
+  stop before Worker B or full acceptance.
 
 - Current bounded runtime-boundary slice (2026-09-03): **PARTIAL**. A
   Windows-only Java 25 FFM Job Object supervisor is integrated through the

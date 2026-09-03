@@ -165,7 +165,8 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
                 || launch.record().generation() != attachmentGeneration) {
             throw new IOException("managed_attachment_not_prepared");
         }
-        List<String> command = configuredCommand(launch.home(), synesisLauncher, location.root());
+        List<String> command = configuredCommand(launch.home(), synesisLauncher, location.root(),
+                authority.connectionInstanceId());
         ProcessBuilder builder = new ProcessBuilder(command)
                 .directory(Path.of(authority.realWorktree()).toFile())
                 .redirectError(ProcessBuilder.Redirect.PIPE);
@@ -364,7 +365,8 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
                 ? CodexManagedRuntimeHome.normalProviderHome() : CodexManagedRuntimeHome.create(projectId);
     }
 
-    private static List<String> configuredCommand(CodexManagedRuntimeHome home, Path launcher, Path projectRoot) {
+    private static List<String> configuredCommand(CodexManagedRuntimeHome home, Path launcher, Path projectRoot,
+            String connectionInstanceId) {
         String configured = System.getenv("SYNESIS_CODEX_APP_SERVER_COMMAND");
         List<String> command = configured == null || configured.isBlank()
                 ? new ArrayList<>(List.of("codex", "app-server", "--stdio"))
@@ -376,6 +378,13 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
                 + tomlString(projectRoot) + "]");
         command.add("-c");
         command.add("mcp_servers.synesis.env_vars=[\"" + CodexManagedRuntimeHome.ATTACHMENT_PROOF_ENV + "\"]");
+        // Codex's selected env_vars carrier is used for the secret proof, but
+        // the non-secret connection selector must be an explicit per-server
+        // override: stock App Server versions do not consistently forward
+        // arbitrary parent environment variables to MCP children.
+        command.add("-c");
+        command.add("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID="
+                + tomlString(connectionInstanceId));
         // The normal home is provider-owned. The home value is deliberately
         // only carried in the process environment, never in this config.
         if (home.path() == null) {
@@ -386,6 +395,10 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
 
     private static String tomlString(Path path) {
         String value = path.toAbsolutePath().normalize().toString().replace('\\', '/');
+        return tomlString(value);
+    }
+
+    private static String tomlString(String value) {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 

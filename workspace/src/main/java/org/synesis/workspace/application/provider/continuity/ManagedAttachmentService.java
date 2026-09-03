@@ -1,6 +1,14 @@
 package org.synesis.workspace.application.provider.continuity;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.HexFormat;
@@ -129,19 +137,100 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(store, "store");
         ManagedAttachmentRecord record = store.read().orElseThrow(() -> failure("attachment_missing"));
-        verifyRecord(record, request, expectedProjectId, false);
+        verifyRecord(record, request, expectedProjectId, false, false);
         return new AuthenticatedRuntime(record.provider(), record.bindingSessionId(), record.mode(),
                 "synesis-managed-proof", record.generation());
     }
 
+    /**
+     * Authenticates a managed transport before authority activation.
+     *
+     * <p>This is deliberately separate from {@link #authenticate}:
+     * {@code PENDING_ACTIVATION} proves the launch scope but is not an
+     * authority-bearing runtime. Callers must keep the returned record
+     * quarantined until the trusted lifecycle changes it to {@code ACTIVE}.
+     * Terminal, stale, wrong-scope, and proof-less requests remain rejected.</p>
+     *
+     * @param location project location
+     * @param request exact provider/binding/thread/proof request
+     * @param expectedProjectId project identity
+     * @param store durable attachment store
+     * @return the authenticated non-secret attachment record
+     * @throws Exception when the launch proof or scope is invalid
+     */
+    public synchronized ManagedAttachmentRecord authenticateTransport(
+            ProjectApplicationService.ProjectLocation location, AttachmentRequest request,
+            String expectedProjectId, ManagedAttachmentStore store) throws Exception {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(store, "store");
+        ManagedAttachmentRecord record = store.read().orElseThrow(() -> failure("attachment_missing"));
+        verifyRecord(record, request, expectedProjectId, false, true);
+        return record;
+    }
+
+    /**
+     * Acquires the one process-local transport slot for an attachment
+     * generation.
+     *
+     * <p>The lock is separate from the durable record lock so lifecycle
+     * activation can still update the record while the authenticated MCP
+     * process remains connected. It contains no proof or authority data and
+     * is released by the operating system if the process exits.</p>
+     *
+     * @param location project location
+     * @param bindingSessionId exact managed binding
+     * @param generation attachment generation
+     * @return held transport slot
+     * @throws IOException when another process already owns the slot
+     */
+    public TransportLease acquireTransport(ProjectApplicationService.ProjectLocation location,
+            String bindingSessionId, long generation) throws IOException {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(bindingSessionId, "bindingSessionId");
+        if (generation < 1) {
+            throw new IllegalArgumentException("generation must be positive");
+        }
+        ManagedAttachmentStore store = storeFor(location, bindingSessionId);
+        ManagedAttachmentRecord record = store.read().orElseThrow(() -> failure("attachment_missing"));
+        if (record.generation() != generation
+                || (record.status() != ManagedAttachmentRecord.Status.ACTIVE
+                        && record.status() != ManagedAttachmentRecord.Status.PENDING_ACTIVATION)) {
+            throw failure("managed_transport_generation_rejected");
+        }
+        Path lockPath = store.file().resolveSibling(store.file().getFileName() + ".generation-"
+                + generation + ".transport.lock");
+        Files.createDirectories(lockPath.getParent());
+        FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try {
+            FileLock lock = channel.tryLock();
+            if (lock == null) {
+                throw failure("managed_transport_already_connected");
+            }
+            return new TransportLease(channel, lock);
+        } catch (OverlappingFileLockException | IOException failure) {
+            try {
+                channel.close();
+            } catch (IOException ignored) {
+                failure.addSuppressed(ignored);
+            }
+            if (failure instanceof OverlappingFileLockException) {
+                throw new IOException("managed_transport_already_connected", failure);
+            }
+            throw failure;
+        }
+    }
+
     private static void verifyRecord(ManagedAttachmentRecord record, AttachmentRequest request,
-            String expectedProjectId, boolean replacement) throws Exception {
+            String expectedProjectId, boolean replacement, boolean allowPending) throws Exception {
+        boolean statusValid = replacement ? record.status() != ManagedAttachmentRecord.Status.TERMINAL
+                : (record.status() == ManagedAttachmentRecord.Status.ACTIVE
+                        || (allowPending && record.status() == ManagedAttachmentRecord.Status.PENDING_ACTIVATION));
         if (!expectedProjectId.equals(record.projectId()) || !request.provider().equals(record.provider())
                 || !request.bindingSessionId().equals(record.bindingSessionId())
                 || !request.threadId().equals(record.threadId())
                 || request.expectedGeneration() != record.generation()
-                || (!replacement && record.status() != ManagedAttachmentRecord.Status.ACTIVE)
-                || (replacement && record.status() == ManagedAttachmentRecord.Status.TERMINAL)
+                || !statusValid
                 || !constantTimeEquals(record.proofHash(), hash(request.proof()))) {
             throw failure("attachment_rejected");
         }
@@ -167,7 +256,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
             throw failure("attachment_live_or_ambiguous");
         }
         ManagedAttachmentRecord prior = store.read().orElseThrow(() -> failure("attachment_missing"));
-        verifyRecord(prior, request, expectedProjectId, true);
+        verifyRecord(prior, request, expectedProjectId, true, false);
         String proof = randomProof();
         ManagedAttachmentRecord next = new ManagedAttachmentRecord(
                 ManagedAttachmentRecord.CURRENT_SCHEMA_VERSION, prior.projectId(), prior.provider(), prior.mode(),
@@ -334,6 +423,34 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
             Objects.requireNonNull(record, "record");
             if (proof.length() != PROOF_BYTES * 2) {
                 throw new IllegalArgumentException("invalid attachment proof");
+            }
+        }
+    }
+
+    /**
+     * Operating-system released slot for one managed transport generation.
+     */
+    public static final class TransportLease implements Closeable {
+
+        private final FileChannel channel;
+        private final FileLock lock;
+
+        private TransportLease(FileChannel channel, FileLock lock) {
+            this.channel = channel;
+            this.lock = lock;
+        }
+
+        /**
+         * Releases the transport slot and its file handle.
+         *
+         * @throws IOException when the operating-system resources cannot close
+         */
+        @Override
+        public void close() throws IOException {
+            try {
+                lock.release();
+            } finally {
+                channel.close();
             }
         }
     }

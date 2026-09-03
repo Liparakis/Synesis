@@ -1,19 +1,20 @@
 # Tasks
 
-## SYN-051 real-runtime validation — 2026-09-04
+## SYN-051 production compatibility fix — 2026-09-04
 
-- Status: ACTIVE / PARTIAL; stopped on first material runtime failure.
-- Scope completed: exact commit build/install/provenance and one fresh
-  `SkibidiToilert` real-Codex managed Worker A launch.
-- Result: App Server A entered the Windows Job and resumed the exact pinned
-  provider thread, but stock Codex started the Synesis MCP child before
-  managed attachment activation. `PENDING_ACTIVATION` correctly rejected
-  the proof during MCP initialize, so the real managed turn had no Synesis
-  authority.
-- Not run after the failure: Worker B, A/B isolation, raw Thread-A probe,
-  forced A failure, A2 restart, optional races, and full acceptance.
-- Next action: separately review a proof-preserving startup-order solution;
-  do not weaken proof gating or rerun acceptance without authorization.
+- Status: ACTIVE / PARTIAL; bounded compatibility boundary passed.
+- Implemented: quarantined pending managed transport, exclusive
+  generation-scoped transport lock, dynamic exact binding/generation gate on
+  every managed tool call, and explicit non-secret connection-selector
+  forwarding in the managed Codex launcher.
+- Verified: focused JUnit tests, strict compilation/install, matching artifact
+  hashes, and fresh real A startup through MCP `ready`, exact thread resume,
+  activation, and same-connection Synesis `ensure_session`.
+- The real disposable model turn failed closed only because its prompt used
+  `compat-a5.txt` while the durable lane was claimed for `compat-a4.txt`.
+- Not run: Worker B, A/B isolation, A1/A2 restart, optional races, and full
+  acceptance.
+- Next action: checkpoint, update evidence, and commit this bounded slice.
 
 ## SYN-051 bounded runtime-boundary follow-on — 2026-09-03
 

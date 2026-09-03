@@ -53,8 +53,55 @@ final class ManagedAttachmentServiceTest {
         assertThrows(IllegalStateException.class, () -> new ManagedAttachmentService().authenticate(location,
                 new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-owned", 1L,
                         issued.proof()), location.projectId().toString(), store));
+        assertEquals(ManagedAttachmentRecord.Status.PENDING_ACTIVATION,
+                new ManagedAttachmentService().authenticateTransport(location,
+                        new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-owned", 1L,
+                                issued.proof()), location.projectId().toString(), store).status());
         new ManagedAttachmentService().activate(store, 1L);
         assertEquals(ManagedAttachmentRecord.Status.ACTIVE, store.read().orElseThrow().status());
+    }
+
+    @Test
+    void transportAuthenticationStillRejectsWrongProofAndStaleOrTerminalPendingRecords() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-transport-fence-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = new ManagedAttachmentStore(root.resolve("adapter/attachment.json"));
+        var ownership = new ProviderThreadOwnershipStore(root.resolve("ownership"))
+                .acquire(location.projectId().toString(), "codex", "thread-owned", "binding-a");
+        var service = new ManagedAttachmentService();
+        var issued = service.issueFromOwnership(location, location.projectId().toString(), "codex", "binding-a",
+                "normal-provider-home", ownership, store);
+
+        assertThrows(IllegalStateException.class, () -> service.authenticateTransport(location,
+                new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-owned", 1L,
+                        "0".repeat(64)), location.projectId().toString(), store));
+        assertThrows(IllegalStateException.class, () -> service.authenticateTransport(location,
+                new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-owned", 2L,
+                        issued.proof()), location.projectId().toString(), store));
+        service.terminalize(store);
+        assertThrows(IllegalStateException.class, () -> service.authenticateTransport(location,
+                new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-owned", 1L,
+                        issued.proof()), location.projectId().toString(), store));
+    }
+
+    @Test
+    void oneTransportConnectionWinsPerPendingGeneration() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-transport-slot-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        var ownership = new ProviderThreadOwnershipStore(root.resolve("ownership"))
+                .acquire(location.projectId().toString(), "codex", "thread-owned", "binding-a");
+        new ManagedAttachmentService().issueFromOwnership(location, location.projectId().toString(), "codex",
+                "binding-a", "normal-provider-home", ownership, store);
+        ManagedAttachmentService service = new ManagedAttachmentService();
+
+        try (ManagedAttachmentService.TransportLease first = service.acquireTransport(location, "binding-a", 1L)) {
+            assertTrue(first != null);
+            assertThrows(Exception.class, () -> service.acquireTransport(location, "binding-a", 1L));
+        }
+        try (ManagedAttachmentService.TransportLease second = service.acquireTransport(location, "binding-a", 1L)) {
+            assertTrue(second != null);
+        }
     }
 
     @Test

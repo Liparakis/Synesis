@@ -42,6 +42,8 @@ import org.synesis.workspace.application.project.ProjectCommandService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
 import org.synesis.workspace.application.workspace.WorkspaceReadService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
@@ -114,6 +116,9 @@ public final class McpProtocolHandler {
     private boolean isSessionBound;
     /** Whether the launcher authenticated this process as managed continuity. */
     private final boolean managedAdmission;
+    /** Binding and generation authenticated for a managed process-local connection. */
+    private final String managedBindingSessionId;
+    private final long managedAttachmentGeneration;
     /** Fail-closed root-authority diagnostic set before provider admission. */
     private String projectRootAuthorityFailure;
     /** Durable command anchor refreshed only after verified session activity. */
@@ -198,6 +203,35 @@ public final class McpProtocolHandler {
             SessionProcessIdentity processIdentity,
             boolean projectRootPinned,
             boolean managedAdmission) {
+        this(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, projectRootPinned,
+                managedAdmission, null);
+    }
+
+    /**
+     * Creates an MCP handler after managed transport admission.
+     *
+     * <p>A pending record authenticates only the launch-local transport. Tool
+     * calls remain quarantined until the durable record is promoted to
+     * {@code ACTIVE}; the handler re-reads that record so the same process
+     * connection can be promoted without resupplying proof.</p>
+     *
+     * @param sessionService       application session service
+     * @param projectRoot          initial launcher project root
+     * @param provider             stable provider name
+     * @param connectionInstanceId exact connection selector
+     * @param processIdentity      captured process identity
+     * @param projectRootPinned    whether the root was launcher-pinned
+     * @param managedAdmission     whether managed transport proof was verified
+     * @param managedAttachment    authenticated non-secret attachment metadata
+     */
+    public McpProtocolHandler(AgentSessionService sessionService,
+            Path projectRoot,
+            String provider,
+            String connectionInstanceId,
+            SessionProcessIdentity processIdentity,
+            boolean projectRootPinned,
+            boolean managedAdmission,
+            ManagedAttachmentRecord managedAttachment) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
         this.readService = new WorkspaceReadService();
         this.patchService = new WorkspacePatchService();
@@ -226,6 +260,18 @@ public final class McpProtocolHandler {
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         this.commandProcessIdentity = Objects.requireNonNull(processIdentity, "processIdentity");
         this.managedAdmission = managedAdmission;
+        if (managedAdmission && managedAttachment == null) {
+            throw new IllegalArgumentException("managed attachment metadata required");
+        }
+        if (managedAttachment != null && !managedAdmission) {
+            throw new IllegalArgumentException("managed attachment requires managed admission");
+        }
+        this.managedBindingSessionId = managedAttachment == null ? null : managedAttachment.bindingSessionId();
+        this.managedAttachmentGeneration = managedAttachment == null ? 0L : managedAttachment.generation();
+        if (managedAttachment != null && managedAttachment.status() != ManagedAttachmentRecord.Status.ACTIVE
+                && managedAttachment.status() != ManagedAttachmentRecord.Status.PENDING_ACTIVATION) {
+            throw new IllegalArgumentException("managed attachment is not transport-admissible");
+        }
     }
 
     /**
@@ -1117,6 +1163,67 @@ public final class McpProtocolHandler {
     }
 
     /**
+     * Reads the current managed attachment fence for this exact process.
+     *
+     * <p>The startup proof authenticates the process-local launch. The durable
+     * status is intentionally consulted again for every tool call so a
+     * pending connection cannot create coordination state and the same
+     * connection becomes eligible only after trusted lifecycle activation.</p>
+     *
+     * @return current managed admission state
+     */
+    private ManagedAdmissionState managedAdmissionState() {
+        if (!managedAdmission) {
+            return ManagedAdmissionState.ACTIVE;
+        }
+        try {
+            ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+                    activeProjectRoot);
+            var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
+            if (!managedBindingSessionId.equals(binding.sessionId())) {
+                return ManagedAdmissionState.REJECTED;
+            }
+            ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, managedBindingSessionId)
+                    .read().orElse(null);
+            if (record == null || record.mode()
+                    != org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY
+                    || record.generation() != managedAttachmentGeneration
+                    || !provider.equals(record.provider())) {
+                return ManagedAdmissionState.REJECTED;
+            }
+            return switch (record.status()) {
+                case PENDING_ACTIVATION -> ManagedAdmissionState.PENDING;
+                case ACTIVE -> ManagedAdmissionState.ACTIVE;
+                case DISCONNECTED, TERMINAL -> ManagedAdmissionState.REJECTED;
+            };
+        } catch (Exception rejected) {
+            return ManagedAdmissionState.REJECTED;
+        }
+    }
+
+    /**
+     * Creates the deterministic response for a quarantined or fenced managed
+     * transport without invoking any application mutation service.
+     */
+    private String managedAdmissionResponse(Object id, ManagedAdmissionState state) {
+        String reason = state == ManagedAdmissionState.PENDING
+                ? "managed_attachment_pending" : "managed_attachment_rejected";
+        Map<String, Object> text = Map.of("status", "blocked", "reason", reason);
+        return createResultResponse(id, Map.of("content", List.of(Map.of("type", "text",
+                "text", ProviderJson.write(text))), "isError", true));
+    }
+
+    /** Managed connection admission states visible only inside this handler. */
+    private enum ManagedAdmissionState {
+        /** The exact managed attachment is active. */
+        ACTIVE,
+        /** The proof-bearing transport is connected but has no authority. */
+        PENDING,
+        /** The attachment or exact binding is no longer admissible. */
+        REJECTED
+    }
+
+    /**
      * Extracts candidate workspace project root paths from MCP {@code initialize} request parameters only.
      * Does not include environment variables, file system scans, or process working directory.
      *
@@ -1402,6 +1509,11 @@ public final class McpProtocolHandler {
                     Map.of("error", projectRootAuthorityFailure));
             Map<String, Object> textContent = Map.of("type", "text", "text", mismatch.toJson());
             return createResultResponse(id, Map.of("content", List.of(textContent)));
+        }
+
+        ManagedAdmissionState managedState = managedAdmissionState();
+        if (managedState != ManagedAdmissionState.ACTIVE) {
+            return managedAdmissionResponse(id, managedState);
         }
 
         AgentResponse agentResponse;

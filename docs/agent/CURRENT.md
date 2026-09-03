@@ -1,26 +1,28 @@
 # Current Task
 
-## SYN-051 real-runtime validation — 2026-09-04
+## SYN-051 production compatibility fix — 2026-09-04
 
-The bounded real-runtime pass is **STOPPED / PARTIAL** at the first
-material failure. Exact committed artifacts were built and hash-matched into
-the local distribution. A fresh `SkibidiToilert` project was initialized
-through the supported Git/Synesis flow, and real Codex 0.145.0 launched a
-managed App Server A inside a Windows Job. The lifecycle resumed the exact
-thread and attempted the real turn, but stock Codex started MCP before the
-managed attachment could be activated. The Synesis MCP child therefore
-failed its initialize handshake while the durable attachment was
-`PENDING_ACTIVATION`; the turn completed without Synesis authority.
+The bounded compatibility slice is **PARTIAL / real boundary PASS**. A
+proof-bearing Synesis MCP child may now establish a transport while its
+attachment is `PENDING_ACTIVATION`, with no authority; each managed tool call
+re-reads the exact binding and generation and remains blocked until trusted
+lifecycle activation promotes the same connection. A per-generation OS lock
+prevents duplicate managed transports. The managed Codex launcher also
+forwards the non-secret connection selector through Codex's explicit
+per-server environment override, while the proof remains on `env_vars`.
 
-This is a concrete runtime-ordering incompatibility, not evidence to relax
-proof gating. Worker B, A/B isolation, A1/A2 restart, and full task
-acceptance were not started. No production code changed in this pass.
+Focused tests, strict compilation, install provenance, and a fresh real
+`SkibidiToilert` A retry passed the compatibility boundary: MCP startup became
+`ready`, the App Server resumed the exact broker-pinned thread, the MCP child
+was observed inside the same Windows Job, and the real turn reached Synesis.
+The disposable turn used a mismatched `compat-a5` claim against the durable
+`compat-a4` lane and therefore failed closed at `ensure_session`; this is
+harness input failure, not a managed transport failure.
 
 ## Immediate next action
 
-Reconcile the stock-Codex pre-thread MCP startup ordering with the pending
-activation security invariant in a separately authorized narrow design/fix
-slice; do not rerun managed acceptance or weaken proof gating first.
+Checkpoint and commit this compatibility slice, preserve the real evidence,
+and stop before Worker B, A/B isolation, A1/A2 restart, or full acceptance.
 
 ## SYN-051 runtime-boundary follow-on — 2026-09-03
 
@@ -48,10 +50,10 @@ tests, ADR-0062, and updated SYN-051 evidence/planning records.
 
 ## Current failures
 
-No focused implementation test failure remains. Real Codex child proof/A-B
-restart acceptance and rebuilt install provenance are still unperformed. The
-package-wide MCP and workspace test selections were stopped after no progress
-and are incomplete, not passing.
+No focused implementation test failure remains. The real managed MCP
+transport boundary passed, but the one disposable model turn did not perform
+the requested file mutation because its prompt selected a path outside the
+durable lane claim. Full A/B, restart, and task acceptance remain unrun.
 
 ## SYN-051 shared-normal-home production slice — 2026-09-03
 

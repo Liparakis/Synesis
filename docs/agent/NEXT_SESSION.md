@@ -1,20 +1,20 @@
 # Next Session
 
-## SYN-051 real-runtime validation — 2026-09-04
+## SYN-051 production compatibility fix — 2026-09-04
 
-The pass is **STOPPED / PARTIAL** at the first material failure. The exact
-commit built and installed with matching workspace/MCP/CLI hashes. Fresh
-`SkibidiToilert` initialization and real Codex authentication worked. The
-managed App Server A was Job-contained and resumed exact Thread A, but stock
-Codex launched MCP before lifecycle activation; Synesis correctly rejected
-the proof in `PENDING_ACTIVATION`, causing MCP initialize to fail. No real
-managed turn, Worker B, A/B isolation, or restart evidence exists.
+The bounded slice is **PARTIAL / compatibility boundary PASS**. Pending
+proof-bearing transport starts quarantined, tool calls remain blocked until
+exact durable activation, and the same connection promotes in place. The
+managed launcher explicitly forwards the non-secret connection selector while
+the proof remains process-local through selected `env_vars`. Focused tests,
+strict build/install provenance, and fresh real A startup passed: MCP became
+`ready`, exact Thread A resumed, the attachment became `ACTIVE`, and a real
+Synesis call ran inside the Job-contained child. The turn failed closed only
+because its prompt requested `compat-a5` while its durable lane claimed
+`compat-a4`.
 
-## Immediate next action
-
-- Exact next action: perform a bounded design review of a proof-preserving
-  pre-thread MCP bootstrap/order boundary; do not alter proof gating or run
-  the real acceptance again until that review is authorized and complete.
+Exact next action: checkpoint and commit the compatibility slice, then stop.
+Do not start Worker B, A/B isolation, A1/A2 restart, or full acceptance.
 
 ## SYN-051 runtime-boundary follow-on — 2026-09-03
 
