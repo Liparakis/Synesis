@@ -1,0 +1,115 @@
+# SYN-051 Windows Job Object process-tree feasibility — 2026-09-03
+
+## Classification
+
+**PARTIAL — the Windows process-containment primitive works for a real
+Codex/App Server/MCP tree, but this spike did not exercise every required
+successor and failure edge.**
+
+The disposable native probe created each App Server suspended, assigned it to
+a new Windows Job Object, and resumed it only after assignment. A generic
+root/child/grandchild tree and real `codex-cli 0.145.0` App Server/MCP trees
+were contained. App Server-only termination left the MCP child alive inside
+the Job; explicit Job teardown terminated it and the Job reached
+`ActiveProcesses == 0`. Independent A/B Jobs were isolated, B survived A's
+teardown, exact A/B threads resumed with fresh proofs, and a controller crash
+proved kill-on-close for the generic tree.
+
+The evidence is not PASS-A because the probe did not run a deliberately failed
+Job query/ambiguous-liveness case, a real two-successor race with losing
+candidate cleanup, or a fresh real Codex host after supervisor crash. Those
+remain fail-closed requirements. No production code, Codex source, auth policy,
+`.synesis` state, fixture, or Synesis MCP path changed.
+
+## Required report
+
+| # | Field | Result |
+|---:|---|---|
+| 1 | Starting HEAD | `bb5f97353d181be356cdb04ae2fa6308d8c69c33` |
+| 2 | Codex version | `codex-cli 0.145.0` |
+| 3 | OS/version | `Microsoft Windows 10.0.26200` |
+| 4 | Process-containment primitive | Windows Job Object |
+| 5 | Job flags/configuration | `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; no breakaway flags |
+| 6 | Prototype location | `C:\Users\Liparakis\AppData\Local\Temp\syn051-job-20260903-01`; run report `...syn051-job-20260903-07\job-report.txt` |
+| 7 | Launch-into-job method | Native `CreateProcessW` with `CREATE_SUSPENDED`, assign with `AssignProcessToJobObject`, then `ResumeThread` |
+| 8 | Assigned before execution | Yes; the process was resumed only after assignment |
+| 9 | Generic parent PID | `19368` (generic root) |
+| 10 | Generic child PID | `22904` |
+| 11 | Generic grandchild PID | `18524` |
+| 12 | Generic descendant containment | PASS; root, child, and grandchild queried as Job members |
+| 13 | Breakaway configuration | Disabled: neither `BREAKAWAY_OK` nor `SILENT_BREAKAWAY_OK` |
+| 14 | Breakaway test | PASS for the normal tree; all descendants remained in the Job |
+| 15 | Broker A PID | `16096` |
+| 16 | AppServer A PID | `13372` |
+| 17 | Thread A | `01a068a5-5628-7d32-90b2-53c1128cb6d4` |
+| 18 | MCP A PID | `17236` |
+| 19 | Intermediate A PIDs | None observed; direct App Server-to-MCP child path in this run |
+| 20 | Job A membership | PASS; `app=True;mcp=True` |
+| 21 | Worker A real model turn | PASS; `SYN051_JOB_A1_OK` |
+| 22 | Broker B PID | `16096` (same disposable controller; separate Job B) |
+| 23 | AppServer B PID | `22516` |
+| 24 | Thread B | `01a068a5-566e-7b73-9a43-4b82c0bcfc7c` |
+| 25 | MCP B PID | `23108` |
+| 26 | Job B membership | PASS; `app=True;mcp=True` |
+| 27 | Worker B real model turn | PASS; `SYN051_JOB_B1_OK` |
+| 28 | Repeated MCP child containment | PASS; repeated tool-call path remained Job-contained (`A_MCP_REPEAT_CONTAINED=True`) |
+| 29 | AppServer-only death | App Server terminated; MCP remained alive in Job A |
+| 30 | Orphan MCP observation | No orphan under Job supervision; MCP survived parent death only until explicit Job teardown |
+| 31 | Explicit Job A teardown | PASS; `JOB_A_EXPLICIT_TEARDOWN=True` |
+| 32 | Job-empty proof | `QueryInformationJobObject(JobObjectBasicAccountingInformation)` with `ActiveProcesses == 0`, after teardown; root process handle was also terminated/signaled |
+| 33 | Graceful broker shutdown | PASS for explicit disposable Job teardown/disposal of A2/B2; no stubborn process remained |
+| 34 | Unexpected broker-death result | PASS for generic crash-controller: controller death closed its sole Job handle and tree was gone |
+| 35 | Kill-on-close result | PASS for generic real process tree; real Codex kill-on-close was not separately run |
+| 36 | Duplicate/inherited Job handle | Prototype creates a non-inherited Job handle and passes only stdio handles; no duplicate retaining handle observed. Full production handle audit remains open |
+| 37 | B survives A teardown | PASS; `B_SURVIVES_A_TEARDOWN=True` and B completed another real turn |
+| 38 | Early successor rejection | PASS in the bounded gate; live A2 Job was non-empty and early successor permission remained false (`EARLY_SUCCESSOR_WHILE_A2_LIVE_REJECTED=True`) |
+| 39 | Ambiguous-liveness result | Not exercised in this probe; required result remains fail closed with no successor authority |
+| 40 | A1→A2 teardown ordering | PASS; `A1_TO_A2_ORDER=True` |
+| 41 | Exact Thread A resume | PASS; A2 resumed `01a068a5-5628-7d32-90b2-53c1128cb6d4` |
+| 42 | Fresh P_A2 | PASS; digest `81805d70720f88de77022a1a98f9ab364761384f76c4bbd80f8807d1b32b4119` |
+| 43 | Old P_A1 process presence | None after Job A teardown; old digest absent from A2 child log |
+| 44 | Model turn after A2 recovery | PASS; `SYN051_JOB_A2_OK` |
+| 45 | Successor race | Prior broker spike had one-winner fencing; this Job-specific spike did not repeat the race |
+| 46 | Losing-successor cleanup | Not exercised in this spike; must be explicit before PASS-A |
+| 47 | PID-reuse safety | PID alone is insufficient; use Job identity, process handles, and Job accounting. The probe used Job membership plus fresh process handles |
+| 48 | Raw proof leakage | PASS; logs/report contain digests or presence flags only; raw proof scan was zero |
+| 49 | Provider credential leakage | PASS; normal provider-owned auth used; no `auth.json` read/copied/emitted |
+| 50 | Shared provider-store integrity | No corruption or auth damage observed during bounded A/B/restart/teardown run |
+| 51 | Rollout/SQLite errors | None observed; this is bounded evidence, not stress evidence |
+| 52 | Auth integrity after teardown | Normal login remained usable; Job teardown did not modify provider auth |
+| 53 | Full host-process recreation | Not fully exercised; A1/B1 and A2/B2 were recreated in one disposable controller |
+| 54 | Restart after supervisor crash | Generic crash teardown passed; real Codex post-crash resume was not exercised |
+| 55 | Recommended liveness/death predicate | `jobAssigned AND teardownIssued AND rootHandleSignaled AND ActiveProcesses == 0`; any failed/unknown query is `AMBIGUOUS` and blocks successor authority |
+| 56 | Recommended abstraction | Provider-neutral `ManagedProcessTree`, with Windows Job Object implementation |
+| 57 | Implementation options | Direct JNA/JNI/FFM calls; tiny native helper; or an existing maintained Java process-supervision library. No dependency was added |
+| 58 | Windows-only v1 implication | Yes for this primitive; Linux/macOS equivalents remain future work and must not be implied |
+| 59 | Broker boundary | PASS; the probe remained lifecycle-only: process launch, exact thread lifecycle, containment, teardown, and attachment evidence |
+| 60 | Provider-native comparison | A provider-owned thread-scoped child lifecycle/assertion would be stronger and lower-maintenance; the Job workaround is provider-neutral but Windows- and protocol-sensitive |
+| 61 | SYN-051 assumptions changed | Process-private proof and exact thread pinning solve attachment selection; Job ownership now supplies a viable separate process-death primitive |
+| 62 | Minimum production integration | Integrate a trusted owned-tree abstraction with exact thread pinning, Job assignment-before-resume, fail-closed liveness, teardown-before-successor, and losing-candidate cleanup |
+| 63 | `UNSAFE_FILE_AUTH` assessment | Unchanged; Job Objects do not make shared normal-home auth safe for isolated-home acceptance and do not authorize auth-policy weakening |
+| 64 | Final classification | **PARTIAL** |
+| 65 | Production integration unblocked in principle | Process-containment primitive: yes. Overall SYN-051 managed-continuity integration: no; `UNSAFE_FILE_AUTH` and the incomplete edge evidence remain blockers |
+| 66 | Remaining unknowns | Ambiguous query failure; real successor race and losing cleanup; real Codex broker-crash recovery; full host recreation; stress and provider-upgrade behavior |
+| 67 | Planning/evidence changes | This evidence record, ADR-0059, and SYN-051 durable state/checkpoint updates |
+| 68 | Prototype artifacts | Retained outside repository at the prototype/run paths above; no production artifact added |
+| 69 | Validation results | Generic containment PASS; real A/B membership PASS; A/B turns PASS; App Server-only death plus explicit teardown PASS; generic crash/kill-on-close PASS; exact ten-tool catalog check preserved; deferred/fixture checks and diff validation recorded after docs |
+| 70 | Commits created | One documentation-only commit; no source/build/.synesis paths |
+| 71 | Final HEAD | Recorded after the documentation-only commit |
+| 72 | Final Git status | Clean `master` expected after commit |
+| 73 | Push | No push occurred |
+| 74 | Exact next action | Preserve `UNSAFE_FILE_AUTH`; separately authorize a bounded edge-case spike for ambiguous liveness, two-successor loser cleanup, and real Codex supervisor-crash recovery. Do not implement production integration or run full acceptance |
+
+## Interpretation
+
+Job Objects close the narrow orphan-teardown primitive in principle. They do
+not replace exact provider-thread pinning, Synesis generation fencing, or
+provider authentication. A successful thread resume is still not evidence
+that an old process tree is dead. The successor gate must wait for the owned
+container's definitive empty predicate and must remain fail closed on query
+failure or handle loss.
+
+The generic crash-controller result is positive, but it is not a real Codex
+broker-crash result. The real Codex run used one disposable controller hosting
+two independent broker objects, so the shared controller PID is a stated
+prototype limitation. No managed Synesis attachment was invoked.

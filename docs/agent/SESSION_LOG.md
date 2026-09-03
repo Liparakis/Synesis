@@ -5077,3 +5077,17 @@ not run Codex or close SYN-041.
 - Exact next action: preserve `UNSAFE_FILE_AUTH`, do not run managed
   acceptance, and require a provider-enforced worker/thread ownership
   contract before any shared-home reconsideration.
+- 2026-09-03 — SYN-051 Windows Job Object process-tree follow-on:
+  a disposable native probe used suspended launch, assignment before resume,
+  kill-on-close, and disabled breakaway. Generic root/child/grandchild
+  containment and controller crash teardown passed. Real Codex A/B App
+  Servers and MCP children were independently Job-contained; App Server-only
+  A death left MCP alive in Job A until explicit teardown, which killed MCP
+  and proved `ActiveProcesses == 0`. B survived and completed another real
+  turn; A2/B2 resumed exact threads with fresh proofs. Ambiguous query failure,
+  real two-successor loser cleanup, and real Codex supervisor-crash recovery
+  were not exercised, so classification is PARTIAL. Evidence is in
+  `docs/evidence/SYN-051-job-object-process-tree-feasibility-2026-09-03.md`
+  and ADR-0059. No Synesis MCP/coordination call, production source/auth
+  policy change, credential access, fixture change, `.synesis` rewrite, or
+  push occurred.

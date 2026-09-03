@@ -1,5 +1,21 @@
 # Next Session
 
+## SYN-051 Windows Job Object follow-on — 2026-09-03
+
+The process-tree feasibility spike is **PARTIAL**. Suspended launch plus
+assignment-before-resume contained generic descendants and real Codex
+AppServer/MCP children in independent Jobs. App Server-only death left MCP
+owned and alive until Job teardown; teardown then proved an empty Job. Generic
+controller crash/kill-on-close passed. Ambiguous query failure, a real
+two-successor loser cleanup, and real Codex post-supervisor-crash recovery
+remain untested.
+
+## Immediate next action
+
+Preserve `UNSAFE_FILE_AUTH` and the managed-acceptance hard stop. Obtain
+separate authorization for those three edge cases before integration; do not
+implement production continuity or run full acceptance.
+
 ## SYN-051 broker follow-on — 2026-09-03
 
 The broker-pinned normal-home feasibility spike is complete as **PASS-B**:

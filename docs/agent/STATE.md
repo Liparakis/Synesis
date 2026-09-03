@@ -1,5 +1,23 @@
 # State
 
+## SYN-051 Windows Job Object follow-on — 2026-09-03
+
+The bounded process-tree feasibility spike is **PARTIAL**. A native
+out-of-repository probe created App Server processes suspended, assigned them
+to Windows Job Objects before resume, and verified real Codex App Server/MCP
+membership. App Server-only death left MCP alive inside Job A; explicit Job
+teardown killed it and proved `ActiveProcesses == 0`. Generic descendant
+containment and controller crash/kill-on-close passed, B survived A teardown,
+and A2/B2 resumed exact threads with fresh proofs. Ambiguous query failure, a
+real two-successor loser cleanup, and real Codex recovery after supervisor
+crash were not exercised. See ADR-0059 and the evidence record.
+
+## Immediate next action
+
+Preserve `UNSAFE_FILE_AUTH` and the managed-acceptance hard stop. Separately
+authorize the three missing edge-case tests before any production integration;
+do not change production code or run full acceptance.
+
 ## SYN-051 broker follow-on — 2026-09-03
 
 The bounded broker-pinned stock-Codex feasibility spike is **PASS-B**. A

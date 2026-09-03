@@ -1,5 +1,23 @@
 # Current Task
 
+## SYN-051 Windows Job Object follow-on — 2026-09-03
+
+The bounded process-tree spike is **PARTIAL**. Suspended launch plus
+assignment-before-resume contained generic descendants and real Codex
+AppServer/MCP children in independent Jobs. App Server-only death left MCP
+alive until Job teardown, which killed it and proved the Job empty. Generic
+controller kill-on-close passed, B stayed usable during A teardown, and A2/B2
+resumed exact threads with fresh proofs. Ambiguous query failure, a real
+two-successor loser cleanup, and real Codex post-supervisor-crash recovery
+remain untested. Evidence is in
+`docs/evidence/SYN-051-job-object-process-tree-feasibility-2026-09-03.md` and
+ADR-0059. No Synesis MCP path was invoked.
+
+## Immediate next action
+
+Preserve `UNSAFE_FILE_AUTH`. Obtain separate authorization for the three
+missing edge cases; do not change production code or run full acceptance.
+
 ## SYN-051 broker follow-on — 2026-09-03
 
 The bounded broker-pinned stock-Codex feasibility spike is **PASS-B**. A
