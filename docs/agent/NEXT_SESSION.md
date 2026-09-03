@@ -10,7 +10,18 @@ runtime, binding, lease, and strict authority seams. Do not touch Claude,
 ordinary `SESSION_BOUND` behavior, Review/Doctor, SYN-049 fixtures, or
 historical durable state.
 
+The bounded shared-normal-home follow-on is complete and rejected as `FAIL`
+for worker isolation. Concurrent dedicated App Servers and launch-local proof
+delivery worked, but a fresh process using the same normal home could resume
+another worker's persisted provider thread after owner shutdown. The full
+shared-home hypothesis is therefore not safe; preserve `UNSAFE_FILE_AUTH` and
+do not run managed acceptance.
+
 ## Immediate next action
+
+The exact next documentation action is to preserve this rejection and wait for
+an explicit provider-enforced worker/thread ownership contract before any
+shared-home reconsideration. No production policy change is authorized.
 
 The SYN-051 slice is committed as `fd45049`; rebuild/install provenance and
 matching hashes are recorded in

@@ -5024,3 +5024,40 @@ not run Codex or close SYN-041.
 - Exact next action: retain the `UNSAFE_FILE_AUTH` hard stop until a
   provider-supported cross-home authentication mechanism is available and
   verified; do not run managed acceptance or weaken the security boundary.
+
+# 2026-09-03 — SYN-051 shared normal-home feasibility rejection
+
+- Completed the bounded provider-only alternative investigation from starting
+  HEAD `b84d041cd066a2f6d9e8f13b6ff093fac5a3a869` using `codex-cli 0.145.0`.
+  Dedicated A1/B1 App Servers shared the normal `C:\Users\Liparakis\.codex`
+  home, created distinct threads, delivered distinct process-private proof
+  digests, and completed concurrent authenticated model turns.
+- Codex accepted launch-local dotted `--config` overrides for the disposable
+  MCP command, args, and selected `env_vars`. The successful corrected run did
+  not mutate the global config. An earlier disposable attempt caused two
+  automatic trust entries; exact cleanup restored the pre-probe config hash
+  and left no probe references at that point. A later read found an
+  unattributed config length/hash change with no probe references; it was not
+  overwritten blindly because the missing user configuration was unknown.
+- A1 stopped, A2 resumed exact Thread A with a fresh proof and completed a
+  model turn while B1 stayed live. B2 likewise recreated B. No raw proof or
+  provider credential content was persisted or exposed; no SQLite, lock, or
+  rollout-corruption error was observed. A2 retained an unexplained `401`
+  string flag in a truncated auxiliary stderr summary despite successful
+  resume/turn completion.
+- The decisive result was negative: after A stopped, fresh B3 using the same
+  normal home resumed A's persisted provider thread and reached the disposable
+  MCP boundary. Process-private proofs do not create provider thread ownership.
+  Final classification is `FAIL` for the full shared-home worker-isolation
+  hypothesis; `UNSAFE_FILE_AUTH` remains unchanged.
+- The current Synesis MCP attachment boundary was not invoked under the
+  no-Synesis-in-source constraint. No production source, `.synesis` state,
+  historical fixture, or remote repository changed. Detailed results are in
+  `docs/evidence/SYN-051-shared-normal-home-feasibility-2026-09-03.md` and
+  ADR-0057.
+- Validation: deferred register PASS, fixture preservation PASS, direct
+  ten-tool catalog check PASS, `git diff --check` PASS. The targeted Gradle
+  catalog test was incomplete because the host could not establish loopback.
+- Exact next action: preserve `UNSAFE_FILE_AUTH`, do not run managed
+  acceptance, and require a provider-enforced worker/thread ownership
+  contract before any shared-home reconsideration.

@@ -10,6 +10,18 @@ generation fencing. ADR-0056 records the decision. SYN-050 is preserved as the
 PASS-A feasibility gate; SYN-049 remains PARTIAL and its fixture is evidence
 only.
 
+The bounded shared-normal-home follow-on is complete and classified `FAIL` for
+the full worker-isolation hypothesis. Codex `0.145.0` allowed concurrent
+dedicated A/B App Servers, provider-owned normal authentication, launch-local
+selected `env_vars`, and short authenticated turns. After A stopped, a fresh
+B3 process using the same normal home resumed A's persisted provider thread.
+Process-private proof is not provider thread ownership. Evidence is recorded
+in `docs/evidence/SYN-051-shared-normal-home-feasibility-2026-09-03.md` and
+ADR-0057. No production source, `.synesis` state, or credential changed.
+The disposable trust-entry cleanup reached the exact pre-probe config hash;
+a later read found an unattributed normal-config length/hash change with no
+probe references, and it was not overwritten without recoverable provenance.
+
 The implementation preserves exact authority, the ten-tool MCP surface,
 ordinary `SESSION_BOUND` behavior, and all historical fixtures. It adds the
 provider-neutral versioned attachment state/fencing slice, isolated Codex
@@ -31,6 +43,12 @@ store, so it is not a shared account-wide carrier for the managed homes. No
 credential was copied, logged, hashed, migrated, or modified.
 
 ## Immediate next action
+
+Preserve `UNSAFE_FILE_AUTH` and do not run managed acceptance. The shared
+normal-home alternative removes the isolated-home auth-copy pressure only
+operationally; it does not establish a provider worker-ownership fence. The
+current Synesis managed attachment probe was not invoked under the explicit
+no-Synesis-in-source boundary.
 
 The bounded implementation is committed as `fd45049`, and build/install
 provenance is recorded in

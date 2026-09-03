@@ -49,3 +49,15 @@ This decision does not implement Claude continuity, anonymous continuity,
 shared App Servers, arbitrary fleet launch, upstream Codex changes, or a
 Review/Doctor redesign. Historical fixtures, including SYN-049, are preserved
 and are not manually repaired or re-admitted.
+
+## Shared normal-home follow-on
+
+The bounded SYN-051 follow-on tested multiple dedicated App Server processes
+against the normal provider-owned CODEX_HOME, auth, and thread store. It
+confirmed operational concurrency and launch-local selected env_vars delivery,
+but a fresh process could resume another worker's persisted provider thread
+after the original process stopped. Process-private proof is therefore not a
+provider thread-ownership fence. The shared-home alternative is rejected for
+managed worker isolation; ADR-0057 and
+docs/evidence/SYN-051-shared-normal-home-feasibility-2026-09-03.md record the
+result. This does not change the dedicated-home decision or UNSAFE_FILE_AUTH.

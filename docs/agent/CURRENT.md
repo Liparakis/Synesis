@@ -3,8 +3,9 @@
 ## SYN-051 Bounded stock-Codex MANAGED_CONTINUITY implementation — 2026-09-03
 
 - Task ID: SYN-051
-- Status: ACTIVE; production implementation authorized after SYN-050 PASS-A
-  feasibility and ADR-0056 acceptance.
+- Status: ACTIVE; the existing bounded implementation is preserved, but
+  managed acceptance and further production auth-policy changes remain blocked
+  after the safe-auth hard stop and the shared-home follow-on rejection.
 - Scope: Codex App Server only; one retained dedicated `CODEX_HOME` and one
   dedicated App Server per logical worker; exact thread resume; selected
   `env_vars` proof delivery; hash-only durable proof; rotation and monotonic
@@ -16,8 +17,20 @@
   seams before edits, then prove safe isolated Codex authentication, matching
   artifact provenance, real authenticated model turn, exact restart/resume,
   stale-generation rejection, and preservation of logical coordination state.
+- Follow-on result: the shared normal CODEX_HOME alternative is rejected for
+  worker isolation. Evidence is recorded in
+  `docs/evidence/SYN-051-shared-normal-home-feasibility-2026-09-03.md` and
+  ADR-0057; no production code changed.
 
 ## Immediate next action
+
+The bounded shared-normal-home follow-on is complete and classified `FAIL` for
+the full worker-isolation hypothesis. Concurrent dedicated App Servers,
+provider-owned normal authentication, launch-local MCP `env_vars`, short real
+turns, and same-home process recreation worked operationally. A fresh B3
+process nevertheless resumed A's persisted provider thread after A stopped.
+Preserve `UNSAFE_FILE_AUTH`; do not run managed acceptance or weaken the
+security boundary.
 
 Artifact provenance is complete and recorded in
 `docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. The
@@ -55,6 +68,16 @@ uses a per-home key and encrypted home-local auth store. Evidence is recorded
 in `docs/evidence/SYN-051-keyring-auth-compatibility-2026-09-03.md`. No
 production source, credential, `.synesis` state, or historical fixture changed.
 
+The shared-normal-home follow-on used only disposable provider and boundary
+observers. A/B proof delivery and concurrent real turns passed, but provider
+thread ownership failed after owner shutdown: B3 resumed A's persisted thread
+with a fresh process proof. The first disposable attempt caused two temporary
+Codex trust-entry additions; exact cleanup restored the normal config's
+pre-probe SHA-256 at the cleanup point. A later read found an unattributed
+length/hash change with no probe references; it was not overwritten blindly.
+Evidence is recorded in
+`docs/evidence/SYN-051-shared-normal-home-feasibility-2026-09-03.md`.
+
 ## Current failures
 
 The safe isolated provider-authentication gate failed. The current normal
@@ -66,6 +89,14 @@ neither of which is established. A focused Gradle regression invocation also
 failed before test execution with `java.io.IOException: Unable to establish
 loopback connection`, including after the IPv4 preference retry. Do not run
 managed acceptance or weaken the security boundary.
+
+The shared-home alternative does not remove the managed-continuity blocker:
+the provider store is operationally concurrent but does not fence a persisted
+thread to its original managed worker. The current Synesis attachment probe
+was intentionally not invoked under the no-Synesis-in-source boundary. The
+targeted Gradle catalog test also remained incomplete because the host could
+not establish loopback; direct catalog inspection still reports exactly ten
+raw tools.
 
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
