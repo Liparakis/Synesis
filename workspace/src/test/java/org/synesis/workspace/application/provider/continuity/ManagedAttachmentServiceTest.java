@@ -37,6 +37,38 @@ final class ManagedAttachmentServiceTest {
     }
 
     @Test
+    void productionIssuePathDerivesThreadFromDurableOwnership() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-owned-attachment-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = new ManagedAttachmentStore(root.resolve("adapter/attachment.json"));
+        var ownership = new ProviderThreadOwnershipStore(root.resolve("ownership"))
+                .acquire(location.projectId().toString(), "codex", "thread-owned", "binding-a");
+
+        var issued = new ManagedAttachmentService().issueFromOwnership(location,
+                location.projectId().toString(), "codex", "binding-a", "normal-provider-home", ownership, store);
+
+        assertEquals("thread-owned", issued.record().threadId());
+        assertEquals(ProviderContinuityMode.MANAGED_CONTINUITY, issued.record().mode());
+    }
+
+    @Test
+    void ownershipReplacementRejectsAThreadSwitch() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-owned-replacement-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = new ManagedAttachmentStore(root.resolve("adapter/attachment.json"));
+        var ownership = new ProviderThreadOwnershipStore(root.resolve("ownership"))
+                .acquire(location.projectId().toString(), "codex", "thread-owned", "binding-a");
+        var service = new ManagedAttachmentService();
+        var issued = service.issueFromOwnership(location, location.projectId().toString(), "codex", "binding-a",
+                "normal-provider-home", ownership, store);
+
+        assertThrows(IllegalStateException.class, () -> service.reattachFromOwnership(location,
+                new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-other", 1L,
+                        issued.proof()), location.projectId().toString(), ownership, "normal-provider-home", store,
+                true));
+    }
+
+    @Test
     void rejectsWrongScopeProofThreadGenerationAndReplayAfterRotation() throws Exception {
         Path root = Files.createTempDirectory("synesis-managed-fence-");
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();

@@ -12,6 +12,8 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentStore;
+import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipRecord;
+import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipStore;
 import org.synesis.workspace.application.provider.continuity.RuntimeAuthenticator;
 
 /**
@@ -26,7 +28,11 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     private final ProjectApplicationService.ProjectLocation location;
     private final Path synesisLauncher;
     private final ManagedAttachmentService attachmentService;
+    private final ProviderThreadOwnershipStore ownershipStore;
+    private final ManagedCodexRuntimeMode runtimeMode;
+    private final ManagedProcessTreeSupervisor processTreeSupervisor;
     private final Map<String, PreparedLaunch> prepared = new ConcurrentHashMap<>();
+    private final Map<String, Process> activeProcesses = new ConcurrentHashMap<>();
 
     /**
      * Creates a managed launcher using the normal Codex executable.
@@ -47,32 +53,61 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      */
     public ManagedCodexProcessLauncher(ProjectApplicationService.ProjectLocation location, Path synesisLauncher,
             ManagedAttachmentService attachmentService) {
+        this(location, synesisLauncher, attachmentService, ManagedCodexRuntimeMode.NORMAL_PROVIDER_HOME_MANAGED);
+    }
+
+    /**
+     * Creates an injectable managed launcher with an explicit runtime mode.
+     *
+     * @param location initialized project location
+     * @param synesisLauncher Synesis MCP executable
+     * @param attachmentService managed attachment service
+     * @param runtimeMode managed runtime mode
+     */
+    public ManagedCodexProcessLauncher(ProjectApplicationService.ProjectLocation location, Path synesisLauncher,
+            ManagedAttachmentService attachmentService, ManagedCodexRuntimeMode runtimeMode) {
+        this(location, synesisLauncher, attachmentService, runtimeMode, ManagedProcessTreeSupervisor.unavailable());
+    }
+
+    /**
+     * Creates a launcher with an explicit owned-process supervisor.
+     *
+     * @param location initialized project location
+     * @param synesisLauncher Synesis MCP executable
+     * @param attachmentService managed attachment service
+     * @param runtimeMode managed runtime mode
+     * @param processTreeSupervisor verified process-tree supervisor
+     */
+    public ManagedCodexProcessLauncher(ProjectApplicationService.ProjectLocation location, Path synesisLauncher,
+            ManagedAttachmentService attachmentService, ManagedCodexRuntimeMode runtimeMode,
+            ManagedProcessTreeSupervisor processTreeSupervisor) {
         this.location = Objects.requireNonNull(location, "location");
         this.synesisLauncher = Objects.requireNonNull(synesisLauncher, "synesisLauncher")
                 .toAbsolutePath().normalize();
         this.attachmentService = Objects.requireNonNull(attachmentService, "attachmentService");
+        this.ownershipStore = ProviderThreadOwnershipStore.storeFor(location);
+        this.runtimeMode = Objects.requireNonNull(runtimeMode, "runtimeMode");
+        this.processTreeSupervisor = Objects.requireNonNull(processTreeSupervisor, "processTreeSupervisor");
     }
 
     /**
      * Prepares a first managed attachment after the exact provider thread exists.
      *
      * @param authority existing exact binding authority
-     * @param threadId exact Codex thread
      * @return durable attachment metadata
      * @throws Exception when authentication or durable setup is unavailable
      */
-    public ManagedAttachmentRecord prepareFirst(LifecycleControlRequestEnvelope.AuthorityContext authority,
-            String threadId) throws Exception {
-        requireAuthority(authority, threadId);
+    public ManagedAttachmentRecord prepareFirst(LifecycleControlRequestEnvelope.AuthorityContext authority)
+            throws Exception {
+        requireAuthority(authority);
+        ManagedCodexThreadBroker broker = brokerFor(authority);
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
-        CodexManagedAuthentication.Strategy authentication = CodexManagedAuthentication.inspect(
-                CodexManagedAuthentication.userHome());
-        CodexManagedRuntimeHome home = CodexManagedRuntimeHome.create(authority.projectId());
+        CodexManagedRuntimeHome home = runtimeHome(authority.projectId());
         try {
-            home.writeConfiguration(synesisLauncher, location.root(), authentication);
-            ManagedAttachmentService.IssuedAttachment issued = attachmentService.issue(location,
-                    authority.projectId(), authority.provider(), authority.bindingSessionId(), threadId, home.homeId(),
-                    store);
+            configureHome(home);
+            ManagedAttachmentService.IssuedAttachment issued = attachmentService.issueFromOwnership(location,
+                    authority.projectId(), authority.provider(), authority.bindingSessionId(), home.homeId(),
+                    broker.ownership(), store);
             prepared.put(authority.bindingSessionId(), new PreparedLaunch(home, issued.proof(), issued.record()));
             return issued.record();
         } catch (Exception failure) {
@@ -87,25 +122,23 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @param authority exact existing binding authority
      * @param currentProof current raw proof held by the trusted launcher
      * @param expectedGeneration current attachment generation
-     * @param threadId exact resumed thread
      * @return replacement metadata
      * @throws Exception when the old attachment is live/ambiguous or stale
      */
     public ManagedAttachmentRecord prepareReplacement(LifecycleControlRequestEnvelope.AuthorityContext authority,
-            String currentProof, long expectedGeneration, String threadId) throws Exception {
-        requireAuthority(authority, threadId);
+            String currentProof, long expectedGeneration) throws Exception {
+        requireAuthority(authority);
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
         ManagedAttachmentRecord prior = store.read().orElseThrow(() -> new IOException("attachment_missing"));
-        CodexManagedRuntimeHome home = CodexManagedRuntimeHome.create(authority.projectId());
+        ManagedCodexThreadBroker broker = brokerFor(authority);
+        CodexManagedRuntimeHome home = runtimeHome(authority.projectId());
         try {
             RuntimeAuthenticator.AttachmentRequest request = new RuntimeAuthenticator.AttachmentRequest(
                     authority.provider(), authority.bindingSessionId(), prior.threadId(), expectedGeneration,
                     currentProof);
-            CodexManagedAuthentication.Strategy authentication = CodexManagedAuthentication.inspect(
-                    CodexManagedAuthentication.userHome());
-            home.writeConfiguration(synesisLauncher, location.root(), authentication);
-            ManagedAttachmentService.IssuedAttachment issued = attachmentService.reattach(location, request,
-                    authority.projectId(), threadId, home.homeId(), store, true);
+            configureHome(home);
+            ManagedAttachmentService.IssuedAttachment issued = attachmentService.reattachFromOwnership(location,
+                    request, authority.projectId(), broker.ownership(), home.homeId(), store, true);
             prepared.put(authority.bindingSessionId(), new PreparedLaunch(home, issued.proof(), issued.record()));
             return issued.record();
         } catch (Exception failure) {
@@ -141,13 +174,63 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         environment.put("SYNESIS_MCP_CONNECTION_INSTANCE_ID", authority.connectionInstanceId());
         environment.put("SYNESIS_MCP_PROVIDER", authority.provider());
         environment.put(CodexManagedRuntimeHome.ATTACHMENT_PROOF_ENV, launch.proof());
-        Process process = builder.start();
+        Process process = processTreeSupervisor.launch(command, Path.of(authority.realWorktree()), environment);
+        if (!processTreeSupervisor.owns(process)) {
+            try {
+                processTreeSupervisor.teardownAndProveEmpty(process);
+            } catch (IOException ignored) {
+                process.destroyForcibly();
+            }
+            throw new IOException("managed_process_tree_ownership_unproven");
+        }
         ProcessHandle.Info info = ProcessHandle.of(process.pid()).map(ProcessHandle::info).orElse(null);
         String executable = info == null ? command.getFirst() : info.command().orElse(command.getFirst());
         String identity = info == null ? executable : info.commandLine().orElse(executable);
         long started = info == null ? System.currentTimeMillis()
                 : info.startInstant().map(Instant::toEpochMilli).orElse(System.currentTimeMillis());
+        activeProcesses.put(authority.bindingSessionId(), process);
         return new CodexAppServerLifecycleService.AppServerProcess(process, executable, identity, started);
+    }
+
+    /**
+     * Tears down one exact managed process tree and only then marks its
+     * attachment disconnected.
+     *
+     * @param authority exact binding authority
+     * @param expectedGeneration generation being torn down
+     * @return true when the owned tree was proven empty
+     * @throws Exception when ownership, generation, or liveness is ambiguous
+     */
+    public boolean teardownAndProveEmpty(LifecycleControlRequestEnvelope.AuthorityContext authority,
+            long expectedGeneration) throws Exception {
+        requireAuthority(authority);
+        PreparedLaunch preparedLaunch = prepared.get(authority.bindingSessionId());
+        Process process = activeProcesses.get(authority.bindingSessionId());
+        if (preparedLaunch == null || process == null || preparedLaunch.record().generation() != expectedGeneration) {
+            throw new IOException("managed_process_tree_missing_or_stale");
+        }
+        if (!processTreeSupervisor.owns(process) || !processTreeSupervisor.teardownAndProveEmpty(process)) {
+            throw new IOException("managed_process_tree_death_ambiguous");
+        }
+        activeProcesses.remove(authority.bindingSessionId(), process);
+        attachmentService.markDisconnected(ManagedAttachmentService.storeFor(location,
+                authority.bindingSessionId()));
+        return true;
+    }
+
+    /**
+     * Terminalizes an attachment and releases its provider-thread tombstone
+     * only after terminal state is durably recorded.
+     *
+     * @param authority exact binding authority
+     * @throws Exception when terminalization or exact ownership release fails
+     */
+    public void terminalizeAndRelease(LifecycleControlRequestEnvelope.AuthorityContext authority) throws Exception {
+        requireAuthority(authority);
+        ManagedAttachmentService attachment = attachmentService;
+        attachment.terminalize(ManagedAttachmentService.storeFor(location, authority.bindingSessionId()));
+        ProviderThreadOwnershipRecord ownership = brokerFor(authority).ownership();
+        ownershipStore.release(ownership.provider(), ownership.providerThreadId(), authority.bindingSessionId());
     }
 
     /**
@@ -161,6 +244,43 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         return launch == null ? null : launch.record();
     }
 
+    /**
+     * Records a provider-returned thread in the durable owner before attachment.
+     *
+     * @param authority exact binding authority
+     * @param providerReturnedThreadId exact provider result
+     * @return active ownership record
+     * @throws IOException when another binding already owns the thread
+     */
+    public ProviderThreadOwnershipRecord observeAndClaimProviderThread(
+            LifecycleControlRequestEnvelope.AuthorityContext authority, String providerReturnedThreadId)
+            throws IOException {
+        requireAuthority(authority);
+        return ownershipStore.acquire(authority.projectId(), authority.provider(), providerReturnedThreadId,
+                authority.bindingSessionId());
+    }
+
+    private ManagedCodexThreadBroker brokerFor(LifecycleControlRequestEnvelope.AuthorityContext authority)
+            throws IOException {
+        return new ManagedCodexThreadBroker(ownershipStore.findByBinding("codex", authority.bindingSessionId())
+                .orElseThrow(() -> new IOException("provider_thread_ownership_missing")));
+    }
+
+    private void configureHome(CodexManagedRuntimeHome home) throws IOException {
+        CodexManagedAuthentication.Strategy authentication = CodexManagedAuthentication.forMode(runtimeMode,
+                CodexManagedAuthentication.userHome());
+        if (runtimeMode == ManagedCodexRuntimeMode.ISOLATED_DEDICATED_HOME) {
+            home.writeConfiguration(synesisLauncher, location.root(), authentication);
+        } else if (authentication != CodexManagedAuthentication.Strategy.NORMAL_PROVIDER_HOME) {
+            throw new IOException("normal_provider_home_strategy_unavailable");
+        }
+    }
+
+    private CodexManagedRuntimeHome runtimeHome(String projectId) throws IOException {
+        return runtimeMode == ManagedCodexRuntimeMode.NORMAL_PROVIDER_HOME_MANAGED
+                ? CodexManagedRuntimeHome.normalProviderHome() : CodexManagedRuntimeHome.create(projectId);
+    }
+
     private static List<String> configuredCommand() {
         String configured = System.getenv("SYNESIS_CODEX_APP_SERVER_COMMAND");
         if (configured == null || configured.isBlank()) {
@@ -169,10 +289,10 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         return List.of(configured.trim().split("\\s+"));
     }
 
-    private static void requireAuthority(LifecycleControlRequestEnvelope.AuthorityContext authority, String threadId) {
+    private static void requireAuthority(LifecycleControlRequestEnvelope.AuthorityContext authority) {
         Objects.requireNonNull(authority, "authority");
-        if (!"codex".equals(authority.provider()) || threadId == null || threadId.isBlank()) {
-            throw new IllegalArgumentException("managed Codex attachment requires exact thread");
+        if (!"codex".equals(authority.provider())) {
+            throw new IllegalArgumentException("managed Codex attachment requires Codex provider");
         }
     }
 

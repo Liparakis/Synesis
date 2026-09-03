@@ -52,6 +52,16 @@ public final class CodexManagedRuntimeHome {
     }
 
     /**
+     * Selects the provider-owned normal Codex home without creating or copying
+     * any credential state.
+     *
+     * @return normal provider home handle
+     */
+    public static CodexManagedRuntimeHome normalProviderHome() {
+        return new CodexManagedRuntimeHome("normal-provider-home", CodexManagedAuthentication.userHome());
+    }
+
+    /**
      * Returns the opaque managed home identity.
      *
      * @return opaque managed home identity
@@ -132,6 +142,9 @@ public final class CodexManagedRuntimeHome {
      * @throws IOException when cleanup fails
      */
     public void deleteAfterTerminal() throws IOException {
+        if ("normal-provider-home".equals(homeId)) {
+            return;
+        }
         if (!Files.exists(home)) {
             return;
         }

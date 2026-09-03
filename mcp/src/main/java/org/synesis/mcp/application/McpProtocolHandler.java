@@ -112,6 +112,8 @@ public final class McpProtocolHandler {
     private Path activeProjectRoot;
     /** Whether initialize has successfully bound this connection to a session. */
     private boolean isSessionBound;
+    /** Whether the launcher authenticated this process as managed continuity. */
+    private final boolean managedAdmission;
     /** Fail-closed root-authority diagnostic set before provider admission. */
     private String projectRootAuthorityFailure;
     /** Durable command anchor refreshed only after verified session activity. */
@@ -130,7 +132,7 @@ public final class McpProtocolHandler {
             String provider,
             String connectionInstanceId) {
         this(sessionService, projectRoot, provider, connectionInstanceId,
-                captureProcessIdentity(connectionInstanceId), false);
+                captureProcessIdentity(connectionInstanceId), false, false);
     }
 
     /**
@@ -156,7 +158,7 @@ public final class McpProtocolHandler {
             String connectionInstanceId,
             boolean projectRootPinned) {
         this(sessionService, projectRoot, provider, connectionInstanceId,
-                captureProcessIdentity(connectionInstanceId), projectRootPinned);
+                captureProcessIdentity(connectionInstanceId), projectRootPinned, false);
     }
 
     /**
@@ -175,6 +177,27 @@ public final class McpProtocolHandler {
             String connectionInstanceId,
             SessionProcessIdentity processIdentity,
             boolean projectRootPinned) {
+        this(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, projectRootPinned, false);
+    }
+
+    /**
+     * Creates an MCP handler after an explicit managed attachment admission.
+     *
+     * @param sessionService application session service
+     * @param projectRoot initial launcher project root
+     * @param provider stable provider name
+     * @param connectionInstanceId exact connection selector
+     * @param processIdentity captured process identity
+     * @param projectRootPinned whether the root was launcher-pinned
+     * @param managedAdmission whether exact managed proof was verified at startup
+     */
+    public McpProtocolHandler(AgentSessionService sessionService,
+            Path projectRoot,
+            String provider,
+            String connectionInstanceId,
+            SessionProcessIdentity processIdentity,
+            boolean projectRootPinned,
+            boolean managedAdmission) {
         this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
         this.readService = new WorkspaceReadService();
         this.patchService = new WorkspacePatchService();
@@ -202,6 +225,7 @@ public final class McpProtocolHandler {
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         this.commandProcessIdentity = Objects.requireNonNull(processIdentity, "processIdentity");
+        this.managedAdmission = managedAdmission;
     }
 
     /**
@@ -1431,7 +1455,7 @@ public final class McpProtocolHandler {
                 }
 
                 AgentSessionService.SessionResolutionRequest resolutionRequest = new AgentSessionService.SessionResolutionRequest(
-                        activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh);
+                        activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh, managedAdmission);
 
                 agentResponse = sessionService.ensureSession(resolutionRequest);
                 if (agentResponse.status() == AgentStatus.READY) {

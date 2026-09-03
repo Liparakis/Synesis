@@ -14,6 +14,8 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.lifecycle.RepositoryPortabilityService;
 
@@ -94,6 +96,17 @@ public final class AgentSessionService {
                 location, request.provider());
         if (!providerAdmission.admitted()) {
             throw new IllegalStateException("PROVIDER_INTEGRATION_REQUIRED");
+        }
+
+        if (request.managedAdmission()) {
+            ProviderSessionBindingService.Binding managedBinding = bindingService.find(location, request.provider(),
+                    request.connectionInstanceId()).orElseThrow(() -> new IllegalStateException("managed_binding_missing"));
+            ManagedAttachmentRecord managed = ManagedAttachmentService.storeFor(location, managedBinding.sessionId())
+                    .read().orElseThrow(() -> new IllegalStateException("managed_attachment_missing"));
+            if (managed.mode() != org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY
+                    || managed.status() != ManagedAttachmentRecord.Status.ACTIVE) {
+                throw new IllegalStateException("managed_attachment_not_active");
+            }
         }
 
         ProviderSessionBindingService.BindingResult bindingResult = bindingService.ensure(
@@ -288,13 +301,15 @@ public final class AgentSessionService {
      * @param connectionInstanceId unique process connection-instance ID
      * @param taskIntent           optional task intent description
      * @param refresh              {@code true} if a session refresh is explicitly requested
+     * @param managedAdmission     {@code true} only after trusted managed proof admission
      */
     public record SessionResolutionRequest(
             Path projectRoot,
             String provider,
             String connectionInstanceId,
             AgentTaskIntent taskIntent,
-            boolean refresh
+            boolean refresh,
+            boolean managedAdmission
     ) {
 
         /**
@@ -308,6 +323,20 @@ public final class AgentSessionService {
             if (connectionInstanceId == null || connectionInstanceId.isBlank()) {
                 throw new IllegalArgumentException("connectionInstanceId is required");
             }
+        }
+
+        /**
+         * Constructs ordinary session-bound resolution parameters.
+         *
+         * @param projectRoot project root
+         * @param provider provider identifier
+         * @param connectionInstanceId connection selector
+         * @param taskIntent optional task intent
+         * @param refresh explicit refresh flag
+         */
+        public SessionResolutionRequest(Path projectRoot, String provider, String connectionInstanceId,
+                AgentTaskIntent taskIntent, boolean refresh) {
+            this(projectRoot, provider, connectionInstanceId, taskIntent, refresh, false);
         }
     }
 

@@ -12,8 +12,9 @@ import org.synesis.workspace.application.ProjectApplicationService;
  * Issues, authenticates, and atomically rotates managed attachment proofs.
  *
  * <p>This service is deliberately independent of provider coordination
- * identity. The caller supplies an already existing binding/session and exact
- * thread selector; the service never creates or selects one.</p>
+ * identity. The shared-home production path accepts an active durable
+ * provider-thread owner and derives the selector from it; the legacy direct
+ * selector overload remains only for the earlier isolated-home adapter.</p>
  */
 public final class ManagedAttachmentService implements RuntimeAuthenticator {
 
@@ -67,6 +68,31 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                 System.currentTimeMillis());
         store.write(record);
         return new IssuedAttachment(proof, record);
+    }
+
+    /**
+     * Issues an attachment from trusted durable provider-thread ownership.
+     *
+     * <p>This is the production path for shared normal-home mode. The thread
+     * selector is taken from the ownership record rather than a caller or
+     * model argument.</p>
+     *
+     * @param location project location
+     * @param projectId durable project ID
+     * @param provider provider identifier
+     * @param bindingSessionId existing binding session
+     * @param runtimeHomeId provider-owned runtime-home identity
+     * @param ownership active durable provider-thread owner
+     * @param store durable attachment store
+     * @return raw proof for trusted process setup and its durable record
+     * @throws Exception when ownership or durable setup is invalid
+     */
+    public synchronized IssuedAttachment issueFromOwnership(ProjectApplicationService.ProjectLocation location,
+            String projectId, String provider, String bindingSessionId, String runtimeHomeId,
+            ProviderThreadOwnershipRecord ownership, ManagedAttachmentStore store) throws Exception {
+        verifyOwnership(ownership, projectId, provider, bindingSessionId);
+        return issue(location, projectId, provider, bindingSessionId, ownership.providerThreadId(), runtimeHomeId,
+                store);
     }
 
     /**
@@ -151,6 +177,30 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
     }
 
     /**
+     * Reattaches to the same provider-thread owner while rotating runtime proof.
+     *
+     * @param location project location
+     * @param request exact current attachment request
+     * @param expectedProjectId project identity
+     * @param ownership active durable provider-thread owner
+     * @param runtimeHomeId provider-owned runtime-home identity
+     * @param store durable attachment store
+     * @param priorAttachmentProvenStopped whether the prior tree is proven dead
+     * @return fresh proof and generation record
+     * @throws Exception when ownership, liveness, or fencing validation fails
+     */
+    public synchronized IssuedAttachment reattachFromOwnership(ProjectApplicationService.ProjectLocation location,
+            AttachmentRequest request, String expectedProjectId, ProviderThreadOwnershipRecord ownership,
+            String runtimeHomeId, ManagedAttachmentStore store, boolean priorAttachmentProvenStopped) throws Exception {
+        verifyOwnership(ownership, expectedProjectId, request.provider(), request.bindingSessionId());
+        if (!ownership.providerThreadId().equals(request.threadId())) {
+            throw failure("managed_provider_thread_mismatch");
+        }
+        return reattach(location, request, expectedProjectId, ownership.providerThreadId(), runtimeHomeId, store,
+                priorAttachmentProvenStopped);
+    }
+
+    /**
      * Marks an exact attachment disconnected without lowering its generation.
      *
      * @param store durable attachment store
@@ -203,6 +253,17 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
     private static void requireCodex(String provider) {
         if (!"codex".equals(provider)) {
             throw new IllegalArgumentException("managed continuity currently supports codex only");
+        }
+    }
+
+    private static void verifyOwnership(ProviderThreadOwnershipRecord ownership, String projectId, String provider,
+            String bindingSessionId) {
+        Objects.requireNonNull(ownership, "ownership");
+        if (ownership.status() != ProviderThreadOwnershipRecord.Status.ACTIVE
+                || !projectId.equals(ownership.projectId())
+                || !provider.equals(ownership.provider())
+                || !bindingSessionId.equals(ownership.bindingSessionId())) {
+            throw new IllegalStateException("provider_thread_ownership_rejected");
         }
     }
 

@@ -1,3 +1,14 @@
+# SYN-051 shared-normal-home implementation slice — 2026-09-03
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Provider-thread ownership | Two bindings race for one Codex thread; one durable owner remains | PASS by direct Java runtime check; Gradle JUnit incomplete | `ProviderThreadOwnershipStoreTest`, `SYN-051-shared-normal-home-implementation-2026-09-03.md` |
+| Managed thread pin | Active owner accepts exact thread and rejects a changed thread | PASS by direct Java runtime check; Gradle JUnit incomplete | `ManagedCodexThreadBrokerTest`, same evidence |
+| Managed admission | Exact managed binding without proof is rejected; managed resolution requires active record | Source-compiled; Gradle JUnit incomplete | `SynesisMcpServerTest`, same evidence |
+| Credential boundary | Normal-home mode classifies provider-owned auth without inspecting credential files; isolated file auth remains unsafe | Source-compiled; Gradle JUnit incomplete | `CodexManagedRuntimeHomeTest`, same evidence |
+| Process containment | Assignment-before-resume Windows Job supervisor integrated into lifecycle | BLOCKED / not implemented in this slice | ADR-0059, same evidence |
+| Full managed acceptance | Fresh real A/B, restart, model turn, provenance, task tracker | NOT RUN | same evidence |
+
 # SYN-041 measurement-design evidence
 
 | SYN-041 final real Codex closure acceptance | one authenticated Codex 0.145.0 lifecycle; official packaged bundle;

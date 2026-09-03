@@ -1,3 +1,26 @@
+- 2026-09-03 — SYN-051 shared-normal-home production design/implementation slice:
+  explicit user authorization selected the PASS-B shared-normal-provider-home
+  architecture; historical shared-home feasibility rejection evidence was
+  preserved unchanged. SYN-051 remained the single ACTIVE task; no new task
+  identifier was invented. Added durable atomic provider-thread ownership,
+  immutable broker pinning, ownership-derived attachment issuance/replacement,
+  explicit normal-provider-home runtime mode, proof-less managed-admission
+  rejection, and a fail-closed owned-process-tree supervisor seam. Ordinary
+  `SESSION_BOUND`, exact authority, `UNSAFE_FILE_AUTH` for isolated homes, ten
+  MCP tools, and historical fixtures remain preserved. Java 25 strict source
+  compilation for changed production and focused test sources passed. Direct
+  ownership/broker runtime checks passed. Deferred validation, diff whitespace
+  checks, and the ten-tool catalog check passed. Gradle focused tests were
+  attempted with and without the approved IPv4 preference workaround but failed
+  before configuration with `Unable to establish loopback connection`; no JUnit
+  suite or real managed acceptance is claimed. The implementation stops at the
+  explicit safety gate: a production Windows Job Object supervisor is not yet
+  integrated into `CodexAppServerLifecycleService`, and the shared-home
+  Codex child-launch boundary still lacks a proven private proof carrier.
+  Evidence: `docs/evidence/SYN-051-shared-normal-home-implementation-2026-09-03.md`,
+  ADR-0061. Exact next action: implement/verify assignment-before-resume Job
+  Object supervision and integrate it through the lifecycle service, then prove
+  the trusted thread-scoped managed MCP proof carrier before real A/B acceptance.
 - 2026-09-03 — SYN-051 bounded broker-pinned stock-Codex feasibility spike:
   retained normal provider home/auth and launched dedicated App Server A/B
   processes through a disposable lifecycle-only broker outside the repository.

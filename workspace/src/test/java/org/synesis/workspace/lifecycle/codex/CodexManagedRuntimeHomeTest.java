@@ -44,4 +44,15 @@ final class CodexManagedRuntimeHomeTest {
         assertEquals(CodexManagedAuthentication.Strategy.UNSAFE_FILE_AUTH,
                 CodexManagedAuthentication.inspect(userHome));
     }
+
+    @Test
+    void normalProviderModeDoesNotInspectOrCopyProviderCredentials() throws Exception {
+        Path home = CodexManagedAuthentication.userHome();
+
+        assertEquals(CodexManagedAuthentication.Strategy.NORMAL_PROVIDER_HOME,
+                CodexManagedAuthentication.forMode(ManagedCodexRuntimeMode.NORMAL_PROVIDER_HOME_MANAGED, home));
+        CodexManagedRuntimeHome normal = CodexManagedRuntimeHome.normalProviderHome();
+        assertEquals(home.toAbsolutePath().normalize(), normal.path());
+        normal.deleteAfterTerminal();
+    }
 }

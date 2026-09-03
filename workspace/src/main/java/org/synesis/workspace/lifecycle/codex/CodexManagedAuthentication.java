@@ -15,10 +15,30 @@ public final class CodexManagedAuthentication {
     public enum Strategy {
         /** The managed home uses the user's provider keyring entry. */
         SHARED_KEYRING,
+        /** The provider reads credentials from its own normal home. */
+        NORMAL_PROVIDER_HOME,
         /** A file credential was found but cannot be safely copied in v1. */
         UNSAFE_FILE_AUTH,
         /** No supported authentication evidence was found. */
         UNAVAILABLE
+    }
+
+    /**
+     * Returns the architecture-aware strategy for a managed runtime mode.
+     *
+     * <p>Normal-home mode deliberately does not inspect or classify provider
+     * credential files; Codex owns that authentication boundary.</p>
+     *
+     * @param mode managed runtime-home mode
+     * @param userCodexHome normal provider home
+     * @return strategy classification
+     * @throws IOException when isolated-home inspection cannot read config
+     */
+    public static Strategy forMode(ManagedCodexRuntimeMode mode, Path userCodexHome) throws IOException {
+        if (mode == ManagedCodexRuntimeMode.NORMAL_PROVIDER_HOME_MANAGED) {
+            return Strategy.NORMAL_PROVIDER_HOME;
+        }
+        return inspect(userCodexHome);
     }
 
     private CodexManagedAuthentication() {

@@ -77,6 +77,13 @@ public final class SynesisMcpServer {
                 System.err.println("SYNESIS_MCP_STARTUP_REJECTED=MANAGED_ATTACHMENT_REJECTED");
                 return 2;
             }
+        } else {
+            try {
+                rejectProoflessManagedAttachment(projectRoot, provider, connectionInstanceId);
+            } catch (Exception rejected) {
+                System.err.println("SYNESIS_MCP_STARTUP_REJECTED=MANAGED_PROOF_REQUIRED");
+                return 2;
+            }
         }
         System.err.println(
                 "SYNESIS_MCP_STARTUP pid=" + pid + " version=0.1.0-SNAPSHOT commit=bc334ac conn=" + connectionInstanceId
@@ -87,7 +94,7 @@ public final class SynesisMcpServer {
         AgentSessionService sessionService = new AgentSessionService();
         SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider,
-                connectionInstanceId, processIdentity, projectRootPinned);
+                connectionInstanceId, processIdentity, projectRootPinned, attachmentProof != null);
         McpStdioServer server = new McpStdioServer(handler);
 
         return server.run();
@@ -108,6 +115,33 @@ public final class SynesisMcpServer {
         RuntimeAuthenticator.AttachmentRequest request = new RuntimeAuthenticator.AttachmentRequest(provider,
                 binding.sessionId(), record.threadId(), record.generation(), attachmentProof);
         return service.authenticate(location, request, location.projectId().toString(), store);
+    }
+
+    /**
+     * Prevents an exact managed binding from silently downgrading to ordinary
+     * session-bound admission when its process-private proof is absent.
+     *
+     * @param projectRoot control project root
+     * @param provider provider identifier
+     * @param connectionInstanceId exact connection selector
+     * @throws Exception when a managed attachment exists without proof
+     */
+    static void rejectProoflessManagedAttachment(Path projectRoot, String provider, String connectionInstanceId)
+            throws Exception {
+        if (!"codex".equals(provider)) {
+            return;
+        }
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService().find(location, provider,
+                connectionInstanceId).orElse(null);
+        if (binding == null) {
+            return;
+        }
+        ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, binding.sessionId()).read()
+                .orElse(null);
+        if (record != null && record.mode() == org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY) {
+            throw new IllegalStateException("managed_attachment_proof_required");
+        }
     }
 
     private static String boundedEnvironment(String name, String fallback) {
