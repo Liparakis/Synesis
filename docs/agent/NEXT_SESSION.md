@@ -3,8 +3,8 @@
 ## SYN-050 provider-session continuity — 2026-09-03
 
 SYN-050 is the single ACTIVE primary task. Its design investigation is
-complete; implementation is blocked pending a trusted provider identity
-contract.
+complete with Result C; implementation is blocked pending a trusted provider
+identity or equivalent non-model-visible continuity contract.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
@@ -12,16 +12,19 @@ preserved and are not reopened.
 ## Immediate next action
 
 Obtain or verify a provider integration contract that supplies an exact
-per-conversation identity or equivalent audited continuity proof to the normal
-MCP process. The current trace found neither input; do not edit production,
-restart SYN-049, rewrite `.synesis`, copy worktrees, invent IDs, weaken exact
+per-conversation identity or equivalent non-model-visible audited continuity
+proof to the normal MCP process. The current trace found neither input; a
+model-visible bearer is not sufficient. Do not edit production, restart
+SYN-049, rewrite `.synesis`, copy worktrees, invent IDs, weaken exact
 authority, or redesign Review/Doctor until that prerequisite is available.
 
 Preserve the SYN-049 fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`.
 Do not restart or re-admit its workers, rewrite `.synesis`, copy worktrees,
 invent IDs, weaken exact authority, or redesign Review/Doctor. Stop if safe
-continuity proof is unavailable or dual authority cannot be fenced.
+continuity proof is unavailable or dual authority cannot be fenced. The full
+design record is
+`docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

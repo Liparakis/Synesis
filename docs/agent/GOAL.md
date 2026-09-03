@@ -4,14 +4,17 @@
   and Defect B preserved separately; its scoped implementation and direct
   acceptance are complete, but the original whole-WorkGroup criterion was not
   met. SYN-050's provider-session continuity design investigation is complete
-  and implementation is blocked because the MCP process receives no trusted
-  conversation identity and the existing recovery path is a new-participant
-  transfer. Do not reopen SYN-049, weaken exact authority, rewrite durable
-  state, copy worktrees, or implement speculative continuity. Evidence:
-  `docs/evidence/syn050-provider-session-continuity-trace-2026-09-03.md`.
+  with Result C: a server-side resume capability is expressible, but ordinary
+  Codex stdio MCP has no trusted provider-controlled, non-model-visible way for
+  the same conversation to present it after restart. The existing recovery path
+  remains a new-participant transfer. Do not reopen SYN-049, weaken exact
+  authority, rewrite durable state, copy worktrees, or implement speculative
+  continuity. Evidence:
+  `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
 - Exact continuation: obtain or verify a provider integration contract that
-  supplies an exact per-conversation MCP identity or equivalent audited
-  continuity proof, then revisit ADR-0055 before production edits.
+  supplies an exact per-conversation MCP identity or equivalent non-model-
+  visible audited continuity proof, then revisit ADR-0055 before production
+  edits.
 
 - SYN-041 final real Codex closure acceptance (2026-08-29): one authenticated
   Codex lifecycle used the official packaged bundle through direct native MCP

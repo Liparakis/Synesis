@@ -17,11 +17,13 @@ dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/D
 
 SYN-050 promotes no deferred capability. Its bounded design investigation at
 the existing provider/MCP session-continuity and authority-recovery seam is
-complete, but implementation is blocked because the normal Codex stdio MCP
-boundary supplies no trusted conversation identity and the existing recovery
-path is semantically different. The strict exact-connection fence, monotonic
-provider lifecycle, and ten-tool MCP surface remain in scope; no broad provider
-identity architecture, connectivity, or Review/Doctor redesign is activated.
+complete with Result C. A hash-backed, single-use Synesis capability is
+server-side expressible, but implementation is blocked because the normal
+Codex stdio MCP boundary supplies no trusted provider-controlled,
+non-model-visible conversation carrier and the existing recovery path is
+semantically different. The strict exact-connection fence, monotonic provider
+lifecycle, and ten-tool MCP surface remain in scope; no broad provider identity
+architecture, connectivity, or Review/Doctor redesign is activated.
 
 ## SYN-049 review — 2026-09-02
 

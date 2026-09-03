@@ -3,9 +3,9 @@
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050
-- Status: ACTIVE; design investigation complete, implementation blocked pending
-  a trusted provider-to-stdio-MCP conversation identity or equivalent audited
-  continuity proof
+- Status: ACTIVE; DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED; Result C pending
+  a trusted provider-to-stdio-MCP conversation identity or equivalent
+  non-model-visible audited continuity proof
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
   and are not reopened.
 - Scope: trace and, only after an accepted ADR design, implement the smallest
@@ -16,11 +16,12 @@
 
 ## Immediate next action
 
-Obtain or verify a provider integration contract that supplies the exact
-conversation identity (or an equivalent audited continuity proof) to the
-ordinary MCP process. Do not make production edits, restart or re-admit the
-preserved SYN-049 fixture, or weaken exact authority while that prerequisite is
-missing.
+Obtain or verify a provider integration contract that supplies an exact
+per-conversation identity or equivalent non-model-visible audited continuity
+proof to the ordinary MCP process. The design pass found that a Synesis-issued
+model-carried bearer is insufficient. Do not make production edits, restart or
+re-admit the preserved SYN-049 fixture, or weaken exact authority while that
+prerequisite is missing.
 
 ## SYN-050 trace result
 
@@ -28,22 +29,56 @@ The normal MCP startup uses the explicit `SYNESIS_MCP_CONNECTION_INSTANCE_ID`
 when supplied and otherwise generates a random UUID. The MCP handshake does
 not consume Codex thread/conversation metadata. The Codex hook sees that
 metadata in a separate process, while the static Codex MCP configuration does
-not pass it to MCP. The existing recovery path is an audited transfer to a
-new participant/intent, not same-session reattachment. ADR-0055 records the
-blocked implementation decision at this trust boundary; no production files
-changed.
+not pass it to MCP. The durable logical binding is
+`ProviderSessionBindingService.Binding.sessionId`; participant and WorkIntent
+identities derive from that binding, while the lease remains keyed to the exact
+transport connection. The existing recovery path is an audited transfer to a
+new participant/intent, not same-session reattachment.
+
+ADR-0055 and
+`docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
+record the expanded capability evaluation. A high-entropy, hash-backed,
+single-use capability is server-side expressible, but ordinary Codex offers no
+provider-controlled non-model-visible way for the same conversation to receive
+and present it after restart. Result C is therefore selected; no production
+files changed.
 
 ## Acceptance boundary
 
-The same-conversation restart must recover the original participant/session and
-WorkIntent without duplicate claims or re-admission; unrelated and concurrent
-processes must fail closed; races have one winner; stale/replayed proof and
-terminal sessions remain fenced; and the recovered lane must complete through
-the existing explicit-completion, review, integration, and ten-tool lifecycle.
+The eventual same-conversation restart must recover the original
+participant/session and WorkIntent without duplicate claims or re-admission;
+unrelated and concurrent processes must fail closed; races have one winner;
+stale/replayed proof and terminal sessions remain fenced; and the recovered lane
+must complete through the existing explicit-completion, review, integration,
+and ten-tool lifecycle. This acceptance is not authorized until the provider
+primitive exists.
 
 No latest-session fallback, inferred authority, durable-state rewrite, worktree
 copy, manual Synesis identifier, new MCP tool, or unrelated Review/Doctor
 redesign is permitted. ADR-0055 records the completed design-gate result.
+
+## Work completed
+
+Mapped the source-backed durable `Binding.sessionId`/participant/WorkIntent
+chain, the ephemeral MCP connection/process evidence, the exact resolver and
+lease coupling, and the separate Codex App Server wake/thread path. Evaluated a
+Synesis-issued high-entropy, hash-backed, single-use rotating capability and
+all currently available Codex carriers. Amended ADR-0055 and synchronized the
+task/current-state records in
+`docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
+No production code, provider configuration, durable Synesis state, or fixture
+was changed.
+
+## Current failures
+
+The provider primitive required for Result C is not available at ordinary
+Codex stdio MCP startup. A model-visible bearer cannot provide reliable
+same-conversation retention or prevent another process from using a copied
+credential, and the existing recovery path transfers to a new participant/
+WorkIntent. The eventual implementation and SYN-049 terminal acceptance
+remain blocked. `agent-doctor.ps1` retains its known historical false-positive
+vague-continuation result and existing absolute-path warning; neither is part
+of this continuity design.
 
 ## SYN-049 Pre-release explicit completion and dependency actionability — 2026-09-02
 

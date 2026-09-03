@@ -84,8 +84,9 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 
 - Status: ACTIVE
 - Lifecycle state: DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED
-- Coordination state: design investigation complete; implementation is blocked
-  pending a trusted provider-to-stdio-MCP conversation identity or equivalent
+- Coordination state: Result C; design investigation complete and
+  implementation blocked because ordinary Codex stdio MCP has no trusted
+  provider-to-MCP conversation identity or equivalent non-model-visible
   audited continuity proof
 - Scope: determine and implement the smallest safe mechanism that lets the
   same Codex provider conversation recover its existing Synesis session
@@ -100,38 +101,48 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 - Planning acceptance: trace MCP startup, provider metadata, binding fields,
   exact authority lookup, clean/abnormal disconnect, wake/rebind, and existing
   recovery paths; distinguish diagnostic correlation from authority-bearing
-  continuity proof; evaluate stable conversation-scoped identity and explicit
-  audited handoff; select one design in ADR-0055 before production edits.
+  continuity proof; evaluate provider-derived identity and a Synesis-issued
+  capability; select one design in ADR-0055 before production edits.
 - Trace result: the normal MCP process receives only an explicit connection
   environment value or a random UUID. The Codex hook sees conversation/session
   evidence, but does not pass it to MCP; the static Codex MCP configuration
   exposes no dynamic thread identity. The existing recovery path is a
   single-use, snapshot-backed transfer to a new participant/intent, not
-  same-session reattachment. Neither design class can be selected safely from
-  the current MCP trust boundary.
+  same-session reattachment. A server-side rotating capability is expressible,
+  but the only current carrier is model-visible tool context; no ordinary
+  Codex non-model-visible conversation channel exists. No safe design can be
+  selected from the current MCP trust boundary. The expanded
+  source trace is
+  `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
+- Design decision: Result C. Do not implement a bearer token, project-local
+  secret, latest-binding fallback, or provider-independent rebind. The
+  model-carried option cannot prove reliable same-conversation retention after
+  compaction/restart and cannot prevent an obtained bearer from being replayed
+  by another process. The existing Codex App Server exact-thread resume is a
+  separate supervised architecture and does not solve ordinary stdio MCP.
 - Safety invariants: exact connection identity remains authority-sensitive;
   no latest-provider/session fallback; stale and terminal bindings remain
   fenced; lifecycle history remains monotonic; recovery creates no duplicate
   participant, WorkIntent, or claim; live dual authority is rejected or
   explicitly handed off; replay and race attempts fail closed; the MCP catalog
   remains exactly ten tools.
-- Implementation acceptance: a lawful same-conversation restart recovers the
-  original authority without re-admission or a new WorkIntent, an unrelated
-  process is rejected, a live original cannot be silently shadowed, races have
-  one winner, stale/replayed proof fails, terminal sessions remain terminal,
-  and the recovered lane can continue through explicit completion and the
-  existing review/integration lifecycle.
-- Required tests: startup/identity, provider binding, authority resolution,
+- Conditional implementation acceptance, not active authorization: after a
+  provider primitive exists, a lawful same-conversation restart must recover
+  the original authority without re-admission or a new WorkIntent; unrelated
+  processes, live/ambiguous originals, races, stale/replayed proof, and terminal
+  sessions must fail closed; the lane must continue through explicit
+  completion, review, publication, integration, and terminal lifecycle.
+- Conditional tests: startup/identity, provider binding, authority resolution,
   clean and abnormal disconnect, recovery/rebind/wake, live-original, race,
   replay/stale proof, terminal session, restart-plus-completion, and ten-tool
   regressions. Reuse existing recovery machinery; do not add a new MCP tool or
   provider identity architecture.
-- Acceptance evidence: rebuild and install from a recorded source commit with
-  matching artifact hashes; record connection, binding, participant, WorkIntent,
-  revision, and final lifecycle evidence without exposing secrets or inventing
-  identifiers. Resume SYN-049 only if its existing durable evidence is
-  compatible with the selected design; otherwise use a fresh continuity
-  fixture and explain the incompatibility.
+- Acceptance evidence, when unblocked: rebuild and install from a recorded
+  source commit with matching artifact hashes; record connection, binding,
+  participant, WorkIntent, revision, and final lifecycle evidence without
+  exposing secrets or inventing identifiers. Resume SYN-049 only if its
+  existing durable evidence is compatible with the selected design; otherwise
+  use a fresh continuity fixture and explain the incompatibility.
 - Boundaries: do not weaken `SessionAuthorityResolver`, select the latest
   session/participant, infer authority from a stable value alone, rewrite old
   durable state, mutate historical fixtures, copy worktrees, manually create
@@ -140,17 +151,21 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 - Deferred-register review: no deferred capability is activated. This is a
   bounded provider-session continuity correction at the existing MCP/provider
   authority seam.
-- Implementation order: (1) record this task and ADR-0055 plus current-state
-  records; (2) trace the current continuity and trust boundary; (3) evaluate
-  both legitimate design classes and finalize ADR-0055; (4) write focused
-  regressions; (5) implement the smallest safe fix; (6) rebuild/hash/install;
-  (7) run the preserved-fixture or fresh continuity acceptance; (8) run
-  Doctor/reconciliation diagnostics; (9) document, checkpoint, and commit only
-  bounded green changes.
-- Current stop: no production code or tests were changed because no trusted
-  per-conversation MCP identity or existing same-session audited handoff is
-  available. Resume only after the provider integration supplies that proof;
-  then re-evaluate process-generation lease fencing before implementation.
+- Implementation order: (1) record this completed capability design and amend
+  ADR-0055/current-state records; (2) stop at Result C until the provider
+  supplies the missing trusted primitive; (3) after that primitive exists,
+  revalidate the provider contract and choose the smallest existing
+  `ensure_session`/binding seam; (4) design one durable generation fence and
+  atomic rotation; (5) write focused regressions; (6) implement only the
+  accepted slice; (7) rebuild/hash/install; (8) run a fresh restart/race/
+  terminal acceptance and the preserved SYN-049 completion acceptance; (9)
+  validate, checkpoint, and commit bounded green changes.
+- Current stop: no production code or tests were changed. A Synesis-issued
+  capability cannot be accepted at the ordinary Codex stdio boundary because
+  the same conversation has no provider-controlled, non-model-visible way to
+  receive and present it after restart. Resume only after the provider
+  integration supplies that proof; then re-evaluate process-generation lease
+  fencing before implementation.
 - Stop conditions: continuity proof cannot be derived from available provider
   metadata; the design requires weakening exact authority lookup or selecting
   the latest session; two live processes could share authority; historical

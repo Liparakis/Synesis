@@ -37,6 +37,25 @@
 - Exact next action: obtain or verify that provider integration contract, then
   re-open the ADR design gate before writing production code.
 
+# 2026-09-03 — SYN-050 continuity capability design result
+
+- Reopened the bounded design question without reopening SYN-049 or changing
+  production code, durable state, provider state, or historical fixtures.
+- Mapped the actual durable `Binding.sessionId`/participant/WorkIntent chain,
+  ephemeral MCP `connectionInstanceId`, lease/process evidence, and the
+  separate Codex App Server thread/attachment generations.
+- Evaluated a Synesis-issued hash-backed single-use rotating capability. The
+  current ordinary Codex stdio path offers only model-visible tool context as a
+  possible carrier; no provider-controlled, non-model-visible conversation
+  channel exists. Result C remains: implementation is blocked pending that
+  provider primitive. The full record is
+  `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
+- Amended ADR-0055 and synchronized the active planning/current-state records.
+  Provider guidance and production tests were intentionally unchanged because
+  no safe continuity workflow was accepted.
+- Exact next action: obtain or verify the provider continuity contract, then
+  revalidate ADR-0055 before any implementation or fixture work.
+
 # 2026-08-30 — MAINT-002 strict-check failure corrections
 
 - Corrected the malformed-provider fixture to use Claude's hook configuration
