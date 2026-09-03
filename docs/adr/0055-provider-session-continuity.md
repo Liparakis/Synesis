@@ -1,6 +1,7 @@
 # ADR-0055: Provider-session continuity across MCP process restart
 
-Status: Proposed for SYN-050.
+Status: Blocked at the SYN-050 design gate pending a provider identity
+contract. No production design is accepted.
 
 ## Context
 
@@ -36,6 +37,32 @@ Evaluate both legitimate design classes:
 ADR-0055 is not accepted until source evidence selects one class and defines
 the trust proof and concurrency rules. No implementation may weaken exact
 authority lookup or select the latest provider/session/participant.
+
+## Trace result
+
+The source trace is recorded in
+[`syn050-provider-session-continuity-trace-2026-09-03.md`](../evidence/syn050-provider-session-continuity-trace-2026-09-03.md).
+The ordinary MCP process currently receives only the launcher-provided
+`SYNESIS_MCP_CONNECTION_INSTANCE_ID`, or a random generated connection ID.
+`McpProtocolHandler.initialize` does not consume provider conversation
+metadata. The Codex hook can see `session_id`/`conversation_id`, but the
+separate hook process does not pass that value to the MCP process. The Codex
+MCP configuration is static and supplies no dynamic thread identity.
+
+Option A therefore cannot be selected from the current trust boundary. A
+stable shell variable, workspace marker, latest hook record, or model-supplied
+value is not proof and would break concurrent-session isolation. Option B is
+also not present in the normal MCP path: the existing continuation mechanism
+is an audited, single-use, snapshot-backed transfer to a new participant and
+intent, not same-session reattachment. A generic reattach ticket would be a
+new provider/MCP trust protocol rather than a bounded change to an existing
+resolver.
+
+The design gate is consequently stopped. A provider integration must first
+deliver an exact per-conversation identity or equivalent audited continuity
+proof to the MCP process. Until then, production edits would either be
+speculative or weaken authority. SYN-050 remains blocked and the preserved
+SYN-049 fixture is not resumed.
 
 ## Invariants
 

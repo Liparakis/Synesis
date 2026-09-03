@@ -81,6 +81,9 @@ SYN-049.
 ### Provider-session continuity across MCP process restart — 2026-09-03
 
 - Status: ACTIVE
+- Coordination state: DESIGN_GATE_BLOCKED pending a trusted
+  provider-to-stdio-MCP conversation identity or equivalent audited continuity
+  proof
 - Scope: determine and implement the smallest safe mechanism that lets the
   same Codex provider conversation recover its existing Synesis session
   authority after an MCP process restart, while rejecting unrelated,
@@ -96,6 +99,13 @@ SYN-049.
   recovery paths; distinguish diagnostic correlation from authority-bearing
   continuity proof; evaluate stable conversation-scoped identity and explicit
   audited handoff; select one design in ADR-0055 before production edits.
+- Trace result: the normal MCP process receives only an explicit connection
+  environment value or a random UUID. The Codex hook sees conversation/session
+  evidence, but does not pass it to MCP; the static Codex MCP configuration
+  exposes no dynamic thread identity. The existing recovery path is a
+  single-use, snapshot-backed transfer to a new participant/intent, not
+  same-session reattachment. Neither design class can be selected safely from
+  the current MCP trust boundary.
 - Safety invariants: exact connection identity remains authority-sensitive;
   no latest-provider/session fallback; stale and terminal bindings remain
   fenced; lifecycle history remains monotonic; recovery creates no duplicate
@@ -134,6 +144,10 @@ SYN-049.
   (7) run the preserved-fixture or fresh continuity acceptance; (8) run
   Doctor/reconciliation diagnostics; (9) document, checkpoint, and commit only
   bounded green changes.
+- Current stop: no production code or tests were changed because no trusted
+  per-conversation MCP identity or existing same-session audited handoff is
+  available. Resume only after the provider integration supplies that proof;
+  then re-evaluate process-generation lease fencing before implementation.
 - Stop conditions: continuity proof cannot be derived from available provider
   metadata; the design requires weakening exact authority lookup or selecting
   the latest session; two live processes could share authority; historical

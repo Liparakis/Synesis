@@ -9,6 +9,21 @@
   durable binding fields, exact authority resolution, disconnect/wake/rebind,
   and existing recovery before selecting a continuity design.
 
+# 2026-09-03 — SYN-050 continuity design-gate result
+
+- Completed the source-backed trace and recorded it in
+  `docs/evidence/syn050-provider-session-continuity-trace-2026-09-03.md`.
+- Confirmed that ordinary MCP startup has only a launcher connection value or
+  a random UUID; Codex hook conversation evidence is not passed to that MCP
+  process. Confirmed that the existing recovery path requires a single-use
+  snapshot/grant and a new participant/intent.
+- Rejected both stable-identity and same-session handoff implementation
+  classes at the current trust boundary. SYN-050 is BLOCKED pending a trusted
+  provider-to-MCP identity or equivalent audited proof. No production code,
+  historical durable state, or preserved fixture changed.
+- Exact next action: obtain or verify that provider integration contract, then
+  re-open the ADR design gate before writing production code.
+
 # 2026-08-30 — MAINT-002 strict-check failure corrections
 
 - Corrected the malformed-provider fixture to use Claude's hook configuration

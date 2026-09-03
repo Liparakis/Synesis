@@ -2,19 +2,22 @@
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single active task. SYN-049 is PARTIAL and remains closed to
-new Defect A/Defect B production edits. SYN-050 covers only the separate
-provider-session continuity defect observed when a Codex MCP process restarts
-and the same conversation returns with a new connection identity.
+SYN-050 is the single ACTIVE primary task, with its design gate BLOCKED.
+SYN-049
+is PARTIAL and remains closed to new Defect A/Defect B production edits.
+SYN-050 covers only the separate provider-session continuity defect observed
+when a Codex MCP process restarts and the same conversation returns with a new
+connection identity.
 
-The first phase is source reconstruction, not implementation. Establish the
-actual startup identity creation, provider metadata available across restart,
-durable binding fields, exact `SessionAuthorityResolver` predicate,
-disconnect/wake/rebind behavior, and any existing recovery proof. Keep exact
-connection authority and participant/session fencing intact. Evaluate stable
-conversation-scoped identity and audited continuity/handoff separately in
-ADR-0055; production changes require a selected design supported by source
-evidence.
+The source reconstruction is complete. `SynesisMcpServer` generates a random
+connection identity unless a launcher supplies one; the MCP initialize path
+does not receive Codex conversation metadata; the hook sees it separately; and
+the static Codex MCP configuration provides no dynamic identity. The existing
+recovery path is an audited transfer to a new participant/intent, not
+same-session reattachment. Keep exact connection authority and
+participant/session fencing intact. ADR-0055 records the blocked decision;
+production changes require a provider-supplied identity or equivalent audited
+continuity proof first.
 
 The preserved fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`
@@ -24,10 +27,11 @@ manually changed. No new MCP tool or Review/Doctor redesign is in scope.
 
 ## Immediate next action
 
-Trace the continuity and trust boundary, then update ADR-0055 with the selected
-safe design before writing production code. Stop if current provider metadata
-cannot establish continuity without weakening exact authority lookup or
-allowing dual authority.
+Obtain or verify the provider integration contract that will supply an exact
+per-conversation MCP identity or equivalent audited continuity proof. Resume
+SYN-050 design only after that trust input exists; do not edit production,
+restart SYN-049, rewrite durable state, copy worktrees, invent IDs, or weaken
+exact authority.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

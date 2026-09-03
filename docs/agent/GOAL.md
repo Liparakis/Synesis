@@ -1,5 +1,17 @@
 # Goal
 
+- Current bounded follow-up (2026-09-03): SYN-049 remains PARTIAL with Defect A
+  and Defect B preserved separately. SYN-050 traces provider-session
+  continuity across ordinary Codex stdio MCP restart and is BLOCKED at the
+  design gate because the MCP process receives no trusted conversation
+  identity and the existing recovery path is a new-participant transfer. Do
+  not reopen SYN-049, weaken exact authority, rewrite durable state, copy
+  worktrees, or implement speculative continuity. Evidence:
+  `docs/evidence/syn050-provider-session-continuity-trace-2026-09-03.md`.
+- Exact continuation: obtain or verify a provider integration contract that
+  supplies an exact per-conversation MCP identity or equivalent audited
+  continuity proof, then revisit ADR-0055 before production edits.
+
 - SYN-041 final real Codex closure acceptance (2026-08-29): one authenticated
   Codex lifecycle used the official packaged bundle through direct native MCP
   and Java, committed `PROVIDER_SESSION_TERMINALIZED` at fence sequence 7,
