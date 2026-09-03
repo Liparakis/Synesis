@@ -18,11 +18,20 @@ and provider guidance. Stop if safe isolated Codex authentication or exact
 thread resume cannot be delivered without plaintext proof persistence or an
 authority fallback.
 
+Build/install provenance for `fd45049` is recorded in
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`; produced
+and installed runtime jars match by SHA-256 and the installed launcher runs.
+The current Codex authentication strategy is `UNSAFE_FILE_AUTH` because
+`auth.json` exists without a keyring setting. No credential was copied or
+modified, so authenticated managed runtime acceptance is blocked.
+
 ## Immediate next action
 
-Commit this bounded implementation slice, then rebuild the distribution and
-record source/artifact/install hashes. Inspect the resulting provider
-authentication strategy before attempting any managed runtime acceptance.
+The bounded implementation is committed as `fd45049`, and build/install
+provenance is recorded in
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. The next
+decision is the safe keyring-authentication gate; do not copy file-backed
+`auth.json` or attempt managed acceptance while `UNSAFE_FILE_AUTH` remains.
 
 The map is complete at
 `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. It confirms that

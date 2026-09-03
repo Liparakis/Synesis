@@ -19,10 +19,11 @@
 
 ## Immediate next action
 
-Establish clean build/install artifact provenance from a committed SYN-051
-implementation and verify safe keyring-backed Codex authentication. The
+Artifact provenance is complete and recorded in
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. Verify
+safe keyring-backed Codex authentication before any managed acceptance. The
 current host reports file-backed `auth.json`; do not copy it. If safe isolated
-authentication is unavailable, record the hard stop and do not run managed
+authentication is unavailable, preserve the hard stop and do not run managed
 Codex acceptance.
 
 The source map is recorded in
@@ -32,6 +33,12 @@ cryptographically random proof issuance, exact binding/thread/generation
 authentication, atomic replacement fencing, dedicated Codex homes, selected
 `env_vars` delivery, MCP startup authentication, continuity-mode reporting,
 and provider guidance. Focused tests and strict Javadocs pass.
+
+The committed build/install provenance is recorded in
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`.
+Source/runtime/install hashes match. The current Codex home is file-backed
+(`auth.json`) without a keyring setting, so safe authenticated managed runtime
+acceptance is blocked and no credential copy is permitted.
 
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 

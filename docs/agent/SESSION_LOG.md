@@ -4983,5 +4983,17 @@ not run Codex or close SYN-041.
 - Host authentication inspection found `auth.json` without a keyring setting.
   Do not copy it. Real authenticated managed-Codex acceptance is blocked until
   safe isolated keyring-backed authentication is available.
-- Exact next action: commit this slice, rebuild/install, record matched
-  provenance hashes, and preserve the authentication blocker if unchanged.
+- Exact next action: verify the safe Codex keyring-authentication gate from the
+  committed build; preserve the blocker if `UNSAFE_FILE_AUTH` remains.
+
+# 2026-09-03 — SYN-051 provenance gate
+
+- Clean `:cli:installDist` rebuild from `fd450495daf591959c7572f2842e99723de77963`
+  passed. Produced workspace, MCP, and CLI jars match the installed
+  distribution copies by SHA-256; the installed launcher version smoke also
+  passed. Full hashes and paths are in
+  `docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`.
+- The host Codex home contains file-backed `auth.json` and no keyring setting.
+  The managed adapter returns `UNSAFE_FILE_AUTH`; the safe-authentication stop
+  condition is therefore active. No auth file was read, copied, logged, or
+  modified, and no managed acceptance was attempted.

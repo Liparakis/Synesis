@@ -12,15 +12,16 @@ historical durable state.
 
 ## Immediate next action
 
-Commit the implemented SYN-051 slice, rebuild/install from that commit, and
-record exact artifact hashes and installation target. Then verify the Codex
-keyring strategy. If it is unavailable, stop with the hard-block evidence;
-do not copy file-backed auth or claim managed acceptance.
+The SYN-051 slice is committed as `fd45049`; rebuild/install provenance and
+matching hashes are recorded in
+`docs/evidence/SYN-051-managed-continuity-provenance-2026-09-03.md`. Verify
+the Codex keyring strategy. If it is unavailable, stop with the hard-block
+evidence; do not copy file-backed auth or claim managed acceptance.
 
 That source map is now recorded in
 `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The first code
-slice is implemented and focused tests/Javadocs pass. The next step is
-provenance and authentication gating.
+slice is implemented, focused tests/Javadocs pass, and provenance is complete.
+The next step is the safe authentication gate.
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
