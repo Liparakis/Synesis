@@ -1,5 +1,18 @@
 # Next Session
 
+## SYN-051 shared-normal-home production slice — 2026-09-03
+
+The prior shared-home feasibility rejection is superseded as a product
+direction by explicit authorization for the PASS-B architecture; its evidence
+and ADR remain historical and are not rewritten. Implement the durable atomic
+provider-thread owner, proof-gated managed admission, broker-derived immutable
+pin, and explicit normal-home managed mode. Preserve `UNSAFE_FILE_AUTH` for
+the isolated-home strategy and fail closed until verified owned process-tree
+supervision is available.
+
+Exact next action: add the provider-thread ownership record/store and race
+tests, then wire the owner into managed attachment and admission paths.
+
 ## SYN-051 Windows Job Object follow-on — 2026-09-03
 
 The process-tree feasibility spike is **PARTIAL**. Suspended launch plus

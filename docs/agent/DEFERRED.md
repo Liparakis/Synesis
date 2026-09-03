@@ -15,14 +15,15 @@ dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/D
 
 ## SYN-051 review — 2026-09-03
 
-SYN-051 activates only the already approved bounded stock-Codex
-`MANAGED_CONTINUITY` implementation from ADR-0055/ADR-0056. It does not
-activate Claude continuity, anonymous continuity, shared App Servers, arbitrary
-fleet launching, connectivity work, or Review/Doctor redesign. The PASS-A
-isolated-runtime evidence is the feasibility gate; matched build and
-installation provenance, safe isolated authentication, and real authenticated
-restart acceptance remain implementation gates. No second identity graph or
-deferred capability is introduced.
+SYN-051 activates only the explicitly authorized bounded stock-Codex
+`MANAGED_CONTINUITY` implementation from ADR-0055/ADR-0056/ADR-0061. The
+selected runtime mode is shared normal provider-home auth with Synesis-enforced
+provider-thread ownership, proof admission, broker pinning, and process-tree
+fencing. It does not activate Claude continuity, anonymous continuity, shared
+App Servers, arbitrary fleet launching, connectivity work, or Review/Doctor
+redesign. Atomic ownership, process containment, private proof delivery,
+matched build/install provenance, and real restart acceptance remain gates. No
+second identity graph or broad deferred capability is introduced.
 
 ## SYN-050 review — 2026-09-03
 

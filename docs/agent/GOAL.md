@@ -1,5 +1,15 @@
 # Goal
 
+- Selected implementation direction (2026-09-03): PASS-B shared normal
+  provider-home managed continuity is authorized. Synesis, not Codex, enforces
+  worker authority through unique durable `(provider, providerThreadId)`
+  ownership, trusted broker-derived immutable pinning, proof-gated admission,
+  generation fencing, and owned process-tree lifecycle. Historical feasibility
+  evidence remains preserved; no provider-native ownership is assumed.
+- Exact continuation: implement the ownership/admission/pinning slice in
+  SYN-051. Preserve ordinary `SESSION_BOUND`, `UNSAFE_FILE_AUTH` for isolated
+  homes, exact authority resolution, ten MCP tools, SYN-049, and all fixtures.
+
 - Current bounded implementation (2026-09-03): SYN-051 is the single ACTIVE
   task for stock-Codex `MANAGED_CONTINUITY`. Implement one dedicated retained
   `CODEX_HOME` and App Server per logical worker, exact thread resume, selected

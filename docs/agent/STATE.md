@@ -1,5 +1,23 @@
 # State
 
+## SYN-051 shared-normal-home production slice — 2026-09-03
+
+The selected PASS-B architecture is now the active implementation boundary by
+explicit user authorization. Shared normal Codex home/auth is provider-owned;
+Synesis must not read, copy, parse, move, or inject provider credentials. The
+first production invariant is a durable atomic unique owner for
+`(provider=codex, providerThreadId)`, separate from attachment generation.
+Managed admission must reject proof-less downgrade and all thread selection
+must derive from trusted durable binding/broker state. A verified Windows Job
+Object supervisor is still an implementation gate; the existing JDK process
+terminator is not sufficient evidence for the launch-race requirement.
+
+## Immediate next action
+
+Add the provider-thread ownership record/store and focused cross-binding race
+tests, then integrate the exact owner into managed attachment issuance and
+proof-gated MCP admission.
+
 ## SYN-051 Windows Job Object follow-on — 2026-09-03
 
 The bounded process-tree feasibility spike is **PARTIAL**. A native

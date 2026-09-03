@@ -1,5 +1,21 @@
 # Current Task
 
+## SYN-051 shared-normal-home production slice — 2026-09-03
+
+The explicit user authorization selects the PASS-B shared-normal-provider-home
+architecture. Historical feasibility rejection records remain unchanged; this
+task now implements the compensating Synesis controls: atomic unique
+`(provider, providerThreadId)` ownership, proof-gated managed admission,
+broker-derived immutable thread pinning, generation fencing, and owned
+process-tree lifecycle. Ordinary `SESSION_BOUND` behavior, exact authority,
+the ten-tool surface, and `UNSAFE_FILE_AUTH` semantics for isolated homes are
+preserved.
+
+## Immediate next action
+
+Implement and test the durable provider-thread ownership record/store first,
+then wire its exact thread into managed attachment issuance and admission.
+
 ## SYN-051 Windows Job Object follow-on — 2026-09-03
 
 The bounded process-tree spike is **PARTIAL**. Suspended launch plus
