@@ -1,3 +1,32 @@
+# 2026-09-03 — SYN-050 Codex App Server child-launch boundary result
+
+- Continued from clean source HEAD `189d7198bfd710c997f3ac27b4e1263638a77960`
+  on `master`. Ran a disposable source/docs/local-observation investigation
+  only; no production source, Codex source, provider configuration, durable
+  state, historical fixture, or MCP tool changed.
+- Inspected the version-matched `codex-cli 0.145.0` launch path:
+  `codex-mcp::rmcp_client::make_rmcp_client` → `RmcpClient::new_stdio_client`
+  → sealed `StdioServerLauncher` →
+  `LocalStdioServerLauncher::launch_server`. The launch contract is static
+  command/args/env/cwd; local launch clears the parent environment and creates
+  standard piped stdio only.
+- Ran the disposable probe at
+  `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-05`.
+  It passed one-process/two-thread routing, two concurrent dedicated A/B
+  processes, wrong-thread rejection, A1→A2 exact-thread resume, fresh child
+  launch, and B continuity while A restarted. Each wrapper/child saw static
+  config only; parent-only environment, thread context, and attachment proof
+  were absent.
+- Classified the current provider child-launch boundary **FAIL** for private
+  proof delivery. The isolated inherited-pipe carrier remains a separate
+  PASS; overall SYN-050 remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED`.
+  Recorded the exact upstream seam required for a future provider-managed
+  private carrier. Evidence:
+  `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
+- Exact next action: obtain a documented provider-managed private launch/IPC
+  carrier at the Codex `StdioServerLauncher` boundary before reopening
+  ADR-0055. Do not implement production continuity or restart SYN-049.
+
 # 2026-09-03 — SYN-050 protected-carrier prototype result
 
 - Ran the disposable Windows inherited-handle/private-IPC prototype from

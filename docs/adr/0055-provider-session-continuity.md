@@ -127,6 +127,60 @@ bridge/thread. The managed implementation therefore remains Result B /
 PROTOTYPE_PARTIAL. Do not turn the managed path into a new identity graph or
 a transparent wrapper workaround.
 
+## Codex App Server child-launch boundary investigation — 2026-09-03
+
+The bounded follow-up investigation answers the remaining provider question for
+the approved managed target: whether an exact Codex thread can privately carry
+a per-worker attachment proof into the MCP child that App Server launches.
+The result is **FAIL for `codex-cli 0.145.0`**, while the isolated
+Synesis-side inherited-pipe carrier remains a separate PASS. SYN-050 therefore
+remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED`; this result does not
+authorize production managed continuity.
+
+Version-matched Codex source shows the following boundary:
+
+```text
+thread-owned McpRuntime
+  → McpConnectionManager
+  → codex-mcp::rmcp_client::make_rmcp_client
+  → RmcpClient::new_stdio_client
+  → rmcp-client::StdioServerLauncher
+  → LocalStdioServerLauncher::launch_server
+```
+
+The configured stdio launch input contains only `command`, `args`, `env`,
+`env_vars`, and `cwd`. The local launcher resolves the command, clears the
+child environment, applies only configured environment values, sets the
+working directory, and creates standard piped stdin/stdout/stderr. The
+launcher boundary has no thread ID, attachment proof, extra-handle,
+per-thread callback, or external private-carrier input. Its launcher trait is
+sealed to the provider implementation.
+
+The disposable Windows observation confirmed that one App Server can host two
+exact threads with separate observed MCP child chains, and that two dedicated
+App Servers can run concurrently with distinct thread and child processes. A
+replacement App Server resumed the exact A thread and relaunched its child
+while B remained live; a wrong-thread request was rejected. Every wrapper and
+child received the static configuration marker, but not parent-only process
+environment, thread context, or attachment proof. A wrapper is therefore
+operationally viable but not an authentication boundary. The detailed record
+is [`SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).
+
+The conservative one-App-Server-per-worker topology is operationally viable,
+but private proof delivery is not proven and is classified FAIL at the current
+provider boundary. Shared-process multiplexing cannot be treated as a secure
+continuity topology without a genuinely thread-scoped carrier. Exact
+`thread/resume` is correlation and lifecycle evidence; it is not sufficient by
+itself to mint a fresh Synesis proof.
+
+The smallest upstream/provider feature required is a provider-managed,
+non-model-visible attachment input at `StdioServerLauncher` /
+`LocalStdioServerLauncher::launch_server`, with plumbing from
+`make_rmcp_client` and the thread-owned `McpRuntime`. It must inject a unique,
+rotated, generation-scoped context into the exact managed child without using
+static configuration, a command-line bearer, a global secret, or model-visible
+protocol data. No Codex source was patched in this pass.
+
 ## Capability assessment
 
 A Synesis-issued capability is server-side feasible in principle:
@@ -373,17 +427,22 @@ Codex UI, or become a harness.
 
 This decision remains **Result B — prototype incomplete**. The disposable
 Codex App Server probe proved process launch, two-thread protocol correlation,
-direct MCP calls, and exact `thread/resume`/`thread/read` after process
-restart. The isolated protected carrier passed, but the real provider did not
-provide the required private proof ingress to the exact MCP bridge/thread.
-Managed continuity is therefore unavailable for production, and ordinary MCP
-stays `SESSION_BOUND` until a provider-controlled carrier contract exists.
+dedicated concurrent A/B processes, wrong-thread rejection, direct MCP calls,
+and exact `thread/resume`/`thread/read` after process restart. The isolated
+protected carrier passed, but the current provider child-launch boundary is a
+bounded **FAIL** for private proof ingress: its sealed launcher accepts only
+static command/args/env/cwd, clears parent environment, and has no thread,
+proof, or extra-handle input. Managed continuity is therefore unavailable for
+production, and ordinary MCP stays `SESSION_BOUND` until a provider-controlled
+carrier contract exists.
 
 The complete design, prototype result, focused tests, acceptance plan,
 unknowns, and evidence classification are recorded in
 [`SYN-050-protected-carrier-prototype-2026-09-03.md`](../evidence/SYN-050-protected-carrier-prototype-2026-09-03.md)
 and
 [`SYN-050-managed-attachment-design-2026-09-03.md`](../evidence/SYN-050-managed-attachment-design-2026-09-03.md).
+The exact child-launch source trace and disposable result are in
+[`SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).
 
 ## Explicit non-decisions
 

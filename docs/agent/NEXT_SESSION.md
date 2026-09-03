@@ -8,25 +8,31 @@ selects Result A (existing core plus a generic runtime-authentication seam).
 Synesis-supervised Codex App Server as its first target. The managed
 implementation is Result B / `PROTOTYPE_PARTIAL`: the isolated inherited-pipe
 carrier passed, but the real provider boundary did not prove protected proof
-delivery to the exact managed MCP bridge/thread. Ordinary Codex and Claude MCP
-remain `SESSION_BOUND`; static wrappers and model-visible bearers are
-insufficient.
+delivery to the exact managed MCP bridge/thread. The version-matched
+`codex-cli 0.145.0` child-launch investigation now classifies the current
+provider boundary as `FAIL`: static command/args/env/cwd reach the child, but
+parent-private environment, thread context, extra handles, and proof do not.
+Ordinary Codex and Claude MCP remain `SESSION_BOUND`; static wrappers and
+model-visible bearers are insufficient.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
 
 ## Immediate next action
 
-- Exact next code action: obtain a documented Codex-managed launch/IPC carrier
-  contract, then reopen ADR-0055 before any production implementation.
+- Exact next code action: obtain a documented provider-managed private
+  launch/IPC carrier at the Codex `StdioServerLauncher` boundary, then reopen
+  ADR-0055 before any production implementation.
 
 The disposable Codex App Server protected-carrier prototype is complete and is
 recorded in `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
 It passed the isolated 48-assertion inherited-pipe model and the real App
-Server start, two-thread MCP-call, and exact process-restart/thread-resume
-probe. It did not prove private proof delivery to the exact managed MCP
-bridge/thread. Do not edit production, restart SYN-049, rewrite `.synesis`,
-copy worktrees, invent IDs, weaken exact authority, or redesign Review/Doctor.
+Server start, shared/dedicated A/B MCP calls, wrong-thread rejection, and exact
+process-restart/thread-resume probe. It did not prove private proof delivery to
+the exact managed MCP bridge/thread. The detailed child-boundary record is
+`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
+Do not edit production, restart SYN-049, rewrite `.synesis`, copy worktrees,
+invent IDs, weaken exact authority, or redesign Review/Doctor.
 
 Preserve the SYN-049 fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`.
@@ -38,7 +44,9 @@ approved managed design record is
 capability analysis is
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
 The provider-boundary feasibility record is
-`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
+`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`; the
+child-launch record is
+`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

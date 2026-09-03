@@ -107,42 +107,47 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   exact authority lookup, clean/abnormal disconnect, wake/rebind, and existing
   recovery paths; distinguish diagnostic correlation from authority-bearing
   continuity proof; evaluate provider-authenticated, Synesis-managed, and
-  anonymous profiles; record the approved capability model and one protected
-  Codex attachment design in ADR-0055 before any production edit.
+  anonymous profiles; and trace the exact Codex App Server child-launch
+  boundary before any production edit.
 - Provider-boundary result: ordinary Codex and Claude stdio remain
-  `SESSION_BOUND`. The disposable Windows inherited-pipe harness passed 48
+  `SESSION_BOUND`. The isolated Windows inherited-pipe harness passed 48
   assertions for proof isolation, rotation, replay, races, live/ambiguous
-  liveness, terminal state, and secret hygiene. The real installed Codex App
-  Server started a configured MCP child, served two exact threads, called the
-  disposable MCP tool for each, and resumed the exact durable thread after a
-  process restart. It did not expose a provider-controlled path for the
-  Synesis proof to reach the exact MCP bridge without static configuration or
-  an unimplemented adapter. Result B is therefore `PARTIAL`, not an
-  implementation gate pass. Evidence is
-  `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`, with the
-  feasibility and managed-design records retained.
+  liveness, terminal state, and secret hygiene. The version-matched
+  `codex-cli 0.145.0` source and disposable run prove that one App Server can
+  host exact threads with separate MCP child chains, and that dedicated
+  concurrent App Servers can restart/resume an exact thread. The current
+  launcher accepts only static command/args/env/cwd, clears the App Server
+  environment before local child launch, and exposes no thread, proof, or
+  extra-handle input. Exact thread resume passed, but fresh successor proof
+  delivery failed at this boundary. The child-launch result is therefore
+  `FAIL`; the overall managed design remains `PROTOTYPE_PARTIAL` and
+  production remains blocked. Evidence is
+  `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`,
+  with the earlier protected-carrier, feasibility, and managed-design records
+  retained.
 - Trace result: the normal MCP process receives only an explicit connection
   environment value or a random UUID. The Codex hook sees conversation/session
-  evidence, but does not pass it to MCP; the static Codex MCP configuration
-  exposes no dynamic thread identity. The existing recovery path is a
-  single-use, snapshot-backed transfer to a new participant/intent, not
+  evidence, but does not pass it to ordinary MCP; static configuration exposes
+  no dynamic thread identity. In the App Server path, the thread-owned MCP
+  runtime launches configured stdio children through the sealed launcher
+  boundary; the child receives configured environment only, not the parent
+  process-private environment or thread context. The existing recovery path is
+  a single-use, snapshot-backed transfer to a new participant/intent, not
   same-session reattachment. A server-side rotating capability is expressible,
-  but the only current carrier is model-visible tool context; no ordinary
-  Codex non-model-visible conversation channel exists. Result A is the
-  smallest source-backed core architecture, while ordinary stdio remains
-  blocked. The expanded
+  but no current child-launch carrier delivers it privately. Result A is the
+  smallest source-backed core architecture, while ordinary stdio and the
+  current managed child boundary remain blocked. The expanded
   source trace is
   `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
 - Design decision: Result A for the provider-neutral core and Result B for the
-  managed Codex implementation. Approve a per-attachment OS-local protected
-  channel with a one-time hash-backed proof and inherited-handle delivery as
-  the prototype target; do not implement a bearer token, project-local secret,
-  latest-binding fallback, or provider-independent rebind. The model-carried
-  option cannot prove reliable same-conversation retention after
-  compaction/restart and cannot prevent an obtained bearer from being replayed
-  by another process. The existing Codex App Server exact-thread resume is the
-  managed lifecycle seam, but private proof delivery to its MCP bridge is not
-  yet source- or provider-proven.
+  managed Codex implementation. The isolated prototype's per-attachment
+  OS-local protected channel remains the approved carrier model; do not
+  implement a bearer token, project-local secret, latest-binding fallback, or
+  provider-independent rebind. The current Codex child-launch boundary is
+  now specifically classified `FAIL`: a future provider feature must inject a
+  rotated, non-model-visible per-thread or dedicated-process carrier at the
+  actual stdio launch boundary. Exact App Server thread resume is a lifecycle
+  seam, not proof delivery.
 - Safety invariants: exact connection identity remains authority-sensitive;
   no latest-provider/session fallback; stale and terminal bindings remain
   fenced; lifecycle history remains monotonic; recovery creates no duplicate
@@ -178,26 +183,27 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   bounded provider-session continuity correction at the existing MCP/provider
   authority seam.
 - Implementation order: (1) record the approved capability model and the
-  managed Codex design in ADR-0055 and current-state records; (2) run the one
-  disposable inherited-handle/private-channel prototype without production or
-  fixture mutation; (3) record its isolated PASS and real-boundary PARTIAL
-  result; (4) do not open a production implementation slice while the exact
-  provider carrier is absent; (5) keep ordinary MCP `SESSION_BOUND` and obtain
-  a documented Codex-managed launch/IPC contract before reopening the ADR gate.
-  A future authorized implementation would then reuse one durable
-  attachment-generation fence and atomic rotation, add focused
-  authorization-preservation regressions, rebuild/hash/install, and run fresh
-  acceptance. No workaround is permitted.
+  managed Codex design in ADR-0055 and current-state records; (2) run the
+  disposable inherited-handle/private-channel model without production or
+  fixture mutation; (3) inspect the version-matched App Server source and run
+  the real shared/dedicated/restart child-boundary probe; (4) record the
+  provider-boundary `FAIL` and exact upstream seam; (5) do not open a
+  production implementation slice while the provider carrier is absent; (6)
+  keep ordinary MCP `SESSION_BOUND` and await a provider-managed launch/IPC
+  contract before reopening the ADR gate. No workaround is permitted.
 - Current stop: no production code or tests were changed. The isolated
-  protected-carrier model passed, but Codex App Server did not prove that the
-  Synesis proof can reach the exact managed MCP bridge/thread. The managed
-  profile remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED`; ordinary
-  Codex stdio remains `SESSION_BOUND`.
-- Future task boundary: this pass creates no implementation task. Reopen
-  ADR-0055 only after Codex documents or exposes a provider-controlled,
-  non-model-visible per-attachment carrier. Do not add a static secret,
-  model-visible bearer, latest fallback, PID-based takeover, or second
-  dependency/identity graph.
+  protected-carrier model passed. The real `codex-cli 0.145.0` child-launch
+  boundary passed topology, exact-thread routing, and restart/resume, but
+  failed to provide any private proof ingress to the exact MCP child. The
+  managed profile remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED` and
+  ordinary Codex stdio remains `SESSION_BOUND`.
+- Future task boundary: this pass creates no production implementation task.
+  Reopen ADR-0055 only after Codex documents or exposes a provider-controlled,
+  non-model-visible per-thread/dedicated-process carrier at
+  `StdioServerLauncher`/`LocalStdioServerLauncher::launch_server`, with
+  plumbing from `make_rmcp_client` and the thread-owned MCP runtime. Do not
+  add a static secret, model-visible bearer, latest fallback, PID-based
+  takeover, or second dependency/identity graph.
 - Stop conditions: continuity proof cannot be derived from available provider
   metadata; the design requires weakening exact authority lookup or selecting
   the latest session; two live processes could share authority; historical

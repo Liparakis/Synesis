@@ -15,6 +15,7 @@
   brokers, process lineage, and model-visible bearers do not establish
   continuity. Evidence:
   `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`,
+  `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`,
   `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`, and
   `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
@@ -27,15 +28,18 @@
 
 ## Immediate next action
 
-The disposable Codex App Server protected-carrier prototype is complete and
-recorded in `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
-Its isolated inherited-pipe carrier passed, and the real provider probe passed
-App Server start, two-thread MCP calls, and exact process-restart/thread-resume,
-but protected proof delivery to the exact managed MCP bridge/thread was not
-proven. The exact next action is to obtain a documented Codex-managed
-launch/IPC carrier contract before reopening ADR-0055. Do not make production
-continuity edits, restart or re-admit the preserved SYN-049 fixture, or weaken
-exact authority.
+The bounded Codex App Server child-launch investigation is complete and
+recorded in `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
+The isolated inherited-pipe carrier remains a separate PASS. The real
+`codex-cli 0.145.0` probe passed shared/dedicated topology, exact-thread MCP
+routing, concurrent A/B processes, and A1-to-A2 exact-thread resume, but the
+current child launcher accepts only static command/args/env/cwd, clears the
+parent environment, and provides no thread/proof/extra-handle ingress. The
+child-boundary classification is therefore `FAIL`; the exact next action is
+to obtain or implement (in a future authorized upstream/provider task) a
+documented provider-managed private launch/IPC carrier, then reopen ADR-0055.
+Do not make production continuity edits, restart or re-admit the preserved
+SYN-049 fixture, or weaken exact authority.
 
 ## SYN-050 trace result
 
@@ -43,19 +47,24 @@ The normal MCP startup uses the explicit `SYNESIS_MCP_CONNECTION_INSTANCE_ID`
 when supplied and otherwise generates a random UUID. The MCP handshake does
 not consume Codex thread/conversation metadata. The Codex hook sees that
 metadata in a separate process, while the static Codex MCP configuration does
-not pass it to MCP. The durable logical binding is
+not pass it to MCP. In App Server, the thread-owned MCP runtime creates the
+configured stdio client through a sealed launcher; the local launch clears the
+parent environment and applies only configured environment values. The durable
+logical binding is
 `ProviderSessionBindingService.Binding.sessionId`; participant and WorkIntent
 identities derive from that binding, while the lease remains keyed to the exact
 transport connection. The existing recovery path is an audited transfer to a
 new participant/intent, not same-session reattachment. A disposable real Codex
-App Server probe now confirms that exact thread correlation and process
-restart/resume are available, but its static MCP configuration does not carry a
-Synesis-managed per-worker proof into the MCP bridge.
+App Server probe confirms exact thread correlation, per-thread MCP child chains,
+dedicated A/B process isolation, and process restart/resume, but no
+Synesis-managed per-worker proof can enter the exact child through the current
+provider boundary.
 
 ADR-0055 and
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
 record the expanded capability evaluation. The provider-boundary feasibility
-record adds the verified Codex/Claude ordinary-MCP and managed-launch matrix.
+record adds the verified Codex/Claude ordinary-MCP and managed-launch matrix,
+and the version-matched child-launch investigation.
 A high-entropy, hash-backed, single-use capability is server-side expressible,
 but ordinary providers offer no provider-controlled non-model-visible way for
 the same conversation to receive and present it after restart. The isolated
@@ -75,14 +84,15 @@ hygiene checks. It passed 48 assertions for isolated Worker A/Worker B
 attachment behavior.
 
 The real installed `codex-cli 0.145.0` probe used temporary provider state. One
-App Server hosted two exact durable threads and accepted a direct MCP tool call
-for each. After the first process stopped, a second process resumed the exact
-first thread and `thread/read` confirmed it. MCP child processes were relaunched
-under the replacement App Server. No proof was supplied to that boundary, and
-no supported per-thread protected-carrier input was found. This proves the
-provider lifecycle seam, not the missing authentication carrier. The full
-redacted evidence is in
-`docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
+App Server hosted two exact threads and created two observed MCP child chains;
+two dedicated App Servers hosted distinct A/B threads and child chains while
+running concurrently. A request using A's thread ID on B's App Server was
+rejected. After A1 stopped, A2 resumed the exact A thread and relaunched its
+MCP child while B remained live. Every wrapper and child saw the static config
+marker but not the App Server parent markers, thread context, or attachment
+proof. The child-launch boundary therefore fails the private-carrier gate.
+Full redacted evidence is in
+`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
 
 ## Acceptance boundary
 
@@ -114,12 +124,13 @@ changed.
 
 ## Current failures
 
-The ordinary Codex stdio provider primitive is still unavailable. A model-
-visible bearer cannot provide reliable same-conversation retention or prevent
-another process from using a copied credential, and the existing recovery path
-transfers to a new participant/WorkIntent. The isolated carrier model is
-promising, but the real Codex App Server bridge has no proven protected
-per-worker proof ingress, so production implementation and SYN-049 terminal
+The ordinary Codex stdio provider primitive remains unavailable, and the
+current App Server child-launch primitive is now a bounded `FAIL`: its
+configured launcher has no thread-scoped private carrier and clears
+parent-private environment before local MCP launch. A model-visible bearer
+cannot provide reliable same-conversation retention or prevent another process
+from using a copied credential, and the existing recovery path transfers to a
+new participant/WorkIntent. Production implementation and SYN-049 terminal
 acceptance remain blocked. `agent-doctor.ps1` retains its known historical
 false-positive vague-continuation result and existing absolute-path warning;
 neither is part of this continuity design.

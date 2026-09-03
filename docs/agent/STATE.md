@@ -32,11 +32,18 @@ participant/session fencing intact. ADR-0055 and
 `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` record the
 approved managed profile, Result A core architecture, and the Result B
 prototype result; production changes remain blocked pending a provider-
-controlled protected carrier.
+controlled protected carrier. The follow-on child-launch investigation is
+now complete: the version-matched `codex-cli 0.145.0` source and disposable
+probe show that the thread-owned MCP runtime launches configured stdio
+children through a sealed launcher that accepts static command/args/env/cwd,
+clears the parent environment, and supplies no thread, proof, or extra-handle
+input. The current child-boundary result is `FAIL`, while the overall SYN-050
+managed design remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED`.
 The earlier capability trace is
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
 and the provider-boundary evidence is
-`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
+`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md` and
+`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
 
 The preserved fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`
@@ -46,31 +53,37 @@ manually changed. No new MCP tool or Review/Doctor redesign is in scope.
 
 ## Immediate next action
 
-The disposable Codex App Server protected-carrier prototype is complete. Its
+The disposable Codex App Server child-launch investigation is complete. Its
 isolated inherited-pipe harness passed 48 assertions, and the real Codex
-App Server probe passed two-thread MCP calls plus exact process-restart/
-thread-resume/thread-read. It did not prove private proof delivery to the exact
-managed MCP bridge/thread. Read
-`docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`; the exact
-next action is to obtain a documented Codex-managed launch/IPC carrier contract
-before reopening ADR-0055. Do not edit production, restart SYN-049, rewrite
-durable state, copy worktrees, invent IDs, or weaken exact authority.
+probe passed one-process/two-thread routing, concurrent dedicated A/B
+processes, wrong-thread rejection, A1→A2 exact process-restart/thread-resume,
+and B continuity while A restarted. It did not deliver private proof to the
+exact managed MCP child: parent-only environment was cleared and no thread or
+attachment context reached the wrapper or child. Read
+`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`;
+the exact next action is to obtain a documented provider-managed private
+launch/IPC carrier at the upstream stdio launcher boundary before reopening
+ADR-0055. Do not edit production, restart SYN-049, rewrite durable state, copy
+worktrees, invent IDs, or weaken exact authority.
 
 ## SYN-050 protected-carrier prototype result
 
-The disposable root is
-`C:\Users\Liparakis\AppData\Local\Temp\syn050-protected-carrier-20260903-01`.
+The disposable protected-carrier root is
+`C:\Users\Liparakis\AppData\Local\Temp\syn050-protected-carrier-20260903-01`;
+the child-launch root is
+`C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-05`.
 The Windows anonymous inherited child-stdin pipe and generation-fenced
 challenge-response model passed A/B isolation, cross-use rejection, replay,
 replacement, race, live-old, ambiguous, terminal, and hash-only secret
-hygiene checks. The real installed `codex-cli 0.145.0` started an instrumented
-MCP child, created two exact durable threads in one App Server process, called
-the MCP tool for each exact thread, and resumed/read the first exact thread
-after an App Server process restart. The App Server path exposed no tested
-per-thread protected proof input; the static config marker was retained only
-as a negative control. Therefore the prototype is PARTIAL and production
-continuity remains blocked. No production source, provider configuration,
-`.synesis` state, or historical fixture changed.
+hygiene checks. The real installed `codex-cli 0.145.0` started instrumented
+MCP children, created two exact threads in one App Server process, ran two
+dedicated App Servers concurrently, rejected a wrong-thread request, and
+resumed/read the exact A thread after an A process restart while B stayed live.
+The static config marker reached each child, but parent-only markers, thread
+context, and attachment proof did not. Therefore the isolated carrier remains
+PASS, the current provider child boundary is FAIL, and production continuity
+remains blocked. No production source, provider configuration, `.synesis`
+state, or historical fixture changed.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

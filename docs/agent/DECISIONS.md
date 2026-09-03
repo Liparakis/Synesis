@@ -68,11 +68,12 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   provider capability model is approved: ordinary Codex/Claude stdio remain
   `SESSION_BOUND`, a future provider-native assertion is
   `NATIVE_CONTINUITY`, and Synesis-supervised Codex App Server is the first
-  `MANAGED_CONTINUITY` target. The isolated inherited-pipe prototype passed,
-  but the real App Server boundary did not prove protected proof delivery to
-  the exact MCP bridge/thread; the managed implementation remains Result B /
+  `MANAGED_CONTINUITY` target. The isolated inherited-pipe prototype passed.
+  The version-matched `codex-cli 0.145.0` child-launch investigation passed
+  topology and exact-thread restart/resume but classified the current private
+  proof ingress as `FAIL`; the managed implementation remains Result B /
   `PROTOTYPE_PARTIAL` and production remains blocked. See the protected-carrier,
-  managed-attachment, and provider-boundary evidence.
+  managed-attachment, provider-boundary, and child-launch evidence.
 - ADR-0054: Preserve structured capability dependencies through admission —
   accepted for SYN-049; verify the rebuilt MCP path first and reuse the
   existing durable capability lifecycle, patching only a proven boundary.
