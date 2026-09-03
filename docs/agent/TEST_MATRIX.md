@@ -1,5 +1,18 @@
 # SYN-051 production compatibility fix — 2026-09-04
 
+## Production lifecycle replacement slice — 2026-09-04
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Trusted death evidence | Supervisor evidence is emitted only after root/Job/active-process proof | PASS direct compilation; real rerun not performed | `ManagedProcessTreeSupervisor` |
+| Receipt scope | Binding and generation are persisted without raw proof or credentials | PASS direct compilation and focused tests | `ManagedRuntimeDeathReceiptStore`, `ManagedAttachmentServiceTest` |
+| Replacement gates | Missing, wrong-scope, terminal, stale, or old-proof replacement rejects | PASS 14/14 direct JUnit | `ManagedAttachmentServiceTest` |
+| Replacement race | Two proofless replacements have one winner and a fresh generation | PASS direct JUnit | `ManagedAttachmentServiceTest` |
+| Lifecycle wiring | Managed exit/teardown records evidence before disconnecting | PASS direct changed-source compilation | `ManagedCodexProcessLauncher`, `CodexAppServerLifecycleService` |
+| Pending MCP regression | Quarantine and in-place promotion remain intact | PASS 2/2 direct JUnit | `McpServerTest` |
+| Gradle/build provenance | Repository build and install of current source | BLOCKED | workstation loopback failure |
+| Real A1-to-A2 | Historical generation replacement | NOT RUN / no trusted receipt | existing fixture left untouched |
+
 | Area | Check | Result | Evidence |
 |---|---|---|---|
 | Pending transport | Proof-bearing `PENDING_ACTIVATION` transport initializes without authority | PASS focused; PASS real startup boundary | `ManagedAttachmentServiceTest`, `McpServerTest`, real generation-1 journal |

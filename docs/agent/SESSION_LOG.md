@@ -1,3 +1,14 @@
+- 2026-09-04 — SYN-051 bounded production lifecycle fix implemented. The
+  trusted process supervisor now emits generation-scoped death evidence only
+  after root exit, Job teardown, and an empty Job count; the launcher persists
+  a non-secret receipt and replaces an exact active/disconnected generation
+  with a fresh proof through an atomic compare-and-replace fence. Missing,
+  mismatched, terminal, stale, live, ambiguous, and old-proof replacement
+  paths fail closed. Direct compilation, 14/14 attachment tests, and 2/2 MCP
+  regression tests passed; Gradle loopback failure blocked current-artifact
+  provenance. The historical real generation had no trusted receipt and was
+  not touched. No Worker B or real A1/A2 run occurred.
+
 - 2026-09-04 — SYN-051 bounded production compatibility fix passed the real
   transport boundary. Pending proof-bearing MCP transport initialized before
   activation without authority; exact thread resume activated generation 1;

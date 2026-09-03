@@ -1173,12 +1173,11 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
         if (attachment.process().supervisor() != null) {
             try {
-                if (!attachment.process().supervisor().owns(attachment.process().process())
-                        || !attachment.process().supervisor().teardownAndProveEmpty(attachment.process().process())) {
-                    journal.offer("managed_tree_death_ambiguous", Map.of("generation", attachmentGeneration), true);
-                    return;
-                }
-                launcher.managedTreeStopped(authority, attachmentGeneration);
+                ManagedProcessTreeSupervisor.DeathEvidence evidence = attachment.process().supervisor()
+                        .teardownAndProveEmptyWithEvidence(attachment.process().process(), attachmentGeneration,
+                                attachment.process().executable(), attachment.process().commandIdentity(),
+                                attachment.process().startEpochMillis());
+                launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
                 journal.offer("managed_tree_empty", Map.of("generation", attachmentGeneration), true);
             } catch (IOException failure) {
                 journal.offer("managed_tree_death_ambiguous", Map.of("generation", attachmentGeneration), true);
@@ -1378,18 +1377,29 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 long attachmentGeneration) throws IOException {
             // Ordinary launchers have no managed runtime record.
         }
+
+        /**
+         * Records definitive managed-tree death with supervisor evidence.
+         *
+         * @param authority verified authority context
+         * @param attachmentGeneration stopped managed generation
+         * @param evidence trusted supervisor-produced death evidence
+         * @throws IOException when managed state cannot be updated
+         */
+        default void managedTreeStopped(LifecycleControlRequestEnvelope.AuthorityContext authority,
+                long attachmentGeneration, ManagedProcessTreeSupervisor.DeathEvidence evidence)
+                throws IOException {
+            managedTreeStopped(authority, attachmentGeneration);
+        }
     }
 
     private ProcessTreeTerminator.Result terminateProcessTree(AppServerProcess process, long attachmentGeneration,
             Duration grace, Instant deadline, CodexLifecycleStateStore.Checkpoint checkpoint) throws IOException {
         if (process != null && process.supervisor() != null) {
-            if (!process.supervisor().owns(process.process())) {
-                throw new IOException("managed_process_tree_ownership_unproven");
-            }
-            if (!process.supervisor().teardownAndProveEmpty(process.process())) {
-                throw new IOException("managed_process_tree_death_ambiguous");
-            }
-            launcher.managedTreeStopped(authority, attachmentGeneration);
+            ManagedProcessTreeSupervisor.DeathEvidence evidence = process.supervisor()
+                    .teardownAndProveEmptyWithEvidence(process.process(), attachmentGeneration,
+                            process.executable(), process.commandIdentity(), process.startEpochMillis());
+            launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
             ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(
                     Math.max(1L, process.process().pid()), process.executable(), process.commandIdentity(),
                     process.startEpochMillis(), attachmentGeneration);

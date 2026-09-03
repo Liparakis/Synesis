@@ -296,6 +296,59 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
     }
 
     /**
+     * Replaces an attachment generation after trusted supervisor death
+     * evidence has been durably recorded.
+     *
+     * <p>The old raw proof is intentionally not an input. The current
+     * generation and durable proof hash are used only as the compare-and-
+     * replace fence; the new proof is freshly minted and returned solely for
+     * trusted process setup.</p>
+     *
+     * @param location project location
+     * @param projectId project identity
+     * @param provider provider identifier
+     * @param bindingSessionId exact provider binding
+     * @param runtimeHomeId replacement runtime-home identity
+     * @param ownership active provider-thread owner
+     * @param store durable attachment store
+     * @param deathReceipts trusted generation death receipts
+     * @param expectedGeneration generation being replaced
+     * @return fresh proof and pending replacement record
+     * @throws Exception when death evidence, ownership, or generation fencing fails
+     */
+    public synchronized IssuedAttachment replaceAfterTrustedDeath(ProjectApplicationService.ProjectLocation location,
+            String projectId, String provider, String bindingSessionId, String runtimeHomeId,
+            ProviderThreadOwnershipRecord ownership, ManagedAttachmentStore store,
+            ManagedRuntimeDeathReceiptStore deathReceipts, long expectedGeneration) throws Exception {
+        Objects.requireNonNull(location, "location");
+        requireCodex(provider);
+        Objects.requireNonNull(store, "store");
+        Objects.requireNonNull(deathReceipts, "deathReceipts");
+        verifyOwnership(ownership, projectId, provider, bindingSessionId);
+        ManagedAttachmentRecord prior = store.read().orElseThrow(() -> failure("attachment_missing"));
+        if (!projectId.equals(prior.projectId()) || !provider.equals(prior.provider())
+                || !bindingSessionId.equals(prior.bindingSessionId()) || prior.generation() != expectedGeneration
+                || !ownership.providerThreadId().equals(prior.threadId())
+                || (prior.status() != ManagedAttachmentRecord.Status.ACTIVE
+                        && prior.status() != ManagedAttachmentRecord.Status.DISCONNECTED)) {
+            throw failure("managed_attachment_replacement_rejected");
+        }
+        ManagedRuntimeDeathReceipt receipt = deathReceipts.read(bindingSessionId, expectedGeneration)
+                .orElseThrow(() -> failure("managed_death_evidence_missing"));
+        verifyDeathReceipt(receipt, projectId, provider, bindingSessionId, expectedGeneration);
+        String proof = randomProof();
+        ManagedAttachmentRecord next = new ManagedAttachmentRecord(
+                ManagedAttachmentRecord.CURRENT_SCHEMA_VERSION, prior.projectId(), prior.provider(), prior.mode(),
+                prior.bindingSessionId(), prior.threadId(), prior.generation() + 1L, hash(proof), runtimeHomeId,
+                ManagedAttachmentRecord.Status.PENDING_ACTIVATION, prior.revision() + 1L,
+                System.currentTimeMillis());
+        if (!store.compareAndReplace(prior.generation(), prior.proofHash(), next)) {
+            throw failure("managed_attachment_replacement_race");
+        }
+        return new IssuedAttachment(proof, next);
+    }
+
+    /**
      * Activates a pending generation after the trusted lifecycle has verified
      * the exact provider-thread response and readback.
      *
@@ -376,6 +429,14 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                 || !provider.equals(ownership.provider())
                 || !bindingSessionId.equals(ownership.bindingSessionId())) {
             throw new IllegalStateException("provider_thread_ownership_rejected");
+        }
+    }
+
+    private static void verifyDeathReceipt(ManagedRuntimeDeathReceipt receipt, String projectId, String provider,
+            String bindingSessionId, long generation) {
+        if (!projectId.equals(receipt.projectId()) || !provider.equals(receipt.provider())
+                || !bindingSessionId.equals(receipt.bindingSessionId()) || receipt.generation() != generation) {
+            throw failure("managed_death_evidence_scope_rejected");
         }
     }
 

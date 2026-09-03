@@ -1,5 +1,25 @@
 # State
 
+## SYN-051 production lifecycle fix — 2026-09-04
+
+Status is **PARTIAL**. The trusted lifecycle boundary now records a
+binding/generation-scoped death receipt only after the supervisor proves root
+exit, Job teardown, and `ActiveProcesses == 0`. Replacement reads that receipt
+from the project-local store, accepts no old raw proof or model assertion,
+atomically wins one replacement race, and mints the next proof while keeping
+the exact provider thread and durable ownership.
+
+The existing real fixture's generation 1 is still `ACTIVE` in durable state,
+but its process is gone and no trusted death receipt exists. It remains
+unrecoverable under this protocol. No real replacement was attempted and no
+fixture state was rewritten.
+
+## Immediate next action
+
+Resolve the Gradle loopback failure, rebuild/install current source, and run
+focused lifecycle and MCP verification. Do not start Worker B or claim A1/A2
+evidence.
+
 ## SYN-051 production compatibility fix — 2026-09-04
 
 Status is **PARTIAL** with the bounded real managed transport boundary

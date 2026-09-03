@@ -1,5 +1,29 @@
 # SYN-051 shared-normal-home implementation slice — 2026-09-03
 
+## 2026-09-04 — bounded production lifecycle replacement fix
+
+**Classification: PARTIAL.** The trusted managed-process supervisor now
+returns death evidence only after its existing root-exit, Job teardown, and
+`ActiveProcesses == 0` proof succeeds. The managed launcher persists that
+evidence as a project-local binding/generation receipt containing process
+identity and supervisor provenance, but no raw proof or credential. The
+replacement path reads the receipt itself, accepts no old proof or caller
+boolean, preserves the exact binding/thread/ownership context, mints a fresh
+proof and generation, and uses atomic compare-and-replace so one concurrent
+replacement wins.
+
+Focused direct execution passed 14/14 `ManagedAttachmentServiceTest` methods,
+including missing evidence, exact scope, terminal rejection, old-proof replay,
+and concurrent replacement. Direct changed-source compilation passed, and
+the pending MCP quarantine/promotion regression passed 2/2. Gradle remains
+blocked before build execution by `Unable to establish loopback connection`,
+so no current-source install provenance or real-runtime rerun is claimed.
+
+The existing real fixture's generation 1 has no trusted receipt. Its process
+tree is gone, but the generation remains unrecoverable under the new protocol;
+no receipt was manufactured and no `.synesis` state was edited. Real A1/A2,
+Worker B, and full acceptance were not run.
+
 ## 2026-09-04 — production compatibility fix and real A boundary
 
 **Classification: PARTIAL / compatibility boundary PASS.** The bounded fix

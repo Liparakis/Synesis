@@ -1,5 +1,19 @@
 # Next Session
 
+## SYN-051 production lifecycle fix — 2026-09-04
+
+The implementation slice is **PARTIAL**: supervisor-produced death receipts,
+proofless fresh-generation replacement, ownership preservation, and the
+single-winner generation fence are directly verified. Gradle still fails at
+daemon startup with `Unable to establish loopback connection`, so current
+source has not been rebuilt or installed for runtime use. The historical
+generation 1 has no trusted receipt and must not be recovered or rewritten.
+
+Exact next action: resolve the Gradle loopback failure, rebuild/install with
+matching hashes, and rerun the focused lifecycle/MCP tests. Only then consider
+a fresh lawful runtime probe. Do not start Worker B, touch `.synesis`, or run
+full acceptance.
+
 ## SYN-051 production compatibility fix — 2026-09-04
 
 The bounded slice is **PARTIAL / compatibility boundary PASS**. Pending

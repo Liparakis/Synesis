@@ -12,9 +12,10 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentStore;
+import org.synesis.workspace.application.provider.continuity.ManagedRuntimeDeathReceipt;
+import org.synesis.workspace.application.provider.continuity.ManagedRuntimeDeathReceiptStore;
 import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipRecord;
 import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipStore;
-import org.synesis.workspace.application.provider.continuity.RuntimeAuthenticator;
 
 /**
  * Stock-Codex App Server launcher for the explicit managed-continuity mode.
@@ -31,8 +32,10 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     private final ProviderThreadOwnershipStore ownershipStore;
     private final ManagedCodexRuntimeMode runtimeMode;
     private final ManagedProcessTreeSupervisor processTreeSupervisor;
+    private final ManagedRuntimeDeathReceiptStore deathReceiptStore;
     private final Map<String, PreparedLaunch> prepared = new ConcurrentHashMap<>();
-    private final Map<String, Process> activeProcesses = new ConcurrentHashMap<>();
+    private final Map<String, CodexAppServerLifecycleService.AppServerProcess> activeProcesses =
+            new ConcurrentHashMap<>();
 
     /**
      * Creates a managed launcher using the normal Codex executable.
@@ -88,6 +91,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         this.ownershipStore = ProviderThreadOwnershipStore.storeFor(location);
         this.runtimeMode = Objects.requireNonNull(runtimeMode, "runtimeMode");
         this.processTreeSupervisor = Objects.requireNonNull(processTreeSupervisor, "processTreeSupervisor");
+        this.deathReceiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);
     }
 
     /**
@@ -117,28 +121,25 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     }
 
     /**
-     * Prepares a replacement after the old process has been proven stopped.
+     * Prepares a replacement after trusted supervisor death evidence exists.
      *
      * @param authority exact existing binding authority
-     * @param currentProof current raw proof held by the trusted launcher
      * @param expectedGeneration current attachment generation
      * @return replacement metadata
-     * @throws Exception when the old attachment is live/ambiguous or stale
+     * @throws Exception when trusted death evidence is missing or the old
+     * attachment is live, ambiguous, terminal, or stale
      */
     public ManagedAttachmentRecord prepareReplacement(LifecycleControlRequestEnvelope.AuthorityContext authority,
-            String currentProof, long expectedGeneration) throws Exception {
+            long expectedGeneration) throws Exception {
         requireAuthority(authority);
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
-        ManagedAttachmentRecord prior = store.read().orElseThrow(() -> new IOException("attachment_missing"));
         ManagedCodexThreadBroker broker = brokerFor(authority);
         CodexManagedRuntimeHome home = runtimeHome(authority.projectId());
         try {
-            RuntimeAuthenticator.AttachmentRequest request = new RuntimeAuthenticator.AttachmentRequest(
-                    authority.provider(), authority.bindingSessionId(), prior.threadId(), expectedGeneration,
-                    currentProof);
             configureHome(home);
-            ManagedAttachmentService.IssuedAttachment issued = attachmentService.reattachFromOwnership(location,
-                    request, authority.projectId(), broker.ownership(), home.homeId(), store, true);
+            ManagedAttachmentService.IssuedAttachment issued = attachmentService.replaceAfterTrustedDeath(location,
+                    authority.projectId(), authority.provider(), authority.bindingSessionId(), home.homeId(),
+                    broker.ownership(), store, deathReceiptStore, expectedGeneration);
             prepared.put(authority.bindingSessionId(), new PreparedLaunch(home, issued.proof(), issued.record()));
             return issued.record();
         } catch (Exception failure) {
@@ -190,9 +191,11 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         String identity = info == null ? executable : info.commandLine().orElse(executable);
         long started = info == null ? System.currentTimeMillis()
                 : info.startInstant().map(Instant::toEpochMilli).orElse(System.currentTimeMillis());
-        activeProcesses.put(authority.bindingSessionId(), process);
-        return new CodexAppServerLifecycleService.AppServerProcess(process, executable, identity, started,
-                processTreeSupervisor);
+        CodexAppServerLifecycleService.AppServerProcess attachment =
+                new CodexAppServerLifecycleService.AppServerProcess(process, executable, identity, started,
+                        processTreeSupervisor);
+        activeProcesses.put(authority.bindingSessionId(), attachment);
+        return attachment;
     }
 
     /**
@@ -262,14 +265,14 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
             long expectedGeneration) throws Exception {
         requireAuthority(authority);
         PreparedLaunch preparedLaunch = prepared.get(authority.bindingSessionId());
-        Process process = activeProcesses.get(authority.bindingSessionId());
+        CodexAppServerLifecycleService.AppServerProcess process = activeProcesses.get(authority.bindingSessionId());
         if (preparedLaunch == null || process == null || preparedLaunch.record().generation() != expectedGeneration) {
             throw new IOException("managed_process_tree_missing_or_stale");
         }
-        if (!processTreeSupervisor.owns(process) || !processTreeSupervisor.teardownAndProveEmpty(process)) {
-            throw new IOException("managed_process_tree_death_ambiguous");
-        }
-        managedTreeStopped(authority, expectedGeneration);
+        ManagedProcessTreeSupervisor.DeathEvidence evidence = processTreeSupervisor
+                .teardownAndProveEmptyWithEvidence(process.process(), expectedGeneration, process.executable(),
+                        process.commandIdentity(), process.startEpochMillis());
+        managedTreeStopped(authority, expectedGeneration, evidence);
         return true;
     }
 
@@ -279,17 +282,26 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      *
      * @param authority exact binding authority
      * @param attachmentGeneration stopped generation
+     * @param evidence trusted supervisor-produced death evidence
      * @throws IOException when managed state cannot be updated
      */
     @Override
     public void managedTreeStopped(LifecycleControlRequestEnvelope.AuthorityContext authority,
-            long attachmentGeneration) throws IOException {
+            long attachmentGeneration, ManagedProcessTreeSupervisor.DeathEvidence evidence) throws IOException {
         requireAuthority(authority);
+        if (evidence == null || evidence.generation() != attachmentGeneration) {
+            throw new IOException("managed_process_tree_death_evidence_mismatch");
+        }
         PreparedLaunch launch = prepared.get(authority.bindingSessionId());
         if (launch != null && launch.record().generation() == attachmentGeneration) {
             try {
                 ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location,
                         authority.bindingSessionId());
+                deathReceiptStore.write(new ManagedRuntimeDeathReceipt(
+                        ManagedRuntimeDeathReceipt.CURRENT_SCHEMA_VERSION, authority.projectId(), authority.provider(),
+                        authority.bindingSessionId(), evidence.generation(), evidence.rootPid(),
+                        evidence.rootStartEpochMillis(), evidence.rootExecutable(), evidence.rootCommandIdentity(),
+                        evidence.supervisorProvenance(), evidence.supervisorRevision(), evidence.observedAtEpochMillis()));
                 ManagedAttachmentRecord record = store.read().orElseThrow(() -> new IOException("attachment_missing"));
                 if (record.status() != ManagedAttachmentRecord.Status.DISCONNECTED
                         && record.status() != ManagedAttachmentRecord.Status.TERMINAL) {

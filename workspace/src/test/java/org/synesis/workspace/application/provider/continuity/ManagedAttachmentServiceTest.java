@@ -219,4 +219,131 @@ final class ManagedAttachmentServiceTest {
         assertEquals(1, winners.get());
         assertEquals(2L, store.read().orElseThrow().generation());
     }
+
+    @Test
+    void activeAttachmentWithoutTrustedDeathReceiptCannotBeReplaced() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-no-death-receipt-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        var issued = new ManagedAttachmentService().issue(location, location.projectId().toString(), "codex",
+                "binding-a", "thread-a", "home-a", store);
+
+        assertThrows(IllegalStateException.class, () -> new ManagedAttachmentService().replaceAfterTrustedDeath(
+                location, location.projectId().toString(), "codex", "binding-a", "home-b", ownership, store,
+                ManagedRuntimeDeathReceiptStore.storeFor(location), 1L));
+        assertEquals(issued.record(), store.read().orElseThrow());
+    }
+
+    @Test
+    void trustedDeathReceiptAllowsProoflessReplacementAndPreservesOwnership() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-proofless-replacement-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        var service = new ManagedAttachmentService();
+        var issued = service.issue(location, location.projectId().toString(), "codex", "binding-a", "thread-a",
+                "home-a", store);
+        var receiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);
+        receiptStore.write(new ManagedRuntimeDeathReceipt(1, location.projectId().toString(), "codex", "binding-a",
+                1L, 7123L, 991L, "codex.exe", "codex app-server", "managed-supervisor", 1L,
+                System.currentTimeMillis()));
+
+        var replacement = service.replaceAfterTrustedDeath(location, location.projectId().toString(), "codex",
+                "binding-a", "home-b", ownership, store, receiptStore, 1L);
+
+        assertEquals(2L, replacement.record().generation());
+        assertEquals("thread-a", replacement.record().threadId());
+        assertNotEquals(issued.proof(), replacement.proof());
+        assertEquals(ManagedAttachmentRecord.Status.PENDING_ACTIVATION, replacement.record().status());
+        assertEquals(ownership, ProviderThreadOwnershipStore.storeFor(location)
+                .findByBinding("codex", "binding-a").orElseThrow());
+        assertThrows(IllegalStateException.class, () -> service.authenticate(location,
+                new RuntimeAuthenticator.AttachmentRequest("codex", "binding-a", "thread-a", 1L,
+                        issued.proof()), location.projectId().toString(), store));
+        assertThrows(IllegalStateException.class, () -> service.replaceAfterTrustedDeath(location,
+                location.projectId().toString(), "codex", "binding-a", "home-c", ownership, store,
+                receiptStore, 1L));
+    }
+
+    @Test
+    void deathReceiptMustMatchExactGenerationAndBinding() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-death-scope-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        new ManagedAttachmentService().issue(location, location.projectId().toString(), "codex", "binding-a",
+                "thread-a", "home-a", store);
+        var receiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);
+        receiptStore.write(new ManagedRuntimeDeathReceipt(1, location.projectId().toString(), "codex", "binding-a",
+                2L, 7123L, 991L, "codex.exe", "codex app-server", "managed-supervisor", 1L,
+                System.currentTimeMillis()));
+
+        assertThrows(IllegalStateException.class, () -> new ManagedAttachmentService().replaceAfterTrustedDeath(
+                location, location.projectId().toString(), "codex", "binding-a", "home-b", ownership, store,
+                receiptStore, 1L));
+    }
+
+    @Test
+    void twoProoflessReplacementAttemptsHaveOneWinner() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-proofless-race-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        new ManagedAttachmentService().issue(location, location.projectId().toString(), "codex", "binding-a",
+                "thread-a", "home-a", store);
+        var receiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);
+        receiptStore.write(new ManagedRuntimeDeathReceipt(1, location.projectId().toString(), "codex", "binding-a",
+                1L, 7123L, 991L, "codex.exe", "codex app-server", "managed-supervisor", 1L,
+                System.currentTimeMillis()));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger winners = new AtomicInteger();
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            for (int i = 0; i < 2; i++) {
+                executor.submit(() -> {
+                    try {
+                        ready.countDown();
+                        start.await();
+                        new ManagedAttachmentService().replaceAfterTrustedDeath(location,
+                                location.projectId().toString(), "codex", "binding-a", "home-b", ownership, store,
+                                receiptStore, 1L);
+                        winners.incrementAndGet();
+                    } catch (Exception expected) {
+                        // The generation/proof compare-and-replace fence rejects the loser.
+                    }
+                    return null;
+                });
+            }
+            ready.await();
+            start.countDown();
+        }
+        assertEquals(1, winners.get());
+        assertEquals(2L, store.read().orElseThrow().generation());
+    }
+
+    @Test
+    void terminalAttachmentCannotUseDeathReceiptForReplacement() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-terminal-death-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        new ManagedAttachmentService().issue(location, location.projectId().toString(), "codex", "binding-a",
+                "thread-a", "home-a", store);
+        var service = new ManagedAttachmentService();
+        service.terminalize(store);
+        var receiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);
+        receiptStore.write(new ManagedRuntimeDeathReceipt(1, location.projectId().toString(), "codex", "binding-a",
+                1L, 7123L, 991L, "codex.exe", "codex app-server", "managed-supervisor", 1L,
+                System.currentTimeMillis()));
+
+        assertThrows(IllegalStateException.class, () -> service.replaceAfterTrustedDeath(location,
+                location.projectId().toString(), "codex", "binding-a", "home-b", ownership, store,
+                receiptStore, 1L));
+    }
 }

@@ -1,5 +1,17 @@
 # Failed Attempts
 
+## 2026-09-04 — SYN-051 historical generation had no death receipt
+
+- The existing real fixture still reports generation 1 as `ACTIVE`, while its
+  managed process tree is gone. Public lifecycle/reconciliation evidence does
+  not include a receipt produced by the new trusted supervisor seam.
+- The old raw proof is not recoverable and no caller-supplied death assertion
+  is accepted. The generation was therefore left untouched; no durable IDs,
+  `.synesis` files, or Worker B state were edited.
+- Gradle also remains blocked before build execution by
+  `java.io.IOException: Unable to establish loopback connection`, so the
+  current source has not been installed for a real-runtime rerun.
+
 ## 2026-09-04 — SYN-051 compatibility retry input mismatch
 
 - The first compatibility retry used a stale installed distribution whose

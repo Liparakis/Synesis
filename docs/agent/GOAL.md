@@ -1,5 +1,15 @@
 # Goal
 
+- SYN-051 lifecycle replacement slice (2026-09-04): **PARTIAL**. Trusted
+  supervisor death evidence is persisted per binding and generation, and
+  proofless replacement is race-safe, fresh-proof, and ownership-preserving.
+  Missing, mismatched, stale, terminal, live, or ambiguous evidence remains a
+  hard rejection. The historical real generation has no trusted receipt and
+  was left untouched.
+- Exact next action: resolve Gradle loopback, rebuild/install matching
+  artifacts, and rerun focused lifecycle/MCP verification. Do not start Worker
+  B or perform full acceptance.
+
 - Real-runtime compatibility result (2026-09-04): **PARTIAL / boundary PASS**.
   Pending proof-bearing MCP transport now survives stock Codex early startup
   without authority, and the same connection promotes after exact thread

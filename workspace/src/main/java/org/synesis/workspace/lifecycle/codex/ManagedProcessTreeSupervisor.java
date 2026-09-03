@@ -45,6 +45,26 @@ public interface ManagedProcessTreeSupervisor {
     boolean teardownAndProveEmpty(Process process) throws IOException;
 
     /**
+     * Tears down an owned root and returns supervisor-produced death evidence.
+     *
+     * @param process exact owned root process
+     * @param generation managed attachment generation
+     * @param executable verified root executable
+     * @param commandIdentity verified root command identity
+     * @param startEpochMillis verified root start time
+     * @return evidence produced only after the empty-tree proof succeeds
+     * @throws IOException when ownership or empty-tree proof fails
+     */
+    default DeathEvidence teardownAndProveEmptyWithEvidence(Process process, long generation,
+            String executable, String commandIdentity, long startEpochMillis) throws IOException {
+        if (!teardownAndProveEmpty(process)) {
+            throw new IOException("managed_process_tree_death_unproven");
+        }
+        return new DeathEvidence(generation, process.pid(), startEpochMillis, executable, commandIdentity,
+                getClass().getName(), 1L, System.currentTimeMillis());
+    }
+
+    /**
      * Returns the production supervisor for the current platform.
      *
      * <p>Managed launches remain fail-closed on platforms without an
@@ -86,5 +106,32 @@ public interface ManagedProcessTreeSupervisor {
                 throw new IOException("managed_process_tree_supervisor_unavailable");
             }
         };
+    }
+
+    /**
+     * Non-secret evidence returned by a trusted process-tree supervisor.
+     *
+     * @param generation managed attachment generation
+     * @param rootPid verified root PID
+     * @param rootStartEpochMillis verified root start time
+     * @param rootExecutable verified executable
+     * @param rootCommandIdentity verified command identity
+     * @param supervisorProvenance supervisor implementation provenance
+     * @param supervisorRevision supervisor evidence revision
+     * @param observedAtEpochMillis evidence observation time
+     */
+    record DeathEvidence(long generation, long rootPid, long rootStartEpochMillis, String rootExecutable,
+            String rootCommandIdentity, String supervisorProvenance, long supervisorRevision,
+            long observedAtEpochMillis) {
+
+        /** Validates bounded non-secret supervisor evidence. */
+        public DeathEvidence {
+            if (generation < 1 || rootPid < 1 || rootStartEpochMillis < 1 || supervisorRevision < 1
+                    || observedAtEpochMillis < 1 || rootExecutable == null || rootExecutable.isBlank()
+                    || rootCommandIdentity == null || rootCommandIdentity.isBlank()
+                    || supervisorProvenance == null || supervisorProvenance.isBlank()) {
+                throw new IllegalArgumentException("invalid managed death evidence");
+            }
+        }
     }
 }

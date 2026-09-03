@@ -1,5 +1,28 @@
 # Current Task
 
+## SYN-051 production lifecycle fix — 2026-09-04
+
+The bounded lifecycle slice is **PARTIAL**. A trusted managed-process
+supervisor now produces generation-scoped, non-secret death evidence only
+after root exit, Job teardown, and an empty Job process count are proven. The
+managed launcher persists that receipt and can replace the exact active or
+disconnected generation without accepting the old raw proof. Replacement
+preserves the broker binding, provider thread, ownership, participant,
+WorkIntent, and claims while atomically fencing the old generation and minting
+a fresh proof.
+
+The historical `SkibidiToilert` generation 1 has no receipt produced by this
+seam. Its process is gone, but it is therefore not lawfully replaceable; no
+receipt was manufactured and no durable fixture state was edited. No real
+A1-to-A2 rerun was performed.
+
+## Immediate next action
+
+Resolve the workstation Gradle loopback failure, rebuild and install the
+current source with matching provenance, then run only the focused lifecycle
+and MCP tests. A fresh lawful real-runtime probe may follow only after that;
+do not touch the historical generation or start Worker B.
+
 ## SYN-051 production compatibility fix — 2026-09-04
 
 The bounded compatibility slice is **PARTIAL / real boundary PASS**. A

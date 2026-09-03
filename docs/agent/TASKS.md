@@ -1,5 +1,20 @@
 # Tasks
 
+## SYN-051 production lifecycle fix — 2026-09-04
+
+- Status: ACTIVE / PARTIAL; implementation and direct focused verification
+  passed, but Gradle build/provenance and real A1-to-A2 evidence are pending.
+- Implemented: trusted supervisor death evidence, atomic generation-scoped
+  death receipts, proofless replacement with a fresh proof, and permanent
+  stale-generation fencing while preserving exact ownership and binding.
+- Verified directly: 14/14 managed attachment tests, changed production
+  lifecycle compilation, and 2/2 pending-MCP regression tests. Gradle is
+  blocked by `Unable to establish loopback connection`.
+- Historical generation 1 has no trusted receipt; it remains unrecoverable.
+  No `.synesis` state, raw proof, durable ID, or Worker B state was changed.
+- Next action: resolve the Gradle loopback failure, rebuild/install the source,
+  and rerun focused tests before any fresh real-runtime probe.
+
 ## SYN-051 production compatibility fix — 2026-09-04
 
 - Status: ACTIVE / PARTIAL; bounded compatibility boundary passed.
