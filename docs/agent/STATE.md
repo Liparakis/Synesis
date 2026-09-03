@@ -1,5 +1,29 @@
 # State
 
+## SYN-051 real-runtime validation — 2026-09-04
+
+Status is **STOPPED / PARTIAL**. The exact committed source built cleanly,
+the workspace/MCP/CLI artifacts were installed into the local development
+distribution with matching SHA-256 hashes, and `SkibidiToilert` was created
+fresh through ordinary Git and supported Synesis initialization. Real Codex
+0.145.0 launched App Server A through `ManagedCodexProcessLauncher`; the
+root was observed inside a Windows Job. During App Server initialization,
+stock Codex launched the Synesis MCP child before lifecycle activation. The
+child correctly rejected the still-pending managed proof, so the MCP
+handshake failed and the requested real managed turn did not obtain Synesis
+authority.
+
+The first failure is therefore the interaction between stock Codex MCP
+startup ordering and `PENDING_ACTIVATION`. The pass stopped immediately;
+Worker B, A1/A2, and full acceptance were not run. This evidence does not
+authorize moving activation earlier or weakening the admission predicate.
+
+## Immediate next action
+
+Perform a narrow design review of a proof-preserving pre-thread bootstrap or
+equivalent supported ordering boundary, then obtain explicit authorization
+before changing production code or rerunning the real probe.
+
 ## SYN-051 runtime-boundary implementation follow-on — 2026-09-03
 
 This bounded slice is **PARTIAL**. The production Windows supervisor is now

@@ -1,5 +1,20 @@
 # Tasks
 
+## SYN-051 real-runtime validation — 2026-09-04
+
+- Status: ACTIVE / PARTIAL; stopped on first material runtime failure.
+- Scope completed: exact commit build/install/provenance and one fresh
+  `SkibidiToilert` real-Codex managed Worker A launch.
+- Result: App Server A entered the Windows Job and resumed the exact pinned
+  provider thread, but stock Codex started the Synesis MCP child before
+  managed attachment activation. `PENDING_ACTIVATION` correctly rejected
+  the proof during MCP initialize, so the real managed turn had no Synesis
+  authority.
+- Not run after the failure: Worker B, A/B isolation, raw Thread-A probe,
+  forced A failure, A2 restart, optional races, and full acceptance.
+- Next action: separately review a proof-preserving startup-order solution;
+  do not weaken proof gating or rerun acceptance without authorization.
+
 ## SYN-051 bounded runtime-boundary follow-on — 2026-09-03
 
 - Status: ACTIVE / PARTIAL

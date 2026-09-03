@@ -1,5 +1,23 @@
 # Failed Attempts
 
+## 2026-09-04 — SYN-051 real-runtime validation first failure
+
+- Exact committed source `dc9231fd48971d72e0cf3a810f68f3e503f5398b` built and
+  installed with matching workspace/MCP/CLI hashes.
+- Fresh `SkibidiToilert` was initialized through ordinary Git and supported
+  Synesis flows. Real Codex 0.145.0 launched managed App Server A; the root
+  was observed inside a Windows Job.
+- Stock Codex started the configured Synesis MCP child during App Server
+  initialization, before the lifecycle verified/resumed the exact thread
+  and activated the pending managed attachment. The child failed closed on
+  MCP initialize because `PENDING_ACTIVATION` is not authority.
+- This is the first concrete runtime incompatibility. Do not relax proof
+  gating, move activation earlier speculatively, or continue with Worker B
+  and A2. Evidence is under the fixture `probe-runtime` directory and the
+  current SYN-051 evidence record.
+- The unfiltered workspace test suite was also stopped after no progress;
+  focused tests passed, but broad tests remain incomplete.
+
 ## 2026-08-29 — SYN-041 CP-0567 bounded verification boundary
 
 - The read-first trace proved there is no surviving Synesis observer for an

@@ -1,5 +1,21 @@
 # Next Session
 
+## SYN-051 real-runtime validation — 2026-09-04
+
+The pass is **STOPPED / PARTIAL** at the first material failure. The exact
+commit built and installed with matching workspace/MCP/CLI hashes. Fresh
+`SkibidiToilert` initialization and real Codex authentication worked. The
+managed App Server A was Job-contained and resumed exact Thread A, but stock
+Codex launched MCP before lifecycle activation; Synesis correctly rejected
+the proof in `PENDING_ACTIVATION`, causing MCP initialize to fail. No real
+managed turn, Worker B, A/B isolation, or restart evidence exists.
+
+## Immediate next action
+
+- Exact next action: perform a bounded design review of a proof-preserving
+  pre-thread MCP bootstrap/order boundary; do not alter proof gating or run
+  the real acceptance again until that review is authorized and complete.
+
 ## SYN-051 runtime-boundary follow-on — 2026-09-03
 
 The bounded production slice is **PARTIAL**. Java 25 FFM now provides a

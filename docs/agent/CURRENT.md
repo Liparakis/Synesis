@@ -1,5 +1,27 @@
 # Current Task
 
+## SYN-051 real-runtime validation — 2026-09-04
+
+The bounded real-runtime pass is **STOPPED / PARTIAL** at the first
+material failure. Exact committed artifacts were built and hash-matched into
+the local distribution. A fresh `SkibidiToilert` project was initialized
+through the supported Git/Synesis flow, and real Codex 0.145.0 launched a
+managed App Server A inside a Windows Job. The lifecycle resumed the exact
+thread and attempted the real turn, but stock Codex started MCP before the
+managed attachment could be activated. The Synesis MCP child therefore
+failed its initialize handshake while the durable attachment was
+`PENDING_ACTIVATION`; the turn completed without Synesis authority.
+
+This is a concrete runtime-ordering incompatibility, not evidence to relax
+proof gating. Worker B, A/B isolation, A1/A2 restart, and full task
+acceptance were not started. No production code changed in this pass.
+
+## Immediate next action
+
+Reconcile the stock-Codex pre-thread MCP startup ordering with the pending
+activation security invariant in a separately authorized narrow design/fix
+slice; do not rerun managed acceptance or weaken proof gating first.
+
 ## SYN-051 runtime-boundary follow-on — 2026-09-03
 
 The bounded production slice is **PARTIAL**. Java 25 FFM now supplies a

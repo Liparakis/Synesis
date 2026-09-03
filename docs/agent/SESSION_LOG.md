@@ -1,3 +1,18 @@
+- 2026-09-04 — SYN-051 bounded real-runtime validation stopped on the first
+  material failure. The exact commit built cleanly; `:cli:installDist`
+  produced workspace, MCP, and CLI jars whose installed copies matched by
+  SHA-256. A fresh `SkibidiToilert` Git/Synesis project was initialized and
+  two real Codex sessions were established with distinct verified bindings.
+  Managed Worker A claimed the exact provider thread, issued a generation-1
+  pending attachment, and launched App Server A inside a Windows Job. Stock
+  Codex then started MCP before lifecycle activation; Synesis correctly
+  rejected the pending proof during MCP initialize. The real managed turn
+  therefore completed without Synesis authority. Worker B, A/B isolation,
+  raw-thread probing, A1/A2 restart, and full acceptance were not run. The
+  disposable A harness/tree was torn down; no production code changed and no
+  push occurred. The next action is a separately authorized
+  proof-preserving startup-order review.
+
 - 2026-09-03 — SYN-051 shared-normal-home production design/implementation slice:
   explicit user authorization selected the PASS-B shared-normal-provider-home
   architecture; historical shared-home feasibility rejection evidence was

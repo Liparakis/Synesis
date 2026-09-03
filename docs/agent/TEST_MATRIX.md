@@ -1,5 +1,15 @@
 # SYN-051 shared-normal-home implementation slice — 2026-09-03
 
+## Real-runtime validation — 2026-09-04
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Exact artifact provenance | Build and install workspace/MCP/CLI artifacts; compare SHA-256 | PASS | local distribution hashes |
+| Fresh fixture | Git baseline plus supported Synesis initialization for `SkibidiToilert` | PASS | baseline `8cf929c` |
+| Managed Worker A launch | Real Codex App Server root launched through Job supervisor | PASS until next gate | real PID/Job membership |
+| Managed MCP A admission | Child starts before lifecycle activation and receives pending proof | FAIL / first material failure | `generation-1.jsonl`, MCP initialize failure |
+| Real A/B/restart acceptance | Worker B, A1/A2, isolation, recovery | NOT RUN | stop-on-first-failure |
+
 | Area | Check | Result | Evidence |
 |---|---|---|---|
 | Windows Job launch | Root plus descendant created inside one Job; assignment precedes resume; teardown proves empty | PASS on real Windows runtime | `WindowsJobObjectProcessTreeSupervisorTest` |

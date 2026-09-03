@@ -1,6 +1,70 @@
 # SYN-051 shared-normal-home implementation slice — 2026-09-03
 
-## Classification
+## 2026-09-04 real-runtime validation — first failure
+
+**Classification: FAIL — stopped on the first material runtime failure.**
+
+The exact committed source `dc9231fd48971d72e0cf3a810f68f3e503f5398b` was
+clean-built and installed into the local development distribution. The
+workspace, MCP, and CLI JAR hashes matched their installed copies. A fresh
+`C:\Users\Liparakis\Desktop\SkibidiToilert` repository was created through
+ordinary Git and supported Synesis initialization; its baseline commit was
+`8cf929c4def2a5d900f654c5b99d9ebef8bc972e`.
+
+Real Codex `0.145.0` established distinct provider sessions for the focused
+workers. Managed Worker A claimed exact Thread A and received generation 1
+with a pending attachment. `ManagedCodexProcessLauncher` launched the real
+App Server through the Windows Job supervisor; App Server A was observed as
+Job-contained and the lifecycle issued `thread/resume` for exact Thread A.
+
+The first material failure followed: stock Codex started the configured MCP
+servers during App Server initialization, before the lifecycle's exact
+thread verification and managed attachment activation. The Synesis MCP
+child consequently failed its initialize handshake while the attachment
+was `PENDING_ACTIVATION`. The fail-closed result is correct for the security
+invariant, but it means the current production ordering cannot complete a
+real managed Codex turn on stock Codex 0.145.0.
+
+Worker B, A/B proof isolation, raw unmanaged Thread-A recovery, App Server A
+failure, Job teardown acceptance, A2 fresh proof/generation, and full
+task-tracker acceptance were not run after this failure. No production code
+changed in this validation pass. The disposable A harness and Job tree were
+terminated; the fixture's baseline source remained unchanged, with only the
+untracked probe evidence directory present.
+
+Evidence: `SkibidiToilert/probe-runtime/.../generation-1.jsonl` records
+`thread/resume` success followed by `synesis` MCP startup failure and no
+raw proof value.
+
+### Validation provenance and hygiene
+
+- Codex: `codex-cli 0.145.0`; executable path
+  `C:\Users\Liparakis\AppData\Local\Microsoft\WinGet\Links\codex.exe`;
+  SHA-256
+  `83751F15CB6A0A7B97DF67752C001E3FE1C20E18FFBFEC3FF63567296205EB6C`.
+- Java: Temurin OpenJDK 25+36-LTS. Windows: Windows 11 Pro 10.0.26200,
+  x64.
+- Built and installed hashes matched: workspace
+  `B0BF809DC59658E5F493FF42E5B82F2BC29EA005EC235DBE7E6144768ED54557`, MCP
+  `FACD4ED19B9B43381AAD51142C0F7861AE6B3A93DB9359146EB10F16701FB4CC`,
+  CLI `312AC4099954EB2BC14004983679CB8F268D5EE3F4BC2D3D378EABF9F1DFC0DD`.
+- Built paths were `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar`,
+  `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar`, and
+  `cli/build/libs/cli-0.1.0-SNAPSHOT.jar`. Installed copies were under
+  `cli/build/install/synesis/lib/`; launchers were under
+  `cli/build/install/synesis/bin/`.
+- Normal `CODEX_HOME` was used. Synesis did not read, copy, parse, or modify
+  provider credentials. No raw proof appeared in the fixture evidence or
+  non-secret Codex configuration scan.
+- The non-secret `config.toml` baseline hash was
+  `9A516E0838556D7977D285D09B8D3A57B43FDF31284CA5752EEA737D5BB7291D`;
+  after the probe it was
+  `C76EE5E24BA12B502B1E717F92300ED5B0375A0DFFB74FD7E9B139EFF65B94DD`.
+  The change was not attributed conclusively and was not overwritten.
+- Focused tests and the exact ten-tool catalog passed. The unfiltered
+  workspace suite was stopped after no progress and remains incomplete.
+
+## Prior implementation-slice classification
 
 **PARTIAL — durable authority controls implemented; managed runtime acceptance
 remains blocked at the process-container and provider-private-carrier gates.**

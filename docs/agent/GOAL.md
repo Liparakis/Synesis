@@ -1,5 +1,15 @@
 # Goal
 
+- Real-runtime validation result (2026-09-04): **STOPPED / PARTIAL**. Exact
+  build/install provenance passed and fresh `SkibidiToilert` initialization
+  passed. Real managed App Server A was Job-contained and resumed the exact
+  thread, but stock Codex launched the Synesis MCP child before attachment
+  activation; the child correctly failed closed while the record was
+  `PENDING_ACTIVATION`. No managed authority or real turn was established.
+- Exact next action: review a proof-preserving solution to the observed
+  pre-thread MCP startup ordering, with no proof-gate weakening and no
+  acceptance rerun until explicitly authorized.
+
 - Current bounded runtime-boundary slice (2026-09-03): **PARTIAL**. A
   Windows-only Java 25 FFM Job Object supervisor is integrated through the
   managed Codex lifecycle with suspended creation, assignment before resume,
