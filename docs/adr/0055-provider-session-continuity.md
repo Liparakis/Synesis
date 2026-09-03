@@ -1,7 +1,7 @@
 # ADR-0055: Provider-session continuity across MCP process restart
 
-Status: Blocked at the SYN-050 design gate pending a provider identity
-contract. No production design is accepted.
+Status: Design investigation complete; implementation blocked pending a
+provider identity contract. No production design is accepted.
 
 ## Context
 

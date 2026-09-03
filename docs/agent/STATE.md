@@ -2,9 +2,11 @@
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task, with its design gate BLOCKED.
-SYN-049
-is PARTIAL and remains closed to new Defect A/Defect B production edits.
+SYN-050 is the single ACTIVE primary task. Its design investigation is
+complete, but implementation is blocked pending a trusted provider identity
+contract. SYN-049 is PARTIAL and remains closed to new Defect A/Defect B
+production edits; its implementation and direct scoped acceptance are complete,
+but its original whole-WorkGroup terminalization criterion was not met.
 SYN-050 covers only the separate provider-session continuity defect observed
 when a Codex MCP process restarts and the same conversation returns with a new
 connection identity.
@@ -15,7 +17,7 @@ does not receive Codex conversation metadata; the hook sees it separately; and
 the static Codex MCP configuration provides no dynamic identity. The existing
 recovery path is an audited transfer to a new participant/intent, not
 same-session reattachment. Keep exact connection authority and
-participant/session fencing intact. ADR-0055 records the blocked decision;
+participant/session fencing intact. ADR-0055 records the design-gate result;
 production changes require a provider-supplied identity or equivalent audited
 continuity proof first.
 

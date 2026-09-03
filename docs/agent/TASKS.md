@@ -67,23 +67,26 @@
 
 ## SYN-049 verification outcome — 2026-09-03
 
-The clean rebuilt artifact was hash-matched to the worker runtime. Defect A
-focused and real multi-mutation completion evidence passed. Defect B passed the
-real MCP admission, durable reload, `NEEDS_CAPABILITY`, and existing
-capability-publication path; no dependency production edit was required. The
-fresh two-worker run remains PARTIAL because a separate post-compliance
-review/session lifecycle stall prevented Worker B's final finish and WorkGroup
-terminalization. Preserve that fixture and do not redesign review/Doctor under
-SYN-049.
+The SYN-049 implementation and its direct Defect A/Defect B acceptance are
+complete: the clean rebuilt artifact was hash-matched to the worker runtime,
+Defect A focused and real multi-mutation completion evidence passed, and
+Defect B passed real MCP admission, durable reload, `NEEDS_CAPABILITY`, and the
+existing capability-publication path without a dependency production edit.
+SYN-049 remains PARTIAL because its original acceptance explicitly requires
+final Worker B completion and WorkGroup terminalization. The fresh run stopped
+at a separate post-compliance provider/session lifecycle defect, now isolated
+under SYN-050. SYN-049 closure must not claim provider-session continuity;
+preserve the fixture and do not redesign review/Doctor under SYN-049.
 
 ## SYN-050
 
 ### Provider-session continuity across MCP process restart — 2026-09-03
 
 - Status: ACTIVE
-- Coordination state: DESIGN_GATE_BLOCKED pending a trusted
-  provider-to-stdio-MCP conversation identity or equivalent audited continuity
-  proof
+- Lifecycle state: DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED
+- Coordination state: design investigation complete; implementation is blocked
+  pending a trusted provider-to-stdio-MCP conversation identity or equivalent
+  audited continuity proof
 - Scope: determine and implement the smallest safe mechanism that lets the
   same Codex provider conversation recover its existing Synesis session
   authority after an MCP process restart, while rejecting unrelated,

@@ -1,3 +1,16 @@
+# 2026-09-03 — SYN-049/SYN-050 bookkeeping reconciliation
+
+- Kept SYN-049 PARTIAL because its original acceptance requires final Worker B
+  completion and WorkGroup terminalization. Recorded that Defect A and Defect B
+  implementation/direct acceptance passed and that the remaining failure is the
+  separate SYN-050 provider-session continuity defect.
+- Recorded SYN-050 as design investigation complete / implementation blocked.
+  The source trace found no trusted conversation identity at the ordinary
+  Codex stdio MCP boundary, so no production continuity design was selected.
+- No production code, durable state, provider/session recovery, or preserved
+  fixture changed. Exact next action is a future continuity-design session
+  after a trusted provider identity contract is available.
+
 # 2026-09-03 — SYN-050 provider-session continuity planning
 
 - Promoted the separate post-SYN-049 MCP restart continuity defect to bounded

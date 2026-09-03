@@ -1,12 +1,13 @@
 # Goal
 
 - Current bounded follow-up (2026-09-03): SYN-049 remains PARTIAL with Defect A
-  and Defect B preserved separately. SYN-050 traces provider-session
-  continuity across ordinary Codex stdio MCP restart and is BLOCKED at the
-  design gate because the MCP process receives no trusted conversation
-  identity and the existing recovery path is a new-participant transfer. Do
-  not reopen SYN-049, weaken exact authority, rewrite durable state, copy
-  worktrees, or implement speculative continuity. Evidence:
+  and Defect B preserved separately; its scoped implementation and direct
+  acceptance are complete, but the original whole-WorkGroup criterion was not
+  met. SYN-050's provider-session continuity design investigation is complete
+  and implementation is blocked because the MCP process receives no trusted
+  conversation identity and the existing recovery path is a new-participant
+  transfer. Do not reopen SYN-049, weaken exact authority, rewrite durable
+  state, copy worktrees, or implement speculative continuity. Evidence:
   `docs/evidence/syn050-provider-session-continuity-trace-2026-09-03.md`.
 - Exact continuation: obtain or verify a provider integration contract that
   supplies an exact per-conversation MCP identity or equivalent audited

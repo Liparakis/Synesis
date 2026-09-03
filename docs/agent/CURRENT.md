@@ -3,8 +3,9 @@
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050
-- Status: ACTIVE; design gate blocked pending a trusted provider-to-stdio-MCP
-  conversation identity or equivalent audited continuity proof
+- Status: ACTIVE; design investigation complete, implementation blocked pending
+  a trusted provider-to-stdio-MCP conversation identity or equivalent audited
+  continuity proof
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
   and are not reopened.
 - Scope: trace and, only after an accepted ADR design, implement the smallest
@@ -28,8 +29,9 @@ when supplied and otherwise generates a random UUID. The MCP handshake does
 not consume Codex thread/conversation metadata. The Codex hook sees that
 metadata in a separate process, while the static Codex MCP configuration does
 not pass it to MCP. The existing recovery path is an audited transfer to a
-new participant/intent, not same-session reattachment. ADR-0055 is blocked at
-this trust-boundary decision; no production files changed.
+new participant/intent, not same-session reattachment. ADR-0055 records the
+blocked implementation decision at this trust boundary; no production files
+changed.
 
 ## Acceptance boundary
 
@@ -41,7 +43,7 @@ the existing explicit-completion, review, integration, and ten-tool lifecycle.
 
 No latest-session fallback, inferred authority, durable-state rewrite, worktree
 copy, manual Synesis identifier, new MCP tool, or unrelated Review/Doctor
-redesign is permitted. ADR-0055 is the design gate.
+redesign is permitted. ADR-0055 records the completed design-gate result.
 
 ## SYN-049 Pre-release explicit completion and dependency actionability — 2026-09-02
 

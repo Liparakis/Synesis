@@ -2,7 +2,9 @@
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task, with its design gate BLOCKED.
+SYN-050 is the single ACTIVE primary task. Its design investigation is
+complete; implementation is blocked pending a trusted provider identity
+contract.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.

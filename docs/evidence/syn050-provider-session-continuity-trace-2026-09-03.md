@@ -1,7 +1,7 @@
 # SYN-050 provider-session continuity source trace — 2026-09-03
 
-Status: BLOCKED at the design gate; no production code or historical fixture
-was changed.
+Status: DESIGN COMPLETE / IMPLEMENTATION BLOCKED; no production code or
+historical fixture was changed.
 
 ## Scope and provenance
 
@@ -91,8 +91,9 @@ fix at `AgentNextActionService` or a fallback in `SessionAuthorityResolver`.
 
 ## Decision and stop condition
 
-No production design is accepted and no production implementation is started.
-The hard stop is: a safe continuity proof cannot be established at the normal
+The design-gate investigation is complete; no production design is accepted
+and no production implementation is started. The hard stop is: a safe
+continuity proof cannot be established at the normal
 Codex stdio MCP boundary, and the existing recovery path is semantically
 different. SYN-050 is blocked pending a provider integration contract that
 supplies an exact per-conversation identity or an equivalent audited,
