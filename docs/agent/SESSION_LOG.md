@@ -1,3 +1,28 @@
+# 2026-09-03 — SYN-050 stock Codex isolated-runtime feasibility result
+
+- Continued from clean source HEAD `f17a4628ee86ad4dea5bc6ea23b393b7465e2847`
+  on `master`. This was a disposable feasibility experiment only; no
+  production source, Codex source, provider installation, Synesis durable
+  state, historical fixture, or MCP tool changed.
+- Tested stock `codex-cli 0.145.0` with separate `CODEX_HOME` roots. Static
+  worker-specific MCP `env` and allow-listed `env_vars` both delivered distinct
+  A/B proof digests without cross-worker visibility. Dedicated App Server PIDs,
+  exact thread IDs, and MCP child chains were distinct and concurrent.
+- Same-home exact thread resume passed. Replacing A's configured value before
+  restart delivered only A2 and not A1. Deleting config after load left the
+  live child working; restarting without config left thread resume available
+  but MCP unavailable. A fresh home could not resume the existing thread.
+- Direct static config stores proof plaintext under inherited Windows ACLs;
+  `env_vars` keeps proof out of config while forwarding only the selected
+  process environment variable. Raw-marker scan outside expected static config
+  files found zero hits; no probe processes remained.
+- Result: `PASS-A` for conservative stock-Codex isolated-runtime feasibility;
+  the earlier dynamic child-launch `FAIL` remains valid for shared/dynamic
+  thread-scoped injection. Evidence:
+  `docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`.
+- Exact next action: review/authorize a bounded dedicated-home production
+  implementation slice; do not implement it as part of this spike.
+
 # 2026-09-03 — SYN-050 Codex App Server child-launch boundary result
 
 - Continued from clean source HEAD `189d7198bfd710c997f3ac27b4e1263638a77960`

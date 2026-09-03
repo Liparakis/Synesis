@@ -5,31 +5,33 @@
 SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
 selects Result A (existing core plus a generic runtime-authentication seam).
 `MANAGED_CONTINUITY` is an approved product capability with
-Synesis-supervised Codex App Server as its first target. The managed
-implementation is Result B / `PROTOTYPE_PARTIAL`: the isolated inherited-pipe
-carrier passed, but the real provider boundary did not prove protected proof
-delivery to the exact managed MCP bridge/thread. The version-matched
-`codex-cli 0.145.0` child-launch investigation now classifies the current
-provider boundary as `FAIL`: static command/args/env/cwd reach the child, but
-parent-private environment, thread context, extra handles, and proof do not.
-Ordinary Codex and Claude MCP remain `SESSION_BOUND`; static wrappers and
-model-visible bearers are insufficient.
+Synesis-supervised Codex App Server as its first target. The stock isolated
+runtime experiment is PASS-A at feasibility level: static MCP `env` and
+allow-listed `env_vars` deliver distinct worker values, exact same-home
+resume works, and proof rotation works. The dynamic child-launch boundary
+remains `FAIL`, and a fresh home cannot resume an existing thread. Ordinary
+Codex and Claude MCP remain `SESSION_BOUND`; static wrappers and model-visible
+bearers remain insufficient.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
 
 ## Immediate next action
 
-- Exact next code action: obtain a documented provider-managed private
-  launch/IPC carrier at the Codex `StdioServerLauncher` boundary, then reopen
-  ADR-0055 before any production implementation.
+- Exact next code action: review/authorize a bounded conservative v1
+  implementation using one retained isolated Codex home per logical worker,
+  selected `env_vars`, exact thread resume, and generation rotation; do not
+  implement it in this feasibility pass.
 
 The disposable Codex App Server protected-carrier prototype is complete and is
 recorded in `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
 It passed the isolated 48-assertion inherited-pipe model and the real App
 Server start, shared/dedicated A/B MCP calls, wrong-thread rejection, and exact
-process-restart/thread-resume probe. It did not prove private proof delivery to
-the exact managed MCP bridge/thread. The detailed child-boundary record is
+process-restart/thread-resume probe. It did not prove dynamic private proof
+delivery to the exact managed MCP bridge/thread. The stock isolated-runtime
+PASS-A record is
+`docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`;
+the detailed dynamic child-boundary record is
 `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
 Do not edit production, restart SYN-049, rewrite `.synesis`, copy worktrees,
 invent IDs, weaken exact authority, or redesign Review/Doctor.

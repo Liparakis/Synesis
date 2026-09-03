@@ -1,10 +1,10 @@
 # ADR-0055: Provider-neutral runtime authentication and session continuity
 
 Status: Provider capability model approved; generic core architecture is
-Result A; Codex App Server managed-attachment implementation is Result B /
-PROTOTYPE_PARTIAL after the protected-channel prototype. Ordinary
-Codex/Claude stdio remain SESSION_BOUND. No production code is authorized by
-this ADR.
+Result A; stock Codex isolated-runtime managed delivery is PASS-A at
+feasibility level for the conservative dedicated-home topology. Dynamic
+thread-scoped child injection remains unavailable. Ordinary Codex/Claude stdio
+remain SESSION_BOUND. No production code is authorized by this ADR.
 
 ## Context
 
@@ -132,10 +132,11 @@ a transparent wrapper workaround.
 The bounded follow-up investigation answers the remaining provider question for
 the approved managed target: whether an exact Codex thread can privately carry
 a per-worker attachment proof into the MCP child that App Server launches.
-The result is **FAIL for `codex-cli 0.145.0`**, while the isolated
-Synesis-side inherited-pipe carrier remains a separate PASS. SYN-050 therefore
-remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED`; this result does not
-authorize production managed continuity.
+The result is **FAIL for the dynamic child-launch carrier in `codex-cli
+0.145.0`**, while the isolated Synesis-side inherited-pipe carrier remains a
+separate PASS. This section did not test isolated worker homes or configured
+`env_vars`; that follow-up is recorded below. It did not authorize production
+managed continuity by itself.
 
 Version-matched Codex source shows the following boundary:
 
@@ -167,8 +168,8 @@ operationally viable but not an authentication boundary. The detailed record
 is [`SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).
 
 The conservative one-App-Server-per-worker topology is operationally viable,
-but private proof delivery is not proven and is classified FAIL at the current
-provider boundary. Shared-process multiplexing cannot be treated as a secure
+but dynamic private proof delivery is not proven and is classified FAIL at the
+current provider boundary. Shared-process multiplexing cannot be treated as a secure
 continuity topology without a genuinely thread-scoped carrier. Exact
 `thread/resume` is correlation and lifecycle evidence; it is not sufficient by
 itself to mint a fresh Synesis proof.
@@ -180,6 +181,43 @@ non-model-visible attachment input at `StdioServerLauncher` /
 rotated, generation-scoped context into the exact managed child without using
 static configuration, a command-line bearer, a global secret, or model-visible
 protocol data. No Codex source was patched in this pass.
+
+## Stock Codex isolated-runtime feasibility — 2026-09-03
+
+The bounded follow-up tested the separate hypothesis that static MCP
+configuration becomes per-worker when each logical worker receives its own
+`CODEX_HOME` and dedicated App Server process. The disposable experiment used
+stock `codex-cli 0.145.0`, separate worker homes, distinct exact threads, and
+distinct MCP child chains.
+
+Both supported configured-environment forms passed A/B delivery. A static
+worker-specific MCP `env` value reached child A or B only, and the supported
+allow-list `env_vars = ["SYN050_ATTACHMENT_PROOF"]` forwarded each managed
+App Server's process-private value to its own child. A/B digests were distinct,
+concurrent, and absent from the other worker's child. No global Codex
+configuration was changed.
+
+The same isolated A home resumed the exact A thread after App Server restart.
+Replacing its configured value before restart delivered A2 and not A1. A
+fresh home could not resume the thread, returning `no rollout found`; thread
+history is therefore home-scoped in this stock configuration. Deleting config
+after load did not affect the live child, while restarting without config left
+thread resume available but made the MCP server unavailable.
+
+Direct static `env` stores the proof in plaintext under inherited Windows ACLs.
+The `env_vars` form keeps the proof out of `config.toml` while still placing it
+in the managed App Server/child process environment. This remains within the
+accepted non-compromised-local-OS threat boundary, not a kernel-isolated
+secret. The disposable report and hygiene results are recorded in
+[`SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`](../evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md).
+
+This is **PASS-A feasibility**, not production implementation. The earlier
+child-launch result remains a narrower FAIL for dynamic thread/proof/
+extra-handle ingress and is not contradicted: isolated runtime configuration
+is the carrier in this pass. A future bounded implementation may use one
+retained isolated Codex home per logical worker, selected `env_vars`, exact
+thread resume, and generation rotation, subject to a new implementation task
+and production review.
 
 ## Capability assessment
 
@@ -425,16 +463,12 @@ Synesis manages attachment, provider lifecycle, restart/resume, and fencing;
 it does not choose prompts, reason, plan, allocate arbitrary workers, replace
 Codex UI, or become a harness.
 
-This decision remains **Result B — prototype incomplete**. The disposable
-Codex App Server probe proved process launch, two-thread protocol correlation,
-dedicated concurrent A/B processes, wrong-thread rejection, direct MCP calls,
-and exact `thread/resume`/`thread/read` after process restart. The isolated
-protected carrier passed, but the current provider child-launch boundary is a
-bounded **FAIL** for private proof ingress: its sealed launcher accepts only
-static command/args/env/cwd, clears parent environment, and has no thread,
-proof, or extra-handle input. Managed continuity is therefore unavailable for
-production, and ordinary MCP stays `SESSION_BOUND` until a provider-controlled
-carrier contract exists.
+The provider-neutral decision remains **Result A — existing core plus a generic
+runtime-authentication seam**. The stock isolated-runtime experiment is
+**PASS-A feasibility** for the conservative dedicated-home topology, while the
+dynamic child-launch boundary remains a bounded **FAIL** for thread/proof/
+extra-handle ingress. Production managed continuity was not implemented in
+this pass; ordinary MCP stays `SESSION_BOUND`.
 
 The complete design, prototype result, focused tests, acceptance plan,
 unknowns, and evidence classification are recorded in

@@ -3,11 +3,11 @@
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050
-- Status: ACTIVE; DESIGN_APPROVED / PROTOTYPE_PARTIAL /
-  IMPLEMENTATION_BLOCKED. The provider-neutral core architecture is Result A;
-  the managed Codex implementation is Result B because the real provider
-  boundary did not prove protected proof delivery. Production code is not
-  authorized in this prototype-only pass.
+- Status: ACTIVE; DESIGN_APPROVED / PASS-A FEASIBILITY / NO PRODUCTION EDITS.
+  The provider-neutral core architecture is Result A. The stock Codex
+  isolated-runtime experiment is PASS-A for conservative one-process-per-
+  worker managed delivery; production continuity is still not implemented in
+  this feasibility pass.
 - Capability decision: ordinary Codex and Claude stdio remain
   `SESSION_BOUND`; `MANAGED_CONTINUITY` is approved as a supported profile and
   Synesis-supervised Codex App Server is its first target. A future provider-
@@ -16,6 +16,7 @@
   continuity. Evidence:
   `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`,
   `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`,
+  `docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`,
   `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`, and
   `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
@@ -28,18 +29,17 @@
 
 ## Immediate next action
 
-The bounded Codex App Server child-launch investigation is complete and
-recorded in `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
-The isolated inherited-pipe carrier remains a separate PASS. The real
-`codex-cli 0.145.0` probe passed shared/dedicated topology, exact-thread MCP
-routing, concurrent A/B processes, and A1-to-A2 exact-thread resume, but the
-current child launcher accepts only static command/args/env/cwd, clears the
-parent environment, and provides no thread/proof/extra-handle ingress. The
-child-boundary classification is therefore `FAIL`; the exact next action is
-to obtain or implement (in a future authorized upstream/provider task) a
-documented provider-managed private launch/IPC carrier, then reopen ADR-0055.
-Do not make production continuity edits, restart or re-admit the preserved
-SYN-049 fixture, or weaken exact authority.
+The bounded stock-Codex isolated-runtime investigation is complete and
+recorded in `docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`.
+Dedicated `CODEX_HOME` roots, worker-specific MCP configuration, selected
+`env_vars`, concurrent A/B processes, exact same-home thread resume, and
+A1-to-A2 proof rotation passed. A fresh home cannot resume an existing thread,
+so each logical worker must retain its own provider home/thread store. The
+earlier dynamic child-launch result remains a narrower `FAIL`: stock Codex
+still has no dynamic thread/proof/extra-handle ingress. The current stock
+isolated-runtime result is `PASS-A` for conservative v1 feasibility; do not
+make production continuity edits, restart or re-admit the preserved SYN-049
+fixture, or weaken exact authority.
 
 ## SYN-050 trace result
 

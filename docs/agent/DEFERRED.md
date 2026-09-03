@@ -21,10 +21,11 @@ and formally approves `MANAGED_CONTINUITY` as a supported product profile, with
 Synesis-supervised Codex App Server as the first target. The isolated
 inherited-pipe model passed. The version-matched real Codex App Server
 child-launch investigation passed topology and exact-thread restart/resume,
-but the current provider boundary failed to deliver protected non-model-visible
-attachment context to the exact managed MCP bridge/thread. The child-boundary
-result is `FAIL`; the managed implementation remains Result B /
-`PROTOTYPE_PARTIAL`, and ordinary Codex and Claude stdio remain
+while its dynamic private-context boundary remains `FAIL`. The follow-up stock
+isolated-runtime experiment passed conservative dedicated-home delivery, exact
+same-home resume, and proof rotation; its classification is `PASS-A` at
+feasibility level. The managed implementation remains unimplemented, and
+ordinary Codex and Claude stdio remain
 `SESSION_BOUND`. The existing recovery path remains semantically different
 from same-session attachment.
 The strict exact-connection fence, monotonic provider lifecycle, and ten-tool
@@ -33,8 +34,9 @@ redesign is activated. Static wrappers, anonymous brokers, process lineage,
 and model-visible bearers do not establish continuity. Evidence:
 `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`,
 `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`,
-`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`, and
-`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`.
+`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`,
+`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`,
+and `docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`.
 
 ## SYN-049 review — 2026-09-02
 

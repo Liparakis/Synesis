@@ -6,9 +6,9 @@ SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
 selects Result A (existing core plus a generic runtime-authentication seam).
 The product capability model now formally approves `MANAGED_CONTINUITY` with
 Synesis-supervised Codex App Server as the first target. The managed
-implementation is Result B / `PROTOTYPE_PARTIAL`: the isolated protected
-carrier passed, but the real provider boundary did not prove protected proof
-delivery to the exact managed MCP bridge/thread. Ordinary Codex and Claude
+implementation is now PASS-A at feasibility level for dedicated stock Codex
+runtime homes: isolated configured-environment delivery passed, while dynamic
+provider-thread injection remains unavailable. Ordinary Codex and Claude
 stdio remain `SESSION_BOUND`; a future provider-native assertion path is
 `NATIVE_CONTINUITY`. SYN-049
 is PARTIAL and remains closed to new Defect A/Defect B production edits; its
@@ -30,15 +30,13 @@ provider-controlled, non-model-visible carrier for the same conversation to
 present it after restart. Keep exact connection authority and
 participant/session fencing intact. ADR-0055 and
 `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` record the
-approved managed profile, Result A core architecture, and the Result B
-prototype result; production changes remain blocked pending a provider-
-controlled protected carrier. The follow-on child-launch investigation is
-now complete: the version-matched `codex-cli 0.145.0` source and disposable
-probe show that the thread-owned MCP runtime launches configured stdio
-children through a sealed launcher that accepts static command/args/env/cwd,
-clears the parent environment, and supplies no thread, proof, or extra-handle
-input. The current child-boundary result is `FAIL`, while the overall SYN-050
-managed design remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED`.
+approved managed profile and Result A core architecture. The follow-on
+child-launch investigation is complete: dynamic thread, proof, and
+extra-handle input remains unavailable, but isolated homes with static MCP
+`env` or allow-listed `env_vars` deliver distinct worker values. The dynamic
+child-boundary result remains `FAIL`; the stock isolated-runtime result is
+`PASS-A` for conservative dedicated-process feasibility. Production
+continuity is still not implemented.
 The earlier capability trace is
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
 and the provider-boundary evidence is
@@ -53,18 +51,16 @@ manually changed. No new MCP tool or Review/Doctor redesign is in scope.
 
 ## Immediate next action
 
-The disposable Codex App Server child-launch investigation is complete. Its
-isolated inherited-pipe harness passed 48 assertions, and the real Codex
-probe passed one-process/two-thread routing, concurrent dedicated A/B
-processes, wrong-thread rejection, A1→A2 exact process-restart/thread-resume,
-and B continuity while A restarted. It did not deliver private proof to the
-exact managed MCP child: parent-only environment was cleared and no thread or
-attachment context reached the wrapper or child. Read
-`docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`;
-the exact next action is to obtain a documented provider-managed private
-launch/IPC carrier at the upstream stdio launcher boundary before reopening
-ADR-0055. Do not edit production, restart SYN-049, rewrite durable state, copy
-worktrees, invent IDs, or weaken exact authority.
+The disposable stock-Codex isolated-runtime investigation is complete. Its
+static `env` and allow-listed `env_vars` A/B checks passed, same-home exact
+thread resume passed, A1→A2 proof rotation passed, and a fresh home correctly
+failed to resume the existing thread. Read
+`docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`;
+the exact next action is to review and explicitly authorize a bounded
+production managed-launch implementation using dedicated homes, retained
+thread state, and a private carrier selected under the accepted threat model.
+Do not edit production in this spike, restart SYN-049, rewrite durable state,
+copy worktrees, invent IDs, or weaken exact authority.
 
 ## SYN-050 protected-carrier prototype result
 

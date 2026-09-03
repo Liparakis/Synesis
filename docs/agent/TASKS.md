@@ -83,15 +83,14 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 ### Provider-session continuity across MCP process restart — 2026-09-03
 
 - Status: ACTIVE
-- Lifecycle state: DESIGN_APPROVED / PROTOTYPE_PARTIAL /
-  IMPLEMENTATION_BLOCKED; production implementation remains blocked because
-  the provider boundary did not prove delivery of a protected per-worker
-  attachment proof to the exact managed MCP bridge/thread
+- Lifecycle state: DESIGN_APPROVED / PASS-A FEASIBILITY / NO PRODUCTION EDITS;
+  stock isolated-runtime feasibility passed for conservative dedicated-home
+  delivery, while dynamic thread-scoped child ingress remains unavailable
 - Coordination state: the provider-neutral core architecture is Result A;
   `MANAGED_CONTINUITY` is approved as a product capability with Codex App
-  Server as its first target. This managed-path design is Result B until a
-  private, non-model-visible provider-boundary carrier is proven. Ordinary
-  Codex and Claude MCP remain `SESSION_BOUND`.
+  Server as its first target. Conservative stock-Codex dedicated-home
+  delivery is `PASS-A` at feasibility level; ordinary Codex and Claude MCP
+  remain `SESSION_BOUND`, and production continuity is not implemented here.
 - Scope: define and, only after the required provider contract exists,
   implement the smallest provider-neutral runtime-authentication mechanism that
   lets an authenticated replacement runtime recover an existing Synesis logical
@@ -119,24 +118,34 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   launcher accepts only static command/args/env/cwd, clears the App Server
   environment before local child launch, and exposes no thread, proof, or
   extra-handle input. Exact thread resume passed, but fresh successor proof
-  delivery failed at this boundary. The child-launch result is therefore
-  `FAIL`; the overall managed design remains `PROTOTYPE_PARTIAL` and
-  production remains blocked. Evidence is
+  dynamic successor proof delivery failed at this boundary. The dynamic
+  child-launch result is therefore `FAIL`. Evidence is
   `docs/evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`,
-  with the earlier protected-carrier, feasibility, and managed-design records
-  retained.
+  with the earlier protected-carrier, feasibility, managed-design, and stock
+  isolated-runtime records retained.
+- Stock isolated-runtime result: separate `CODEX_HOME` roots and worker
+  specific MCP configuration delivered distinct A/B proof digests through
+  static `env` and allow-listed `env_vars`. Same-home exact thread resume and
+  A1→A2 proof rotation passed. Deleting config after load left the live child
+  working; restarting without config left thread resume available but MCP
+  unavailable; a fresh home could not resume A's thread. Direct static config
+  is plaintext under inherited ACLs; `env_vars` keeps the proof out of config.
+  Result: `PASS-A` feasibility for dedicated one-process-per-worker delivery.
+  Evidence:
+  `docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`.
 - Trace result: the normal MCP process receives only an explicit connection
   environment value or a random UUID. The Codex hook sees conversation/session
   evidence, but does not pass it to ordinary MCP; static configuration exposes
   no dynamic thread identity. In the App Server path, the thread-owned MCP
   runtime launches configured stdio children through the sealed launcher
   boundary; the child receives configured environment only, not the parent
-  process-private environment or thread context. The existing recovery path is
+  process-private environment unless the config explicitly allow-lists it via
+  `env_vars`, and never thread context. The existing recovery path is
   a single-use, snapshot-backed transfer to a new participant/intent, not
   same-session reattachment. A server-side rotating capability is expressible,
-  but no current child-launch carrier delivers it privately. Result A is the
-  smallest source-backed core architecture, while ordinary stdio and the
-  current managed child boundary remain blocked. The expanded
+  while dynamic child-launch delivery remains unavailable. Result A is the
+  smallest source-backed core architecture; dedicated isolated stock Codex
+  feasibility is now PASS-A, while ordinary stdio remains `SESSION_BOUND`. The expanded
   source trace is
   `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
 - Design decision: Result A for the provider-neutral core and Result B for the

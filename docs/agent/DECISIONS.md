@@ -70,10 +70,12 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   `NATIVE_CONTINUITY`, and Synesis-supervised Codex App Server is the first
   `MANAGED_CONTINUITY` target. The isolated inherited-pipe prototype passed.
   The version-matched `codex-cli 0.145.0` child-launch investigation passed
-  topology and exact-thread restart/resume but classified the current private
-  proof ingress as `FAIL`; the managed implementation remains Result B /
-  `PROTOTYPE_PARTIAL` and production remains blocked. See the protected-carrier,
-  managed-attachment, provider-boundary, and child-launch evidence.
+  topology and exact-thread restart/resume but classified dynamic private
+  proof ingress as `FAIL`. A follow-up stock isolated-runtime experiment
+  classified conservative dedicated-home delivery as `PASS-A` at feasibility
+  level, with proof rotation and exact same-home resume. Production code was
+  not changed. See the protected-carrier, managed-attachment,
+  provider-boundary, child-launch, and isolated-runtime evidence.
 - ADR-0054: Preserve structured capability dependencies through admission —
   accepted for SYN-049; verify the rebuilt MCP path first and reuse the
   existing durable capability lifecycle, patching only a proven boundary.
