@@ -1,5 +1,17 @@
 # Goal
 
+- Current bounded implementation (2026-09-03): SYN-051 is the single ACTIVE
+  task for stock-Codex `MANAGED_CONTINUITY`. Implement one dedicated retained
+  `CODEX_HOME` and App Server per logical worker, exact thread resume, selected
+  `env_vars` proof delivery, hash-only durable attachment state, proof
+  rotation, and monotonic generation fencing through existing strict authority
+  seams. First map insertion points, then implement and verify safe isolated
+  authentication, an authenticated model turn, restart/reattachment, and
+  stale-generation rejection. Preserve SYN-049, SYN-050 evidence, ordinary
+  `SESSION_BOUND` providers, exactly ten MCP tools, and all historical state.
+  Do not weaken authority, copy worktrees, edit `.synesis`, invent IDs, push,
+  tag, release, or redesign Review/Doctor.
+
 - Current bounded follow-up (2026-09-03): SYN-049 remains PARTIAL with Defect A
   and Defect B preserved separately; its scoped implementation and direct
   acceptance are complete, but the original whole-WorkGroup criterion was not

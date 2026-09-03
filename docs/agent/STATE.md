@@ -1,9 +1,33 @@
 # State
 
+## SYN-051 bounded stock-Codex MANAGED_CONTINUITY implementation — 2026-09-03
+
+SYN-051 is now the single ACTIVE primary task. The implementation is bounded
+to the approved stock-Codex App Server profile: dedicated retained runtime
+homes, dedicated processes, exact thread resume, selected `env_vars` proof
+delivery, hash-only durable proof, proof rotation, and monotonic attachment
+generation fencing. ADR-0056 records the decision. SYN-050 is preserved as the
+PASS-A feasibility gate; SYN-049 remains PARTIAL and its fixture is evidence
+only.
+
+Before production mutation, map the existing runtime-authentication,
+`ProjectRuntimeHost`, `BindingRuntime`, Codex lifecycle, binding/lease,
+`SessionAuthorityResolver`, CLI, and guidance seams. Preserve exact authority,
+the ten-tool MCP surface, ordinary `SESSION_BOUND` behavior, and all historical
+fixtures. Stop if safe isolated Codex authentication or exact thread resume
+cannot be delivered without plaintext proof persistence or an authority
+fallback.
+
+## Immediate next action
+
+Complete the source-backed insertion-point map, record it in the SYN-051
+checkpoint/evidence, then implement the smallest provider-neutral attachment
+state/fencing slice followed by the Codex managed-home adapter.
+
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
-selects Result A (existing core plus a generic runtime-authentication seam).
+SYN-050 is complete as a feasibility/design gate. Its provider-neutral core
+design selects Result A (existing core plus a generic runtime-authentication seam).
 The product capability model now formally approves `MANAGED_CONTINUITY` with
 Synesis-supervised Codex App Server as the first target. The managed
 implementation is now PASS-A at feasibility level for dedicated stock Codex

@@ -79,3 +79,7 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 - ADR-0054: Preserve structured capability dependencies through admission —
   accepted for SYN-049; verify the rebuilt MCP path first and reuse the
   existing durable capability lifecycle, patching only a proven boundary.
+- ADR-0056: Bounded stock-Codex `MANAGED_CONTINUITY` implementation — accepted
+  for SYN-051; dedicated retained Codex homes and App Servers, exact thread
+  resume, selected `env_vars` proof delivery, rotation, and generation fencing
+  behind the existing provider-neutral authority seams.

@@ -1,9 +1,27 @@
 # Next Session
 
+## SYN-051 bounded stock-Codex MANAGED_CONTINUITY implementation — 2026-09-03
+
+SYN-051 is the single ACTIVE task. Implement only the approved Codex App
+Server managed profile using dedicated retained `CODEX_HOME` roots, dedicated
+processes, exact thread resume, selected `env_vars` proof delivery, hash-only
+durable proof, rotation, and generation fencing. Reuse existing provider,
+runtime, binding, lease, and strict authority seams. Do not touch Claude,
+ordinary `SESSION_BOUND` behavior, Review/Doctor, SYN-049 fixtures, or
+historical durable state.
+
+## Immediate next action
+
+Inspect and map the existing runtime-authentication, `ProjectRuntimeHost`,
+`BindingRuntime`, `CodexAppServerLifecycleService`, binding/lease,
+`SessionAuthorityResolver`, CLI/provider mode, and guidance seams. Record the
+smallest insertion points before production edits. Stop if safe isolated Codex
+authentication, exact thread resume, or proof hygiene cannot be achieved.
+
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
-selects Result A (existing core plus a generic runtime-authentication seam).
+SYN-050 is complete as a feasibility/design gate. Its provider-neutral core
+design selects Result A (existing core plus a generic runtime-authentication seam).
 `MANAGED_CONTINUITY` is an approved product capability with
 Synesis-supervised Codex App Server as its first target. The stock isolated
 runtime experiment is PASS-A at feasibility level: static MCP `env` and

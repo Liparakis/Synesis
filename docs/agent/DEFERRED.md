@@ -13,6 +13,17 @@ Promotion requires an activation trigger, the listed evidence, an explicit task
 with acceptance criteria, and exactly one `ACTIVE` task. Historical IDs and
 dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/DEFERRED_FUNCTIONALITY_HISTORY.md).
 
+## SYN-051 review — 2026-09-03
+
+SYN-051 activates only the already approved bounded stock-Codex
+`MANAGED_CONTINUITY` implementation from ADR-0055/ADR-0056. It does not
+activate Claude continuity, anonymous continuity, shared App Servers, arbitrary
+fleet launching, connectivity work, or Review/Doctor redesign. The PASS-A
+isolated-runtime evidence is the feasibility gate; matched build and
+installation provenance, safe isolated authentication, and real authenticated
+restart acceptance remain implementation gates. No second identity graph or
+deferred capability is introduced.
+
 ## SYN-050 review — 2026-09-03
 
 SYN-050 does not activate a broad deferred capability or a new identity graph.

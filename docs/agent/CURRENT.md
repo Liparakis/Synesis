@@ -1,9 +1,34 @@
 # Current Task
 
+## SYN-051 Bounded stock-Codex MANAGED_CONTINUITY implementation — 2026-09-03
+
+- Task ID: SYN-051
+- Status: ACTIVE; production implementation authorized after SYN-050 PASS-A
+  feasibility and ADR-0056 acceptance.
+- Scope: Codex App Server only; one retained dedicated `CODEX_HOME` and one
+  dedicated App Server per logical worker; exact thread resume; selected
+  `env_vars` proof delivery; hash-only durable proof; rotation and monotonic
+  generation fencing; existing strict authority and lifecycle seams.
+- Non-goals: Claude, anonymous continuity, shared App Server, arbitrary fleet
+  launch, upstream Codex changes, Review/Doctor redesign, SYN-049 closure,
+  manual IDs/state, worktree copying, and push/tag/release.
+- Required gate: inspect and reuse existing runtime/provider/binding/authority
+  seams before edits, then prove safe isolated Codex authentication, matching
+  artifact provenance, real authenticated model turn, exact restart/resume,
+  stale-generation rejection, and preservation of logical coordination state.
+
+## Immediate next action
+
+Inspect the existing runtime-authentication, provider-launch, Codex App Server,
+binding/lease, authority, CLI/provider-mode, and generated-guidance seams. Map
+the smallest production insertion points and their owning modules, then begin
+the first implementation slice only after that map is recorded.
+
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050
-- Status: ACTIVE; DESIGN_APPROVED / PASS-A FEASIBILITY / NO PRODUCTION EDITS.
+- Status: DONE / FEASIBILITY ACCEPTED; DESIGN_APPROVED / PASS-A FEASIBILITY /
+  NO PRODUCTION EDITS.
   The provider-neutral core architecture is Result A. The stock Codex
   isolated-runtime experiment is PASS-A for conservative one-process-per-
   worker managed delivery; production continuity is still not implemented in

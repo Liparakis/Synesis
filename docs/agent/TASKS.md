@@ -1,5 +1,54 @@
 # Tasks
 
+## SYN-051
+
+### Bounded stock-Codex MANAGED_CONTINUITY implementation — 2026-09-03
+
+- Status: ACTIVE
+- Scope: implement the approved stock-Codex `MANAGED_CONTINUITY` profile using
+  one dedicated retained `CODEX_HOME` and one dedicated Codex App Server per
+  logical worker, exact thread resume, selected `env_vars` proof delivery,
+  cryptographically random hash-only attachment proof, proof rotation, and
+  monotonic attachment-generation fencing. Reuse the existing provider-neutral
+  runtime-authentication seam, `ProjectRuntimeHost`, `BindingRuntime`,
+  `CodexAppServerLifecycleService`, and strict `SessionAuthorityResolver`
+  where applicable; do not create a second identity graph.
+- Acceptance: establish safe isolated Codex authentication; authenticate first
+  attachment and exact-thread continuation; preserve participant, WorkIntent,
+  claims, and WorkGroup without re-admission; reject wrong, stale, replayed,
+  concurrent, live-old, ambiguous, and terminal attachments; rotate proof
+  atomically; retain and safely clean managed homes; distinguish
+  `MANAGED_CONTINUITY` from ordinary `SESSION_BOUND`; keep exactly ten MCP
+  tools; and pass focused tests plus a fresh real two-worker stock-Codex
+  restart/continuation acceptance with an authenticated model turn.
+- Required evidence: source/build/install artifact provenance and matching
+  hashes; dedicated A/B homes/processes/threads/proofs; no raw proof in config,
+  command line, repository, prompts, output, logs, exceptions, Doctor, or
+  audit; exact restart generation N→N+1; old-generation rejection; and no
+  duplicate participant, intent, claims, or WorkGroup.
+- Boundaries: Codex only; no Claude implementation, anonymous continuity,
+  upstream Codex patch, shared App Server, arbitrary fleet launcher, new MCP
+  tool, Review/Doctor redesign, SYN-049 closure, manual IDs/state, worktree
+  copying, metadata reset, or authority fallback. Do not push, tag, or release.
+- Dependencies: SYN-050 PASS-A stock-Codex feasibility; ADR-0055; existing
+  runtime/provider, binding, lease, authority, MCP, lifecycle, and ten-tool
+  contract seams.
+- Deferred-register review: no broad deferred capability is activated; this is
+  the bounded implementation of the already approved managed Codex profile.
+- Implementation order: (1) inspect existing runtime-authentication,
+  provider-launch, binding, lease, authority, CLI, and documentation seams and
+  update durable planning; (2) implement provider-neutral attachment state and
+  fencing; (3) implement the Codex managed home/auth/launcher adapter and
+  user-facing mode; (4) add focused security, race, restart, ordinary-mode,
+  and ten-tool tests; (5) rebuild/install and record matched provenance; (6)
+  run fresh real managed A/B and authenticated restart acceptance; (7) update
+  evidence/docs, checkpoint, validate, and create bounded commits.
+- Stop conditions: safe isolated Codex authentication cannot be achieved;
+  raw proof must persist in plaintext; exact thread resume is unreliable;
+  `SessionAuthorityResolver` would need weakening; multiple workers need one
+  App Server; an eleventh tool is needed; historical state needs rewriting; or
+  acceptance requires worktree copying or a lifecycle bypass.
+
 ## SYN-049
 
 ### Pre-release explicit completion and dependency actionability — 2026-09-02
@@ -82,7 +131,7 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 
 ### Provider-session continuity across MCP process restart — 2026-09-03
 
-- Status: ACTIVE
+- Status: DONE / FEASIBILITY ACCEPTED; implementation promoted to SYN-051
 - Lifecycle state: DESIGN_APPROVED / PASS-A FEASIBILITY / NO PRODUCTION EDITS;
   stock isolated-runtime feasibility passed for conservative dedicated-home
   delivery, while dynamic thread-scoped child ingress remains unavailable
