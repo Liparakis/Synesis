@@ -4,8 +4,12 @@
 
 SYN-050 is the single ACTIVE primary task. Its provider-neutral design
 investigation selects Result A (existing core plus a generic runtime-authentication
-seam), but implementation is blocked pending a trusted provider identity or
-equivalent non-model-visible continuity contract. SYN-049
+seam), but implementation is blocked pending a trusted provider identity,
+equivalent non-model-visible continuity contract, or explicitly accepted
+Synesis-managed launch channel. The completed feasibility spike classifies
+ordinary Codex and Claude stdio as D (provider support required) and the
+Synesis-supervised Codex App Server / future managed Claude paths as C
+candidates only. SYN-049
 is PARTIAL and remains closed to new Defect A/Defect B production edits; its
 implementation and direct scoped acceptance are complete, but its original
 whole-WorkGroup terminalization criterion was not met.
@@ -13,7 +17,8 @@ SYN-050 covers only the separate provider-session continuity defect observed
 when a Codex MCP process restarts and the same conversation returns with a new
 connection identity.
 
-The source reconstruction is complete. `SynesisMcpServer` generates a random
+The source reconstruction and provider-boundary feasibility are complete.
+`SynesisMcpServer` generates a random
 connection identity unless a launcher supplies one; the MCP initialize path
 does not receive Codex conversation metadata; the hook sees it separately; and
 the static Codex MCP configuration provides no dynamic identity. The existing
@@ -25,7 +30,8 @@ present it after restart. Keep exact connection authority and
 participant/session fencing intact. ADR-0055 and
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
 record Result A and the current ordinary-Codex implementation gate; production
-changes require the provider primitive first.
+changes require the provider primitive first. Evidence:
+`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 
 The preserved fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`
@@ -35,11 +41,12 @@ manually changed. No new MCP tool or Review/Doctor redesign is in scope.
 
 ## Immediate next action
 
-Obtain or verify the provider integration contract that will supply an exact
-per-conversation MCP identity or equivalent non-model-visible audited
-continuity proof. Resume SYN-050 implementation planning only after that trust
-input exists; do not edit production, restart SYN-049, rewrite durable state,
-copy worktrees, invent IDs, or weaken exact authority.
+Obtain or verify either the provider integration contract that will supply an
+exact per-conversation MCP identity/equivalent non-model-visible audited
+continuity proof, or an explicitly accepted Synesis-managed launch channel.
+Resume SYN-050 implementation planning only after that trust input exists; do
+not edit production, restart SYN-049, rewrite durable state, copy worktrees,
+invent IDs, or weaken exact authority.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

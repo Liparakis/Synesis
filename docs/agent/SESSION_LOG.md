@@ -1,3 +1,28 @@
+# 2026-09-03 — SYN-050 provider-boundary feasibility spike
+
+- Completed the bounded provider-boundary feasibility investigation from clean
+  source HEAD `8998a528734e480be0f2bb505722310134d0290f` without changing
+  production source, provider configuration, durable state, or historical
+  fixtures.
+- Verified local Codex `0.145.0` ordinary MCP is static stdio with no trusted
+  per-conversation input; Codex App Server is a separate Synesis-supervised
+  exact-thread/resume candidate. Verified Claude Code `2.1.220` ordinary MCP
+  has static configuration/project-root inputs while hook session metadata is
+  not automatically carried into MCP.
+- Classified ordinary Codex and Claude stdio as D (provider support required).
+  Classified Synesis-managed launch/App Server paths as C candidates only.
+  Static wrappers, anonymous brokers, process lineage, and model-visible
+  bearers do not solve the continuity proof.
+- Recorded the full matrix, trust-root analysis, restart/loss behavior, and
+  bounded future plan in
+  `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md` and
+  linked it from ADR-0055 and all current-state records. SYN-050 remains
+  DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED; no production implementation is
+  authorized.
+- Exact next action: obtain or explicitly accept a provider-authenticated or
+  genuinely Synesis-managed continuity primitive, then re-open ADR-0055 before
+  implementation.
+
 # 2026-09-03 — SYN-050 provider-neutral runtime authentication design
 
 - Re-ran the bounded architecture pass from clean source HEAD

@@ -70,7 +70,9 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   server-side rotating capability is expressible but cannot be safely carried
   by the current provider, and the existing audited recovery path is a
   new-participant transfer rather than same-session reattachment. See the
-  expanded capability design evidence.
+  expanded capability design evidence. The provider-boundary feasibility spike
+  classifies ordinary Codex/Claude stdio as D and managed-launch paths as C
+  candidates; see the feasibility evidence.
 - ADR-0054: Preserve structured capability dependencies through admission —
   accepted for SYN-049; verify the rebuilt MCP path first and reuse the
   existing durable capability lifecycle, patching only a proven boundary.

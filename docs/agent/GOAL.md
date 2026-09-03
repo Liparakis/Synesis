@@ -12,6 +12,12 @@
   rewrite durable state, copy worktrees, or implement speculative continuity.
   Evidence:
   `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
+- Provider-boundary feasibility (2026-09-03): ordinary Codex and Claude stdio
+  are D (provider support required); Synesis-managed launch paths are C
+  candidates only. Static wrappers, anonymous brokers, process lineage, and
+  model-visible bearers do not establish same-conversation continuity. Full
+  evidence:
+  `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 - Exact continuation: obtain or verify a provider integration contract that
   supplies an exact per-conversation MCP identity, equivalent non-model-visible
   audited continuity proof, or a genuinely Synesis-managed attachment channel;

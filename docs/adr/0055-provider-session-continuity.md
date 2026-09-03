@@ -81,6 +81,46 @@ same-session reattachment.
 The source trace and expanded capability analysis are recorded in
 [`syn050-provider-session-continuity-capability-design-2026-09-03.md`](../evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md).
 
+## Provider-boundary feasibility spike — 2026-09-03
+
+The bounded provider-boundary spike verified the current installed provider
+edges before proposing any continuity implementation. The local Codex MCP
+entry is a static stdio launcher with no per-conversation thread input. Codex
+hook/session evidence is separate from that MCP process. The local Claude MCP
+boundary likewise provides static command/environment configuration and a
+project root, while Claude hook `session_id` metadata is not automatically
+carried into MCP. The detailed evidence is recorded in
+[`SYN-050-provider-boundary-feasibility-2026-09-03.md`](../evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md).
+
+The resulting classifications are deliberately boundary-specific:
+
+- Ordinary Codex stdio MCP: **D** — provider support is required for
+  transparent per-conversation continuity.
+- Synesis-supervised Codex App Server: **C candidate** — the existing exact
+  thread/resume lifecycle is a managed-launch seam, but its current transport
+  identifiers are not by themselves a generic conversation authenticator.
+- Ordinary Claude stdio MCP: **D** — provider support is required for
+  transparent per-conversation continuity.
+- A future Synesis-managed Claude launch: **C candidate** — hooks may supply
+  correlation metadata, but a protected channel joining that evidence to MCP
+  would still be required.
+
+A static wrapper, anonymous broker, PID/lineage check, project secret, or
+model-visible bearer cannot supply the missing proof. A protected
+Synesis-owned launch channel could do so, but it is a distinct product mode
+with explicit UX cost and is not implemented or accepted by this ADR. Result
+A therefore remains the provider-neutral core architecture and the ordinary
+provider profiles remain implementation-blocked. No provider configuration,
+production source, durable state, or historical fixture was changed.
+
+The future implementation gate is unchanged: first obtain either a provider-
+authenticated per-conversation MCP assertion or an explicitly accepted
+Synesis-managed launch channel. Then re-open this ADR, bind the proof to the
+existing authority resolver and generation fences, and validate restart,
+replacement, replay, race, terminal, and same-human-chat cases. Do not turn
+the feasibility result into a new identity graph or a transparent wrapper
+workaround.
+
 ## Capability assessment
 
 A Synesis-issued capability is server-side feasible in principle:

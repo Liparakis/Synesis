@@ -7,6 +7,9 @@ investigation selects Result A (existing core plus a generic runtime-
 authentication seam); implementation is blocked for the current ordinary
 Codex stdio profile pending a trusted provider identity or equivalent
 non-model-visible continuity contract.
+The feasibility spike also classifies ordinary Claude stdio as D (provider
+support required). Synesis-managed launch paths are C candidates only and are
+not yet accepted; static wrappers and brokers are insufficient.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
@@ -20,6 +23,9 @@ channel. The current trace found neither input; a model-visible bearer is not
 sufficient. Do not edit production, restart
 SYN-049, rewrite `.synesis`, copy worktrees, invent IDs, weaken exact
 authority, or redesign Review/Doctor until that prerequisite is available.
+The next design decision is whether to obtain provider support or explicitly
+accept a Synesis-managed attachment mode; do not begin implementation before
+that trust input exists.
 
 Preserve the SYN-049 fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`.
@@ -28,6 +34,8 @@ invent IDs, weaken exact authority, or redesign Review/Doctor. Stop if safe
 continuity proof is unavailable or dual authority cannot be fenced. The full
 design record is
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
+The provider-boundary feasibility record is
+`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

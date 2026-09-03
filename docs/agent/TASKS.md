@@ -105,6 +105,13 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   continuity proof; evaluate provider-authenticated, Synesis-managed, and
   anonymous profiles; select one provider-neutral design in ADR-0055 before
   production edits.
+- Provider-boundary feasibility result: the ordinary Codex stdio and Claude
+  stdio paths are **D** (provider support required); the existing Synesis-
+  supervised Codex App Server path and a future Synesis-managed Claude launch
+  are **C candidates** only. Static wrappers, anonymous brokers, process
+  lineage, project secrets, and model-visible bearers do not establish
+  conversation continuity. The evidence is
+  `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 - Trace result: the normal MCP process receives only an explicit connection
   environment value or a random UUID. The Codex hook sees conversation/session
   evidence, but does not pass it to MCP; the static Codex MCP configuration
@@ -156,9 +163,10 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   bounded provider-session continuity correction at the existing MCP/provider
   authority seam.
 - Implementation order: (1) record the provider-neutral Result A design and
-  amend ADR-0055/current-state records; (2) stop until a provider-authenticated
-  or genuinely Synesis-managed continuity primitive is available; (3) after
-  that primitive exists, revalidate the provider contract and choose the
+  the ordinary-provider D / managed-launch C feasibility result in ADR-0055
+  and current-state records; (2) stop until a provider-authenticated or
+  explicitly accepted Synesis-managed continuity primitive is available; (3)
+  after that primitive exists, revalidate the provider contract and choose the
   smallest existing `ensure_session`/binding seam; (4) design one durable
   generation fence and atomic rotation; (5) write focused provider-profile and
   authorization-preservation regressions; (6) implement only the accepted

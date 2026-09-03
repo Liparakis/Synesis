@@ -7,6 +7,12 @@
   provider-neutral architecture choices. The ordinary Codex stdio profile is
   blocked pending a trusted provider-to-MCP conversation identity or equivalent
   non-model-visible audited continuity proof
+- Feasibility result: ordinary Codex stdio and ordinary Claude stdio are D
+  (provider support required). Synesis-supervised Codex App Server and a future
+  Synesis-managed Claude launch are C candidates only; static wrappers,
+  anonymous brokers, process lineage, and model-visible bearers do not establish
+  conversation continuity. Evidence:
+  `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
   and are not reopened.
 - Scope: define and, only after a verified provider contract and accepted ADR,
@@ -17,12 +23,13 @@
 
 ## Immediate next action
 
-Obtain or verify a provider integration contract that supplies an exact
+Obtain or verify either a provider integration contract that supplies an exact
 per-conversation identity or equivalent non-model-visible audited continuity
-proof to the ordinary MCP process. The design pass found that a Synesis-issued
-model-carried bearer is insufficient. Do not make production edits, restart or
-re-admit the preserved SYN-049 fixture, or weaken exact authority while that
-prerequisite is missing.
+proof to the ordinary MCP process, or an explicitly accepted Synesis-managed
+launch channel. The feasibility spike found no ordinary Codex/Claude carrier;
+static wrappers and brokers are insufficient. Do not make production edits,
+restart or re-admit the preserved SYN-049 fixture, or weaken exact authority
+while that prerequisite is missing.
 
 ## SYN-050 trace result
 
@@ -38,12 +45,13 @@ new participant/intent, not same-session reattachment.
 
 ADR-0055 and
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
-record the expanded capability evaluation. A high-entropy, hash-backed,
-single-use capability is server-side expressible, but ordinary Codex offers no
-provider-controlled non-model-visible way for the same conversation to receive
-and present it after restart. Result A is selected as the smallest
-provider-neutral core architecture; its ordinary-Codex implementation remains
-blocked. No production files changed.
+record the expanded capability evaluation. The provider-boundary feasibility
+record adds the verified Codex/Claude ordinary-MCP and managed-launch matrix.
+A high-entropy, hash-backed, single-use capability is server-side expressible,
+but ordinary providers offer no provider-controlled non-model-visible way for
+the same conversation to receive and present it after restart. Result A is
+selected as the smallest provider-neutral core architecture; its ordinary-
+provider implementation remains blocked. No production files changed.
 
 ## Acceptance boundary
 

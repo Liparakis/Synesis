@@ -23,6 +23,11 @@ conversation carrier and the existing recovery path is semantically different.
 The strict exact-connection fence, monotonic provider lifecycle, and ten-tool
 MCP surface remain in scope; no broad provider identity architecture,
 connectivity, or Review/Doctor redesign is activated.
+The provider-boundary feasibility spike additionally classifies ordinary Claude
+stdio as D (provider support required) and Synesis-managed launch paths as C
+candidates only; static wrappers, anonymous brokers, process lineage, and
+model-visible bearers do not establish continuity. Evidence:
+`docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 
 ## SYN-049 review — 2026-09-02
 
