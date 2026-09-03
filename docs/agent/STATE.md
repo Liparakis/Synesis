@@ -5,10 +5,12 @@
 SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
 selects Result A (existing core plus a generic runtime-authentication seam).
 The product capability model now formally approves `MANAGED_CONTINUITY` with
-Synesis-supervised Codex App Server as the first target, while the managed
-implementation is Result B pending one protected attachment-delivery
-prototype. Ordinary Codex and Claude stdio remain `SESSION_BOUND`; a future
-provider-native assertion path is `NATIVE_CONTINUITY`. SYN-049
+Synesis-supervised Codex App Server as the first target. The managed
+implementation is Result B / `PROTOTYPE_PARTIAL`: the isolated protected
+carrier passed, but the real provider boundary did not prove protected proof
+delivery to the exact managed MCP bridge/thread. Ordinary Codex and Claude
+stdio remain `SESSION_BOUND`; a future provider-native assertion path is
+`NATIVE_CONTINUITY`. SYN-049
 is PARTIAL and remains closed to new Defect A/Defect B production edits; its
 implementation and direct scoped acceptance are complete, but its original
 whole-WorkGroup terminalization criterion was not met.
@@ -28,8 +30,9 @@ provider-controlled, non-model-visible carrier for the same conversation to
 present it after restart. Keep exact connection authority and
 participant/session fencing intact. ADR-0055 and
 `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` record the
-approved managed profile, Result A core architecture, and Result B prototype
-gate; production changes require successful protected-carrier evidence first.
+approved managed profile, Result A core architecture, and the Result B
+prototype result; production changes remain blocked pending a provider-
+controlled protected carrier.
 The earlier capability trace is
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
 and the provider-boundary evidence is
@@ -43,12 +46,31 @@ manually changed. No new MCP tool or Review/Doctor redesign is in scope.
 
 ## Immediate next action
 
-Run the single disposable Codex App Server protected-carrier prototype in
-`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`. Verify private
-inherited-handle/IPC delivery to the exact managed MCP bridge/thread, restart
-and multi-thread scoping, and old-generation fencing. Do not edit production,
-restart SYN-049, rewrite durable state, copy worktrees, invent IDs, or weaken
-exact authority while that Result B gate is unresolved.
+The disposable Codex App Server protected-carrier prototype is complete. Its
+isolated inherited-pipe harness passed 48 assertions, and the real Codex
+App Server probe passed two-thread MCP calls plus exact process-restart/
+thread-resume/thread-read. It did not prove private proof delivery to the exact
+managed MCP bridge/thread. Read
+`docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`; the exact
+next action is to obtain a documented Codex-managed launch/IPC carrier contract
+before reopening ADR-0055. Do not edit production, restart SYN-049, rewrite
+durable state, copy worktrees, invent IDs, or weaken exact authority.
+
+## SYN-050 protected-carrier prototype result
+
+The disposable root is
+`C:\Users\Liparakis\AppData\Local\Temp\syn050-protected-carrier-20260903-01`.
+The Windows anonymous inherited child-stdin pipe and generation-fenced
+challenge-response model passed A/B isolation, cross-use rejection, replay,
+replacement, race, live-old, ambiguous, terminal, and hash-only secret
+hygiene checks. The real installed `codex-cli 0.145.0` started an instrumented
+MCP child, created two exact durable threads in one App Server process, called
+the MCP tool for each exact thread, and resumed/read the first exact thread
+after an App Server process restart. The App Server path exposed no tested
+per-thread protected proof input; the static config marker was retained only
+as a negative control. Therefore the prototype is PARTIAL and production
+continuity remains blocked. No production source, provider configuration,
+`.synesis` state, or historical fixture changed.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

@@ -3,17 +3,19 @@
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050
-- Status: ACTIVE; DESIGN_APPROVED / PROTOTYPE_REQUIRED; the provider-neutral
-  core architecture is Result A and the managed Codex implementation is Result
-  B pending one protected attachment-delivery experiment. Production code is
-  not authorized in this design-only pass.
+- Status: ACTIVE; DESIGN_APPROVED / PROTOTYPE_PARTIAL /
+  IMPLEMENTATION_BLOCKED. The provider-neutral core architecture is Result A;
+  the managed Codex implementation is Result B because the real provider
+  boundary did not prove protected proof delivery. Production code is not
+  authorized in this prototype-only pass.
 - Capability decision: ordinary Codex and Claude stdio remain
   `SESSION_BOUND`; `MANAGED_CONTINUITY` is approved as a supported profile and
   Synesis-supervised Codex App Server is its first target. A future provider-
   native assertion path is `NATIVE_CONTINUITY`. Static wrappers, anonymous
   brokers, process lineage, and model-visible bearers do not establish
   continuity. Evidence:
-  `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` and
+  `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`,
+  `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`, and
   `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
   and are not reopened.
@@ -25,13 +27,15 @@
 
 ## Immediate next action
 
-Run the single disposable Codex App Server protected-carrier prototype recorded
-in `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`. Prove that
-an inherited-handle/private IPC proof reaches the exact managed MCP
-bridge/thread without model-visible or static global delivery, and classify
-the bridge/App Server/host restart and multi-thread cases. Do not make
-production edits, restart or re-admit the preserved SYN-049 fixture, or weaken
-exact authority while that prototype gate is unresolved.
+The disposable Codex App Server protected-carrier prototype is complete and
+recorded in `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
+Its isolated inherited-pipe carrier passed, and the real provider probe passed
+App Server start, two-thread MCP calls, and exact process-restart/thread-resume,
+but protected proof delivery to the exact managed MCP bridge/thread was not
+proven. The exact next action is to obtain a documented Codex-managed
+launch/IPC carrier contract before reopening ADR-0055. Do not make production
+continuity edits, restart or re-admit the preserved SYN-049 fixture, or weaken
+exact authority.
 
 ## SYN-050 trace result
 
@@ -43,7 +47,10 @@ not pass it to MCP. The durable logical binding is
 `ProviderSessionBindingService.Binding.sessionId`; participant and WorkIntent
 identities derive from that binding, while the lease remains keyed to the exact
 transport connection. The existing recovery path is an audited transfer to a
-new participant/intent, not same-session reattachment.
+new participant/intent, not same-session reattachment. A disposable real Codex
+App Server probe now confirms that exact thread correlation and process
+restart/resume are available, but its static MCP configuration does not carry a
+Synesis-managed per-worker proof into the MCP bridge.
 
 ADR-0055 and
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
@@ -51,10 +58,31 @@ record the expanded capability evaluation. The provider-boundary feasibility
 record adds the verified Codex/Claude ordinary-MCP and managed-launch matrix.
 A high-entropy, hash-backed, single-use capability is server-side expressible,
 but ordinary providers offer no provider-controlled non-model-visible way for
-the same conversation to receive and present it after restart. Result A remains
-the smallest provider-neutral core architecture. The managed Codex design is
-now approved as a product capability target but remains Result B until private
-proof delivery is proven. No production files changed.
+the same conversation to receive and present it after restart. The isolated
+protected-carrier model passed; the real Codex boundary did not prove private
+proof delivery. Result A remains the smallest provider-neutral core
+architecture, while the managed Codex design remains Result B and production
+implementation remains blocked. No production files changed.
+
+## SYN-050 protected-carrier prototype result
+
+The disposable Windows harness at
+`C:\Users\Liparakis\AppData\Local\Temp\syn050-protected-carrier-20260903-01`
+used an anonymous inherited child-stdin pipe, random per-worker proofs,
+hash-only durable state, challenge-response verification, generation rotation,
+replay/race rejection, live/ambiguous/terminal fail-closed cases, and secret
+hygiene checks. It passed 48 assertions for isolated Worker A/Worker B
+attachment behavior.
+
+The real installed `codex-cli 0.145.0` probe used temporary provider state. One
+App Server hosted two exact durable threads and accepted a direct MCP tool call
+for each. After the first process stopped, a second process resumed the exact
+first thread and `thread/read` confirmed it. MCP child processes were relaunched
+under the replacement App Server. No proof was supplied to that boundary, and
+no supported per-thread protected-carrier input was found. This proves the
+provider lifecycle seam, not the missing authentication carrier. The full
+redacted evidence is in
+`docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
 
 ## Acceptance boundary
 
@@ -79,23 +107,22 @@ Synesis-issued high-entropy, hash-backed, single-use rotating capability, the
 provider-authenticated/Synesis-managed/anonymous capability classes, and all
 currently available Codex carriers. Formally approved `MANAGED_CONTINUITY` as
 a product profile with Codex App Server as its first target, selected Result A
-for the provider-neutral core, and recorded Result B for the managed path
-pending the protected-carrier prototype. The full design is in
-`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
-No production code, provider configuration, durable Synesis state, or fixture
-was changed.
+for the provider-neutral core, and recorded the Result B prototype outcome.
+The isolated carrier passed, but the real provider carrier is not proven. No
+production code, provider configuration, durable Synesis state, or fixture was
+changed.
 
 ## Current failures
 
 The ordinary Codex stdio provider primitive is still unavailable. A model-
 visible bearer cannot provide reliable same-conversation retention or prevent
 another process from using a copied credential, and the existing recovery path
-transfers to a new participant/WorkIntent. The managed profile is approved, but
-its protected bridge-delivery boundary still requires the single prototype
-gate; production implementation and SYN-049 terminal acceptance remain
-blocked. `agent-doctor.ps1` retains its known historical false-positive
-vague-continuation result and existing absolute-path warning; neither is part
-of this continuity design.
+transfers to a new participant/WorkIntent. The isolated carrier model is
+promising, but the real Codex App Server bridge has no proven protected
+per-worker proof ingress, so production implementation and SYN-049 terminal
+acceptance remain blocked. `agent-doctor.ps1` retains its known historical
+false-positive vague-continuation result and existing absolute-path warning;
+neither is part of this continuity design.
 
 ## SYN-049 Pre-release explicit completion and dependency actionability — 2026-09-02
 

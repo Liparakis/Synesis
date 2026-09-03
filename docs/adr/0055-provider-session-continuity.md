@@ -1,9 +1,10 @@
 # ADR-0055: Provider-neutral runtime authentication and session continuity
 
 Status: Provider capability model approved; generic core architecture is
-Result A; Codex App Server managed-attachment implementation is Result B
-pending one protected-channel prototype. Ordinary Codex/Claude stdio remain
-SESSION_BOUND. No production code is authorized by this ADR.
+Result A; Codex App Server managed-attachment implementation is Result B /
+PROTOTYPE_PARTIAL after the protected-channel prototype. Ordinary
+Codex/Claude stdio remain SESSION_BOUND. No production code is authorized by
+this ADR.
 
 ## Context
 
@@ -116,14 +117,15 @@ SESSION_BOUND and implementation-blocked for seamless restart continuity.
 No provider configuration, production source, durable state, or historical
 fixture was changed.
 
-The next implementation gate is one disposable provider-boundary prototype:
-prove that a per-attachment protected OS channel or inherited handle can reach
-the exact managed MCP bridge/thread without model-visible or static global
-secret delivery, and that a replacement can be generation-fenced. Then bind
-the proof to the existing authority resolver and generation fences and
-validate restart, replacement, replay, race, terminal, and same-human-chat
-cases. Do not turn the managed path into a new identity graph or a
-transparent wrapper workaround.
+The disposable provider-boundary prototype has now been run. Its isolated
+Windows inherited-pipe model passed proof isolation, generation fencing,
+replay, race, live/ambiguous, terminal, and secret-hygiene checks. The real
+Codex App Server probe passed configured MCP launch, two exact-thread tool
+calls, and exact process-restart/thread-resume/thread-read, but it did not
+prove delivery of a Synesis-created protected proof to the exact managed MCP
+bridge/thread. The managed implementation therefore remains Result B /
+PROTOTYPE_PARTIAL. Do not turn the managed path into a new identity graph or
+a transparent wrapper workaround.
 
 ## Capability assessment
 
@@ -278,16 +280,16 @@ metadata becomes the core identity.
 
 ## Conditional implementation order
 
-This ADR authorizes design and a disposable provider-boundary prototype, not
-production implementation. The next order is: prove the protected Codex
-carrier; revalidate this ADR against the provider result; add the smallest
-generic authentication input at the existing session-resolution ingress;
-reuse the existing attachment/connection generations and lifecycle revision;
-implement one Codex adapter; add only the required managed launcher/channel;
-then test replay, races, stale and terminal state, restart, and preservation
-of existing authorization. Rebuild and hash the installed artifact before any
-disposable runtime acceptance. If the carrier cannot be proven, stop with
-ordinary MCP in `SESSION_BOUND` and do not implement a workaround.
+This ADR authorizes design and disposable provider-boundary experiments, not
+production implementation. The next order is: obtain a documented
+provider-controlled protected carrier; reopen this ADR against that provider
+result; add the smallest generic authentication input at the existing
+session-resolution ingress; reuse the existing attachment/connection
+generations and lifecycle revision; implement one Codex adapter; add only the
+required managed launcher/channel; then test replay, races, stale and terminal
+state, restart, and preservation of existing authorization. If the carrier
+cannot be proven, stop with ordinary MCP in `SESSION_BOUND` and do not
+implement a workaround.
 
 ## Managed-continuity decision — Codex App Server — 2026-09-03
 
@@ -369,16 +371,18 @@ Synesis manages attachment, provider lifecycle, restart/resume, and fencing;
 it does not choose prompts, reason, plan, allocate arbitrary workers, replace
 Codex UI, or become a harness.
 
-This decision is **Result B — prototype spike required**. Before production
-code, a disposable Codex App Server probe must prove private handle/IPC
-delivery to the managed MCP child, exact thread/process scoping for two
-simultaneous workers, bridge replacement, App Server `thread/resume`, and
-old-generation rejection without logging proof material. If the provider
-cannot provide that boundary, managed continuity remains unavailable and
-ordinary MCP stays `SESSION_BOUND`.
+This decision remains **Result B — prototype incomplete**. The disposable
+Codex App Server probe proved process launch, two-thread protocol correlation,
+direct MCP calls, and exact `thread/resume`/`thread/read` after process
+restart. The isolated protected carrier passed, but the real provider did not
+provide the required private proof ingress to the exact MCP bridge/thread.
+Managed continuity is therefore unavailable for production, and ordinary MCP
+stays `SESSION_BOUND` until a provider-controlled carrier contract exists.
 
-The complete design, prototype gate, focused tests, acceptance plan, unknowns,
-and evidence classification are recorded in
+The complete design, prototype result, focused tests, acceptance plan,
+unknowns, and evidence classification are recorded in
+[`SYN-050-protected-carrier-prototype-2026-09-03.md`](../evidence/SYN-050-protected-carrier-prototype-2026-09-03.md)
+and
 [`SYN-050-managed-attachment-design-2026-09-03.md`](../evidence/SYN-050-managed-attachment-design-2026-09-03.md).
 
 ## Explicit non-decisions

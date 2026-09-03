@@ -19,15 +19,18 @@ SYN-050 does not activate a broad deferred capability or a new identity graph.
 Its bounded provider-neutral design
 investigation selects Result A for the core and formally approves
 `MANAGED_CONTINUITY` as a supported product profile, with Synesis-supervised
-Codex App Server as the first target. The managed implementation is Result B
-pending one protected non-model-visible attachment-delivery prototype;
-ordinary Codex and Claude stdio remain `SESSION_BOUND`. The existing recovery
-path remains semantically different from same-session attachment.
+Codex App Server as the first target. The isolated inherited-pipe model passed,
+but the real provider boundary did not prove protected non-model-visible
+attachment delivery to the exact managed MCP bridge/thread. The managed
+implementation is therefore Result B / `PROTOTYPE_PARTIAL`; ordinary Codex and
+Claude stdio remain `SESSION_BOUND`. The existing recovery path remains
+semantically different from same-session attachment.
 The strict exact-connection fence, monotonic provider lifecycle, and ten-tool
 MCP surface remain in scope. No connectivity, harness, or Review/Doctor
 redesign is activated. Static wrappers, anonymous brokers, process lineage,
 and model-visible bearers do not establish continuity. Evidence:
-`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` and
+`docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`,
+`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`, and
 `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 
 ## SYN-049 review — 2026-09-02

@@ -4,26 +4,29 @@
 
 SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
 selects Result A (existing core plus a generic runtime-authentication seam).
-`MANAGED_CONTINUITY` is now an approved product capability with
-Synesis-supervised Codex App Server as its first target, but the managed
-implementation is Result B pending one protected attachment-delivery
-prototype. Ordinary Codex and Claude MCP remain `SESSION_BOUND`; static
-wrappers and model-visible bearers are insufficient.
+`MANAGED_CONTINUITY` is an approved product capability with
+Synesis-supervised Codex App Server as its first target. The managed
+implementation is Result B / `PROTOTYPE_PARTIAL`: the isolated inherited-pipe
+carrier passed, but the real provider boundary did not prove protected proof
+delivery to the exact managed MCP bridge/thread. Ordinary Codex and Claude MCP
+remain `SESSION_BOUND`; static wrappers and model-visible bearers are
+insufficient.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
 
 ## Immediate next action
 
-- Exact next code action: run the disposable Codex App Server protected-carrier
-  prototype described in the managed-attachment design evidence.
+- Exact next code action: obtain a documented Codex-managed launch/IPC carrier
+  contract, then reopen ADR-0055 before any production implementation.
 
-Run the single disposable Codex App Server protected-carrier prototype in
-`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`. Verify private
-inherited-handle/IPC delivery to the exact managed MCP bridge/thread, restart
-and multi-thread scoping, and old-generation fencing. Do not edit production,
-restart SYN-049, rewrite `.synesis`, copy worktrees, invent IDs, weaken exact
-authority, or redesign Review/Doctor until that Result B gate is resolved.
+The disposable Codex App Server protected-carrier prototype is complete and is
+recorded in `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
+It passed the isolated 48-assertion inherited-pipe model and the real App
+Server start, two-thread MCP-call, and exact process-restart/thread-resume
+probe. It did not prove private proof delivery to the exact managed MCP
+bridge/thread. Do not edit production, restart SYN-049, rewrite `.synesis`,
+copy worktrees, invent IDs, weaken exact authority, or redesign Review/Doctor.
 
 Preserve the SYN-049 fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`.

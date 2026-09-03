@@ -1,3 +1,25 @@
+# 2026-09-03 — SYN-050 protected-carrier prototype result
+
+- Ran the disposable Windows inherited-handle/private-IPC prototype from
+  source HEAD `a2c0783e357f0a3382dcfbb8133cc020cf4284c2`. The isolated
+  anonymous inherited child-stdin carrier passed 48 assertions covering A/B
+  isolation, cross-use rejection, proof rotation, replay, replacement races,
+  live/ambiguous liveness, terminal state, and hash-only secret hygiene.
+- Ran the installed `codex-cli 0.145.0` App Server boundary probe with a
+  temporary `CODEX_HOME`. The real provider created two exact durable threads,
+  served direct MCP calls for both, and resumed/read the exact first thread
+  after an App Server process restart. MCP child processes were relaunched
+  under the replacement App Server.
+- The real provider path did not expose a per-thread protected proof ingress to
+  the exact MCP bridge. The static MCP marker was used only as a non-secret
+  control; no proof was supplied to the provider. Classification is PARTIAL,
+  not a production unblock. Evidence:
+  `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`.
+- No production source, provider configuration, `.synesis` state, historical
+  fixture, authority rule, MCP tool, or Review/Doctor behavior changed. The
+  next action is to obtain a documented Codex-managed launch/IPC carrier
+  contract, then reopen ADR-0055 before creating an implementation task.
+
 # 2026-09-03 — SYN-050 managed-continuity approval and attachment design
 
 - Reconciled SYN-050/ADR-0055 from clean source HEAD

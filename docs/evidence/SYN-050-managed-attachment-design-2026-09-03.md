@@ -611,8 +611,9 @@ no metadata edits, no manual state, and exactly ten MCP tools.
   supported Synesis profile and Codex App Server is its first target.
 * Generic architecture decision: **Result A** — existing core plus a generic
   runtime-authentication seam.
-* Implementation decision for this pass: **Result B** — one narrow provider
-  attachment-delivery prototype is required.
+* Implementation decision for this pass: **Result B / PROTOTYPE_PARTIAL** —
+  the isolated carrier passed, but the real provider attachment-delivery
+  boundary did not.
 * Production implementation: **not unblocked**.
 * Review/Doctor behavior: not redesigned and not opened as a defect by this
   design pass.
@@ -621,9 +622,11 @@ no metadata edits, no manual state, and exactly ten MCP tools.
 
 ## Unknowns kept explicit
 
-1. Whether the installed Codex App Server forwards an inherited handle or an
-   equivalent private carrier to the configured MCP child.
-2. Whether the carrier is scoped to a thread or only to an App Server process.
+1. The tested installed Codex App Server did not expose an inherited-handle or
+   equivalent per-worker protected-carrier input to the configured MCP child;
+   a documented provider-managed launch/IPC contract is still required.
+2. Whether a future provider carrier can be scoped to a thread or only to an
+   App Server process.
 3. Whether the provider offers a safe explicit handoff when an old managed
    process remains live during host restart.
 4. Whether the exact `thread/resume` response plus a newly established private
@@ -634,3 +637,21 @@ no metadata edits, no manual state, and exactly ten MCP tools.
 
 These are provider-boundary questions, not permission to infer continuity or
 to alter the Synesis authority core.
+
+## Prototype follow-up — 2026-09-03
+
+The disposable protected-carrier gate was executed after this design record
+was approved. The isolated Windows anonymous inherited-pipe model passed 48
+assertions for per-worker proof isolation, rotation, replay, race, liveness,
+terminal, and secret-hygiene behavior. A real `codex-cli 0.145.0` App Server
+probe also passed configured MCP launch, two exact-thread calls, and exact
+process-restart/thread-resume/thread-read.
+
+The real provider probe did not expose a provider-controlled input that could
+carry a Synesis-created proof to the exact MCP bridge/thread. The static MCP
+configuration marker was used only as a non-secret control. The result is
+therefore **PARTIAL**: the managed provider lifecycle seam is observable, but
+the protected attachment chain is not proven and production implementation
+remains blocked. Full redacted commands, hashes, reports, and the no-bypass
+record are in
+[`SYN-050-protected-carrier-prototype-2026-09-03.md`](SYN-050-protected-carrier-prototype-2026-09-03.md).

@@ -83,9 +83,10 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 ### Provider-session continuity across MCP process restart — 2026-09-03
 
 - Status: ACTIVE
-- Lifecycle state: DESIGN_APPROVED / PROTOTYPE_REQUIRED; production
-  implementation remains blocked pending one protected Codex App Server
-  attachment-delivery experiment
+- Lifecycle state: DESIGN_APPROVED / PROTOTYPE_PARTIAL /
+  IMPLEMENTATION_BLOCKED; production implementation remains blocked because
+  the provider boundary did not prove delivery of a protected per-worker
+  attachment proof to the exact managed MCP bridge/thread
 - Coordination state: the provider-neutral core architecture is Result A;
   `MANAGED_CONTINUITY` is approved as a product capability with Codex App
   Server as its first target. This managed-path design is Result B until a
@@ -108,17 +109,18 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   continuity proof; evaluate provider-authenticated, Synesis-managed, and
   anonymous profiles; record the approved capability model and one protected
   Codex attachment design in ADR-0055 before any production edit.
-- Provider-boundary result: ordinary Codex and Claude stdio are
-  `SESSION_BOUND` and still require provider support for native continuity.
-  The Synesis-supervised Codex App Server path is now the approved first
-  `MANAGED_CONTINUITY` design target, but its private bridge-delivery boundary
-  remains a Result B prototype gate. A future managed Claude launch remains a
-  compatibility target only. Static wrappers, anonymous brokers, process
-  lineage, project secrets, and model-visible bearers do not establish
-  continuity. The feasibility evidence is
-  `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`; the
-  approved managed design is
-  `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
+- Provider-boundary result: ordinary Codex and Claude stdio remain
+  `SESSION_BOUND`. The disposable Windows inherited-pipe harness passed 48
+  assertions for proof isolation, rotation, replay, races, live/ambiguous
+  liveness, terminal state, and secret hygiene. The real installed Codex App
+  Server started a configured MCP child, served two exact threads, called the
+  disposable MCP tool for each, and resumed the exact durable thread after a
+  process restart. It did not expose a provider-controlled path for the
+  Synesis proof to reach the exact MCP bridge without static configuration or
+  an unimplemented adapter. Result B is therefore `PARTIAL`, not an
+  implementation gate pass. Evidence is
+  `docs/evidence/SYN-050-protected-carrier-prototype-2026-09-03.md`, with the
+  feasibility and managed-design records retained.
 - Trace result: the normal MCP process receives only an explicit connection
   environment value or a random UUID. The Codex hook sees conversation/session
   evidence, but does not pass it to MCP; the static Codex MCP configuration
@@ -178,26 +180,24 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 - Implementation order: (1) record the approved capability model and the
   managed Codex design in ADR-0055 and current-state records; (2) run the one
   disposable inherited-handle/private-channel prototype without production or
-  fixture mutation; (3) if it passes, create or promote one bounded
-  implementation slice at the existing provider/session seam; (4) reuse one
-  durable attachment-generation fence and atomic rotation; (5) write focused
-  provider-profile, secret-hygiene, and authorization-preservation regressions;
-  (6) implement only the accepted Codex slice; (7) rebuild/hash/install; (8)
-  run fresh restart/race/terminal and multi-provider acceptance plus the
-  preserved SYN-049 completion acceptance; (9) validate, checkpoint, and
-  commit bounded green changes. If the prototype fails, keep ordinary MCP
-  `SESSION_BOUND` and stop without a workaround.
-- Current stop: no production code or tests were changed. The managed profile
-  is formally approved as a product capability, but the Codex App Server
-  bridge-delivery proof is not yet established. Run the narrow prototype
-  recorded in `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
-  Ordinary Codex stdio remains `SESSION_BOUND`; no model-visible bearer,
-  static secret, latest fallback, or authority workaround is allowed.
-- Future task boundary: this pass creates no separate implementation task.
-  If the prototype passes, open or promote one bounded Codex managed-
-  attachment implementation slice under the single-active-task convention;
-  if it fails, record the provider limitation and keep the product at
-  `SESSION_BOUND` for ordinary MCP.
+  fixture mutation; (3) record its isolated PASS and real-boundary PARTIAL
+  result; (4) do not open a production implementation slice while the exact
+  provider carrier is absent; (5) keep ordinary MCP `SESSION_BOUND` and obtain
+  a documented Codex-managed launch/IPC contract before reopening the ADR gate.
+  A future authorized implementation would then reuse one durable
+  attachment-generation fence and atomic rotation, add focused
+  authorization-preservation regressions, rebuild/hash/install, and run fresh
+  acceptance. No workaround is permitted.
+- Current stop: no production code or tests were changed. The isolated
+  protected-carrier model passed, but Codex App Server did not prove that the
+  Synesis proof can reach the exact managed MCP bridge/thread. The managed
+  profile remains `PROTOTYPE_PARTIAL / IMPLEMENTATION_BLOCKED`; ordinary
+  Codex stdio remains `SESSION_BOUND`.
+- Future task boundary: this pass creates no implementation task. Reopen
+  ADR-0055 only after Codex documents or exposes a provider-controlled,
+  non-model-visible per-attachment carrier. Do not add a static secret,
+  model-visible bearer, latest fallback, PID-based takeover, or second
+  dependency/identity graph.
 - Stop conditions: continuity proof cannot be derived from available provider
   metadata; the design requires weakening exact authority lookup or selecting
   the latest session; two live processes could share authority; historical
