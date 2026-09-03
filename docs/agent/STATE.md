@@ -2,14 +2,13 @@
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task. Its provider-neutral design
-investigation selects Result A (existing core plus a generic runtime-authentication
-seam), but implementation is blocked pending a trusted provider identity,
-equivalent non-model-visible continuity contract, or explicitly accepted
-Synesis-managed launch channel. The completed feasibility spike classifies
-ordinary Codex and Claude stdio as D (provider support required) and the
-Synesis-supervised Codex App Server / future managed Claude paths as C
-candidates only. SYN-049
+SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
+selects Result A (existing core plus a generic runtime-authentication seam).
+The product capability model now formally approves `MANAGED_CONTINUITY` with
+Synesis-supervised Codex App Server as the first target, while the managed
+implementation is Result B pending one protected attachment-delivery
+prototype. Ordinary Codex and Claude stdio remain `SESSION_BOUND`; a future
+provider-native assertion path is `NATIVE_CONTINUITY`. SYN-049
 is PARTIAL and remains closed to new Defect A/Defect B production edits; its
 implementation and direct scoped acceptance are complete, but its original
 whole-WorkGroup terminalization criterion was not met.
@@ -28,9 +27,12 @@ server-side expressible, but the ordinary Codex path offers no safe,
 provider-controlled, non-model-visible carrier for the same conversation to
 present it after restart. Keep exact connection authority and
 participant/session fencing intact. ADR-0055 and
+`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` record the
+approved managed profile, Result A core architecture, and Result B prototype
+gate; production changes require successful protected-carrier evidence first.
+The earlier capability trace is
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`
-record Result A and the current ordinary-Codex implementation gate; production
-changes require the provider primitive first. Evidence:
+and the provider-boundary evidence is
 `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 
 The preserved fixture
@@ -41,12 +43,12 @@ manually changed. No new MCP tool or Review/Doctor redesign is in scope.
 
 ## Immediate next action
 
-Obtain or verify either the provider integration contract that will supply an
-exact per-conversation MCP identity/equivalent non-model-visible audited
-continuity proof, or an explicitly accepted Synesis-managed launch channel.
-Resume SYN-050 implementation planning only after that trust input exists; do
-not edit production, restart SYN-049, rewrite durable state, copy worktrees,
-invent IDs, or weaken exact authority.
+Run the single disposable Codex App Server protected-carrier prototype in
+`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`. Verify private
+inherited-handle/IPC delivery to the exact managed MCP bridge/thread, restart
+and multi-thread scoping, and old-generation fencing. Do not edit production,
+restart SYN-049, rewrite durable state, copy worktrees, invent IDs, or weaken
+exact authority while that Result B gate is unresolved.
 
 ## SYN-049 pre-release completion/dependency correction — 2026-09-02
 

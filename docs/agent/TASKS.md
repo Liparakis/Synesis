@@ -83,11 +83,14 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 ### Provider-session continuity across MCP process restart — 2026-09-03
 
 - Status: ACTIVE
-- Lifecycle state: DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED
-- Coordination state: Result A under the provider-neutral architecture choices;
-  implementation remains blocked for ordinary Codex stdio because it has no
-  trusted provider-to-MCP conversation identity or equivalent non-model-visible
-  audited continuity proof
+- Lifecycle state: DESIGN_APPROVED / PROTOTYPE_REQUIRED; production
+  implementation remains blocked pending one protected Codex App Server
+  attachment-delivery experiment
+- Coordination state: the provider-neutral core architecture is Result A;
+  `MANAGED_CONTINUITY` is approved as a product capability with Codex App
+  Server as its first target. This managed-path design is Result B until a
+  private, non-model-visible provider-boundary carrier is proven. Ordinary
+  Codex and Claude MCP remain `SESSION_BOUND`.
 - Scope: define and, only after the required provider contract exists,
   implement the smallest provider-neutral runtime-authentication mechanism that
   lets an authenticated replacement runtime recover an existing Synesis logical
@@ -103,15 +106,19 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   exact authority lookup, clean/abnormal disconnect, wake/rebind, and existing
   recovery paths; distinguish diagnostic correlation from authority-bearing
   continuity proof; evaluate provider-authenticated, Synesis-managed, and
-  anonymous profiles; select one provider-neutral design in ADR-0055 before
-  production edits.
-- Provider-boundary feasibility result: the ordinary Codex stdio and Claude
-  stdio paths are **D** (provider support required); the existing Synesis-
-  supervised Codex App Server path and a future Synesis-managed Claude launch
-  are **C candidates** only. Static wrappers, anonymous brokers, process
+  anonymous profiles; record the approved capability model and one protected
+  Codex attachment design in ADR-0055 before any production edit.
+- Provider-boundary result: ordinary Codex and Claude stdio are
+  `SESSION_BOUND` and still require provider support for native continuity.
+  The Synesis-supervised Codex App Server path is now the approved first
+  `MANAGED_CONTINUITY` design target, but its private bridge-delivery boundary
+  remains a Result B prototype gate. A future managed Claude launch remains a
+  compatibility target only. Static wrappers, anonymous brokers, process
   lineage, project secrets, and model-visible bearers do not establish
-  conversation continuity. The evidence is
-  `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
+  continuity. The feasibility evidence is
+  `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`; the
+  approved managed design is
+  `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
 - Trace result: the normal MCP process receives only an explicit connection
   environment value or a random UUID. The Codex hook sees conversation/session
   evidence, but does not pass it to MCP; the static Codex MCP configuration
@@ -119,17 +126,21 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   single-use, snapshot-backed transfer to a new participant/intent, not
   same-session reattachment. A server-side rotating capability is expressible,
   but the only current carrier is model-visible tool context; no ordinary
-  Codex non-model-visible conversation channel exists. Result A is the smallest
-  source-backed architecture, while its ordinary-Codex implementation remains
+  Codex non-model-visible conversation channel exists. Result A is the
+  smallest source-backed core architecture, while ordinary stdio remains
   blocked. The expanded
   source trace is
   `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
-- Design decision: Result A. Do not implement a bearer token, project-local
-  secret, latest-binding fallback, or provider-independent rebind. The
-  model-carried option cannot prove reliable same-conversation retention after
+- Design decision: Result A for the provider-neutral core and Result B for the
+  managed Codex implementation. Approve a per-attachment OS-local protected
+  channel with a one-time hash-backed proof and inherited-handle delivery as
+  the prototype target; do not implement a bearer token, project-local secret,
+  latest-binding fallback, or provider-independent rebind. The model-carried
+  option cannot prove reliable same-conversation retention after
   compaction/restart and cannot prevent an obtained bearer from being replayed
-  by another process. The existing Codex App Server exact-thread resume is a
-  separate supervised architecture and does not solve ordinary stdio MCP.
+  by another process. The existing Codex App Server exact-thread resume is the
+  managed lifecycle seam, but private proof delivery to its MCP bridge is not
+  yet source- or provider-proven.
 - Safety invariants: exact connection identity remains authority-sensitive;
   no latest-provider/session fallback; stale and terminal bindings remain
   fenced; lifecycle history remains monotonic; recovery creates no duplicate
@@ -148,12 +159,14 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   session, restart-plus-completion, and ten-tool regressions. Reuse existing
   recovery machinery; do not add a new MCP tool or put provider identity logic
   in the core.
-- Acceptance evidence, when unblocked: rebuild and install from a recorded
-  source commit with matching artifact hashes; record connection, binding,
-  participant, WorkIntent, revision, and final lifecycle evidence without
-  exposing secrets or inventing identifiers. Resume SYN-049 only if its
-  existing durable evidence is compatible with the selected design; otherwise
-  use a fresh continuity fixture and explain the incompatibility.
+- Acceptance evidence, when unblocked: first run the disposable protected-
+  carrier prototype and record redacted provider evidence; then rebuild and
+  install from a recorded source commit with matching artifact hashes. Record
+  connection, binding, participant, WorkIntent, revision, thread, generation,
+  and final lifecycle evidence without exposing secrets or inventing
+  identifiers. Resume SYN-049 only if its existing durable evidence is
+  compatible with the selected design; otherwise use a fresh continuity
+  fixture and explain the incompatibility.
 - Boundaries: do not weaken `SessionAuthorityResolver`, select the latest
   session/participant, infer authority from a stable value alone, rewrite old
   durable state, mutate historical fixtures, copy worktrees, manually create
@@ -162,23 +175,29 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
 - Deferred-register review: no deferred capability is activated. This is a
   bounded provider-session continuity correction at the existing MCP/provider
   authority seam.
-- Implementation order: (1) record the provider-neutral Result A design and
-  the ordinary-provider D / managed-launch C feasibility result in ADR-0055
-  and current-state records; (2) stop until a provider-authenticated or
-  explicitly accepted Synesis-managed continuity primitive is available; (3)
-  after that primitive exists, revalidate the provider contract and choose the
-  smallest existing `ensure_session`/binding seam; (4) design one durable
-  generation fence and atomic rotation; (5) write focused provider-profile and
-  authorization-preservation regressions; (6) implement only the accepted
-  slice; (7) rebuild/hash/install; (8) run fresh restart/race/terminal and
-  multi-provider acceptance plus the preserved SYN-049 completion acceptance;
-  (9) validate, checkpoint, and commit bounded green changes.
-- Current stop: no production code or tests were changed. A Synesis-issued
-  capability cannot be accepted at the ordinary Codex stdio boundary because
-  the same conversation has no provider-controlled, non-model-visible way to
-  receive and present it after restart. Result A is selected as the core
-  architecture, but implementation resumes only after the provider integration
-  supplies that proof; then re-evaluate process-generation lease fencing.
+- Implementation order: (1) record the approved capability model and the
+  managed Codex design in ADR-0055 and current-state records; (2) run the one
+  disposable inherited-handle/private-channel prototype without production or
+  fixture mutation; (3) if it passes, create or promote one bounded
+  implementation slice at the existing provider/session seam; (4) reuse one
+  durable attachment-generation fence and atomic rotation; (5) write focused
+  provider-profile, secret-hygiene, and authorization-preservation regressions;
+  (6) implement only the accepted Codex slice; (7) rebuild/hash/install; (8)
+  run fresh restart/race/terminal and multi-provider acceptance plus the
+  preserved SYN-049 completion acceptance; (9) validate, checkpoint, and
+  commit bounded green changes. If the prototype fails, keep ordinary MCP
+  `SESSION_BOUND` and stop without a workaround.
+- Current stop: no production code or tests were changed. The managed profile
+  is formally approved as a product capability, but the Codex App Server
+  bridge-delivery proof is not yet established. Run the narrow prototype
+  recorded in `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
+  Ordinary Codex stdio remains `SESSION_BOUND`; no model-visible bearer,
+  static secret, latest fallback, or authority workaround is allowed.
+- Future task boundary: this pass creates no separate implementation task.
+  If the prototype passes, open or promote one bounded Codex managed-
+  attachment implementation slice under the single-active-task convention;
+  if it fails, record the provider limitation and keep the product at
+  `SESSION_BOUND` for ordinary MCP.
 - Stop conditions: continuity proof cannot be derived from available provider
   metadata; the design requires weakening exact authority lookup or selecting
   the latest session; two live processes could share authority; historical

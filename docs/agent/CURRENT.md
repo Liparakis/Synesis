@@ -3,15 +3,17 @@
 ## SYN-050 Provider-session continuity across MCP process restart — 2026-09-03
 
 - Task ID: SYN-050
-- Status: ACTIVE; DESIGN_COMPLETE / IMPLEMENTATION_BLOCKED; Result A under the
-  provider-neutral architecture choices. The ordinary Codex stdio profile is
-  blocked pending a trusted provider-to-MCP conversation identity or equivalent
-  non-model-visible audited continuity proof
-- Feasibility result: ordinary Codex stdio and ordinary Claude stdio are D
-  (provider support required). Synesis-supervised Codex App Server and a future
-  Synesis-managed Claude launch are C candidates only; static wrappers,
-  anonymous brokers, process lineage, and model-visible bearers do not establish
-  conversation continuity. Evidence:
+- Status: ACTIVE; DESIGN_APPROVED / PROTOTYPE_REQUIRED; the provider-neutral
+  core architecture is Result A and the managed Codex implementation is Result
+  B pending one protected attachment-delivery experiment. Production code is
+  not authorized in this design-only pass.
+- Capability decision: ordinary Codex and Claude stdio remain
+  `SESSION_BOUND`; `MANAGED_CONTINUITY` is approved as a supported profile and
+  Synesis-supervised Codex App Server is its first target. A future provider-
+  native assertion path is `NATIVE_CONTINUITY`. Static wrappers, anonymous
+  brokers, process lineage, and model-visible bearers do not establish
+  continuity. Evidence:
+  `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` and
   `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 - SYN-049 status: PARTIAL; its Defect A and Defect B results remain separate
   and are not reopened.
@@ -23,13 +25,13 @@
 
 ## Immediate next action
 
-Obtain or verify either a provider integration contract that supplies an exact
-per-conversation identity or equivalent non-model-visible audited continuity
-proof to the ordinary MCP process, or an explicitly accepted Synesis-managed
-launch channel. The feasibility spike found no ordinary Codex/Claude carrier;
-static wrappers and brokers are insufficient. Do not make production edits,
-restart or re-admit the preserved SYN-049 fixture, or weaken exact authority
-while that prerequisite is missing.
+Run the single disposable Codex App Server protected-carrier prototype recorded
+in `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`. Prove that
+an inherited-handle/private IPC proof reaches the exact managed MCP
+bridge/thread without model-visible or static global delivery, and classify
+the bridge/App Server/host restart and multi-thread cases. Do not make
+production edits, restart or re-admit the preserved SYN-049 fixture, or weaken
+exact authority while that prototype gate is unresolved.
 
 ## SYN-050 trace result
 
@@ -49,9 +51,10 @@ record the expanded capability evaluation. The provider-boundary feasibility
 record adds the verified Codex/Claude ordinary-MCP and managed-launch matrix.
 A high-entropy, hash-backed, single-use capability is server-side expressible,
 but ordinary providers offer no provider-controlled non-model-visible way for
-the same conversation to receive and present it after restart. Result A is
-selected as the smallest provider-neutral core architecture; its ordinary-
-provider implementation remains blocked. No production files changed.
+the same conversation to receive and present it after restart. Result A remains
+the smallest provider-neutral core architecture. The managed Codex design is
+now approved as a product capability target but remains Result B until private
+proof delivery is proven. No production files changed.
 
 ## Acceptance boundary
 
@@ -74,22 +77,23 @@ chain, the ephemeral MCP connection/process evidence, the exact resolver and
 lease coupling, and the separate Codex App Server wake/thread path. Evaluated a
 Synesis-issued high-entropy, hash-backed, single-use rotating capability, the
 provider-authenticated/Synesis-managed/anonymous capability classes, and all
-currently available Codex carriers. Selected Result A as the provider-neutral
-core architecture while keeping implementation blocked for the current
-ordinary stdio profile. Amended ADR-0055 and synchronized the task/current-state
-records in
-`docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
+currently available Codex carriers. Formally approved `MANAGED_CONTINUITY` as
+a product profile with Codex App Server as its first target, selected Result A
+for the provider-neutral core, and recorded Result B for the managed path
+pending the protected-carrier prototype. The full design is in
+`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
 No production code, provider configuration, durable Synesis state, or fixture
 was changed.
 
 ## Current failures
 
-The provider primitive required to implement Result A is not available at
-ordinary Codex stdio MCP startup. A model-visible bearer cannot provide reliable
-same-conversation retention or prevent another process from using a copied
-credential, and the existing recovery path transfers to a new participant/
-WorkIntent. The eventual implementation and SYN-049 terminal acceptance
-remain blocked. `agent-doctor.ps1` retains its known historical false-positive
+The ordinary Codex stdio provider primitive is still unavailable. A model-
+visible bearer cannot provide reliable same-conversation retention or prevent
+another process from using a copied credential, and the existing recovery path
+transfers to a new participant/WorkIntent. The managed profile is approved, but
+its protected bridge-delivery boundary still requires the single prototype
+gate; production implementation and SYN-049 terminal acceptance remain
+blocked. `agent-doctor.ps1` retains its known historical false-positive
 vague-continuation result and existing absolute-path warning; neither is part
 of this continuity design.
 

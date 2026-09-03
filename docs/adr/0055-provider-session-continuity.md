@@ -1,8 +1,9 @@
 # ADR-0055: Provider-neutral runtime authentication and session continuity
 
-Status: Design investigation complete; Result A under the A/B/C/D choices;
-implementation blocked for the current ordinary Codex stdio profile pending a
-trusted provider continuity contract. No production design is accepted.
+Status: Provider capability model approved; generic core architecture is
+Result A; Codex App Server managed-attachment implementation is Result B
+pending one protected-channel prototype. Ordinary Codex/Claude stdio remain
+SESSION_BOUND. No production code is authorized by this ADR.
 
 ## Context
 
@@ -107,19 +108,22 @@ The resulting classifications are deliberately boundary-specific:
 
 A static wrapper, anonymous broker, PID/lineage check, project secret, or
 model-visible bearer cannot supply the missing proof. A protected
-Synesis-owned launch channel could do so, but it is a distinct product mode
-with explicit UX cost and is not implemented or accepted by this ADR. Result
-A therefore remains the provider-neutral core architecture and the ordinary
-provider profiles remain implementation-blocked. No provider configuration,
-production source, durable state, or historical fixture was changed.
+Synesis-owned launch channel is a distinct product mode with explicit UX
+cost. This ADR now approves that mode as the first managed-continuity design
+target for Codex App Server, but does not claim that the current provider
+already delivers the protected channel. The ordinary provider profiles remain
+SESSION_BOUND and implementation-blocked for seamless restart continuity.
+No provider configuration, production source, durable state, or historical
+fixture was changed.
 
-The future implementation gate is unchanged: first obtain either a provider-
-authenticated per-conversation MCP assertion or an explicitly accepted
-Synesis-managed launch channel. Then re-open this ADR, bind the proof to the
-existing authority resolver and generation fences, and validate restart,
-replacement, replay, race, terminal, and same-human-chat cases. Do not turn
-the feasibility result into a new identity graph or a transparent wrapper
-workaround.
+The next implementation gate is one disposable provider-boundary prototype:
+prove that a per-attachment protected OS channel or inherited handle can reach
+the exact managed MCP bridge/thread without model-visible or static global
+secret delivery, and that a replacement can be generation-fenced. Then bind
+the proof to the existing authority resolver and generation fences and
+validate restart, replacement, replay, race, terminal, and same-human-chat
+cases. Do not turn the managed path into a new identity graph or a
+transparent wrapper workaround.
 
 ## Capability assessment
 
@@ -174,15 +178,16 @@ adapter belongs at the edge; a larger identity refactor is not justified.
 
 The earlier shorthand “Result C” meant “blocked on a provider contract.” It is
 not the A/B/C/D classification used by this ADR revision. Under that
-classification, the architecture is Result A and the current implementation
-disposition is blocked.
+classification, the provider-neutral core architecture is Result A. This
+managed Codex design pass is Result B because the exact provider delivery
+boundary still needs a narrow prototype; ordinary stdio implementation stays
+blocked.
 
-The missing provider primitive is an automatically injected, authenticated
-per-conversation identity or confidential continuity assertion for every
-ordinary stdio MCP process, including restarts, or a provider-controlled
-launcher/callback that proves the new MCP process is attached to the same
-conversation. It must be hidden from unrelated chats/processes, replay-safe,
-concurrency-aware, and usable without asking the model to copy a secret.
+The missing managed-path proof is a provider-controlled or genuinely
+Synesis-managed launcher/IPC callback that proves the new MCP bridge is
+attached to the exact managed App Server thread. It must be hidden from
+unrelated chats/processes, replay-safe, concurrency-aware, and usable without
+asking the model to copy a secret. Ordinary stdio still lacks this primitive.
 
 ## Required future invariants
 
@@ -235,10 +240,11 @@ Authentication may establish only which durable logical binding a runtime may
 speak for and which current attachment generation it holds. It must not grant
 claims, review, completion, publication, integration, or task permissions.
 
-`RuntimeAdapter` is needed conceptually to verify provider-specific evidence.
-A local Runtime Broker is optional only for a genuinely Synesis-managed
-provider boundary; it is not required for provider-authenticated mode and is
-not authorized by this ADR. Anonymous providers remain session-bound.
+`RuntimeAuthenticator` is the generic seam for provider-specific evidence.
+The Codex implementation is an adapter beside the existing App Server
+lifecycle. A local broker/launcher channel is authorized only for the
+explicitly managed Codex profile described below; it is not used by
+provider-authenticated mode. Anonymous providers remain session-bound.
 
 | Profile | Root of trust | Supported continuity |
 | --- | --- | --- |
@@ -246,11 +252,12 @@ not authorized by this ADR. Anonymous providers remain session-bound.
 | Synesis-managed | Protected Synesis launcher/broker attachment credential | Continuity only when Synesis truly mediates the provider boundary. |
 | Anonymous | No runtime authentication root | Current transport only; restart continuity is unsupported. |
 
-Ordinary Codex stdio is currently in the anonymous profile at this boundary.
-Codex App Server is a separate supervised adapter-shaped path with exact
-thread/turn and attachment/connection generations. Claude hook metadata is
-provider correlation, not yet ordinary-MCP authentication. Neither thread ID
-nor hook metadata becomes the core identity.
+Ordinary Codex stdio is currently `SESSION_BOUND` at this boundary. Codex App
+Server is the first approved `MANAGED_CONTINUITY` adapter target, subject to
+the protected-channel prototype gate, with exact thread/turn and
+attachment/connection generations. Claude hook metadata is provider
+correlation, not ordinary-MCP authentication. Neither thread ID nor hook
+metadata becomes the core identity.
 
 ## Attachment and failure invariants
 
@@ -271,14 +278,108 @@ nor hook metadata becomes the core identity.
 
 ## Conditional implementation order
 
-This ADR does not authorize implementation until the provider contract exists.
-The next implementation order is: verify the provider root; reopen and
-revalidate this ADR; add the smallest generic authentication input at the
-existing session-resolution ingress; reuse or add one durable attachment
-generation/audit seam; implement one provider adapter; add a broker only if a
-controlled provider boundary requires it; then test replay, races, stale and
-terminal state, restart, and preservation of existing authorization. Rebuild
-and hash the installed artifact before any disposable runtime acceptance.
+This ADR authorizes design and a disposable provider-boundary prototype, not
+production implementation. The next order is: prove the protected Codex
+carrier; revalidate this ADR against the provider result; add the smallest
+generic authentication input at the existing session-resolution ingress;
+reuse the existing attachment/connection generations and lifecycle revision;
+implement one Codex adapter; add only the required managed launcher/channel;
+then test replay, races, stale and terminal state, restart, and preservation
+of existing authorization. Rebuild and hash the installed artifact before any
+disposable runtime acceptance. If the carrier cannot be proven, stop with
+ordinary MCP in `SESSION_BOUND` and do not implement a workaround.
+
+## Managed-continuity decision — Codex App Server — 2026-09-03
+
+The approved capability model is:
+
+| Profile | Trust input | Continuity disposition |
+| --- | --- | --- |
+| `NATIVE_CONTINUITY` | Provider-controlled, non-model-visible conversation assertion | Future provider adapter path. |
+| `MANAGED_CONTINUITY` | Protected Synesis-managed runtime attachment proof | Approved capability; Codex App Server is the first target. |
+| `SESSION_BOUND` | Current authenticated transport only | Ordinary Codex/Claude MCP; restart continuity is explicitly unsupported. |
+
+The managed trust root is the combination of the existing admitted Synesis
+binding and claims, Synesis ownership of the App Server launch, the exact
+provider thread returned by `thread/start`/`thread/resume`/`thread/read`, and a
+protected non-model-visible attachment handshake. A thread ID is exact
+provider correlation, not a secret or authority proof. PID, process lineage,
+worktree, repository, provider name, and same-human context remain diagnostic
+or contextual evidence only.
+
+The selected channel is a per-attachment OS-local protected IPC channel, with
+an inherited handle as the primary delivery mechanism. Synesis creates a
+fresh random proof for each attachment generation, keeps only its hash and
+non-secret scope metadata in the existing Codex lifecycle state, and verifies
+a one-time domain-separated challenge response. The raw proof remains in
+trusted process memory/IPC and never enters model context, project files,
+ordinary logs, guidance, exceptions, or durable audit plaintext. A static
+environment/configuration value, model-visible token, project secret, PID
+check, or OS credential lookup alone is rejected.
+
+The first implementation preserves the current one-App-Server-process /
+one-exact-thread-per-binding invariant. If a provider process multiplexes
+multiple logical threads, a thread-scoped provider assertion is required;
+process identity or process-wide environment cannot authenticate the threads.
+
+The existing `Checkpoint.attachmentGeneration` is reused as the monotonic
+runtime generation; `connectionGeneration` remains the transport generation,
+`revision` remains the lifecycle CAS fence, `threadId` remains provider
+correlation, and `bindingVersion` remains the authority snapshot/version. No
+new core logical-worker ID or second epoch is introduced. A versioned
+adapter-private `managedAttachment` record/object is required to hold an
+opaque attachment ID, exact provider thread correlation, generation, proof
+hash, scope digest, and current/consumed/revoked state. It contains no raw
+credential.
+
+The replacement transaction runs under the existing project and per-binding
+attachment serialization: authenticate the private proof, re-read the
+logical binding and all existing authority predicates, require old-channel
+closure or an explicit provider handoff, compare the current generation,
+consume the old proof, advance the generation, atomically write the new
+managed record/checkpoint revision, and fence the old attachment. One of two
+concurrent replacements wins; stale, replayed, live-old, ambiguous, wrong-
+thread, and terminal requests fail closed. A crash that leaves the managed
+record and checkpoint inconsistent also fails closed and requires a fresh
+managed attach.
+
+For App Server restart, Synesis starts the replacement, resumes the exact
+stored thread, requires exact provider identity and `thread/read`, creates a
+new protected channel, and advances the generation. For a full host restart,
+the host may do the same only after proving the old managed runtime is absent
+or has completed an explicit provider handoff. It never adopts by PID. If
+liveness or provider state is ambiguous, the state remains ambiguous and no
+automatic continuity is claimed.
+
+The generic seam belongs in the existing `workspace` application/provider
+boundary as `RuntimeAuthenticator`; the Codex implementation belongs beside
+the existing `workspace.lifecycle.codex` App Server lifecycle. The seam
+returns only an already durable logical binding reference, provider,
+authentication method, opaque provider runtime reference, and attachment
+generation. Existing `SessionAuthorityResolver`, participant/WorkIntent,
+claims, leases, review, completion, integration, and terminal fences remain
+unchanged and run after authentication. Codex JSON-RPC stays in the adapter.
+
+The minimum UX is an explicit managed launch mode, recommended for the
+prototype as `synesis provider run codex --managed --project <path>` after
+the existing `synesis provider install codex --project <path>` prerequisite.
+That `run` command does not exist yet; it is a proposed future surface. The
+ordinary static MCP workflow remains available and remains `SESSION_BOUND`.
+Synesis manages attachment, provider lifecycle, restart/resume, and fencing;
+it does not choose prompts, reason, plan, allocate arbitrary workers, replace
+Codex UI, or become a harness.
+
+This decision is **Result B — prototype spike required**. Before production
+code, a disposable Codex App Server probe must prove private handle/IPC
+delivery to the managed MCP child, exact thread/process scoping for two
+simultaneous workers, bridge replacement, App Server `thread/resume`, and
+old-generation rejection without logging proof material. If the provider
+cannot provide that boundary, managed continuity remains unavailable and
+ordinary MCP stays `SESSION_BOUND`.
+
+The complete design, prototype gate, focused tests, acceptance plan, unknowns,
+and evidence classification are recorded in
+[`SYN-050-managed-attachment-design-2026-09-03.md`](../evidence/SYN-050-managed-attachment-design-2026-09-03.md).
 
 ## Explicit non-decisions
 

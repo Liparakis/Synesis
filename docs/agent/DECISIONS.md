@@ -64,15 +64,13 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   remove caller-selected completion policies and require explicit,
   revalidated completion projection.
 - ADR-0055: Provider-neutral runtime authentication and session continuity —
-  Result A (existing core plus a generic authentication seam); implementation is
-  blocked for ordinary Codex stdio because it does not receive a trusted
-  conversation identity or equivalent non-model-visible continuity proof. A
-  server-side rotating capability is expressible but cannot be safely carried
-  by the current provider, and the existing audited recovery path is a
-  new-participant transfer rather than same-session reattachment. See the
-  expanded capability design evidence. The provider-boundary feasibility spike
-  classifies ordinary Codex/Claude stdio as D and managed-launch paths as C
-  candidates; see the feasibility evidence.
+  Result A for the existing core plus a generic authentication seam. The
+  provider capability model is approved: ordinary Codex/Claude stdio remain
+  `SESSION_BOUND`, a future provider-native assertion is
+  `NATIVE_CONTINUITY`, and Synesis-supervised Codex App Server is the first
+  `MANAGED_CONTINUITY` target. The managed implementation is Result B pending
+  one protected, non-model-visible attachment-delivery prototype. See the
+  managed attachment design and provider-boundary feasibility evidence.
 - ADR-0054: Preserve structured capability dependencies through admission —
   accepted for SYN-049; verify the rebuilt MCP path first and reuse the
   existing durable capability lifecycle, patching only a proven boundary.

@@ -15,18 +15,19 @@ dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/D
 
 ## SYN-050 review — 2026-09-03
 
-SYN-050 promotes no deferred capability. Its bounded provider-neutral design
-investigation selects Result A (existing core plus a generic runtime-
-authentication seam), but implementation is blocked for ordinary Codex stdio
-because that boundary supplies no trusted provider-controlled, non-model-visible
-conversation carrier and the existing recovery path is semantically different.
+SYN-050 does not activate a broad deferred capability or a new identity graph.
+Its bounded provider-neutral design
+investigation selects Result A for the core and formally approves
+`MANAGED_CONTINUITY` as a supported product profile, with Synesis-supervised
+Codex App Server as the first target. The managed implementation is Result B
+pending one protected non-model-visible attachment-delivery prototype;
+ordinary Codex and Claude stdio remain `SESSION_BOUND`. The existing recovery
+path remains semantically different from same-session attachment.
 The strict exact-connection fence, monotonic provider lifecycle, and ten-tool
-MCP surface remain in scope; no broad provider identity architecture,
-connectivity, or Review/Doctor redesign is activated.
-The provider-boundary feasibility spike additionally classifies ordinary Claude
-stdio as D (provider support required) and Synesis-managed launch paths as C
-candidates only; static wrappers, anonymous brokers, process lineage, and
-model-visible bearers do not establish continuity. Evidence:
+MCP surface remain in scope. No connectivity, harness, or Review/Doctor
+redesign is activated. Static wrappers, anonymous brokers, process lineage,
+and model-visible bearers do not establish continuity. Evidence:
+`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md` and
 `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
 
 ## SYN-049 review — 2026-09-02

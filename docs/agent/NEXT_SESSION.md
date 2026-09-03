@@ -2,37 +2,37 @@
 
 ## SYN-050 provider-session continuity — 2026-09-03
 
-SYN-050 is the single ACTIVE primary task. Its provider-neutral design
-investigation selects Result A (existing core plus a generic runtime-
-authentication seam); implementation is blocked for the current ordinary
-Codex stdio profile pending a trusted provider identity or equivalent
-non-model-visible continuity contract.
-The feasibility spike also classifies ordinary Claude stdio as D (provider
-support required). Synesis-managed launch paths are C candidates only and are
-not yet accepted; static wrappers and brokers are insufficient.
+SYN-050 is the single ACTIVE primary task. Its provider-neutral core design
+selects Result A (existing core plus a generic runtime-authentication seam).
+`MANAGED_CONTINUITY` is now an approved product capability with
+Synesis-supervised Codex App Server as its first target, but the managed
+implementation is Result B pending one protected attachment-delivery
+prototype. Ordinary Codex and Claude MCP remain `SESSION_BOUND`; static
+wrappers and model-visible bearers are insufficient.
 SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
 
 ## Immediate next action
 
-Obtain or verify a provider integration contract that supplies an exact
-per-conversation identity or equivalent non-model-visible audited continuity
-proof to the normal MCP process, or a genuinely Synesis-managed attachment
-channel. The current trace found neither input; a model-visible bearer is not
-sufficient. Do not edit production, restart
-SYN-049, rewrite `.synesis`, copy worktrees, invent IDs, weaken exact
-authority, or redesign Review/Doctor until that prerequisite is available.
-The next design decision is whether to obtain provider support or explicitly
-accept a Synesis-managed attachment mode; do not begin implementation before
-that trust input exists.
+- Exact next code action: run the disposable Codex App Server protected-carrier
+  prototype described in the managed-attachment design evidence.
+
+Run the single disposable Codex App Server protected-carrier prototype in
+`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`. Verify private
+inherited-handle/IPC delivery to the exact managed MCP bridge/thread, restart
+and multi-thread scoping, and old-generation fencing. Do not edit production,
+restart SYN-049, rewrite `.synesis`, copy worktrees, invent IDs, weaken exact
+authority, or redesign Review/Doctor until that Result B gate is resolved.
 
 Preserve the SYN-049 fixture
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`.
 Do not restart or re-admit its workers, rewrite `.synesis`, copy worktrees,
 invent IDs, weaken exact authority, or redesign Review/Doctor. Stop if safe
-continuity proof is unavailable or dual authority cannot be fenced. The full
-design record is
+continuity proof is unavailable or dual authority cannot be fenced. The
+approved managed design record is
+`docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`; the prior
+capability analysis is
 `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
 The provider-boundary feasibility record is
 `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.

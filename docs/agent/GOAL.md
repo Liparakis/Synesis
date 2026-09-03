@@ -3,25 +3,23 @@
 - Current bounded follow-up (2026-09-03): SYN-049 remains PARTIAL with Defect A
   and Defect B preserved separately; its scoped implementation and direct
   acceptance are complete, but the original whole-WorkGroup criterion was not
-  met. SYN-050's provider-neutral runtime-authentication design selects Result A:
-  the existing core plus a generic authentication seam. Implementation remains
-  blocked for ordinary Codex stdio because it has no trusted provider-
-  controlled, non-model-visible way for the same conversation to present a
-  continuity proof after restart. The existing recovery path remains a
-  new-participant transfer. Do not reopen SYN-049, weaken exact authority,
-  rewrite durable state, copy worktrees, or implement speculative continuity.
-  Evidence:
-  `docs/evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md`.
+  met. SYN-050's provider-neutral runtime-authentication design selects Result A
+  for the core, and formally approves `MANAGED_CONTINUITY` with
+  Synesis-supervised Codex App Server as its first target. The managed
+  implementation is Result B pending one protected attachment-delivery
+  prototype; ordinary Codex/Claude MCP remain `SESSION_BOUND`. Do not reopen
+  SYN-049, weaken exact authority, rewrite durable state, copy worktrees, or
+  implement production continuity in this design-only pass. Evidence:
+  `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
 - Provider-boundary feasibility (2026-09-03): ordinary Codex and Claude stdio
-  are D (provider support required); Synesis-managed launch paths are C
-  candidates only. Static wrappers, anonymous brokers, process lineage, and
-  model-visible bearers do not establish same-conversation continuity. Full
-  evidence:
+  remain `SESSION_BOUND`; static wrappers, anonymous brokers, process
+  lineage, and model-visible bearers do not establish same-conversation
+  continuity. The managed Codex target is approved but still requires the
+  protected-carrier gate. Full evidence:
   `docs/evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md`.
-- Exact continuation: obtain or verify a provider integration contract that
-  supplies an exact per-conversation MCP identity, equivalent non-model-visible
-  audited continuity proof, or a genuinely Synesis-managed attachment channel;
-  then revisit ADR-0055 before production edits.
+- Exact continuation: run the disposable Codex App Server private-channel
+  prototype; only after it passes may a bounded production implementation
+  slice be opened. Preserve SYN-049 and all historical fixtures.
 
 - SYN-041 final real Codex closure acceptance (2026-08-29): one authenticated
   Codex lifecycle used the official packaged bundle through direct native MCP

@@ -1,3 +1,30 @@
+# 2026-09-03 — SYN-050 managed-continuity approval and attachment design
+
+- Reconciled SYN-050/ADR-0055 from clean source HEAD
+  `ae565f22c0e983472868ed1ff1ab11a934a00495`. Formally approved
+  `MANAGED_CONTINUITY` as a supported capability profile with the
+  Synesis-supervised Codex App Server path as its first target. Ordinary Codex
+  and Claude MCP remain `SESSION_BOUND`; the provider-neutral core remains
+  Result A.
+- Completed a design-only trace of the actual App Server launch,
+  `thread/start`, exact `threadId`, `thread/resume`/`thread/read`, attachment
+  and connection generations, process evidence, host restart reconciliation,
+  and existing authority verification. Thread IDs remain exact correlation,
+  not standalone authority.
+- Selected a per-attachment OS-local protected IPC channel with one-time
+  hash-backed proof and inherited-handle delivery as the managed design. Kept
+  raw proof out of model context, files, ordinary logs, guidance, and durable
+  audit. Reused the existing attachment/connection generations and lifecycle
+  revision; no second core identity graph or epoch was proposed.
+- Recorded Result B for implementation: one disposable provider-boundary
+  prototype must prove private proof delivery to the exact managed MCP
+  bridge/thread, multi-thread isolation, restart behavior, and old-generation
+  fencing. No production code, provider configuration, durable state, or
+  historical fixture changed. No separate implementation task was created.
+- Evidence: `docs/evidence/SYN-050-managed-attachment-design-2026-09-03.md`.
+  Exact next action: run that mutation-free protected-carrier prototype and
+  stop if Codex cannot provide the required boundary.
+
 # 2026-09-03 — SYN-050 provider-boundary feasibility spike
 
 - Completed the bounded provider-boundary feasibility investigation from clean
