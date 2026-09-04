@@ -17,8 +17,8 @@ they are incomplete, not passes. No fresh managed runtime, Worker B, A1/A2,
 historical fixture, `.synesis` state, credentials, or remote state was
 modified.
 
-Exact next action: checkpoint and commit the slice, then stop. Fresh managed
-runtime validation is separately authorized work.
+Exact next action: stop this slice. Fresh managed runtime validation is
+separately authorized work.
 
 ## SYN-051 provider-thread provenance review — 2026-09-04
 

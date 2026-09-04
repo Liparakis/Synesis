@@ -18,8 +18,8 @@ workspace and MCP package-wide test tasks stalled and were stopped, so they
 are incomplete evidence. No fresh managed Worker A, Worker B, A1/A2, or full
 acceptance was run.
 
-Exact next action: checkpoint and commit this slice, then stop. A fresh
-single-worker managed runtime validation requires separate authorization.
+Exact next action: stop this slice. A fresh single-worker managed runtime
+validation may be separately authorized; do not start it in this task.
 
 ## SYN-051 provider-thread provenance review — 2026-09-04
 

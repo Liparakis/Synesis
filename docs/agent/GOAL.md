@@ -7,8 +7,8 @@
   tests, clean install, and artifact matching passed; package-wide workspace
   and MCP test tasks stalled and remain incomplete. No fresh managed runtime
   was run.
-- Exact next action: checkpoint and commit the implementation, then stop;
-  fresh single-worker managed runtime validation needs separate authorization.
+- Exact next action: stop this slice; fresh single-worker managed runtime
+  validation needs separate authorization.
 
 - SYN-051 provider-thread provenance review (2026-09-04): **PASS-B —
   architecture simplification found**, with overall managed compatibility

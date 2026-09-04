@@ -9,8 +9,8 @@
   build/install provenance passed; workspace/MCP package-wide test tasks
   stalled and remain incomplete. No fresh Worker A, Worker B, A1/A2, or full
   acceptance was run.
-- Next action: checkpoint and commit this implementation slice, then stop;
-  fresh single-worker managed runtime validation needs separate authorization.
+- Next action: stop this slice; fresh single-worker managed runtime validation
+  needs separate authorization.
 
 - SYN-051 provider-thread provenance/loadability review — 2026-09-04:
   **COMPLETE / PASS-B architecture simplification found**. Read-only

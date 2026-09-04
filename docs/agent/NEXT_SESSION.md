@@ -9,9 +9,8 @@ replacement gates are implemented. Changed workspace tests and clean
 build/install artifact matching passed. Workspace and MCP package-wide test
 tasks stalled and were stopped; no fresh managed runtime was run.
 
-Exact next action: checkpoint and commit the source/tests/evidence, then stop.
-Do not start a fresh managed Worker A, Worker B, A1/A2, or full acceptance
-without separate authorization.
+Exact next action: if separately authorized, run only a fresh single-worker
+managed runtime validation. Do not start Worker B, A1/A2, or full acceptance.
 
 ## SYN-051 provider-thread provenance review — 2026-09-04
 

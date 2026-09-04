@@ -66,8 +66,10 @@ BUILD SUCCESSFUL
 ```
 
 The lifecycle regression proves `verify → finalize → activate` ordering and
-that only a completed event reaches the persistence callback. Ownership,
-attachment, replacement, broker, protocol, and lifecycle focused tests pass.
+that only a completed event reaches the persistence callback. The six
+explicitly selected workspace classes completed **34 tests, 0 failures, 0
+errors, 0 skipped**. Ownership, attachment, replacement, broker, protocol,
+and lifecycle focused tests pass.
 MCP test sources compile. The combined workspace/MCP test task and a selected
 MCP package test task both stalled after entering their test task and were
 stopped; they are incomplete evidence, not passes.
@@ -107,5 +109,5 @@ runtime validation remain unrun. No credentials were read, copied, logged,
 or modified; no raw proof is persisted or placed in global Codex config; no
 new MCP tool was added; the catalog remains exactly 10 tools.
 
-Exact next action: checkpoint and commit this slice, then stop. Fresh
-single-worker managed runtime validation may be separately authorized.
+Exact next action: stop this slice. Fresh single-worker managed runtime
+validation may be separately authorized.
