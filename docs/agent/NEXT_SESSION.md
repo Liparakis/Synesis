@@ -1,5 +1,42 @@
 # Next Session
 
+## SYN-051 caller-contract-only preparation validation — 2026-09-05
+
+The bounded caller-contract pass is **PASS-A for preparation only; SYN-051
+remains ACTIVE / PARTIAL overall**. The prior candidate was inspected and left
+untouched because its binding was already `FAILED` with
+`managed_attachment_not_prepared`. Exactly one new lawful Worker-A lane was
+created through supported target application flows. The production
+`ManagedCodexProcessLauncher.prepareFirst(AuthorityContext)` call created
+exactly one generation 1 `PENDING_ACTIVATION` attachment with proof digest
+`897b305ba8aa01fc162a5466a4c0de49c35250a73161717a2c362b2d2e118591`; raw proof
+was never persisted or logged. The provider thread and ownership are absent,
+the exact authority records are preserved, and no START/App Server/MCP/Job or
+provider-thread work was performed. Evidence:
+`docs/evidence/SYN-051-fresh-worker-a-validation-2026-09-04.md`.
+
+- Exact next action: do not call START from a new process against this pending
+  record. If separately authorized, use one trusted live caller that performs
+  `prepareFirst` and START in the same process, then stop before any broader
+  runtime acceptance; do not start Worker B.
+
+## SYN-051 fresh Worker A managed-runtime validation — 2026-09-04
+
+The pass is **PARTIAL / STOPPED BEFORE MANAGED APP SERVER LAUNCH**. Final
+artifact provenance and 35 focused workspace/lifecycle tests passed; the
+selected MCP test task stalled without assertion output. Fresh authority and
+the exact `probe-runtime/persistence-a.txt` claim were created, but the
+disposable caller submitted START without invoking managed `prepareFirst`,
+and the owner returned `managed_attachment_not_prepared`. No proof,
+generation, App Server, MCP child, Job, provider thread, turn, or target file
+mutation exists. Historical target records and production source are
+untouched. Evidence:
+`docs/evidence/SYN-051-fresh-worker-a-validation-2026-09-04.md`.
+
+- Exact next action: decide or separately authorize the supported managed
+  caller sequence that invokes `prepareFirst` before START; do not retry this
+  pass, start Worker B, or perform A1-to-A2 replacement.
+
 ## SYN-051 generation-1 persistence-boundary implementation — 2026-09-04
 
 The bounded implementation is **PARTIAL**. Same-App-Server first-generation

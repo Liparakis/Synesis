@@ -1,5 +1,58 @@
 # Current Task
 
+## SYN-051 caller-contract-only preparation validation — 2026-09-05
+
+The bounded pass is **PASS-A for the preparation boundary; SYN-051 remains
+ACTIVE / PARTIAL overall**. The prior requested binding
+`session-8b82fd05-6c97-4f8f-bc1a-2a1ce0c56c2a` was inspected through supported
+state and correctly left untouched because it was already `FAILED` with
+`managed_attachment_not_prepared` and had no attachment. Exactly one new
+lawful Worker-A lane was created through the production session and
+collaboration services:
+
+- Binding: `session-444ee24b-1ff8-4111-b818-787f900088a0`
+- Participant: `agt_c74b5d08-5a0b-3017-bce9-652498da186c`
+- WorkIntent: `befca654-af37-31cb-a605-f6bfbec7a8f0`
+- Claim: `probe-runtime/caller-contract-preparation-62178e4d-e95a-4529-845a-22ae1d8fbfff.txt`
+
+The actual production call
+`ManagedCodexProcessLauncher.prepareFirst(AuthorityContext)` succeeded and
+created exactly one generation 1 `PENDING_ACTIVATION` record. The durable
+record contains only the proof digest
+`897b305ba8aa01fc162a5466a4c0de49c35250a73161717a2c362b2d2e118591`; the raw
+proof was held only in the trusted launcher's volatile preparation. The
+provider thread and provider-thread ownership remain absent. Binding,
+participant, WorkIntent, and claim preservation all passed. No START, Codex,
+App Server, MCP, Job, or provider-thread operation was performed, and no
+production source changed.
+
+Evidence: `docs/evidence/SYN-051-fresh-worker-a-validation-2026-09-04.md`.
+
+## Immediate next action
+
+If separately authorized, keep `prepareFirst` and START in the same trusted
+live caller and run only the next bounded single-worker runtime step; do not
+call START from a new process against this pending record, do not start Worker
+B, and do not run broader acceptance.
+
+## SYN-051 fresh Worker A managed-runtime validation — 2026-09-04
+
+The bounded runtime pass is **PARTIAL / STOPPED BEFORE MANAGED APP SERVER
+LAUNCH**. The clean final build/install and 35 focused workspace/lifecycle
+tests passed; the selected MCP test task stalled without assertion output and
+was stopped. A fresh target authority lane was created for binding
+`session-8b82fd05-6c97-4f8f-bc1a-2a1ce0c56c2a`, participant
+`agt_9db6eb10-fff3-3711-8f97-1d0b75ed40de`, WorkIntent
+`45cb6507-0dd0-397d-aecb-51e8754b069e`, and claim
+`probe-runtime/persistence-a.txt`. The caller submitted START without first
+calling the managed launcher's `prepareFirst`, so the owner returned
+`managed_attachment_not_prepared` before App Server launch. No proof,
+generation, App Server, MCP child, Job, provider thread, turn, or mutation
+was created. Historical target state and source production code were not
+changed.
+
+Evidence: `docs/evidence/SYN-051-fresh-worker-a-validation-2026-09-04.md`.
+
 ## SYN-051 generation-1 provider persistence boundary — 2026-09-04
 
 The bounded production slice is **PARTIAL**. The managed App Server now
@@ -20,8 +73,10 @@ acceptance was run.
 
 ## Immediate next action
 
-Stop this slice. A fresh single-worker managed runtime validation may be
-separately authorized; do not start it in this task.
+Do not retry this stopped pass. Decide or separately authorize the supported
+managed caller sequence that invokes `prepareFirst` before START, then run a
+new fresh single-worker validation only if authorized; do not start Worker B,
+A1-to-A2 replacement, or full acceptance.
 
 ## SYN-051 provider-thread provenance review — 2026-09-04
 
