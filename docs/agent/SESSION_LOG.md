@@ -1,3 +1,19 @@
+## 2026-09-04 — SYN-051 provider-thread provenance/loadability review
+
+Completed the bounded read-only investigation. Official Codex 0.153.0 source,
+provider durable stores, launch provenance, and disposable T1/T2 probes agree:
+`thread/start` without a persisted turn is not a cross-process durable
+handoff; a completed-turn thread is cold-loadable and resumable from the same
+normal provider home. The prior `thread not loaded` failure is therefore a
+bootstrap persistence-boundary error, not a Synesis state-root mismatch or a
+missing load-order method. Classified PASS-B architecture simplification
+found; full managed compatibility remains partial. No production source,
+protected runtime state, credentials, Worker B, or remote state changed.
+
+Immediate next action: implement managed generation-1 creation, broker exact
+ownership/pinning, and the persisted-turn gate; then run focused verification
+only.
+
 - 2026-09-04 — SYN-051 bounded production lifecycle fix implemented. The
   trusted process supervisor now emits generation-scoped death evidence only
   after root exit, Job teardown, and an empty Job count; the launcher persists

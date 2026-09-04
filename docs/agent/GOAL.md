@@ -1,5 +1,17 @@
 # Goal
 
+- SYN-051 provider-thread provenance review (2026-09-04): **PASS-B —
+  architecture simplification found**, with overall managed compatibility
+  still **PARTIAL**. Codex 0.153.0 does not make a `thread/start`-only ID
+  successor-loadable across App Server processes; one persisted turn/history
+  is required in the observed lifecycle. State roots matched, and the exact
+  failure was not caused by Synesis proof/ownership state. No production code
+  changed. See the provider evidence and ADR-0064.
+- Exact next action: implement the bounded managed-generation-1 creation and
+  broker pinning change, then require one persisted turn before successor or
+  replacement acceptance. Rebuild/install and run focused checks only; do not
+  start Worker B or full acceptance.
+
 - SYN-051 real-runtime validation (2026-09-04): **PARTIAL / STOPPED ON FIRST
   MATERIAL FAILURE**. Current source and installed artifacts were verified;
   a fresh managed Worker A binding and provider-thread owner were created.

@@ -1,5 +1,19 @@
 # Next Session
 
+## SYN-051 provider-thread provenance review — 2026-09-04
+
+The read-only review is **COMPLETE / PASS-B architecture simplification
+found**. A Codex 0.153.0 `thread/start` result without a persisted turn is
+process-local: fresh `thread/read` reports `thread not loaded` and fresh
+`thread/resume` reports `no rollout found`. The same binary/home successfully
+read and resumed a thread with one completed turn. No production source or
+runtime state changed.
+
+Exact next action: implement managed generation-1 `thread/start`, broker
+acquisition and immutable pinning of its exact ID, and the persisted-turn gate;
+rebuild/install and run focused provider/lifecycle verification only. Do not
+start Worker B or full acceptance.
+
 ## SYN-051 bounded real-runtime validation — 2026-09-04
 
 The pass is **PARTIAL / STOPPED ON FIRST MATERIAL FAILURE**. The rebuilt

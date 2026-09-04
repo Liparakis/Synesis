@@ -1,5 +1,21 @@
 # SYN-051 production compatibility fix — 2026-09-04
 
+## SYN-051 provider-thread provenance review — 2026-09-04
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Provider source meaning | 0.153.0 `thread/read` missing-live/missing-store branch | PASS | official `thread_processor.rs`; detailed evidence record |
+| Provenance | Bootstrap and successor effective home/state/history/rollout roots | PASS: matched | detailed evidence record |
+| T1 start-only | Same-process live read; fresh-process read/resume | PASS then FAIL as expected | disposable provider probe; T1 durable store absent |
+| T2 completed turn | Fresh-process read and exact resume | PASS | disposable provider probe; T2 durable store/rollout present |
+| Version comparison | 0.145 source and historical completed-turn acceptance | NO regression found | official 0.145 source and existing repo evidence |
+| Managed acceptance | A1/A2, controlled crash, Worker B, full acceptance | NOT RUN | read-only scope boundary |
+
+Exact next action: implement managed generation-1 `thread/start`, broker exact
+ownership/pinning, and the persisted-turn gate; rebuild/install and run only
+focused provider/lifecycle verification. Worker B and full acceptance remain
+out of scope.
+
 ## SYN-051 real-runtime validation — 2026-09-04
 
 | Area | Check | Result | Evidence |

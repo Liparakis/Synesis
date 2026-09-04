@@ -1,5 +1,18 @@
 # Tasks
 
+- SYN-051 provider-thread provenance/loadability review — 2026-09-04:
+  **COMPLETE / PASS-B architecture simplification found**. Read-only
+  provider-source, durable-store, environment-provenance, and disposable T1/T2
+  checks established that `thread/start` alone is not a cross-process durable
+  handoff, while a thread with one completed turn is cold-loadable/resumable.
+  No production source, `.synesis` state, credentials, historical evidence,
+  Worker B, or remote state changed. Full managed compatibility remains
+  unverified.
+- Next action: implement managed generation-1 `thread/start`, broker exact
+  ownership/pinning, and the persisted-turn gate; rebuild/install and run only
+  focused provider/lifecycle verification, with Worker B/full acceptance out
+  of scope.
+
 - SYN-051 bounded real-runtime validation — 2026-09-04:
   **ACTIVE / PARTIAL / STOPPED ON FIRST MATERIAL FAILURE**.
   `088cb239f2e2109c4dddd40cbaee36c158337e82` built and installed with

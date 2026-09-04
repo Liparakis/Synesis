@@ -1,5 +1,26 @@
 # Failed Attempts
 
+## 2026-09-04 — SYN-051 bootstrap thread was not a durable handoff
+
+- The read-only provider investigation reproduced the managed failure with
+  disposable provider-only probes. A `thread/start`-only T1 was readable while
+  live in its originating process but had no provider `threads` row, history
+  items, or rollout and failed fresh `thread/read`/`thread/resume`.
+- A T2 with one completed turn, using the same Codex 0.153.0 binary, normal
+  home, state DB, and history DB, produced durable records and passed fresh
+  `thread/read` and `thread/resume`.
+- This disproves the bootstrap assumption that the returned live ID was a
+  successor-loadable provider resource. It does not indicate a state-root
+  mismatch, require a `thread/load` call, or weaken Synesis proof/ownership
+  controls. Graceful-versus-abrupt termination was not separately compared.
+- Classification: PASS-B architecture simplification found; overall managed
+  compatibility remains partial. No production source or protected state was
+  changed.
+
+Immediate next action: implement managed generation-1 creation and broker
+pinning with one persisted turn before successor/replacement acceptance, then
+run focused verification only.
+
 ## 2026-09-04 — SYN-051 real-runtime validation stopped before A1
 
 - Current source `088cb239f2e2109c4dddd40cbaee36c158337e82` built and installed

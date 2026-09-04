@@ -1,5 +1,25 @@
 # Current Task
 
+## SYN-051 provider-thread provenance review — 2026-09-04
+
+The read-only investigation is **PASS-B — architecture simplification found**
+with full managed compatibility still unverified. Codex 0.153.0 creates a
+start-only thread in the originating App Server but does not provide a
+successor-loadable provider rollout/history until a persisted turn or
+equivalent persistence operation exists. The exact managed failure was caused
+by treating that live ID as a durable handoff; provider state roots matched.
+No production source, `.synesis` state, credentials, historical evidence,
+Worker B, or remote state changed. Evidence is in
+`docs/evidence/SYN-051-provider-thread-provenance-2026-09-04.md` and ADR-0064.
+
+## Immediate next action
+
+Implement the bounded SYN-051 first-generation lifecycle change: let managed
+App Server call `thread/start`, then broker-acquire/pin the returned thread and
+require one persisted turn before successor/replacement acceptance. Rebuild,
+install, and run only focused provider/lifecycle verification; do not start
+Worker B or full acceptance.
+
 ## SYN-051 bounded real-runtime validation — 2026-09-04
 
 The pass is **PARTIAL / STOPPED ON FIRST MATERIAL FAILURE**. The current

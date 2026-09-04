@@ -1,5 +1,24 @@
 # State
 
+## SYN-051 provider-thread provenance review — 2026-09-04
+
+Status is **PASS-B — architecture simplification found** for the bounded
+provenance question and **PARTIAL** for overall managed-runtime compatibility.
+The same 0.153.0 provider binary and normal home reproduced the boundary:
+start-only T1 was live-process readable but absent from provider durable
+threads/history/rollout and failed cold read/resume; T2 with one completed turn
+was durably stored and cold read/resume passed. The prior managed failure is
+therefore a bootstrap handoff assumption, not a path mismatch or missing
+`thread/load` step. No production source or runtime state changed.
+
+## Immediate next action
+
+Implement the bounded SYN-051 first-generation lifecycle change: let managed
+App Server call `thread/start`, then broker-acquire/pin the returned thread and
+require one persisted turn before successor/replacement acceptance. Rebuild,
+install, and run only focused provider/lifecycle verification; do not start
+Worker B or full acceptance.
+
 ## SYN-051 bounded real-runtime validation — 2026-09-04
 
 Status is **PARTIAL / STOPPED ON FIRST MATERIAL FAILURE**. Build and install
