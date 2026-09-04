@@ -22,9 +22,12 @@ attachment or start the A1 turn.
 
 The lifecycle's bounded startup cleanup produced a trusted generation-1 death
 receipt for root PID `4952`. This is startup-failure cleanup evidence only, not
-the requested controlled App Server-root crash/teardown evidence. The aborted
-fresh attachment was terminalized at generation 2 through the public
-application service. The historical binding `session-72ed7536-ff66-431d-ae97-fcdf27f678c3`
+the requested controlled App Server-root crash/teardown evidence. The one-shot
+harness did not fail-fast after the exception and later reached the production
+replacement path, creating generation 2 `PENDING_ACTIVATION` from that receipt.
+That was not accepted as A1-to-A2 evidence; the aborted generation-2 record
+was terminalized through the public application service. The historical
+binding `session-72ed7536-ff66-431d-ae97-fcdf27f678c3`
 remains generation 1 `ACTIVE` with no receipt. No Worker B, A/B test,
 replacement, A2, production source change, or push occurred.
 
@@ -42,7 +45,7 @@ Read-only provider confirmation in a new App Server process returned:
 | Exact pinned thread join | FAIL: `thread not loaded` |
 | A1 managed turn and mutation | NOT RUN |
 | Controlled root failure and trusted teardown | NOT RUN |
-| Proofless replacement and A2 | NOT RUN |
+| Proofless replacement and A2 | NOT RUN as validation; aborted harness created gen2 pending and cleanup terminalized it |
 | Worker B/A-B/full acceptance | NOT RUN |
 
 ## Next action

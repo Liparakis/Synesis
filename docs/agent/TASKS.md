@@ -8,8 +8,10 @@
   launched a Job-contained App Server, but Codex `0.153.0` returned
   `thread not loaded` for `thread/resume`; A1 did not activate or execute a
   managed turn. Startup cleanup produced trusted generation-1 death evidence;
-  this is not controlled A1 crash evidence. The aborted fresh attachment was
-  terminalized at generation 2 through the public service. Historical
+  this is not controlled A1 crash evidence. The non-fail-fast harness later
+  created generation 2 pending through the production replacement path; that
+  aborted record was terminalized at generation 2 through the public service.
+  Historical
   generation 1, Worker B, and production source remain untouched.
 - Verified: fresh build/install, artifact hashes, focused lifecycle/MCP tests,
   strict Javadocs/format/static/architecture checks, deferred register, and

@@ -5183,8 +5183,9 @@ not run Codex or close SYN-041.
   generation-1 managed attachment; Job-contained App Server launch then
   failed closed because Codex 0.153.0 returned `thread not loaded` for the
   bootstrap-created thread during `thread/resume`. Startup cleanup produced a
-  trusted receipt, but no A1 turn or controlled crash evidence. The aborted
-  fresh attachment was terminalized at generation 2 through the public
-  service. Historical generation 1, Worker B, production source, and remote
-  state remain untouched. Next action: read-only provider-thread provenance
-  review; no retry or proof-gate relaxation.
+  trusted receipt, but no A1 turn or controlled crash evidence. The harness
+  failed to stop at the exception and later created generation 2 pending via
+  the production replacement path; that aborted record was terminalized at
+  generation 2 through the public service. Historical generation 1, Worker B,
+  production source, and remote state remain untouched. Next action: read-only
+  provider-thread provenance review; no retry or proof-gate relaxation.

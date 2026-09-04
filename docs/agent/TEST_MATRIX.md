@@ -11,12 +11,12 @@
 | Exact thread join | New App Server `thread/resume` for bootstrap-created exact thread | FAIL: `thread not loaded` | `probe-runtime/.../generation-1.jsonl` |
 | Startup cleanup | Lifecycle failed closed and trusted generation-1 receipt was written | PASS | public receipt store; not crash evidence |
 | Controlled A1 root failure | Kill only active App Server root after A1 turn | NOT RUN | stop-on-first-failure |
-| Replacement/A2 | Fresh proof, generation 2 activation, exact resume, real turn | NOT RUN | stop-on-first-failure |
+| Replacement/A2 | Fresh proof, generation 2 activation, exact resume, real turn | NOT RUN; aborted harness reached generation-2 pending, then terminalized | stop-on-first-failure |
 | Worker B/A-B acceptance | B, isolation, cross-proof, full acceptance | NOT RUN | explicit scope boundary |
 
 The read-only provider repro returned `thread not loaded:
 01a069b4-1028-7472-8a77-21e847c51cc7` in a new App Server process. The fresh
-aborted attachment was terminalized at generation 2 through the public
+aborted generation-2 pending attachment was terminalized through the public
 application service. The historical binding remains generation 1 `ACTIVE`
 without a receipt.
 

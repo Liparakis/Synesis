@@ -9,7 +9,10 @@ attachment, and Job-contained App Server launch were established. Codex
 `0.153.0` then returned `thread not loaded` for the broker-pinned thread on
 `thread/resume`. The lifecycle recorded `FAILED` and performed its bounded
 startup cleanup, producing generation-1 trusted death evidence; no A1 turn,
-activation, controlled root failure, or replacement occurred.
+activation, controlled root failure, or valid A1-to-A2 acceptance occurred.
+Because the one-shot harness did not fail-fast after the exception, it later
+called the production replacement path and created generation 2 pending; that
+aborted record was terminalized through the public service.
 
 The aborted fresh attachment was terminalized at generation 2 through the
 public service. The historical `session-72ed7536-ff66-431d-ae97-fcdf27f678c3`

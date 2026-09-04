@@ -7,9 +7,10 @@ installed source was provenance-matched. Fresh Worker A setup and exact
 provider-thread ownership passed, but the managed App Server failed at the
 first protocol join: Codex `0.153.0` returned `thread not loaded` for the
 bootstrap-created exact thread. No A1 turn, controlled root crash, trusted
-crash teardown, replacement, or A2 evidence exists. Startup cleanup produced
-only a generation-1 receipt, and the aborted fresh attachment was terminalized
-at generation 2. Historical generation 1 remains active without a receipt.
+  crash teardown or valid A1-to-A2 evidence exists. Startup cleanup produced
+  a generation-1 receipt; the non-fail-fast harness later created an aborted
+  generation-2 pending record through the production replacement path, which
+  was terminalized. Historical generation 1 remains active without a receipt.
 
 Exact next action: perform a read-only provider-thread provenance review for
 the cross-process loadability failure. Do not retry managed A1/A2, relax proof

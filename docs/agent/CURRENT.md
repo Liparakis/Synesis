@@ -11,13 +11,17 @@ created a generation-1 pending attachment inside a Windows Job. Codex
 `thread not loaded`; therefore A1 never reached a real managed turn or
 activation. The lifecycle failed closed and its startup cleanup produced a
 trusted generation-1 death receipt. This is not the requested controlled
-App-Server-root crash evidence and does not authorize replacement.
+App-Server-root crash evidence. The one-shot harness did not fail-fast after
+the exception and later reached the production replacement call, creating a
+generation-2 pending record from that startup-cleanup receipt; this was not
+accepted as A1-to-A2 evidence and was terminalized through the public service.
 
 The fresh aborted attachment was terminalized through the public application
 service at generation 2 for safe stopping. The historical binding remains
 generation 1 `ACTIVE` with no receipt and was not touched. Worker B, A/B
 isolation, A1/A2 restart, and full acceptance were not run. No production
-source changed and no push occurred.
+source changed and no push occurred. The harness-control defect is recorded
+as a test-execution failure, not a production lifecycle conclusion.
 
 ## Immediate next action
 
