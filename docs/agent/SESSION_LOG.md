@@ -1,3 +1,25 @@
+## 2026-09-04 — SYN-051 generation-1 persistence-boundary implementation
+
+Implemented the bounded production slice selected by ADR-0064. The managed
+App Server now owns generation-1 `thread/start`; the returned exact ID is
+acquired under unique `(provider, thread)` ownership, broker verified, bound
+to the pending attachment, and activated only afterward. Durable ownership
+records now carry idempotent provider-persistence readiness, set only by the
+trusted exact `turn/completed` lifecycle event. Provisional successor and
+replacement attempts fail closed; already-bound successor finalization is
+idempotent and mismatched binding remains rejected. Existing proof,
+generation, quarantine, ten-tool, and process-lifecycle seams remain intact.
+
+Verification: changed workspace tests passed, including the lifecycle hook
+ordering regression; clean `:cli:installDist` passed; produced and installed
+workspace/MCP/CLI jars matched by SHA-256; MCP test sources compiled. The
+workspace and MCP package-wide test tasks stalled and were stopped, so they
+are incomplete evidence. No fresh managed Worker A, Worker B, A1/A2, full
+acceptance, protected runtime state, credentials, or remote state was touched.
+
+Exact next action: checkpoint and commit this slice, then stop. Fresh managed
+runtime validation requires separate authorization.
+
 ## 2026-09-04 — SYN-051 provider-thread provenance/loadability review
 
 Completed the bounded read-only investigation. Official Codex 0.153.0 source,

@@ -107,6 +107,79 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
     }
 
     /**
+     * Issues the first pending attachment before the managed App Server has
+     * created its provider thread.
+     *
+     * @param location project location
+     * @param projectId durable project ID
+     * @param provider provider identifier
+     * @param bindingSessionId existing binding session
+     * @param runtimeHomeId provider-owned runtime-home identity
+     * @param store durable attachment store
+     * @return raw proof and pending attachment metadata
+     * @throws Exception when durable setup is invalid
+     */
+    public synchronized IssuedAttachment issuePending(ProjectApplicationService.ProjectLocation location,
+            String projectId, String provider, String bindingSessionId, String runtimeHomeId,
+            ManagedAttachmentStore store) throws Exception {
+        Objects.requireNonNull(location, "location");
+        requireCodex(provider);
+        Objects.requireNonNull(store, "store");
+        if (!location.projectId().toString().equals(projectId)) {
+            throw new IllegalArgumentException("managed attachment project mismatch");
+        }
+        if (store.read().isPresent()) {
+            throw new IllegalStateException("managed attachment already exists");
+        }
+        String proof = randomProof();
+        ManagedAttachmentRecord record = new ManagedAttachmentRecord(
+                ManagedAttachmentRecord.CURRENT_SCHEMA_VERSION, projectId, provider,
+                ProviderContinuityMode.MANAGED_CONTINUITY, bindingSessionId, null, 1L,
+                hash(proof), runtimeHomeId, ManagedAttachmentRecord.Status.PENDING_ACTIVATION, 1L,
+                System.currentTimeMillis());
+        store.write(record);
+        return new IssuedAttachment(proof, record);
+    }
+
+    /**
+     * Binds the exact provider thread returned by the managed App Server to a
+     * still-pending first generation.
+     *
+     * @param store exact attachment store
+     * @param provider canonical provider identifier
+     * @param bindingSessionId exact binding
+     * @param threadId exact provider-returned thread
+     * @param expectedGeneration pending generation
+     * @return updated pending attachment
+     * @throws Exception when the pending record is stale or already bound
+     */
+    public synchronized ManagedAttachmentRecord bindProviderThread(ManagedAttachmentStore store, String provider,
+            String bindingSessionId, String threadId, long expectedGeneration) throws Exception {
+        Objects.requireNonNull(store, "store");
+        requireCodex(provider);
+        requireNonBlank(bindingSessionId, "bindingSessionId");
+        requireNonBlank(threadId, "threadId");
+        ManagedAttachmentRecord prior = store.read().orElseThrow(() -> failure("attachment_missing"));
+        if (!provider.equals(prior.provider()) || !bindingSessionId.equals(prior.bindingSessionId())
+                || prior.generation() != expectedGeneration
+                || prior.status() != ManagedAttachmentRecord.Status.PENDING_ACTIVATION) {
+            throw failure("managed_attachment_thread_binding_rejected");
+        }
+        if (prior.threadId() != null) {
+            if (!prior.threadId().equals(threadId)) {
+                throw failure("managed_attachment_thread_binding_rejected");
+            }
+            return prior;
+        }
+        ManagedAttachmentRecord next = new ManagedAttachmentRecord(prior.schemaVersion(), prior.projectId(),
+                prior.provider(), prior.mode(), prior.bindingSessionId(), threadId, prior.generation(),
+                prior.proofHash(), prior.runtimeHomeId(), prior.status(), prior.revision() + 1L,
+                System.currentTimeMillis());
+        store.write(next);
+        return next;
+    }
+
+    /**
      * Authenticates an exact managed attachment without changing state.
      *
      * @param location project location
@@ -228,7 +301,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                         || (allowPending && record.status() == ManagedAttachmentRecord.Status.PENDING_ACTIVATION));
         if (!expectedProjectId.equals(record.projectId()) || !request.provider().equals(record.provider())
                 || !request.bindingSessionId().equals(record.bindingSessionId())
-                || !request.threadId().equals(record.threadId())
+                || !threadMatches(record, request, allowPending)
                 || request.expectedGeneration() != record.generation()
                 || !statusValid
                 || !constantTimeEquals(record.proofHash(), hash(request.proof()))) {
@@ -333,6 +406,9 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                         && prior.status() != ManagedAttachmentRecord.Status.DISCONNECTED)) {
             throw failure("managed_attachment_replacement_rejected");
         }
+        if (!ownership.persistenceReady()) {
+            throw failure("managed_provider_thread_not_persistence_ready");
+        }
         ManagedRuntimeDeathReceipt receipt = deathReceipts.read(bindingSessionId, expectedGeneration)
                 .orElseThrow(() -> failure("managed_death_evidence_missing"));
         verifyDeathReceipt(receipt, projectId, provider, bindingSessionId, expectedGeneration);
@@ -418,6 +494,22 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
     private static void requireCodex(String provider) {
         if (!"codex".equals(provider)) {
             throw new IllegalArgumentException("managed continuity currently supports codex only");
+        }
+    }
+
+    private static boolean threadMatches(ManagedAttachmentRecord record, AttachmentRequest request,
+            boolean allowPending) {
+        if (record.threadId() == null) {
+            return allowPending && record.status() == ManagedAttachmentRecord.Status.PENDING_ACTIVATION
+                    && request.threadId() == null;
+        }
+        return record.threadId().equals(request.threadId());
+    }
+
+    private static void requireNonBlank(String value, String label) {
+        Objects.requireNonNull(value, label);
+        if (value.isBlank()) {
+            throw new IllegalArgumentException(label + " is invalid");
         }
     }
 

@@ -1,5 +1,21 @@
 # SYN-051 production compatibility fix — 2026-09-04
 
+## SYN-051 generation-1 persistence-boundary implementation — 2026-09-04
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Same-process generation 1 | Managed lifecycle uses `thread/start` without bootstrap handoff | PASS focused lifecycle regression | `CodexLifecycleWaitControlTest` |
+| Boundary ordering | Verify, finalize, activate occur in order | PASS | `CodexLifecycleWaitControlTest` |
+| Persistence signal | Exact completed event reaches provider owner | PASS | `CodexLifecycleWaitControlTest`, launcher callback |
+| Durable ownership | Scoped/idempotent readiness and wrong-owner rejection | PASS | `ProviderThreadOwnershipStoreTest` |
+| Attachment gate | Pending thread bind, idempotence, mismatch rejection | PASS | `ManagedAttachmentServiceTest` |
+| Replacement gate | Provisional blocked; persisted plus trusted death allowed | PASS focused | `ManagedAttachmentServiceTest` |
+| Compatibility regressions | Protocol, broker, lifecycle focused classes | PASS | explicit Gradle test selection |
+| MCP package tests | Selected MCP tests | INCOMPLETE: stalled and stopped | `FAILED_ATTEMPTS.md` |
+| Build/install | Clean `:cli:installDist` | PASS | SYN-051 implementation evidence |
+| Artifact provenance | Produced vs installed SHA-256 | PASS | SYN-051 implementation evidence |
+| Real managed acceptance | Worker A/B, A1/A2, full acceptance | NOT RUN | explicit scope boundary |
+
 ## SYN-051 provider-thread provenance review — 2026-09-04
 
 | Area | Check | Result | Evidence |

@@ -440,6 +440,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 }
             }
             launcher.verifyReturnedThread(authority, attachmentGeneration, threadId);
+            launcher.finalizeManagedThread(authority, attachmentGeneration, threadId);
             launcher.activateManagedAttachment(authority, attachmentGeneration);
             synchronized (stateLock) {
                 active = new Attachment(process, protocol, journal, attachmentGeneration, connectionGeneration);
@@ -1354,6 +1355,35 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
 
         /**
+         * Finalizes the exact managed provider-thread binding after the
+         * provider returned it and before authority activation.
+         *
+         * @param authority verified authority context
+         * @param attachmentGeneration local attachment generation
+         * @param returnedThreadId exact provider-returned thread selector
+         * @throws IOException when the binding cannot be finalized
+         */
+        default void finalizeManagedThread(LifecycleControlRequestEnvelope.AuthorityContext authority,
+                long attachmentGeneration, String returnedThreadId) throws IOException {
+            // Ordinary launchers have no managed provider-thread record.
+        }
+
+        /**
+         * Records the trusted provider completion boundary for the exact
+         * managed provider thread.
+         *
+         * @param authority verified authority context
+         * @param attachmentGeneration local attachment generation
+         * @param threadId exact completed-turn thread
+         * @param turnId exact completed turn, when supplied by the provider
+         * @throws IOException when the completion is outside the active scope
+         */
+        default void providerTurnCompleted(LifecycleControlRequestEnvelope.AuthorityContext authority,
+                long attachmentGeneration, String threadId, String turnId) throws IOException {
+            // Ordinary launchers have no managed persistence boundary.
+        }
+
+        /**
          * Activates a pending managed proof only after exact thread verification.
          *
          * @param authority verified authority context
@@ -1618,6 +1648,10 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                                 current.threadId(),
                                 current.turnId(),
                                 null);
+                        if (next == CodexLifecycleStateStore.State.COMPLETED) {
+                            launcher.providerTurnCompleted(authority, attachmentGeneration, current.threadId(),
+                                    current.turnId());
+                        }
                         journal.offer("turn_completed",
                                 Map.of("turnId", current.turnId() == null ? "" : current.turnId(),
                                         "status", status == null ? "" : status),

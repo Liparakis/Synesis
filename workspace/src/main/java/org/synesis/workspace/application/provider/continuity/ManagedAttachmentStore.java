@@ -53,7 +53,7 @@ public final class ManagedAttachmentStore {
             return java.util.Optional.of(new ManagedAttachmentRecord(
                     number(value, "schemaVersion").intValue(), text(value, "projectId"),
                     text(value, "provider"), ProviderContinuityMode.valueOf(text(value, "mode")),
-                    text(value, "bindingSessionId"), text(value, "threadId"),
+                    text(value, "bindingSessionId"), optionalText(value, "threadId"),
                     number(value, "generation").longValue(), text(value, "proofHash"),
                     text(value, "runtimeHomeId"), ManagedAttachmentRecord.Status.valueOf(text(value, "status")),
                     number(value, "revision").longValue(), number(value, "updatedAtEpochMillis").longValue()));
@@ -175,6 +175,17 @@ public final class ManagedAttachmentStore {
             throw new IllegalArgumentException("missing " + key);
         }
         return number;
+    }
+
+    private static String optionalText(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (item == null) {
+            return null;
+        }
+        if (!(item instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return text;
     }
 
     @FunctionalInterface

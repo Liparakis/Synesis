@@ -1,5 +1,18 @@
 # Next Session
 
+## SYN-051 generation-1 persistence-boundary implementation — 2026-09-04
+
+The bounded implementation is **PARTIAL**. Same-App-Server first-generation
+creation, exact ownership/pinning and attachment finalization, pending MCP
+quarantine, durable persistence readiness, and fail-closed successor/
+replacement gates are implemented. Changed workspace tests and clean
+build/install artifact matching passed. Workspace and MCP package-wide test
+tasks stalled and were stopped; no fresh managed runtime was run.
+
+Exact next action: checkpoint and commit the source/tests/evidence, then stop.
+Do not start a fresh managed Worker A, Worker B, A1/A2, or full acceptance
+without separate authorization.
+
 ## SYN-051 provider-thread provenance review — 2026-09-04
 
 The read-only review is **COMPLETE / PASS-B architecture simplification

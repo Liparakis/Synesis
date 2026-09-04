@@ -241,8 +241,10 @@ final class ManagedAttachmentServiceTest {
         Path root = Files.createTempDirectory("synesis-managed-proofless-replacement-");
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
-        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+        ProviderThreadOwnershipStore.storeFor(location)
                 .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .markPersistenceReady(location.projectId().toString(), "codex", "thread-a", "binding-a");
         var service = new ManagedAttachmentService();
         var issued = service.issue(location, location.projectId().toString(), "codex", "binding-a", "thread-a",
                 "home-a", store);
@@ -288,12 +290,55 @@ final class ManagedAttachmentServiceTest {
     }
 
     @Test
-    void twoProoflessReplacementAttemptsHaveOneWinner() throws Exception {
-        Path root = Files.createTempDirectory("synesis-managed-proofless-race-");
+    void provisionalProviderThreadCannotBeReplacedAfterTrustedDeath() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-provisional-replacement-");
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
         var ownership = ProviderThreadOwnershipStore.storeFor(location)
                 .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        new ManagedAttachmentService().issue(location, location.projectId().toString(), "codex", "binding-a",
+                "thread-a", "home-a", store);
+        var receiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);
+        receiptStore.write(new ManagedRuntimeDeathReceipt(1, location.projectId().toString(), "codex", "binding-a",
+                1L, 7123L, 991L, "codex.exe", "codex app-server", "managed-supervisor", 1L,
+                System.currentTimeMillis()));
+
+        assertThrows(IllegalStateException.class, () -> new ManagedAttachmentService().replaceAfterTrustedDeath(
+                location, location.projectId().toString(), "codex", "binding-a", "home-b", ownership, store,
+                receiptStore, 1L));
+        assertEquals(1L, store.read().orElseThrow().generation());
+    }
+
+    @Test
+    void pendingGenerationCanBindThreadAfterStartBeforeActivation() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-pending-thread-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        var service = new ManagedAttachmentService();
+        var issued = service.issuePending(location, location.projectId().toString(), "codex", "binding-a", "home-a",
+                store);
+
+        assertEquals(null, issued.record().threadId());
+        var bound = service.bindProviderThread(store, "codex", "binding-a", "thread-a", 1L);
+
+        assertEquals("thread-a", bound.threadId());
+        assertEquals(ManagedAttachmentRecord.Status.PENDING_ACTIVATION, bound.status());
+        assertEquals(bound, service.bindProviderThread(store, "codex", "binding-a", "thread-a", 1L));
+        assertThrows(IllegalStateException.class,
+                () -> service.bindProviderThread(store, "codex", "binding-a", "thread-b", 1L));
+        service.activate(store, 1L);
+        assertEquals("thread-a", store.read().orElseThrow().threadId());
+    }
+
+    @Test
+    void twoProoflessReplacementAttemptsHaveOneWinner() throws Exception {
+        Path root = Files.createTempDirectory("synesis-managed-proofless-race-");
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root).location();
+        ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, "binding-a");
+        ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId().toString(), "codex", "thread-a", "binding-a");
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .markPersistenceReady(location.projectId().toString(), "codex", "thread-a", "binding-a");
         new ManagedAttachmentService().issue(location, location.projectId().toString(), "codex", "binding-a",
                 "thread-a", "home-a", store);
         var receiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);

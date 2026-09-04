@@ -90,9 +90,54 @@ public final class ProviderThreadOwnershipStore {
             ProviderThreadOwnershipRecord record = new ProviderThreadOwnershipRecord(
                     ProviderThreadOwnershipRecord.CURRENT_SCHEMA_VERSION, projectId, provider,
                     providerThreadId, bindingSessionId, ProviderThreadOwnershipRecord.Status.ACTIVE,
-                    1L, now, now);
+                    false, 1L, now, now);
             writeUnlocked(path, record);
             result[0] = record;
+        });
+        return result[0];
+    }
+
+    /**
+     * Marks one exact owned provider thread cold-resume eligible.
+     *
+     * <p>The transition is durable and idempotent. It is intentionally keyed
+     * by provider and thread rather than attachment generation, so a later
+     * lawful generation inherits the established provider fact.</p>
+     *
+     * @param projectId project identity
+     * @param provider canonical provider identifier
+     * @param providerThreadId exact provider thread
+     * @param bindingSessionId exact owning binding
+     * @return current persisted owner
+     * @throws IOException when ownership is missing, stale, or mismatched
+     */
+    public synchronized ProviderThreadOwnershipRecord markPersistenceReady(String projectId, String provider,
+            String providerThreadId, String bindingSessionId) throws IOException {
+        requireText(projectId, "projectId");
+        requireProvider(provider);
+        requireText(providerThreadId, "providerThreadId");
+        requireText(bindingSessionId, "bindingSessionId");
+        final ProviderThreadOwnershipRecord[] result = {null};
+        withLock(() -> {
+            Path path = pathFor(provider, providerThreadId);
+            ProviderThreadOwnershipRecord prior = readUnlocked(path)
+                    .orElseThrow(() -> new IOException("provider_thread_ownership_missing"));
+            if (prior.status() != ProviderThreadOwnershipRecord.Status.ACTIVE
+                    || !prior.provider().equals(provider)
+                    || !prior.projectId().equals(projectId)
+                    || !prior.bindingSessionId().equals(bindingSessionId)) {
+                throw new IOException("provider_thread_persistence_scope_rejected");
+            }
+            if (prior.persistenceReady()) {
+                result[0] = prior;
+                return;
+            }
+            ProviderThreadOwnershipRecord next = new ProviderThreadOwnershipRecord(
+                    ProviderThreadOwnershipRecord.CURRENT_SCHEMA_VERSION, prior.projectId(), prior.provider(),
+                    prior.providerThreadId(), prior.bindingSessionId(), prior.status(), true, prior.revision() + 1L,
+                    prior.acquiredAtEpochMillis(), System.currentTimeMillis());
+            writeUnlocked(path, next);
+            result[0] = next;
         });
         return result[0];
     }
@@ -162,7 +207,7 @@ public final class ProviderThreadOwnershipStore {
             }
             ProviderThreadOwnershipRecord next = new ProviderThreadOwnershipRecord(prior.schemaVersion(),
                     prior.projectId(), prior.provider(), prior.providerThreadId(), prior.bindingSessionId(),
-                    ProviderThreadOwnershipRecord.Status.RELEASED, prior.revision() + 1L,
+                    ProviderThreadOwnershipRecord.Status.RELEASED, prior.persistenceReady(), prior.revision() + 1L,
                     prior.acquiredAtEpochMillis(), System.currentTimeMillis());
             writeUnlocked(path, next);
             result[0] = next;
@@ -201,6 +246,7 @@ public final class ProviderThreadOwnershipStore {
                     text(value, "provider"), text(value, "providerThreadId"),
                     text(value, "bindingSessionId"),
                     ProviderThreadOwnershipRecord.Status.valueOf(text(value, "status")),
+                    optionalBoolean(value, "persistenceReady"),
                     number(value, "revision").longValue(), number(value, "acquiredAtEpochMillis").longValue(),
                     number(value, "updatedAtEpochMillis").longValue()));
         } catch (RuntimeException failure) {
@@ -217,6 +263,7 @@ public final class ProviderThreadOwnershipStore {
         value.put("providerThreadId", record.providerThreadId());
         value.put("bindingSessionId", record.bindingSessionId());
         value.put("status", record.status().name());
+        value.put("persistenceReady", record.persistenceReady());
         value.put("revision", record.revision());
         value.put("acquiredAtEpochMillis", record.acquiredAtEpochMillis());
         value.put("updatedAtEpochMillis", record.updatedAtEpochMillis());
@@ -286,6 +333,17 @@ public final class ProviderThreadOwnershipStore {
             throw new IllegalArgumentException("missing " + key);
         }
         return number;
+    }
+
+    private static boolean optionalBoolean(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (item == null) {
+            return false;
+        }
+        if (!(item instanceof Boolean flag)) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return flag;
     }
 
     @FunctionalInterface

@@ -15,6 +15,7 @@ import java.util.Objects;
  * @param providerThreadId exact provider thread selector
  * @param bindingSessionId existing Synesis provider binding
  * @param status ownership lifecycle state
+ * @param persistenceReady whether trusted provider history makes cold resume eligible
  * @param revision monotonically increasing record revision
  * @param acquiredAtEpochMillis first acquisition time
  * @param updatedAtEpochMillis last record update time
@@ -26,12 +27,13 @@ public record ProviderThreadOwnershipRecord(
         String providerThreadId,
         String bindingSessionId,
         Status status,
+        boolean persistenceReady,
         long revision,
         long acquiredAtEpochMillis,
         long updatedAtEpochMillis) {
 
     /** Current durable ownership record format. */
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     /** Lifecycle states for a provider-thread ownership record. */
     public enum Status {
@@ -43,7 +45,7 @@ public record ProviderThreadOwnershipRecord(
 
     /** Validates the durable ownership record. */
     public ProviderThreadOwnershipRecord {
-        if (schemaVersion != CURRENT_SCHEMA_VERSION) {
+        if (schemaVersion != 1 && schemaVersion != CURRENT_SCHEMA_VERSION) {
             throw new IllegalArgumentException("unsupported provider-thread ownership format");
         }
         requireText(projectId, "projectId");
@@ -54,6 +56,26 @@ public record ProviderThreadOwnershipRecord(
         if (revision < 1 || acquiredAtEpochMillis <= 0 || updatedAtEpochMillis <= 0) {
             throw new IllegalArgumentException("invalid provider-thread ownership timestamps or revision");
         }
+    }
+
+    /**
+     * Reads the pre-persistence-boundary shape conservatively as provisional.
+     *
+     * @param schemaVersion legacy durable record schema version
+     * @param projectId project owning the binding
+     * @param provider canonical provider identifier
+     * @param providerThreadId exact provider thread selector
+     * @param bindingSessionId existing Synesis provider binding
+     * @param status ownership lifecycle state
+     * @param revision monotonically increasing record revision
+     * @param acquiredAtEpochMillis first acquisition time
+     * @param updatedAtEpochMillis last record update time
+     */
+    public ProviderThreadOwnershipRecord(int schemaVersion, String projectId, String provider,
+            String providerThreadId, String bindingSessionId, Status status, long revision,
+            long acquiredAtEpochMillis, long updatedAtEpochMillis) {
+        this(schemaVersion, projectId, provider, providerThreadId, bindingSessionId, status, false, revision,
+                acquiredAtEpochMillis, updatedAtEpochMillis);
     }
 
     private static void requireText(String value, String label) {

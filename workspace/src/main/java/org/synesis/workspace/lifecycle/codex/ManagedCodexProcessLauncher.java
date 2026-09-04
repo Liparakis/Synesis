@@ -20,9 +20,11 @@ import org.synesis.workspace.application.provider.continuity.ProviderThreadOwner
 /**
  * Stock-Codex App Server launcher for the explicit managed-continuity mode.
  *
- * <p>The launcher is opt-in and prepared only with an exact existing thread.
- * It retains raw proof in trusted process memory until the child process owns
- * it, while the durable attachment record stores only the proof hash.</p>
+ * <p>The launcher is opt-in. First generation preparation creates only a
+ * pending proof scope; the managed App Server creates and returns its own
+ * provider thread. Successor preparation uses the exact durable owner. Raw
+ * proof remains in trusted process memory until the child owns it, while the
+ * durable attachment record stores only the proof hash.</p>
  */
 public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycleService.ProcessLauncher {
 
@@ -95,7 +97,8 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     }
 
     /**
-     * Prepares a first managed attachment after the exact provider thread exists.
+     * Prepares a first managed attachment before the managed App Server creates
+     * its provider thread.
      *
      * @param authority existing exact binding authority
      * @return durable attachment metadata
@@ -104,14 +107,12 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     public ManagedAttachmentRecord prepareFirst(LifecycleControlRequestEnvelope.AuthorityContext authority)
             throws Exception {
         requireAuthority(authority);
-        ManagedCodexThreadBroker broker = brokerFor(authority);
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
         CodexManagedRuntimeHome home = runtimeHome(authority.projectId());
         try {
             configureHome(home);
-            ManagedAttachmentService.IssuedAttachment issued = attachmentService.issueFromOwnership(location,
-                    authority.projectId(), authority.provider(), authority.bindingSessionId(), home.homeId(),
-                    broker.ownership(), store);
+            ManagedAttachmentService.IssuedAttachment issued = attachmentService.issuePending(location,
+                    authority.projectId(), authority.provider(), authority.bindingSessionId(), home.homeId(), store);
             prepared.put(authority.bindingSessionId(), new PreparedLaunch(home, issued.proof(), issued.record()));
             return issued.record();
         } catch (Exception failure) {
@@ -210,7 +211,11 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     public String expectedInitialThreadId(LifecycleControlRequestEnvelope.AuthorityContext authority,
             long attachmentGeneration) throws IOException {
         requireAuthority(authority);
-        return brokerFor(authority).pinnedThreadId();
+        PreparedLaunch launch = prepared.get(authority.bindingSessionId());
+        if (launch == null || launch.record().generation() != attachmentGeneration) {
+            throw new IOException("managed_attachment_not_prepared");
+        }
+        return launch.record().threadId();
     }
 
     /**
@@ -227,9 +232,46 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
             long attachmentGeneration, String returnedThreadId) throws IOException {
         requireAuthority(authority);
         try {
+            PreparedLaunch launch = prepared.get(authority.bindingSessionId());
+            if (launch == null || launch.record().generation() != attachmentGeneration) {
+                throw new IOException("managed_attachment_not_prepared");
+            }
+            if (launch.record().threadId() == null) {
+                ownershipStore.acquire(authority.projectId(), authority.provider(), returnedThreadId,
+                        authority.bindingSessionId());
+            }
             brokerFor(authority).verifyReturnedThread(returnedThreadId);
         } catch (RuntimeException mismatch) {
             throw new IOException(mismatch.getMessage(), mismatch);
+        }
+    }
+
+    /**
+     * Persists the exact thread returned by a first-generation provider start.
+     *
+     * @param authority exact binding authority
+     * @param attachmentGeneration managed generation
+     * @param returnedThreadId exact provider-returned thread
+     * @throws IOException when the pending attachment cannot be bound
+     */
+    @Override
+    public void finalizeManagedThread(LifecycleControlRequestEnvelope.AuthorityContext authority,
+            long attachmentGeneration, String returnedThreadId) throws IOException {
+        requireAuthority(authority);
+        try {
+            ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location,
+                    authority.bindingSessionId());
+            ManagedAttachmentRecord bound = attachmentService.bindProviderThread(store, authority.provider(),
+                    authority.bindingSessionId(), returnedThreadId, attachmentGeneration);
+            PreparedLaunch launch = prepared.get(authority.bindingSessionId());
+            if (launch == null || launch.record().generation() != attachmentGeneration) {
+                throw new IOException("managed_attachment_not_prepared");
+            }
+            prepared.put(authority.bindingSessionId(), new PreparedLaunch(launch.home(), launch.proof(), bound));
+        } catch (IOException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new IOException("managed_attachment_thread_binding_failed", failure);
         }
     }
 
@@ -245,10 +287,50 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
             long attachmentGeneration) throws IOException {
         requireAuthority(authority);
         try {
-            attachmentService.activate(ManagedAttachmentService.storeFor(location, authority.bindingSessionId()),
-                    attachmentGeneration);
+            ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
+            attachmentService.activate(store, attachmentGeneration);
+            PreparedLaunch launch = prepared.get(authority.bindingSessionId());
+            if (launch != null && launch.record().generation() == attachmentGeneration) {
+                prepared.put(authority.bindingSessionId(), new PreparedLaunch(launch.home(), launch.proof(),
+                        store.read().orElseThrow(() -> new IOException("managed_attachment_missing_after_activation"))));
+            }
         } catch (Exception failure) {
             throw new IOException("managed_attachment_activation_failed", failure);
+        }
+    }
+
+    /**
+     * Marks provider persistence only after the trusted App Server completion
+     * notification for the active exact thread.
+     *
+     * @param authority exact binding authority
+     * @param attachmentGeneration managed generation
+     * @param threadId completed-turn thread
+     * @param turnId completed turn identifier
+     * @throws IOException when the event is outside the active exact scope
+     */
+    @Override
+    public void providerTurnCompleted(LifecycleControlRequestEnvelope.AuthorityContext authority,
+            long attachmentGeneration, String threadId, String turnId) throws IOException {
+        requireAuthority(authority);
+        if (threadId == null || threadId.isBlank()) {
+            throw new IOException("managed_provider_persistence_thread_missing");
+        }
+        try {
+            ManagedAttachmentStore attachment = ManagedAttachmentService.storeFor(location,
+                    authority.bindingSessionId());
+            ManagedAttachmentRecord record = attachment.read()
+                    .orElseThrow(() -> new IOException("managed_attachment_missing"));
+            if (record.generation() != attachmentGeneration || record.status() != ManagedAttachmentRecord.Status.ACTIVE
+                    || !threadId.equals(record.threadId())) {
+                throw new IOException("managed_provider_persistence_scope_rejected");
+            }
+            ownershipStore.markPersistenceReady(authority.projectId(), authority.provider(), threadId,
+                    authority.bindingSessionId());
+        } catch (IOException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new IOException("managed_provider_persistence_update_failed", failure);
         }
     }
 

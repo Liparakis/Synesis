@@ -1,5 +1,25 @@
 # State
 
+## SYN-051 generation-1 persistence-boundary implementation — 2026-09-04
+
+Status is **PARTIAL**. Production code now removes the first-generation
+bootstrap handoff: the managed App Server calls `thread/start`, the exact
+returned ID is acquired under unique provider-thread ownership, broker
+verified, bound to the pending attachment, and activated before authority is
+available. Durable ownership records distinguish provisional from provider-
+persisted threads. Only the exact managed `turn/completed` boundary marks the
+owner persistence-ready; the transition is scoped and idempotent. Successor
+resume and trusted-death replacement require that durable fact.
+
+Focused changed workspace tests and clean source/install provenance passed.
+The workspace and MCP package-wide test tasks stalled and were terminated;
+they are incomplete, not passes. No fresh managed runtime, Worker B, A1/A2,
+historical fixture, `.synesis` state, credentials, or remote state was
+modified.
+
+Exact next action: checkpoint and commit the slice, then stop. Fresh managed
+runtime validation is separately authorized work.
+
 ## SYN-051 provider-thread provenance review — 2026-09-04
 
 Status is **PASS-B — architecture simplification found** for the bounded

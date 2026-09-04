@@ -1,5 +1,15 @@
 # Goal
 
+- SYN-051 generation-1 persistence-boundary implementation (2026-09-04):
+  **PARTIAL**. Same-App-Server `thread/start`, exact broker acquisition and
+  binding, pending MCP quarantine, durable provider persistence readiness, and
+  fail-closed successor/replacement gates are implemented. Changed workspace
+  tests, clean install, and artifact matching passed; package-wide workspace
+  and MCP test tasks stalled and remain incomplete. No fresh managed runtime
+  was run.
+- Exact next action: checkpoint and commit the implementation, then stop;
+  fresh single-worker managed runtime validation needs separate authorization.
+
 - SYN-051 provider-thread provenance review (2026-09-04): **PASS-B —
   architecture simplification found**, with overall managed compatibility
   still **PARTIAL**. Codex 0.153.0 does not make a `thread/start`-only ID

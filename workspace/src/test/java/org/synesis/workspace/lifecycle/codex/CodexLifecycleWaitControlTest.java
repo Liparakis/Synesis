@@ -14,10 +14,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -85,7 +88,32 @@ class CodexLifecycleWaitControlTest {
         }
     }
 
+    @Test
+    void managedBoundaryHooksRunBeforeActivationAndOnTrustedCompletion() throws Exception {
+        try (FakeServer server = new FakeServer()) {
+            RecordingLauncher launcher = new RecordingLauncher(server);
+            try (CodexAppServerLifecycleService service = service(server, launcher)) {
+                CodexLifecycleHttpClient.Response started = service.start(
+                        request(LifecycleControlRequestEnvelope.Operation.START, null, null, true, "initial"));
+
+                assertEquals(List.of("verify:thread-1", "finalize:thread-1", "activate"), launcher.calls);
+                assertTrue(!launcher.persistenceCompleted.await(20L, TimeUnit.MILLISECONDS));
+
+                assertTrue(service.steer(request(LifecycleControlRequestEnvelope.Operation.STEER,
+                        started.threadId(), started.turnId(), false, "steer"))
+                        .success());
+                assertTrue(launcher.persistenceCompleted.await(2L, TimeUnit.SECONDS));
+                assertEquals("thread-1", launcher.completedThreadId);
+            }
+        }
+    }
+
     private CodexAppServerLifecycleService service(FakeServer server) throws Exception {
+        return service(server, (_, _) -> server.process());
+    }
+
+    private CodexAppServerLifecycleService service(FakeServer server,
+            CodexAppServerLifecycleService.ProcessLauncher launcher) throws Exception {
         Path worktree = Files.createDirectories(temp.resolve(UUID.randomUUID()
                 .toString()));
         LifecycleControlRequestEnvelope.AuthorityContext authority = new LifecycleControlRequestEnvelope.AuthorityContext(
@@ -109,8 +137,52 @@ class CodexLifecycleWaitControlTest {
                 "worker");
         CodexLifecycleStateStore store = new CodexLifecycleStateStore(temp.resolve("state"));
         LifecycleIdempotencyLedger ledger = new LifecycleIdempotencyLedger(temp.resolve("ledger.json"));
-        return new CodexAppServerLifecycleService(authority, store, ledger,
-                (_, _) -> server.process(), new ProcessTreeTerminator(), temp.resolve("evidence"));
+        return new CodexAppServerLifecycleService(authority, store, ledger, launcher, new ProcessTreeTerminator(),
+                temp.resolve("evidence"));
+    }
+
+    /** Records the managed lifecycle boundary callbacks around the fixture server. */
+    private static final class RecordingLauncher implements CodexAppServerLifecycleService.ProcessLauncher {
+
+        private final FakeServer server;
+        private final List<String> calls = new ArrayList<>();
+        private final CountDownLatch persistenceCompleted = new CountDownLatch(1);
+        private String completedThreadId;
+
+        private RecordingLauncher(FakeServer server) {
+            this.server = server;
+        }
+
+        @Override
+        public CodexAppServerLifecycleService.AppServerProcess launch(
+                LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration) {
+            return server.process();
+        }
+
+        @Override
+        public void verifyReturnedThread(LifecycleControlRequestEnvelope.AuthorityContext authority,
+                long attachmentGeneration, String returnedThreadId) {
+            calls.add("verify:" + returnedThreadId);
+        }
+
+        @Override
+        public void finalizeManagedThread(LifecycleControlRequestEnvelope.AuthorityContext authority,
+                long attachmentGeneration, String returnedThreadId) {
+            calls.add("finalize:" + returnedThreadId);
+        }
+
+        @Override
+        public void activateManagedAttachment(LifecycleControlRequestEnvelope.AuthorityContext authority,
+                long attachmentGeneration) {
+            calls.add("activate");
+        }
+
+        @Override
+        public void providerTurnCompleted(LifecycleControlRequestEnvelope.AuthorityContext authority,
+                long attachmentGeneration, String threadId, String turnId) {
+            persistenceCompleted.countDown();
+            completedThreadId = threadId;
+        }
     }
 
     private LifecycleControlRequestEnvelope request(LifecycleControlRequestEnvelope.Operation operation,

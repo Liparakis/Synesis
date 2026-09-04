@@ -1,5 +1,26 @@
 # Current Task
 
+## SYN-051 generation-1 provider persistence boundary — 2026-09-04
+
+The bounded production slice is **PARTIAL**. The managed App Server now
+creates generation 1 with `thread/start` inside the existing pending MCP
+quarantine, acquires and broker-verifies the exact returned thread, binds it
+to the pending attachment, and activates only after that sequence. Provider
+thread ownership now carries a durable, idempotent `persistenceReady` fact;
+`thread/start`, same-process read, and graceful exit do not set it. The
+managed lifecycle marks it only after a trusted exact `turn/completed` event.
+Successor/replacement paths remain blocked while provisional and require the
+persisted owner plus trusted death evidence.
+
+Focused changed-source workspace tests and clean `:cli:installDist` passed;
+installed workspace/MCP/CLI jars match their produced hashes. The selected
+workspace and MCP package-wide test tasks stalled and were stopped, so they
+are incomplete evidence. No fresh managed Worker A, Worker B, A1/A2, or full
+acceptance was run.
+
+Exact next action: checkpoint and commit this slice, then stop. A fresh
+single-worker managed runtime validation requires separate authorization.
+
 ## SYN-051 provider-thread provenance review — 2026-09-04
 
 The read-only investigation is **PASS-B — architecture simplification found**

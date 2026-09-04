@@ -13,6 +13,14 @@ Promotion requires an activation trigger, the listed evidence, an explicit task
 with acceptance criteria, and exactly one `ACTIVE` task. Historical IDs and
 dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/DEFERRED_FUNCTIONALITY_HISTORY.md).
 
+## SYN-051 implementation status — 2026-09-04
+
+The explicitly activated bounded implementation now includes same-App-Server
+generation-1 creation, provider-thread ownership/pinning, pending transport
+quarantine, and a trusted provider-persistence boundary. Full real-runtime
+restart acceptance, package-wide test completion, and broader Worker A/B
+validation remain deferred gates. No new capability or MCP tool is activated.
+
 ## SYN-051 review — 2026-09-03
 
 SYN-051 activates only the explicitly authorized bounded stock-Codex

@@ -30,7 +30,7 @@ public interface RuntimeAuthenticator {
      *
      * @param provider           canonical provider identifier
      * @param bindingSessionId   existing provider binding session
-     * @param threadId           exact provider thread
+     * @param threadId           exact provider thread, or {@code null} for a pending first generation
      * @param expectedGeneration expected attachment generation
      * @param proof              raw proof held only for authentication
      */
@@ -41,7 +41,9 @@ public interface RuntimeAuthenticator {
         public AttachmentRequest {
             requireText(provider, "provider");
             requireText(bindingSessionId, "bindingSessionId");
-            requireText(threadId, "threadId");
+            if (threadId != null) {
+                requireText(threadId, "threadId");
+            }
             if (expectedGeneration < 1) {
                 throw new IllegalArgumentException("expectedGeneration must be positive");
             }

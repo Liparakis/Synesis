@@ -14,7 +14,7 @@ import java.util.Objects;
  * @param provider             canonical provider identifier
  * @param mode                 provider continuity mode
  * @param bindingSessionId     existing provider binding session
- * @param threadId             exact provider thread
+ * @param threadId             exact provider thread, or {@code null} while a first generation is pending
  * @param generation           attachment generation fence
  * @param proofHash            SHA-256 hash of the attachment proof
  * @param runtimeHomeId        opaque isolated runtime-home identity
@@ -52,7 +52,12 @@ public record ManagedAttachmentRecord(int schemaVersion, String projectId, Strin
         requireText(provider, "provider");
         Objects.requireNonNull(mode, "mode");
         requireText(bindingSessionId, "bindingSessionId");
-        requireText(threadId, "threadId");
+        if (threadId == null && status != Status.PENDING_ACTIVATION) {
+            throw new IllegalArgumentException("threadId is required outside pending activation");
+        }
+        if (threadId != null) {
+            requireText(threadId, "threadId");
+        }
         if (generation < 1) {
             throw new IllegalArgumentException("generation must be positive");
         }

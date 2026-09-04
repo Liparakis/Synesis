@@ -67,6 +67,37 @@ final class ProviderThreadOwnershipStoreTest {
                 () -> store.acquire("project", "codex", "thread-x", "binding-b"));
     }
 
+    @Test
+    void persistenceReadyIsDurableAndIdempotentWithoutChangingOwnership() throws Exception {
+        Path directory = Files.createTempDirectory("synesis-provider-thread-persistence-");
+        var store = new ProviderThreadOwnershipStore(directory);
+        var owner = store.acquire("project", "codex", "thread-x", "binding-a");
+
+        var persisted = store.markPersistenceReady("project", "codex", "thread-x", "binding-a");
+        var repeated = store.markPersistenceReady("project", "codex", "thread-x", "binding-a");
+
+        assertTrue(persisted.persistenceReady());
+        assertEquals(persisted, repeated);
+        assertEquals(owner.projectId(), repeated.projectId());
+        assertEquals(owner.providerThreadId(), repeated.providerThreadId());
+        assertEquals(owner.bindingSessionId(), repeated.bindingSessionId());
+        assertTrue(new ProviderThreadOwnershipStore(directory).find("codex", "thread-x")
+                .orElseThrow().persistenceReady());
+    }
+
+    @Test
+    void wrongPersistenceCompletionCannotMarkAnotherOwnerReady() throws Exception {
+        Path directory = Files.createTempDirectory("synesis-provider-thread-persistence-scope-");
+        var store = new ProviderThreadOwnershipStore(directory);
+        store.acquire("project", "codex", "thread-x", "binding-a");
+
+        assertThrows(java.io.IOException.class,
+                () -> store.markPersistenceReady("project", "codex", "thread-other", "binding-a"));
+        assertThrows(java.io.IOException.class,
+                () -> store.markPersistenceReady("project", "codex", "thread-x", "binding-b"));
+        assertTrue(!store.find("codex", "thread-x").orElseThrow().persistenceReady());
+    }
+
     private static boolean attempt(ProviderThreadOwnershipStore store, String binding, CountDownLatch ready,
             CountDownLatch start) {
         ready.countDown();

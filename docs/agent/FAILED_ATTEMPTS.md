@@ -1,5 +1,19 @@
 # Failed Attempts
 
+## 2026-09-04 — SYN-051 package-wide test tasks incomplete
+
+- After the implementation slice, `:workspace:test :mcp:test --no-daemon
+  --max-workers=1` reached `:workspace:test` and produced no progress for
+  two bounded waits; it was stopped.
+- A subsequent explicit MCP test selection reached `:mcp:test` and likewise
+  produced no progress for two bounded waits; it was stopped.
+- These are incomplete host/test-run evidence, not passing or failing
+  implementation results. The changed workspace classes passed explicitly,
+  MCP test sources compiled, and clean installation/provenance passed.
+- Do not respond by weakening lifecycle or proof gates; retain the focused
+  evidence and leave package-wide runtime testing for a separately bounded
+  follow-up.
+
 ## 2026-09-04 — SYN-051 bootstrap thread was not a durable handoff
 
 - The read-only provider investigation reproduced the managed failure with
