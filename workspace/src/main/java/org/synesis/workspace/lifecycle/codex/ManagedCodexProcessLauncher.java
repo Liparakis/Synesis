@@ -215,7 +215,19 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         if (launch == null || launch.record().generation() != attachmentGeneration) {
             throw new IOException("managed_attachment_not_prepared");
         }
-        return launch.record().threadId();
+        String threadId = launch.record().threadId();
+        if (threadId == null) {
+            return null;
+        }
+        ProviderThreadOwnershipRecord ownership = ownershipStore.find(authority.provider(), threadId)
+                .orElseThrow(() -> new IOException("provider_thread_ownership_missing"));
+        if (ownership.status() != ProviderThreadOwnershipRecord.Status.ACTIVE
+                || !authority.projectId().equals(ownership.projectId())
+                || !authority.bindingSessionId().equals(ownership.bindingSessionId())
+                || !ownership.persistenceReady()) {
+            throw new IOException("managed_provider_thread_not_persistence_ready");
+        }
+        return threadId;
     }
 
     /**
