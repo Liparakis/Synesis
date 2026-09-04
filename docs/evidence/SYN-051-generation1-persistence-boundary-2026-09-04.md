@@ -85,7 +85,7 @@ BUILD SUCCESSFUL
 The installed launcher reports `SYNESIS_VERSION=0.1.0-dev.local`,
 `RECORD_FORMAT=SDR2`, `BUILD_PLATFORM=windows-x64`, and
 `JAVA_RUNTIME=25+36-LTS`. The final runtime-build HEAD for this slice is
-`1b0cd51fd6e2125b150dd265cf484a41e6c8e0b3`. The generated launcher still
+`208f1a351fef062dd3ee5127c3387b1f2596b102`. The generated launcher still
 reports `BUILD_COMMIT=UNKNOWN` in this local build, so that field is not used
 as provenance evidence; the committed source HEAD, exact artifact paths, and
 matching produced/installed hashes are recorded here.
@@ -94,10 +94,10 @@ matching produced/installed hashes are recorded here.
 |---|---|
 | `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar` | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
 | `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar` | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar` | `8a6bfddf9e9717d45b4d2c3ff57c88f284261fcd6549d0719776989a0ae23f90` |
+| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar` | `becfa549c53b4eb324b4a23b6d63eb7490c9553eae89474f98d152f48bd22c8e` |
 | `cli/build/install/synesis/lib/workspace-0.1.0-SNAPSHOT.jar` | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
 | `cli/build/install/synesis/lib/mcp-0.1.0-SNAPSHOT.jar` | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar` | `8a6bfddf9e9717d45b4d2c3ff57c88f284261fcd6549d0719776989a0ae23f90` |
+| `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar` | `becfa549c53b4eb324b4a23b6d63eb7490c9553eae89474f98d152f48bd22c8e` |
 | `cli/build/install/synesis/bin/synesis.bat` | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
 
 ## Acceptance boundary
