@@ -1,5 +1,24 @@
 # Tasks
 
+- SYN-051 bounded real-runtime validation — 2026-09-04:
+  **ACTIVE / PARTIAL / STOPPED ON FIRST MATERIAL FAILURE**.
+  `088cb239f2e2109c4dddd40cbaee36c158337e82` built and installed with
+  matching workspace/MCP/CLI/launcher hashes. A fresh lawful Worker A binding
+  and exact provider-thread owner were established. The managed lifecycle
+  launched a Job-contained App Server, but Codex `0.153.0` returned
+  `thread not loaded` for `thread/resume`; A1 did not activate or execute a
+  managed turn. Startup cleanup produced trusted generation-1 death evidence;
+  this is not controlled A1 crash evidence. The aborted fresh attachment was
+  terminalized at generation 2 through the public service. Historical
+  generation 1, Worker B, and production source remain untouched.
+- Verified: fresh build/install, artifact hashes, focused lifecycle/MCP tests,
+  strict Javadocs/format/static/architecture checks, deferred register, and
+  exact public binding/attachment/receipt state.
+- Not run: controlled root failure, trusted teardown during A1, replacement,
+  A2, Worker B, A/B isolation, or full acceptance.
+- Next action: read-only provider-thread provenance/loadability review; no
+  managed retry or proof-gating relaxation until resolved.
+
 ## SYN-051 production lifecycle fix — 2026-09-04
 
 - Status: ACTIVE / PARTIAL; implementation and direct focused verification

@@ -1,5 +1,32 @@
 # Current Task
 
+## SYN-051 bounded real-runtime validation — 2026-09-04
+
+The pass is **PARTIAL / STOPPED ON FIRST MATERIAL FAILURE**. The current
+source at `088cb239f2e2109c4dddd40cbaee36c158337e82` built and installed with
+matching artifact hashes. A fresh lawful Worker A binding and exact provider
+thread ownership were established, and the production managed launcher
+created a generation-1 pending attachment inside a Windows Job. Codex
+`0.153.0` rejected the pinned `thread/resume` in the fresh App Server with
+`thread not loaded`; therefore A1 never reached a real managed turn or
+activation. The lifecycle failed closed and its startup cleanup produced a
+trusted generation-1 death receipt. This is not the requested controlled
+App-Server-root crash evidence and does not authorize replacement.
+
+The fresh aborted attachment was terminalized through the public application
+service at generation 2 for safe stopping. The historical binding remains
+generation 1 `ACTIVE` with no receipt and was not touched. Worker B, A/B
+isolation, A1/A2 restart, and full acceptance were not run. No production
+source changed and no push occurred.
+
+## Immediate next action
+
+Perform a separately authorized, read-only provider-thread provenance review
+for why a bootstrap-created Codex thread is not loadable by a new App Server
+process. Do not retry managed A1/A2, relax proof gating, recover the
+historical generation, start Worker B, or broaden SYN-051 until that cause is
+resolved.
+
 ## SYN-051 production lifecycle fix — 2026-09-04
 
 The bounded lifecycle slice is **PARTIAL**. A trusted managed-process

@@ -1,3 +1,56 @@
+# SYN-051 bounded real-runtime validation — 2026-09-04
+
+## Result
+
+**PARTIAL / STOPPED ON FIRST MATERIAL FAILURE.** This pass used the rebuilt
+installation from source HEAD `088cb239f2e2109c4dddd40cbaee36c158337e82`.
+Workspace, MCP, CLI, and native launcher built/installed hashes matched:
+
+- workspace `01D7C4CB4015B417FFADBC30A6B64C1C84EEC1F07B1306A49FED859FCCCFBE40`
+- MCP `DDDC6DF0DECC0530DC30D6809DED118B9CF0E801AD7238B73AA53AB90BAE0BFD`
+- CLI `78432D8DDF988E3D25933456EC9841024ED8065D4200E6ED8EBF28F030A071B4`
+- launcher `A39FF82BE3355AE0EA0BA66D522D7688E2CC44BDF3FF07DB2C6C83266430BF23`
+
+A fresh lawful Worker A binding was created for `SkibidiToilert`, with active
+participant `agt_b20c250c-6c97-359b-af7b-0beda8f49440`, exact claim
+`probe-runtime/replacement-a.txt`, active provider-thread ownership for
+`01a069b4-1028-7472-8a77-21e847c51cc7`, and a generation-1 pending attachment.
+The managed production launcher created App Server A inside the Windows Job
+supervisor. Codex `0.153.0` then returned `thread not loaded` for
+`thread/resume`; the lifecycle recorded `FAILED` and did not activate the
+attachment or start the A1 turn.
+
+The lifecycle's bounded startup cleanup produced a trusted generation-1 death
+receipt for root PID `4952`. This is startup-failure cleanup evidence only, not
+the requested controlled App Server-root crash/teardown evidence. The aborted
+fresh attachment was terminalized at generation 2 through the public
+application service. The historical binding `session-72ed7536-ff66-431d-ae97-fcdf27f678c3`
+remains generation 1 `ACTIVE` with no receipt. No Worker B, A/B test,
+replacement, A2, production source change, or push occurred.
+
+Read-only provider confirmation in a new App Server process returned:
+`thread not loaded: 01a069b4-1028-7472-8a77-21e847c51cc7`.
+
+## Runtime matrix
+
+| Gate | Result |
+|---|---|
+| Build/install provenance | PASS |
+| Focused lifecycle/MCP and strict quality checks | PASS |
+| Fresh binding/participant/claim/ownership | PASS |
+| Job-contained managed App Server launch | PARTIAL |
+| Exact pinned thread join | FAIL: `thread not loaded` |
+| A1 managed turn and mutation | NOT RUN |
+| Controlled root failure and trusted teardown | NOT RUN |
+| Proofless replacement and A2 | NOT RUN |
+| Worker B/A-B/full acceptance | NOT RUN |
+
+## Next action
+
+Perform a separately authorized, read-only provider-thread provenance review
+for cross-process thread loadability. Preserve fail-closed proof activation;
+do not retry managed A1/A2 or broaden SYN-051 until the cause is understood.
+
 # SYN-051 shared-normal-home implementation slice — 2026-09-03
 
 ## 2026-09-04 — bounded production lifecycle replacement fix

@@ -1,5 +1,25 @@
 # SYN-051 production compatibility fix — 2026-09-04
 
+## SYN-051 real-runtime validation — 2026-09-04
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Source/build provenance | Fresh current-source install from `088cb239f2e2109c4dddd40cbaee36c158337e82` | PASS | local distribution hashes |
+| Focused verification | Lifecycle/MCP tests, strict quality checks, deferred register | PASS | Gradle reports and validator |
+| Fresh Worker A | Lawful binding, participant, intent, exact claim, provider-thread owner | PASS | public application state |
+| Managed A1 launch | Generation-1 pending attachment and Job-contained App Server launch | PARTIAL | lifecycle checkpoint/evidence journal |
+| Exact thread join | New App Server `thread/resume` for bootstrap-created exact thread | FAIL: `thread not loaded` | `probe-runtime/.../generation-1.jsonl` |
+| Startup cleanup | Lifecycle failed closed and trusted generation-1 receipt was written | PASS | public receipt store; not crash evidence |
+| Controlled A1 root failure | Kill only active App Server root after A1 turn | NOT RUN | stop-on-first-failure |
+| Replacement/A2 | Fresh proof, generation 2 activation, exact resume, real turn | NOT RUN | stop-on-first-failure |
+| Worker B/A-B acceptance | B, isolation, cross-proof, full acceptance | NOT RUN | explicit scope boundary |
+
+The read-only provider repro returned `thread not loaded:
+01a069b4-1028-7472-8a77-21e847c51cc7` in a new App Server process. The fresh
+aborted attachment was terminalized at generation 2 through the public
+application service. The historical binding remains generation 1 `ACTIVE`
+without a receipt.
+
 ## Production lifecycle replacement slice — 2026-09-04
 
 | Area | Check | Result | Evidence |

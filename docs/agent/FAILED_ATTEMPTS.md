@@ -1,5 +1,26 @@
 # Failed Attempts
 
+## 2026-09-04 — SYN-051 real-runtime validation stopped before A1
+
+- Current source `088cb239f2e2109c4dddd40cbaee36c158337e82` built and installed
+  successfully with matching workspace/MCP/CLI/native-launcher hashes. Focused
+  tests and strict quality checks passed.
+- A fresh lawful binding and active exact provider-thread owner were created
+  for `SkibidiToilert`. The managed launcher issued generation 1 and launched
+  App Server A inside the Windows Job supervisor.
+- Codex `0.153.0` rejected the broker-pinned bootstrap-created thread with
+  `thread not loaded` on `thread/resume` in the new App Server process. This is
+  the first material runtime failure; A1 activation and the real turn did not
+  occur. The lifecycle failed closed and startup cleanup wrote a trusted
+  generation-1 receipt. That receipt is not evidence of the requested
+  controlled App Server-root crash.
+- The aborted fresh attachment was terminalized at generation 2 through the
+  public service. The historical generation 1 remains `ACTIVE` without a
+  trusted receipt. No Worker B, replacement, A2, production edit, or push was
+  performed.
+- Read-only provider confirmation returned the same error:
+  `thread not loaded: 01a069b4-1028-7472-8a77-21e847c51cc7`.
+
 ## 2026-09-04 — SYN-051 historical generation had no death receipt
 
 - The existing real fixture still reports generation 1 as `ACTIVE`, while its

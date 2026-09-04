@@ -1,5 +1,17 @@
 # Goal
 
+- SYN-051 real-runtime validation (2026-09-04): **PARTIAL / STOPPED ON FIRST
+  MATERIAL FAILURE**. Current source and installed artifacts were verified;
+  a fresh managed Worker A binding and provider-thread owner were created.
+  Production lifecycle launch reached a Windows Job-contained App Server, but
+  Codex `0.153.0` rejected the exact bootstrap-created thread with
+  `thread not loaded` before A1 activation. The lifecycle failed closed and
+  produced only startup-cleanup death evidence. No controlled crash,
+  replacement, A2, Worker B, or broad acceptance was run.
+- Exact next action: perform a read-only provider-thread provenance review;
+  do not retry managed runtime or modify production code until the loadability
+  cause is understood.
+
 - SYN-051 lifecycle replacement slice (2026-09-04): **PARTIAL**. Trusted
   supervisor death evidence is persisted per binding and generation, and
   proofless replacement is race-safe, fresh-proof, and ownership-preserving.

@@ -1,5 +1,28 @@
 # State
 
+## SYN-051 bounded real-runtime validation — 2026-09-04
+
+Status is **PARTIAL / STOPPED ON FIRST MATERIAL FAILURE**. Build and install
+provenance passed from `088cb239f2e2109c4dddd40cbaee36c158337e82`. A fresh
+managed binding, active provider-thread owner, generation-1 pending
+attachment, and Job-contained App Server launch were established. Codex
+`0.153.0` then returned `thread not loaded` for the broker-pinned thread on
+`thread/resume`. The lifecycle recorded `FAILED` and performed its bounded
+startup cleanup, producing generation-1 trusted death evidence; no A1 turn,
+activation, controlled root failure, or replacement occurred.
+
+The aborted fresh attachment was terminalized at generation 2 through the
+public service. The historical `session-72ed7536-ff66-431d-ae97-fcdf27f678c3`
+attachment remains `ACTIVE` generation 1 with no trusted receipt. No
+production source, historical fixture, Worker B, or remote state changed.
+
+## Immediate next action
+
+Resolve the provider-thread provenance/loadability failure by read-only
+investigation before any managed retry. Preserve the current fail-closed
+behavior and do not change production code unless a concrete defect is
+isolated and separately authorized.
+
 ## SYN-051 production lifecycle fix — 2026-09-04
 
 Status is **PARTIAL**. The trusted lifecycle boundary now records a
