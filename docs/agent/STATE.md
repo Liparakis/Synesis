@@ -3284,3 +3284,26 @@ blocker. Do not create SYN-040 or push.
 The earlier SYN-043 active-task override is retained as historical context.
 SYN-046 is the current single active implementation slice; preserve the
 uncommitted SYN-043 work and do not stage it as part of SYN-046.
+## SYN-051 fresh Worker-A persistence validation — 2026-09-05
+
+Status is **PARTIAL**. Exact artifact provenance and JDK25 process-local
+Selector/HttpServer preflight passed. One successful fresh lawful lane used
+the same live launcher instance for `prepareFirst → START`: generation 1 was
+`PENDING_ACTIVATION` with a volatile proof and digest-only durable record;
+the same App Server created Thread A, acquired unique ownership, broker-pinned
+and finalized it, and promoted the attachment to `ACTIVE`. One exact-claim
+Codex turn completed through trusted production `turn/completed`, then
+`persistenceReady` changed `false` at ownership revision 1 to `true` at
+revision 2. Provider state DB row, completed history, and rollout were
+confirmed read-only. The only target mutation was the exact claimed file.
+
+The run did not independently capture a pending authority rejection or direct
+MCP-child membership in the exact Job handle, so PASS-A is not claimed. Normal
+host close produced `DISCONNECTED`/`STOPPED`; no replacement, A2, Worker B,
+full SYN-049 acceptance, credential access, production source change, or push
+occurred. Evidence:
+`docs/evidence/SYN-051-fresh-worker-a-persistence-2026-09-05.md`.
+
+## Immediate next action
+
+Checkpoint and stop; do not invoke A1-to-A2 replacement or start Worker B.

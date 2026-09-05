@@ -5292,3 +5292,21 @@ authorized slice, then use a new fresh lawful Worker-A lane with preparation
 and START in the same live caller.
 
 Evidence: `docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
+## 2026-09-05 — SYN-051 fresh Worker-A persistence validation
+
+The successful bounded fresh lane is **PARTIAL**. Exact built/installed
+artifacts and the JDK25 process-local Selector/HttpServer preflight passed.
+Binding `session-e3783a86-78c4-41c5-965c-6fb10e854781` was created lawfully;
+the same live `ManagedCodexProcessLauncher` performed `prepareFirst` and
+production START. Generation 1 stayed pending until the same App Server
+created Thread `01a06f47-0e24-7ce2-9e9f-bf4fdb36c18f`, which was uniquely owned,
+broker-pinned, finalized, and activated. One exact-claim Codex turn completed
+with trusted `turn/completed`; `persistenceReady` changed false/revision 1 to
+true/revision 2. Provider state DB, completed history, and rollout were
+confirmed read-only, and the exact claimed file was the only assigned-worktree
+mutation. A pending authority rejection and direct MCP-child exact-Job query
+were not independently captured, so PASS-A is not claimed. Normal close left
+the attachment disconnected and lifecycle stopped; no replacement, A2,
+Worker B, full acceptance, credentials, production source change, or push
+occurred. Evidence is in
+`docs/evidence/SYN-051-fresh-worker-a-persistence-2026-09-05.md`.

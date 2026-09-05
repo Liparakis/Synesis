@@ -839,3 +839,12 @@ run focused verification only.
 - Next hypothesis: Verify the supported Antigravity workspace/project loading
   mode or obtain a trusted diagnostic that proves `.agents/hooks.json` is
   loaded before changing the adapter again.
+## 2026-09-05 — SYN-051 disposable observation harness closed before completion
+
+The first fresh same-process harness reached generation-1 ACTIVE and observed
+`persistenceReady=false` before `turn/start`, but its disposable caller closed
+the production host 1.5 seconds after `turn/started` instead of waiting for
+trusted completion. The lane was normally closed, produced no claim mutation,
+and was not reused. The harness was corrected before a different fresh lane
+was run. This was a harness observation error, not evidence of a production
+failure; the successful lane is recorded separately.

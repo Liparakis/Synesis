@@ -1,5 +1,25 @@
 # Next Session
 
+## SYN-051 fresh Worker-A persistence validation — 2026-09-05
+
+The successful fresh lane reached same-process `prepareFirst → START`,
+generation-1 ACTIVE, same-App-Server Thread A creation, one real exact-claim
+turn, trusted completion, `persistenceReady=false → true`, and read-only
+provider DB/history/rollout durability. Evidence:
+`docs/evidence/SYN-051-fresh-worker-a-persistence-2026-09-05.md`.
+
+Classification is **PARTIAL**, not PASS-A: pending authority denial and direct
+MCP-child membership in the exact Windows Job were not independently captured.
+Normal close left the attachment disconnected/stopped; provider ownership is
+durably ready. No replacement, A2, Worker B, or full acceptance was run.
+
+- Exact next action: checkpoint and stop. Require separate authorization before
+  any bounded follow-up for the two evidence gaps; do not invoke A1-to-A2
+  replacement or start Worker B.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+# Next Session
+
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
 The command-local `GRADLE_OPTS` carrier with `TEMP/TMP=C:\t` passed Gradle

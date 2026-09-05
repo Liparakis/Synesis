@@ -3,6 +3,38 @@
 - Task ID: SYN-051
 - Status: ACTIVE / PARTIAL
 
+## SYN-051 fresh Worker-A persistence validation — 2026-09-05
+
+The bounded run is **PARTIAL**. A successful fresh lane proved same-process
+`prepareFirst → START`, generation-1 `PENDING_ACTIVATION`, same-App-Server
+`thread/start`, exact ownership and broker pin, `ACTIVE`, one real
+claim-aligned Codex turn, trusted `turn/completed`, and
+`persistenceReady=false → true`. Provider SQLite/history/rollout durability
+for the exact Thread A was confirmed read-only. The target mutation was only
+the exact claimed file in the assigned worktree.
+
+PASS-A is not claimed: pending-state authority denial and direct child-to-exact
+Windows Job membership were not independently captured in this run. SYN-049
+remains `PARTIAL`; SYN-051 remains `ACTIVE / PARTIAL`. No production source,
+credential, global setting, replacement, A2, Worker B, full acceptance, or
+push occurred.
+
+Evidence: `docs/evidence/SYN-051-fresh-worker-a-persistence-2026-09-05.md`.
+
+## Immediate next action
+
+Checkpoint and stop. Do not start Worker B or invoke A1-to-A2 replacement;
+future work requires separate authorization for the two narrow evidence gaps.
+
+## Verification
+
+JDK25 process-local selector/HTTP preflight and exact artifact hashes passed.
+The successful lane used Binding A `session-e3783a86-78c4-41c5-965c-6fb10e854781`,
+Thread A `01a06f47-0e24-7ce2-9e9f-bf4fdb36c18f`, and turn
+`01a06f47-0f2d-7a71-aa81-91a0ea83d707`. Normal host close left the attachment
+`DISCONNECTED` and lifecycle checkpoint `STOPPED`; provider ownership remained
+`persistenceReady=true`. A preliminary disposable lane was not reused.
+
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
 The command-local `GRADLE_OPTS` carrier succeeded with `TEMP/TMP=C:\t` and
@@ -20,7 +52,7 @@ Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
 
 ## Immediate next action
 
-Run one fresh lawful SYN-051 Worker-A validation using JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in the same live caller; do not start Worker B or invoke A1-to-A2 replacement.
+Historical next action: run one fresh lawful SYN-051 Worker-A validation using JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in the same live caller; do not start Worker B or invoke A1-to-A2 replacement.
 
 ## Work completed
 

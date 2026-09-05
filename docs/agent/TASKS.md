@@ -1,3 +1,13 @@
+## SYN-051 fresh Worker-A persistence validation — 2026-09-05
+
+**ACTIVE / PARTIAL.** Same-process generation-1 preparation/start and one real
+claim-aligned turn reached trusted completion and durable provider persistence
+for exact Thread A. Two narrow evidence items remain unresolved: direct pending
+authority rejection and direct MCP-child membership in the exact Job handle.
+
+- Next action: checkpoint and stop; do not run replacement, A2, Worker B, or
+  full SYN-049 acceptance.
+
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
 The bounded build-JVM compatibility slice is **PASS-A**: command-local
