@@ -5310,3 +5310,16 @@ the attachment disconnected and lifecycle stopped; no replacement, A2,
 Worker B, full acceptance, credentials, production source change, or push
 occurred. Evidence is in
 `docs/evidence/SYN-051-fresh-worker-a-persistence-2026-09-05.md`.
+## 2026-09-05 — SYN-051 fresh Worker-A A1/A2 runtime validation
+
+A new fresh lane passed artifact provenance and JDK25 process-local preflight,
+same-process `prepareFirst -> START`, explicit pending authority denial, exact
+AppServer/MCP same-Job membership, same-AppServer Thread A creation, ownership,
+ACTIVE promotion, trusted generation-1 completion, persistence readiness
+false-to-true, and read-only provider DB/history/rollout durability. The real
+Codex turn did not mutate the exact claimed file: Synesis reported an active
+duplicate-claim conflict and the provider completed with no file change. The
+run stopped before controlled A1 death, replacement, or A2. Normal cleanup
+incidentally wrote generation-1 death receipt evidence. No Worker B, full
+SYN-049 acceptance, credential access, production source change, or push
+occurred. Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.

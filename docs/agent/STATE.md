@@ -50,6 +50,27 @@ and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
 Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
 
+## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
+
+Status is **ACTIVE / PARTIAL**. Fresh lane
+`session-111525f8-c7f3-41d5-895e-87670d01a587` passed generation-1 managed
+runtime and exact provider persistence, including pending authority denial,
+same Job membership for AppServer/MCP, Thread A ownership, ACTIVE promotion,
+trusted `turn/completed`, and readiness false-to-true. The exact claimed file
+was not mutated: the provider rollout reported a duplicate/active ownership
+conflict for the exact path and then performed only read-only checks.
+
+The lane was stopped before controlled A1 death and replacement. Normal close
+produced incidental generation-1 death receipt evidence only. No A2, Worker B,
+full acceptance, credentials, production source, or push occurred.
+
+Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
+
+## Immediate next action
+
+Investigate the exact claim-alignment/duplicate-claim interaction in a new
+bounded slice; do not reuse this lane or invoke A1-to-A2 replacement.
+
 # State
 
 ## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05

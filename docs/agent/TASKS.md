@@ -50,6 +50,21 @@ and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
 Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
 
+## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
+
+- Status: ACTIVE
+
+**ACTIVE / PARTIAL.** Generation-1 managed lifecycle and exact provider
+persistence passed in a fresh lane. The real Codex turn failed the required
+claim-aligned mutation: Synesis reported the exact path already owned and the
+assigned worktree remained unchanged. Stop occurred before controlled death,
+replacement, and A2.
+
+- Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
+- Next action: investigate the duplicate-claim/claim-alignment interaction in
+  a separate bounded slice; do not reuse this lane, run A2, start Worker B, or
+  run full SYN-049 acceptance.
+
 # Tasks
 
 - SYN-051 fresh single-worker managed-runtime validation — 2026-09-05:
