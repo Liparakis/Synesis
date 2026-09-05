@@ -75,7 +75,8 @@ bounded slice; do not reuse this lane or invoke A1-to-A2 replacement.
 
 ## 2026-09-05 — SYN-051 fresh Worker-A A1/A2 runtime validation
 
-The fresh lane is **PASS-A**. Binding
+The runtime lane is **PASS-A**, but SYN-051 remains **ACTIVE / PARTIAL** until
+the broader MCP package-test gate is complete. Binding
 `session-b57fcc4c-40f8-4df2-b846-99b34b132d02` was created lawfully with exact
 claim `probe-runtime/persistence-final-a-c033a0f0-bcd8-4673-9f4a-8e3a2e51de05.txt`.
 One live launcher retained generation-1 preparation through START; pending
@@ -98,9 +99,9 @@ rebuild/install, and produced-to-installed hash checks passed. Evidence:
 
 ## Immediate next action
 
-Review the PASS-A evidence and stop this runtime slice. Do not start Worker B
-or run full SYN-049 acceptance; any further continuity experiment requires
-separate authorization.
+Preserve the runtime PASS-A evidence and resolve the remaining MCP package-test
+provider/Git setup stall before considering SYN-051 DONE. Do not start Worker B
+or run full SYN-049 acceptance.
 
 ## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
 

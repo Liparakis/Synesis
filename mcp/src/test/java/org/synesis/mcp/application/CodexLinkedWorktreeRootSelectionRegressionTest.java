@@ -83,7 +83,7 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
         String response = toolText(handler.handleMessage(ensureSessionRequest()));
 
         assertAll(
-                () -> assertEquals(fixture.controlRoot(), handler.activeProjectRoot(),
+                () -> assertEquals(fixture.controlRoot().toRealPath(), handler.activeProjectRoot().toRealPath(),
                         "an unpinned linked worktree must resolve to its main checkout"),
                 () -> assertTrue(response.contains("\"status\":\"ready\""), response),
                 () -> assertTrue(response.contains("\"workspace\":\"isolated\""), response));

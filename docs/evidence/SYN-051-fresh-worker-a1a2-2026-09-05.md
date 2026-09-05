@@ -2,7 +2,8 @@
 
 ## Classification
 
-**PASS-A.** One fresh lawful Worker A completed the corrected generation-1
+**PASS-A for the requested runtime path; SYN-051 remains ACTIVE / PARTIAL
+overall because the repository-wide MCP test gate is incomplete.** One fresh lawful Worker A completed the corrected generation-1
 managed lifecycle, one real exact-claim Codex turn, trusted persistence, a
 controlled A1 hard stop with a trusted death receipt, exact generation-2
 resume, and a second exact-claim turn on the same provider Thread A. No
@@ -21,6 +22,13 @@ Worker B or full SYN-049 acceptance was run.
   committed as `072581d`.
 - Focused tests passed:
   `CodexLifecycleWaitControlTest` and `CodexEvidenceJournalTest`.
+- The complete workspace lifecycle-codex suite passed. The MCP linked-worktree
+  regression initially exposed only a Windows 8.3-versus-long-path test
+  comparison; the minimal test-only canonical-path correction passed alone.
+  The broader MCP suite then remained incomplete: `McpServerTest` provider
+  setup stalled in its external MCP probe, and a later linked-worktree setup
+  stalled while launching Git. No MCP assertion failure was attributed to the
+  managed runtime path, but the broader test gate is not green.
 - The authorized rebuild/install passed with `--max-workers=1` and the
   process-local AF_UNIX workaround. Produced and installed hashes matched:
   - workspace:

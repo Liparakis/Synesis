@@ -17,9 +17,11 @@ dispositions are preserved in [`DEFERRED_FUNCTIONALITY_HISTORY.md`](../archive/D
 
 The explicitly activated bounded implementation now includes same-App-Server
 generation-1 creation, provider-thread ownership/pinning, pending transport
-quarantine, and a trusted provider-persistence boundary. Full real-runtime
-restart acceptance, package-wide test completion, and broader Worker A/B
-validation remain deferred gates. No new capability or MCP tool is activated.
+quarantine, a trusted provider-persistence boundary, and a fresh end-to-end
+Worker-A generation-1 death plus exact generation-2 resume acceptance. The
+broader MCP package-test gate remains incomplete, and Worker B/A-B validation
+and full SYN-049 acceptance remain out of scope. No new capability or MCP tool
+is activated.
 
 ## SYN-051 review — 2026-09-03
 

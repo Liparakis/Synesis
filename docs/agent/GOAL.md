@@ -1,3 +1,19 @@
+## SYN-051 end-to-end managed continuity — 2026-09-05
+
+The fresh A1 -> trusted death -> A2 -> second-turn runtime path is **PASS-A**:
+pending authority was denied, exact AppServer/MCP Job membership was proven,
+Thread A ownership and persistence were preserved, and both real turns
+completed with trusted provider events. A narrow hard-stop checkpoint race was
+fixed in `072581d`.
+
+SYN-051 remains **ACTIVE / PARTIAL**, not DONE, because the broader MCP
+package-test gate is incomplete: the targeted linked-worktree regression passes
+after a minimal Windows canonical-path test correction, but full-suite provider
+MCP setup and another linked-worktree Git setup stall on this host. Worker B
+and full SYN-049 acceptance remain out of scope.
+
+- Exact next action: resolve or formally accept the MCP package-test provider/Git setup blocker; do not start Worker B or run full SYN-049 acceptance.
+
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
 The process-local `GRADLE_OPTS` carrier passed Gradle startup, task execution,

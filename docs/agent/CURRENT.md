@@ -2,24 +2,27 @@
 
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
-Status: **ACTIVE / PASS-A**. One fresh lawful lane passed provenance, JDK25
+Status: **ACTIVE / PARTIAL (runtime PASS-A)**. One fresh lawful lane passed provenance, JDK25
 process-local compatibility, same-process `prepareFirst -> START`, pending
 authority quarantine, exact AppServer/MCP Job containment, same-AppServer
 `thread/start`, ownership, broker pin, ACTIVE promotion, two trusted exact-claim
 turns, controlled generation-1 death, exact generation-2 resume, and provider
 DB/history/rollout durability for the same Thread A. A narrow hard-stop
-checkpoint race was fixed and verified before the final lane.
+checkpoint race was fixed and verified before the final lane. The complete
+workspace lifecycle-codex suite passed; the broader MCP suite remains
+incomplete because provider/Git setup stalled after the targeted regression
+passed.
 
 Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
 ## Immediate next action
 
-Review the PASS-A evidence and stop this runtime slice. Do not start Worker B
-or run full SYN-049 acceptance; any further continuity experiment requires
-separate authorization.
+Preserve the runtime PASS-A evidence and resolve the remaining MCP package-test
+provider/Git setup stall before considering SYN-051 DONE. Do not start Worker B
+or run full SYN-049 acceptance.
 
 - Task ID: SYN-051
-- Status: ACTIVE / PASS-A
+- Status: ACTIVE / PARTIAL (runtime PASS-A)
 
 ## SYN-051 fresh Worker-A persistence validation — 2026-09-05
 

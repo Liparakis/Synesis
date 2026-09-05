@@ -848,3 +848,16 @@ trusted completion. The lane was normally closed, produced no claim mutation,
 and was not reused. The harness was corrected before a different fresh lane
 was run. This was a harness observation error, not evidence of a production
 failure; the successful lane is recorded separately.
+
+## 2026-09-05 — SYN-051 broader package-test gate incomplete
+
+After the fresh end-to-end runtime PASS-A, `:workspace:test :mcp:test` was
+run with JDK25, `--no-daemon`, `--max-workers=1`, and the process-local AF_UNIX
+property. The workspace lifecycle-codex suite passed. The MCP suite first
+exposed a Windows 8.3 short-path versus long-path test comparison; a minimal
+test-only `toRealPath()` correction made that regression pass. A subsequent
+full MCP run remained incomplete: `McpServerTest` stalled in provider MCP
+setup, and a linked-worktree setup later stalled while launching Git. The
+stalls were stopped without being treated as passing. SYN-051 runtime evidence
+remains PASS-A, but the repository task remains ACTIVE / PARTIAL until this
+broader test gate is resolved or its environment blocker is formally accepted.

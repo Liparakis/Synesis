@@ -1,14 +1,16 @@
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
-**ACTIVE / PASS-A.** One fresh lawful Worker A completed the managed
+**ACTIVE / PARTIAL (runtime PASS-A).** One fresh lawful Worker A completed the managed
 generation-1 lifecycle, controlled A1 death, exact generation-2 resume, two
 claim-aligned trusted turns, and read-only provider DB/history/rollout
 durability for the same Thread A. The hard-stop checkpoint race was fixed in
-`072581d` and verified by focused tests plus the fresh lane.
+`072581d` and verified by focused tests plus the fresh lane. The complete
+workspace lifecycle-codex suite passed; the broader MCP suite remains
+incomplete because provider/Git setup stalled after the targeted regression
+passed.
 
-- Next action: stop this runtime slice; do not start Worker B or run full
-  SYN-049 acceptance. Any further continuity experiment requires separate
-  authorization.
+- Next action: resolve the remaining MCP package-test provider/Git setup stall;
+  do not start Worker B or run full SYN-049 acceptance.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
