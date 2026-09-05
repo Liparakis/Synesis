@@ -1,5 +1,24 @@
 # Current Task
 
+## SYN-051 fresh two-worker acceptance — 2026-09-05
+
+Status: **ACTIVE / PARTIAL; bounded run FAILED**. Provenance and JDK25
+process-local compatibility gates passed. A fresh supported A/B setup created
+distinct bindings, participants, intents, claims, generation-1 pending
+attachments, digests, and cross-proof rejection. Worker A reached a real
+Thread A but its turn ended with lifecycle `FAILED/process_exit` and no trusted
+`turn/completed`; Worker B completed one real claim-aligned turn, but the
+observer did not capture complete B MCP/Job evidence before the process ended.
+The run stopped at that first material failure. Evidence:
+`docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
+
+## Immediate next action
+
+Diagnose the fresh A/B co-running Codex/MCP protocol failure read-only from the
+recorded journals and current production source; do not reuse either fresh
+binding, proof, thread, or worktree, do not invoke replacement, and do not run
+another acceptance lane until the exact cause is understood.
+
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 Status: **ACTIVE / PARTIAL (runtime PASS-A)**. One fresh lawful lane passed provenance, JDK25

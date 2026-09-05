@@ -5346,3 +5346,15 @@ cleanup stopped A2 and incidentally produced generation-2 death evidence.
 No Worker B, full SYN-049 acceptance, credential access, global setting,
 historical-lane reuse, manual `.synesis` modification, or push occurred.
 Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
+## 2026-09-05 — SYN-051 fresh two-worker acceptance stop
+
+The fresh bounded A/B run passed artifact provenance, JDK25 process-local
+Selector/HttpServer compatibility, lawful distinct A/B setup, generation-1
+pending preparation, proof isolation, and cross-proof rejection. Worker A's
+real turn ended with lifecycle `FAILED/process_exit` and no trusted
+`turn/completed`; Worker B completed a real claim-aligned turn, but complete
+B MCP/Job observation was not captured before its process ended. The run
+stopped at the first material failure. Provider state was inspected read-only;
+no credentials, source, global setting, replacement, A2, Worker C, or push was
+used. Exact evidence is in
+`docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.

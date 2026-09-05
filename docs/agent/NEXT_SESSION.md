@@ -15,6 +15,20 @@ Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
 # Next Session
 
+## SYN-051 fresh two-worker acceptance — 2026-09-05
+
+The bounded fresh A/B acceptance is **FAILED / incomplete** after provenance
+and compatibility passed. A's real turn ended `FAILED/process_exit` without a
+trusted completion; B completed, but complete B MCP/Job capture was missed
+before cleanup. Evidence:
+`docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
+
+- Exact next action: diagnose the A/B co-running Codex/MCP protocol failure
+  read-only; do not reuse either lane or start another acceptance run until
+  the cause is understood.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 The final fresh lane is **PASS-A for runtime**, while SYN-051 remains
