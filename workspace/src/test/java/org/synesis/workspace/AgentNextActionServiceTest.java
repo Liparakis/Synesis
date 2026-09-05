@@ -287,13 +287,12 @@ class AgentNextActionServiceTest {
 
         AgentResponse ownerAfterAccept = new AgentNextActionService().getNextAction(
                 new AgentNextActionService.NextActionRequest(controlRoot, "codex", "same-provider-owner"));
-        assertEquals(AgentStatus.READY, ownerAfterAccept.status(), ownerAfterAccept.toJson());
-        assertEquals("IMPLEMENT",
-                ((Map<?, ?>) ownerAfterAccept.result()).get("workflow") instanceof Map<?, ?> workflow
-                        ? workflow.get("type")
-                        : null,
+        assertEquals(AgentStatus.WAITING, ownerAfterAccept.status(), ownerAfterAccept.toJson());
+        assertEquals(AgentReason.IMPLEMENTATION_UNAVAILABLE, ownerAfterAccept.reason());
+        assertEquals(AgentNextAction.WAIT, ownerAfterAccept.nextAction());
+        assertEquals(handle, ((Map<?, ?>) ownerAfterAccept.result()).get("capabilityRequestHandle"));
+        assertTrue(ownerAfterAccept.toJson().contains("publish_capability_implementation"),
                 ownerAfterAccept.toJson());
-        assertFalse(ownerAfterAccept.toJson().contains(handle), ownerAfterAccept.toJson());
     }
 
     @Test

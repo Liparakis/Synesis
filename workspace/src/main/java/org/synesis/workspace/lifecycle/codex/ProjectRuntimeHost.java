@@ -657,6 +657,9 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
                 .equals(expected.controlProjectRoot())) {
             throw new IOException("lifecycle_project_root_mismatch");
         }
+        boolean completedStatusRead = request.operation() == LifecycleControlRequestEnvelope.Operation.STATUS
+                && "COMPLETED".equals(binding.status());
+        boolean admissibleBindingState = "BOUND".equals(binding.status()) || completedStatusRead;
         if (!binding.projectId()
                 .equals(expected.projectId()) || !"codex".equals(binding.provider())
                 || !binding.sessionId()
@@ -664,7 +667,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
                 || !binding.providerInstanceFingerprint()
                 .equals(expected.bindingFingerprint())
                 || binding.bindingVersion() != expected.bindingVersion()
-                || !"BOUND".equals(binding.status()) || !"VERIFIED".equals(binding.verificationState())
+                || !admissibleBindingState || !"VERIFIED".equals(binding.verificationState())
                 || !"VERIFIED".equals(binding.providerTrustState()) || binding.worktreePath() == null) {
             throw new IOException("lifecycle_binding_stale");
         }

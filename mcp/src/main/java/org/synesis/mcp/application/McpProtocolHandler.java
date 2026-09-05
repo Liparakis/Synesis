@@ -1172,15 +1172,19 @@ public final class McpProtocolHandler {
      *
      * @return current managed admission state
      */
-    private ManagedAdmissionState managedAdmissionState() {
+    private ManagedAdmissionState managedAdmissionState(String toolName) {
         if (!managedAdmission) {
             return ManagedAdmissionState.ACTIVE;
         }
         try {
             ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
                     activeProjectRoot);
-            var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
+            var binding = authorityResolver.resolveReview(location, provider, connectionInstanceId);
             if (!managedBindingSessionId.equals(binding.sessionId())) {
+                return ManagedAdmissionState.REJECTED;
+            }
+            boolean completed = "COMPLETED".equalsIgnoreCase(binding.status());
+            if (completed && !completedReviewTool(toolName)) {
                 return ManagedAdmissionState.REJECTED;
             }
             ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, managedBindingSessionId)
@@ -1191,6 +1195,9 @@ public final class McpProtocolHandler {
                     || !provider.equals(record.provider())) {
                 return ManagedAdmissionState.REJECTED;
             }
+            if (completed) {
+                return ManagedAdmissionState.REVIEW_ONLY;
+            }
             return switch (record.status()) {
                 case PENDING_ACTIVATION -> ManagedAdmissionState.PENDING;
                 case ACTIVE -> ManagedAdmissionState.ACTIVE;
@@ -1199,6 +1206,12 @@ public final class McpProtocolHandler {
         } catch (Exception rejected) {
             return ManagedAdmissionState.REJECTED;
         }
+    }
+
+    private static boolean completedReviewTool(String toolName) {
+        return ("synesis." + McpToolCatalog.GET_NEXT_ACTION).equals(toolName)
+                || ("synesis." + McpToolCatalog.REQUEST_COORDINATION).equals(toolName)
+                || ("synesis." + McpToolCatalog.RESPOND_COORDINATION).equals(toolName);
     }
 
     /**
@@ -1217,6 +1230,8 @@ public final class McpProtocolHandler {
     private enum ManagedAdmissionState {
         /** The exact managed attachment is active. */
         ACTIVE,
+        /** The completed binding may continue exact review coordination only. */
+        REVIEW_ONLY,
         /** The proof-bearing transport is connected but has no authority. */
         PENDING,
         /** The attachment or exact binding is no longer admissible. */
@@ -1511,8 +1526,9 @@ public final class McpProtocolHandler {
             return createResultResponse(id, Map.of("content", List.of(textContent)));
         }
 
-        ManagedAdmissionState managedState = managedAdmissionState();
-        if (managedState != ManagedAdmissionState.ACTIVE) {
+        ManagedAdmissionState managedState = managedAdmissionState(name);
+        if (managedState != ManagedAdmissionState.ACTIVE
+                && managedState != ManagedAdmissionState.REVIEW_ONLY) {
             return managedAdmissionResponse(id, managedState);
         }
 
@@ -1528,7 +1544,8 @@ public final class McpProtocolHandler {
         // the exact server-issued finish envelope before the completion
         // service can consume it.  Completion itself remains authoritative;
         // all other non-command calls retain the normal activity heartbeat.
-        if (!durableCommand && !noChangeCompletion && !snapshotCompletion) {
+        if (managedState != ManagedAdmissionState.REVIEW_ONLY
+                && !durableCommand && !noChangeCompletion && !snapshotCompletion) {
             renewLease();
         }
 

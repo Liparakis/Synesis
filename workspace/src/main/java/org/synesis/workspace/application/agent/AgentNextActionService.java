@@ -1659,6 +1659,19 @@ public final class AgentNextActionService {
                                         .equals(candidate.authorityLineageId()))
                                         .orElse(false))
                         .toList();
+                List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerAccepted = capProj
+                        .records().values().stream()
+                        .filter(candidate -> candidate.matchesOwner(callerNodeId, binding.supervisorId(),
+                                binding.workerId()))
+                        .filter(candidate -> candidate.state()
+                                == org.synesis.coordination.domain.capability.CapabilityLifecycleState.ACCEPTED
+                                || candidate.state()
+                                == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTING)
+                        .filter(candidate -> !coordinationActivated
+                                || callerIntent.map(intent -> intent.authorityLineageId()
+                                        .equals(candidate.authorityLineageId()))
+                                        .orElse(false))
+                        .toList();
 
                 // Slice 3: Check active integration projection states
                 var taskCompProj = store.taskCompletionProjection();
@@ -1738,6 +1751,25 @@ public final class AgentNextActionService {
                     result.put("contract", contractMap);
                     result.put("pending", ownerPending.size());
                     return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_COORDINATION, result);
+                }
+                if (!ownerAccepted.isEmpty()) {
+                    org.synesis.coordination.domain.capability.CapabilityRequestRecord topReq = ownerAccepted.getFirst();
+                    Map<String, Object> contractMap = new LinkedHashMap<>();
+                    contractMap.put("inputs", topReq.contract().inputs());
+                    contractMap.put("output", topReq.contract().output());
+                    contractMap.put("requiredBehavior", topReq.contract().requiredBehavior());
+                    contractMap.put("acceptanceTests", topReq.contract().acceptanceTests());
+
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("capabilityRequestHandle", topReq.handle().value());
+                    result.put("capability", topReq.capability());
+                    result.put("authorityLineageId", topReq.authorityLineageId().toString());
+                    result.put("contract", contractMap);
+                    result.put("pending", ownerAccepted.size());
+                    return new AgentResponse(AgentStatus.WAITING,
+                            AgentReason.IMPLEMENTATION_UNAVAILABLE,
+                            AgentNextAction.WAIT,
+                            result);
                 }
 
                 // Slice 2: owner must respond to a validation revision

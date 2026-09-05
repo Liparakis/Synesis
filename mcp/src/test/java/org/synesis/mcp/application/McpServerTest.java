@@ -147,6 +147,31 @@ class McpServerTest {
     }
 
     @Test
+    void completedManagedTransportRetainsOnlyReviewCoordinationAdmission() throws Exception {
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(tempRoot);
+        var binding = new ProviderSessionBindingService().ensure(location, "codex", "completed-review-connection")
+                .binding();
+        var ownership = ProviderThreadOwnershipStore.storeFor(location).acquire(location.projectId().toString(),
+                "codex", "completed-review-thread", binding.sessionId());
+        var issued = new ManagedAttachmentService().issueFromOwnership(location, location.projectId().toString(),
+                "codex", binding.sessionId(), "normal-provider-home", ownership,
+                ManagedAttachmentService.storeFor(location, binding.sessionId()));
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex",
+                "completed-review-connection", new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"),
+                true, true, issued.record());
+
+        new ManagedAttachmentService().activate(ManagedAttachmentService.storeFor(location, binding.sessionId()), 1L);
+        assertTrue(new ProviderSessionBindingService().complete(location, "codex", "completed-review-connection"));
+
+        String next = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}");
+        assertFalse(next.contains("managed_attachment_rejected"), next);
+        String mutation = handler.handleMessage(
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"README.md\"}}}");
+        assertTrue(mutation.contains("managed_attachment_rejected"), mutation);
+    }
+
+    @Test
     void toolsListAdvertisesExactlyTenRawNamesAndRejectsDecoratedCalls() {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-raw");
         String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}");
