@@ -1,3 +1,16 @@
+## 2026-09-05 — SYN-051 clean-build loopback stop
+
+- JDK25 process-local selector and minimal IPv4/IPv6 HTTP preflight passed with
+  `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
+- The required clean `:cli:installDist` attempt independently failed in the
+  Gradle/JDK process before task execution with `Unable to establish loopback
+  connection`.
+- The diagnostic property was not propagated to Gradle or global settings.
+  Artifact provenance was not freshly re-established, so no Worker-A lane was
+  created and no managed runtime was launched.
+
+Evidence: `docs/evidence/SYN-051-process-local-preflight-build-blocker-2026-09-05.md`.
+
 ## SYN-051 standalone host compatibility — 2026-09-05
 
 The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.

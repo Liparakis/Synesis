@@ -1,3 +1,16 @@
+## SYN-051 process-local preflight and clean-build gate — 2026-09-05
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| JDK25 selector | `Selector.open()` with process-local UNIX temp directory | PASS | blocker evidence |
+| JDK25 HTTP | IPv4/IPv6 `HttpServer.create/start/stop` with same property | PASS | blocker evidence |
+| Clean provenance build | `:cli:installDist` without workaround propagation | STOPPED: Gradle JVM loopback failure before task execution | blocker evidence |
+| Fresh Worker A | New lawful lane and managed runtime | NOT RUN | artifact provenance gate |
+
+Exact next action: obtain separate authorization for a bounded process-local
+build-JVM compatibility path, then fresh-build/install and lock provenance
+before creating a new Worker-A lane.
+
 ## SYN-051 standalone host compatibility — 2026-09-05
 
 The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.

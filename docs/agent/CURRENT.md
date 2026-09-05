@@ -3,6 +3,40 @@
 - Task ID: SYN-051
 - Status: ACTIVE / PARTIAL
 
+## SYN-051 process-local preflight and clean-build gate — 2026-09-05
+
+The compatibility evidence was committed as `bff97418672e2197cd00f293409d68446918bdd8`.
+Under JDK25 `25+36-LTS`, the authorized process-local property
+`-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe` made the required
+`Selector.open()` and minimal IPv4/IPv6 `HttpServer.create/start/stop` sanity
+checks pass. No global Java/network/Codex setting changed.
+
+The required clean rebuild/install then failed in the independent Gradle/JDK
+process before task execution with `java.io.IOException: Unable to establish
+loopback connection`. The stop rule therefore forbids propagating the
+diagnostic property into build logic or broadening the workaround here.
+Artifact provenance was not freshly re-established. No fresh Worker-A lane was
+created in this slice; the target and its pre-existing `probe-runtime/` were
+untouched.
+
+Evidence: `docs/evidence/SYN-051-process-local-preflight-build-blocker-2026-09-05.md`.
+
+## Immediate next action
+
+Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then perform a fresh clean build/install and provenance lock before creating any new Worker-A lane; do not launch or reuse a lane.
+
+## Work completed
+
+Committed the standalone compatibility evidence, passed the exact JDK25 selector and HTTP preflight, verified the target baseline, and attempted the required clean build without global settings changes.
+
+## Current failures
+
+Gradle's JDK25 process independently reproduces the Windows AF_UNIX loopback failure before task execution. Existing installed hashes are observations only and are not a new provenance lock for this slice.
+
+## Verification
+
+`git diff --check`, deferred validation, JDK25 selector preflight, JDK25 IPv4/IPv6 HTTP preflight, target Git identity, and environment-setting checks passed. Clean `:cli:installDist` stopped before task execution. No fresh lane or managed runtime was run.
+
 ## SYN-051 standalone host compatibility — 2026-09-05
 
 The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.

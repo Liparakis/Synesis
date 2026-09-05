@@ -1,3 +1,15 @@
+## SYN-051 process-local preflight and clean-build gate — 2026-09-05
+
+The standalone compatibility evidence is committed at
+`bff97418672e2197cd00f293409d68446918bdd8`. JDK25 selector and minimal
+IPv4/IPv6 HTTP preflight passed with the process-local UNIX temporary
+directory, but the required clean Gradle install failed before task execution
+with `Unable to establish loopback connection`. The independent-Java-process
+stop rule applies; no build workaround was broadened and no new Worker-A lane
+was created.
+
+- Next action: obtain separate authorization for a bounded process-local build-JVM compatibility path, then fresh-build/install and provenance-lock before creating a new Worker-A lane; do not launch or reuse a lane.
+
 ## SYN-051 standalone host compatibility — 2026-09-05
 
 The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.

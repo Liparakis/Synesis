@@ -1,3 +1,22 @@
+## SYN-051 process-local preflight and clean-build gate — 2026-09-05
+
+The standalone compatibility evidence was committed at
+`bff97418672e2197cd00f293409d68446918bdd8`. JDK25 `25+36-LTS` passed
+`Selector.open()` and minimal IPv4/IPv6 HTTP create/start/stop with only the
+process-local `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
+Global Java/network/Codex settings were not changed.
+
+The required clean `:cli:installDist` attempt failed before Gradle task
+execution in the independent JDK process with `Unable to establish loopback
+connection`. This is a material reproduction, so the workaround was not
+broadened to Gradle/build logic. Artifact provenance is not freshly locked;
+runtime execution is not authorized. No fresh lane was created, and the target
+project plus pre-existing `probe-runtime/` remained untouched.
+
+## Immediate next action
+
+Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then fresh-build and provenance-lock the runtime before creating a new Worker-A lane; do not launch or reuse a lane.
+
 ## SYN-051 standalone host compatibility — 2026-09-05
 
 The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
