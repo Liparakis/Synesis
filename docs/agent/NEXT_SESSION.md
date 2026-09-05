@@ -45,6 +45,21 @@ SYN-051 runtime are evidence only.
 
 # Next Session
 
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+
+The fresh target run is **PARTIAL**. Provenance and JDK25 process-local
+compatibility passed. Worker A performed and verified real isolated
+domain/persistence work and published `tasktracker.domain.persistence`; Worker
+B lawfully reached `NEEDS_CAPABILITY` and waited. B's original Codex connection
+ended before consumption. Resuming the same task created a new participant,
+and Synesis rejected re-admission because the original B claims remained owned.
+No integration or terminalization was reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05.md`.
+
+- Exact next action: start only a new fresh acceptance after preserving B's live connection through dependency wait and capturing/restoring the pre-run Codex configuration around supported provider setup; do not reuse or repair this target.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-051 fresh two-worker acceptance — 2026-09-05
 
 The bounded fresh A/B acceptance is **FAILED / incomplete** after provenance

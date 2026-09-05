@@ -1,3 +1,14 @@
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+
+The fresh target admitted distinct lawful Worker A/B participants and B reached
+`NEEDS_CAPABILITY` for `tasktracker.domain.persistence`. A completed and
+published its implementation, but B's original provider connection ended before
+consumption. Resuming the same task created a new participant whose claims were
+correctly rejected as overlapping. The run is **PARTIAL**; no integration or
+terminalization was reached.
+
+- Exact next action: preserve `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05.md`; do not reuse the partial target or repair its durable state.
+
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
 Command-local `GRADLE_OPTS` successfully delivered the AF_UNIX temporary

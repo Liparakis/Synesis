@@ -2,21 +2,21 @@
 
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
 
-Status: **ACTIVE / PARTIAL pending fresh runtime evidence**. This is the sole
-active task. It requires a new disposable fixture and real supported Synesis
-flows for two independent managed workers, an explicit structured capability
-dependency, projected coordination/completion actions, terminal lanes, and a
-terminal WorkGroup. Historical fixtures and completed SYN-051 evidence remain
-read-only evidence.
+Status: **ACTIVE / PARTIAL**. This is the sole active task. The fresh target
+admitted two lawful participants, B reached the structured capability wait,
+and A published the capability, but B's provider connection ended before
+consumption. A same-task resume created a new participant and Synesis rejected
+the still-owned claims. Historical fixtures and completed SYN-051 evidence
+remain read-only evidence.
 
 - Task ID: SYN-049
 
 ## Immediate next action
 
-Recompute the installed runtime artifact hashes and run the JDK25 process-local
-Selector and minimal HttpServer preflight. If both pass, create a new fixture
-without historical `.synesis` state and admit the two lanes through supported
-flows.
+Preserve the fresh partial evidence and, in a later fresh target, keep Worker B's
+original provider connection alive through the capability wait; capture and
+restore the pre-run Codex configuration around supported provider setup. Do not
+reuse this target or repair its durable state.
 
 ## Historical: SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 

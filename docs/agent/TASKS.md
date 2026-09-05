@@ -2,20 +2,22 @@
 
 ### Fresh unattended two-worker acceptance — 2026-09-05
 
-**ACTIVE / PARTIAL pending fresh runtime evidence.** The sole active task is
-the bounded real Worker A/B acceptance: fresh lawful bindings, participants,
-WorkIntents, claims, explicit structured capability dependency, real isolated
-work, projected completion actions, terminal lanes, and terminal WorkGroup.
-The completed SYN-051 runtime is a prerequisite and remains evidence only.
+**ACTIVE / PARTIAL.** The sole active task is the bounded real Worker A/B
+acceptance. The fresh run admitted two lawful participants, B reached the
+structured capability wait, and A published the implementation, but B's
+provider connection ended before consumption. Same-task recovery created a new
+participant and Synesis rejected its still-owned claims. The completed SYN-051
+runtime is a prerequisite and remains evidence only.
 
 - Status: ACTIVE
 
-- Exact next action: verify installed artifact hashes and run the JDK25
-  process-local selector/HttpServer preflight before creating a fresh fixture.
-- Scope exclusions: no historical fixture reuse, no Worker B before the fresh
-  acceptance setup requires it, no provider credential access, no manual
-  `.synesis` changes, no source changes unless a material production defect is
-  directly reproduced.
+- Exact next action: preserve the fresh partial evidence and do not reuse or
+  repair its target; a later run must keep B's original provider connection
+  alive through dependency wait and contain supported Codex configuration
+  changes.
+- Scope exclusions: no historical fixture reuse, no third worker or replacement
+  lane in this run, no provider credential access, no manual `.synesis` changes,
+  no source changes unless a material production defect is directly reproduced.
 
 ## Historical: SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 

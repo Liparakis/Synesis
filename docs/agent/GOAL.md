@@ -1,14 +1,17 @@
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
 
 Complete one fresh real two-worker acceptance through the supported Synesis
-and managed Codex paths. Worker A owns domain/persistence, Worker B owns
-application/API/reporting, and B declares the explicit structured capability
-dependency `tasktracker.domain.persistence`. Prove initial dependency blocking,
-capability publication/consumption, real claim-aligned work in isolated
-worktrees, projected completion, terminal lanes, and terminal WorkGroup state.
+and managed Codex paths. The 2026-09-05 attempt is **PARTIAL**: Worker A
+completed and published `tasktracker.domain.persistence`, while Worker B hit
+the real dependency wait but its provider connection ended before consumption;
+same-task recovery created a new participant and was rejected for overlapping
+claims. Initial dependency blocking and A publication are proven; B
+consumption, integration, projected completion, terminal lanes, and terminal
+WorkGroup state remain unproven.
 
-- Exact next action: verify the provenance-locked installed artifacts and run
-  the process-local JDK25 compatibility preflight before creating fresh state.
+- Exact next action: preserve the partial evidence and use a new fresh target
+  only after the harness keeps B's original provider connection alive through
+  dependency wait and captures/restores pre-run Codex configuration.
 - Do not reopen SYN-051, reuse historical fixtures, start a replacement, or
   make production changes without a directly reproduced material defect.
 
