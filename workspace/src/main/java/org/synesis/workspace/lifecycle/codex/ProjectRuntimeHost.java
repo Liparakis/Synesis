@@ -359,8 +359,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
             }
             runtime = runtime(request.authority()
                     .bindingSessionId(), request.authority());
-            if (!runtime.authority()
-                    .equals(request.authority())) {
+            if (!sameRuntimeAuthority(runtime.authority(), request.authority())) {
                 throw new IOException("lifecycle_binding_mismatch");
             }
             CodexLifecycleStateStore.Checkpoint before = runtime.stateStore()
@@ -584,6 +583,44 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
                 runtime.releaseLock();
             }
         }
+    }
+
+    /**
+     * Compares a retained runtime authority with an incoming lifecycle
+     * authority. Wake admission may identify the same verified binding through
+     * its fingerprint-qualified connection identity, while the retained live
+     * runtime was created from the original provider connection identity.
+     * Every other authority field remains exact.
+     *
+     * @param retained authority captured when the runtime was established
+     * @param incoming authority being dispatched
+     * @return whether both authorities describe the same exact runtime
+     */
+    static boolean sameRuntimeAuthority(LifecycleControlRequestEnvelope.AuthorityContext retained,
+            LifecycleControlRequestEnvelope.AuthorityContext incoming) {
+        if (retained.equals(incoming)) {
+            return true;
+        }
+        if (!incoming.connectionInstanceId()
+                .startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX)) {
+            return false;
+        }
+        return Objects.equals(retained.projectId(), incoming.projectId())
+                && Objects.equals(retained.controlProjectRoot(), incoming.controlProjectRoot())
+                && Objects.equals(retained.provider(), incoming.provider())
+                && Objects.equals(retained.bindingSessionId(), incoming.bindingSessionId())
+                && Objects.equals(retained.bindingFingerprint(), incoming.bindingFingerprint())
+                && retained.bindingVersion() == incoming.bindingVersion()
+                && Objects.equals(retained.participant(), incoming.participant())
+                && Objects.equals(retained.workIntentId(), incoming.workIntentId())
+                && retained.laneEpoch() == incoming.laneEpoch()
+                && Objects.equals(retained.canonicalWorktree(), incoming.canonicalWorktree())
+                && Objects.equals(retained.realWorktree(), incoming.realWorktree())
+                && Objects.equals(retained.gitCommonDirectory(), incoming.gitCommonDirectory())
+                && Objects.equals(retained.branch(), incoming.branch())
+                && Objects.equals(retained.baseCommit(), incoming.baseCommit())
+                && Objects.equals(retained.supervisorId(), incoming.supervisorId())
+                && Objects.equals(retained.workerId(), incoming.workerId());
     }
 
     private void pruneRequestLocks() {

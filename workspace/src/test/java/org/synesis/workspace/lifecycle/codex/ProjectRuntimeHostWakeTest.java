@@ -44,6 +44,24 @@ class ProjectRuntimeHostWakeTest {
     Path temp;
 
     @Test
+    void fingerprintQualifiedWakePreservesSessionBoundRuntimeAuthority() {
+        LifecycleControlRequestEnvelope.AuthorityContext retained = authority("session-connection");
+        LifecycleControlRequestEnvelope.AuthorityContext qualified = authority(
+                CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX + "provider-fingerprint");
+
+        assertTrue(ProjectRuntimeHost.sameRuntimeAuthority(retained, qualified));
+        assertTrue(!ProjectRuntimeHost.sameRuntimeAuthority(retained, authority("other-connection")));
+        assertTrue(!ProjectRuntimeHost.sameRuntimeAuthority(retained,
+                new LifecycleControlRequestEnvelope.AuthorityContext(
+                        retained.projectId(), retained.controlProjectRoot(), retained.provider(),
+                        qualified.connectionInstanceId(), retained.bindingSessionId(),
+                        retained.bindingFingerprint(), retained.bindingVersion(), retained.participant(),
+                        "other-intent", retained.laneEpoch(), retained.canonicalWorktree(),
+                        retained.realWorktree(), retained.gitCommonDirectory(), retained.branch(),
+                        retained.baseCommit(), retained.supervisorId(), retained.workerId())));
+    }
+
+    @Test
     void ownerRoutesExactResumeReadAndContinuationTurn() throws Exception {
         Path project = Files.createDirectories(temp.resolve("project"));
         TestGit.run(project, "init");
@@ -138,6 +156,13 @@ class ProjectRuntimeHostWakeTest {
             assertEquals(List.of("initialize", "thread/resume", "thread/read", "turn/start", "turn/start"),
                     server.methods);
         }
+    }
+
+    private static LifecycleControlRequestEnvelope.AuthorityContext authority(String connection) {
+        return new LifecycleControlRequestEnvelope.AuthorityContext(
+                "project", "C:\\project", "codex", connection, "binding", "fingerprint", 1,
+                "participant", "intent", 1L, "C:\\worktree", "C:\\worktree", "C:\\git",
+                "main", "base", "supervisor", "worker");
     }
 
     private static final class FakeAppServer implements AutoCloseable {
