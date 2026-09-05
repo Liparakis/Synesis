@@ -45,7 +45,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * @since 1.0
  */
 @SuppressWarnings({"resource", "DuplicatedCode"})
-public final class ProjectRuntimeHost implements AutoCloseable {
+public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissionService.LifecycleDispatcher {
 
     /**
      * Codex-only loopback route mounted by the existing coordination listener.
@@ -69,6 +69,7 @@ public final class ProjectRuntimeHost implements AutoCloseable {
     private final ExecutorService controlExecutor;
     private final ExecutorService waitExecutor;
     private final CodexLifecycleHttpAdapter adapter;
+    private final CodexWakeCoordinator wakeCoordinator;
     private volatile boolean closed;
 
     /**
@@ -134,6 +135,8 @@ public final class ProjectRuntimeHost implements AutoCloseable {
         });
         this.adapter = new CodexLifecycleHttpAdapter(this);
         reconcileOnStartup();
+        this.wakeCoordinator = new CodexWakeCoordinator(location, this);
+        this.wakeCoordinator.start();
     }
 
     private static String durableResult(CodexLifecycleHttpClient.Response response) {
@@ -181,8 +184,41 @@ public final class ProjectRuntimeHost implements AutoCloseable {
      *
      * @return owner instance ID
      */
+    @Override
     public String hostInstanceId() {
         return hostInstanceId;
+    }
+
+    /**
+     * Reports whether this owner retains a live App Server attachment for one binding.
+     *
+     * @param bindingSessionId exact binding session
+     * @return true only when the matching owned attachment is live
+     */
+    @Override
+    public boolean attachmentAlive(String bindingSessionId) {
+        if (bindingSessionId == null || bindingSessionId.isBlank()) {
+            return false;
+        }
+        BindingRuntime runtime = bindings.get(bindingSessionId);
+        return runtime != null && runtime.service().attachmentAlive();
+    }
+
+    /**
+     * Signs and dispatches one wake request through this exact owner.
+     *
+     * @param request immutable lifecycle request
+     * @return bounded owner response
+     * @throws Exception when signing, authority validation, or lifecycle execution fails
+     */
+    @Override
+    public CodexLifecycleHttpClient.Response dispatch(LifecycleControlRequestEnvelope request)
+            throws Exception {
+        Objects.requireNonNull(request, "request");
+        if (!hostInstanceId.equals(request.hostInstanceId())) {
+            throw new IOException("lifecycle_owner_mismatch");
+        }
+        return handle(request.sign(ownerIdentity));
     }
 
     /**
@@ -397,6 +433,7 @@ public final class ProjectRuntimeHost implements AutoCloseable {
             return;
         }
         closed = true;
+        wakeCoordinator.close();
         // Stop queued/in-flight dispatcher tasks from issuing a new mutation
         // while the binding services perform their own exact-turn graceful
         // interruption and bounded attachment shutdown.
@@ -499,6 +536,8 @@ public final class ProjectRuntimeHost implements AutoCloseable {
                 diagnostics.put("oversizedLifecycleControlRequestFailures", adapter.oversizedRequestCount());
                 diagnostics.putAll(runtime.service()
                         .diagnostics());
+                diagnostics.put("wakeRelayScanCount", wakeCoordinator.scanCount());
+                diagnostics.put("wakeRelayDiagnostic", wakeCoordinator.lastDiagnostic());
                 response = new CodexLifecycleHttpClient.Response(response.success(), response.diagnostic(),
                         response.state(), response.lifecycleRevision(), response.threadId(), response.turnId(),
                         diagnostics);
@@ -602,9 +641,13 @@ public final class ProjectRuntimeHost implements AutoCloseable {
     private void verifyAuthority(LifecycleControlRequestEnvelope request) throws Exception {
         ProjectApplicationService.ProjectLocation current = new ProjectApplicationService().locate(location.root());
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        ProviderSessionBindingService.Binding binding = bindingService.find(current, "codex",
-                        request.authority()
-                                .connectionInstanceId())
+        String connectionIdentity = request.authority().connectionInstanceId();
+        java.util.Optional<ProviderSessionBindingService.Binding> resolved =
+                connectionIdentity.startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX)
+                        ? bindingService.findByFingerprint(current, "codex", connectionIdentity.substring(
+                                CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX.length()))
+                        : bindingService.find(current, "codex", connectionIdentity);
+        ProviderSessionBindingService.Binding binding = resolved
                 .orElseThrow(() -> new IOException("lifecycle_binding_missing"));
         LifecycleControlRequestEnvelope.AuthorityContext expected = request.authority();
         if (!location.root()

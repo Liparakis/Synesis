@@ -796,6 +796,36 @@ public final class ProviderSessionBindingService {
     }
 
     /**
+     * Resolves one binding by its persisted provider-instance fingerprint.
+     *
+     * <p>This path is used only by the provider lifecycle owner when a durable
+     * wake association intentionally carries the stored fingerprint rather
+     * than raw provider connection evidence. It never falls back to the newest
+     * binding and rejects duplicate fingerprints.</p>
+     *
+     * @param location initialized control project
+     * @param provider stable provider identifier
+     * @param fingerprint exact persisted fingerprint
+     * @return matching binding, or empty when absent
+     * @throws BindingException when stored bindings are malformed or ambiguous
+     */
+    public synchronized java.util.Optional<Binding> findByFingerprint(
+            ProjectApplicationService.ProjectLocation location, String provider, String fingerprint)
+            throws BindingException {
+        Objects.requireNonNull(location, "location");
+        requireText(provider, "provider");
+        requireText(fingerprint, "fingerprint");
+        java.util.List<Binding> matches = list(location, provider).stream()
+                .filter(binding -> fingerprint.equals(binding.providerInstanceFingerprint()))
+                .toList();
+        if (matches.size() > 1) {
+            throw new BindingException("SESSION_BINDING_AMBIGUOUS",
+                    "Multiple provider bindings share the same fingerprint");
+        }
+        return matches.stream().findFirst();
+    }
+
+    /**
      * Marks one exact provider connection binding complete while preserving its
      * worktree and audit record.  Resolution is by the caller's connection
      * evidence; no provider-wide or latest-binding fallback is permitted.
