@@ -146,3 +146,12 @@ Claim-A mutation remains in the assigned worktree for evidence.
 - supported-store inspection with `C:\t\Syn051PostInspect.java`
 - read-only provider SQLite/history/rollout inspection
 - read-only target Git status/content inspection
+
+## Follow-on MCP test isolation — 2026-09-05
+
+All 33 methods in `McpServerTest` and all 13 methods in
+`CodexLinkedWorktreeRootSelectionRegressionTest` passed when each was run in
+its own fresh Gradle test JVM with the process-local JDK25 AF_UNIX workaround
+and native MCP launcher. Aggregate class/package invocations remain incomplete
+because cumulative Git/provider fixture setup stalls on this host; the
+individual results do not constitute a green aggregate package run.

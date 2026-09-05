@@ -1,18 +1,16 @@
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
-The fresh lane passed all generation-1 runtime and exact Thread-A persistence
-gates, including explicit `managed_attachment_pending`, independent root/MCP
-same-Job membership, trusted completion, and readiness false-to-true. It
-stopped before A1 replacement because the provider did not mutate the exact
-claim; the rollout reported an active duplicate-claim conflict and the exact
-file remained absent. Normal close produced incidental generation-1 death
-evidence only.
+The fresh lane passed the complete A1 -> trusted death -> A2 runtime path,
+including explicit `managed_attachment_pending`, independent root/MCP same-Job
+membership, exact Thread-A persistence, exact `thread/resume`, and both
+trusted claim-aligned turns. The lane was normally closed after A2; no Worker B
+or full SYN-049 acceptance ran.
 
 Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
-- Exact next action: investigate the claim-alignment/duplicate-claim provider
-  interaction in a new bounded slice. Do not reuse this lane, invoke A1-to-A2
-  replacement, start Worker B, or run full SYN-049 acceptance.
+- Exact next documentation action: preserve the runtime PASS-A evidence and resolve or
+  formally accept the aggregate MCP package-test host blocker. Do not reuse
+  this lane, start Worker B, or run full SYN-049 acceptance.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 # Next Session
@@ -20,7 +18,10 @@ Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 The final fresh lane is **PASS-A for runtime**, while SYN-051 remains
-**ACTIVE / PARTIAL** because the broader MCP package-test gate is incomplete.
+**ACTIVE / PARTIAL** because aggregate MCP package-test invocations are
+incomplete. All 33 `McpServerTest` methods and all 13 linked-worktree methods
+passed individually in fresh test JVMs; the aggregate runs still encounter
+host-level cumulative fixture setup stalls.
 It passed exact generation-1 preparation
 through START, pending quarantine, same-AppServer Thread A creation, ownership,
 ACTIVE, one exact-claim trusted turn, readiness false -> true, controlled A1
@@ -29,9 +30,9 @@ read-only provider DB/history/rollout durability. The hard-stop revision race
 was fixed in `072581d`; evidence is in
 `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
-- Exact next action: resolve the remaining MCP package-test provider/Git setup
-  stall before considering SYN-051 DONE; do not start Worker B or run full
-  SYN-049 acceptance.
+- Exact next action: resolve or formally accept the aggregate MCP package-test
+  host blocker before considering SYN-051 DONE; do not start Worker B or run
+  full SYN-049 acceptance.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## SYN-051 fresh Worker-A persistence validation — 2026-09-05

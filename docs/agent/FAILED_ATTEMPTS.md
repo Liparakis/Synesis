@@ -861,3 +861,14 @@ setup, and a linked-worktree setup later stalled while launching Git. The
 stalls were stopped without being treated as passing. SYN-051 runtime evidence
 remains PASS-A, but the repository task remains ACTIVE / PARTIAL until this
 broader test gate is resolved or its environment blocker is formally accepted.
+
+## 2026-09-05 — SYN-051 MCP per-method isolation follow-on
+
+To distinguish assertion failures from cumulative fixture-host behavior, every
+test method in `McpServerTest` (33 methods) and every test method in
+`CodexLinkedWorktreeRootSelectionRegressionTest` (13 methods) was run in a
+separate fresh Gradle test JVM with JDK25, `--no-daemon`, `--max-workers=1`, the
+process-local AF_UNIX property, and the process-local native MCP launcher.
+Every isolated invocation passed. Aggregate class invocations still failed to
+complete reliably during repeated Git fixture setup, so this evidence does
+not claim a green aggregate MCP package task.

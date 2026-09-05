@@ -6,13 +6,13 @@ Thread A ownership and persistence were preserved, and both real turns
 completed with trusted provider events. A narrow hard-stop checkpoint race was
 fixed in `072581d`.
 
-SYN-051 remains **ACTIVE / PARTIAL**, not DONE, because the broader MCP
-package-test gate is incomplete: the targeted linked-worktree regression passes
-after a minimal Windows canonical-path test correction, but full-suite provider
-MCP setup and another linked-worktree Git setup stall on this host. Worker B
-and full SYN-049 acceptance remain out of scope.
+SYN-051 remains **ACTIVE / PARTIAL**, not DONE, because aggregate MCP
+package-test invocations remain incomplete: all 33 `McpServerTest` methods and
+all 13 linked-worktree regression methods pass in isolated fresh test JVMs, but
+aggregate runs still stall during cumulative Git/provider fixture setup on this
+host. Worker B and full SYN-049 acceptance remain out of scope.
 
-- Exact next action: resolve or formally accept the MCP package-test provider/Git setup blocker; do not start Worker B or run full SYN-049 acceptance.
+- Exact next action: resolve or formally accept the aggregate MCP package-test host blocker; do not start Worker B or run full SYN-049 acceptance.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
