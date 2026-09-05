@@ -136,8 +136,11 @@ left the generation-1 attachment `DISCONNECTED`, the lifecycle checkpoint
 `STOPPED`, and root PID `-1`; ownership remained durably `ACTIVE` and
 `persistenceReady=true`. No deliberate death test, replacement, A2, cross-
 process resume, Worker B, or full SYN-049 acceptance was run. No trusted death
-evidence was intentionally produced; normal close produced the checkpoint
-diagnostic `managed_job_empty` but was not used for replacement authorization.
+evidence was intentionally produced. Normal close did incidentally create the
+generation-1 receipt through the production
+`WindowsJobObjectProcessTreeSupervisor` (`rootPid=25220`, diagnostic
+`managed_job_empty`); it was not used for replacement authorization and no
+death test was performed.
 
 Only this evidence record and the corresponding agent checkpoint/state updates
 are allowed changes. No production source or build configuration changed. No
