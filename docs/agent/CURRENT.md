@@ -1,5 +1,46 @@
 # Current Task
 
+- Task ID: SYN-051
+- Status: ACTIVE / PARTIAL
+
+## SYN-051 standalone host compatibility — 2026-09-05
+
+The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
+Both Temurin 25+36 and 21.0.11+10 pass Pipe.open() and IPv4/IPv6 TCP, but
+fail Selector.open() and HttpServer creation with an AF_UNIX connect error.
+The smaller direct UNIX socket test fails in inherited/expanded user TEMP
+and passes in C:\t\synesis-loopback-probe. With only the diagnostic JVM's
+jdk.net.unixdomain.tmpdir set to that directory, the unchanged full probe
+passes 13/13 on BOTH JDKs. Classification: temporary-path-dependent Windows
+AF_UNIX boundary, not JDK25-specific, not IPv4/IPv6, not host-wide TCP failure.
+The underlying OS/filesystem/environment cause is unproven. User-TEMP socket
+cleanup failed; exact files and limitations are recorded in the evidence.
+No managed runtime, target project, production source, .synesis, credentials,
+global settings, or remote state was touched.
+
+Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
+and its `-raw.txt` companion. Checkpoint: CP-0683.md.
+
+## Immediate next action
+
+Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+
+## Work completed
+
+Completed standalone JDK25/JDK21 comparison and source-supported AF_UNIX reduction; recorded exact results and traces. Production unchanged. No managed acceptance run.
+
+## Current failures
+
+Both default JDKs fail selector initialization at UNIX socket connect in user TEMP. Process-local diagnostic directory resolves all 13 primitive cases on both JDKs. User-TEMP socket cleanup failed; root cause and managed runtime remain unverified.
+
+## Verification
+
+Commands: external run_probe.py baseline, run_probe.py ipv4, run_unix.py; exact command arrays and all results in evidence. Run git diff --check and scripts/agent-checkpoint.ps1; no Doctor, MCP, or production test invocation.
+
+## Historical handoffs (superseded by the current entry above)
+
+# Current Task
+
 ## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
 
 The bounded pass is **PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST
@@ -23,7 +64,7 @@ replacement, A2, and Worker B were not invoked. No production source changed.
 
 Evidence: `docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
 
-## Immediate next action
+## Historical next action
 
 Separately resolve or investigate the JDK 25 loopback `PipeImpl`/
 `WEPollSelectorProvider` invalid-argument failure, then run a new fresh lawful
@@ -74,7 +115,7 @@ production source changed.
 
 Evidence: `docs/evidence/SYN-051-fresh-worker-a-validation-2026-09-04.md`.
 
-## Immediate next action
+## Historical next action
 
 If separately authorized, keep `prepareFirst` and START in the same trusted
 live caller and run only the next bounded single-worker runtime step; do not
@@ -117,7 +158,7 @@ workspace and MCP package-wide test tasks stalled and were stopped, so they
 are incomplete evidence. No fresh managed Worker A, Worker B, A1/A2, or full
 acceptance was run.
 
-## Immediate next action
+## Historical next action
 
 Do not retry this stopped pass. Decide or separately authorize the supported
 managed caller sequence that invokes `prepareFirst` before START, then run a
@@ -136,7 +177,7 @@ No production source, `.synesis` state, credentials, historical evidence,
 Worker B, or remote state changed. Evidence is in
 `docs/evidence/SYN-051-provider-thread-provenance-2026-09-04.md` and ADR-0064.
 
-## Immediate next action
+## Historical next action
 
 Implement the bounded SYN-051 first-generation lifecycle change: let managed
 App Server call `thread/start`, then broker-acquire/pin the returned thread and
@@ -167,7 +208,7 @@ isolation, A1/A2 restart, and full acceptance were not run. No production
 source changed and no push occurred. The harness-control defect is recorded
 as a test-execution failure, not a production lifecycle conclusion.
 
-## Immediate next action
+## Historical next action
 
 Perform a separately authorized, read-only provider-thread provenance review
 for why a bootstrap-created Codex thread is not loadable by a new App Server
@@ -191,7 +232,7 @@ seam. Its process is gone, but it is therefore not lawfully replaceable; no
 receipt was manufactured and no durable fixture state was edited. No real
 A1-to-A2 rerun was performed.
 
-## Immediate next action
+## Historical next action
 
 Resolve the workstation Gradle loopback failure, rebuild and install the
 current source with matching provenance, then run only the focused lifecycle
@@ -217,7 +258,7 @@ The disposable turn used a mismatched `compat-a5` claim against the durable
 `compat-a4` lane and therefore failed closed at `ensure_session`; this is
 harness input failure, not a managed transport failure.
 
-## Immediate next action
+## Historical next action
 
 Checkpoint and commit this compatibility slice, preserve the real evidence,
 and stop before Worker B, A/B isolation, A1/A2 restart, or full acceptance.
@@ -234,7 +275,7 @@ source/build, lifecycle, attachment, admission, and real root-plus-descendant
 containment checks pass; real Codex A/B proof delivery and restart acceptance
 remain outstanding.
 
-## Immediate next action
+## Historical next action
 
 Rebuild and install the current source with matching hashes, then run only the
 focused real Codex child-proof, A1-to-A2 restart, fresh-proof, and Worker B
@@ -264,7 +305,7 @@ process-tree lifecycle. Ordinary `SESSION_BOUND` behavior, exact authority,
 the ten-tool surface, and `UNSAFE_FILE_AUTH` semantics for isolated homes are
 preserved.
 
-## Immediate next action
+## Historical next action
 
 Implement and test the durable provider-thread ownership record/store first,
 then wire its exact thread into managed attachment issuance and admission.
@@ -282,7 +323,7 @@ remain untested. Evidence is in
 `docs/evidence/SYN-051-job-object-process-tree-feasibility-2026-09-03.md` and
 ADR-0059. No Synesis MCP path was invoked.
 
-## Immediate next action
+## Historical next action
 
 Preserve `UNSAFE_FILE_AUTH`. Obtain separate authorization for the three
 missing edge cases; do not change production code or run full acceptance.
@@ -302,7 +343,7 @@ do not implement integration or run managed acceptance. Evidence is in
 ADR-0058. The broker remained outside this repository and the Synesis MCP
 attachment path was not invoked.
 
-## Immediate next action
+## Historical next action
 
 Obtain or design-review a verified owned process-tree supervisor and authorize
 a fresh real Synesis attachment probe; until both exist, preserve the
@@ -331,7 +372,7 @@ resolution, and `UNSAFE_FILE_AUTH` without production changes.
   `docs/evidence/SYN-051-shared-normal-home-feasibility-2026-09-03.md` and
   ADR-0057; no production code changed.
 
-## Immediate next action
+## Historical next action
 
 The bounded shared-normal-home follow-on is complete and classified `FAIL` for
 the full worker-isolation hypothesis. Concurrent dedicated App Servers,
@@ -435,7 +476,7 @@ raw tools.
   worker. Preserve exact connection fencing and reject unrelated, concurrent,
   stale, replayed, and terminal recovery attempts.
 
-## Immediate next action
+## Historical next action
 
 The bounded stock-Codex isolated-runtime investigation is complete and
 recorded in `docs/evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`.
@@ -553,7 +594,7 @@ neither is part of this continuity design.
   through the rebuilt MCP path (Defect B). Preserve the existing capability,
   review, integration, provider, authority, and ten-tool architecture.
 
-## Immediate next action
+## Historical next action
 
 Preserve the fresh `SynesisTaskTrackerRealAcceptance-20260903-08` evidence and
 do not re-admit or restart either worker. Review the recorded post-compliance
@@ -710,7 +751,7 @@ integrate branches, edit durable state, or restart the pair.
   existing capability/contract lifecycle, isolated worktrees, and the exact
   ten-tool MCP catalog.
 
-## Immediate next action
+## Historical next action
 
 Preserve the bounded live two-Codex result, allow only the already-running pair
 to reach a terminal state, and then classify the remaining task-launch or
@@ -753,7 +794,7 @@ pair.
   degraded Codex semantics, and the unrelated SYN-043 dependency-admission
   changes.
 
-## Immediate next action
+## Historical next action
 
 Preserve checkpoint CP-0622 and keep the provider/Git changes separate from
 SYN-043 implementation work.
@@ -930,7 +971,7 @@ before Gradle executes them.
   embedded installer, while the bundle smoke test exercises the standalone
   file's menu entry point.
 
-## Immediate next action
+## Historical next action
 
 Run the hosted `check` and six-platform bundle matrix again, confirm the
 self-extracting files launch on all six targets without configuration-cache or
@@ -962,7 +1003,7 @@ host/tooling blocker, not evidence against the build-script changes.
 - Existing uncommitted work is preserved. No commit, push, release, or
   SYN-042 creation is part of this task.
 
-## Immediate next action
+## Historical next action
 
 Run a separately reviewed high-confidence warning batch and preserve
 intentional lifecycle, polling, reflection, and public-API behavior. The latest
@@ -979,7 +1020,7 @@ full pass is recorded in checkpoint CP-0573.
   process metadata is preserved.
 - Evidence: `docs/evidence/syn041-final-real-codex-closure-2026-08-29.md`.
 
-## Immediate next action
+## Historical next action
 
 Preserve the accepted SYN-041 closure and do not create SYN-042 or broaden
 terminal-session semantics without a separately activated task.
@@ -1005,7 +1046,7 @@ timeout and are not reported as passing.
   `TERMINAL_DISCONNECTED` with original identity metadata preserved.
 - Evidence: `docs/evidence/syn041-terminal-disconnect-trigger-cp0567-2026-08-29.md`.
 
-## Immediate next action
+## Historical next action
 
 Review CP-0567 and await separately authorized final provider confirmation; do
 not run Codex, close SYN-041, change Doctor, or broaden the terminal-session
@@ -1043,7 +1084,7 @@ through persisted PID evidence. Final real-provider confirmation is deferred.
   host timeouts, with no assertion failure observed.
 - Evidence: `docs/evidence/syn041-terminal-transport-history-fix-2026-08-29.md`.
 
-## Immediate next action
+## Historical next action
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, read
 CP-0563 and the new evidence, and await a separately authorized final
@@ -1079,7 +1120,7 @@ a proven product failure. No real Codex run was authorized for this slice.
 - Evidence:
   `docs/evidence/syn041-final-real-codex-terminal-seal-acceptance-2026-08-28.md`.
 
-## Immediate next action
+## Historical next action
 
 Inspect `SessionLeaseService.markClosedCleanly` and add a narrow regression
 test for refusal to overwrite terminal authority; do not run another provider
@@ -1100,7 +1141,7 @@ resolved and re-verified.
 - SYN-039 remains CLOSED / DONE / ACCEPTED. No generalized identity,
   provider migration, new MCP tool, push, tag, or release was added.
 
-## Immediate next action
+## Historical next action
 
 Run `git status --short` and inspect the SYN-041 implementation/evidence diff
 before any future commit; do not commit, push, tag, release, or run another
@@ -1197,7 +1238,7 @@ or released.
   harness lost the Codex transcript and could not directly capture EOF/child
   exit code; no lease defect is proven.
 
-## Immediate next action
+## Historical next action
 
 Preserve RESULT E as the stopping boundary. Do not run another equivalent
 probe, implement a lease fix, suppress Doctor, alter lifecycle semantics, or
@@ -1226,7 +1267,7 @@ Evidence target:
 - Existing dirty lifecycle files remain outside scope unless causality is
   proven.
 
-## Immediate next action
+## Historical next action
 
 No product action remains for SYN-040. Preserve the evidence, do not
 auto-reconcile the two stale leases, and explicitly promote any future task
@@ -1263,7 +1304,7 @@ behavior probe passed. Doctor remained DEGRADED with six non-fatal stale-lease,
 command namespace/retention, and provider migration warnings. No SYN-039
 collaboration state remained active, and no hygiene repair was performed.
 
-## Immediate next action
+## Historical next action
 
 Select and explicitly promote the next authorized task before beginning any
 implementation; do not reopen SYN-039 for its separately recorded Doctor
@@ -1297,7 +1338,7 @@ received `review_validation` polling with no snapshot available and chose a
 non-projected pytest action. No unchanged projected action failed and no new
 production defect is proven.
 
-## Immediate next action
+## Historical next action
 
 Preserve CP-0545 as agent-compliance evidence and do not change lifecycle
 semantics. Run another fresh two-agent acceptance only with new provider-session
@@ -1336,7 +1377,7 @@ continuations. No snapshot, validation, integration, or WorkGroup closure was
 reached. No unchanged projected action failed and no production defect is
 proven; the first blocker remains ordinary provider engagement.
 
-## Immediate next action
+## Historical next action
 
 Run another fresh ordinary unattended two-agent Todo acceptance with only
 complementary visible coding prompts. Preserve the first unchanged projected
@@ -1376,7 +1417,7 @@ before grant `c7d4b141-32fd-3547-9928-c8cf191cc1b8` consumption and the
 implementation snapshot. No unchanged projected action failed and no new
 production defect is proven.
 
-## Immediate next action
+## Historical next action
 
 Run another fresh ordinary unattended two-agent Todo acceptance with only
 complementary visible coding prompts. Preserve the first unchanged projected
@@ -1417,7 +1458,7 @@ continuations before the second grant and implementation snapshot. No new
 production defect is proven; generated `AGENTS.md` already requires continued
 polling while unresolved WorkGroup state remains.
 
-## Immediate next action
+## Historical next action
 
 Run another fresh ordinary unattended two-agent Todo acceptance with only
 complementary visible coding prompts. Preserve the first unchanged projected
@@ -1457,7 +1498,7 @@ reciprocal grant targeted at A remained pending. Source inspection confirms
 these are intentional wait states, so this is provider/session compliance
 evidence, not a new production defect. No production code changed.
 
-## Immediate next action
+## Historical next action
 
 Run another fresh ordinary unattended two-agent Todo acceptance with only
 complementary visible coding prompts. Preserve the first unchanged projected
@@ -1500,7 +1541,7 @@ authorized by the bound caller and consumed; this is agent-compliance evidence.
 No unchanged concrete projection failed and no new production defect is
 proven.
 
-## Immediate next action
+## Historical next action
 
 Run another fresh ordinary unattended two-agent Todo acceptance with only
 complementary visible coding prompts. Do not change the review-decision
@@ -1542,7 +1583,7 @@ fail-closed error before correcting the call; later it stopped despite a
 projected `WAIT -> get_next_action({})`. These are provider/session
 compliance boundaries, not new production defects.
 
-## Immediate next action
+## Historical next action
 
 Run another fresh ordinary unattended two-agent Todo acceptance with only
 complementary visible coding prompts and the rebuilt bundled MCP. Preserve
@@ -1591,7 +1632,7 @@ action failed. The ordinary post-fix probe stopped at the same provider/session
 engagement boundary before the second snapshot. This remains agent/session
 compliance evidence, not a new production lifecycle defect.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh ordinary unattended two-agent Todo acceptance using only
 complementary visible coding prompts and the rebuilt bundled MCP. Preserve the
@@ -1620,7 +1661,7 @@ projections with no executable lifecycle action. This is provider/session
 compliance evidence, not a proven production lifecycle defect. No production
 code changed.
 
-## Immediate next action
+## Historical next action
 
 Preserve CP-0535 evidence and checkpoint state. Do not modify lifecycle code,
 push, or create SYN-040. A future SYN-039 slice is not justified unless an
@@ -1646,7 +1687,7 @@ No unchanged `get_next_action` projection failed. The first concrete boundary
 is agent/session compliance with a continuation returned by a mutating tool,
 not a new production protocol defect. No second ordinary acceptance was run.
 
-## Immediate next action
+## Historical next action
 
 Run one bounded diagnostic applying the exact-projected action rule to
 continuation actions returned by mutating tools as well as `get_next_action`.
@@ -1672,7 +1713,7 @@ terminal WorkGroup state was created. Control pytest was `4 failed, 1 passed`.
 No unchanged projected Synesis action failed. The first blocker is ordinary
 provider/session engagement, not a proven production protocol defect.
 
-## Immediate next action
+## Historical next action
 
 Run one bounded continuity diagnostic with the same two independent provider
 sessions and no manual relay: preserve the owner session across the delayed
@@ -1723,7 +1764,7 @@ The full root `check` still reproduces the known Git subprocess startup stall
 in `ProcessCommandRunner.execute` during `:cli:test`; bootstrap migration
 failures and Doctor warnings remain separately classified.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh ordinary unattended two-agent Todo acceptance with only the
 complementary coding prompts and the current bundled MCP. Do not relay,
@@ -1776,7 +1817,7 @@ the exact projected REVIEW admission payload, then ended while A still had a
 valid projected continuation. No unchanged projected action failed. The
 conditional second ordinary acceptance was not run.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh bounded two-agent exact-projection diagnostic with the current
 rebuilt MCP and the same complementary Todo responsibilities. Capture whether
@@ -1828,7 +1869,7 @@ not published; the control checkout therefore remained at `2 failed, 2
 passed`. This is agent/session engagement evidence, not a proven protocol
 defect.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh ordinary unattended two-agent Todo acceptance with only
 complementary coding prompts and the current bundled MCP. Do not provide
@@ -1877,7 +1918,7 @@ ACTIVE; control pytest passed 3/3 and contains the implementation but not the
 test-lane snapshot. This is agent/session engagement evidence, not a proven
 protocol defect.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh supported non-ephemeral Codex provider-session continuity probe
 across the ordinary pending-grant `WAIT -> get_next_action({})` boundary,
@@ -1920,7 +1961,7 @@ integration, and structured REJECT. The provider turn ended before the
 reciprocal REVIEW grant was consumed, so the WorkGroup remains ACTIVE. No
 unchanged projected action failed in the post-fix run.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh completely ordinary unattended two-agent Todo acceptance using
 only the complementary coding prompts and the current bundled MCP. Do not
@@ -1962,7 +2003,7 @@ Codex session ended before the reciprocal grant targeted at A was consumed.
 This remains provider/session engagement evidence, not a proven production
 defect.
 
-## Immediate next action
+## Historical next action
 
 Run one supported non-ephemeral Codex provider-session continuity probe in a
 fresh disposable project, preserving both independent sessions across a
@@ -2003,7 +2044,7 @@ snapshots, and passed control pytest 3/3, but stopped with WorkGroup
 continue the valid projected reviewer continuation. This remains agent/session
 engagement evidence, not a proven production defect.
 
-## Immediate next action
+## Historical next action
 
 Run one bounded provider-session continuation check from the preserved CP-0525
 ordinary `WAIT` boundary, retaining the same participant/intent and executing
@@ -2048,7 +2089,7 @@ compliance boundary, with additional evidence that a test-only lane can be
 published before the sibling implementation lane is integrated when the
 agent executes the projected action despite its local failing test.
 
-## Immediate next action
+## Historical next action
 
 Keep production code unchanged. Run a bounded provider-session continuity
 diagnostic at a fresh durable `WAIT → get_next_action({})` boundary, recording
@@ -2090,7 +2131,7 @@ projected `WAIT`; WorkGroup
 `051f07ff-e0c0-3f10-8422-705d066afc57` pending. No unchanged projected
 action failed and no production protocol defect is proven.
 
-## Immediate next action
+## Historical next action
 
 Run one third fresh ordinary unattended two-agent Todo acceptance with the
 same actual complementary coding prompts and no lifecycle coaching. Retain
@@ -2128,7 +2169,7 @@ fixture/agent evidence, not a Synesis defect.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0521-invalid-seed-continuation-2026-08-24.md`.
 
-## Immediate next action
+## Historical next action
 
 Run a fresh bounded two-agent diagnostic with a genuinely missing
 `TodoList.complete` implementation, current bundled MCP, and the existing
@@ -2172,7 +2213,7 @@ engagement evidence, not a production protocol defect.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0520-ordinary-completed-lane-2026-08-24.md`.
 
-## Immediate next action
+## Historical next action
 
 Run one bounded no-code continuation diagnostic in a fresh disposable project:
 retain a completed participant only long enough to execute any already
@@ -2220,7 +2261,7 @@ after the harness resumed a completed lane; its WorkGroup
 `dfc93a1a-de2e-3db4-859e-c0eb7d60eaab` remains `ACTIVE`. That remainder is
 agent/session engagement evidence, not a new production defect.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh ordinary unattended two-agent Todo acceptance with retained
 sessions, but do not resume a completed lane as a new coding intent. Preserve
@@ -2264,7 +2305,7 @@ integrated the test snapshot, but stopped when an agent changed then ignored a
 concrete projected coordination action. Its WorkGroup remains ACTIVE with the
 reciprocal grant unresolved. No additional production defect is proven.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh ordinary unattended two-agent Todo acceptance with the harness
 retaining both independent Codex sessions across durable WAIT/projection
@@ -2314,7 +2355,7 @@ REVIEW grant targeted at A; Agent B correctly remained in WAIT. The WorkGroup
 `895e9681-8d66-37c0-b3b7-6eb88aa57838` remains ACTIVE. This is agent
 engagement/compliance evidence, not a new production defect.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh bounded diagnostic with both agents kept engaged through the
 reciprocal grant, second snapshot publication, reviewer validation, accepted
@@ -2357,7 +2398,7 @@ integration, structured review responses, and durable WorkGroup
 `cf3f65dd-c43b-3ad1-855b-0d72c68a419a` `COMPLETED`. Control contains both
 accepted lane changes and `pytest` passes 4/4.
 
-## Immediate next action
+## Historical next action
 
 Reproduce the reviewer snapshot-read recovery transition in a deterministic MCP fixture and capture binding, worktree,
 control revision, snapshot, and lease state before changing production code.
@@ -2407,7 +2448,7 @@ WorkGroup `0d63aa77-fa6b-3dbd-a1a7-09e0d9ad0cda` remains ACTIVE. Doctor is
 DEGRADED with six separately classified warnings. The known Git subprocess
 stall and bootstrap migration failures remain independent.
 
-## Immediate next action
+## Historical next action
 
 Audit the provider/manual contract for the `review_decision` state and run a
 deterministic reviewer-decision fixture. If the existing decision contract is
@@ -2451,7 +2492,7 @@ The projection-to-admission liveness/state transition is not yet explained;
 the final read-only state showed Agent A detached and Agent B active, but the
 raw agent logs do not timestamp the request relative to that transition.
 
-## Immediate next action
+## Historical next action
 
 Reproduce CP-0527 with durable per-call timing and participant/intent state
 around the exact projected REVIEW admission. Trace whether the projection is
@@ -2485,7 +2526,7 @@ rebuild, bootstrap `go vet`, and `git diff --check` pass. Doctor remains
 DEGRADED with six separately classified warnings. The known root Git
 subprocess stall and bootstrap migration failures remain independent.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh ordinary unattended two-agent Todo acceptance with only the
 agents' complementary coding prompts. Do not relay, manually transition,
@@ -2529,7 +2570,7 @@ Both WorkGroups remain ACTIVE. Doctor remains DEGRADED with six separately
 classified warnings; the root Git subprocess stall and bootstrap migration
 failures remain independent verification issues.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh bounded exact-action diagnostic whose harness records the
 projected action and actual arguments side by side and requires no manual
@@ -2578,7 +2619,7 @@ projected action failed. WorkGroup `1fea1dc1-607e-3168-99df-8e896bf68295`
 remains ACTIVE. Doctor is DEGRADED with six warnings; the root Git stall,
 bootstrap migration failures, and document-format findings remain separate.
 
-## Immediate next action
+## Historical next action
 
 Run a fresh ordinary unattended two-agent Todo acceptance with no
 protocol-conformance instruction beyond the repository contract. Observe
@@ -2610,7 +2651,7 @@ is correct but no usable continuation is projected. WorkGroup
 `2563b0c`; B has no snapshot; reciprocal request
 `a705dde9-eab2-40ec-bd4a-b30fb45a9122` remains pending.
 
-## Immediate next action
+## Historical next action
 
 Implement and deterministically test only the post-ACCEPT dirty-lane
 continuation projection. Preserve dirty work and all existing claim, grant,
@@ -2651,7 +2692,7 @@ closure. Doctor remains DEGRADED with six warnings. The root Git subprocess
 stall, bootstrap migration test failures, and pre-existing documentation
 trailing-whitespace failures remain independent verification issues.
 
-## Immediate next action
+## Historical next action
 
 Run a fresh completely ordinary two-agent Todo acceptance with no lifecycle
 instruction beyond the repository contract, and capture whether both normal
@@ -2694,7 +2735,7 @@ continuation after sibling integration without losing or silently replacing
 the reviewer's dirty work. This is a concrete SYN-039 product blocker, not an
 agent-compliance deviation.
 
-## Immediate next action
+## Historical next action
 
 Implement the smallest deterministic stale-reviewer continuation slice: allow
 grant-authorized durable review projection/validation after sibling control
@@ -2748,7 +2789,7 @@ failed; this remains agent-compliance evidence. Doctor remains DEGRADED with
 six warnings, and the known Git subprocess stall and bootstrap migration
 failures remain separate.
 
-## Immediate next action
+## Historical next action
 
 Run a fresh bounded exact-projection diagnostic with both agents explicitly
 required to execute every concrete projected action unchanged and remain
@@ -2810,7 +2851,7 @@ ordinary agent even though no lifecycle action was projected. These are the
 next agent-facing continuation/contract questions; no lifecycle redesign is
 justified. Doctor remains `DEGRADED` with six unrelated warnings.
 
-## Immediate next action
+## Historical next action
 
 Inspect and classify the two remaining agent-facing stops from CP-0511 and
 CP-0512: the optional `integrationCheck` overload after ordinary coding and
@@ -2875,7 +2916,7 @@ fixture/deferred validators, `go vet`, Doctor, and `git diff --check` pass.
 Doctor remains `DEGRADED` with six unrelated warnings; the known root Git
 subprocess stall and bootstrap migration failures remain separate.
 
-## Immediate next action
+## Historical next action
 
 Run a fresh bounded two-agent diagnostic from the rebuilt bundle, preserving
 the exact-projection rule, and keep both agents alive after reciprocal REVIEW
@@ -2944,7 +2985,7 @@ subprocess stall, bootstrap migration failures, and Doctor warnings remain
 separately classified unless the next focused reproduction connects them to
 validation projection.
 
-## Immediate next action
+## Historical next action
 
 Trace the review-validation projection from `reviewActions` through
 `AgentWorkflowReducer` and the MCP response contract; make the smallest fix
@@ -2996,7 +3037,7 @@ integration, or closure. This is agent-compliance evidence. Fixture Doctor is
 DEGRADED with six warnings; the known Git subprocess stall, bootstrap
 migration failures, and format findings remain separately classified.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh bounded diagnostic with both agents kept alive through grant
 consumption and peer snapshot publication; capture the first later projection
@@ -3052,7 +3093,7 @@ CP-0494 evidence file, and the run reproduced the Git subprocess stall in
 `ProviderApplicationServiceTest` / `ProcessCommandRunner` before it was
 bounded and stopped.
 
-## Immediate next action
+## Historical next action
 
 Run one fresh bounded diagnostic with both agents remaining alive after every
 `WAIT` projection and after peer-side publication; capture the first
@@ -3348,7 +3389,7 @@ B's active claim and no B snapshot. This is agent-compliance evidence, not a
 new lifecycle defect. The recurring Git subprocess stall, bootstrap migration
 failures, and six fixture Doctor warnings remain separate.
 
-## Immediate next action
+## Historical next action
 
 Run the next fresh bounded diagnostic with the same exact-projection rule and
 verify that both agents continue polling after an idempotent REVIEW admission
@@ -3551,7 +3592,7 @@ The known unprojected `finish_lane` calls remain agent-compliance evidence.
 5. Rerun the same unattended Todo experiment with no babysitting and record
    the complete evidence.
 
-## Immediate next action
+## Historical next action
 
 Trace the order-dependent review-admission owner selection in
 `AgentNextActionService.reviewActions`. Reproduce the reviewer-first state with

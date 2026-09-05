@@ -1,3 +1,23 @@
+## SYN-051 standalone host compatibility — 2026-09-05
+
+The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
+Both Temurin 25+36 and 21.0.11+10 pass Pipe.open() and IPv4/IPv6 TCP, but
+fail Selector.open() and HttpServer creation with an AF_UNIX connect error.
+The smaller direct UNIX socket test fails in inherited/expanded user TEMP
+and passes in C:\t\synesis-loopback-probe. With only the diagnostic JVM's
+jdk.net.unixdomain.tmpdir set to that directory, the unchanged full probe
+passes 13/13 on BOTH JDKs. Classification: temporary-path-dependent Windows
+AF_UNIX boundary, not JDK25-specific, not IPv4/IPv6, not host-wide TCP failure.
+The underlying OS/filesystem/environment cause is unproven. User-TEMP socket
+cleanup failed; exact files and limitations are recorded in the evidence.
+No managed runtime, target project, production source, .synesis, credentials,
+global settings, or remote state was touched.
+
+Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
+and its `-raw.txt` companion. Checkpoint: CP-0683.md.
+
+Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+
 # Failed Attempts
 
 ## 2026-09-05 — SYN-051 real-runtime loopback host creation

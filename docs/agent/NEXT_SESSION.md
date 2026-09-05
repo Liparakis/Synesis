@@ -1,5 +1,31 @@
 # Next Session
 
+## SYN-051 standalone host compatibility — 2026-09-05
+
+The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
+Both Temurin 25+36 and 21.0.11+10 pass Pipe.open() and IPv4/IPv6 TCP, but
+fail Selector.open() and HttpServer creation with an AF_UNIX connect error.
+The smaller direct UNIX socket test fails in inherited/expanded user TEMP
+and passes in C:\t\synesis-loopback-probe. With only the diagnostic JVM's
+jdk.net.unixdomain.tmpdir set to that directory, the unchanged full probe
+passes 13/13 on BOTH JDKs. Classification: temporary-path-dependent Windows
+AF_UNIX boundary, not JDK25-specific, not IPv4/IPv6, not host-wide TCP failure.
+The underlying OS/filesystem/environment cause is unproven. User-TEMP socket
+cleanup failed; exact files and limitations are recorded in the evidence.
+No managed runtime, target project, production source, .synesis, credentials,
+global settings, or remote state was touched.
+
+Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
+and its `-raw.txt` companion. Checkpoint: CP-0683.md.
+
+- Exact next documentation action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+- Continuation evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`.
+
+## Historical handoffs (superseded by the current entry above)
+
+# Next Session
+
 ## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
 
 The bounded pass is **PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST
@@ -12,7 +38,7 @@ replacement, A2, Worker B, credential access, or production source change
 occurred. Evidence:
 `docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
 
-- Exact next code action: separately resolve or investigate the JDK 25 loopback
+- Historical next code action: separately resolve or investigate the JDK 25 loopback
   compatibility blocker, then use a new fresh lawful Worker-A lane with
   `prepareFirst` and START in the same trusted live caller; do not reuse this
   lane, start Worker B, invoke A1-to-A2 replacement, or broaden acceptance.
@@ -63,7 +89,7 @@ replacement gates are implemented. Changed workspace tests and clean
 build/install artifact matching passed. Workspace and MCP package-wide test
 tasks stalled and were stopped; no fresh managed runtime was run.
 
-- Exact next code action: if separately authorized, run only a fresh
+- Historical next code action: if separately authorized, run only a fresh
   single-worker managed runtime validation. Do not start Worker B, A1/A2, or
   full acceptance.
 
@@ -146,9 +172,9 @@ selection was stopped after no progress and is incomplete. No real Codex
 managed A/B/restart acceptance, rebuilt install provenance, or full
 task-tracker acceptance has been run.
 
-## Immediate next action
+## Historical next action
 
-- Exact next code action: create rebuilt hash-matched artifacts and run the
+- Historical next code action: create rebuilt hash-matched artifacts and run the
   smallest real Codex probe
   that proves exact child proof delivery, A/B proof isolation, early-proof
   rejection, exact-thread/generation join, A1 Job death, fresh A2 proof, and
@@ -177,7 +203,7 @@ controller crash/kill-on-close passed. Ambiguous query failure, a real
 two-successor loser cleanup, and real Codex post-supervisor-crash recovery
 remain untested.
 
-## Immediate next action
+## Historical next action
 
 Preserve `UNSAFE_FILE_AUTH` and the managed-acceptance hard stop. Obtain
 separate authorization for those three edge cases before integration; do not
@@ -190,7 +216,7 @@ exact provider-thread pinning and pre-Codex wrong-thread rejection passed, but
 App Server-only death orphaned the disposable MCP child. No production code,
 auth policy, `.synesis` state, fixture, or Synesis MCP path changed.
 
-## Immediate next action
+## Historical next action
 
 Obtain a verified owned process-tree teardown/liveness design and explicit
 authorization for a fresh real Synesis attachment probe. Until then preserve
@@ -214,7 +240,7 @@ another worker's persisted provider thread after owner shutdown. The full
 shared-home hypothesis is therefore not safe; preserve `UNSAFE_FILE_AUTH` and
 do not run managed acceptance.
 
-## Immediate next action
+## Historical next action
 
 The exact next documentation action is to preserve this rejection and wait for
 an explicit provider-enforced worker/thread ownership contract before any
@@ -252,9 +278,9 @@ SYN-049
 is PARTIAL; its explicit completion and structured dependency results remain
 preserved and are not reopened.
 
-## Immediate next action
+## Historical next action
 
-- Exact next code action: review/authorize a bounded conservative v1
+- Historical next code action: review/authorize a bounded conservative v1
   implementation using one retained isolated Codex home per logical worker,
   selected `env_vars`, exact thread resume, and generation rotation; do not
   implement it in this feasibility pass.
@@ -300,7 +326,7 @@ fresh hash-matched MCP regression identifies a first failing boundary. Do not
 fabricate capability requests, infer dependencies, edit durable state, copy
 worktrees, invent IDs, or redesign review/Doctor.
 
-## Immediate next action
+## Historical next action
 
 Read `docs/evidence/syn049-completion-dependency-acceptance-2026-09-03.md`,
 preserve fixture `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`,
@@ -323,7 +349,7 @@ not edit durable state or touch KogMaw. Focused regression coverage and narrow
 guard tests pass; the complete MCP class remains incomplete after a bounded
 timeout.
 
-## Immediate next action
+## Historical next action
 
 Create a new fresh SYN-047 fixture with the rebuilt distribution and launch only
 the bootstrap task.
@@ -544,7 +570,7 @@ before a seal retains stale/recovery behavior; abnormal loss after a seal is
 
 Evidence: `docs/evidence/syn041-terminal-session-seal-2026-08-28.md`.
 
-- Exact next code action: run `git status --short` and inspect the SYN-041
+- Historical next code action: run `git status --short` and inspect the SYN-041
   implementation/evidence diff before any future commit. Do not commit, push,
   tag, release, or run another real provider experiment.
 
@@ -884,7 +910,7 @@ arguments were rejected fail-closed and the provider sessions ended before
 reciprocal grant consumption and implementation publication; control pytest was
 `1 failed, 4 passed`. No production defect was proven.
 
-- Exact next code action: run one fresh ordinary unattended two-agent Todo
+- Historical next code action: run one fresh ordinary unattended two-agent Todo
   acceptance with only complementary coding prompts and the current bundled
   MCP. Do not relay, repair, trigger lifecycle transitions, or add production
   behavior for wrong agent arguments or provider-turn termination. Preserve the
@@ -907,7 +933,7 @@ inspection, structured ACCEPT, and integration. The sessions ended with a
 reciprocal request/grant unresolved; no unchanged projected action failed.
 The conditional second ordinary run was not started.
 
-- Exact next code action: run one fresh ordinary unattended two-agent Todo
+- Historical next code action: run one fresh ordinary unattended two-agent Todo
   acceptance with only the complementary coding prompts and current bundled
   MCP. Do not relay, repair, trigger transitions, or coach lifecycle steps.
 
@@ -1184,9 +1210,9 @@ the ordinary run stopped at Agent B's changed/ignored projected
 `4ba34d35-976a-3d55-bc40-0d7c9656f46b` unresolved. No further lifecycle code
 change is justified.
 
-- Exact next documentation action: create the next checkpoint after the local
+- Historical next documentation action: create the next checkpoint after the local
   commit; CP-0536 evidence already contains the final command results.
-- Exact next code action: commit the already verified terminal-WorkGroup guard,
+- Historical next code action: commit the already verified terminal-WorkGroup guard,
   its two deterministic regressions, and the necessary MCP fixture correction;
   do not alter production lifecycle behavior unless a new unchanged projected
   action fails.
@@ -1234,10 +1260,10 @@ not trustworthy validation evidence: after control advanced, both reviewers'
 snapshot reads returned `workspace_stale`; B's attempted
 `ensure_session({"refresh":true})` returned `internal_failure`.
 
-- Exact next documentation action: preserve the reviewer stale-read and
+- Historical next documentation action: preserve the reviewer stale-read and
   recovery trace as the next SYN-039 blocker and keep the root format failure,
   Git stall, bootstrap migration failures, and Doctor warnings separate.
-- Exact next code action: reproduce the reviewer snapshot-read and
+- Historical next code action: reproduce the reviewer snapshot-read and
   `ensure_session` recovery transition in a deterministic MCP fixture; make no
   production change until the binding/worktree/lease cause is identified.
 - Do not relay, consume grants, repair state, push, or create SYN-040.
@@ -1264,11 +1290,11 @@ exact WAIT polling for A's grant and did not publish its own test change.
 WorkGroup `f81adf5d-1845-31b6-9eda-199dbcf8cb6f` is ACTIVE and Doctor is
 DEGRADED with six warnings.
 
-- Exact next documentation action: run a bounded diagnostic with both agents
+- Historical next documentation action: run a bounded diagnostic with both agents
   kept engaged through the reciprocal request and WAIT projections; capture
   whether the active reviewer later receives its own implementation/publication
   action.
-- Exact next code action: none until an engaged participant executes an unchanged
+- Historical next code action: none until an engaged participant executes an unchanged
   projection that fails or Synesis reaches a required state with no usable
   action.
 - Do not relay, consume grants, repair state, push, or create SYN-040.
@@ -1382,7 +1408,7 @@ fail-closed `INTENT_NOT_FOUND`; no exact projected action failed.
 - Exact next action: run a fresh bounded exact-action two-agent diagnostic and
   preserve every projection beside the unchanged actual arguments until the
   first real protocol failure or missing usable action.
-- Exact next code action: none; do not modify production code for CP-0521 or
+- Historical next code action: none; do not modify production code for CP-0521 or
   CP-0522 agent-compliance evidence.
 - Do not relay IDs, manually transition lifecycle state, push, broaden
   SYN-039, or create SYN-040.
@@ -1405,7 +1431,7 @@ agent-compliance evidence and later exact actions succeeded.
 - Exact next action: run a fresh ordinary unattended two-agent Todo acceptance
   with no protocol-conformance instruction; preserve the first concrete
   projected-action failure or missing continuation.
-- Exact next code action: run that fresh ordinary acceptance and preserve the
+- Historical next code action: run that fresh ordinary acceptance and preserve the
   first concrete projected-action failure or missing continuation; do not
   change production code for agent-compliance evidence.
 - Do not relay IDs, manually accept requests, trigger transitions, push,
@@ -1430,7 +1456,7 @@ snapshot but still owns dirty `test_todo.py` work. Its exact projected
 `internal_failure / request_human_help`; the WorkGroup is ACTIVE and B's
 reciprocal snapshot has not been published.
 
-- Exact next code action: reproduce this post-ACCEPT dirty-lane state in a
+- Historical next code action: reproduce this post-ACCEPT dirty-lane state in a
   deterministic fixture, then implement the smallest existing-model
   continuation projection for publication or authorized review. Preserve all
   fail-closed checks and do not discard dirty work.
@@ -1460,7 +1486,7 @@ The fresh exact-action CP-0517 diagnostic used project
 poll predated that request and its Codex turn ended. No grant, snapshot,
 validation, integration, or closure was reached.
 
-- Exact next code action: none; do not modify production code for this agent-
+- Historical next code action: none; do not modify production code for this agent-
   engagement result.
 - Exact next acceptance action: run a fresh ordinary two-agent Todo test with
   no lifecycle-conformance instruction, then preserve the first concrete
@@ -1601,7 +1627,7 @@ blocker. If an agent omits or ignores a projected action again, record agent
 compliance evidence without changing production code. Do not push or create
 SYN-040.
 
-- Exact next code action: run the fresh bounded exact-projection diagnostic;
+- Historical next code action: run the fresh bounded exact-projection diagnostic;
   do not change production code unless a complete projected action fails.
 
 ## CP-0507 continuation
@@ -1623,7 +1649,7 @@ WorkGroup remains ACTIVE; no validation decision or closure was reached.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0507-review-result-projection-2026-08-24.md`.
 
-- Exact next code action: trace `reviewActions`, `AgentWorkflowReducer`, and
+- Historical next code action: trace `reviewActions`, `AgentWorkflowReducer`, and
   the MCP response contract, then make the smallest projection fix that
   exposes valid structured ACCEPT/REJECT choices without choosing for the
   reviewer.
@@ -1741,7 +1767,7 @@ was no longer polling to consume it. The WorkGroup remains ACTIVE with B's
 active claim and no B snapshot. Treat this as agent-compliance evidence; do
 not change lifecycle production code from it.
 
-- Exact next code action: run a fresh bounded two-agent diagnostic with the
+- Historical next code action: run a fresh bounded two-agent diagnostic with the
   same exact-projection rule and verify both agents continue polling after the
   idempotent REVIEW request until the second grant, B snapshot, validation,
   integration, and WorkGroup closure. If a concrete projection is ignored
@@ -1769,7 +1795,7 @@ remains live after ACCEPT, but its final `get_next_action` returns ordinary
 occur. The same run also generated three requests and three single-use grants
 for repeated identical REVIEW admission projections.
 
-- Exact next code action: reproduce this post-ACCEPT active-reviewer no-action
+- Historical next code action: reproduce this post-ACCEPT active-reviewer no-action
   state, trace why the existing model does not project B's publication/finish
   or a terminal closure action, and cover the repeated-admission projection in
   the same focused regression. Do not modify cleanup, ownership, Doctor, or
@@ -1911,7 +1937,7 @@ failed, and no grant, snapshot, validation, integration, or closure completed.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0487-role-order-diagnostic-2026-08-24.md`.
 
-- Exact next code action: run a fresh bounded diagnostic with the
+- Historical next code action: run a fresh bounded diagnostic with the
   implementation agent launched first, then capture every projection/action
   pair through producer publication and reviewer validation without relaying
   or manually triggering transitions.
@@ -1943,7 +1969,7 @@ integration, or closure was reached. This is agent-compliance evidence, not a
 new production lifecycle defect. Evidence:
 `docs/evidence/syn039-unattended-todo-cp0486-exact-rule-diagnostic-2026-08-24.md`.
 
-- Exact next code action: run a fresh bounded two-agent diagnostic with the
+- Historical next code action: run a fresh bounded two-agent diagnostic with the
   current bundle and a rule forbidding unprojected integration checks or
   lifecycle transitions during ordinary `IMPLEMENT`; capture every
   `get_next_action` projection and following action.
@@ -1985,7 +2011,7 @@ DEGRADED with six warnings, including two `stale_session_lease` warnings.
 Evidence:
 `docs/evidence/syn039-unattended-todo-cp0485-exact-rule-diagnostic-2026-08-24.md`.
 
-- Exact next code action: reproduce the live reviewer stale-session recovery
+- Historical next code action: reproduce the live reviewer stale-session recovery
   in a deterministic two-session fixture and trace lease, heartbeat,
   connection, binding, worktree, process-anchor, and provider-process state
   through `ensure_session`; fix only a proven fail-closed readiness defect.
@@ -2088,7 +2114,7 @@ cleanup issues separate. Do not push or create SYN-040.
 - Immediate next command: `powershell -ExecutionPolicy Bypass -File
   scripts/agent-resume.ps1`; then rerun the explicit two-agent acceptance with
   strict exact `get_next_action` execution and no manual relay.
-- Exact next code action: preserve the first typed result after the reviewer
+- Historical next code action: preserve the first typed result after the reviewer
   submits the projected `request_coordination(work_group_join)` action. No
   production change is authorized by CP-0477. Keep `SYN-014E` paused; do not
   create SYN-040.
