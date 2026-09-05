@@ -5323,3 +5323,26 @@ run stopped before controlled A1 death, replacement, or A2. Normal cleanup
 incidentally wrote generation-1 death receipt evidence. No Worker B, full
 SYN-049 acceptance, credential access, production source change, or push
 occurred. Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
+
+## 2026-09-05 — SYN-051 fresh Worker-A A1/A2 completion
+
+The final fresh lane is **PASS-A**. It passed artifact provenance, JDK25
+process-local Selector/HttpServer preflight, same-process generation-1
+`prepareFirst -> START`, pending authority denial, exact AppServer/MCP Job
+containment, same-AppServer Thread A creation, ownership, broker pin, ACTIVE,
+and the first exact-claim real Codex turn with trusted `turn/completed` and
+`persistenceReady=false -> true`. The exact Thread A provider row, completed
+history, and rollout were confirmed read-only.
+
+The narrow production hard-stop race was diagnosed as a stale checkpoint
+revision concurrent with process-exit observation. `072581d` serialized
+hard-stop evidence persistence and final transition against the latest
+checkpoint. Focused tests and rebuilt produced-to-installed artifact hashes
+passed. The fresh lane then returned controlled A1 `HARD_STOP` success with a
+trusted death receipt, prepared generation 2, resumed the exact Thread A, and
+completed a second exact-claim turn with trusted `turn/completed`. Normal host
+cleanup stopped A2 and incidentally produced generation-2 death evidence.
+
+No Worker B, full SYN-049 acceptance, credential access, global setting,
+historical-lane reuse, manual `.synesis` modification, or push occurred.
+Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.

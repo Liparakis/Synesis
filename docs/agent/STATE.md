@@ -73,6 +73,35 @@ bounded slice; do not reuse this lane or invoke A1-to-A2 replacement.
 
 # State
 
+## 2026-09-05 — SYN-051 fresh Worker-A A1/A2 runtime validation
+
+The fresh lane is **PASS-A**. Binding
+`session-b57fcc4c-40f8-4df2-b846-99b34b132d02` was created lawfully with exact
+claim `probe-runtime/persistence-final-a-c033a0f0-bcd8-4673-9f4a-8e3a2e51de05.txt`.
+One live launcher retained generation-1 preparation through START; pending
+authority was denied, AppServer/MCP Job containment and same-AppServer Thread A
+creation were proven, and the exact owner reached ACTIVE with readiness false.
+The first claim-aligned turn completed with trusted `turn/completed` and
+readiness false/revision 1 -> true/revision 2.
+
+Controlled A1 HARD_STOP returned STOPPED with a trusted generation-1 death
+receipt. Exact generation-2 preparation and RESUME reused Thread A, and the
+second claim-aligned turn completed with trusted `turn/completed`; provider
+SQLite thread/history/rollout durability was confirmed read-only. Normal host
+cleanup stopped A2 and incidentally produced generation-2 death evidence.
+Worker B and full SYN-049 acceptance were not run.
+
+A production hard-stop race was fixed in `072581d` by serializing evidence
+persistence and final transition against the latest checkpoint; focused tests,
+rebuild/install, and produced-to-installed hash checks passed. Evidence:
+`docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
+
+## Immediate next action
+
+Review the PASS-A evidence and wait for separate authorization before any next
+bounded A1 trusted-death -> A2 exact-resume continuation; do not start Worker B
+or run full SYN-049 acceptance.
+
 ## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
 
 Status is **PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST FAILURE**. The

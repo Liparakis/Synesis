@@ -17,6 +17,21 @@ Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
 # Next Session
 
+## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
+
+The final fresh lane is **PASS-A**. It passed exact generation-1 preparation
+through START, pending quarantine, same-AppServer Thread A creation, ownership,
+ACTIVE, one exact-claim trusted turn, readiness false -> true, controlled A1
+death, exact generation-2 resume, a second exact-claim trusted turn, and
+read-only provider DB/history/rollout durability. The hard-stop revision race
+was fixed in `072581d`; evidence is in
+`docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
+
+- Exact next action: wait for separate authorization before any further bounded
+  A1 trusted-death -> A2 exact-resume validation; do not start Worker B or run
+  full SYN-049 acceptance.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-051 fresh Worker-A persistence validation — 2026-09-05
 
 The successful fresh lane reached same-process `prepareFirst → START`,

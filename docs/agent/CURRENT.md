@@ -2,30 +2,24 @@
 
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
-Status: **ACTIVE / PARTIAL**. A new fresh lane passed provenance, JDK25
-process-local compatibility, same-process `prepareFirst -> START`, explicit
-pending authority quarantine, exact AppServer/MCP Job containment, same-
-AppServer `thread/start`, ownership, broker pin, ACTIVE promotion, trusted
-generation-1 completion, `persistenceReady=false -> true`, and read-only
-provider DB/history/rollout durability for Thread A.
-
-The lane stopped before A1 replacement because the real provider turn did not
-mutate the exact claim. Its Synesis interaction reported the exact path as
-already owned and ended with no file change. Normal cleanup incidentally wrote
-generation-1 death evidence; this is not controlled A1 death evidence. No A2,
-Worker B, full SYN-049 acceptance, credential access, production source
-change, or push occurred.
+Status: **ACTIVE / PASS-A**. One fresh lawful lane passed provenance, JDK25
+process-local compatibility, same-process `prepareFirst -> START`, pending
+authority quarantine, exact AppServer/MCP Job containment, same-AppServer
+`thread/start`, ownership, broker pin, ACTIVE promotion, two trusted exact-claim
+turns, controlled generation-1 death, exact generation-2 resume, and provider
+DB/history/rollout durability for the same Thread A. A narrow hard-stop
+checkpoint race was fixed and verified before the final lane.
 
 Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
 ## Immediate next action
 
-Investigate the exact claim-alignment/duplicate-claim provider interaction in a
-separate bounded slice; do not reuse this lane, invoke replacement/A2, start
-Worker B, or run full SYN-049 acceptance.
+Review the PASS-A evidence and authorize the separately bounded A1 trusted-death
+-> A2 exact-resume validation continuation; do not start Worker B or run full
+SYN-049 acceptance.
 
 - Task ID: SYN-051
-- Status: ACTIVE / PARTIAL
+- Status: ACTIVE / PASS-A
 
 ## SYN-051 fresh Worker-A persistence validation — 2026-09-05
 

@@ -1,11 +1,13 @@
-## SYN-051 fresh Worker-A persistence validation — 2026-09-05
+## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
-**ACTIVE / PARTIAL.** Same-process generation-1 preparation/start and one real
-claim-aligned turn reached trusted completion and durable provider persistence
-for exact Thread A. Two narrow evidence items remain unresolved: direct pending
-authority rejection and direct MCP-child membership in the exact Job handle.
+**ACTIVE / PASS-A.** One fresh lawful Worker A completed the managed
+generation-1 lifecycle, controlled A1 death, exact generation-2 resume, two
+claim-aligned trusted turns, and read-only provider DB/history/rollout
+durability for the same Thread A. The hard-stop checkpoint race was fixed in
+`072581d` and verified by focused tests plus the fresh lane.
 
-- Next action: checkpoint and stop; do not run replacement, A2, Worker B, or
+- Next action: wait for separate authorization before any further bounded A1
+  trusted-death -> A2 exact-resume validation; do not start Worker B or run
   full SYN-049 acceptance.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
@@ -66,6 +68,17 @@ replacement, and A2.
   run full SYN-049 acceptance.
 
 # Tasks
+
+- SYN-051 fresh single-worker managed-runtime validation — 2026-09-05:
+  **PASS-A / ACTIVE FOR FOLLOW-ON AUTHORIZATION**. Fresh lawful Worker A
+  completed generation-1 prepare/start, pending quarantine, same-AppServer
+  Thread A creation, ACTIVE, trusted claim-aligned persistence, controlled A1
+  death, exact generation-2 resume, second trusted claim-aligned turn, and
+  provider DB/history/rollout durability. Hard-stop race fix `072581d` was
+  verified. No Worker B or full SYN-049 acceptance ran.
+- Next action: wait for separate authorization before any further bounded A1
+  trusted-death -> A2 exact-resume validation; do not start Worker B or run
+  full SYN-049 acceptance.
 
 - SYN-051 fresh single-worker managed-runtime validation — 2026-09-05:
   **ACTIVE / PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST FAILURE**. A
