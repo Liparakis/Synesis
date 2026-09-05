@@ -19,9 +19,10 @@ The explicitly activated bounded implementation now includes same-App-Server
 generation-1 creation, provider-thread ownership/pinning, pending transport
 quarantine, a trusted provider-persistence boundary, and a fresh end-to-end
 Worker-A generation-1 death plus exact generation-2 resume acceptance. The
-broader MCP package-test gate remains incomplete, and Worker B/A-B validation
-and full SYN-049 acceptance remain out of scope. No new capability or MCP tool
-is activated.
+in-scope workspace and MCP regression classes now pass. Worker B/A-B
+validation and full SYN-049 acceptance remain out of scope for this bounded
+objective and are the remaining repository-level acceptance criterion. No new
+capability or MCP tool is activated.
 
 ## SYN-051 review — 2026-09-03
 

@@ -5,12 +5,14 @@ generation-1 lifecycle, controlled A1 death, exact generation-2 resume, two
 claim-aligned trusted turns, and read-only provider DB/history/rollout
 durability for the same Thread A. The hard-stop checkpoint race was fixed in
 `072581d` and verified by focused tests plus the fresh lane. The complete
-workspace lifecycle-codex suite passed; the broader MCP suite remains
-incomplete because provider/Git setup stalled after the targeted regression
-passed.
+workspace lifecycle-codex suite passed. The in-scope aggregate MCP classes
+passed after their long-running Git/provider fixtures completed; explicit
+two-process and older SYN-039 acceptance classes remain outside this bounded
+objective.
 
-- Next action: resolve the remaining MCP package-test provider/Git setup stall;
-  do not start Worker B or run full SYN-049 acceptance.
+- Next action: preserve this runtime evidence; the remaining repository
+  acceptance criterion is separately scoped two-worker/restart validation and
+  must not be run in this bounded objective.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 

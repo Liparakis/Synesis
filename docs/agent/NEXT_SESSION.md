@@ -8,9 +8,9 @@ or full SYN-049 acceptance ran.
 
 Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
-- Exact next documentation action: preserve the runtime PASS-A evidence and resolve or
-  formally accept the aggregate MCP package-test host blocker. Do not reuse
-  this lane, start Worker B, or run full SYN-049 acceptance.
+- Exact next documentation action: preserve the runtime PASS-A evidence and
+  record the separately scoped two-worker/restart acceptance as remaining.
+  Do not reuse this lane, start Worker B, or run full SYN-049 acceptance.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 # Next Session
@@ -18,10 +18,10 @@ Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 The final fresh lane is **PASS-A for runtime**, while SYN-051 remains
-**ACTIVE / PARTIAL** because aggregate MCP package-test invocations are
-incomplete. All 33 `McpServerTest` methods and all 13 linked-worktree methods
-passed individually in fresh test JVMs; the aggregate runs still encounter
-host-level cumulative fixture setup stalls.
+**ACTIVE / PARTIAL** because the repository task still requires separately
+scoped two-worker/restart acceptance. The in-scope aggregate MCP classes passed,
+as did all 33 `McpServerTest` and 13 linked-worktree methods in isolated fresh
+JVMs.
 It passed exact generation-1 preparation
 through START, pending quarantine, same-AppServer Thread A creation, ownership,
 ACTIVE, one exact-claim trusted turn, readiness false -> true, controlled A1
@@ -30,9 +30,9 @@ read-only provider DB/history/rollout durability. The hard-stop revision race
 was fixed in `072581d`; evidence is in
 `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
-- Exact next action: resolve or formally accept the aggregate MCP package-test
-  host blocker before considering SYN-051 DONE; do not start Worker B or run
-  full SYN-049 acceptance.
+- Exact next action: preserve the single-worker PASS-A evidence and obtain
+  separate authorization for two-worker/restart acceptance before considering
+  SYN-051 DONE; do not start Worker B or run full SYN-049 acceptance here.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## SYN-051 fresh Worker-A persistence validation — 2026-09-05

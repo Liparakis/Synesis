@@ -6,13 +6,15 @@ Thread A ownership and persistence were preserved, and both real turns
 completed with trusted provider events. A narrow hard-stop checkpoint race was
 fixed in `072581d`.
 
-SYN-051 remains **ACTIVE / PARTIAL**, not DONE, because aggregate MCP
-package-test invocations remain incomplete: all 33 `McpServerTest` methods and
-all 13 linked-worktree regression methods pass in isolated fresh test JVMs, but
-aggregate runs still stall during cumulative Git/provider fixture setup on this
-host. Worker B and full SYN-049 acceptance remain out of scope.
+SYN-051 remains **ACTIVE / PARTIAL**, not DONE, because the repository task's
+acceptance still requires separately scoped two-worker/restart validation. The
+single-worker runtime and all in-scope aggregate workspace/MCP regression
+classes pass; Worker B and full SYN-049 acceptance remain out of scope for this
+objective.
 
-- Exact next action: resolve or formally accept the aggregate MCP package-test host blocker; do not start Worker B or run full SYN-049 acceptance.
+- Exact next action: preserve the single-worker PASS-A evidence; obtain a
+  separately authorized two-worker/restart acceptance before marking SYN-051
+  DONE. Do not start Worker B or run full SYN-049 acceptance here.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 

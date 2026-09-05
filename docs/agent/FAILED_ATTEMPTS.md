@@ -869,6 +869,7 @@ test method in `McpServerTest` (33 methods) and every test method in
 `CodexLinkedWorktreeRootSelectionRegressionTest` (13 methods) was run in a
 separate fresh Gradle test JVM with JDK25, `--no-daemon`, `--max-workers=1`, the
 process-local AF_UNIX property, and the process-local native MCP launcher.
-Every isolated invocation passed. Aggregate class invocations still failed to
-complete reliably during repeated Git fixture setup, so this evidence does
-not claim a green aggregate MCP package task.
+Every isolated invocation passed. Subsequent bounded aggregate runs passed for
+the in-scope MCP classes after their long-running Git/provider fixtures
+completed. Explicit two-process and older SYN-039 classes remain unrun by
+scope.

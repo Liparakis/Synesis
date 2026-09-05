@@ -152,6 +152,6 @@ Claim-A mutation remains in the assigned worktree for evidence.
 All 33 methods in `McpServerTest` and all 13 methods in
 `CodexLinkedWorktreeRootSelectionRegressionTest` passed when each was run in
 its own fresh Gradle test JVM with the process-local JDK25 AF_UNIX workaround
-and native MCP launcher. Aggregate class/package invocations remain incomplete
-because cumulative Git/provider fixture setup stalls on this host; the
-individual results do not constitute a green aggregate package run.
+and native MCP launcher. Subsequent bounded aggregate runs passed for the
+in-scope MCP classes after their long-running fixtures completed. Explicit
+two-process and older SYN-039 classes remain unrun by scope.

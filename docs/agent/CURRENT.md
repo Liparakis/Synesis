@@ -9,10 +9,11 @@ authority quarantine, exact AppServer/MCP Job containment, same-AppServer
 turns, controlled generation-1 death, exact generation-2 resume, and provider
 DB/history/rollout durability for the same Thread A. A narrow hard-stop
 checkpoint race was fixed and verified before the final lane. The complete
-workspace lifecycle-codex suite passed. All 33 `McpServerTest` methods and all
-13 linked-worktree regression methods also passed in isolated fresh test JVMs;
-the aggregate class/package invocations remain incomplete because cumulative
-provider/Git fixture setup does not reliably finish on this host.
+workspace lifecycle-codex suite passed. The in-scope aggregate MCP classes
+`McpServerTest`, `CodexLinkedWorktreeRootSelectionRegressionTest`,
+`McpStage2BSlice1Test`, and `Slice4FailureScenariosTest` also passed under the
+same bounded JDK25 configuration. Explicit two-process and older SYN-039
+acceptance classes remain unrun by scope.
 
 Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
@@ -24,15 +25,16 @@ start Worker B or run full SYN-049 acceptance.
 
 ## Work completed
 
-All 33 `McpServerTest` methods and all 13 linked-worktree regression methods
-passed in separate fresh Gradle test JVMs with process-local JDK25 and native
-MCP settings. Aggregate class/package invocations remain incomplete because
-cumulative Git/provider fixture setup stalls on this host.
+The in-scope aggregate MCP classes passed after their long-running Git/provider
+fixtures completed; the 33 `McpServerTest` methods and 13 linked-worktree
+methods also passed in isolated fresh JVMs. Explicit two-process and older
+SYN-039 acceptance classes were not run.
 
 ## Current failures
 
-No assertion failure remains in the isolated MCP method runs. The unresolved
-gate is aggregate package-test completion, not a managed-continuity invariant.
+No assertion failure remains in the in-scope MCP tests. The unresolved gate is
+the repository task's separately scoped two-worker/restart acceptance, not a
+managed-continuity invariant in this single-worker A1/A2 objective.
 
 - Task ID: SYN-051
 - Status: ACTIVE / PARTIAL (runtime PASS-A)
