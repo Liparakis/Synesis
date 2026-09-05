@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -348,7 +350,7 @@ public final class CodexWakeAdmissionService {
             if (intent == null || intent.status() != WorkIntent.Status.ANNOUNCED) {
                 continue;
             }
-            ActionableItem action = targetedPendingRequest(store, participant);
+            ActionableItem action = targetedPendingRequest(store, binding, participant);
             if (action == null) {
                 continue;
             }
@@ -386,13 +388,30 @@ public final class CodexWakeAdmissionService {
                 && binding.branch() != null && binding.baseCommit() != null;
     }
 
-    private static ActionableItem targetedPendingRequest(PredictionEventStore store, String participant) {
+    private static ActionableItem targetedPendingRequest(PredictionEventStore store,
+            ProviderSessionBindingService.Binding binding, String participant) {
+        ActionableItem capability = store.capabilityRequestProjection().findAllForRequester(binding.nodeId()).stream()
+                .map(request -> capabilityAction(request, binding, participant))
+                .filter(Objects::nonNull)
+                .findFirst().orElse(null);
+        if (capability != null) {
+            return capability;
+        }
         return store.collaborationProjection().requests().stream()
                 .filter(request -> request.status() == CoordinationRequest.Status.PENDING)
                 .filter(request -> !store.collaborationProjection().inboxAcknowledged(request.requestId()))
                 .filter(request -> request.target().equals(participant))
                 .map(request -> new ActionableItem("coordination-request:" + request.requestId(), participant))
                 .findFirst().orElse(null);
+    }
+
+    static ActionableItem capabilityAction(CapabilityRequestRecord request,
+            ProviderSessionBindingService.Binding binding, String participant) {
+        if (!request.matchesRequester(binding.nodeId(), binding.supervisorId(), binding.workerId())
+                || request.state() != CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE) {
+            return null;
+        }
+        return new ActionableItem("capability-request:" + request.handle().value(), participant);
     }
 
     private static boolean isDormant(CodexLifecycleStateStore.Checkpoint checkpoint) {

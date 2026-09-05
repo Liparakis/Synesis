@@ -12,8 +12,13 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.capability.SecureRandomCapabilityRequestHandleGenerator;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -159,6 +164,36 @@ class CodexWakeAdmissionServiceTest {
         assertEquals(CodexWakeAdmissionService.Outcome.SKIPPED_ALREADY_ADMITTED, duplicate.outcome());
         assertEquals(CodexWakeAdmissionService.Outcome.NOT_DORMANT, running.outcome());
         assertEquals(1, dispatcher.requests.size());
+    }
+
+    @Test
+    void capabilityPublicationTargetsOnlyTheExactRequesterBinding() {
+        CodexWakeAdmissionService.DormantBinding dormant = candidate("request-capability");
+        ProviderSessionBindingService.Binding binding = dormant.binding();
+        CapabilityContract contract = new CapabilityContract("inputs", "output", List.of("behavior"),
+                List.of("acceptance"));
+        CapabilityRequestRecord available = new CapabilityRequestRecord(
+                new SecureRandomCapabilityRequestHandleGenerator().generate(), "tasktracker.domain.persistence",
+                "node-1", "supervisor-1", "worker-1", "owner-node", "", "", UUID.randomUUID(), contract,
+                CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, null, 1L, 2L);
+
+        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        CodexWakeAdmissionService.ActionableItem action = CodexWakeAdmissionService.capabilityAction(
+                available, binding, participant);
+
+        assertEquals("capability-request:" + available.handle().value(), action.key());
+        assertEquals(participant, action.participant());
+        assertEquals(null, CodexWakeAdmissionService.capabilityAction(
+                available.withUpdate(CapabilityLifecycleState.AWAITING_OWNER, null, null, 3L), binding, participant));
+        ProviderSessionBindingService.Binding otherBinding = new ProviderSessionBindingService.Binding(
+                binding.schemaVersion(), binding.sessionId(), binding.projectId(), binding.nodeId(), binding.provider(),
+                binding.providerInstanceFingerprint(), "other-supervisor", binding.workerId(), binding.worktreeId(),
+                binding.worktreePath(), binding.controlCheckoutPath(), binding.branch(), binding.baseCommit(),
+                binding.gitCommonDir(), binding.creationState(), binding.verificationState(), binding.lastSeenState(),
+                binding.status(), binding.createdAtEpochMillis(), binding.lastSeenEpochMillis(),
+                binding.lastVerifiedProjectSequence(), binding.providerTrustState(), binding.bindingVersion(),
+                binding.completedAt());
+        assertEquals(null, CodexWakeAdmissionService.capabilityAction(available, otherBinding, participant));
     }
 
     private static CodexWakeAdmissionService.DormantBinding candidate(String actionKey) {
