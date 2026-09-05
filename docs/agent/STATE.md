@@ -98,9 +98,9 @@ rebuild/install, and produced-to-installed hash checks passed. Evidence:
 
 ## Immediate next action
 
-Review the PASS-A evidence and wait for separate authorization before any next
-bounded A1 trusted-death -> A2 exact-resume continuation; do not start Worker B
-or run full SYN-049 acceptance.
+Review the PASS-A evidence and stop this runtime slice. Do not start Worker B
+or run full SYN-049 acceptance; any further continuity experiment requires
+separate authorization.
 
 ## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
 

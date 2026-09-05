@@ -6,9 +6,9 @@ claim-aligned trusted turns, and read-only provider DB/history/rollout
 durability for the same Thread A. The hard-stop checkpoint race was fixed in
 `072581d` and verified by focused tests plus the fresh lane.
 
-- Next action: wait for separate authorization before any further bounded A1
-  trusted-death -> A2 exact-resume validation; do not start Worker B or run
-  full SYN-049 acceptance.
+- Next action: stop this runtime slice; do not start Worker B or run full
+  SYN-049 acceptance. Any further continuity experiment requires separate
+  authorization.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 

@@ -14,9 +14,9 @@ Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
 ## Immediate next action
 
-Review the PASS-A evidence and authorize the separately bounded A1 trusted-death
--> A2 exact-resume validation continuation; do not start Worker B or run full
-SYN-049 acceptance.
+Review the PASS-A evidence and stop this runtime slice. Do not start Worker B
+or run full SYN-049 acceptance; any further continuity experiment requires
+separate authorization.
 
 - Task ID: SYN-051
 - Status: ACTIVE / PASS-A

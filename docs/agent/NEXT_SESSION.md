@@ -27,9 +27,9 @@ read-only provider DB/history/rollout durability. The hard-stop revision race
 was fixed in `072581d`; evidence is in
 `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
-- Exact next action: wait for separate authorization before any further bounded
-  A1 trusted-death -> A2 exact-resume validation; do not start Worker B or run
-  full SYN-049 acceptance.
+- Exact next action: stop this runtime slice; do not start Worker B or run full
+  SYN-049 acceptance. Any further continuity experiment requires separate
+  authorization.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## SYN-051 fresh Worker-A persistence validation — 2026-09-05
