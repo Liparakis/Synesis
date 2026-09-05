@@ -3,18 +3,18 @@
 ### Fresh unattended two-worker acceptance — 2026-09-05
 
 **ACTIVE / PARTIAL.** The sole active task is the bounded real Worker A/B
-acceptance. The fresh run admitted two lawful participants, B reached the
-structured capability wait, and A published the implementation, but B's
-provider connection ended before consumption. Same-task recovery created a new
-participant and Synesis rejected its still-owned claims. The completed SYN-051
-runtime is a prerequisite and remains evidence only.
+acceptance. Fresh run #08 admitted two lawful participants, completed managed
+generation-1 startup, let B reach the structured capability wait, and let A
+publish and integrate its exact implementation. The run then stopped on the
+first material failure: A status returned `lifecycle_binding_stale` after its
+asynchronous turn, so A was interrupted during normal cleanup and B never
+consumed the capability. The completed SYN-051 runtime is evidence only.
 
 - Status: ACTIVE
 
-- Exact next action: preserve the fresh partial evidence and do not reuse or
-  repair its target; a later run must keep B's original provider connection
-  alive through dependency wait and contain supported Codex configuration
-  changes.
+- Exact next action: preserve run #08 evidence and inspect the reproduced
+  `lifecycle_binding_stale` boundary before any new fresh target; do not reuse
+  or repair run #08.
 - Scope exclusions: no historical fixture reuse, no third worker or replacement
   lane in this run, no provider credential access, no manual `.synesis` changes,
   no source changes unless a material production defect is directly reproduced.

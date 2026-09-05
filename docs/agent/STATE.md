@@ -3408,3 +3408,22 @@ production source changes are permitted.
 
 - Exact next action: verify installed artifact provenance and JDK25
   process-local compatibility before creating any target state.
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05 run #08
+
+Run #08 used a fresh target and the rebuilt provenance-locked artifacts. Both
+workers prepared and started as generation 1 under managed Job supervision;
+B completed its initial turn and reached the exact capability wait. A then
+implemented the domain/persistence lane, published the exact capability, and
+received an integrated snapshot result. The first material failure followed:
+the live status request for A returned `lifecycle_binding_stale` after the
+asynchronous turn. The harness stopped through normal cleanup, leaving A's
+turn interrupted and B unwoken. No replacement, Worker B substitute, manual
+state edit, or full terminal acceptance was performed.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run08.md`.
+
+## Immediate next action
+
+Review the run #08 `lifecycle_binding_stale` evidence and current binding
+verification path; if a production correction is justified, test and rebuild
+it before creating a new fresh SYN-049 target. Do not reuse run #08.

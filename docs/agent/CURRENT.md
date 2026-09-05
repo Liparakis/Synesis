@@ -2,21 +2,24 @@
 
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
 
-Status: **ACTIVE / PARTIAL**. This is the sole active task. The fresh target
-admitted two lawful participants, B reached the structured capability wait,
-and A published the capability, but B's provider connection ended before
-consumption. A same-task resume created a new participant and Synesis rejected
-the still-owned claims. Historical fixtures and completed SYN-051 evidence
-remain read-only evidence.
+Status: **ACTIVE / PARTIAL**. This is the sole active task. Fresh run #08
+passed lawful A/B admission, generation-1 managed startup, B's structured
+capability wait, A's exact publication and integrated snapshot, and the
+same-node binding projection regression. It then stopped on the first
+material runtime failure: the harness received `lifecycle_binding_stale`
+while polling A after its asynchronous turn; A's turn was interrupted during
+normal cleanup and B never consumed the published capability. No terminal
+WorkGroup acceptance was reached. Historical fixtures and completed SYN-051
+evidence remain read-only evidence.
 
 - Task ID: SYN-049
 
 ## Immediate next action
 
-Preserve the fresh partial evidence and, in a later fresh target, keep Worker B's
-original provider connection alive through the capability wait; capture and
-restore the pre-run Codex configuration around supported provider setup. Do not
-reuse this target or repair its durable state.
+Preserve run #08 evidence and do not reuse or repair its target. The next
+attempt must first resolve the reproduced `lifecycle_binding_stale` boundary
+in a separately verified source slice, then use a new target; do not continue
+this lane or invoke replacement.
 
 ## Historical: SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 

@@ -2424,3 +2424,20 @@ exact same-thread resume, and second turns with the other worker alive.
   SYN-051 or run full SYN-049 acceptance without a new explicit task.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05 run #08
+
+Run #08 is **PARTIAL**, not acceptance. It used a fresh target with the
+rebuilt installed artifacts. A/B generation-1 managed startup passed; B
+completed its initial turn and reached `NEEDS_CAPABILITY`; A implemented,
+published the exact capability, and received an integrated snapshot result.
+The first material failure was `lifecycle_binding_stale` on a live A status
+request after the asynchronous A turn. Normal cleanup stopped both jobs; A's
+turn is interrupted and B has no second turn. No replacement, substitute
+worker, manual state edit, or full terminal acceptance was run.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run08.md`.
+
+- Exact next action: inspect the run #08 binding-verification evidence and
+  determine whether the stale-binding result is a production lifecycle defect
+  or a harness-envelope lifetime defect; do not reuse run #08 or create a new
+  target until that diagnosis is complete.
