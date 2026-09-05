@@ -1,5 +1,22 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — runs #12–#16 — 2026-09-05
+
+Status: **FAIL at the provider-native wake boundary; ACTIVE / PARTIAL**.
+Fresh runs proved generation-1 same-process preparation and START, live
+managed B attachment after its initial `NEEDS_CAPABILITY` turn, exact A
+publication, and 60 clean wake-relay scans. The exact B actionable candidate
+was present while the production host reported `attachmentAlive=true`, but no
+provider-native B continuation was dispatched. No B consumption, integration,
+or terminalization evidence exists.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run16.md`.
+
+- Exact next action: diagnose the production wake-admission/dispatch boundary
+  read-only using the captured run #16 evidence; do not reuse any target,
+  invoke manual wake, create A2/B replacement, or patch production before the
+  exact rejection path is identified.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #10 and #11 — 2026-09-05
 
 Status: **ACTIVE / PARTIAL**. Two completely fresh acceptance attempts were

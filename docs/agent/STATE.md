@@ -3444,3 +3444,18 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run08.md`
 Review the run #08 `lifecycle_binding_stale` evidence and current binding
 verification path; if a production correction is justified, test and rebuild
 it before creating a new fresh SYN-049 target. Do not reuse run #08.
+## SYN-049 fresh unattended two-worker acceptance — runs #12–#16 — 2026-09-05
+
+Runs #12–#16 were fresh and stopped at the same material runtime boundary.
+Generation-1 same-process `prepareFirst -> START` passed for both workers.
+B's exact original attachment stayed live after its initial capability wait;
+A published the exact capability after one normal same-thread continuation.
+The host then reported 60 clean wake-relay scans and `attachmentAlive=true` for
+B, while a read-only projection found the exact actionable B candidate. No
+provider-native B wake was dispatched. The run is **FAIL / PARTIAL**; no B
+consumption, integration, or terminalization was reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run16.md`.
+
+Immediate next action: diagnose the exact production admission/dispatch
+rejection read-only; do not reuse a target or manually invoke wake.

@@ -5398,3 +5398,24 @@ exact produced-to-installed hashes passed. No credentials, global settings,
 historical lanes, manual state surgery, Worker C, full SYN-049 acceptance, or
 push were used. Evidence:
 `docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
+## 2026-09-05 — SYN-049 fresh unattended two-worker acceptance runs #12–#16
+
+Five fresh disposable runs were stopped at the provider-native wake boundary.
+Run #16 is the decisive evidence: B reached generation-1 `COMPLETED` with
+its original attachment still live; A reached generation-1 `ACTIVE`, completed
+its real owner work, and published the exact capability request. The host
+reported `attachmentAlive=true` for B and 60 clean wake-relay scans with no
+diagnostic, but no same-thread provider-native B wake was dispatched. No B
+consumption, integration, completion request, lane terminalization, or
+WorkGroup terminalization occurred. Classification: **FAIL / PARTIAL**.
+
+The exact target was stopped after the first material failure. No old lane,
+replacement, A2, Worker B replacement, or manual wake was used. The global
+Codex configuration was restored to its pre-run SHA-256; no credentials or
+raw proofs were inspected, copied, or logged. The Synesis control checkout
+remained clean and no production source changed.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run16.md`.
+
+Exact next action: diagnose the production admission/dispatch rejection path
+read-only before any further acceptance attempt.

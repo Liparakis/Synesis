@@ -2460,3 +2460,19 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run08.md`
   determine whether the stale-binding result is a production lifecycle defect
   or a harness-envelope lifetime defect; do not reuse run #08 or create a new
   target until that diagnosis is complete.
+## SYN-049 fresh unattended two-worker acceptance — runs #12–#16 — 2026-09-05
+
+The fresh runtime attempts are **FAIL / PARTIAL** at provider-native wake.
+Run #16 proved B's original generation-1 attachment remained live after its
+initial dependency wait, A published the exact capability, and the host made
+60 clean relay scans with `attachmentAlive=true`; B nevertheless did not
+receive a same-thread wake. No replacement, integration, or terminalization
+was attempted.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run16.md`.
+
+- Exact next action: perform a read-only diagnosis of the production
+  admission/dispatch rejection path from run #16. Do not reuse targets, invoke
+  manual wake, start A2/B replacement, or patch production yet.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
