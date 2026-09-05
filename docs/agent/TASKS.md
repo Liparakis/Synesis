@@ -1,3 +1,13 @@
+## SYN-051 build-JVM compatibility and provenance — 2026-09-05
+
+The bounded build-JVM compatibility slice is **PASS-A**: command-local
+`GRADLE_OPTS` passed Gradle startup/task execution; clean build/install passed;
+produced and installed workspace/MCP/CLI/native hashes match. Focused
+workspace and MCP tests stalled after compilation without assertions and are
+incomplete. No Worker A or managed runtime was run.
+
+- Next action: run one fresh lawful Worker-A validation with the same process-local property and same-live-caller `prepareFirst → START`; do not start Worker B or test replacement.
+
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
 The standalone compatibility evidence is committed at

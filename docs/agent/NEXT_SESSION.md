@@ -1,5 +1,18 @@
 # Next Session
 
+## SYN-051 build-JVM compatibility and provenance — 2026-09-05
+
+The command-local `GRADLE_OPTS` carrier with `TEMP/TMP=C:\t` passed Gradle
+startup, `help`, and clean `:cli:installDist`. Produced and installed
+workspace/MCP/CLI/native launcher hashes match. Focused workspace and MCP test
+tasks stalled after compilation without assertions and remain incomplete. No
+Worker A or runtime was run.
+
+Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
+
+- Exact next action: Run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
 The compatibility evidence is committed at `bff97418672e2197cd00f293409d68446918bdd8`.

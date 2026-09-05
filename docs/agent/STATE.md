@@ -1,3 +1,16 @@
+## SYN-051 build-JVM compatibility and provenance — 2026-09-05
+
+Command-local `GRADLE_OPTS` successfully delivered the AF_UNIX temporary
+directory property to Gradle with `TEMP/TMP=C:\t`. Gradle startup, `help`, and
+clean `:cli:installDist` passed. Produced and installed workspace, MCP, CLI,
+and native MCP artifacts are byte/hash equal. Focused workspace and MCP tests
+compiled but stalled at execution without assertions and are incomplete.
+No Worker A or managed runtime was created.
+
+## Immediate next action
+
+Run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
+
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
 The standalone compatibility evidence was committed at

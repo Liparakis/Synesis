@@ -1,3 +1,18 @@
+## SYN-051 build-JVM compatibility and provenance — 2026-09-05
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Gradle JVM carrier | Command-local `GRADLE_OPTS`, `TEMP/TMP=C:\t` | PASS | build provenance evidence |
+| Gradle startup/task | `--version`, `help` | PASS | build provenance evidence |
+| Focused workspace tests | Managed/lifecycle/ownership/Job selections | INCOMPLETE: stalled after compilation | build provenance evidence |
+| Focused MCP tests | Catalog/server/frame selections | INCOMPLETE: stalled after compilation | build provenance evidence |
+| Clean build/install | `clean :cli:installDist` | PASS | build provenance evidence |
+| Artifact provenance | Produced == installed hashes | PASS | build provenance evidence |
+| Worker A/runtime | Explicitly excluded | NOT RUN | scope boundary |
+
+Exact next action: run one fresh lawful Worker-A validation with the same
+process-local property and same-live-caller `prepareFirst → START` boundary.
+
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
 | Area | Check | Result | Evidence |

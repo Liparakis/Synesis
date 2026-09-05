@@ -1,3 +1,15 @@
+## 2026-09-05 — SYN-051 build-JVM compatibility and provenance
+
+The command-local `GRADLE_OPTS` carrier with `TEMP/TMP=C:\t` passed Gradle
+startup and task execution. Focused workspace and MCP test tasks compiled but
+stalled without assertions and were stopped as incomplete. The clean
+`:cli:installDist` build passed, produced and installed artifact hashes matched
+for workspace/MCP/CLI/native launcher, and `BUILD_COMMIT=UNKNOWN` remained
+unchanged. No production source, target project, Worker A, or managed runtime
+was touched.
+
+Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
+
 ## 2026-09-05 — SYN-051 process-local preflight and clean-build stop
 
 Committed the completed standalone compatibility evidence as

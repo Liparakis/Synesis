@@ -1,3 +1,14 @@
+## 2026-09-05 — SYN-051 focused Gradle test stalls
+
+- The command-local build-JVM workaround passed Gradle startup and clean
+  `:cli:installDist`.
+- Focused workspace and MCP test selections compiled but stalled at their test
+  tasks without assertion output; both were stopped after bounded waits.
+- These are incomplete host/test evidence, not production or architecture
+  failures. The clean build/install and exact artifact provenance passed.
+
+Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
+
 ## 2026-09-05 — SYN-051 clean-build loopback stop
 
 - JDK25 process-local selector and minimal IPv4/IPv6 HTTP preflight passed with

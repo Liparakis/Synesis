@@ -1,3 +1,13 @@
+## SYN-051 build-JVM compatibility and provenance — 2026-09-05
+
+The process-local `GRADLE_OPTS` carrier passed Gradle startup, task execution,
+clean build, and `:cli:installDist` with exact produced-to-installed hashes.
+Focused workspace and MCP tests stalled after compilation without assertions
+and remain incomplete. No Worker A or managed runtime was created. SYN-051
+remains ACTIVE / PARTIAL.
+
+- Exact next action: run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
+
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
 The compatibility evidence was committed as

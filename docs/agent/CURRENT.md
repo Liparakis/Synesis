@@ -3,6 +3,37 @@
 - Task ID: SYN-051
 - Status: ACTIVE / PARTIAL
 
+## SYN-051 build-JVM compatibility and provenance — 2026-09-05
+
+The command-local `GRADLE_OPTS` carrier succeeded with `TEMP/TMP=C:\t` and
+`-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`. Gradle startup and
+the `help` task passed. Focused workspace and MCP test selections compiled but
+stalled at their test tasks without assertions and were stopped as incomplete.
+
+The clean `:cli:installDist` build passed, including the native MCP launcher.
+Produced and installed workspace, MCP, CLI, and native launcher hashes match
+exactly. `BUILD_COMMIT=UNKNOWN` remains documented. No global setting,
+repository build configuration, production source, target project, or managed
+runtime changed.
+
+Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
+
+## Immediate next action
+
+Run one fresh lawful SYN-051 Worker-A validation using JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in the same live caller; do not start Worker B or invoke A1-to-A2 replacement.
+
+## Work completed
+
+Proved the build-JVM compatibility carrier, completed clean build/install, and established exact produced-to-installed artifact provenance.
+
+## Current failures
+
+Focused workspace and MCP test tasks remain incomplete because they stalled after compilation without assertion output. Package-wide acceptance remains unrun.
+
+## Verification
+
+`gradlew --version`, `help`, clean `:cli:installDist`, deferred validation, artifact hash equality, target identity, and persistent-environment checks passed. No Worker A or managed runtime was run.
+
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
 The compatibility evidence was committed as `bff97418672e2197cd00f293409d68446918bdd8`.
