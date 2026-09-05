@@ -19,9 +19,9 @@ Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
 
 ## Immediate next action
 
-Preserve the runtime PASS-A evidence and resolve or formally accept the
-aggregate MCP package-test host blocker before considering SYN-051 DONE. Do not
-start Worker B or run full SYN-049 acceptance.
+Preserve the runtime PASS-A evidence; the remaining repository criterion is
+separately scoped two-worker/restart acceptance. Do not start Worker B or run
+full SYN-049 acceptance in this bounded objective.
 
 ## Work completed
 
