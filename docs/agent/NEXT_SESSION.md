@@ -2476,3 +2476,19 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run
   manual wake, start A2/B replacement, or patch production yet.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## SYN-049 fresh unattended two-worker acceptance — run #25 — 2026-09-06
+
+Run #25 is **PARTIAL**. The corrected generation-1 runtime path passed
+same-process START, original-thread B wake, capability publication/validation,
+real provider work, exact Thread A/B durability, and completed lifecycle
+checkpoints. The remaining blocker is durable collaboration terminalization:
+Participant A is still `ACTIVE` and WorkIntent A is still `ANNOUNCED` although
+the capability is `VALIDATED`.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`.
+
+- Exact next action: diagnose the projected A completion/finish action
+  read-only; do not reuse the target, invoke replacement, start Worker B, or
+  modify `.synesis` state.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

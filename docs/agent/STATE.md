@@ -3459,3 +3459,22 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run
 
 Immediate next action: diagnose the exact production admission/dispatch
 rejection read-only; do not reuse a target or manually invoke wake.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #25
+
+Run #25 is **PARTIAL**. Fresh generation-1 A/B preparation and START succeeded
+in one live launcher/host. B reached `NEEDS_CAPABILITY`, waited on its original
+provider connection, and was later woken on the same Thread B after A
+published the exact capability. The capability reached `VALIDATED`; B made a
+real in-claim application/API mutation and provider history is durable for
+both exact threads. A and B lifecycle checkpoints ended `COMPLETED`, generation
+1, with exact ACTIVE attachments and ownership records at persistence-ready
+revision 2. The public collaboration projection nevertheless retains A
+`ACTIVE` and A's intent `ANNOUNCED`, so WorkGroup terminalization is unresolved.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`.
+
+## Immediate next action
+
+Perform a bounded read-only diagnosis of why the exact active A lane does not
+consume the projected completion/finish action after the validated dependency;
+do not reuse the run, invoke A2/B replacement, or edit `.synesis` state.

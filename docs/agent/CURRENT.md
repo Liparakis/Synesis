@@ -1,5 +1,21 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — run #25 — 2026-09-06
+
+Status: **ACTIVE / PARTIAL**. Fresh run #25 passed corrected generation-1
+managed setup, same-process prepare through START, original-thread provider
+native B wake, capability publication/validation, real provider turns, exact
+ownership, and read-only provider durability for Threads A and B. Both
+lifecycle checkpoints ended `COMPLETED` at generation 1. The durable
+collaboration projection still leaves Participant A `ACTIVE` with WorkIntent A
+`ANNOUNCED`, so WorkGroup terminalization was not proven.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`.
+
+- Exact next action: diagnose the completion/finish projection for the exact
+  active A lane read-only; do not reuse run #25, invoke replacement, start
+  Worker B, or perform `.synesis` surgery.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #12–#16 — 2026-09-05
 
 Status: **FAIL at the provider-native wake boundary; ACTIVE / PARTIAL**.

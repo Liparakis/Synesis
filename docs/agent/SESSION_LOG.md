@@ -5419,3 +5419,20 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run
 
 Exact next action: diagnose the production admission/dispatch rejection path
 read-only before any further acceptance attempt.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #25
+
+Fresh run #25 passed provenance/hash verification, JDK25 process-local
+Selector/HttpServer preflight, lawful fresh A/B setup, same-process generation-1
+prepare/START, original-thread provider-native B wake, capability publication
+and validation, real provider turns, exact ownership, and provider DB/history/
+rollout durability. Both lifecycle checkpoints ended `COMPLETED` at generation
+1. The run is **PARTIAL** because the durable collaboration projection still
+has Participant A `ACTIVE` and WorkIntent A `ANNOUNCED`; WorkGroup
+terminalization was not proven. The host was stopped normally after bounded
+completion followups. No A2, replacement, Worker B replacement, state surgery,
+credential access, or push occurred.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`.
+
+Exact next action: diagnose the projected A completion/finish boundary
+read-only; do not reuse the lane or invoke replacement.
