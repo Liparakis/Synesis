@@ -2,25 +2,22 @@
 
 ## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
-Status: **ACTIVE / PARTIAL; bounded run stopped on restart cleanup defect**.
+Status: **PASS-A / COMPLETE for bounded SYN-051 managed continuity**.
 Provenance and JDK25 process-local compatibility passed. A fresh supported A/B
 setup proved distinct identities, claims, generation-1 pending preparation,
 cross-proof rejection, Job containment, same-connection MCP promotion,
 same-AppServer thread creation, exact ownership, ACTIVE, real claim-aligned
 turns, trusted `turn/completed`, `persistenceReady=false -> true`, and
-read-only provider DB/history/rollout durability for both workers. The first
-restart attempt raced natural process-exit observation with explicit hard-stop
-cleanup and hung while closing the native managed handles, before trusted death
-evidence and replacement could be established. No A2, B restart, or reuse is
-permitted. Evidence:
+read-only provider DB/history/rollout durability for both workers. Each worker
+then passed trusted generation-1 death, fresh-proof generation-2 replacement,
+exact same-thread resume, and a second real turn while the other successor
+remained live. Evidence:
 `docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
 
 ## Immediate next action
 
-Verify the lifecycle serialization fix for concurrent process-exit cleanup and
-hard-stop teardown, then rebuild/install and provenance-check before creating
-one new fresh A/B lane. Do not reuse either prior binding, proof, thread, or
-worktree.
+Preserve the SYN-051 PASS-A evidence; do not reopen the accepted managed
+runtime or run full SYN-049 acceptance without a new explicit task.
 
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
