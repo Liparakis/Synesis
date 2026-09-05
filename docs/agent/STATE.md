@@ -1,5 +1,38 @@
 # State
 
+## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
+
+Status is **PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST FAILURE**. The
+source repository was clean at `bc55302dbecd5e744f9d91f0f23318db087d3071`;
+the runtime source baseline remained `a7697bbb5de83ced8b61b275056f9204e4467fbc`
+and installed artifact hashes remained matched from the prior build. Target
+`SkibidiToilert` was clean at `8cf929c4def2a5d900f654c5b99d9ebef8bc972e`.
+
+The preceding preparation-only lane was not reused. One fresh lawful lane was
+created through supported target application flows: connection
+`syn051-live-a-40ff76be-a20b-4148-99d1-d04a153152b7`, participant
+`agt_81dcd2a3-5d43-3cb5-9068-6a68b5f2f699`, WorkIntent
+`c340aab7-376f-3172-b43f-2580c3045603`, binding
+`session-756b644a-bac0-479c-be24-577581f286c6`, and exact claim
+`probe-runtime/persistence-live-a-40ff76be-a20b-4148-99d1-d04a153152b7.txt`.
+
+The disposable caller compiled and constructed one live launcher and production
+runtime host. JDK 25 then failed during `HttpServer.create(...)` with
+`Unable to establish loopback connection`, caused by
+`SocketException: Invalid argument: connect` in `PipeImpl`/
+`WEPollSelectorProvider`. This occurred before `prepareFirst`, so no managed
+attachment, proof, generation, START, App Server, MCP, Job, provider thread,
+turn, or persistence transition exists. Normal host close completed; no
+replacement or worker B path was invoked. Evidence:
+`docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
+
+## Immediate next action
+
+Separately resolve or investigate the JDK 25 loopback compatibility blocker;
+then, only if authorized, use a new fresh lawful Worker-A lane that keeps
+`prepareFirst` and START in the same live caller. Do not reuse this lane,
+start Worker B, invoke A1-to-A2 replacement, or broaden acceptance.
+
 ## SYN-051 caller-contract-only preparation validation — 2026-09-05
 
 The narrow caller-contract pass is **PASS-A for preparation; SYN-051 remains

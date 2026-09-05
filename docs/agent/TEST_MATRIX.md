@@ -1,3 +1,24 @@
+# SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Source/runtime provenance | Source commit, runtime baseline, installed hashes | PASS / unchanged | validation evidence |
+| Target identity | `SkibidiToilert` Git baseline and tracked state | PASS | validation evidence |
+| Fresh lawful lane | New connection, participant, WorkIntent, binding, exact claim | PASS | public application state |
+| Same live caller | One launcher and production runtime host constructed | PASS up to host creation | disposable caller output |
+| Loopback boundary | JDK 25 `HttpServer.create(...)` | FAIL: `Unable to establish loopback connection` / invalid argument | `SYN-051-live-worker-a-loopback-blocker-2026-09-05.md` |
+| Managed preparation/START | `prepareFirst` followed by START | NOT REACHED | stopped on first material failure |
+| App Server/MCP/Job | Real managed child topology and containment | NOT REACHED | stopped on first material failure |
+| Provider thread/turn | Thread A, ownership, `turn/completed`, persistence readiness | NOT REACHED | stopped on first material failure |
+| Mutation scope | Claimed mutation and out-of-claim inspection | NOT REACHED | stopped on first material failure |
+| Cleanup | Normal host close; no replacement/A2/B invocation | PASS | disposable caller output |
+| Broader acceptance | Worker B, A/B, A1/A2, full acceptance | NOT RUN | explicit scope boundary |
+
+Exact next action: separately resolve or investigate the JDK 25 loopback
+compatibility blocker, then run a new fresh lawful Worker-A validation with
+`prepareFirst` and START in the same trusted live caller. Do not reuse this
+lane or broaden acceptance.
+
 # SYN-051 production compatibility fix — 2026-09-04
 
 ## SYN-051 generation-1 persistence-boundary implementation — 2026-09-04

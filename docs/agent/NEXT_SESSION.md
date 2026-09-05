@@ -1,5 +1,22 @@
 # Next Session
 
+## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
+
+The bounded pass is **PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST
+FAILURE**. A fresh lawful Worker-A lane and source/runtime provenance were
+verified, but JDK 25 failed during production loopback host creation with
+`Unable to establish loopback connection` / `SocketException: Invalid
+argument: connect` before `prepareFirst`. No START, attachment, App Server,
+MCP, Job, provider thread, turn, or persistence evidence exists. No retry,
+replacement, A2, Worker B, credential access, or production source change
+occurred. Evidence:
+`docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
+
+- Exact next code action: separately resolve or investigate the JDK 25 loopback
+  compatibility blocker, then use a new fresh lawful Worker-A lane with
+  `prepareFirst` and START in the same trusted live caller; do not reuse this
+  lane, start Worker B, invoke A1-to-A2 replacement, or broaden acceptance.
+
 ## SYN-051 caller-contract-only preparation validation — 2026-09-05
 
 The bounded caller-contract pass is **PASS-A for preparation only; SYN-051

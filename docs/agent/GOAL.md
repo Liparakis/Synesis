@@ -1,5 +1,19 @@
 # Goal
 
+- SYN-051 fresh single-worker managed-runtime validation (2026-09-05):
+  **PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST FAILURE**. Source
+  provenance, installed hashes, target identity, and one fresh lawful Worker-A
+  lane were verified. The same caller constructed the production launcher and
+  runtime host, but JDK 25 failed at `HttpServer.create(...)` with
+  `Unable to establish loopback connection` / `SocketException: Invalid
+  argument: connect` before `prepareFirst`. No START, attachment, App Server,
+  MCP, Job, provider thread, turn, or persistence evidence exists. No retry,
+  A2, Worker B, or production source change occurred.
+- Exact next action: separately resolve or investigate the JDK 25 loopback
+  compatibility blocker, then use a new fresh lawful Worker-A lane with
+  `prepareFirst` and START in the same trusted live caller. Do not reuse this
+  lane, start Worker B, invoke A1-to-A2 replacement, or broaden acceptance.
+
 - SYN-051 generation-1 persistence-boundary implementation (2026-09-04):
   **PARTIAL**. Same-App-Server `thread/start`, exact broker acquisition and
   binding, pending MCP quarantine, durable provider persistence readiness, and

@@ -1,5 +1,51 @@
 # Current Task
 
+## SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
+
+The bounded pass is **PARTIAL / STOPPED ON FIRST MATERIAL HARNESS/HOST
+FAILURE**. Source/runtime provenance and target identity were verified, and a
+fresh lawful Worker-A lane was created. The same trusted caller constructed one
+live `ManagedCodexProcessLauncher` and the production runtime host, but JDK 25
+failed at `HttpServer.create(...)` with `Unable to establish loopback
+connection` caused by `SocketException: Invalid argument: connect` in
+`PipeImpl`/`WEPollSelectorProvider`. The failure occurred before
+`prepareFirst`, so no START, proof, generation, attachment, App Server, MCP,
+Job, provider thread, turn, or persistence transition was reached.
+
+The fresh lane is connection
+`syn051-live-a-40ff76be-a20b-4148-99d1-d04a153152b7`, participant
+`agt_81dcd2a3-5d43-3cb5-9068-6a68b5f2f699`, WorkIntent
+`c340aab7-376f-3172-b43f-2580c3045603`, binding
+`session-756b644a-bac0-479c-be24-577581f286c6`, claim
+`probe-runtime/persistence-live-a-40ff76be-a20b-4148-99d1-d04a153152b7.txt`.
+The previous preparation-only lane was not reused. The host closed normally;
+replacement, A2, and Worker B were not invoked. No production source changed.
+
+Evidence: `docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
+
+## Immediate next action
+
+Separately resolve or investigate the JDK 25 loopback `PipeImpl`/
+`WEPollSelectorProvider` invalid-argument failure, then run a new fresh lawful
+Worker-A validation with `prepareFirst` and START in the same trusted live
+caller. Do not reuse this lane, start Worker B, invoke A1-to-A2 replacement,
+or broaden acceptance.
+
+## Work completed
+
+Recorded the first-material-failure result in the dedicated evidence file and
+durable agent records. Verified source/runtime provenance, target identity,
+fresh-lane identity, normal host cleanup, and the absence of a managed
+attachment or new lifecycle checkpoint. No production source was changed.
+
+## Current failures
+
+JDK 25 cannot create the disposable JDK loopback HTTP boundary in this
+environment: `HttpServer.create(...)` fails with `Unable to establish loopback
+connection` and `SocketException: Invalid argument: connect` in
+`PipeImpl`/`WEPollSelectorProvider`. This blocks reaching `prepareFirst` and
+START; it is not provider-runtime evidence.
+
 ## SYN-051 caller-contract-only preparation validation — 2026-09-05
 
 The bounded pass is **PASS-A for the preparation boundary; SYN-051 remains

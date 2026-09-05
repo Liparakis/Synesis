@@ -1,5 +1,23 @@
 # Failed Attempts
 
+## 2026-09-05 — SYN-051 real-runtime loopback host creation
+
+- The fresh single-worker validation stopped at the first material boundary.
+  A new lawful Worker-A lane was created through supported application flows,
+  and a disposable caller compiled and constructed one live production
+  launcher and runtime host.
+- JDK 25 failed at `HttpServer.create(...)` before `prepareFirst` with
+  `Unable to establish loopback connection`, caused by
+  `SocketException: Invalid argument: connect` in `PipeImpl`/
+  `WEPollSelectorProvider`.
+- Therefore no START, attachment, proof, generation, App Server, MCP, Job,
+  provider thread, turn, or persistence evidence exists. Normal host cleanup
+  ran; replacement, A2, and Worker B were not invoked.
+- Classification: harness/host compatibility blocker, not provider-runtime
+  failure. Do not retry this pass or reuse its lane. Resolve the loopback
+  compatibility issue in a separately authorized slice before a new fresh
+  Worker-A run.
+
 ## 2026-09-04 — SYN-051 package-wide test tasks incomplete
 
 - After the implementation slice, `:workspace:test :mcp:test --no-daemon

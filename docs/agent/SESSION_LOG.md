@@ -5227,3 +5227,23 @@ not run Codex or close SYN-041.
   generation 2 through the public service. Historical generation 1, Worker B,
   production source, and remote state remain untouched. Next action: read-only
   provider-thread provenance review; no retry or proof-gate relaxation.
+## 2026-09-05 — SYN-051 fresh single-worker managed-runtime validation
+
+The bounded real-runtime pass stopped at the first material harness/host
+failure. Source/runtime provenance and the target Git baseline were verified,
+and one fresh lawful Worker-A lane was created through supported application
+flows. A disposable caller compiled and constructed one live
+`ManagedCodexProcessLauncher` and production `ProjectRuntimeHost`, but JDK 25
+failed at `HttpServer.create(...)` with `Unable to establish loopback
+connection` caused by `SocketException: Invalid argument: connect` in
+`PipeImpl`/`WEPollSelectorProvider`.
+
+The failure preceded `prepareFirst`, so no START, managed attachment, proof,
+generation, App Server, MCP, Job, provider thread, real turn, or persistence
+transition exists. Normal host close ran. No retry, A2, Worker B, credential
+access, production source change, or push occurred. The exact continuation is
+to investigate or resolve this loopback compatibility blocker in a separately
+authorized slice, then use a new fresh lawful Worker-A lane with preparation
+and START in the same live caller.
+
+Evidence: `docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
