@@ -1,6 +1,24 @@
 # Current Task
 
-## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+
+Status: **ACTIVE / PARTIAL pending fresh runtime evidence**. This is the sole
+active task. It requires a new disposable fixture and real supported Synesis
+flows for two independent managed workers, an explicit structured capability
+dependency, projected coordination/completion actions, terminal lanes, and a
+terminal WorkGroup. Historical fixtures and completed SYN-051 evidence remain
+read-only evidence.
+
+- Task ID: SYN-049
+
+## Immediate next action
+
+Recompute the installed runtime artifact hashes and run the JDK25 process-local
+Selector and minimal HttpServer preflight. If both pass, create a new fixture
+without historical `.synesis` state and admit the two lanes through supported
+flows.
+
+## Historical: SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
 Status: **PASS-A / COMPLETE for bounded SYN-051 managed continuity**.
 Provenance and JDK25 process-local compatibility passed. A fresh supported A/B
@@ -19,7 +37,7 @@ remained live. Evidence:
 Preserve the SYN-051 PASS-A evidence; do not reopen the accepted managed
 runtime or run full SYN-049 acceptance without a new explicit task.
 
-## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
+## Historical: SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 Status: **ACTIVE / PARTIAL (runtime PASS-A)**. One fresh lawful lane passed provenance, JDK25
 process-local compatibility, same-process `prepareFirst -> START`, pending

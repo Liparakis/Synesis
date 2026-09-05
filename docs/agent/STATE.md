@@ -3384,3 +3384,16 @@ were not required by this bounded SYN-051 task and were not run.
 
 Preserve the SYN-051 PASS-A evidence; do not reopen the accepted managed
 runtime or run full SYN-049 acceptance without a new explicit task.
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+
+SYN-049 is the sole active task for this run and remains PARTIAL pending a
+fresh full two-worker acceptance. The target is a new disposable task-tracker
+fixture derived from tracked source only; the historical fixture is preserved.
+Required evidence is the supported real A/B lifecycle, structured capability
+dependency blocking and consumption, claim-aligned mutations, projected
+completion, and terminal WorkGroup state. No manual `.synesis` edits, copied
+state, invented IDs, credentials, Worker B outside the acceptance, or
+production source changes are permitted.
+
+- Exact next action: verify installed artifact provenance and JDK25
+  process-local compatibility before creating any target state.

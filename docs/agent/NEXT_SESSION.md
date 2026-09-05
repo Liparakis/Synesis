@@ -1,4 +1,4 @@
-## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
+## Historical: SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
 The corrected fresh A/B lane passed independent setup, pending MCP quarantine,
 Job containment, same-AppServer thread creation, exact provider ownership,
@@ -15,7 +15,7 @@ regression are now pending verification.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
-## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
+## Historical: SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 The fresh lane passed the complete A1 -> trusted death -> A2 runtime path,
 including explicit `managed_attachment_pending`, independent root/MCP same-Job
@@ -29,6 +29,19 @@ Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
   record the separately scoped two-worker/restart acceptance as remaining.
   Do not reuse this lane, start Worker B, or run full SYN-049 acceptance.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+
+The next bounded slice is the fresh full SYN-049 acceptance. It must use a new
+disposable task-tracker fixture, the current installed artifacts, the JDK25
+process-local AF_UNIX workaround, and supported Synesis MCP flows. The
+historical `SynesisTaskTrackerRealAcceptance-20260903-08` fixture and completed
+SYN-051 runtime are evidence only.
+
+- Exact next action: recompute installed artifact hashes and run Selector plus
+  minimal HttpServer preflight; stop before target-state creation on failure.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 # Next Session
 

@@ -1,4 +1,23 @@
-## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
+## SYN-049
+
+### Fresh unattended two-worker acceptance — 2026-09-05
+
+**ACTIVE / PARTIAL pending fresh runtime evidence.** The sole active task is
+the bounded real Worker A/B acceptance: fresh lawful bindings, participants,
+WorkIntents, claims, explicit structured capability dependency, real isolated
+work, projected completion actions, terminal lanes, and terminal WorkGroup.
+The completed SYN-051 runtime is a prerequisite and remains evidence only.
+
+- Status: ACTIVE
+
+- Exact next action: verify installed artifact hashes and run the JDK25
+  process-local selector/HttpServer preflight before creating a fresh fixture.
+- Scope exclusions: no historical fixture reuse, no Worker B before the fresh
+  acceptance setup requires it, no provider credential access, no manual
+  `.synesis` changes, no source changes unless a material production defect is
+  directly reproduced.
+
+## Historical: SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
 **PASS-A / COMPLETE for the bounded SYN-051 acceptance.** A fresh managed A/B
 run passed independent identity and authority, proof isolation, Job
@@ -11,7 +30,7 @@ earlier attempt was fixed and covered by focused regression testing.
 - Next action: preserve this evidence; SYN-049 remains a separate PARTIAL
   acceptance and must not be run under this task.
 
-## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
+## Historical: SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 **ACTIVE / PARTIAL (runtime PASS-A).** One fresh lawful Worker A completed the managed
 generation-1 lifecycle, controlled A1 death, exact generation-2 resume, two
@@ -69,7 +88,7 @@ and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
 Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
 
-## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
+## Historical: SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 - Status: ACTIVE
 
@@ -221,7 +240,7 @@ pending-before-pin rejection, A/B cross-proof rejection, and one managed
 restart with Worker B isolated. Stop immediately on any failed containment,
 proof join, or restart predicate; do not run full task-tracker acceptance.
 
-## SYN-051
+## Historical: SYN-051
 
 ### Bounded shared-normal-home MANAGED_CONTINUITY implementation — 2026-09-03
 

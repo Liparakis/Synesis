@@ -1,3 +1,17 @@
+## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+
+Complete one fresh real two-worker acceptance through the supported Synesis
+and managed Codex paths. Worker A owns domain/persistence, Worker B owns
+application/API/reporting, and B declares the explicit structured capability
+dependency `tasktracker.domain.persistence`. Prove initial dependency blocking,
+capability publication/consumption, real claim-aligned work in isolated
+worktrees, projected completion, terminal lanes, and terminal WorkGroup state.
+
+- Exact next action: verify the provenance-locked installed artifacts and run
+  the process-local JDK25 compatibility preflight before creating fresh state.
+- Do not reopen SYN-051, reuse historical fixtures, start a replacement, or
+  make production changes without a directly reproduced material defect.
+
 ## SYN-051 two-worker/restart acceptance — 2026-09-05
 
 The fresh two-worker/restart runtime path is **PASS-A**. Independent A/B
