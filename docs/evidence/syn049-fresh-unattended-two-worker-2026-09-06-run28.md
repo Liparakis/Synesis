@@ -27,8 +27,11 @@ full acceptance retry was used.
   `E9CDB993FAC28B485BBA25E11AF421E38FAFCB1E6F8D7A4E2C7E53F9473DBB8A`
 - Global Codex config after restore:
   `8F3A95C1AD08EC5727CF20B1651BE17AA92B15A45408DF4B46F40E0727EA87E7`
-- No global setting, Java/network setting, Synesis production configuration,
-  or credential was changed.
+- A post-run Codex-process drift was observed at
+  `E4D14B9262807B3B1676B29C90C10EF7C5BDCA29C91067075FDB21544704274F` after
+  all managed processes had exited; the saved pre-run snapshot was restored
+  afterward and matched byte-for-byte. No persistent global setting, Java/
+  network setting, Synesis production configuration, or credential was changed.
 
 Runtime artifacts and the validation-host install matched exactly:
 
