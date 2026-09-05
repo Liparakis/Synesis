@@ -1,3 +1,29 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #28
+
+Run #28 is **FAIL / ACTIVE / PARTIAL**. Provenance and JDK25 process-local
+Selector/HttpServer compatibility passed. A and B were created lawfully in a
+fresh skeleton target. One live launcher and runtime host carried generation-1
+`prepareFirst` through START for both bindings; both App Servers and MCP
+children ran under the production Windows Job launch path. A performed real
+domain/persistence implementation and publication. B reached `NEEDS_CAPABILITY`,
+requested the exact capability, woke on the same Thread B, and completed its
+provider-native wake turn.
+
+The first normal same-thread B continuation after that wake was rejected by
+production with `lifecycle_worktree_mismatch`. Read-only binding/provider
+evidence shows the original B provider row still used the original worktree,
+while Synesis had rewritten the durable B binding to a recovery worktree with
+the integrated A base commit. No B implementation or consumption, final
+integration, WorkGroup terminalization, replacement, A2, Worker B substitute,
+or state surgery occurred. Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run28.md`.
+
+## Immediate next action
+
+Diagnose the binding-recovery/reconciliation race and its exact production
+write path read-only; do not reuse run #28 or launch another acceptance lane
+before the boundary is understood.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #10 and #11 — 2026-09-05
 
 Runs #10 and #11 were fresh and are **PARTIAL**. Provenance and the JDK25

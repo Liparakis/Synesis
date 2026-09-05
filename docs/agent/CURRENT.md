@@ -1,5 +1,24 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — run #28 — 2026-09-06
+
+Status: **FAIL at production worktree fence / ACTIVE / PARTIAL**. Fresh
+skeleton-based run #28 passed provenance, JDK25 process-local compatibility,
+lawful A/B setup, same-process generation-1 preparation and START, real A
+implementation/publication, and same-thread provider-native B wake. The exact
+same-thread B continuation then failed with `lifecycle_worktree_mismatch`.
+Read-only evidence shows B's durable binding was rewritten to a recovery
+worktree/base commit while the original B provider process still referenced its
+original worktree. No B consumption, final integration, or terminalization was
+reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run28.md`.
+
+- Exact next action: diagnose the binding-recovery/reconciliation race behind
+  `lifecycle_worktree_mismatch` read-only and with focused tests; do not reuse
+  run #28, invoke replacement, start a Worker B substitute, or perform state
+  surgery.
+
 ## SYN-049 fresh unattended two-worker acceptance — run #25 — 2026-09-06
 
 Status: **ACTIVE / PARTIAL**. Fresh run #25 passed corrected generation-1

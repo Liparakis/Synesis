@@ -1,3 +1,21 @@
+## SYN-049 fresh unattended two-worker acceptance — run #28 — 2026-09-06
+
+The fresh skeleton-based run is **FAIL / ACTIVE / PARTIAL**. It passed exact
+generation-1 managed preparation/START, real A implementation and capability
+publication, and same-thread provider-native B wake. The first lawful B
+continuation failed with production `lifecycle_worktree_mismatch`: B's
+durable binding had changed to a recovery worktree while its original provider
+process still referenced the original worktree. No B consumption, final
+integration, terminalization, replacement, A2, or Worker B substitute occurred.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run28.md`.
+
+- Exact next action: perform a read-only source/projection diagnosis of the
+  B binding recovery/reconciliation write path and create focused regression
+  evidence; do not reuse this target or start another acceptance lane first.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #10 and #11 — 2026-09-05
 
 The two latest fresh attempts are **PARTIAL** and were stopped at the first

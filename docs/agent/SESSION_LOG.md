@@ -5436,3 +5436,23 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`
 
 Exact next action: diagnose the projected A completion/finish boundary
 read-only; do not reuse the lane or invoke replacement.
+
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #28
+
+Fresh skeleton-based run #28 passed exact artifact provenance, JDK25
+process-local Selector/HttpServer compatibility, lawful A/B admission,
+same-process generation-1 preparation/START, real A implementation and
+capability publication, and same-thread provider-native B wake. It stopped at
+the first material production failure: the normal same-thread B continuation
+was rejected with `lifecycle_worktree_mismatch`.
+
+Read-only evidence showed the original B provider row still referenced the
+original worktree while Synesis had rewritten B's durable binding to a recovery
+worktree with the integrated A base commit. B therefore could not lawfully
+continue; no B consumption, final integration, terminalization, replacement,
+A2, Worker B substitute, credentials, state surgery, or push occurred. Global
+Codex configuration was restored exactly. Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run28.md`.
+
+Exact next action: diagnose the binding-recovery/reconciliation race
+read-only before another acceptance lane.
