@@ -669,7 +669,10 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                         current.threadId(), current.turnId(), current.terminalDiagnostic(), false,
                         System.currentTimeMillis());
             }
-            current = persistEvidenceCompleteness(current, attachment.journal());
+            synchronized (stateLock) {
+                current = checkpoint();
+                current = persistEvidenceCompleteness(current, attachment.journal());
+            }
             if (active == attachment) {
                 active = null;
             }
@@ -678,10 +681,13 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 || result.outcome() == ProcessTreeTerminator.Outcome.FORCED
                 || result.outcome() == ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED
                 ? CodexLifecycleStateStore.State.STOPPED : CodexLifecycleStateStore.State.FAILED;
-        transition(current, state, current.attachmentGeneration(), current.connectionGeneration(),
-                result.outcome() == ProcessTreeTerminator.Outcome.ROOT_SURVIVED ? current.rootPid() : -1L,
-                current.rootExecutable(), current.rootCommandIdentity(), current.threadId(), current.turnId(),
-                result.diagnostic());
+        synchronized (stateLock) {
+            current = checkpoint();
+            transition(current, state, current.attachmentGeneration(), current.connectionGeneration(),
+                    result.outcome() == ProcessTreeTerminator.Outcome.ROOT_SURVIVED ? current.rootPid() : -1L,
+                    current.rootExecutable(), current.rootCommandIdentity(), current.threadId(), current.turnId(),
+                    result.diagnostic());
+        }
         return response(state == CodexLifecycleStateStore.State.STOPPED, result.diagnostic(), state,
                 checkpoint().revision(), current.threadId(), current.turnId());
     }
