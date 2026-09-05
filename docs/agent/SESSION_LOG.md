@@ -1,3 +1,23 @@
+## 2026-09-05 — SYN-049 fresh unattended two-worker acceptance runs #10 and #11
+
+Two fresh managed two-worker attempts were stopped at the first material
+runtime boundary and classified PARTIAL. Provenance and JDK25 process-local
+compatibility passed. Run #10 stopped after Worker B generation-1 START when
+its App Server exited. Run #11 reached generation-1 provider turns for both
+workers, but the installed native Synesis MCP child failed the `initialize`
+handshake for both App Servers (`connection closed: initialize response`). No
+capability request/publication, provider-native wake, claim mutation,
+integration, or terminalization was reached. Exact target processes were
+stopped normally and the Codex configuration was restored byte-for-byte. No
+credentials or raw proofs were read or persisted, no global setting changed,
+and the AF_UNIX workaround was not propagated to child processes.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run10-run11.md`.
+
+Exact next action: perform a separate bounded read-only child-startup
+compatibility investigation before any new acceptance lane; do not reuse or
+repair either target, propagate the workaround, or patch production.
+
 ## 2026-09-05 — SYN-051 build-JVM compatibility and provenance
 
 The command-local `GRADLE_OPTS` carrier with `TEMP/TMP=C:\t` passed Gradle

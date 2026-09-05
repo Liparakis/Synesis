@@ -1,3 +1,22 @@
+## SYN-049 fresh unattended two-worker acceptance — runs #10 and #11 — 2026-09-05
+
+The two latest fresh attempts are **PARTIAL** and were stopped at the first
+material runtime failure. Run #10 stopped on Worker B `FAILED/process_exit`
+during generation-1 START. Run #11 stopped after both exact App Servers
+reported native Synesis MCP startup failure at the `initialize` handshake:
+`connection closed: initialize response`. No dependency wake, real managed
+claim mutation, integration, or terminalization evidence exists.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run10-run11.md`.
+
+- Exact next action: run a separate read-only child-startup compatibility
+  diagnosis and establish whether the child independently fails at the known
+  AF_UNIX boundary. Until then, do not propagate the process-local property,
+  change production source/configuration, reuse either target, or start a new
+  acceptance lane.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## Historical: SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
 The corrected fresh A/B lane passed independent setup, pending MCP quarantine,

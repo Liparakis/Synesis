@@ -1,3 +1,20 @@
+## SYN-049 fresh unattended two-worker acceptance — runs #10 and #11 — 2026-09-05
+
+Runs #10 and #11 were fresh and are **PARTIAL**. Provenance and the JDK25
+process-local compatibility preflight passed. Run #10 stopped when Worker B's
+generation-1 App Server exited during START. Run #11 reached real generation-1
+provider turns for both workers, but the installed native Synesis MCP child
+failed the App Server `initialize` handshake for both connections. Durable
+coordination contains only WorkGroup creation and the two WorkIntent
+announcements; no capability request/publication, wake/consume, mutation,
+integration, or terminalization was reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run10-run11.md`.
+
+- Exact next action: perform a bounded read-only child-startup compatibility
+  investigation. Do not reuse or repair either target, propagate the AF_UNIX
+  property, patch production, or launch another acceptance lane first.
+
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
 
 The fresh target admitted distinct lawful Worker A/B participants and B reached

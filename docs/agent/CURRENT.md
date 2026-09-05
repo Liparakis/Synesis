@@ -1,6 +1,23 @@
 # Current Task
 
-## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+## SYN-049 fresh unattended two-worker acceptance — runs #10 and #11 — 2026-09-05
+
+Status: **ACTIVE / PARTIAL**. Two completely fresh acceptance attempts were
+stopped at the first material runtime boundary. Run #10 stopped after Worker
+B's generation-1 App Server exited during START. Run #11 stopped after both
+real App Servers reported that the native Synesis MCP child failed its
+`initialize` handshake (`connection closed: initialize response`). No
+capability exchange, provider-native wake, claim mutation, integration, or
+terminalization was reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run10-run11.md`.
+
+- Exact next action: perform a separate read-only child-startup compatibility
+  diagnosis to determine whether the native MCP child independently hits the
+  known AF_UNIX boundary. Do not propagate the workaround, patch production,
+  reuse either target, or start another acceptance lane before that diagnosis.
+
+## Historical: SYN-049 fresh unattended two-worker acceptance — 2026-09-05
 
 Status: **ACTIVE / PARTIAL**. This is the sole active task. Fresh run #08
 passed lawful A/B admission, generation-1 managed startup, B's structured
