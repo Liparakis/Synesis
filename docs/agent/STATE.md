@@ -3358,3 +3358,29 @@ occurred. Evidence:
 ## Immediate next action
 
 Checkpoint and stop; do not invoke A1-to-A2 replacement or start Worker B.
+## 2026-09-05 — SYN-051 fresh two-worker/restart acceptance
+
+SYN-051 is **PASS-A / COMPLETE for its bounded managed continuity acceptance**.
+Fresh A/B workers passed independent identity and proof admission, pending
+MCP quarantine, exact Job containment, same-AppServer generation-1 thread
+creation, unique ownership, ACTIVE promotion, real exact-claim turns,
+trusted completion and persistence readiness, generation-1 trusted death,
+fresh-proof generation-2 replacement, exact same-thread resume, and a second
+real turn while the other worker remained live. Provider DB rows, completed
+history, and rollout files were confirmed read-only. The target control
+checkout stayed at its required baseline; only isolated worker worktrees
+received their own claim files.
+
+A native pipe-close race was fixed by serializing managed lifecycle teardown
+and closing protocol/stdout/stderr streams before supervisor handle release.
+Focused lifecycle tests, the complete workspace lifecycle-codex suite,
+rebuild/install, and produced-to-installed hashes passed. Evidence:
+`docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
+
+SYN-049 remains **PARTIAL**; dependency/handoff and WorkGroup terminalization
+were not required by this bounded SYN-051 task and were not run.
+
+## Immediate next action
+
+Preserve the SYN-051 PASS-A evidence; do not reopen the accepted managed
+runtime or run full SYN-049 acceptance without a new explicit task.

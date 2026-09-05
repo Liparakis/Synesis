@@ -2383,3 +2383,16 @@ request continuation. Do not use Synesis MCP tools or add project control-plane
 state while working in this checkout. The immediate next action is to inspect
 the current diff, run the focused dependency-admission regression, and update
 the checkpoint with exact results.
+## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
+
+The fresh A/B managed runtime acceptance is **PASS-A**. It proved distinct
+lawful identities, cross-proof rejection, Job-contained generation-1 startup,
+same-AppServer threads, real exact-claim turns, trusted completion and
+durability, independent trusted death, fresh-proof generation-2 replacement,
+exact same-thread resume, and second turns with the other worker alive.
+
+- Exact next action: preserve
+  `docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`; do not reopen
+  SYN-051 or run full SYN-049 acceptance without a new explicit task.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

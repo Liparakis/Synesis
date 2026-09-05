@@ -1,16 +1,15 @@
 ## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
-**ACTIVE / PARTIAL.** The current acceptance task is the fresh managed
-Worker-A/Worker-B identity, isolation, real-work, and restart validation
-authorized by the current SYN-051 objective. The prior two-worker run reached
-both real generation-1 turns and durable provider state, but its immediate
-restart attempt raced process-exit cleanup and hung in native managed-handle
-teardown. That race is now the active defect investigation; neither prior
-lane may be reused.
+**PASS-A / COMPLETE for the bounded SYN-051 acceptance.** A fresh managed A/B
+run passed independent identity and authority, proof isolation, Job
+containment, same-AppServer generation-1 thread creation, real claim-aligned
+turns, trusted provider durability, independent trusted death, fresh-proof
+generation-2 replacement, exact same-thread resume, and post-resume real turns
+with the other worker alive. The native stream-close race found during an
+earlier attempt was fixed and covered by focused regression testing.
 
-- Next action: verify the narrow lifecycle serialization fix with focused
-  regression coverage, then rebuild/provenance-lock and run one new fresh A/B
-  acceptance lane.
+- Next action: preserve this evidence; SYN-049 remains a separate PARTIAL
+  acceptance and must not be run under this task.
 
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 

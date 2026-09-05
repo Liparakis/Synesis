@@ -5358,3 +5358,23 @@ stopped at the first material failure. Provider state was inspected read-only;
 no credentials, source, global setting, replacement, A2, Worker C, or push was
 used. Exact evidence is in
 `docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
+
+## 2026-09-05 — SYN-051 fresh two-worker/restart PASS-A
+
+After diagnosing the prior A/B stop, a fresh rebuilt lane passed artifact and
+JDK25 process-local compatibility gates, distinct lawful A/B setup, pending
+quarantine, cross-proof rejection, Job containment, same-AppServer generation-1
+thread creation, unique ownership, ACTIVE promotion, two real exact-claim
+turns, trusted completion, and persistence readiness for both workers. Each
+worker then independently passed trusted generation-1 death, fresh-proof
+generation-2 replacement, exact same-thread resume, and a second real turn
+while the other successor remained live. Provider DB/history/rollout state and
+isolated claim mutations were verified read-only.
+
+The production fix serializes lifecycle teardown and closes protocol/stdout/
+stderr streams before managed supervisor handle release. Focused lifecycle
+regression, the complete workspace lifecycle-codex suite, rebuild/install, and
+exact produced-to-installed hashes passed. No credentials, global settings,
+historical lanes, manual state surgery, Worker C, full SYN-049 acceptance, or
+push were used. Evidence:
+`docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.

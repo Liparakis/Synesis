@@ -1,20 +1,14 @@
-## SYN-051 end-to-end managed continuity — 2026-09-05
+## SYN-051 two-worker/restart acceptance — 2026-09-05
 
-The fresh A1 -> trusted death -> A2 -> second-turn runtime path is **PASS-A**:
-pending authority was denied, exact AppServer/MCP Job membership was proven,
-Thread A ownership and persistence were preserved, and both real turns
-completed with trusted provider events. A narrow hard-stop checkpoint race was
-fixed in `072581d`.
+The fresh two-worker/restart runtime path is **PASS-A**. Independent A/B
+bindings, participants, WorkIntents, claims, proofs, managed Jobs, provider
+threads, trusted turns, generation-1 death evidence, exact generation-2
+resumes, and post-resume claim-aligned turns all passed. SYN-049 remains
+**PARTIAL** because its broader integration/workgroup acceptance was not run.
 
-SYN-051 remains **ACTIVE / PARTIAL**, not DONE, because the repository task's
-acceptance still requires separately scoped two-worker/restart validation. The
-single-worker runtime and all in-scope aggregate workspace/MCP regression
-classes pass; Worker B and full SYN-049 acceptance remain out of scope for this
-objective.
-
-- Exact next action: preserve the single-worker PASS-A evidence; obtain a
-  separately authorized two-worker/restart acceptance before marking SYN-051
-  DONE. Do not start Worker B or run full SYN-049 acceptance here.
+- Exact next action: preserve the SYN-051 PASS-A evidence and do not reopen
+  the accepted runtime or run full SYN-049 acceptance without a new explicit
+  task.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 

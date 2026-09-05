@@ -642,6 +642,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                         checkpoint().revision(), current.threadId(), current.turnId());
             }
             Attachment attachment = active;
+            if (attachment != null) {
+                closeAttachmentStreams(attachment);
+            }
             ProcessTreeTerminator.Result result = terminateProcessTree(attachment == null ? startingProcess
                     : attachment.process(), current.attachmentGeneration(), Duration.ofSeconds(2),
                     Instant.ofEpochMilli(request.callerDeadlineEpochMillis()), current);
@@ -656,8 +659,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                                         "survivors",
                                         result.survivors()),
                                 true);
-                attachment.protocol()
-                        .close();
                 try {
                     attachment.journal()
                             .close();
@@ -1177,6 +1178,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             if (attachment == null || attachment.attachmentGeneration() != attachmentGeneration) {
                 return;
             }
+            closeAttachmentStreams(attachment);
             if (attachment.process().supervisor() != null) {
                 try {
                     ManagedProcessTreeSupervisor.DeathEvidence evidence = attachment.process().supervisor()
@@ -1191,8 +1193,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 }
             }
             active = null;
-            attachment.protocol()
-                    .close();
             try {
                 attachment.journal()
                         .close();
@@ -1205,6 +1205,28 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             } catch (IOException ignored) {
                 // The process-exit checkpoint remains authoritative.
             }
+        }
+    }
+
+    private void closeAttachmentStreams(Attachment attachment) {
+        attachment.protocol()
+                .close();
+        Thread stderrCloser = new Thread(() -> {
+            try {
+                attachment.process()
+                        .stderr()
+                        .close();
+            } catch (IOException ignored) {
+                // Best effort; the managed supervisor retains final ownership.
+            }
+        }, "synesis-codex-stderr-closer-" + attachment.connectionGeneration());
+        stderrCloser.setDaemon(true);
+        stderrCloser.start();
+        try {
+            stderrCloser.join(500L);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread()
+                    .interrupt();
         }
     }
 

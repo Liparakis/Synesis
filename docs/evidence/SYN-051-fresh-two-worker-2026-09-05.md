@@ -1,100 +1,133 @@
-# SYN-051 fresh two-worker acceptance — 2026-09-05
+# SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
 ## Classification
 
-**FAIL / incomplete acceptance.** This bounded run stopped at the first
-material runtime failure. It does not supersede the earlier single-worker
-runtime PASS-A evidence and does not authorize A2 continuation from this run.
+**PASS-A for the bounded SYN-051 two-worker/restart acceptance.** This fresh
+run proved independent managed Worker A and Worker B identity, authority,
+provider-thread ownership, real claim-aligned work, trusted generation-1
+death, exact generation-2 resume, and post-resume real turns. It does not
+close the broader SYN-049 integration/workgroup acceptance.
 
-## Gates
+## Gates and provenance
 
-- Synesis HEAD at start: `cdc5762e078b0653687417fe92d885fb280f4d7a`; worktree
-  clean.
-- Runtime source reference: `a7697bbb5de83ced8b61b275056f9204e4467fbc`.
+- Starting Synesis HEAD: `d6ab7e0`; the worktree contained only the pending
+  narrow stream-ordering fix that was built for this run.
 - JDK: Temurin `25+36-LTS`,
   `C:\Program Files\Eclipse Adoptium\jdk-25.0.0.36-hotspot\bin\java.exe`.
 - Process-local property only:
   `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
-- `Selector.open()` and minimal `HttpServer` create/start/stop passed.
-- Produced and installed hashes matched for workspace
-  `7b3b5066f46140cae88a3357f0156e45cfb8b432ea1e07f6844983fe5141163a`, MCP
-  `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`, CLI
-  `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467`, and
-  native MCP `d24737530957fbe82ac05f3d5f43588d5357fdc8eff7377712e3151e0bc25c30`.
-- Global `JAVA_TOOL_OPTIONS`, `GRADLE_OPTS`, `JDK_JAVA_OPTIONS`, and
-  `_JAVA_OPTIONS` were empty; no global setting was changed.
-- Target baseline: `main`,
+- `Selector.open()` passed; minimal `HttpServer` create/start/stop passed.
+- Produced and installed hashes matched exactly:
+  - workspace: `a7049e8b0a9c7de792038c254f1c546515de1c02757ec97834ac67be5e6863a1`
+  - MCP: `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
+  - CLI: `07f6770592f923a78f3071be39e27d8dea4dfd13b99f99acbd5a8937d98cd0bb`
+  - native MCP: `37a2db02909d434a6a8135a6326e2592ecf5f2e83c873e146e589b95a27f97ea`
+- Target baseline: branch `main`, tracked HEAD
   `8cf929c4def2a5d900f654c5b99d9ebef8bc972e`; only pre-existing untracked
-  `probe-runtime/` evidence was present.
+  `probe-runtime/` existed in the control checkout.
+- Global Java/Codex settings were not changed. The workaround remained
+  process-local. No credentials were read, copied, logged, or modified.
 - No historical binding, proof, thread, or worktree was reused.
 
-## Fresh workers
-
-Fresh state was created through supported application flows with one shared
-project-scoped `ProjectRuntimeHost` and distinct managed connections:
+## Fresh workers and generation 1
 
 | | Worker A | Worker B |
 |---|---|---|
-| Connection | `syn051-final-ab-a-8e19e257-cc93-4699-9f80-5e32bce969b3` | `syn051-final-ab-b-4f29312e-83b4-470e-9dc5-020b0028ae55` |
-| Binding | `session-d4097aa2-af29-4e9c-b8d8-15e8d9fb5292` | `session-37198834-b63e-4de9-b8ad-481d3eb5ca93` |
-| Participant | `agt_f1141c00-71f5-33d5-8490-50de43ec78f0` | `agt_40743a46-20ca-3113-9eb7-d991deb1c114` |
-| WorkIntent | `e53a9209-f22f-36be-885b-8d90201b4688` | `5d50f093-c444-3faa-b61f-67560a80bd91` |
-| Claim | `probe-runtime/persistence-ab-a-0b2e90be-4a83-43e7-a310-539ee00aa2c4.txt` | `probe-runtime/persistence-ab-b-741f3499-9e72-47ab-b683-05c21e665f4a.txt` |
-| Assigned worktree | `...\\worktrees\\session-d4097aa2-af29-4e9c-b8d8-15e8d9fb5292` | `...\\worktrees\\session-37198834-b63e-4de9-b8ad-481d3eb5ca93` |
-| Generation-1 proof digest | `bd704c9d242c07f96713167fd53c58364903a5a35b3fe84e8e0b5a4b56362c52` | `c3ed6b9b2d3d02ab4c16db4c2f060c2ff3050e2c62cc6125c82570d7fb07b01a` |
+| Connection | `syn051-final-ab-a-99b9f163-3e17-456b-ad86-4293bc677925` | `syn051-final-ab-b-4ac9d1a8-a34d-4f40-9cae-1a8f1107b2dc` |
+| Binding | `session-61a3ec50-0fe7-4106-9ac2-cceda3a96615` | `session-84b268af-b448-4059-9c97-cb8c73f5615f` |
+| Participant | `agt_971db454-30b8-346f-a91d-91570a54bfa3` | `agt_f68d651b-150c-35e3-a2e1-8026e2ce69fc` |
+| WorkIntent | `54bfa3ae-46ab-382d-907f-4db7f82394e5` | `8fa013b7-c415-3cf4-865b-7390b2ffeb0d` |
+| Claim | `probe-runtime/persistence-ab-a-8c5eafea-90cd-46d4-b29d-ec93acca78d8.txt` | `probe-runtime/persistence-ab-b-01a3cc44-b042-452a-af9f-88f5e73f3337.txt` |
+| Generation-1 proof digest | `35f5426f5784d00340bea2ae0b3941d8e43abc2a29f5fbd2d9c0f7f1d3bfefe7` | `564a5662b41e4f846146633ba7e5a016ffc98d70a6b6142d9c41c52b151e0cee` |
 
-Both preparations returned generation 1 `PENDING_ACTIVATION`, unresolved
-thread, absent ownership, and volatile raw-proof retention. Cross-proof
-probes in both directions returned `managed_attachment_rejected`.
+Both fresh preparations returned generation 1 `PENDING_ACTIVATION`, unresolved
+provider thread, absent ownership, and raw proof retained only in volatile
+launcher state. Cross-proof probes in both directions returned
+`managed_attachment_rejected`.
 
-## First-start result
+Worker A launched AppServer PID `15076`, MCP PID `14984`; Worker B launched
+AppServer PID `18512`, MCP PID `22452`. Both used
+`CREATE_SUSPENDED -> AssignProcessToJobObject -> ResumeThread`; both roots and
+MCP children were in their exact production Windows Job. Pending transport
+survived while pending authority remained denied. Each worker then used the
+same AppServer connection for `thread/start`, acquired unique ownership, was
+promoted to `ACTIVE`, and retained the same MCP connection through promotion.
 
-Worker A produced AppServer PID `7948` and MCP PID `22228`; both were in the
-same production Job, with `assignmentBeforeResume=true`.
+Generation-1 provider threads were distinct:
 
-Worker B reached a real generation-1 turn and its provider process completed,
-but the disposable observer did not capture its MCP child before the process
-ended. The observer therefore stopped before claiming the required complete
-two-worker containment evidence.
+- A: `01a071f2-2e42-7f23-8bf7-4f4753fb4e63`
+- B: `01a071f2-2e83-7c52-ad9e-9fc148b5e87d`
 
-Worker A's provider Thread A was
-`01a071cd-237e-7fa1-97e5-ed0987906723`, with turn
-`01a071cd-2581-7353-8102-6685908c7c23`. Its lifecycle ended `FAILED` with
-`process_exit`; the trusted `turn/completed` event was absent. The generation-1
-journal contains `thread/start` and `turn/start`, but no trusted completion.
-The provider history row remains `inProgress`.
+Immediately after ownership, each ownership record was revision 1 with
+`persistenceReady=false`. The first real turns completed through trusted
+`turn/completed` events:
 
-Worker B's provider Thread B was
-`01a071cd-238c-7893-b054-4c0a1d228914`, with completed turn
-`01a071cd-2582-7763-9757-5999274ae437`. Its provider `thread_turns` row is
-`completed`, the rollout exists, and the exact claim file was created with
-the requested marker. The run's cleanup then produced a normal managed-job
-empty stop for B; this is not replacement evidence.
+- A turn `01a071f2-3032-7a70-8a44-174134ae89ce`;
+- B turn `01a071f2-303a-74b2-843b-fc47eb8f54d1`.
 
-The first material failure was A's real turn/protocol path. The journal
-records Synesis MCP startup/protocol failures and `ReadFile failed, win32=0`;
-no production source was patched and no second fresh acceptance run was
-started. A's exact claim was not observed as a completed in-scope mutation;
-B's exact claim was the only observed claim mutation in its assigned worktree.
+For each exact `(CODEX, Thread) -> Binding`, readiness changed
+`false -> true`. The managed agent performed the mutations through Synesis
+MCP only. A changed only its exact claim file and wrote marker
+`SYN051-AB-A-A1-382672cf-7fe4-4a13-b1ba-8402ed24960f`; B changed only its
+exact claim file and wrote marker
+`SYN051-AB-B-A1-2b02bdc5-efc2-4023-9594-d8c85b26f46c`.
 
-## Stop and hygiene
+## Independent restart and generation 2
 
-- No replacement operation was invoked.
-- No A2 was created.
-- No Worker C was created.
-- No dependency, handoff, or full SYN-049 acceptance was run.
-- No provider credentials were read, copied, logged, or modified.
-- Raw attachment proofs were not printed or persisted in this evidence; only
-  digests are recorded.
-- The validation JVM and managed children were absent after cleanup. B's
-  cleanup stop was incidental; trusted death/replacement validation was not
-  attempted.
-- No target control-checkout files were manually edited and no push occurred.
+Worker A was stopped while B remained live. Trusted generation-1 death
+evidence recorded root PID `15076`; fresh generation-2 proof digest was
+`11e22b9c7fa5cbf59bb9267704369294d03dba2b3f071333f94e0fc7931c1c76`.
+Generation 2 launched AppServer PID `22228` and MCP PID `14588` and resumed
+exact Thread A. Its trusted turn was
+`01a071f2-deb5-7d12-aee1-7bfbcadd3377`; the other worker remained live.
 
-## Remaining blocker
+Worker B was then stopped while A's successor remained live. Trusted
+generation-1 death evidence recorded root PID `18512`; fresh generation-2
+proof digest was
+`1b5800fa25637037a6380405cd8f33c7b775a36af0b2e192f77f82d962ef1178`.
+Generation 2 launched AppServer PID `8052` and MCP PID `24584` and resumed
+exact Thread B. Its trusted turn was
+`01a071f3-890e-7823-808b-3e20e88e0451`; A's successor remained live.
 
-The fresh two-worker acceptance is unresolved because Worker A failed to
-produce trusted completion while Worker B completed, and complete B MCP/Job
-observation was not captured before cleanup. Before another fresh lane, the
-co-running Codex/MCP protocol failure must be diagnosed from current
-production evidence without reusing these bindings or proofs.
+Post-resume verification remained exact and contained: each worktree had
+only its own claim file, with both continuation markers present. The provider
+thread database contained a row and rollout path for each exact Thread A/B;
+the history database contained two `completed` turns per thread; all four
+rollout files existed and contained the corresponding real MCP activity and
+completion evidence.
+
+Final lifecycle records were generation 2, `DISCONNECTED` attachment,
+`persistenceReady=true`, ownership revision 2, exact original binding,
+participant, WorkIntent, claim, and provider thread, with checkpoint state
+`STOPPED` and `evidenceComplete=true` after normal host cleanup.
+
+## Scope, cleanup, and hygiene
+
+- No bootstrap AppServer was used; each generation-1 thread was created by
+  its own AppServer launched by the production START path.
+- No A1 -> A2 thread substitution, proof recovery, stale-generation
+  authority, cross-worker ownership, or latest-session fallback occurred.
+- No dependency/handoff or WorkGroup terminalization was required by this
+  bounded SYN-051 acceptance. The broader SYN-049 integration/workgroup
+  acceptance remains separate and was not run.
+- The validation host exited normally after the evidence endpoint. No Java or
+  Synesis MCP child remained. Cleanup produced no additional replacement
+  generation; trusted death receipts were the explicit generation-1 restart
+  evidence.
+- Raw proofs were never logged or persisted; only digests appear here.
+  Provider credentials were not inspected. No raw proof was placed in the
+  target or global Codex configuration.
+- No push, tag, release, or remote mutation occurred.
+
+## Defect and verification record
+
+The first corrected A/B attempt exposed two production-boundary issues: a
+co-running teardown race and native pipe closure while protocol readers were
+blocked. The narrow fix serializes lifecycle teardown under the existing
+state lock and closes protocol/stdout/stderr streams before managed-supervisor
+handle release. Focused lifecycle regression and the complete workspace
+`lifecycle.codex` suite passed. The runtime was rebuilt and installed after
+the fix, with exact produced/installed hashes recorded above.
+
+Final classification: **PASS-A** for SYN-051. SYN-051 may advance through
+normal repository status documentation; SYN-049 remains **PARTIAL**.
