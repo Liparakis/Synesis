@@ -234,8 +234,13 @@ public final class CapabilityRequestService {
             }
 
             // Check existing active request for (requester, capability)
-            Optional<CapabilityRequestRecord> activeOpt = projection.findActiveByRequesterAndCapability(requesterNodeId,
-                    capability);
+            Optional<CapabilityRequestRecord> activeOpt = projection.findAllForRequester(requesterNodeId).stream()
+                    .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(),
+                            binding.workerId()))
+                    .filter(record -> record.capability().equals(capability))
+                    .filter(record -> record.state() == CapabilityLifecycleState.AWAITING_OWNER
+                            || record.state() == CapabilityLifecycleState.REVISION_REQUESTED)
+                    .findFirst();
 
             if (activeOpt.isPresent()) {
                 CapabilityRequestRecord activeRec = activeOpt.get();

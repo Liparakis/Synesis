@@ -28,6 +28,7 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
+import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
@@ -277,6 +278,22 @@ class AgentNextActionServiceTest {
         AgentResponse ownerNext = new AgentNextActionService().getNextAction(
                 new AgentNextActionService.NextActionRequest(controlRoot, "codex", "same-provider-owner"));
         assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNext.nextAction(), ownerNext.toJson());
+
+        String handle = (String) ((Map<?, ?>) ownerNext.result()).get("capabilityRequestHandle");
+        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(
+                new CapabilityResponseService.OwnerResponseRequest(
+                        controlRoot, "codex", "same-provider-owner", handle, "accept", null, null));
+        assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
+
+        AgentResponse ownerAfterAccept = new AgentNextActionService().getNextAction(
+                new AgentNextActionService.NextActionRequest(controlRoot, "codex", "same-provider-owner"));
+        assertEquals(AgentStatus.READY, ownerAfterAccept.status(), ownerAfterAccept.toJson());
+        assertEquals("IMPLEMENT",
+                ((Map<?, ?>) ownerAfterAccept.result()).get("workflow") instanceof Map<?, ?> workflow
+                        ? workflow.get("type")
+                        : null,
+                ownerAfterAccept.toJson());
+        assertFalse(ownerAfterAccept.toJson().contains(handle), ownerAfterAccept.toJson());
     }
 
     @Test

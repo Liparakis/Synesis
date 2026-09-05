@@ -1692,6 +1692,8 @@ public final class AgentNextActionService {
                 }
                 if (callerIntent.isPresent() && !callerIntent.get().knownDependencies().isEmpty()) {
                     var requestedCapabilities = capProj.findAllForRequester(callerNodeId).stream()
+                            .filter(candidate -> candidate.matchesRequester(callerNodeId, binding.supervisorId(),
+                                    binding.workerId()))
                             .map(org.synesis.coordination.domain.capability.CapabilityRequestRecord::capability)
                             .collect(java.util.stream.Collectors.toSet());
                     String missingDependency = callerIntent.get().knownDependencies().stream()
@@ -1760,8 +1762,12 @@ public final class AgentNextActionService {
                             result);
                 }
 
-                List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> reqPending = capProj.findPendingForRequester(
-                        callerNodeId);
+                List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> reqPending = capProj
+                        .findPendingForRequester(callerNodeId)
+                        .stream()
+                        .filter(candidate -> candidate.matchesRequester(callerNodeId, binding.supervisorId(),
+                                binding.workerId()))
+                        .toList();
                 if (!reqPending.isEmpty()) {
                     org.synesis.coordination.domain.capability.CapabilityRequestRecord topReq = null;
                     for (org.synesis.coordination.domain.capability.CapabilityRequestRecord r : reqPending) {
