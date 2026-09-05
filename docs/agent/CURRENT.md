@@ -1,23 +1,26 @@
 # Current Task
 
-## SYN-051 fresh two-worker acceptance — 2026-09-05
+## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
-Status: **ACTIVE / PARTIAL; bounded run FAILED**. Provenance and JDK25
-process-local compatibility gates passed. A fresh supported A/B setup created
-distinct bindings, participants, intents, claims, generation-1 pending
-attachments, digests, and cross-proof rejection. Worker A reached a real
-Thread A but its turn ended with lifecycle `FAILED/process_exit` and no trusted
-`turn/completed`; Worker B completed one real claim-aligned turn, but the
-observer did not capture complete B MCP/Job evidence before the process ended.
-The run stopped at that first material failure. Evidence:
+Status: **ACTIVE / PARTIAL; bounded run stopped on restart cleanup defect**.
+Provenance and JDK25 process-local compatibility passed. A fresh supported A/B
+setup proved distinct identities, claims, generation-1 pending preparation,
+cross-proof rejection, Job containment, same-connection MCP promotion,
+same-AppServer thread creation, exact ownership, ACTIVE, real claim-aligned
+turns, trusted `turn/completed`, `persistenceReady=false -> true`, and
+read-only provider DB/history/rollout durability for both workers. The first
+restart attempt raced natural process-exit observation with explicit hard-stop
+cleanup and hung while closing the native managed handles, before trusted death
+evidence and replacement could be established. No A2, B restart, or reuse is
+permitted. Evidence:
 `docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
 
 ## Immediate next action
 
-Diagnose the fresh A/B co-running Codex/MCP protocol failure read-only from the
-recorded journals and current production source; do not reuse either fresh
-binding, proof, thread, or worktree, do not invoke replacement, and do not run
-another acceptance lane until the exact cause is understood.
+Verify the lifecycle serialization fix for concurrent process-exit cleanup and
+hard-stop teardown, then rebuild/install and provenance-check before creating
+one new fresh A/B lane. Do not reuse either prior binding, proof, thread, or
+worktree.
 
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 

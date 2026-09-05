@@ -1,3 +1,20 @@
+## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
+
+The corrected fresh A/B lane passed independent setup, pending MCP quarantine,
+Job containment, same-AppServer thread creation, exact provider ownership,
+ACTIVE promotion, real claim-aligned turns, trusted completion, readiness
+false-to-true, and read-only provider durability for both workers. The first
+restart attempt exposed a production race: natural process-exit cleanup and
+explicit hard-stop teardown entered the same managed supervisor concurrently,
+and native handle close hung. A narrow lifecycle serialization fix and focused
+regression are now pending verification.
+
+- Exact next action: run the focused lifecycle regression, then rebuild/install
+  and exact-hash verify before a new fresh A/B lane; do not reuse either prior
+  lane.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 The fresh lane passed the complete A1 -> trusted death -> A2 runtime path,

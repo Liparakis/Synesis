@@ -22,6 +22,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -104,6 +106,43 @@ class CodexLifecycleWaitControlTest {
                         .success());
                 assertTrue(launcher.persistenceCompleted.await(2L, TimeUnit.SECONDS));
                 assertEquals("thread-1", launcher.completedThreadId);
+            }
+        }
+    }
+
+    @Test
+    void concurrentHardStopAndProcessExitCleanupCannotTeardownManagedTreeTwice() throws Exception {
+        try (FakeServer server = new FakeServer()) {
+            ConcurrentTeardownSupervisor supervisor = new ConcurrentTeardownSupervisor();
+            CodexAppServerLifecycleService.ProcessLauncher launcher = (_, _) -> server.process(supervisor);
+            try (CodexAppServerLifecycleService service = service(server, launcher)) {
+                CodexLifecycleHttpClient.Response started = service.start(
+                        request(LifecycleControlRequestEnvelope.Operation.START, null, null, true, "initial"));
+
+                CompletableFuture<CodexLifecycleHttpClient.Response> first = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return service.hardStop(request(LifecycleControlRequestEnvelope.Operation.HARD_STOP,
+                                started.threadId(), started.turnId(), false, null));
+                    } catch (Exception failure) {
+                        throw new RuntimeException(failure);
+                    }
+                });
+                assertTrue(supervisor.teardownEntered.await(2L, TimeUnit.SECONDS));
+                CompletableFuture<CodexLifecycleHttpClient.Response> second = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return service.hardStop(request(LifecycleControlRequestEnvelope.Operation.HARD_STOP,
+                                started.threadId(), started.turnId(), false, null));
+                    } catch (Exception failure) {
+                        throw new RuntimeException(failure);
+                    }
+                });
+                Thread.sleep(50L);
+                assertTrue(supervisor.maxConcurrent.get() <= 1);
+                supervisor.releaseTeardown.countDown();
+                assertTrue(first.get(2L, TimeUnit.SECONDS).success());
+                assertTrue(second.get(2L, TimeUnit.SECONDS).success());
+                assertEquals(1, supervisor.teardownCalls.get());
+                assertTrue(!supervisor.overlap.get());
             }
         }
     }
@@ -290,6 +329,11 @@ class CodexLifecycleWaitControlTest {
                     System.currentTimeMillis());
         }
 
+        private CodexAppServerLifecycleService.AppServerProcess process(ManagedProcessTreeSupervisor supervisor) {
+            return new CodexAppServerLifecycleService.AppServerProcess(process, "fake-codex",
+                    "fake-codex app-server", System.currentTimeMillis(), supervisor);
+        }
+
         @Override
         public void close() throws IOException {
             process.destroy();
@@ -361,6 +405,47 @@ class CodexLifecycleWaitControlTest {
         @Override
         public long pid() {
             return 12345L;
+        }
+    }
+
+    /** Detects concurrent managed-tree teardown calls in the lifecycle race regression. */
+    private static final class ConcurrentTeardownSupervisor implements ManagedProcessTreeSupervisor {
+
+        private final CountDownLatch teardownEntered = new CountDownLatch(1);
+        private final CountDownLatch releaseTeardown = new CountDownLatch(1);
+        private final AtomicInteger activeTeardowns = new AtomicInteger();
+        private final AtomicInteger maxConcurrent = new AtomicInteger();
+        private final AtomicInteger teardownCalls = new AtomicInteger();
+        private final AtomicBoolean overlap = new AtomicBoolean();
+
+        @Override
+        public Process launch(List<String> command, Path workingDirectory, Map<String, String> environment) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean owns(Process process) {
+            return true;
+        }
+
+        @Override
+        public boolean teardownAndProveEmpty(Process process) throws IOException {
+            teardownCalls.incrementAndGet();
+            int concurrent = activeTeardowns.incrementAndGet();
+            maxConcurrent.accumulateAndGet(concurrent, Math::max);
+            if (concurrent > 1) {
+                overlap.set(true);
+            }
+            teardownEntered.countDown();
+            try {
+                releaseTeardown.await(2L, TimeUnit.SECONDS);
+                return true;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException("teardown_interrupted", interrupted);
+            } finally {
+                activeTeardowns.decrementAndGet();
+            }
         }
     }
 }

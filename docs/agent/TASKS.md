@@ -1,3 +1,17 @@
+## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
+
+**ACTIVE / PARTIAL.** The current acceptance task is the fresh managed
+Worker-A/Worker-B identity, isolation, real-work, and restart validation
+authorized by the current SYN-051 objective. The prior two-worker run reached
+both real generation-1 turns and durable provider state, but its immediate
+restart attempt raced process-exit cleanup and hung in native managed-handle
+teardown. That race is now the active defect investigation; neither prior
+lane may be reused.
+
+- Next action: verify the narrow lifecycle serialization fix with focused
+  regression coverage, then rebuild/provenance-lock and run one new fresh A/B
+  acceptance lane.
+
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
 **ACTIVE / PARTIAL (runtime PASS-A).** One fresh lawful Worker A completed the managed

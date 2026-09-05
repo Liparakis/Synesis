@@ -632,64 +632,62 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      */
     public CodexLifecycleHttpClient.Response hardStop(LifecycleControlRequestEnvelope request) throws Exception {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.HARD_STOP);
-        CodexLifecycleStateStore.Checkpoint current = checkpoint();
-        if (current.rootPid() <= 0) {
-            transition(current, CodexLifecycleStateStore.State.STOPPED, current.attachmentGeneration(),
-                    current.connectionGeneration(), -1L, "none", "none", current.threadId(), current.turnId(), null);
-            return response(true, "root_already_exited", CodexLifecycleStateStore.State.STOPPED,
-                    checkpoint().revision(), current.threadId(), current.turnId());
-        }
-        Attachment attachment = active;
-        ProcessTreeTerminator.Result result = terminateProcessTree(attachment == null ? startingProcess
-                : attachment.process(), current.attachmentGeneration(), Duration.ofSeconds(2),
-                Instant.ofEpochMilli(request.callerDeadlineEpochMillis()), current);
-        if (attachment != null) {
-            attachment.journal()
-                    .offer("hard_stop_result",
-                            Map.of("outcome",
-                                    result.outcome()
-                                            .name(),
-                                    "diagnostic",
-                                    result.diagnostic(),
-                                    "survivors",
-                                    result.survivors()),
-                            true);
-            attachment.protocol()
-                    .close();
-            try {
-                attachment.journal()
-                        .close();
-            } catch (IOException failure) {
-                attachment.journal()
-                        .markIncomplete();
-                current = new CodexLifecycleStateStore.Checkpoint(current.bindingSessionId(), current.projectId(),
-                        current.provider(), current.revision(), current.state(), current.ownerHostInstanceId(),
-                        current.attachmentGeneration(), current.connectionGeneration(), current.rootPid(),
-                        current.rootStartEpochMillis(), current.rootExecutable(), current.rootCommandIdentity(),
-                        current.threadId(), current.turnId(), current.terminalDiagnostic(), false,
-                        System.currentTimeMillis());
-            }
-            synchronized (stateLock) {
-                current = checkpoint();
-                current = persistEvidenceCompleteness(current, attachment.journal());
-            }
-            if (active == attachment) {
-                active = null;
-            }
-        }
-        CodexLifecycleStateStore.State state = result.outcome() == ProcessTreeTerminator.Outcome.CLEAN_GRACEFUL
-                || result.outcome() == ProcessTreeTerminator.Outcome.FORCED
-                || result.outcome() == ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED
-                ? CodexLifecycleStateStore.State.STOPPED : CodexLifecycleStateStore.State.FAILED;
         synchronized (stateLock) {
+            CodexLifecycleStateStore.Checkpoint current = checkpoint();
+            if (current.rootPid() <= 0) {
+                transition(current, CodexLifecycleStateStore.State.STOPPED, current.attachmentGeneration(),
+                        current.connectionGeneration(), -1L, "none", "none", current.threadId(), current.turnId(),
+                        null);
+                return response(true, "root_already_exited", CodexLifecycleStateStore.State.STOPPED,
+                        checkpoint().revision(), current.threadId(), current.turnId());
+            }
+            Attachment attachment = active;
+            ProcessTreeTerminator.Result result = terminateProcessTree(attachment == null ? startingProcess
+                    : attachment.process(), current.attachmentGeneration(), Duration.ofSeconds(2),
+                    Instant.ofEpochMilli(request.callerDeadlineEpochMillis()), current);
+            if (attachment != null) {
+                attachment.journal()
+                        .offer("hard_stop_result",
+                                Map.of("outcome",
+                                        result.outcome()
+                                                .name(),
+                                        "diagnostic",
+                                        result.diagnostic(),
+                                        "survivors",
+                                        result.survivors()),
+                                true);
+                attachment.protocol()
+                        .close();
+                try {
+                    attachment.journal()
+                            .close();
+                } catch (IOException failure) {
+                    attachment.journal()
+                            .markIncomplete();
+                    current = new CodexLifecycleStateStore.Checkpoint(current.bindingSessionId(), current.projectId(),
+                            current.provider(), current.revision(), current.state(), current.ownerHostInstanceId(),
+                            current.attachmentGeneration(), current.connectionGeneration(), current.rootPid(),
+                            current.rootStartEpochMillis(), current.rootExecutable(), current.rootCommandIdentity(),
+                            current.threadId(), current.turnId(), current.terminalDiagnostic(), false,
+                            System.currentTimeMillis());
+                }
+                current = persistEvidenceCompleteness(current, attachment.journal());
+                if (active == attachment) {
+                    active = null;
+                }
+            }
+            CodexLifecycleStateStore.State state = result.outcome() == ProcessTreeTerminator.Outcome.CLEAN_GRACEFUL
+                    || result.outcome() == ProcessTreeTerminator.Outcome.FORCED
+                    || result.outcome() == ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED
+                    ? CodexLifecycleStateStore.State.STOPPED : CodexLifecycleStateStore.State.FAILED;
             current = checkpoint();
             transition(current, state, current.attachmentGeneration(), current.connectionGeneration(),
                     result.outcome() == ProcessTreeTerminator.Outcome.ROOT_SURVIVED ? current.rootPid() : -1L,
                     current.rootExecutable(), current.rootCommandIdentity(), current.threadId(), current.turnId(),
                     result.diagnostic());
+            return response(state == CodexLifecycleStateStore.State.STOPPED, result.diagnostic(), state,
+                    checkpoint().revision(), current.threadId(), current.turnId());
         }
-        return response(state == CodexLifecycleStateStore.State.STOPPED, result.diagnostic(), state,
-                checkpoint().revision(), current.threadId(), current.turnId());
     }
 
     /**
@@ -1174,37 +1172,39 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
     }
 
     private void closeExitedAttachment(long attachmentGeneration, CodexEvidenceJournal journal) {
-        Attachment attachment = active;
-        if (attachment == null || attachment.attachmentGeneration() != attachmentGeneration) {
-            return;
-        }
-        if (attachment.process().supervisor() != null) {
-            try {
-                ManagedProcessTreeSupervisor.DeathEvidence evidence = attachment.process().supervisor()
-                        .teardownAndProveEmptyWithEvidence(attachment.process().process(), attachmentGeneration,
-                                attachment.process().executable(), attachment.process().commandIdentity(),
-                                attachment.process().startEpochMillis());
-                launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
-                journal.offer("managed_tree_empty", Map.of("generation", attachmentGeneration), true);
-            } catch (IOException failure) {
-                journal.offer("managed_tree_death_ambiguous", Map.of("generation", attachmentGeneration), true);
+        synchronized (stateLock) {
+            Attachment attachment = active;
+            if (attachment == null || attachment.attachmentGeneration() != attachmentGeneration) {
                 return;
             }
-        }
-        active = null;
-        attachment.protocol()
-                .close();
-        try {
-            attachment.journal()
+            if (attachment.process().supervisor() != null) {
+                try {
+                    ManagedProcessTreeSupervisor.DeathEvidence evidence = attachment.process().supervisor()
+                            .teardownAndProveEmptyWithEvidence(attachment.process().process(), attachmentGeneration,
+                                    attachment.process().executable(), attachment.process().commandIdentity(),
+                                    attachment.process().startEpochMillis());
+                    launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
+                    journal.offer("managed_tree_empty", Map.of("generation", attachmentGeneration), true);
+                } catch (IOException failure) {
+                    journal.offer("managed_tree_death_ambiguous", Map.of("generation", attachmentGeneration), true);
+                    return;
+                }
+            }
+            active = null;
+            attachment.protocol()
                     .close();
-        } catch (IOException failure) {
-            attachment.journal()
-                    .markIncomplete();
-        }
-        try {
-            persistEvidenceCompleteness(checkpointUnchecked(), journal);
-        } catch (IOException ignored) {
-            // The process-exit checkpoint remains authoritative.
+            try {
+                attachment.journal()
+                        .close();
+            } catch (IOException failure) {
+                attachment.journal()
+                        .markIncomplete();
+            }
+            try {
+                persistEvidenceCompleteness(checkpointUnchecked(), journal);
+            } catch (IOException ignored) {
+                // The process-exit checkpoint remains authoritative.
+            }
         }
     }
 
