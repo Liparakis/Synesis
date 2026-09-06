@@ -1,3 +1,20 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #44
+
+Run #44 used a fresh skeleton target, the current hash-verified artifacts, and
+JDK25 with the process-local AF_UNIX temporary-directory property. One live
+validation JVM carried both production managed launchers through generation-1
+prepare/START. Both App Servers created exact provider threads and reached
+ACTIVE; their initial provider turns completed. Both configured native Synesis
+MCP children then failed the `initialize` handshake with `connection closed`,
+so the workers had no callable Synesis tools. No capability request, wake,
+mutation, integration, or terminalization was reached. The run was stopped at
+the first material boundary and cleaned up through supported provider uninstall.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run44.md`.
+
+Exact next action: diagnose the native Synesis MCP child-startup handshake
+read-only before another fresh acceptance lane.
+
 ## 2026-09-05 — SYN-049 fresh unattended two-worker acceptance runs #10 and #11
 
 Two fresh managed two-worker attempts were stopped at the first material

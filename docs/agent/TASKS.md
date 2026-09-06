@@ -1,5 +1,19 @@
 ## SYN-049
 
+### Fresh unattended two-worker acceptance — run #44 — 2026-09-06
+
+**ACTIVE / PARTIAL.** Fresh run #44 passed generation-1 managed preparation,
+START, same-AppServer thread creation, ownership, and ACTIVE promotion. It
+stopped before coordination because both App Servers' configured native
+Synesis MCP children closed during `initialize`; no Synesis MCP tool was
+callable. No capability, coding, integration, or terminalization evidence was
+created.
+
+- Status: ACTIVE
+
+- Exact next action: diagnose the native Synesis MCP child-startup handshake
+  read-only before another fresh target; do not reuse or repair run #44.
+
 ### Fresh unattended two-worker acceptance — runs #40–#42 — 2026-09-06
 
 **ACTIVE / PARTIAL.** The sole active task is the bounded real Worker A/B

@@ -1,3 +1,22 @@
+## SYN-049 fresh unattended two-worker acceptance — run #44 — 2026-09-06
+
+Run #44 is **PARTIAL / ACTIVE**. The fresh target passed artifact and JDK25
+process-local compatibility, lawful A/B setup, same-process generation-1
+managed prepare/START, same-AppServer provider-thread creation, ownership,
+ACTIVE promotion, and initial provider turn completion. Both App Servers then
+reported that the configured native `synesis` MCP child closed during the
+`initialize` handshake. No Synesis MCP tool was callable, so no capability
+request/publication, provider-native wake/consume, coding, integration, or
+terminalization was reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run44.md`.
+
+- Exact next action: diagnose the configured native Synesis MCP child-startup
+  handshake read-only before another fresh lane. Do not reuse or repair run
+  #44, bypass MCP, copy worktrees, or patch production speculatively.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #40–#42 — 2026-09-06
 
 Runs #40–#42 are **PARTIAL / ACTIVE**. Run #42 passed exact provenance,

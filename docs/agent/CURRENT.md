@@ -1,5 +1,40 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — run #44 — 2026-09-06
+
+Status: **PARTIAL / ACTIVE**. Fresh run #44 passed current artifact and JDK25
+process-local compatibility, fresh lawful A/B setup, same-process generation-1
+managed preparation/START, same-AppServer provider-thread creation, ownership,
+ACTIVE promotion, and initial provider turn completion. It stopped at the
+first material boundary: both managed App Servers reported that the configured
+native `synesis` MCP child closed during `initialize`. Neither worker had a
+callable Synesis namespace, so no capability request, publication, wake/consume,
+coding, integration, or terminalization was lawful.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run44.md`.
+
+- Task ID: SYN-049
+
+## Immediate next action
+
+Perform a bounded read-only diagnosis of the configured native Synesis MCP
+child-startup/handshake boundary before another fresh target. Do not reuse or
+repair run #44, bypass MCP, copy worktrees, or patch production speculatively.
+
+## Work completed
+
+Recorded fresh run #44, verified current artifact hashes and JDK25 host
+preflight, verified supported provider cleanup, and preserved exact A/B
+identities and generation-1 lifecycle evidence. No production source change
+was made during the runtime attempt.
+
+## Current failures
+
+Run #44's App Server-to-Synesis-MCP child handshake failed before Synesis MCP
+tools were exposed. The target and A/B worktrees are clean; no capability
+request, B wake, claim mutation, integration, or WorkGroup terminalization was
+proven.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #40–#42 — 2026-09-06
 
 Status: **PARTIAL / ACTIVE**. Fresh runs passed provenance and host

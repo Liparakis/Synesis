@@ -1,3 +1,21 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #44
+
+Run #44 is **PARTIAL / ACTIVE**. A fresh target passed current artifact and
+JDK25 process-local compatibility, lawful A/B setup, same-process generation-1
+prepare/START, same-AppServer provider-thread creation, managed ownership, and
+ACTIVE promotion. Both initial provider turns completed on exact generation-1
+threads. The first material boundary was the configured native Synesis MCP
+child: both App Servers recorded `connection closed: initialize response`,
+leaving no callable Synesis MCP namespace. No capability request/publication,
+B wake/consume, coding, integration, or terminalization was possible.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run44.md`.
+
+## Immediate next action
+
+Diagnose the native Synesis MCP child-startup/handshake boundary read-only
+before another fresh lane; do not reuse or repair run #44 or bypass MCP.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #40–#42
 
 Runs #40–#42 are **PARTIAL / ACTIVE**. Fresh run #42 passed artifact and
