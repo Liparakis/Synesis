@@ -1,5 +1,26 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — runs #68–#69 — 2026-09-06
+
+Status: **PARTIAL / ACTIVE**. Fresh runs #68 and #69 passed generation-1
+same-process managed preparation/START, real A/B claim admission, capability
+publication and validation, provider-native B wake on the original thread,
+and real claim-scoped implementation. Run #69 integrated B's immutable
+application/API snapshot. The first unresolved boundary is the owner/reviewer
+ordering cycle: B's review request for A is accepted before A's snapshot is
+published, so Synesis withholds A completion while B waits for that snapshot.
+The WorkGroup remains ACTIVE and integrated compile fails with A's absent
+domain/persistence snapshot.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69.md`.
+
+## Immediate next action
+
+Diagnose the owner/reviewer snapshot-ordering projection read-only before
+another fresh target. Do not edit `.synesis`, copy snapshots/worktrees,
+force completion, invoke replacement/A2, create a substitute B, or patch
+production before the exact root cause is established.
+
 ## SYN-049 fresh unattended two-worker acceptance — run #59 — 2026-09-06
 
 Status: **PARTIAL / ACTIVE**. Fresh run #59 used a one-host, one-launcher

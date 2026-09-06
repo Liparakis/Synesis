@@ -3624,3 +3624,22 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`
 Read-only diagnosis of snapshot materialization and review-workspace routing;
 do not bypass grants, copy worktrees, repair state, invoke replacement, create
 A2, or start a substitute B.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #68–#69
+
+Runs #68–#69 are **PARTIAL / ACTIVE**. Both fresh targets passed the
+generation-1 managed prepare/START and capability handoff boundary, including
+same-thread B wake and validation. Run #69 produced real claim-scoped A/B
+implementation and an integrated B snapshot. The owner/reviewer ordering then
+left A ACTIVE without a snapshot while B COMPLETED with an accepted,
+unconsumed review grant; WorkGroup terminalization timed out. The integrated
+checkout compile failed because A's domain/persistence snapshot was absent.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69.md`.
+
+No production source, provider credentials, global Java settings, or durable
+`.synesis` state was changed. Supported provider uninstall completed normally.
+
+## Immediate next action
+
+Read-only diagnosis of the owner/reviewer snapshot-ordering projection, then
+one new fresh acceptance target only if the exact sequence is corrected.

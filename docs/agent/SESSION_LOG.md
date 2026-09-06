@@ -5632,3 +5632,17 @@ before another fresh target.
 - Normal cleanup completed; no replacement, A2, substitute B, manual copy,
   credential access, production source change, or push.
 - Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #68–#69
+
+Runs #68–#69 ended **PARTIAL / ACTIVE** after fresh generation-1 managed A/B
+startup, capability publication/validation, same-thread B wake, and real
+claim-scoped implementation. Run #69 integrated B's application/API snapshot,
+then exposed an owner/reviewer snapshot-ordering cycle: B's accepted review
+grant awaited A's snapshot while A's completion was withheld by the review
+obligation. The WorkGroup remained ACTIVE and the integrated checkout did not
+compile because A's domain/persistence snapshot was absent.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69.md`.
+
+Exact next action: diagnose the ordering projection read-only; do not bypass
+Synesis, edit durable state, copy worktrees, or patch production speculatively.

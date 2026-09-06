@@ -1,5 +1,21 @@
 ## SYN-049
 
+### Fresh unattended two-worker acceptance — runs #68–#69 — 2026-09-06
+
+**ACTIVE / PARTIAL.** Fresh runs #68–#69 proved generation-1 managed
+prepare/START for A and B, capability publication/validation, provider-native
+B wake on the original thread, and real claim-scoped implementation. Run #69
+integrated B's snapshot but stopped with A ACTIVE and without an A snapshot,
+while B was COMPLETED with an accepted unconsumed review grant. The WorkGroup
+remained ACTIVE; independent integrated compilation failed because A's
+domain/persistence source was absent.
+
+- Status: ACTIVE
+- Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69.md`
+- Exact next action: diagnose owner/reviewer snapshot ordering read-only.
+- Scope exclusions: no `.synesis` surgery, snapshot/worktree copying, forced
+  completion, replacement, A2, substitute B, credential access, or push.
+
 ### Fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
 **ACTIVE / PARTIAL.** Run #56 proved the corrected accepted-review and

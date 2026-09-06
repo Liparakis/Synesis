@@ -2634,3 +2634,19 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`
 Immediate next action: diagnose the production snapshot materialization/review
 workspace route read-only before another fresh target. Preserve fail-closed
 behavior and do not bypass the review grant or copy files between worktrees.
+## SYN-049 fresh unattended two-worker acceptance — runs #68–#69 — 2026-09-06
+
+Runs #68–#69 are **PARTIAL / ACTIVE**. Fresh generation-1 managed A/B
+preparation/START, capability publication/validation, same-thread B wake, and
+real claim-scoped implementation were proven. Run #69 integrated B's snapshot
+but stopped with A ACTIVE, B COMPLETED, an accepted unconsumed B review grant,
+no A snapshot or review validation, and WorkGroup ACTIVE. Independent
+integrated compile failed because A's domain/persistence snapshot was absent.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69.md`.
+
+- Exact next action: diagnose owner/reviewer snapshot ordering read-only.
+- Do not edit `.synesis`, copy snapshots/worktrees, force completion, invoke
+  replacement/A2, create a substitute B, or patch production speculatively.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
