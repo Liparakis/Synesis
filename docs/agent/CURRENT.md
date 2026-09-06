@@ -13,10 +13,12 @@ was reached.
 
 Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`.
 
-- Exact next action: investigate the new B App Server `process_exit` read-only
-  using run #29's public checkpoint and provider evidence; do not reuse or
-  retry run #29, start another worker, invoke replacement, or perform state
-  surgery before the launch boundary is isolated.
+## Immediate next action
+
+Investigate the new B App Server `process_exit` read-only using run #29's
+public checkpoint and provider evidence; do not reuse or retry run #29, start
+another worker, invoke replacement, or perform state surgery before the launch
+boundary is isolated.
 
 ## SYN-049 fresh unattended two-worker acceptance — run #28 — 2026-09-06
 
