@@ -55,7 +55,7 @@ Run #74 used the corrected disposable runner and a fresh target. It passed
 fresh lawful A/B setup, generation-1 `prepareFirst`/START, and B initial
 completion. A’s real owner turn then failed with lifecycle state `FAILED`,
 `revision=8`, generation `1`, exact thread
-`01a0776f-970e-7663-ac39-1ebbe09f377fa`, and
+`01a0776f-970e-7663-ac39-1ebbe09f37fa`, and
 `terminalDiagnostic=process_exit`. The runner failed closed immediately; no
 replacement, A2, cross-process resume, or substitute B was invoked.
 
