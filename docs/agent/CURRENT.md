@@ -1,5 +1,20 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — run #81 — 2026-09-06
+
+Status: **COMPLETE / PASS**. Fresh run #81 passed generation-1 managed A/B
+prepare/START, exact provider-native B wake on the original thread, capability
+publication/validation, claim-scoped coding, immutable snapshot integration,
+call-local completion requests, both terminal participants, WorkGroup
+`COMPLETED`, and the integrated fixture suite.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs75-81.md`.
+
+## Immediate next action
+
+Preserve the PASS evidence and stop. Do not retry SYN-049, reopen SYN-051, or
+start A1-to-A2 replacement validation without a separately bounded request.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #70–#74 — 2026-09-06
 
 Status: **PARTIAL / ACTIVE**. Fresh runs #70 and #71 reached WorkGroup

@@ -1,3 +1,19 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #81
+
+Run #81 passed the full bounded acceptance: fresh generation-1 managed A/B
+prepare/START, exact same-thread provider-native B wake, capability
+publication/validation, real claim-scoped implementation, immutable snapshot
+integration, call-local completion, both terminal participants, WorkGroup
+`COMPLETED`, and all four integrated fixture tests. Provider thread database
+rows and rollout files were verified read-only for both exact threads.
+
+Normal host/provider cleanup completed; no replacement, A2, substitute worker,
+credential access, production source change, or push occurred. Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs75-81.md`.
+
+Classification: **COMPLETE / PASS**. Exact next action: preserve evidence and
+stop; separately authorize any A1 trusted-death/A2 validation.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #54
 
 Run #54 used a fresh skeleton-based target, current hash-verified artifacts,

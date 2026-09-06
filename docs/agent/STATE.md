@@ -1,3 +1,22 @@
+## 2026-09-06 — SYN-049 full unattended two-worker acceptance run #81
+
+Run #81 passed fresh lawful generation-1 managed A/B preparation/START,
+provider-native same-thread B wake, exact capability publication/validation,
+claim-scoped A/B implementation, immutable snapshot integration, call-local
+completion requests, both terminal participants, WorkGroup `COMPLETED`, and
+all four integrated fixture tests. Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs75-81.md`.
+
+No production source, provider credential, global Java/network setting, or
+durable `.synesis` state was edited. Supported provider uninstall completed
+normally. SYN-051 remains `COMPLETE / PASS-A`.
+
+## Exact next action
+
+Preserve the completed SYN-049 evidence and stop. Do not retry SYN-049,
+reopen SYN-051, invoke replacement/A2, or modify production source without a
+new bounded request.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #70–#74
 
 Runs #70 and #71 reached the generation-1 managed/capability/wake/terminal

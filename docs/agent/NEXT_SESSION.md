@@ -1,5 +1,20 @@
 
 
+## 2026-09-06 — SYN-049 run #81 PASS
+
+Run #81 completed the fresh unattended two-worker acceptance with generation-1
+managed A/B prepare/START, original-thread provider-native wake, capability
+validation, real claim-scoped coding, immutable snapshot integration, exact
+call-local completion requests, both participants `COMPLETED`, WorkGroup
+`COMPLETED`, and four passing integrated fixture tests.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs75-81.md`.
+
+- Exact next action: preserve evidence and stop; do not retry SYN-049 or start
+  A1-to-A2 replacement validation without a separate bounded authorization.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #70–#74 — 2026-09-06
 
 Status: **PARTIAL / ACTIVE**. Runs #70–#71 proved the generation-1 managed

@@ -1,5 +1,19 @@
 ## SYN-049
 
+### Fresh unattended two-worker acceptance — run #81 — 2026-09-06
+
+**COMPLETE / PASS.** Fresh run #81 passed the full bounded unattended
+two-worker acceptance: generation-1 managed prepare/START, original-thread
+provider-native B wake, exact capability validation, claim-scoped A/B coding,
+immutable snapshot integration, call-local completion, terminal participants,
+WorkGroup `COMPLETED`, and all four integrated fixture tests.
+
+- Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs75-81.md`
+- Exact next action: preserve evidence and stop; separately authorize any A1
+  trusted-death/A2 replacement validation.
+- Scope: no production source change, `.synesis` surgery, replacement/A2,
+  substitute worker, credential access, or push.
+
 ### Fresh unattended two-worker acceptance — runs #70–#74 — 2026-09-06
 
 **ACTIVE / PARTIAL.** Runs #70–#71 reached the generation-1 managed
