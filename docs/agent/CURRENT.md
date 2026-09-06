@@ -1,20 +1,21 @@
 # Current Task
 
-## SYN-049 fresh unattended two-worker acceptance — runs #45–#50 — 2026-09-06
+## SYN-049 fresh unattended two-worker acceptance — run #54 — 2026-09-06
 
-Status: **PARTIAL / ACTIVE**. Fresh run #50 passed corrected generation-1
+Status: **PARTIAL / ACTIVE**. Fresh run #54 passed corrected generation-1
 same-process managed startup for A and B, real A capability publication,
 provider-native wake on original Thread B, strict capability validation, real
-dependent B work, and same-thread A/B continuation. It stopped with B still
-ACTIVE and the WorkGroup still ACTIVE. Final B review/finish, lane
-terminalization, and WorkGroup terminalization remain unproven.
+dependent B work, and same-thread A/B continuation. It stopped with A
+COMPLETED, B ACTIVE, an accepted A-to-B review request, and the WorkGroup
+ACTIVE. Final B review/finish, lane terminalization, and WorkGroup
+terminalization remain unproven.
 
-Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48.md`.
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`.
 
 ## Immediate next action
 
 Diagnose the final B-side review/finish/terminalization projection read-only,
-using run #50's preserved evidence. Do not reuse or repair runs #45–#50,
+using run #54's preserved evidence. Do not reuse or repair run #54,
 invoke replacement, create A2 or a substitute B, or patch production again
 before the exact boundary is identified.
 
@@ -23,15 +24,16 @@ before the exact boundary is identified.
 Corrected the invalid owner-side implementation-validation projection so it
 exposes the provider's required decision instead of manufacturing an
 incomplete response. Added a focused regression, rebuilt and hash-verified
-the distribution, and ran fresh #47–#50 fixtures. The run-50 provider was
+the distribution, and ran fresh #47–#54 fixtures. The run-54 provider was
 uninstalled through the supported flow.
 
 ## Current failures
 
 Run #45 exposed and fixed a production projection/schema mismatch. Run #47
-exposed a harness-only continuation-grant gate. Run #50 reached real A/B
-continuations but stopped with B ACTIVE and the WorkGroup ACTIVE. No final B
-review/finish or WorkGroup terminalization is proven.
+exposed a harness-only continuation-grant gate. Run #54 reached real A/B
+continuations but stopped with B ACTIVE and the WorkGroup ACTIVE after an
+accepted review request. No final B review/finish or WorkGroup
+terminalization is proven.
 
 ## SYN-049 fresh unattended two-worker acceptance — run #44 — 2026-09-06
 

@@ -1,3 +1,22 @@
+
+## SYN-049 fresh unattended two-worker acceptance — run #54 — 2026-09-06
+
+Run #54 is **PARTIAL / ACTIVE**. A fresh target passed artifact provenance,
+JDK25 process-local compatibility, lawful generation-1 managed prepare/START,
+same-App-Server provider threads, provider-native B wake, A capability
+publication, strict validation, and real claim-aligned A/B work. At the
+bounded stop A was `COMPLETED`, B was `ACTIVE`, the A-to-B review request was
+`ACCEPTED`, and the WorkGroup was `ACTIVE`.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`.
+
+- Exact next action: diagnose the final B-side review/finish/terminalization
+  projection read-only from run #54. Do not reuse or repair its target,
+  invoke replacement, create A2 or a substitute B, or patch production
+  speculatively.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — run #44 — 2026-09-06
 
 Run #44 is **PARTIAL / ACTIVE**. The fresh target passed artifact and JDK25

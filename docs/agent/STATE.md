@@ -1,3 +1,23 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #54
+
+Run #54 is **PARTIAL / ACTIVE**. The fresh target passed exact artifact
+provenance, JDK25 process-local compatibility, lawful A/B admission,
+generation-1 same-process managed prepare/START, same-App-Server provider
+thread creation, provider-native B wake, A capability publication, strict
+capability validation, and real claim-aligned A/B work. The final supported
+status was A participant `COMPLETED`, B participant `ACTIVE`, an accepted
+A-to-B review request, and WorkGroup `ACTIVE`. The bounded harness exited on
+`SYN-049 workgroup terminalization timeout`; no B lane finish or WorkGroup
+terminalization was proven.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`.
+
+## Immediate next action
+
+Diagnose the final B-side review/finish/terminalization projection read-only
+from run #54; do not reuse or repair its target, invoke replacement, create
+A2 or a substitute B, or patch production speculatively.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #44
 
 Run #44 is **PARTIAL / ACTIVE**. A fresh target passed current artifact and

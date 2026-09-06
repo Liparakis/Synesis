@@ -1,5 +1,22 @@
 ## SYN-049
 
+### Fresh unattended two-worker acceptance — run #54 — 2026-09-06
+
+**ACTIVE / PARTIAL.** Run #54 passed fresh provenance and host compatibility,
+lawful generation-1 managed startup, provider-native B wake, A publication,
+capability validation, and real claimed A/B work. It stopped with A
+`COMPLETED`, B `ACTIVE`, an accepted A-to-B review request, and WorkGroup
+`ACTIVE`. Final B review/finish and WorkGroup terminalization remain
+unproven.
+
+- Status: ACTIVE
+- Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`
+- Exact next action: diagnose the final B-side review/finish/terminalization
+  projection read-only; do not reuse or repair run #54 or patch production
+  speculatively.
+- Scope exclusions: no replacement, A2, substitute B, manual `.synesis`
+  changes, provider credential access, or push.
+
 ### Fresh unattended two-worker acceptance — run #44 — 2026-09-06
 
 **ACTIVE / PARTIAL.** Fresh run #44 passed generation-1 managed preparation,

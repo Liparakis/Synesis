@@ -1,3 +1,26 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #54
+
+Run #54 used a fresh skeleton-based target, current hash-verified artifacts,
+JDK25, and the process-local AF_UNIX temporary-directory property. One live
+validation JVM carried both production managed launchers through generation-1
+prepare/START. A and B created exact original provider threads, reached ACTIVE,
+and completed real claim-aligned provider work. A published
+`tasktracker.domain.persistence`; B consumed it through the original
+Thread-B provider-native wake and strict validation path.
+
+The bounded run stopped at the final coordination boundary with A participant
+`COMPLETED`, B participant `ACTIVE`, an accepted A-to-B REVIEW request, and
+the WorkGroup `ACTIVE`. The parent and run-specific worker processes then
+exited normally. No replacement, A2, substitute B, manual state/worktree
+copy, credential access, or push occurred. Supported provider uninstall
+succeeded. `config.toml` was not byte-for-byte restored by the supported
+install/uninstall flow; the exact hashes and the full identity record are in
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`.
+
+Classification: **PARTIAL / ACTIVE**. Exact next action: diagnose the final
+B-side review/finish/terminalization projection read-only; do not reuse or
+repair run #54.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #44
 
 Run #44 used a fresh skeleton target, the current hash-verified artifacts, and

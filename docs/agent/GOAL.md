@@ -1,17 +1,14 @@
-## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
+## SYN-049 fresh unattended two-worker acceptance — run #54 — 2026-09-06
 
 Complete one fresh real two-worker acceptance through the supported Synesis
-and managed Codex paths. The 2026-09-05 attempt is **PARTIAL**: Worker A
-completed and published `tasktracker.domain.persistence`, while Worker B hit
-the real dependency wait but its provider connection ended before consumption;
-same-task recovery created a new participant and was rejected for overlapping
-claims. Initial dependency blocking and A publication are proven; B
-consumption, integration, projected completion, terminal lanes, and terminal
-WorkGroup state remain unproven.
+and managed Codex paths. Run #54 is **PARTIAL**: A published
+`tasktracker.domain.persistence`, B consumed it on the original provider
+thread, and both workers performed real claimed work. The run stopped with A
+`COMPLETED`, B `ACTIVE`, an accepted A-to-B review request, and the WorkGroup
+`ACTIVE`; final B review/finish and terminal WorkGroup state remain unproven.
 
-- Exact next action: preserve the partial evidence and use a new fresh target
-  only after the harness keeps B's original provider connection alive through
-  dependency wait and captures/restores pre-run Codex configuration.
+- Exact next action: diagnose the final B-side review/finish/terminalization
+  projection read-only from run #54 before any new fresh target.
 - Do not reopen SYN-051, reuse historical fixtures, start a replacement, or
   make production changes without a directly reproduced material defect.
 
