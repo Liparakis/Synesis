@@ -17,6 +17,9 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
@@ -559,6 +562,35 @@ public final class ProviderSessionBindingService {
         }
     }
 
+    /**
+     * Checks whether a managed runtime still owns this exact binding.
+     *
+     * <p>An active managed provider process may legitimately retain a clean
+     * worktree based on the previous control checkout while a sibling snapshot
+     * is integrated. Reallocating that binding would strand the live provider
+     * process on its original working directory and make its next exact
+     * continuation fail the lifecycle worktree fence.</p>
+     *
+     * @param location initialized project location
+     * @param binding exact provider binding
+     * @return {@code true} only for an active managed attachment on this binding
+     */
+    private static boolean hasActiveManagedAttachment(
+            ProjectApplicationService.ProjectLocation location, Binding binding) {
+        try {
+            ManagedAttachmentRecord attachment = ManagedAttachmentService.storeFor(location, binding.sessionId())
+                    .read()
+                    .orElse(null);
+            return attachment != null
+                    && attachment.mode() == ProviderContinuityMode.MANAGED_CONTINUITY
+                    && attachment.status() == ManagedAttachmentRecord.Status.ACTIVE
+                    && attachment.projectId().equals(binding.projectId())
+                    && attachment.bindingSessionId().equals(binding.sessionId());
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     private static boolean isSafeWorkspaceStatusLine(String line) {
         String path = line.length() > 3 ? line.substring(3)
                                           .trim() : line.trim();
@@ -621,7 +653,7 @@ public final class ProviderSessionBindingService {
                     throw new BindingException("SESSION_TERMINAL",
                             "The exact provider session has an irreversible terminal fence");
                 }
-                if (cleanlyDetached(location, binding)) {
+                if (cleanlyDetached(location, binding) && !hasActiveManagedAttachment(location, binding)) {
                     Binding rebound = withWorktree(location,
                             newBinding(location, identity, provider, fingerprint)).touch();
                     write(bindingPath, rebound);
@@ -638,13 +670,17 @@ public final class ProviderSessionBindingService {
                             throw new BindingException("WORKSPACE_STALE_DIRTY",
                                     "Stored provider workspace contains uncommitted work");
                         }
-                        if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding)) {
+                        boolean activeManagedAttachment = hasActiveManagedAttachment(location, binding);
+                        if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding)
+                                && !activeManagedAttachment) {
                             Binding rebound = reallocatePreservingSession(location, binding).touch();
                             write(bindingPath, rebound);
                             return new BindingResult(rebound,
                                     instanceEvidence == null || instanceEvidence.isBlank());
                         }
-                        binding = newBinding(location, identity, provider, fingerprint);
+                        if (!activeManagedAttachment) {
+                            binding = newBinding(location, identity, provider, fingerprint);
+                        }
                     }
                     Binding refreshed = withWorktree(location, binding).touch();
                     write(bindingPath, refreshed);

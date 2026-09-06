@@ -14,6 +14,9 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.hook.HookApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
 
 /**
  * Verifies project-scoped provider session identity and trust bootstrap.
@@ -201,6 +204,43 @@ final class ProviderSessionBindingServiceTest {
         assertEquals(gitHead(root), recovered.baseCommit());
         assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
                 .verified());
+    }
+
+    @Test
+    void preservesLiveManagedWorktreeWhenOnlyTheControlCheckoutAdvanced() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-managed-control-advance-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root)
+                .location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "managed-control@example.invalid");
+        git(root, "config", "user.name", "Managed Control Test");
+        git(root, "commit", "-m", "baseline");
+
+        var service = new ProviderSessionBindingService();
+        var first = service.ensure(location, "codex", "managed-control-advance")
+                .binding();
+        ManagedAttachmentService.storeFor(location, first.sessionId()).write(
+                new ManagedAttachmentRecord(1, location.projectId().toString(), "codex",
+                        ProviderContinuityMode.MANAGED_CONTINUITY, first.sessionId(), "thread-managed", 1,
+                        "a".repeat(64), "normal-provider-home", ManagedAttachmentRecord.Status.ACTIVE, 1,
+                        System.currentTimeMillis()));
+        var attachment = ManagedAttachmentService.storeFor(location, first.sessionId()).read().orElseThrow();
+        assertEquals(first.projectId(), attachment.projectId());
+        assertEquals(first.sessionId(), attachment.bindingSessionId());
+        assertEquals(ProviderContinuityMode.MANAGED_CONTINUITY, attachment.mode());
+        assertEquals(ManagedAttachmentRecord.Status.ACTIVE, attachment.status());
+        Files.writeString(root.resolve("README.md"), "integrated control state\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "integrated snapshot");
+
+        var retained = service.ensure(location, "codex", "managed-control-advance")
+                .binding();
+
+        assertEquals(first.sessionId(), retained.sessionId(), () -> first + " retained=" + retained);
+        assertEquals(first.worktreePath(), retained.worktreePath());
+        assertEquals(first.baseCommit(), retained.baseCommit());
     }
 
     @Test
