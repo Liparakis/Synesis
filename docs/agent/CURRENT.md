@@ -1,5 +1,23 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — run #29 — 2026-09-06
+
+Status: **FAIL at B App Server process exit / ACTIVE / PARTIAL**. The fresh
+target passed the source-correction regressions, rebuilt artifact provenance,
+JDK25 process-local preflight, lawful A/B admission, generation-1
+same-process preparation, and B START. B's exact provider Thread B was
+created and its provider row/rollout exists, but the App Server exited before
+the first turn completed. Synesis recorded `FAILED/process_exit`; no trusted
+completion, capability wake, A START, mutation, integration, or terminalization
+was reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`.
+
+- Exact next action: investigate the new B App Server `process_exit` read-only
+  using run #29's public checkpoint and provider evidence; do not reuse or
+  retry run #29, start another worker, invoke replacement, or perform state
+  surgery before the launch boundary is isolated.
+
 ## SYN-049 fresh unattended two-worker acceptance — run #28 — 2026-09-06
 
 Status: **FAIL at production worktree fence / ACTIVE / PARTIAL**. Fresh

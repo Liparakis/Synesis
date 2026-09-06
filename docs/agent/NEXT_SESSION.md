@@ -82,6 +82,22 @@ SYN-051 runtime are evidence only.
 
 # Next Session
 
+## SYN-049 fresh unattended two-worker acceptance — run #29 — 2026-09-06
+
+Run #29 is **FAIL / ACTIVE / PARTIAL**. The exact B generation-1 START created
+Thread B, but its App Server exited before the first real turn completed;
+Synesis recorded `FAILED/process_exit`. The provider row and rollout exist,
+but the exact turn remains `inProgress`. No A START, capability exchange,
+provider-native wake, mutation, integration, or terminalization occurred.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`.
+
+- Exact next action: diagnose the B App Server `process_exit` read-only from
+  the public lifecycle/provider evidence; do not reuse or retry run #29, start
+  another worker, invoke replacement, or perform state surgery.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
 
 The fresh target run is **PARTIAL**. Provenance and JDK25 process-local

@@ -127,6 +127,32 @@ bounded slice; do not reuse this lane or invoke A1-to-A2 replacement.
 
 # State
 
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #29
+
+Run #29 is **FAIL / ACTIVE / PARTIAL**. Commit `4426b03` narrowly preserves
+active managed provider bindings when the control checkout advances; its
+focused binding, next-action, wake, and lifecycle regressions passed. A clean
+rebuilt disposable installation matched the workspace, MCP, CLI, and native
+launcher hashes. The fresh target was admitted lawfully and one live launcher
+held both generation-1 preparations through B START.
+
+B START returned Thread B
+`01a0740f-8aee-7041-a4b9-0428911abafe`, but the provider App Server exited
+before the first turn completed. Public state is `FAILED` with
+`terminalDiagnostic=process_exit`, attachment `DISCONNECTED`, and exact B
+ownership at `persistenceReady=false`. The provider state row and rollout
+exist, while its `thread_turns` row remains `inProgress`. A was not started;
+no capability request, wake, mutation, integration, or terminalization was
+reached. The target is clean and global Codex configuration was restored.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`.
+
+- Exact next action: perform a read-only diagnosis of the B App Server
+  `process_exit` boundary from run #29; do not reuse the target, retry the
+  acceptance, create A2, or start another worker.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-09-05 — SYN-051 fresh Worker-A A1/A2 runtime validation
 
 The runtime lane is **PASS-A**, but SYN-051 remains **ACTIVE / PARTIAL** until

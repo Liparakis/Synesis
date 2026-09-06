@@ -5456,3 +5456,22 @@ Codex configuration was restored exactly. Evidence:
 
 Exact next action: diagnose the binding-recovery/reconciliation race
 read-only before another acceptance lane.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #29
+
+The run was stopped at the first material runtime failure. Source commit
+`4426b03` preserved active managed bindings across control-checkout advance and
+all focused binding/next-action/wake/lifecycle regressions passed. The rebuilt
+disposable installation passed exact artifact hash verification. A fresh
+target admitted A and B lawfully and one live launcher retained generation-1
+preparation through B START. Thread B was created, then its App Server exited
+before the first turn completed; public Synesis state recorded
+`FAILED/process_exit`, and provider state showed an `inProgress` first turn.
+No A START, capability workflow, wake, mutation, integration, terminalization,
+replacement, A2, Worker-B substitute, or state surgery occurred. Global Codex
+configuration was restored byte-for-byte and no credentials or raw proof were
+read or recorded.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`.
+
+Exact next action: investigate the B App Server process-exit boundary read-only
+before any new acceptance lane.
