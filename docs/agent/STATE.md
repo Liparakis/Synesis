@@ -1,22 +1,20 @@
-## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #54
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #55–#58
 
-Run #54 is **PARTIAL / ACTIVE**. The fresh target passed exact artifact
-provenance, JDK25 process-local compatibility, lawful A/B admission,
-generation-1 same-process managed prepare/START, same-App-Server provider
-thread creation, provider-native B wake, A capability publication, strict
-capability validation, and real claim-aligned A/B work. The final supported
-status was A participant `COMPLETED`, B participant `ACTIVE`, an accepted
-A-to-B review request, and WorkGroup `ACTIVE`. The bounded harness exited on
-`SYN-049 workgroup terminalization timeout`; no B lane finish or WorkGroup
-terminalization was proven.
+Runs #55–#58 are **PARTIAL / ACTIVE**. Run #56 proved the corrected accepted-
+review gate and same-Thread-B post-review continuation, but B still produced
+no publishable downstream snapshot. Fresh runs #57–#58 passed fresh
+generation-1 managed preparation/START but their trusted provider turns
+produced no claimed mutation or capability request; #58 had no run-scoped
+Synesis MCP child. No B wake, downstream completion, review/integration, or
+WorkGroup terminalization is proven.
 
-Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`.
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs55-58.md`.
 
 ## Immediate next action
 
-Diagnose the final B-side review/finish/terminalization projection read-only
-from run #54; do not reuse or repair its target, invoke replacement, create
-A2 or a substitute B, or patch production speculatively.
+Diagnose the run-scoped Codex App-Server-to-Synesis-MCP tool-admission
+boundary read-only; do not bypass MCP, reuse or repair a lane, invoke
+replacement, create A2 or a substitute B, or patch production speculatively.
 
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #44
 

@@ -5602,3 +5602,20 @@ Evidence:
 
 Exact next action: diagnose the final B-side review/finish/terminalization
 projection read-only before any new fresh acceptance fixture.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #55–#58
+
+Runs #55 and #56 preserved the original B provider binding and Thread-B wake;
+#56 also sent the corrected post-review continuation, but B had no publishable
+downstream snapshot. Fresh runs #57 and #58 reached generation-1 same-process
+managed START and trusted provider turn completion but produced no claimed
+mutation or capability request. Run #58 had no run-scoped Synesis MCP child.
+
+Both failed runs were stopped/cleaned up without replacement, A2, substitute B,
+state surgery, credential access, or push. Supported provider uninstall
+succeeded. Source HEAD was restored to `3f91c593a471b4e8e6f574cccf3cea8ab868a54c`
+and remains clean. Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs55-58.md`.
+
+Classification: **PARTIAL / ACTIVE**. Exact next action: diagnose the
+run-scoped Codex App-Server-to-Synesis-MCP tool-admission boundary read-only
+before another fresh target.

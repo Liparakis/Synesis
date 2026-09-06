@@ -1,19 +1,18 @@
 
-## SYN-049 fresh unattended two-worker acceptance — run #54 — 2026-09-06
+## SYN-049 fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
-Run #54 is **PARTIAL / ACTIVE**. A fresh target passed artifact provenance,
-JDK25 process-local compatibility, lawful generation-1 managed prepare/START,
-same-App-Server provider threads, provider-native B wake, A capability
-publication, strict validation, and real claim-aligned A/B work. At the
-bounded stop A was `COMPLETED`, B was `ACTIVE`, the A-to-B review request was
-`ACCEPTED`, and the WorkGroup was `ACTIVE`.
+Runs #55–#58 are **PARTIAL / ACTIVE**. Run #56 proved the corrected
+same-Thread-B post-review continuation, but B had no publishable downstream
+snapshot. Fresh runs #57–#58 reached generation-1 managed START and trusted
+turn completion, but no claimed mutation, capability request, or run-scoped
+Synesis MCP child was observed; B wake and terminalization were not reached.
 
-Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`.
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs55-58.md`.
 
-- Exact next action: diagnose the final B-side review/finish/terminalization
-  projection read-only from run #54. Do not reuse or repair its target,
-  invoke replacement, create A2 or a substitute B, or patch production
-  speculatively.
+- Exact next action: diagnose the run-scoped Codex App-Server-to-Synesis-MCP
+  tool-admission boundary read-only before a new target. Do not bypass MCP,
+  reuse or repair a lane, invoke replacement, create A2 or a substitute B, or
+  patch production speculatively.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 

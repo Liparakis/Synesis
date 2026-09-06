@@ -1,23 +1,22 @@
 # Current Task
 
-## SYN-049 fresh unattended two-worker acceptance — run #54 — 2026-09-06
+## SYN-049 fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
-Status: **PARTIAL / ACTIVE**. Fresh run #54 passed corrected generation-1
-same-process managed startup for A and B, real A capability publication,
-provider-native wake on original Thread B, strict capability validation, real
-dependent B work, and same-thread A/B continuation. It stopped with A
-COMPLETED, B ACTIVE, an accepted A-to-B review request, and the WorkGroup
-ACTIVE. Final B review/finish, lane terminalization, and WorkGroup
-terminalization remain unproven.
+Status: **PARTIAL / ACTIVE**. Run #56 proved the corrected accepted-review
+gate and sent B's post-review continuation on the original Thread B, but B
+still had no publishable downstream snapshot. Fresh runs #57–#58 then showed
+trusted provider turn completion without any claimed mutation or capability
+request; no run-scoped Synesis MCP child appeared in #58. B wake, downstream
+work, review, integration, and WorkGroup terminalization remain unproven.
 
-Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`.
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs55-58.md`.
 
 ## Immediate next action
 
-Diagnose the final B-side review/finish/terminalization projection read-only,
-using run #54's preserved evidence. Do not reuse or repair run #54,
-invoke replacement, create A2 or a substitute B, or patch production again
-before the exact boundary is identified.
+Diagnose the fresh run-scoped Codex App-Server-to-Synesis-MCP tool-admission
+boundary read-only before another target. Do not bypass MCP, copy worktrees,
+reuse or repair a lane, invoke replacement, create A2 or a substitute B, or
+patch production before the exact boundary is identified.
 
 ## Work completed
 

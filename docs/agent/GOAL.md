@@ -1,14 +1,15 @@
-## SYN-049 fresh unattended two-worker acceptance — run #54 — 2026-09-06
+## SYN-049 fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
 Complete one fresh real two-worker acceptance through the supported Synesis
-and managed Codex paths. Run #54 is **PARTIAL**: A published
-`tasktracker.domain.persistence`, B consumed it on the original provider
-thread, and both workers performed real claimed work. The run stopped with A
-`COMPLETED`, B `ACTIVE`, an accepted A-to-B review request, and the WorkGroup
-`ACTIVE`; final B review/finish and terminal WorkGroup state remain unproven.
+and managed Codex paths. Runs #55–#58 remain **PARTIAL**: #56 proved the
+corrected same-Thread-B post-review continuation, but B produced no
+publishable downstream snapshot; #57–#58 reached trusted turn completion
+without claimed mutation or a capability request, and #58 had no run-scoped
+Synesis MCP child. B wake, downstream work, final review/finish, and terminal
+WorkGroup state remain unproven.
 
-- Exact next action: diagnose the final B-side review/finish/terminalization
-  projection read-only from run #54 before any new fresh target.
+- Exact next action: diagnose the run-scoped Codex App-Server-to-Synesis-MCP
+  tool-admission boundary read-only before any new fresh target.
 - Do not reopen SYN-051, reuse historical fixtures, start a replacement, or
   make production changes without a directly reproduced material defect.
 

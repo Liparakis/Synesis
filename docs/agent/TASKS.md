@@ -1,19 +1,19 @@
 ## SYN-049
 
-### Fresh unattended two-worker acceptance — run #54 — 2026-09-06
+### Fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
-**ACTIVE / PARTIAL.** Run #54 passed fresh provenance and host compatibility,
-lawful generation-1 managed startup, provider-native B wake, A publication,
-capability validation, and real claimed A/B work. It stopped with A
-`COMPLETED`, B `ACTIVE`, an accepted A-to-B review request, and WorkGroup
-`ACTIVE`. Final B review/finish and WorkGroup terminalization remain
-unproven.
+**ACTIVE / PARTIAL.** Run #56 proved the corrected accepted-review and
+same-Thread-B post-review continuation, but B had no publishable downstream
+snapshot. Fresh runs #57–#58 completed trusted provider turns without claimed
+mutation or capability request; #58 had no run-scoped Synesis MCP child. B
+wake, downstream work, review, integration, and WorkGroup terminalization
+remain unproven.
 
 - Status: ACTIVE
-- Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run54.md`
-- Exact next action: diagnose the final B-side review/finish/terminalization
-  projection read-only; do not reuse or repair run #54 or patch production
-  speculatively.
+- Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs55-58.md`
+- Exact next action: diagnose the run-scoped Codex App-Server-to-Synesis-MCP
+  tool-admission boundary read-only; do not bypass MCP, reuse or repair a
+  lane, or patch production speculatively.
 - Scope exclusions: no replacement, A2, substitute B, manual `.synesis`
   changes, provider credential access, or push.
 
