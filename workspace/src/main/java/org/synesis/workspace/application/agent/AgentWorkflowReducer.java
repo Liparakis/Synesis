@@ -134,21 +134,11 @@ public final class AgentWorkflowReducer {
         }
         switch (next) {
             case VALIDATE_IMPLEMENTATION -> {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                Object serverItem = result.get("inboxItemId");
-                if (serverItem == null && result.get("capabilityRequestHandle") instanceof String handle) {
-                    serverItem = UUID.nameUUIDFromBytes(("capability:" + handle)
-                                    .getBytes(StandardCharsets.UTF_8))
-                            .toString();
-                }
-                if (serverItem == null) {
-                    return null;
-                }
-                payload.put("inboxItemId", serverItem);
-                payload.put("capabilityRequestHandle", result.get("capabilityRequestHandle"));
-                payload.put("implementationRevision", result.get("revision"));
-                return Map.of("tool", "respond_coordination", "arguments", Map.of(
-                        "kind", "implementation_validation", "payload", payload));
+                // Validation is a provider decision.  Do not manufacture an
+                // accepted response from the available implementation
+                // metadata; the strict MCP boundary requires the provider to
+                // choose accepted or revision_required after inspection.
+                return null;
             }
             case RESPOND_COORDINATION -> {
                 Object kind = result.get("nextProtocolKind");

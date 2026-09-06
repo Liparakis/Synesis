@@ -1868,12 +1868,20 @@ public final class AgentNextActionService {
                             result.put("capabilityRequestHandle",
                                     topReq.handle()
                                             .value());
+                            result.put("inboxItemId", UUID.nameUUIDFromBytes(("capability:"
+                                    + topReq.handle().value()).getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                                    .toString());
                             result.put("capability", topReq.capability());
                             result.put("authorityLineageId",
                                     topReq.authorityLineageId()
                                             .toString());
                             result.put("revision", revision);
                             result.put("pending", reqPending.size());
+                            result.put("reviewDecision", Map.of(
+                                    "required", true,
+                                    "field", "result",
+                                    "allowedResults", List.of("accepted", "revision_required"),
+                                    "revisionReasonRequired", true));
                             return new AgentResponse(AgentStatus.READY,
                                     null,
                                     AgentNextAction.VALIDATE_IMPLEMENTATION,

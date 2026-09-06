@@ -2584,3 +2584,20 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`
   modify `.synesis` state.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## SYN-049 fresh unattended two-worker acceptance — runs #45–#48 — 2026-09-06
+
+The fresh run series remains **PARTIAL / ACTIVE**. Run #48 passed corrected
+generation-1 same-process startup, exact A publication, original Thread B
+provider-native wake, strict capability validation, and real B dependent
+implementation/completion. It stopped because A's ordinary same-thread
+post-dependency continuation did not return in the bounded window. Final
+review/integration and WorkGroup terminalization remain unproven.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48.md`.
+
+- Exact next action: diagnose the A post-dependency provider continuation
+  stall read-only from run #48 lifecycle/provider evidence; do not reuse or
+  repair runs #45–#48, invoke replacement, start A2 or a substitute B, or
+  patch production before the exact boundary is understood.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

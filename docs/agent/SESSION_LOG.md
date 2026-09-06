@@ -5539,3 +5539,24 @@ Evidence:
 
 Exact next action: diagnose the B `workspace_stale -> workspace_not_ready`
 recovery boundary read-only before any new acceptance lane.
+# 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #45–#48
+
+Run #45 exposed a real projection/schema mismatch: the owner-side
+implementation-validation recommendation omitted required `result`, and the
+strict MCP boundary rejected it. The source correction now exposes the
+provider decision contract and exact validation metadata without auto-
+accepting an implementation. The focused reducer regression passed; the
+broader focused MCP/next-action invocation stalled and remains incomplete.
+
+Fresh run #48 passed exact generation-1 same-process A/B startup, A's real
+capability publication, SYN-040 original-Thread-B wake, strict validation,
+and B's real dependent implementation/completion on original Thread B. The
+ordinary A post-dependency continuation did not return before the bounded
+stop. Final review/integration, lane terminalization, and WorkGroup
+terminalization remain unproven. Provider uninstall succeeded; no
+replacement, A2, substitute B, state surgery, credentials, or push occurred.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48.md`.
+
+Exact next action: diagnose the A post-dependency managed continuation stall
+read-only before any new fresh acceptance fixture.

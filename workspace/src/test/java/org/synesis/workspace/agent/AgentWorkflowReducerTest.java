@@ -135,6 +135,32 @@ final class AgentWorkflowReducerTest {
     }
 
     /**
+     * Implementation validation exposes the provider decision without
+     * projecting a response that omits the required result field.
+     */
+    @Test
+    void implementationValidationExposesDecisionWithoutGuessingResult() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+                Path.of("."), "codex", "connection-1");
+        Map<String, Object> decision = Map.of("required", true, "field", "result",
+                "allowedResults", java.util.List.of("accepted", "revision_required"),
+                "revisionReasonRequired", true);
+        AgentResponse validation = reducer.decorate(request,
+                new AgentResponse(AgentStatus.READY, null, AgentNextAction.VALIDATE_IMPLEMENTATION,
+                        Map.of("capabilityRequestHandle", "req_123456789012", "revision", 1,
+                                "reviewDecision", decision)));
+
+        Map<?, ?> result = (Map<?, ?>) validation.result();
+        Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
+        assertEquals("PUBLISH", workflow.get("type"));
+        assertEquals(decision, workflow.get("decision"));
+        assertFalse(workflow.containsKey("recommendedTool"));
+        assertFalse(workflow.containsKey("arguments"));
+        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
+    }
+
+    /**
      * A missing capability exposes the contract fields without inventing an
      * executable request whose payload is incomplete.
      */
