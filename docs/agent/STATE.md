@@ -1,3 +1,21 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #70–#74
+
+Runs #70 and #71 reached the generation-1 managed/capability/wake/terminal
+endpoint, but their independent integrated compiles failed on A-produced Java
+contract shapes. Run #72 and #73 exposed disposable runner continuation gates.
+Run #74 used the corrected runner and stopped at the first material runtime
+failure: A generation-1 AppServer state `FAILED`, revision 8,
+`terminalDiagnostic=process_exit` during the real owner turn. No replacement,
+A2, state repair, or production patch occurred.
+
+Classification: **PARTIAL / ACTIVE**. Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs70-74.md`.
+
+## Immediate next action
+
+Investigate run-#74 AppServer `process_exit` evidence read-only before another
+fresh target. Do not patch production speculatively or claim full SYN-049.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #55–#58
 
 Runs #55–#58 are **PARTIAL / ACTIVE**. Run #56 proved the corrected accepted-

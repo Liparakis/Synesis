@@ -5602,6 +5602,19 @@ Evidence:
 
 Exact next action: diagnose the final B-side review/finish/terminalization
 projection read-only before any new fresh acceptance fixture.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #70–#74
+
+Fresh runs #70–#71 reached generation-1 managed A/B terminalization and
+provider-native same-thread wake, but integrated compilation failed on
+agent-produced contract shapes. Runs #72–#73 exposed disposable runner gates.
+Run #74 used the corrected runner and stopped on A generation-1 AppServer
+`process_exit` during the real owner turn. Supported provider uninstall
+succeeded for all completed targets. No production source changed, no state was
+repaired, and no replacement/A2 or push occurred.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs70-74.md`.
+Next: investigate the #74 process-exit evidence read-only.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #55–#58
 
 Runs #55 and #56 preserved the original B provider binding and Thread-B wake;

@@ -1,5 +1,24 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — runs #70–#74 — 2026-09-06
+
+Status: **PARTIAL / ACTIVE**. Fresh runs #70 and #71 reached WorkGroup
+`COMPLETED` with generation-1 managed A/B startup, capability publication and
+validation, same-thread B wake, real claim-scoped coding, and both terminal
+participants. Their independent integrated compiles failed on A-produced Java
+contract shapes. Run #72 and #73 exposed disposable-runner continuation gates;
+run #74 used those fixes but stopped on A generation-1 AppServer
+`terminalDiagnostic=process_exit` during the real owner turn. Full acceptance
+is therefore unproven.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs70-74.md`.
+
+## Immediate next action
+
+Investigate run-#74 AppServer `process_exit` evidence read-only. Do not patch
+production, reuse a target, repair `.synesis`, copy snapshots/worktrees,
+invoke replacement/A2, or claim SYN-049 completion.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #68–#69 — 2026-09-06
 
 Status: **PARTIAL / ACTIVE**. Fresh runs #68 and #69 passed generation-1

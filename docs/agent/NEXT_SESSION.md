@@ -1,4 +1,20 @@
 
+
+## SYN-049 fresh unattended two-worker acceptance — runs #70–#74 — 2026-09-06
+
+Status: **PARTIAL / ACTIVE**. Runs #70–#71 proved the generation-1 managed
+capability/wake/terminal lifecycle but failed independent integrated compilation
+on A-produced contract shapes. Runs #72–#73 exposed disposable runner gates.
+Run #74 stopped on A generation-1 AppServer `process_exit` during the owner
+turn. See `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs70-74.md`.
+
+Exact next action: investigate the run-#74 AppServer `process_exit` evidence
+read-only before another fresh target. Do not patch production, reuse/repair a
+target, edit `.synesis`, invoke replacement/A2, or claim completion.
+
+Exact continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
 Runs #55–#58 are **PARTIAL / ACTIVE**. Run #56 proved the corrected

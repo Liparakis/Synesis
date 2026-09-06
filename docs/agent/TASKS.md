@@ -1,5 +1,18 @@
 ## SYN-049
 
+### Fresh unattended two-worker acceptance — runs #70–#74 — 2026-09-06
+
+**ACTIVE / PARTIAL.** Runs #70–#71 reached the generation-1 managed
+capability/wake/terminal endpoint but failed integrated compilation on
+agent-produced Java contract shapes. Runs #72–#73 exposed disposable runner
+continuation gates. Run #74 stopped on A generation-1 AppServer
+`terminalDiagnostic=process_exit` during the real owner turn.
+
+- Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs70-74.md`
+- Exact next action: investigate #74 AppServer process-exit evidence read-only.
+- Scope: no production patch, `.synesis` surgery, snapshot copying,
+  replacement/A2, substitute B, credential access, or push.
+
 ### Fresh unattended two-worker acceptance — runs #68–#69 — 2026-09-06
 
 **ACTIVE / PARTIAL.** Fresh runs #68–#69 proved generation-1 managed
