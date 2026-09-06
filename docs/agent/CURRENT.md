@@ -1,38 +1,37 @@
 # Current Task
 
-## SYN-049 fresh unattended two-worker acceptance — runs #45–#48 — 2026-09-06
+## SYN-049 fresh unattended two-worker acceptance — runs #45–#50 — 2026-09-06
 
-Status: **PARTIAL / ACTIVE**. Fresh run #48 passed the corrected generation-1
+Status: **PARTIAL / ACTIVE**. Fresh run #50 passed corrected generation-1
 same-process managed startup for A and B, real A capability publication,
-provider-native wake on the original Thread B, strict capability validation,
-and real dependent B implementation/completion on the original Thread B.
-It stopped when the ordinary same-thread post-dependency continuation for A
-did not return within the bounded window. Final review, integration, lane
+provider-native wake on original Thread B, strict capability validation, real
+dependent B work, and same-thread A/B continuation. It stopped with B still
+ACTIVE and the WorkGroup still ACTIVE. Final B review/finish, lane
 terminalization, and WorkGroup terminalization remain unproven.
 
 Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48.md`.
 
 ## Immediate next action
 
-Diagnose the A post-dependency managed continuation stall read-only, using
-run #48's preserved lifecycle/provider evidence. Do not reuse runs #45–#48,
-repair their state, invoke replacement, create A2 or a substitute B, or
-patch production again before the exact stall boundary is identified.
+Diagnose the final B-side review/finish/terminalization projection read-only,
+using run #50's preserved evidence. Do not reuse or repair runs #45–#50,
+invoke replacement, create A2 or a substitute B, or patch production again
+before the exact boundary is identified.
 
 ## Work completed
 
 Corrected the invalid owner-side implementation-validation projection so it
 exposes the provider's required decision instead of manufacturing an
 incomplete response. Added a focused regression, rebuilt and hash-verified
-the distribution, and ran fresh #47/#48 fixtures. The run-48 provider was
+the distribution, and ran fresh #47–#50 fixtures. The run-50 provider was
 uninstalled through the supported flow.
 
 ## Current failures
 
 Run #45 exposed and fixed a production projection/schema mismatch. Run #47
-exposed a harness-only continuation-grant gate. Run #48 removed that gate but
-the A post-dependency provider continuation did not return before bounded
-stop. No final integration or WorkGroup terminalization is proven.
+exposed a harness-only continuation-grant gate. Run #50 reached real A/B
+continuations but stopped with B ACTIVE and the WorkGroup ACTIVE. No final B
+review/finish or WorkGroup terminalization is proven.
 
 ## SYN-049 fresh unattended two-worker acceptance — run #44 — 2026-09-06
 

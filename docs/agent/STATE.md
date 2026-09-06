@@ -3564,27 +3564,28 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`
 Perform a bounded read-only diagnosis of why the exact active A lane does not
 consume the projected completion/finish action after the validated dependency;
 do not reuse the run, invoke A2/B replacement, or edit `.synesis` state.
-## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #45–#48
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #45–#50
 
-Runs #45–#48 remain **PARTIAL / ACTIVE**. Run #45 reached the first material
+Runs #45–#50 remain **PARTIAL / ACTIVE**. Run #45 reached the first material
 production projection failure: the owner-side implementation-validation
 recommendation omitted strict field `result`, and MCP correctly rejected it.
 The narrow correction now exposes the accepted/revision-required decision and
 the exact handle/revision metadata without guessing acceptance. The focused
 reducer regression passed and the clean JDK25 distribution rebuild passed.
 
-Fresh run #48 then reached generation-1 same-process A/B startup, A's real
+Fresh run #50 then reached generation-1 same-process A/B startup, A's real
 capability publication, original Thread B provider-native wake, strict
-validation to `VALIDATED`, and real B dependent implementation/completion on
-the original Thread B. The ordinary A post-dependency same-thread
-continuation did not return before the bounded stop. Final review,
-integration, lane terminalization, and WorkGroup terminalization were not
-proven. Supported provider uninstall succeeded; no replacement, A2, Worker B
-substitute, state surgery, credentials, or push occurred.
+validation to `VALIDATED`, real B dependent work, and same-thread A/B
+continuations. It stopped with B `ACTIVE`, B intent `ANNOUNCED`, and the
+WorkGroup `ACTIVE`; final B review/finish, lane terminalization, and WorkGroup
+terminalization were not proven. Supported provider uninstall succeeded; no
+replacement, A2, Worker B substitute, state surgery, credentials, or push
+occurred.
 
 Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48.md`.
 
 ## Immediate next action
 
-Diagnose the A post-dependency managed continuation stall read-only before a
-new fresh acceptance fixture; do not reuse or repair any run #45–#48 state.
+Diagnose the final B-side review/finish/terminalization boundary read-only
+before a new fresh acceptance fixture; do not reuse or repair any run #45–#50
+state.

@@ -5560,3 +5560,22 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48
 
 Exact next action: diagnose the A post-dependency managed continuation stall
 read-only before any new fresh acceptance fixture.
+
+# 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #49–#50
+
+Run #49 reached A's exact finish projection and a server-issued single-use
+review grant, but the harness had no lawful completed-but-live A continuation
+branch. Run #50 corrected that harness boundary and reached fresh
+generation-1 same-process A/B startup, original-Thread-B provider-native
+wake, strict capability validation, real dependent B work, and same-thread A/B
+continuations. The bounded run stopped with B ACTIVE, B intent ANNOUNCED, and
+the WorkGroup ACTIVE. Final B review/finish, lane terminalization, and
+WorkGroup terminalization remain unproven. Supported provider uninstall
+succeeded; no replacement, A2, substitute B, state surgery, credentials, or
+push occurred.
+
+Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48.md`.
+
+Exact next action: diagnose the final B-side review/finish/terminalization
+projection read-only before any new fresh acceptance fixture.

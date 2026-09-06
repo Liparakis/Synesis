@@ -1,8 +1,8 @@
-# SYN-049 fresh unattended two-worker acceptance — runs #45–#48
+# SYN-049 fresh unattended two-worker acceptance — runs #45–#50
 
 Date: 2026-09-06  
 Classification: **PARTIAL**  
-Repository source checkout: `bf4b69aad8203083e0940c0de6dbef3e79b9fed5` at the start of the slice  
+Repository source checkout: `0901417067ca11f9a8c2f5b922bca6ba16051031` before the final evidence checkpoint
 Runtime source provenance: `a7697bbb5de83ced8b61b275056f9204e4467fbc`
 
 ## Scope and boundaries
@@ -86,6 +86,40 @@ integration, completion request, lane finish, or WorkGroup terminalization was
 claimed. The provider was uninstalled successfully afterward, with unrelated
 configuration preserved.
 
+## Runs #49–#50 — completion-boundary diagnosis
+
+Run #49 was a fresh target and reached the exact A finish projection. A
+published and integrated immutable snapshot `snap_df1ca7adead8f5e1ff8ad7585acd2aca`
+and received a server-issued single-use review grant. The harness had no
+lawful branch for a completed-but-live A to consume that grant, so the run
+stopped with A `COMPLETED`, B `ACTIVE`, B intent `ANNOUNCED`, and the WorkGroup
+`ACTIVE`. No state was repaired and no replacement was invoked.
+
+Run #50 was a fresh target with the corrected harness and post-fix installed
+distribution. It proved, in one live JVM, both generation-1 `prepareFirst →
+START` paths, exact original provider threads, original-Thread-B
+provider-native wake, capability admission through `VALIDATED`, real A and B
+claimed work, and same-thread A/B continuations. Its final bounded state was
+B participant `ACTIVE`, B intent `ANNOUNCED`, and WorkGroup `ACTIVE`; final B
+review/finish, lane terminalization, and WorkGroup terminalization remain
+unproven. Run #50 was stopped normally and provider installation was removed
+through the supported flow. No A2, replacement, substitute B, manual
+state/worktree copy, cherry-pick, credential access, or push occurred.
+
+Exact run #50 identities: project
+`9a5b3f1b-2b9f-4914-9179-3caa4d256196`, WorkGroup
+`ec9e5b6b-3cc9-3d2c-b23f-a61050c807de`, A binding
+`session-e6053b3d-5cb8-4218-9620-7cdc382ae1f2`, A participant
+`agt_b3e3a515-bda6-35af-9ec1-4c3817e42650`, A intent
+`74c0e2d7-60dc-3fa8-8011-b61c19c3195e`, Thread A
+`01a07559-e432-7fe0-95c6-4c89949c43b2`, B binding
+`session-7d65c4ea-cca8-4269-8139-c8db1849ec46`, B participant
+`agt_f313c651-c532-3ef3-91cc-789a8bd0fddd`, B intent
+`2d5583df-6e2d-331e-919f-2e0acad5767b`, and Thread B
+`01a07558-e9b8-7691-b8e4-2a39ca3c32ed`. The dependency was
+`tasktracker.domain.persistence`; A owned domain/persistence source and test
+subtrees, and B owned application/API source and test subtrees.
+
 ## Source change and verification
 
 The narrow production correction is in
@@ -108,8 +142,8 @@ MCP was used by hash, not by the raw build-output path.
 
 ## Result
 
-The corrected capability-validation projection and provider-native wake path
-are proven in fresh real runs. SYN-049 remains **ACTIVE / PARTIAL** because
-the exact A post-dependency continuation did not return, so final review,
-integration, lane terminalization, and WorkGroup terminalization remain
-unproven. SYN-051 remains **COMPLETE / PASS-A**. No push was performed.
+The corrected capability-validation projection, provider-native wake path, and
+same-thread dependent work are proven in fresh real runs. SYN-049 remains
+**ACTIVE / PARTIAL** because the final B-side review/finish/terminalization
+boundary was not reached in run #50. SYN-051 remains **COMPLETE / PASS-A**.
+No push was performed.
