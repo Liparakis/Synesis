@@ -1,5 +1,25 @@
 # Current Task
 
+## SYN-049 fresh unattended two-worker acceptance — run #59 — 2026-09-06
+
+Status: **PARTIAL / ACTIVE**. Fresh run #59 used a one-host, one-launcher
+generation-1 A/B runtime with the hash-identical installed MCP copy. Both
+managed App Servers started, real Synesis MCP tools were available, A reached
+`NEEDS_CAPABILITY`, the exact capability advanced through publication and
+validation, and original B woke with `sameThread=true`. The first unresolved
+boundary was after B consumed the exact review grant: Synesis remained
+`SNAPSHOT_PENDING` and B reported `workspace_mismatch` because the published A
+dependency existed only in the control checkout, not B's authorized worktree.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`.
+
+## Immediate next action
+
+Diagnose snapshot materialization and review-workspace routing read-only before
+another target. Do not bypass the review grant, copy files/worktrees, repair
+durable state, invoke replacement, create A2 or a substitute B, or patch
+production before the exact boundary is identified.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
 Status: **PARTIAL / ACTIVE**. Run #56 proved the corrected accepted-review

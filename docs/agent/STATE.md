@@ -3607,3 +3607,20 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48
 Diagnose the final B-side review/finish/terminalization boundary read-only
 before a new fresh acceptance fixture; do not reuse or repair any run #45–#50
 state.
+## 2026-09-06 — SYN-049 run #59
+
+Run #59 passed fresh provenance, JDK25 process-local compatibility, lawful A/B
+setup, same-process generation-1 managed prepare/START, same-AppServer thread
+creation, real MCP admission, capability publication/validation, and original
+B provider-native wake with `sameThread=true`. It stopped at the first material
+collaboration boundary: after B consumed the exact review grant, the state was
+`SNAPSHOT_PENDING` and B's authorized worktree could not expose the published A
+dependency (`workspace_mismatch`; source existed only in the control checkout).
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`.
+
+## Exact next action
+
+Read-only diagnosis of snapshot materialization and review-workspace routing;
+do not bypass grants, copy worktrees, repair state, invoke replacement, create
+A2, or start a substitute B.

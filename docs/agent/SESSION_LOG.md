@@ -5619,3 +5619,16 @@ and remains clean. Evidence:
 Classification: **PARTIAL / ACTIVE**. Exact next action: diagnose the
 run-scoped Codex App-Server-to-Synesis-MCP tool-admission boundary read-only
 before another fresh target.
+## 2026-09-06 — SYN-049 run #59
+
+- Verified locked artifacts and JDK25 process-local AF_UNIX preflight.
+- Created fresh target #59 and ran one live managed host with exact A/B
+  bindings and generation-1 same-process preparation/START.
+- Confirmed real Synesis MCP admission, A capability publication/validation,
+  and provider-native wake of original B with `sameThread=true`.
+- Stopped at the first material boundary after exact review-grant consumption:
+  `SNAPSHOT_PENDING` plus B `workspace_mismatch` because the published A
+  dependency was not exposed in B's authorized worktree.
+- Normal cleanup completed; no replacement, A2, substitute B, manual copy,
+  credential access, production source change, or push.
+- Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`.

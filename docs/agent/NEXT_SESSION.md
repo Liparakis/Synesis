@@ -2619,3 +2619,18 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48
   production before the exact boundary is understood.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-09-06 — exact continuation after SYN-049 run #59
+
+Run #59 reached real managed A/B MCP operation. A published and validated
+`tasktracker.domain.persistence`; original B woke on the same provider thread
+and consumed the exact review grant. The run stopped because accepted review
+remained `SNAPSHOT_PENDING` and B received
+`workspace_mismatch: the files exist only in the control checkout` while using
+its authorized worktree. No replacement, A2, substitute B, manual copy, or
+production source change occurred.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`.
+
+Immediate next action: diagnose the production snapshot materialization/review
+workspace route read-only before another fresh target. Preserve fail-closed
+behavior and do not bypass the review grant or copy files between worktrees.
