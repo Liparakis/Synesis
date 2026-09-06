@@ -5475,3 +5475,26 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`
 
 Exact next action: investigate the B App Server process-exit boundary read-only
 before any new acceptance lane.
+# 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #31
+
+Fresh run #31 passed exact artifact provenance, JDK25 process-local
+Selector/HttpServer compatibility, lawful A/B setup, generation-1
+same-process managed preparation/START, A's real claimed implementation and
+capability publication, and the original B provider-native wake on the same
+Thread B. The run stopped at the first material collaboration failure: B's
+server-projected recovery repeatedly returned
+`workspace_stale -> ensure_session({}) -> workspace_not_ready`.
+
+A's immutable snapshot was published and A entered review-only
+`SNAPSHOT_PENDING`; B remained active with its exact claims and never reached a
+lawful completion request. The WorkGroup remained active. No replacement, A2,
+Worker B substitute, state surgery, copied worktree, credential access, or
+push occurred. Managed processes were stopped through normal cleanup; no
+intentional trusted-death evidence was produced. The run-specific global
+Synesis registration/trust entry was reverted after supported provider setup.
+
+Evidence:
+`docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run31.md`.
+
+Exact next action: diagnose the B `workspace_stale -> workspace_not_ready`
+recovery boundary read-only before any new acceptance lane.

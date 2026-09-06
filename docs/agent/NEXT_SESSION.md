@@ -82,6 +82,23 @@ SYN-051 runtime are evidence only.
 
 # Next Session
 
+# SYN-049 fresh unattended two-worker acceptance — run #31 — 2026-09-06
+
+Run #31 is **FAIL / ACTIVE / PARTIAL**. It passed fresh provenance and host
+compatibility, lawful A/B generation-1 managed startup, A's real claimed
+implementation/publication, and the original B provider-native same-thread
+wake. B then repeatedly received `workspace_stale -> ensure_session({}) ->
+workspace_not_ready`; it never lawfully requested completion. A is
+`SNAPSHOT_PENDING` review-only, B is active, and the WorkGroup is active.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run31.md`.
+
+- Exact next action: perform a bounded read-only diagnosis of the B recovery
+  boundary before any new acceptance lane; do not reuse run #31, repair its
+  state, invoke replacement, start a Worker B substitute, or patch production.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — run #29 — 2026-09-06
 
 Run #29 is **FAIL / ACTIVE / PARTIAL**. The exact B generation-1 START created

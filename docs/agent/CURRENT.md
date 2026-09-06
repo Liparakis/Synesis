@@ -1,24 +1,23 @@
 # Current Task
 
-## SYN-049 fresh unattended two-worker acceptance — run #29 — 2026-09-06
+## SYN-049 fresh unattended two-worker acceptance — run #31 — 2026-09-06
 
-Status: **FAIL at B App Server process exit / ACTIVE / PARTIAL**. The fresh
-target passed the source-correction regressions, rebuilt artifact provenance,
-JDK25 process-local preflight, lawful A/B admission, generation-1
-same-process preparation, and B START. B's exact provider Thread B was
-created and its provider row/rollout exists, but the App Server exited before
-the first turn completed. Synesis recorded `FAILED/process_exit`; no trusted
-completion, capability wake, A START, mutation, integration, or terminalization
-was reached.
+Status: **FAIL at original B workspace recovery / ACTIVE / PARTIAL**. Fresh
+run #31 passed provenance, JDK25 process-local compatibility, lawful A/B
+admission, generation-1 same-process preparation/START, A implementation and
+publication, and same-thread provider-native B wake. B then repeatedly hit the
+server-projected `workspace_stale -> ensure_session({}) ->
+workspace_not_ready` recovery sequence. A is review-only
+`SNAPSHOT_PENDING`; B and the WorkGroup remain active.
 
-Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`.
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run31.md`.
 
 ## Immediate next action
 
-Investigate the new B App Server `process_exit` read-only using run #29's
-public checkpoint and provider evidence; do not reuse or retry run #29, start
-another worker, invoke replacement, or perform state surgery before the launch
-boundary is isolated.
+Diagnose the original B `workspace_stale -> workspace_not_ready` recovery
+boundary read-only before any new acceptance lane; do not reuse run #31,
+repair its state, invoke replacement, start a Worker B substitute, or patch
+production in this slice.
 
 ## SYN-049 fresh unattended two-worker acceptance — run #28 — 2026-09-06
 
