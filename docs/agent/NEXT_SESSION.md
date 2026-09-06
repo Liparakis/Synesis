@@ -1,3 +1,25 @@
+## SYN-049 fresh unattended two-worker acceptance — runs #40–#42 — 2026-09-06
+
+Runs #40–#42 are **PARTIAL / ACTIVE**. Run #42 passed exact provenance,
+JDK25 process-local compatibility, lawful A/B generation-1 managed startup,
+same-AppServer provider-thread creation, provider-native B wake, A's real
+claimed implementation/publication, capability validation, and provider
+DB/history/rollout durability for both exact generation-1 threads. The first
+unresolved boundary was B's managed worktree: after A's immutable snapshot,
+B still had only its skeleton and `.keep` files. The supported refresh path
+returned `overlapping_claim` / self-overlap, so B never lawfully completed
+downstream work. No final review/integration or WorkGroup terminalization was
+reached.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs40-42.md`.
+
+- Exact next action: diagnose managed dependent-worktree snapshot consumption
+  and the self-overlap recovery boundary read-only before another fresh lane;
+  do not reuse run #42, repair its state, start a substitute worker, invoke
+  replacement, or patch production speculatively.
+- Exact continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — run #28 — 2026-09-06
 
 The fresh skeleton-based run is **FAIL / ACTIVE / PARTIAL**. It passed exact

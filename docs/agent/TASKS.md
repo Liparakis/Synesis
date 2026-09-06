@@ -1,20 +1,22 @@
 ## SYN-049
 
-### Fresh unattended two-worker acceptance — 2026-09-05
+### Fresh unattended two-worker acceptance — runs #40–#42 — 2026-09-06
 
 **ACTIVE / PARTIAL.** The sole active task is the bounded real Worker A/B
-acceptance. Fresh run #08 admitted two lawful participants, completed managed
-generation-1 startup, let B reach the structured capability wait, and let A
-publish and integrate its exact implementation. The run then stopped on the
-first material failure: A status returned `lifecycle_binding_stale` after its
-asynchronous turn, so A was interrupted during normal cleanup and B never
-consumed the capability. The completed SYN-051 runtime is evidence only.
+acceptance. Run #42 passed fresh provenance and host compatibility, lawful
+generation-1 managed startup, same-AppServer thread creation, provider-native
+B wake, A's real implementation/publication, capability validation, and
+provider durability for both exact provider threads. It stopped before B's
+lawful downstream completion because B's managed worktree did not expose the
+integrated producer types; supported refresh correctly returned
+`overlapping_claim` / self-overlap. Final review/integration and WorkGroup
+terminalization remain unproven.
 
 - Status: ACTIVE
 
-- Exact next action: preserve run #08 evidence and inspect the reproduced
-  `lifecycle_binding_stale` boundary before any new fresh target; do not reuse
-  or repair run #08.
+- Exact next action: diagnose managed dependent-worktree snapshot consumption
+  and the self-overlap recovery boundary read-only before another fresh target;
+  do not reuse or repair run #42.
 - Scope exclusions: no historical fixture reuse, no third worker or replacement
   lane in this run, no provider credential access, no manual `.synesis` changes,
   no source changes unless a material production defect is directly reproduced.

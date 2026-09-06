@@ -1110,6 +1110,29 @@ public final class ProviderSessionBindingService {
     }
 
     /**
+     * Verifies a live managed continuation without requiring the control
+     * checkout to remain at the binding's admission base.
+     *
+     * <p>A sibling lane may publish and integrate an immutable snapshot while
+     * this managed provider remains attached to its own clean isolated
+     * worktree. The exact active attachment is the additional fence that
+     * permits that provider to continue; an ordinary or inactive binding must
+     * continue to use the strict current-control-base check.</p>
+     *
+     * @param location project location
+     * @param binding  exact provider binding
+     * @param cwd      provider event working directory
+     * @return workspace verification result
+     */
+    public synchronized WorkspaceCheck verifyManagedContinuationWorkspace(
+            ProjectApplicationService.ProjectLocation location, Binding binding, Path cwd) {
+        if (!hasActiveManagedAttachment(location, binding)) {
+            return new WorkspaceCheck(false, "MANAGED_ATTACHMENT_NOT_ACTIVE");
+        }
+        return verifyWorkspace(location, binding, cwd, false, false);
+    }
+
+    /**
      * Verifies a clean producer lane whose HEAD is a committed descendant of
      * its admission base without authorizing ordinary workspace mutation.
      *

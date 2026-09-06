@@ -130,6 +130,17 @@ public final class WorkspaceReadinessService {
                             : allowControlBaseAdvance
                             ? bindingService.verifyNoChangeWorkspace(location, binding, worktree)
                             : bindingService.verifyWorkspace(location, binding, worktree);
+            if (!workspaceCheck.verified() && "CONTROL_BASE_ADVANCED".equals(workspaceCheck.code())) {
+                // A live managed provider owns an exact isolated worktree and
+                // may continue after a sibling integrates its snapshot into
+                // the control checkout. Keep ordinary mutation lanes strict;
+                // the managed attachment is the additional continuation fence.
+                ProviderSessionBindingService.WorkspaceCheck managedContinuation =
+                        bindingService.verifyManagedContinuationWorkspace(location, binding, worktree);
+                if (managedContinuation.verified()) {
+                    workspaceCheck = managedContinuation;
+                }
+            }
             if (!workspaceCheck.verified()) {
                 return unavailable(AgentReason.WORKSPACE_STALE, workspaceCheck.code());
             }

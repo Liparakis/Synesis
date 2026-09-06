@@ -5475,6 +5475,30 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`
 
 Exact next action: investigate the B App Server process-exit boundary read-only
 before any new acceptance lane.
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #40–#42
+
+Runs #40–#42 were fresh bounded SYN-049 acceptance attempts after the
+managed-continuation readiness correction. Run #42 passed exact artifact and
+JDK25 process-local compatibility, lawful A/B generation-1 managed startup,
+same-AppServer provider-thread creation, provider-native B wake, real A
+implementation/publication, capability validation, and provider
+DB/history/rollout durability for both exact generation-1 threads. Both
+lifecycle checkpoints ended `COMPLETED` and both ownership records ended
+`persistenceReady=true`.
+
+The run stopped at the first unresolved collaboration boundary: B's managed
+worktree still contained only the fresh skeleton and `.keep` files after A's
+immutable snapshot. B's supported refresh attempt returned
+`overlapping_claim` / self-overlap, so it did not bypass authority or claim
+state. No B downstream completion, final review/integration, or WorkGroup
+terminalization was proven. No A2, replacement, state surgery, credential
+access, manual merge, or push occurred. Classification: **PARTIAL**.
+
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs40-42.md`.
+
+Exact next action: diagnose managed dependent-worktree snapshot consumption
+and the self-overlap recovery boundary read-only before another fresh lane.
+
 # 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #31
 
 Fresh run #31 passed exact artifact provenance, JDK25 process-local

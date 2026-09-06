@@ -1,23 +1,43 @@
 # Current Task
 
-## SYN-049 fresh unattended two-worker acceptance — run #31 — 2026-09-06
+## SYN-049 fresh unattended two-worker acceptance — runs #40–#42 — 2026-09-06
 
-Status: **FAIL at original B workspace recovery / ACTIVE / PARTIAL**. Fresh
-run #31 passed provenance, JDK25 process-local compatibility, lawful A/B
-admission, generation-1 same-process preparation/START, A implementation and
-publication, and same-thread provider-native B wake. B then repeatedly hit the
-server-projected `workspace_stale -> ensure_session({}) ->
-workspace_not_ready` recovery sequence. A is review-only
-`SNAPSHOT_PENDING`; B and the WorkGroup remain active.
+Status: **PARTIAL / ACTIVE**. Fresh runs passed provenance and host
+compatibility, lawful A/B admission, generation-1 same-process managed
+preparation/START, same-AppServer provider-thread creation, ACTIVE promotion,
+provider-native B wake, A's real claimed implementation/publication, and
+capability validation. Run #42 confirmed durable provider state for both
+exact generation-1 threads. It stopped before lawful B downstream
+implementation/completion, final review/integration, and WorkGroup
+terminalization because the integrated producer types were not visible in
+B's managed worktree; B's supported refresh correctly returned
+`overlapping_claim` / self-overlap.
 
-Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run31.md`.
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs40-42.md`.
+
+- Task ID: SYN-049
 
 ## Immediate next action
 
-Diagnose the original B `workspace_stale -> workspace_not_ready` recovery
-boundary read-only before any new acceptance lane; do not reuse run #31,
-repair its state, invoke replacement, start a Worker B substitute, or patch
-production in this slice.
+Perform a separate read-only diagnosis of managed dependent-worktree snapshot
+consumption and the self-overlap recovery boundary before another fresh
+acceptance lane. Do not reuse run #42, repair its state, start a substitute
+worker, invoke replacement, or patch production speculatively.
+
+## Work completed
+
+Recorded runs #40–#42, verified the run-42 durable projection and exact
+provider continuity records, verified the supported provider cleanup result,
+and reran the three focused regressions for the narrow managed-continuation
+correction. No production source change was made during the runtime attempt.
+
+## Current failures
+
+SYN-049 remains incomplete at lawful dependent-worker snapshot consumption:
+B's managed worktree contains only its skeleton after A publication, and
+re-announcing B's existing claim is correctly rejected as self-overlap. The
+target control checkout is clean; no B completion, final integration, or
+WorkGroup terminalization was proven.
 
 ## SYN-049 fresh unattended two-worker acceptance — run #28 — 2026-09-06
 

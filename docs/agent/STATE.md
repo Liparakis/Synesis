@@ -1,3 +1,27 @@
+## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #40–#42
+
+Runs #40–#42 are **PARTIAL / ACTIVE**. Fresh run #42 passed artifact and
+JDK25 process-local compatibility, lawful A/B setup, generation-1
+same-process managed preparation/START, same-AppServer thread creation,
+ownership/ACTIVE promotion, provider-native B wake, A's real implementation
+and capability publication, capability validation, and read-only provider
+durability for exact Thread A and Thread B. Both lifecycle checkpoints ended
+generation 1 `COMPLETED` and both provider ownership records ended
+`persistenceReady=true`.
+
+The first unresolved collaboration boundary was B's managed worktree after
+A's immutable snapshot: B still saw only its skeleton and `.keep` files. Its
+supported refresh attempt returned `overlapping_claim` / self-overlap, so no
+state or claim bypass was attempted. B did not lawfully complete downstream
+work; final review/integration and WorkGroup terminalization were not reached.
+Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs40-42.md`.
+
+## Immediate next action
+
+Diagnose managed dependent-worktree snapshot consumption and the self-overlap
+recovery boundary read-only before another fresh acceptance lane; do not reuse
+run #42 or patch production speculatively.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #28
 
 Run #28 is **FAIL / ACTIVE / PARTIAL**. Provenance and JDK25 process-local

@@ -19,9 +19,13 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.doctor.DoctorService;
@@ -336,6 +340,32 @@ final class McpSyn039NoChangeCompletionTest {
         assertTrue(store.collaborationProjection()
                 .noChangeCompletions()
                 .isEmpty());
+    }
+
+    @Test
+    void activeManagedContinuationSurvivesSiblingControlAdvance(@TempDir Path temp) throws Exception {
+        Fixture fixture = prepare(temp, "syn051-managed-control-advance");
+        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService()
+                .find(fixture.location(), "codex", fixture.connection())
+                .orElseThrow();
+        ManagedAttachmentService.storeFor(fixture.location(), binding.sessionId()).write(
+                new ManagedAttachmentRecord(1, fixture.location().projectId().toString(), "codex",
+                        ProviderContinuityMode.MANAGED_CONTINUITY, binding.sessionId(), "thread-managed", 1,
+                        "a".repeat(64), "normal-provider-home", ManagedAttachmentRecord.Status.ACTIVE, 1,
+                        System.currentTimeMillis()));
+
+        Files.writeString(fixture.project.resolve("control-advance.txt"), "integrated elsewhere\n");
+        git(fixture.project, "add", "control-advance.txt");
+        git(fixture.project, "commit", "-m", "advance control checkout");
+
+        var readiness = new WorkspaceReadinessService().assess(fixture.location, "codex", fixture.connection);
+        assertTrue(readiness.ready(), readiness.toString());
+        assertEquals(binding.worktreePath(), readiness.worktree().toString());
+
+        var response = new AgentSessionService().ensureSession(
+                new AgentSessionService.SessionResolutionRequest(fixture.project, "codex", fixture.connection,
+                        null, true));
+        assertEquals(AgentStatus.READY, response.status(), response.toString());
     }
 
     @Test
