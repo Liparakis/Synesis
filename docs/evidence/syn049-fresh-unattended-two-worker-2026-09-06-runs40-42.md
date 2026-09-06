@@ -47,8 +47,10 @@ The supported provider-install flow temporarily registered the fresh target
 in the user Codex configuration. Supported provider uninstall then reported
 `PROVIDER_UNINSTALL_RESULT=SUCCESS`, `MANAGED_HOOK_REMOVED=true`, and
 `UNRELATED_CONFIGURATION_PRESERVED=true`; the target-specific MCP registration
-was absent afterward. Final direct configuration hash was
-`42C2D2B98D69EE6BA70C35FB0650CBE651DA9869D693D7F329B550600182762E`.
+was absent afterward. The cleanup-point direct configuration hash was
+`42C2D2B98D69EE6BA70C35FB0650CBE651DA9869D693D7F329B550600182762E`; a later
+final read-only check observed
+`3046E0568F20781B9FB1C147011E20B3E943E8B8E97DE751CD7B8FE0CBA3B6C7`.
 No provider credentials were read, copied, or logged. Exact byte-for-byte
 restoration to the older pre-run configuration hash was not established.
 
