@@ -35,10 +35,12 @@ public final class ProviderTestSupport {
     }
 
     private static void isolateHome() throws Exception {
-        if (System.getProperty(ISOLATED_HOME) == null) {
+        String isolatedHome = System.getProperty(ISOLATED_HOME);
+        if (isolatedHome == null) {
             Path home = Files.createTempDirectory("synesis-provider-test-home-");
-            System.setProperty(ISOLATED_HOME, home.toString());
-            System.setProperty("user.home", home.toString());
+            isolatedHome = home.toString();
+            System.setProperty(ISOLATED_HOME, isolatedHome);
         }
+        System.setProperty("user.home", isolatedHome);
     }
 }
