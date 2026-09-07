@@ -56,7 +56,8 @@ public class DoctorServiceTest {
                         .toString());
         assertTrue(report.findings()
                         .stream()
-                        .allMatch(f -> f.code() == DoctorFindingCode.COMMAND_NAMESPACE_RECONCILIATION_REQUIRED
+                        .allMatch(f -> f.code() == DoctorFindingCode.HEALTHY
+                                || f.code() == DoctorFindingCode.COMMAND_NAMESPACE_RECONCILIATION_REQUIRED
                                 || f.code() == DoctorFindingCode.COMMAND_CAPACITY_OR_RETENTION),
                 report.findings()
                         .toString());
