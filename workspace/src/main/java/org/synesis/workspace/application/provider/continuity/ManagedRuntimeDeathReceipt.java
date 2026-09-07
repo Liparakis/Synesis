@@ -9,28 +9,33 @@ import java.util.Objects;
  * <p>The receipt contains process identity and supervisor provenance only. It
  * never contains an attachment proof or provider credential.</p>
  *
- * @param schemaVersion durable receipt format
- * @param projectId project identity
- * @param provider canonical provider identifier
- * @param bindingSessionId exact provider binding
- * @param generation exact managed attachment generation
- * @param rootPid previously owned process root
- * @param rootStartEpochMillis previously verified root start time
- * @param rootExecutable previously verified executable
- * @param rootCommandIdentity previously verified command identity
- * @param supervisorProvenance trusted supervisor identity
- * @param supervisorRevision trusted supervisor evidence revision
+ * @param schemaVersion         durable receipt format
+ * @param projectId             project identity
+ * @param provider              canonical provider identifier
+ * @param bindingSessionId      exact provider binding
+ * @param generation            exact managed attachment generation
+ * @param rootPid               previously owned process root
+ * @param rootStartEpochMillis  previously verified root start time
+ * @param rootExecutable        previously verified executable
+ * @param rootCommandIdentity   previously verified command identity
+ * @param supervisorProvenance  trusted supervisor identity
+ * @param supervisorRevision    trusted supervisor evidence revision
  * @param observedAtEpochMillis receipt creation time
  */
 public record ManagedRuntimeDeathReceipt(int schemaVersion, String projectId, String provider,
-        String bindingSessionId, long generation, long rootPid, long rootStartEpochMillis,
-        String rootExecutable, String rootCommandIdentity, String supervisorProvenance,
-        long supervisorRevision, long observedAtEpochMillis) {
+                                         String bindingSessionId, long generation, long rootPid,
+                                         long rootStartEpochMillis,
+                                         String rootExecutable, String rootCommandIdentity, String supervisorProvenance,
+                                         long supervisorRevision, long observedAtEpochMillis) {
 
-    /** Current durable death-receipt format. */
+    /**
+     * Current durable death-receipt format.
+     */
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
-    /** Validates the bounded, non-secret death evidence. */
+    /**
+     * Validates the bounded, non-secret death evidence.
+     */
     public ManagedRuntimeDeathReceipt {
         if (schemaVersion != CURRENT_SCHEMA_VERSION) {
             throw new IllegalArgumentException("unsupported managed death receipt format");

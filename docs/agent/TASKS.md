@@ -132,7 +132,8 @@ produced and installed workspace/MCP/CLI/native hashes match. Focused
 workspace and MCP tests stalled after compilation without assertions and are
 incomplete. No Worker A or managed runtime was run.
 
-- Next action: run one fresh lawful Worker-A validation with the same process-local property and same-live-caller `prepareFirst → START`; do not start Worker B or test replacement.
+- Next action: run one fresh lawful Worker-A validation with the same process-local property and same-live-caller
+  `prepareFirst → START`; do not start Worker B or test replacement.
 
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
@@ -144,7 +145,8 @@ with `Unable to establish loopback connection`. The independent-Java-process
 stop rule applies; no build workaround was broadened and no new Worker-A lane
 was created.
 
-- Next action: obtain separate authorization for a bounded process-local build-JVM compatibility path, then fresh-build/install and provenance-lock before creating a new Worker-A lane; do not launch or reuse a lane.
+- Next action: obtain separate authorization for a bounded process-local build-JVM compatibility path, then
+  fresh-build/install and provenance-lock before creating a new Worker-A lane; do not launch or reuse a lane.
 
 ## SYN-051 standalone host compatibility — 2026-09-05
 
@@ -164,7 +166,9 @@ global settings, or remote state was touched.
 Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
 and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
-Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on
+existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a
+lane in this slice.
 
 ## Historical: SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
@@ -783,7 +787,6 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   launch/worker liveness only after the current pair reaches a terminal state;
   do not manually drive lifecycle actions, copy worktrees, or start another
   pair as part of this task.
-
 
 ## MAINT-002
 

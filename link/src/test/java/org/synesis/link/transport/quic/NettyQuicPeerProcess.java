@@ -147,7 +147,8 @@ final class NettyQuicPeerProcess {
                         .toCompletableFuture()
                         .get(5, TimeUnit.SECONDS);
             } else {
-                while (!Thread.currentThread().isInterrupted()) {
+                while (!Thread.currentThread()
+                        .isInterrupted()) {
                     LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
                 }
             }

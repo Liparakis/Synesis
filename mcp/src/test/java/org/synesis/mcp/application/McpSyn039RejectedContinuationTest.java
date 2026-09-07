@@ -39,8 +39,7 @@ final class McpSyn039RejectedContinuationTest {
                 .resolve(".synesis/coordination"), location.projectId());
     }
 
-    private static long sequenceOf(PredictionEventStore store, String snapshotId)
-            {
+    private static long sequenceOf(PredictionEventStore store, String snapshotId) {
         return store.events()
                 .stream()
                 .filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED)
@@ -117,7 +116,8 @@ final class McpSyn039RejectedContinuationTest {
         git(project, "commit", "-m", "baseline");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        ProjectApplicationService.ProjectLocation location = projectService.init(project).location();
+        ProjectApplicationService.ProjectLocation location = projectService.init(project)
+                .location();
         McpProviderTestSupport.install(location, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService sessions = new AgentSessionService();

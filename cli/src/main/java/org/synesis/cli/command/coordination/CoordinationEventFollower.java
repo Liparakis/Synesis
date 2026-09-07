@@ -110,7 +110,9 @@ public final class CoordinationEventFollower {
         }
     }
 
-    /** Marks a bounded event-stream read failure for CLI classification. */
+    /**
+     * Marks a bounded event-stream read failure for CLI classification.
+     */
     private static final class StreamFailure extends RuntimeException {
 
         @Serial

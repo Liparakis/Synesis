@@ -29,11 +29,17 @@ public final class ProjectConfig {
      * Maximum configured peer count.
      */
     public static final int MAX_PEERS = 32;
-    /** Wire-format key for the project UUID line. */
+    /**
+     * Wire-format key for the project UUID line.
+     */
     private static final String PROJECT_KEY = "projectId";
-    /** Immutable project namespace loaded from the configuration. */
+    /**
+     * Immutable project namespace loaded from the configuration.
+     */
     private final UUID projectId;
-    /** Explicit authenticated peer allowlist in deterministic iteration order. */
+    /**
+     * Explicit authenticated peer allowlist in deterministic iteration order.
+     */
     private final Set<String> peerNodeIds;
 
     /**

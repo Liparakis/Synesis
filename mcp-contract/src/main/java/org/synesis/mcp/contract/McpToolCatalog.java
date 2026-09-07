@@ -218,8 +218,12 @@ public final class McpToolCatalog {
         taskProperties.put("acceptance", Map.of("type", "string", "description", "Announced acceptance criteria"));
         taskProperties.put("likelyScopes", Map.of("type", "array", "items", property("string"),
                 "description", "Descriptive planning hints only; these do not announce intent or acquire ownership"));
-        taskProperties.put("knownDependencies", Map.of("type", "array", "items", property("string"),
-                "description", "Explicit capability identifiers required by this task; prose and file changes do not create dependencies"));
+        taskProperties.put("knownDependencies", Map.of("type",
+                "array",
+                "items",
+                property("string"),
+                "description",
+                "Explicit capability identifiers required by this task; prose and file changes do not create dependencies"));
         taskProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
         taskProperties.put("role", Map.of("type", "string", "enum", List.of("producer", "reviewer"),
                 "description", "Semantic review-routing role; it does not change ownership claims"));
@@ -312,9 +316,11 @@ public final class McpToolCatalog {
         result.add(descriptor(GET_NEXT_ACTION,
                 "Retrieves the highest-priority actionable coordination item. Call without arguments to read the durable coordination inbox. The optional completionRequested boolean is a call-local request to evaluate completion; missing or false continues implementation and does not inherit a prior request. The optional integrationCheck input is a read-only compatibility check of explicitly supplied candidate facts; it never advances a lane or WorkGroup and must not replace empty-argument polling or be treated as lifecycle completion. If the response is workflow IMPLEMENT without a concrete recommendedTool and arguments, continue ordinary coding in the assigned worktree and do not inspect protected .synesis/** metadata. If the assigned visible work is complete or blocked while the WorkGroup or another participant remains active, do not end the session; perform a bounded wait and call get_next_action again until an exact lifecycle action or terminal state is projected. If a recommendedTool and arguments are present, execute that exact tool with those exact arguments before another lifecycle action. When WAIT projects get_next_action with empty arguments, continue the inbox until a terminal state or the next concrete action; do not stop while the WorkGroup is active.",
                 objectSchema(Map.of("completionRequested",
-                                Map.of("type", "boolean",
-                                        "description", "Request completion projection for this call only; false or absent continues implementation"),
-                        "integrationCheck",
+                                Map.of("type",
+                                        "boolean",
+                                        "description",
+                                        "Request completion projection for this call only; false or absent continues implementation"),
+                                "integrationCheck",
                                 Map.of("type",
                                         "object",
                                         "description",

@@ -1,20 +1,14 @@
 package org.synesis.workspace.lifecycle.lease;
 
+import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
+import java.util.*;
 
 /**
  * Persists and loads provider session lease records outside the control checkout under the

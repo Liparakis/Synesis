@@ -9,11 +9,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Verifies bounded event-driven wake relay lifetime and durable-event detection. */
+/**
+ * Verifies bounded event-driven wake relay lifetime and durable-event detection.
+ */
 class CodexWakeCoordinatorTest {
 
     @TempDir
     Path temp;
+
+    private static void awaitAtLeast(AtomicInteger scans, int expected) throws Exception {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (scans.get() < expected && System.nanoTime() < deadline) {
+            Thread.sleep(10L);
+        }
+        assertTrue(scans.get() >= expected, "timed out waiting for relay scan");
+    }
 
     @Test
     void durableEventTriggersOneScanAndCloseStopsRelay() throws Exception {
@@ -30,13 +40,5 @@ class CodexWakeCoordinatorTest {
             coordinator.close();
         }
         assertFalse(coordinator.isAlive());
-    }
-
-    private static void awaitAtLeast(AtomicInteger scans, int expected) throws Exception {
-        long deadline = System.nanoTime() + 3_000_000_000L;
-        while (scans.get() < expected && System.nanoTime() < deadline) {
-            Thread.sleep(10L);
-        }
-        assertTrue(scans.get() >= expected, "timed out waiting for relay scan");
     }
 }

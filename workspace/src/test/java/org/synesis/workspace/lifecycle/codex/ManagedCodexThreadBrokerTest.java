@@ -9,7 +9,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipRecord;
 
-/** Verifies the broker's immutable exact-thread pin. */
+/**
+ * Verifies the broker's immutable exact-thread pin.
+ */
 final class ManagedCodexThreadBrokerTest {
 
     @Test

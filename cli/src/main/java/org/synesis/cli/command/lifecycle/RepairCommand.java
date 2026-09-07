@@ -131,7 +131,8 @@ public final class RepairCommand implements Callable<Integer> {
                 RepairPlan plan = repairService.preparePlan(controlRoot);
                 String sb = "REPAIR_RESULT=PLAN_PREPARED\n"
                         + "PLAN=" + plan.planId() + "\n"
-                        + "FINDINGS=" + plan.entries().size() + "\n"
+                        + "FINDINGS=" + plan.entries()
+                        .size() + "\n"
                         + "SUPPORTED_REPAIRS=" + plan.supportedRepairsCount() + "\n"
                         + "UNSUPPORTED_FINDINGS=" + plan.unsupportedCount() + "\n"
                         + "TARGET_MUTATIONS_PERFORMED=0\n"
@@ -147,7 +148,8 @@ public final class RepairCommand implements Callable<Integer> {
                     .filter(DoctorFinding::repairSupported)
                     .count();
             String sb = "REPAIR_DRY_RUN=COMPLETED\n"
-                    + "FINDINGS=" + report.findings().size() + "\n"
+                    + "FINDINGS=" + report.findings()
+                    .size() + "\n"
                     + "REPAIR_CANDIDATES=" + candidateCount + "\n"
                     + "MUTATIONS_PERFORMED=0\n"
                     + "NEXT_ACTION=" + (candidateCount > 0 ? "prepare_repair_plan" : "no_action");

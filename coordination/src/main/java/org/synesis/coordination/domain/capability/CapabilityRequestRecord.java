@@ -172,6 +172,10 @@ public record CapabilityRequestRecord(
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
+    private static boolean scopedIdentityMismatch(String expected, String caller) {
+        return !expected.isBlank() && caller != null && !caller.isBlank() && !expected.equals(caller);
+    }
+
     /**
      * Creates an updated record with a new state, contract, and modification timestamp.
      *
@@ -237,9 +241,5 @@ public record CapabilityRequestRecord(
             return false;
         }
         return !scopedIdentityMismatch(ownerSupervisorId, callerSupervisorId);
-    }
-
-    private static boolean scopedIdentityMismatch(String expected, String caller) {
-        return !expected.isBlank() && caller != null && !caller.isBlank() && !expected.equals(caller);
     }
 }

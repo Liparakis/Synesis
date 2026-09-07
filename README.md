@@ -33,7 +33,7 @@ Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded p
 - 🔌 **Provider integrations**
 
   | Provider     | ID              | Maturity                             |
-  |--------------|-----------------|--------------------------------------|
+    |--------------|-----------------|--------------------------------------|
   | Codex        | `codex`         | `experimental`, trust-review limited |
   | Claude Code  | `claude`        | `experimental`                       |
 

@@ -37,7 +37,9 @@ public interface RuntimeAuthenticator {
     record AttachmentRequest(String provider, String bindingSessionId, String threadId,
                              long expectedGeneration, String proof) {
 
-        /** Validates and freezes the request without retaining a secret copy. */
+        /**
+         * Validates and freezes the request without retaining a secret copy.
+         */
         public AttachmentRequest {
             requireText(provider, "provider");
             requireText(bindingSessionId, "bindingSessionId");
@@ -71,7 +73,9 @@ public interface RuntimeAuthenticator {
                                 ProviderContinuityMode mode, String authenticationMethod,
                                 long attachmentGeneration) {
 
-        /** Validates the bounded authentication result. */
+        /**
+         * Validates the bounded authentication result.
+         */
         public AuthenticatedRuntime {
             Objects.requireNonNull(provider, "provider");
             Objects.requireNonNull(bindingSessionId, "bindingSessionId");

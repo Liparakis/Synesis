@@ -2,10 +2,10 @@
 
 Synesis currently recognizes two provider IDs:
 
-| Provider ID   | Support level                        | Configuration boundary                                    |
-|---------------|--------------------------------------|-----------------------------------------------------------|
-| `codex`       | experimental / trust review required | user Codex TOML plus project-local hooks where applicable |
-| `claude`      | experimental                         | project-local `.claude/settings.json` and `.mcp.json`     |
+| Provider ID | Support level                        | Configuration boundary                                    |
+|-------------|--------------------------------------|-----------------------------------------------------------|
+| `codex`     | experimental / trust review required | user Codex TOML plus project-local hooks where applicable |
+| `claude`    | experimental                         | project-local `.claude/settings.json` and `.mcp.json`     |
 
 - [Codex](codex.md)
 - [Claude Code](claude-code.md)

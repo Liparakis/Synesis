@@ -46,7 +46,8 @@ broker lock is not a replacement for Synesis durable generation fencing.
 
 ## Evidence
 
-See [`SYN-051-broker-pinned-thread-feasibility-2026-09-03.md`](../evidence/SYN-051-broker-pinned-thread-feasibility-2026-09-03.md).
+See [
+`SYN-051-broker-pinned-thread-feasibility-2026-09-03.md`](../evidence/SYN-051-broker-pinned-thread-feasibility-2026-09-03.md).
 
 No production source, `.synesis` state, historical fixture, provider
 credential, or remote repository was changed by the spike.

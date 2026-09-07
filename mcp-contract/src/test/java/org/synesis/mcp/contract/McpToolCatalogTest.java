@@ -227,7 +227,9 @@ class McpToolCatalogTest {
                 "codex",
                 "tampered\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         assertNotEquals(first, second);
-        assertFalse(McpToolCatalog.wireCompatibilityDigest().isBlank());
-        assertFalse(McpToolCatalog.catalogContentDigest().isBlank());
+        assertFalse(McpToolCatalog.wireCompatibilityDigest()
+                .isBlank());
+        assertFalse(McpToolCatalog.catalogContentDigest()
+                .isBlank());
     }
 }

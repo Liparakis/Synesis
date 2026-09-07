@@ -37,7 +37,9 @@ public final class ProviderThreadOwnershipStore {
      * @param directory ownership record directory
      */
     public ProviderThreadOwnershipStore(Path directory) {
-        this.directory = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
+        this.directory = Objects.requireNonNull(directory, "directory")
+                .toAbsolutePath()
+                .normalize();
         this.lockFile = this.directory.resolve("ownership.lock");
     }
 
@@ -49,15 +51,67 @@ public final class ProviderThreadOwnershipStore {
      */
     public static ProviderThreadOwnershipStore storeFor(ProjectApplicationService.ProjectLocation location) {
         Objects.requireNonNull(location, "location");
-        return new ProviderThreadOwnershipStore(location.synesisDirectory().resolve("local/runtime")
+        return new ProviderThreadOwnershipStore(location.synesisDirectory()
+                .resolve("local/runtime")
                 .resolve(DIRECTORY));
+    }
+
+    private static String digest(String value) {
+        try {
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    private static void requireText(String value, String label) {
+        Objects.requireNonNull(value, label);
+        if (value.isBlank() || value.length() > 8_192) {
+            throw new IllegalArgumentException(label + " is invalid");
+        }
+    }
+
+    private static void requireProvider(String value) {
+        requireText(value, "provider");
+        if (!value.matches("[a-z0-9_-]{1,64}")) {
+            throw new IllegalArgumentException("provider is invalid");
+        }
+    }
+
+    private static String text(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return text;
+    }
+
+    private static Number number(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof Number number)) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return number;
+    }
+
+    private static boolean optionalBoolean(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (item == null) {
+            return false;
+        }
+        if (!(item instanceof Boolean flag)) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return flag;
     }
 
     /**
      * Atomically claims a provider thread for a binding.
      *
-     * @param projectId project identity
-     * @param provider provider identifier
+     * @param projectId        project identity
+     * @param provider         provider identifier
      * @param providerThreadId exact provider thread
      * @param bindingSessionId existing binding session
      * @return newly active ownership record
@@ -75,12 +129,16 @@ public final class ProviderThreadOwnershipStore {
             Optional<ProviderThreadOwnershipRecord> existing = readUnlocked(path);
             if (existing.isPresent()) {
                 ProviderThreadOwnershipRecord owner = existing.get();
-                if (!owner.projectId().equals(projectId) || !owner.provider().equals(provider)
-                        || !owner.providerThreadId().equals(providerThreadId)) {
+                if (!owner.projectId()
+                        .equals(projectId) || !owner.provider()
+                        .equals(provider)
+                        || !owner.providerThreadId()
+                        .equals(providerThreadId)) {
                     throw new IOException("provider_thread_ownership_key_mismatch");
                 }
                 if (owner.status() == ProviderThreadOwnershipRecord.Status.ACTIVE
-                        && owner.bindingSessionId().equals(bindingSessionId)) {
+                        && owner.bindingSessionId()
+                        .equals(bindingSessionId)) {
                     result[0] = owner;
                     return;
                 }
@@ -104,8 +162,8 @@ public final class ProviderThreadOwnershipStore {
      * by provider and thread rather than attachment generation, so a later
      * lawful generation inherits the established provider fact.</p>
      *
-     * @param projectId project identity
-     * @param provider canonical provider identifier
+     * @param projectId        project identity
+     * @param provider         canonical provider identifier
      * @param providerThreadId exact provider thread
      * @param bindingSessionId exact owning binding
      * @return current persisted owner
@@ -123,9 +181,12 @@ public final class ProviderThreadOwnershipStore {
             ProviderThreadOwnershipRecord prior = readUnlocked(path)
                     .orElseThrow(() -> new IOException("provider_thread_ownership_missing"));
             if (prior.status() != ProviderThreadOwnershipRecord.Status.ACTIVE
-                    || !prior.provider().equals(provider)
-                    || !prior.projectId().equals(projectId)
-                    || !prior.bindingSessionId().equals(bindingSessionId)) {
+                    || !prior.provider()
+                    .equals(provider)
+                    || !prior.projectId()
+                    .equals(projectId)
+                    || !prior.bindingSessionId()
+                    .equals(bindingSessionId)) {
                 throw new IOException("provider_thread_persistence_scope_rejected");
             }
             if (prior.persistenceReady()) {
@@ -145,7 +206,7 @@ public final class ProviderThreadOwnershipStore {
     /**
      * Reads exact provider-thread ownership.
      *
-     * @param provider provider identifier
+     * @param provider         provider identifier
      * @param providerThreadId exact provider thread
      * @return ownership record when present
      * @throws IOException when the record is malformed
@@ -158,7 +219,7 @@ public final class ProviderThreadOwnershipStore {
     /**
      * Finds the active provider thread owned by one exact binding.
      *
-     * @param provider provider identifier
+     * @param provider         provider identifier
      * @param bindingSessionId existing binding session
      * @return active ownership, or empty
      * @throws IOException when a record is malformed
@@ -172,12 +233,16 @@ public final class ProviderThreadOwnershipStore {
         }
         try (var paths = Files.list(directory)) {
             for (Path path : paths.filter(Files::isRegularFile)
-                    .filter(item -> item.getFileName().toString().endsWith(".json"))
+                    .filter(item -> item.getFileName()
+                            .toString()
+                            .endsWith(".json"))
                     .toList()) {
                 ProviderThreadOwnershipRecord record = readUnlocked(path).orElse(null);
                 if (record != null && record.status() == ProviderThreadOwnershipRecord.Status.ACTIVE
-                        && record.provider().equals(provider)
-                        && record.bindingSessionId().equals(bindingSessionId)) {
+                        && record.provider()
+                        .equals(provider)
+                        && record.bindingSessionId()
+                        .equals(bindingSessionId)) {
                     return Optional.of(record);
                 }
             }
@@ -188,7 +253,7 @@ public final class ProviderThreadOwnershipStore {
     /**
      * Releases ownership only for the exact active owner.
      *
-     * @param provider provider identifier
+     * @param provider         provider identifier
      * @param providerThreadId exact provider thread
      * @param bindingSessionId expected owner binding
      * @return released record
@@ -202,7 +267,8 @@ public final class ProviderThreadOwnershipStore {
             ProviderThreadOwnershipRecord prior = readUnlocked(path)
                     .orElseThrow(() -> new IOException("provider_thread_ownership_missing"));
             if (prior.status() != ProviderThreadOwnershipRecord.Status.ACTIVE
-                    || !prior.bindingSessionId().equals(bindingSessionId)) {
+                    || !prior.bindingSessionId()
+                    .equals(bindingSessionId)) {
                 throw new IOException("provider_thread_release_rejected");
             }
             ProviderThreadOwnershipRecord next = new ProviderThreadOwnershipRecord(prior.schemaVersion(),
@@ -262,7 +328,9 @@ public final class ProviderThreadOwnershipStore {
         value.put("provider", record.provider());
         value.put("providerThreadId", record.providerThreadId());
         value.put("bindingSessionId", record.bindingSessionId());
-        value.put("status", record.status().name());
+        value.put("status",
+                record.status()
+                        .name());
         value.put("persistenceReady", record.persistenceReady());
         value.put("revision", record.revision());
         value.put("acquiredAtEpochMillis", record.acquiredAtEpochMillis());
@@ -296,58 +364,9 @@ public final class ProviderThreadOwnershipStore {
         }
     }
 
-    private static String digest(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError(impossible);
-        }
-    }
-
-    private static void requireText(String value, String label) {
-        Objects.requireNonNull(value, label);
-        if (value.isBlank() || value.length() > 8_192) {
-            throw new IllegalArgumentException(label + " is invalid");
-        }
-    }
-
-    private static void requireProvider(String value) {
-        requireText(value, "provider");
-        if (!value.matches("[a-z0-9_-]{1,64}")) {
-            throw new IllegalArgumentException("provider is invalid");
-        }
-    }
-
-    private static String text(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return text;
-    }
-
-    private static Number number(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof Number number)) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return number;
-    }
-
-    private static boolean optionalBoolean(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (item == null) {
-            return false;
-        }
-        if (!(item instanceof Boolean flag)) {
-            throw new IllegalArgumentException("invalid " + key);
-        }
-        return flag;
-    }
-
     @FunctionalInterface
     private interface LockedOperation {
+
         void run() throws IOException;
     }
 }

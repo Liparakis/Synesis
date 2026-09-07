@@ -51,6 +51,14 @@ public final class WorkspaceReadinessService {
         return new ReadinessResult(false, null, null, response, internalReason);
     }
 
+    private static ReadinessResult unavailableProvider(String provider, String status) {
+        AgentResponse response = new AgentResponse(AgentStatus.BLOCKED,
+                AgentReason.PROVIDER_INTEGRATION_REQUIRED,
+                AgentNextAction.REQUEST_HUMAN_HELP,
+                java.util.Map.of("provider", provider, "status", status));
+        return new ReadinessResult(false, null, null, response, "PROVIDER_INTEGRATION_REQUIRED");
+    }
+
     /**
      * Resolves and verifies the workspace for one provider connection.
      *
@@ -128,8 +136,8 @@ public final class WorkspaceReadinessService {
                     allowCommittedGeneration
                             ? bindingService.verifyCompletionWorkspace(location, binding, worktree)
                             : allowControlBaseAdvance
-                            ? bindingService.verifyNoChangeWorkspace(location, binding, worktree)
-                            : bindingService.verifyWorkspace(location, binding, worktree);
+                              ? bindingService.verifyNoChangeWorkspace(location, binding, worktree)
+                                    : bindingService.verifyWorkspace(location, binding, worktree);
             if (!workspaceCheck.verified() && "CONTROL_BASE_ADVANCED".equals(workspaceCheck.code())) {
                 // A live managed provider owns an exact isolated worktree and
                 // may continue after a sibling integrates its snapshot into
@@ -163,14 +171,6 @@ public final class WorkspaceReadinessService {
         } catch (Exception failure) {
             return unavailable(AgentReason.WORKSPACE_NOT_READY, "WORKSPACE_UNVERIFIED");
         }
-    }
-
-    private static ReadinessResult unavailableProvider(String provider, String status) {
-        AgentResponse response = new AgentResponse(AgentStatus.BLOCKED,
-                AgentReason.PROVIDER_INTEGRATION_REQUIRED,
-                AgentNextAction.REQUEST_HUMAN_HELP,
-                java.util.Map.of("provider", provider, "status", status));
-        return new ReadinessResult(false, null, null, response, "PROVIDER_INTEGRATION_REQUIRED");
     }
 
     /**

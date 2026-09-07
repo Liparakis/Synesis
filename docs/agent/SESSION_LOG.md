@@ -117,7 +117,9 @@ global settings, or remote state was touched.
 Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
 and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
-Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on
+existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a
+lane in this slice.
 
 ## 2026-09-04 — SYN-051 generation-1 persistence-boundary implementation
 
@@ -4852,6 +4854,7 @@ not run Codex or close SYN-041.
   remain incomplete after host timeout. SYN-041 is DONE / ACCEPTED, RESULT A.
 - Evidence: `docs/evidence/syn041-final-real-codex-closure-2026-08-29.md`.
 - Exact next action: preserve closure; do not create SYN-042 or broaden scope.
+
 ## 2026-08-29 — MAINT-001 IntelliJ analyzer cleanup
 
 - Promoted MAINT-001 as the sole active maintenance task while preserving the
@@ -5173,6 +5176,7 @@ not run Codex or close SYN-041.
 - Exact next action: preserve the fresh fixture and evidence; promote any
   review/session lifecycle repair as a separate bounded task before making
   further production changes. Do not claim SYN-049 whole-WorkGroup completion.
+
 # 2026-09-03 — SYN-051 production implementation task activated
 
 - Starting HEAD: `d948d2ace2f35f5ad2fefd396913052cd7339222`, clean `master`.
@@ -5348,6 +5352,7 @@ not run Codex or close SYN-041.
   generation 2 through the public service. Historical generation 1, Worker B,
   production source, and remote state remain untouched. Next action: read-only
   provider-thread provenance review; no retry or proof-gate relaxation.
+
 ## 2026-09-05 — SYN-051 fresh single-worker managed-runtime validation
 
 The bounded real-runtime pass stopped at the first material harness/host
@@ -5368,6 +5373,7 @@ authorized slice, then use a new fresh lawful Worker-A lane with preparation
 and START in the same live caller.
 
 Evidence: `docs/evidence/SYN-051-live-worker-a-loopback-blocker-2026-09-05.md`.
+
 ## 2026-09-05 — SYN-051 fresh Worker-A persistence validation
 
 The successful bounded fresh lane is **PARTIAL**. Exact built/installed
@@ -5386,6 +5392,7 @@ the attachment disconnected and lifecycle stopped; no replacement, A2,
 Worker B, full acceptance, credentials, production source change, or push
 occurred. Evidence is in
 `docs/evidence/SYN-051-fresh-worker-a-persistence-2026-09-05.md`.
+
 ## 2026-09-05 — SYN-051 fresh Worker-A A1/A2 runtime validation
 
 A new fresh lane passed artifact provenance and JDK25 process-local preflight,
@@ -5422,6 +5429,7 @@ cleanup stopped A2 and incidentally produced generation-2 death evidence.
 No Worker B, full SYN-049 acceptance, credential access, global setting,
 historical-lane reuse, manual `.synesis` modification, or push occurred.
 Evidence: `docs/evidence/SYN-051-fresh-worker-a1a2-2026-09-05.md`.
+
 ## 2026-09-05 — SYN-051 fresh two-worker acceptance stop
 
 The fresh bounded A/B run passed artifact provenance, JDK25 process-local
@@ -5454,6 +5462,7 @@ exact produced-to-installed hashes passed. No credentials, global settings,
 historical lanes, manual state surgery, Worker C, full SYN-049 acceptance, or
 push were used. Evidence:
 `docs/evidence/SYN-051-fresh-two-worker-2026-09-05.md`.
+
 ## 2026-09-05 — SYN-049 fresh unattended two-worker acceptance runs #12–#16
 
 Five fresh disposable runs were stopped at the provider-native wake boundary.
@@ -5475,6 +5484,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run
 
 Exact next action: diagnose the production admission/dispatch rejection path
 read-only before any further acceptance attempt.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #25
 
 Fresh run #25 passed provenance/hash verification, JDK25 process-local
@@ -5482,11 +5492,12 @@ Selector/HttpServer preflight, lawful fresh A/B setup, same-process generation-1
 prepare/START, original-thread provider-native B wake, capability publication
 and validation, real provider turns, exact ownership, and provider DB/history/
 rollout durability. Both lifecycle checkpoints ended `COMPLETED` at generation
+
 1. The run is **PARTIAL** because the durable collaboration projection still
-has Participant A `ACTIVE` and WorkIntent A `ANNOUNCED`; WorkGroup
-terminalization was not proven. The host was stopped normally after bounded
-completion followups. No A2, replacement, Worker B replacement, state surgery,
-credential access, or push occurred.
+   has Participant A `ACTIVE` and WorkIntent A `ANNOUNCED`; WorkGroup
+   terminalization was not proven. The host was stopped normally after bounded
+   completion followups. No A2, replacement, Worker B replacement, state surgery,
+   credential access, or push occurred.
 
 Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`.
 
@@ -5512,6 +5523,7 @@ Codex configuration was restored exactly. Evidence:
 
 Exact next action: diagnose the binding-recovery/reconciliation race
 read-only before another acceptance lane.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #29
 
 The run was stopped at the first material runtime failure. Source commit
@@ -5531,6 +5543,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run29.md`
 
 Exact next action: investigate the B App Server process-exit boundary read-only
 before any new acceptance lane.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #40–#42
 
 Runs #40–#42 were fresh bounded SYN-049 acceptance attempts after the
@@ -5578,6 +5591,7 @@ Evidence:
 
 Exact next action: diagnose the B `workspace_stale -> workspace_not_ready`
 recovery boundary read-only before any new acceptance lane.
+
 # 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #45–#48
 
 Run #45 exposed a real projection/schema mismatch: the owner-side
@@ -5618,6 +5632,7 @@ Evidence:
 
 Exact next action: diagnose the final B-side review/finish/terminalization
 projection read-only before any new fresh acceptance fixture.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #70–#74
 
 Fresh runs #70–#71 reached generation-1 managed A/B terminalization and
@@ -5648,6 +5663,7 @@ and remains clean. Evidence:
 Classification: **PARTIAL / ACTIVE**. Exact next action: diagnose the
 run-scoped Codex App-Server-to-Synesis-MCP tool-admission boundary read-only
 before another fresh target.
+
 ## 2026-09-06 — SYN-049 run #59
 
 - Verified locked artifacts and JDK25 process-local AF_UNIX preflight.
@@ -5661,6 +5677,7 @@ before another fresh target.
 - Normal cleanup completed; no replacement, A2, substitute B, manual copy,
   credential access, production source change, or push.
 - Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #68–#69
 
 Runs #68–#69 ended **PARTIAL / ACTIVE** after fresh generation-1 managed A/B

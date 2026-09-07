@@ -146,7 +146,8 @@ Its existing sequence resolves the session, announces the claim, resolves the
 exact binding, builds `AuthorityContext`, and submits START, but it does not
 call `prepareFirst`. No production caller or test invoking
 `ManagedCodexProcessLauncher.prepareFirst` was found. The nearest lower-level
-test is `workspace/src/test/java/org/synesis/workspace/application/provider/continuity/ManagedAttachmentServiceTest.java:312-330`,
+test is
+`workspace/src/test/java/org/synesis/workspace/application/provider/continuity/ManagedAttachmentServiceTest.java:312-330`,
 which tests `issuePending`, not the launcher caller boundary. A disposable
 caller therefore constructed the smallest supported sequence from
 `AgentSessionService.resolveSessionContext` →

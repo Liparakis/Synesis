@@ -8,7 +8,9 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies the bounded demo-work protocol contract. */
+/**
+ * Verifies the bounded demo-work protocol contract.
+ */
 final class DemoWorkProtocolTest {
 
     @Test

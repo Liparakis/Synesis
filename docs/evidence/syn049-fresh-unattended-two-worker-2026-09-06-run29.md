@@ -49,12 +49,12 @@ The rebuilt validation installation was disposable:
 `C:\t\synesis049-install-run29`. Its payload and stable MCP launcher matched
 the rebuilt artifacts exactly:
 
-| artifact | SHA-256 |
-|---|---|
+| artifact      | SHA-256                                                            |
+|---------------|--------------------------------------------------------------------|
 | workspace JAR | `563D5C1ACC99EA314CA5F1190886C3A86B193C91F026530271D59A75DF6F9A7C` |
-| MCP JAR | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
-| CLI JAR | `2F76646F7794A12724ABF90D86C3667A8F6F88C3AC070F222632B4F67F1276DF` |
-| native MCP | `58C31651CC3BE0B7DE71204EA12AEA690D987E8403C31B96D9013B9EEB5360C8` |
+| MCP JAR       | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
+| CLI JAR       | `2F76646F7794A12724ABF90D86C3667A8F6F88C3AC070F222632B4F67F1276DF` |
+| native MCP    | `58C31651CC3BE0B7DE71204EA12AEA690D987E8403C31B96D9013B9EEB5360C8` |
 
 The global Codex config was restored byte-for-byte after the transient
 supported provider-install flow: before/after

@@ -59,7 +59,9 @@ final class CandidateGathererTest {
         }
     }
 
-    /** Supplies deterministic provider candidates to gatherer tests. */
+    /**
+     * Supplies deterministic provider candidates to gatherer tests.
+     */
     private record StubProvider(String id, CompletableFuture<List<Candidate>> result)
             implements CandidateProvider {
 

@@ -60,11 +60,11 @@ SHA-256 6E260AF20C51A039588329374038DDF7A8C1D6362A9B8531B1B71B9764D49604
 
 Disposable source hashes from the final run:
 
-| File | SHA-256 |
-| --- | --- |
+| File                             | SHA-256                                                            |
+|----------------------------------|--------------------------------------------------------------------|
 | `ProtectedCarrierPrototype.java` | `877571E48FF5035E96AC4C6979073B8161F251BF002339E85DA76EC8D80B5F20` |
-| `McpProbe.java` | `63420567914A638E924C2C7DF7C0FC2733EB967571FA1CE93973F7CA7440BD7F` |
-| `AppServerBoundaryProbe.java` | `D10FAFBD7F4757D4128A412FDE58997F8D5FC1CD2B59A87B63664E3F200F06F3` |
+| `McpProbe.java`                  | `63420567914A638E924C2C7DF7C0FC2733EB967571FA1CE93973F7CA7440BD7F` |
+| `AppServerBoundaryProbe.java`    | `D10FAFBD7F4757D4128A412FDE58997F8D5FC1CD2B59A87B63664E3F200F06F3` |
 
 ## Carrier experiment
 
@@ -165,23 +165,23 @@ provider guarantee is inferred from the successful `probe-ok` calls.
 
 ## Security and lifecycle findings
 
-| Property | Result | Evidence boundary |
-| --- | --- | --- |
-| Per-worker random proof | PASS | 48-assertion isolated harness |
-| A/B isolation and cross-use rejection | PASS | Actual handshake attempts |
-| Generation rotation and stale rejection | PASS | Bridge replacement/replay assertions |
-| Replay rejection | PASS | Consumed old proof and wrong worker/thread cases |
-| Race single-winner fencing | PASS | Deterministic concurrent replacement assertions |
-| Live-old and ambiguous liveness | PASS | Fail-closed isolated cases |
-| Terminal-state protection | PASS | Revival attempt rejected |
-| Raw proof in durable prototype state | PASS | State files contain only hashes/scope |
-| Raw proof in real App Server evidence | PASS for exercised probe | No proof was supplied; redacted logs contain no raw proof |
-| Model-visible leakage | PARTIAL | No proof entered the probe input or direct tool result; a full model turn was not run |
-| App Server start and exact thread identity | PASS | Real `thread/start` response |
-| App Server process restart and exact resume | PASS | Real `thread/resume` and `thread/read` |
-| Protected attachment across App Server boundary | NOT PROVEN | No provider-controlled per-thread carrier input was available |
-| Two threads in one App Server | PROTOCOL PASS / AUTH PARTIAL | Both exact thread calls work; no thread-scoped proof was tested |
-| Full Synesis-host restart | PARTIAL/model-only | Fresh proof and safe old-runtime classification remain required |
+| Property                                        | Result                       | Evidence boundary                                                                     |
+|-------------------------------------------------|------------------------------|---------------------------------------------------------------------------------------|
+| Per-worker random proof                         | PASS                         | 48-assertion isolated harness                                                         |
+| A/B isolation and cross-use rejection           | PASS                         | Actual handshake attempts                                                             |
+| Generation rotation and stale rejection         | PASS                         | Bridge replacement/replay assertions                                                  |
+| Replay rejection                                | PASS                         | Consumed old proof and wrong worker/thread cases                                      |
+| Race single-winner fencing                      | PASS                         | Deterministic concurrent replacement assertions                                       |
+| Live-old and ambiguous liveness                 | PASS                         | Fail-closed isolated cases                                                            |
+| Terminal-state protection                       | PASS                         | Revival attempt rejected                                                              |
+| Raw proof in durable prototype state            | PASS                         | State files contain only hashes/scope                                                 |
+| Raw proof in real App Server evidence           | PASS for exercised probe     | No proof was supplied; redacted logs contain no raw proof                             |
+| Model-visible leakage                           | PARTIAL                      | No proof entered the probe input or direct tool result; a full model turn was not run |
+| App Server start and exact thread identity      | PASS                         | Real `thread/start` response                                                          |
+| App Server process restart and exact resume     | PASS                         | Real `thread/resume` and `thread/read`                                                |
+| Protected attachment across App Server boundary | NOT PROVEN                   | No provider-controlled per-thread carrier input was available                         |
+| Two threads in one App Server                   | PROTOCOL PASS / AUTH PARTIAL | Both exact thread calls work; no thread-scoped proof was tested                       |
+| Full Synesis-host restart                       | PARTIAL/model-only           | Fresh proof and safe old-runtime classification remain required                       |
 
 The real-boundary probe did not expose the random proof at all, so its
 no-leak result is bounded: it proves that the tested App Server/MCP protocol

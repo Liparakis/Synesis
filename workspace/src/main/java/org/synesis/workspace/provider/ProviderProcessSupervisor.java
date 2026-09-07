@@ -263,7 +263,9 @@ public final class ProviderProcessSupervisor implements AutoCloseable {
         NOT_FOUND
     }
 
-    /** Couples a supervised provider process with its generation identity. */
+    /**
+     * Couples a supervised provider process with its generation identity.
+     */
     private record Registration(Process process, String provider, long generation) {
 
     }

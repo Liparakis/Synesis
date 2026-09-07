@@ -125,7 +125,8 @@ public final class SynesisMcpServer {
         }
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
         ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService().find(location, provider,
-                connectionInstanceId).orElseThrow(() -> new IllegalStateException("managed binding missing"));
+                        connectionInstanceId)
+                .orElseThrow(() -> new IllegalStateException("managed binding missing"));
         ManagedAttachmentService service = new ManagedAttachmentService();
         var store = ManagedAttachmentService.storeFor(location, binding.sessionId());
         if (!"BOUND".equalsIgnoreCase(binding.status())) {
@@ -135,15 +136,19 @@ public final class SynesisMcpServer {
                 .orElseThrow(() -> new IllegalStateException("managed attachment missing"));
         RuntimeAuthenticator.AttachmentRequest request = new RuntimeAuthenticator.AttachmentRequest(provider,
                 binding.sessionId(), record.threadId(), record.generation(), attachmentProof);
-        return service.authenticateTransport(location, request, location.projectId().toString(), store);
+        return service.authenticateTransport(location,
+                request,
+                location.projectId()
+                        .toString(),
+                store);
     }
 
     /**
      * Prevents an exact managed binding from silently downgrading to ordinary
      * session-bound admission when its process-private proof is absent.
      *
-     * @param projectRoot control project root
-     * @param provider provider identifier
+     * @param projectRoot          control project root
+     * @param provider             provider identifier
      * @param connectionInstanceId exact connection selector
      * @throws Exception when a managed attachment exists without proof
      */
@@ -154,13 +159,16 @@ public final class SynesisMcpServer {
         }
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
         ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService().find(location, provider,
-                connectionInstanceId).orElse(null);
+                        connectionInstanceId)
+                .orElse(null);
         if (binding == null) {
             return;
         }
-        ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, binding.sessionId()).read()
+        ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, binding.sessionId())
+                .read()
                 .orElse(null);
-        if (record != null && record.mode() == org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY) {
+        if (record != null && record.mode()
+                == org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY) {
             throw new IllegalStateException("managed_attachment_proof_required");
         }
     }

@@ -25,7 +25,9 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
-/** Exercises workspace CLI parsing, readiness, and project-state behavior. */
+/**
+ * Exercises workspace CLI parsing, readiness, and project-state behavior.
+ */
 class WorkspaceCliTest {
 
     private Path tempDir;
@@ -148,7 +150,9 @@ class WorkspaceCliTest {
         assertEquals(output1, output2);
     }
 
-    /** Holds isolated streams and runtime for one workspace CLI invocation. */
+    /**
+     * Holds isolated streams and runtime for one workspace CLI invocation.
+     */
     private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
 
         private String output() {

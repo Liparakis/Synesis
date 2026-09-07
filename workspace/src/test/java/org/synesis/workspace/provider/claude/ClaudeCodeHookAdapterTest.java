@@ -17,7 +17,9 @@ import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.security.Ed25519Signer;
 
-/** Exercises Claude Code hook parsing and fail-closed provider behavior. */
+/**
+ * Exercises Claude Code hook parsing and fail-closed provider behavior.
+ */
 final class ClaudeCodeHookAdapterTest {
 
     private static String escape(String s) {

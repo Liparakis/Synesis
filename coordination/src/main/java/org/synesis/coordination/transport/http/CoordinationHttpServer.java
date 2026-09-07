@@ -110,7 +110,8 @@ public final class CoordinationHttpServer implements AutoCloseable {
         if (declared > 64 * 1024) {
             throw new IOException("request exceeds bound");
         }
-        try (var input = exchange.getRequestBody(); var bytes = new java.io.ByteArrayOutputStream()) {
+        try (var input = exchange.getRequestBody();
+                var bytes = new java.io.ByteArrayOutputStream()) {
             input.transferTo(new java.io.OutputStream() {
                 @Override
                 public void write(int value) throws IOException {
@@ -196,7 +197,8 @@ public final class CoordinationHttpServer implements AutoCloseable {
         exchange.getResponseHeaders()
                 .set("Cache-Control", "no-cache");
         exchange.sendResponseHeaders(200, 0);
-        try (exchange; var subscription = service.subscribe(after);
+        try (exchange;
+                var subscription = service.subscribe(after);
                 var output = exchange.getResponseBody()) {
             while (!Thread.currentThread()
                     .isInterrupted()) {

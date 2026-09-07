@@ -15,10 +15,10 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
-import org.synesis.coordination.persistence.PredictionEventStore;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
@@ -27,11 +27,13 @@ import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipStore;
-import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
-/** Exercises MCP server framing, initialization, and tool dispatch. */
+/**
+ * Exercises MCP server framing, initialization, and tool dispatch.
+ */
 @SuppressWarnings("TextBlockMigration")
 class McpServerTest {
 
@@ -45,7 +47,9 @@ class McpServerTest {
     @BeforeEach
     void setUp() throws Exception {
         previousUserHome = System.getProperty("user.home");
-        System.setProperty("user.home", Files.createTempDirectory("synesis-mcp-provider-home-").toString());
+        System.setProperty("user.home",
+                Files.createTempDirectory("synesis-mcp-provider-home-")
+                        .toString());
         tempRoot = Files.createTempDirectory("synesis-mcp-test-");
         git(tempRoot, "init");
         git(tempRoot, "config", "user.name", "Test User");
@@ -55,7 +59,8 @@ class McpServerTest {
         git(tempRoot, "commit", "-m", "Initial commit");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        ProjectApplicationService.ProjectLocation location = projectService.init(tempRoot).location();
+        ProjectApplicationService.ProjectLocation location = projectService.init(tempRoot)
+                .location();
         new ProviderApplicationService().install(location, "codex");
         new ProviderApplicationService().install(location, "claude");
         new ProviderManualService().install("codex");
@@ -116,10 +121,17 @@ class McpServerTest {
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(tempRoot);
         var binding = new ProviderSessionBindingService().ensure(location, "codex", "pending-connection")
                 .binding();
-        var ownership = ProviderThreadOwnershipStore.storeFor(location).acquire(location.projectId().toString(),
-                "codex", "pending-thread", binding.sessionId());
-        var issued = new ManagedAttachmentService().issueFromOwnership(location, location.projectId().toString(),
-                "codex", binding.sessionId(), "normal-provider-home", ownership,
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId()
+                                .toString(),
+                        "codex", "pending-thread", binding.sessionId());
+        var issued = new ManagedAttachmentService().issueFromOwnership(location,
+                location.projectId()
+                        .toString(),
+                "codex",
+                binding.sessionId(),
+                "normal-provider-home",
+                ownership,
                 ManagedAttachmentService.storeFor(location, binding.sessionId()));
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex",
                 "pending-connection", new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"), true, true,
@@ -136,9 +148,13 @@ class McpServerTest {
         String pendingMutation = handler.handleMessage(
                 "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"README.md\"}}}");
         assertTrue(pendingMutation.contains("managed_attachment_pending"), pendingMutation);
-        assertTrue(new SessionLeaseStore().load(tempRoot, "pending-connection").isEmpty());
-        assertTrue(new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId())
-                .collaborationProjection().activeIntents().isEmpty());
+        assertTrue(new SessionLeaseStore().load(tempRoot, "pending-connection")
+                .isEmpty());
+        assertTrue(new PredictionEventStore(location.root()
+                .resolve(".synesis/coordination"), location.projectId())
+                .collaborationProjection()
+                .activeIntents()
+                .isEmpty());
 
         new ManagedAttachmentService().activate(ManagedAttachmentService.storeFor(location, binding.sessionId()), 1L);
         String activeEnsure = handler.handleMessage(
@@ -151,10 +167,17 @@ class McpServerTest {
         ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(tempRoot);
         var binding = new ProviderSessionBindingService().ensure(location, "codex", "completed-review-connection")
                 .binding();
-        var ownership = ProviderThreadOwnershipStore.storeFor(location).acquire(location.projectId().toString(),
-                "codex", "completed-review-thread", binding.sessionId());
-        var issued = new ManagedAttachmentService().issueFromOwnership(location, location.projectId().toString(),
-                "codex", binding.sessionId(), "normal-provider-home", ownership,
+        var ownership = ProviderThreadOwnershipStore.storeFor(location)
+                .acquire(location.projectId()
+                                .toString(),
+                        "codex", "completed-review-thread", binding.sessionId());
+        var issued = new ManagedAttachmentService().issueFromOwnership(location,
+                location.projectId()
+                        .toString(),
+                "codex",
+                binding.sessionId(),
+                "normal-provider-home",
+                ownership,
                 ManagedAttachmentService.storeFor(location, binding.sessionId()));
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex",
                 "completed-review-connection", new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"),
@@ -207,7 +230,8 @@ class McpServerTest {
                 tempRoot, "codex", "conn-known-dependency");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"service implementation\",\"acceptance\":\"uses domain capability\",\"knownDependencies\":[\"tasktracker.domain\"],\"claims\":[{\"kind\":\"path_exact\",\"path\":\"src/service.java\"}]}}}}";
 
-        assertTrue(handler.handleMessage(ensure).contains("ready"));
+        assertTrue(handler.handleMessage(ensure)
+                .contains("ready"));
 
         String next = handler.handleMessage(
                 "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}");
@@ -224,7 +248,8 @@ class McpServerTest {
         var intent = reopened.collaborationProjection()
                 .activeIntents()
                 .stream()
-                .filter(candidate -> candidate.knownDependencies().contains("tasktracker.domain"))
+                .filter(candidate -> candidate.knownDependencies()
+                        .contains("tasktracker.domain"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(List.of("tasktracker.domain"), intent.knownDependencies());

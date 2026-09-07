@@ -1,5 +1,3 @@
-
-
 ## 2026-09-06 — SYN-049 run #81 PASS
 
 Run #81 completed the fresh unattended two-worker acceptance with generation-1
@@ -217,7 +215,9 @@ No integration or terminalization was reached.
 
 Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05.md`.
 
-- Exact next action: start only a new fresh acceptance after preserving B's live connection through dependency wait and capturing/restoring the pre-run Codex configuration around supported provider setup; do not reuse or repair this target.
+- Exact next action: start only a new fresh acceptance after preserving B's live connection through dependency wait and
+  capturing/restoring the pre-run Codex configuration around supported provider setup; do not reuse or repair this
+  target.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## SYN-051 fresh two-worker acceptance — 2026-09-05
@@ -284,7 +284,8 @@ Worker A or runtime was run.
 
 Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
 
-- Exact next action: Run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
+- Exact next action: Run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property,
+  keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
@@ -299,7 +300,9 @@ create a Worker-A lane.
 
 Evidence: `docs/evidence/SYN-051-process-local-preflight-build-blocker-2026-09-05.md`.
 
-- Exact next action: Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then fresh-build and provenance-lock the runtime before creating any new Worker-A lane; do not launch or reuse a lane.
+- Exact next action: Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle
+  JVM itself, then fresh-build and provenance-lock the runtime before creating any new Worker-A lane; do not launch or
+  reuse a lane.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## SYN-051 standalone host compatibility — 2026-09-05
@@ -320,7 +323,9 @@ global settings, or remote state was touched.
 Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
 and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
-- Exact next documentation action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+- Exact next documentation action: Review the standalone compatibility evidence and obtain separate authorization for
+  one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do
+  not launch or reuse a lane in this slice.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Continuation evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`.
 
@@ -416,10 +421,10 @@ installed source was provenance-matched. Fresh Worker A setup and exact
 provider-thread ownership passed, but the managed App Server failed at the
 first protocol join: Codex `0.153.0` returned `thread not loaded` for the
 bootstrap-created exact thread. No A1 turn, controlled root crash, trusted
-  crash teardown or valid A1-to-A2 evidence exists. Startup cleanup produced
-  a generation-1 receipt; the non-fail-fast harness later created an aborted
-  generation-2 pending record through the production replacement path, which
-  was terminalized. Historical generation 1 remains active without a receipt.
+crash teardown or valid A1-to-A2 evidence exists. Startup cleanup produced
+a generation-1 receipt; the non-fail-fast harness later created an aborted
+generation-2 pending record through the production replacement path, which
+was terminalized. Historical generation 1 remains active without a receipt.
 
 Exact next action: perform a read-only provider-thread provenance review for
 the cross-process loadability failure. Do not retry managed A1/A2, relax proof
@@ -480,7 +485,7 @@ task-tracker acceptance has been run.
   smallest real Codex probe
   that proves exact child proof delivery, A/B proof isolation, early-proof
   rejection, exact-thread/generation join, A1 Job death, fresh A2 proof, and
-Worker B survival. Stop on any failed gate and do not start full acceptance.
+  Worker B survival. Stop on any failed gate and do not start full acceptance.
 
 ## SYN-051 shared-normal-home production slice — 2026-09-03
 
@@ -2563,6 +2568,7 @@ provider/harness distribution or project-pin defect if that evidence proves
 one; do not change production lifecycle code speculatively. Keep the Git stall,
 bootstrap migration failures, and Doctor warnings separate. Do not push or
 create SYN-040.
+
 # SYN-043 dependency-admission continuation
 
 SYN-043 is active for the narrow fix that preserves `knownDependencies` from
@@ -2571,6 +2577,7 @@ request continuation. Do not use Synesis MCP tools or add project control-plane
 state while working in this checkout. The immediate next action is to inspect
 the current diff, run the focused dependency-admission regression, and update
 the checkpoint with exact results.
+
 ## SYN-051 fresh two-worker/restart acceptance — 2026-09-05
 
 The fresh A/B managed runtime acceptance is **PASS-A**. It proved distinct
@@ -2584,6 +2591,7 @@ exact same-thread resume, and second turns with the other worker alive.
   SYN-051 or run full SYN-049 acceptance without a new explicit task.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05 run #08
 
 Run #08 is **PARTIAL**, not acceptance. It used a fresh target with the
@@ -2601,6 +2609,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run08.md`
   determine whether the stale-binding result is a production lifecycle defect
   or a harness-envelope lifetime defect; do not reuse run #08 or create a new
   target until that diagnosis is complete.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #12–#16 — 2026-09-05
 
 The fresh runtime attempts are **FAIL / PARTIAL** at provider-native wake.
@@ -2617,6 +2626,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run
   manual wake, start A2/B replacement, or patch production yet.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — run #25 — 2026-09-06
 
 Run #25 is **PARTIAL**. The corrected generation-1 runtime path passed
@@ -2633,6 +2643,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`
   modify `.synesis` state.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #45–#50 — 2026-09-06
 
 The fresh run series remains **PARTIAL / ACTIVE**. Run #50 passed corrected
@@ -2650,6 +2661,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48
   production before the exact boundary is understood.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-09-06 — exact continuation after SYN-049 run #59
 
 Run #59 reached real managed A/B MCP operation. A published and validated
@@ -2665,6 +2677,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`
 Immediate next action: diagnose the production snapshot materialization/review
 workspace route read-only before another fresh target. Preserve fail-closed
 behavior and do not bypass the review grant or copy files between worktrees.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #68–#69 — 2026-09-06
 
 Runs #68–#69 are **PARTIAL / ACTIVE**. Fresh generation-1 managed A/B

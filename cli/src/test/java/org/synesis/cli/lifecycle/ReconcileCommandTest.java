@@ -21,7 +21,9 @@ import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ProjectApplicationService;
 
-/** Exercises reconciliation command inputs and bounded outcomes. */
+/**
+ * Exercises reconciliation command inputs and bounded outcomes.
+ */
 class ReconcileCommandTest {
 
     private static Invocation createInvocation(Path profile) {
@@ -66,7 +68,9 @@ class ReconcileCommandTest {
         assertTrue(stdout.contains("MUTATIONS_PERFORMED=0"));
     }
 
-    /** Holds isolated streams and runtime for one reconciliation invocation. */
+    /**
+     * Holds isolated streams and runtime for one reconciliation invocation.
+     */
     private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
 
         private String output() {

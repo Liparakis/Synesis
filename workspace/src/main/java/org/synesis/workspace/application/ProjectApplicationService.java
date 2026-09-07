@@ -47,9 +47,9 @@ public final class ProjectApplicationService {
     private static final String AGENTS_END = "<!-- SYNESIS-END -->";
     private static final String AGENTS_BODY = """
             ## Synesis
-
+            
             This repository uses Synesis.
-
+            
             - Use Synesis tools for project reads, file changes, and commands.
             - One persistent MCP connection owns one provider binding and one isolated worker context.
             - After synesis init succeeds, install the integration matching the responding harness before starting work: Claude Code uses `synesis provider install claude`, and Codex uses `synesis provider install codex`. The matching `claude` or `codex` executable must already be installed and available to that harness; installing one provider is not a substitute for the other.
@@ -131,7 +131,7 @@ public final class ProjectApplicationService {
                 .stream()
                 .anyMatch(key -> !(key instanceof String text)
                         || !Set.of("argv", "workingDirectory", "timeoutSeconds")
-                                .contains(text))) {
+                        .contains(text))) {
             throw new IOException("validation contains unsupported fields");
         }
         Object argvRaw = map.get("argv");
@@ -414,7 +414,7 @@ public final class ProjectApplicationService {
      *
      * @param projectRoot explicit project directory
      * @throws ProjectApplicationException with code {@code GIT_REQUIRED} when
-     *         the directory is not a usable Git repository
+     *                                     the directory is not a usable Git repository
      */
     public void requireGitRepository(Path projectRoot) throws ProjectApplicationException {
         Path root = directory(projectRoot, "project directory");

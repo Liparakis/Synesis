@@ -20,10 +20,16 @@ import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 
-/** Verifies the user-facing Git precondition for project initialization. */
+/**
+ * Verifies the user-facing Git precondition for project initialization.
+ */
 final class InitCommandTest {
 
     private Path root;
+
+    private static PrintStream stream(ByteArrayOutputStream target) {
+        return new PrintStream(target, true, StandardCharsets.UTF_8);
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -58,12 +64,10 @@ final class InitCommandTest {
         int exitCode = SynesisCli.execute(new String[]{"init", "--project", root.toString()}, runtime);
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, exitCode);
-        assertTrue(errors.toString(StandardCharsets.UTF_8).contains("ERROR_CODE=GIT_REQUIRED"));
-        assertTrue(errors.toString(StandardCharsets.UTF_8).contains("requires a Git repository"));
+        assertTrue(errors.toString(StandardCharsets.UTF_8)
+                .contains("ERROR_CODE=GIT_REQUIRED"));
+        assertTrue(errors.toString(StandardCharsets.UTF_8)
+                .contains("requires a Git repository"));
         assertFalse(Files.exists(root.resolve(".synesis")));
-    }
-
-    private static PrintStream stream(ByteArrayOutputStream target) {
-        return new PrintStream(target, true, StandardCharsets.UTF_8);
     }
 }

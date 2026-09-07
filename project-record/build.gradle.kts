@@ -51,7 +51,8 @@ tasks.register("formatCheck") {
     val buildFile = layout.projectDirectory.file("build.gradle.kts").asFile
     doLast {
         val files = listOf(sourceDirectory, buildFile).flatMap { root ->
-            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in setOf("java", "kt", "kts") }.toList()
+            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in setOf("java", "kt", "kts") }
+                .toList()
             else listOfNotNull(root.takeIf { it.isFile && it.extension in setOf("java", "kt", "kts") })
         }
         val offenders = files.filter { source ->

@@ -102,7 +102,7 @@ class CodexLifecycleWaitControlTest {
                 assertTrue(!launcher.persistenceCompleted.await(20L, TimeUnit.MILLISECONDS));
 
                 assertTrue(service.steer(request(LifecycleControlRequestEnvelope.Operation.STEER,
-                        started.threadId(), started.turnId(), false, "steer"))
+                                started.threadId(), started.turnId(), false, "steer"))
                         .success());
                 assertTrue(launcher.persistenceCompleted.await(2L, TimeUnit.SECONDS));
                 assertEquals("thread-1", launcher.completedThreadId);
@@ -139,8 +139,10 @@ class CodexLifecycleWaitControlTest {
                 Thread.sleep(50L);
                 assertTrue(supervisor.maxConcurrent.get() <= 1);
                 supervisor.releaseTeardown.countDown();
-                assertTrue(first.get(2L, TimeUnit.SECONDS).success());
-                assertTrue(second.get(2L, TimeUnit.SECONDS).success());
+                assertTrue(first.get(2L, TimeUnit.SECONDS)
+                        .success());
+                assertTrue(second.get(2L, TimeUnit.SECONDS)
+                        .success());
                 assertEquals(1, supervisor.teardownCalls.get());
                 assertTrue(!supervisor.overlap.get());
             }
@@ -180,7 +182,44 @@ class CodexLifecycleWaitControlTest {
                 temp.resolve("evidence"));
     }
 
-    /** Records the managed lifecycle boundary callbacks around the fixture server. */
+    private LifecycleControlRequestEnvelope request(LifecycleControlRequestEnvelope.Operation operation,
+            String threadId, String turnId, boolean continuation, String input) throws IOException {
+        LifecycleControlRequestEnvelope.AuthorityContext authority = new LifecycleControlRequestEnvelope.AuthorityContext(
+                "project",
+                "codex",
+                "connection",
+                "session",
+                "fingerprint",
+                1,
+                "participant",
+                "00000000-0000-0000-0000-000000000001",
+                1L,
+                temp.toString(),
+                temp.toRealPath()
+                        .toString(),
+                "git",
+                "branch",
+                "a".repeat(40),
+                "supervisor",
+                "worker");
+        return new LifecycleControlRequestEnvelope(UUID.randomUUID(),
+                "host",
+                authority,
+                operation,
+                0L,
+                threadId,
+                turnId,
+                continuation,
+                input,
+                Instant.now()
+                        .plusSeconds(10)
+                        .toEpochMilli(),
+                Map.of());
+    }
+
+    /**
+     * Records the managed lifecycle boundary callbacks around the fixture server.
+     */
     private static final class RecordingLauncher implements CodexAppServerLifecycleService.ProcessLauncher {
 
         private final FakeServer server;
@@ -224,42 +263,9 @@ class CodexLifecycleWaitControlTest {
         }
     }
 
-    private LifecycleControlRequestEnvelope request(LifecycleControlRequestEnvelope.Operation operation,
-            String threadId, String turnId, boolean continuation, String input) throws IOException {
-        LifecycleControlRequestEnvelope.AuthorityContext authority = new LifecycleControlRequestEnvelope.AuthorityContext(
-                "project",
-                "codex",
-                "connection",
-                "session",
-                "fingerprint",
-                1,
-                "participant",
-                "00000000-0000-0000-0000-000000000001",
-                1L,
-                temp.toString(),
-                temp.toRealPath()
-                        .toString(),
-                "git",
-                "branch",
-                "a".repeat(40),
-                "supervisor",
-                "worker");
-        return new LifecycleControlRequestEnvelope(UUID.randomUUID(),
-                "host",
-                authority,
-                operation,
-                0L,
-                threadId,
-                turnId,
-                continuation,
-                input,
-                Instant.now()
-                        .plusSeconds(10)
-                        .toEpochMilli(),
-                Map.of());
-    }
-
-    /** Provides a controllable server for lifecycle wait tests. */
+    /**
+     * Provides a controllable server for lifecycle wait tests.
+     */
     private static final class FakeServer implements AutoCloseable {
 
         private final PipedInputStream serverInput;
@@ -342,7 +348,9 @@ class CodexLifecycleWaitControlTest {
         }
     }
 
-    /** Provides a controllable process abstraction for wait tests. */
+    /**
+     * Provides a controllable process abstraction for wait tests.
+     */
     private static final class FakeProcess extends Process {
 
         private final InputStream stdout;
@@ -408,7 +416,9 @@ class CodexLifecycleWaitControlTest {
         }
     }
 
-    /** Detects concurrent managed-tree teardown calls in the lifecycle race regression. */
+    /**
+     * Detects concurrent managed-tree teardown calls in the lifecycle race regression.
+     */
     private static final class ConcurrentTeardownSupervisor implements ManagedProcessTreeSupervisor {
 
         private final CountDownLatch teardownEntered = new CountDownLatch(1);
@@ -441,7 +451,8 @@ class CodexLifecycleWaitControlTest {
                 releaseTeardown.await(2L, TimeUnit.SECONDS);
                 return true;
             } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                        .interrupt();
                 throw new IOException("teardown_interrupted", interrupted);
             } finally {
                 activeTeardowns.decrementAndGet();

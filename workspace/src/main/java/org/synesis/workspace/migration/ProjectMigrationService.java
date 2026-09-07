@@ -572,7 +572,9 @@ public final class ProjectMigrationService {
         }
     }
 
-    /** Owns the project migration lock for one transactional migration. */
+    /**
+     * Owns the project migration lock for one transactional migration.
+     */
     private record ProjectMigrationLock(Path path) implements AutoCloseable {
 
         static ProjectMigrationLock acquire(Path adminRoot, Path projectRoot) throws IOException {

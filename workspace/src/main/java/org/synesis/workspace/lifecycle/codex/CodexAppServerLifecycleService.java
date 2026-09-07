@@ -47,6 +47,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
     private volatile Attachment active;
     private volatile AppServerProcess startingProcess;
     private volatile boolean closed;
+
     /**
      * Creates one binding-scoped lifecycle service.
      *
@@ -426,7 +427,8 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             }
             if (expectedManagedThread == null) {
                 threadStarted.get(Math.max(1L, remaining(request).toMillis()), TimeUnit.MILLISECONDS);
-                if (!threadStarted.getNow("").equals(threadId)) {
+                if (!threadStarted.getNow("")
+                        .equals(threadId)) {
                     throw new IOException("thread/started identity mismatch");
                 }
             } else {
@@ -646,7 +648,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 closeAttachmentStreams(attachment);
             }
             ProcessTreeTerminator.Result result = terminateProcessTree(attachment == null ? startingProcess
-                    : attachment.process(), current.attachmentGeneration(), Duration.ofSeconds(2),
+                            : attachment.process(), current.attachmentGeneration(), Duration.ofSeconds(2),
                     Instant.ofEpochMilli(request.callerDeadlineEpochMillis()), current);
             if (attachment != null) {
                 attachment.journal()
@@ -911,8 +913,12 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         AppServerProcess launching = startingProcess;
         if (attachment == null && launching != null) {
             CodexLifecycleStateStore.Checkpoint snapshot = checkpointUnchecked();
-            ProcessTreeTerminator.Result result = terminateProcessTree(launching, snapshot.attachmentGeneration(),
-                    Duration.ofMillis(500), Instant.now().plusSeconds(2), snapshot);
+            ProcessTreeTerminator.Result result = terminateProcessTree(launching,
+                    snapshot.attachmentGeneration(),
+                    Duration.ofMillis(500),
+                    Instant.now()
+                            .plusSeconds(2),
+                    snapshot);
             if (ownedTermination(result.outcome())) {
                 launching.close();
             } else {
@@ -959,7 +965,11 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 .process()
                 .isAlive() && current.rootPid() > 0) {
             ProcessTreeTerminator.Result result = terminateProcessTree(attachment.process(),
-                    current.attachmentGeneration(), Duration.ofMillis(500), Instant.now().plusSeconds(2), current);
+                    current.attachmentGeneration(),
+                    Duration.ofMillis(500),
+                    Instant.now()
+                            .plusSeconds(2),
+                    current);
             termination = result;
             if (ownedTermination(result.outcome())) {
                 attachment.process()
@@ -1010,8 +1020,12 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             return;
         }
         try {
-            ProcessTreeTerminator.Result result = terminateProcessTree(process, attachmentGeneration,
-                    Duration.ofMillis(250), Instant.now().plusSeconds(2), checkpointUnchecked());
+            ProcessTreeTerminator.Result result = terminateProcessTree(process,
+                    attachmentGeneration,
+                    Duration.ofMillis(250),
+                    Instant.now()
+                            .plusSeconds(2),
+                    checkpointUnchecked());
             if (ownedTermination(result.outcome())) {
                 process.process()
                         .destroyForcibly();
@@ -1060,7 +1074,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 return;
             }
             java.util.concurrent.locks.LockSupport.parkNanos(
-            java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(
+                    java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(
                             Math.clamp(deadline - System.currentTimeMillis(), 1L, 25L)));
             if (Thread.interrupted()) {
                 throw new InterruptedException();
@@ -1179,12 +1193,20 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 return;
             }
             closeAttachmentStreams(attachment);
-            if (attachment.process().supervisor() != null) {
+            if (attachment.process()
+                    .supervisor() != null) {
                 try {
-                    ManagedProcessTreeSupervisor.DeathEvidence evidence = attachment.process().supervisor()
-                            .teardownAndProveEmptyWithEvidence(attachment.process().process(), attachmentGeneration,
-                                    attachment.process().executable(), attachment.process().commandIdentity(),
-                                    attachment.process().startEpochMillis());
+                    ManagedProcessTreeSupervisor.DeathEvidence evidence = attachment.process()
+                            .supervisor()
+                            .teardownAndProveEmptyWithEvidence(attachment.process()
+                                            .process(),
+                                    attachmentGeneration,
+                                    attachment.process()
+                                            .executable(),
+                                    attachment.process()
+                                            .commandIdentity(),
+                                    attachment.process()
+                                            .startEpochMillis());
                     launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
                     journal.offer("managed_tree_empty", Map.of("generation", attachmentGeneration), true);
                 } catch (IOException failure) {
@@ -1309,7 +1331,10 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         try {
             Attachment current = active;
             ProcessTreeTerminator.Result result = terminateProcessTree(current == null ? null : current.process(),
-                    checkpoint.attachmentGeneration(), Duration.ofMillis(250), Instant.now().plusSeconds(2),
+                    checkpoint.attachmentGeneration(),
+                    Duration.ofMillis(250),
+                    Instant.now()
+                            .plusSeconds(2),
                     checkpoint);
             if (ownedTermination(result.outcome()) && active != null
                     && active.attachmentGeneration() == checkpoint.attachmentGeneration()) {
@@ -1337,6 +1362,33 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
+    private ProcessTreeTerminator.Result terminateProcessTree(AppServerProcess process, long attachmentGeneration,
+            Duration grace, Instant deadline, CodexLifecycleStateStore.Checkpoint checkpoint) throws IOException {
+        if (process != null && process.supervisor() != null) {
+            ManagedProcessTreeSupervisor.DeathEvidence evidence = process.supervisor()
+                    .teardownAndProveEmptyWithEvidence(process.process(), attachmentGeneration,
+                            process.executable(), process.commandIdentity(), process.startEpochMillis());
+            launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
+            ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(
+                    Math.max(1L,
+                            process.process()
+                                    .pid()), process.executable(), process.commandIdentity(),
+                    process.startEpochMillis(), attachmentGeneration);
+            return new ProcessTreeTerminator.Result(ProcessTreeTerminator.Outcome.FORCED, attachmentGeneration,
+                    identity.pid(), List.of(), List.of(), true, "managed_job_empty");
+        }
+        if (checkpoint.rootPid() <= 0) {
+            ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(1L,
+                    "unknown", "unknown", Math.max(1L, checkpoint.rootStartEpochMillis()), attachmentGeneration);
+            return new ProcessTreeTerminator.Result(ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED,
+                    attachmentGeneration, identity.pid(), List.of(), List.of(), false, "root_already_exited");
+        }
+        ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(
+                checkpoint.rootPid(), checkpoint.rootExecutable(), checkpoint.rootCommandIdentity(),
+                checkpoint.rootStartEpochMillis(), attachmentGeneration);
+        return terminator.terminate(identity, attachmentGeneration, grace, deadline);
+    }
+
     /**
      * Injectable direct-process launch seam for deterministic fake servers.
      */
@@ -1358,7 +1410,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * Returns the exact thread that a managed initial launch must resume.
          * Ordinary launchers return {@code null} and use {@code thread/start}.
          *
-         * @param authority verified authority context
+         * @param authority            verified authority context
          * @param attachmentGeneration local attachment generation
          * @return exact managed thread, or {@code null} for ordinary start
          * @throws IOException when managed pin state is unavailable
@@ -1372,9 +1424,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * Verifies the provider result before the lifecycle joins managed
          * authority to this generation.
          *
-         * @param authority verified authority context
+         * @param authority            verified authority context
          * @param attachmentGeneration local attachment generation
-         * @param returnedThreadId provider-returned thread selector
+         * @param returnedThreadId     provider-returned thread selector
          * @throws IOException when the returned selector is not trusted
          */
         default void verifyReturnedThread(LifecycleControlRequestEnvelope.AuthorityContext authority,
@@ -1386,9 +1438,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * Finalizes the exact managed provider-thread binding after the
          * provider returned it and before authority activation.
          *
-         * @param authority verified authority context
+         * @param authority            verified authority context
          * @param attachmentGeneration local attachment generation
-         * @param returnedThreadId exact provider-returned thread selector
+         * @param returnedThreadId     exact provider-returned thread selector
          * @throws IOException when the binding cannot be finalized
          */
         default void finalizeManagedThread(LifecycleControlRequestEnvelope.AuthorityContext authority,
@@ -1400,10 +1452,10 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * Records the trusted provider completion boundary for the exact
          * managed provider thread.
          *
-         * @param authority verified authority context
+         * @param authority            verified authority context
          * @param attachmentGeneration local attachment generation
-         * @param threadId exact completed-turn thread
-         * @param turnId exact completed turn, when supplied by the provider
+         * @param threadId             exact completed-turn thread
+         * @param turnId               exact completed turn, when supplied by the provider
          * @throws IOException when the completion is outside the active scope
          */
         default void providerTurnCompleted(LifecycleControlRequestEnvelope.AuthorityContext authority,
@@ -1414,7 +1466,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         /**
          * Activates a pending managed proof only after exact thread verification.
          *
-         * @param authority verified authority context
+         * @param authority            verified authority context
          * @param attachmentGeneration local attachment generation
          * @throws IOException when managed activation cannot be committed
          */
@@ -1427,7 +1479,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * Records definitive managed-tree death at the trusted lifecycle
          * boundary.
          *
-         * @param authority verified authority context
+         * @param authority            verified authority context
          * @param attachmentGeneration stopped managed generation
          * @throws IOException when managed state cannot be updated
          */
@@ -1439,9 +1491,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         /**
          * Records definitive managed-tree death with supervisor evidence.
          *
-         * @param authority verified authority context
+         * @param authority            verified authority context
          * @param attachmentGeneration stopped managed generation
-         * @param evidence trusted supervisor-produced death evidence
+         * @param evidence             trusted supervisor-produced death evidence
          * @throws IOException when managed state cannot be updated
          */
         default void managedTreeStopped(LifecycleControlRequestEnvelope.AuthorityContext authority,
@@ -1449,31 +1501,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 throws IOException {
             managedTreeStopped(authority, attachmentGeneration);
         }
-    }
-
-    private ProcessTreeTerminator.Result terminateProcessTree(AppServerProcess process, long attachmentGeneration,
-            Duration grace, Instant deadline, CodexLifecycleStateStore.Checkpoint checkpoint) throws IOException {
-        if (process != null && process.supervisor() != null) {
-            ManagedProcessTreeSupervisor.DeathEvidence evidence = process.supervisor()
-                    .teardownAndProveEmptyWithEvidence(process.process(), attachmentGeneration,
-                            process.executable(), process.commandIdentity(), process.startEpochMillis());
-            launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
-            ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(
-                    Math.max(1L, process.process().pid()), process.executable(), process.commandIdentity(),
-                    process.startEpochMillis(), attachmentGeneration);
-            return new ProcessTreeTerminator.Result(ProcessTreeTerminator.Outcome.FORCED, attachmentGeneration,
-                    identity.pid(), List.of(), List.of(), true, "managed_job_empty");
-        }
-        if (checkpoint.rootPid() <= 0) {
-            ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(1L,
-                    "unknown", "unknown", Math.max(1L, checkpoint.rootStartEpochMillis()), attachmentGeneration);
-            return new ProcessTreeTerminator.Result(ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED,
-                    attachmentGeneration, identity.pid(), List.of(), List.of(), false, "root_already_exited");
-        }
-        ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(
-                checkpoint.rootPid(), checkpoint.rootExecutable(), checkpoint.rootCommandIdentity(),
-                checkpoint.rootStartEpochMillis(), attachmentGeneration);
-        return terminator.terminate(identity, attachmentGeneration, grace, deadline);
     }
 
     /**
@@ -1492,9 +1519,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         /**
          * Creates an ordinary process attachment without a managed supervisor.
          *
-         * @param process launched process
-         * @param executable verified executable identity
-         * @param commandIdentity verified command identity
+         * @param process          launched process
+         * @param executable       verified executable identity
+         * @param commandIdentity  verified command identity
          * @param startEpochMillis verified process start instant
          */
         public AppServerProcess(Process process, String executable, String commandIdentity, long startEpochMillis) {
@@ -1563,19 +1590,25 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
-    /** Couples one owned App Server process with its protocol client. */
+    /**
+     * Couples one owned App Server process with its protocol client.
+     */
     private record Attachment(AppServerProcess process, CodexAppServerProtocolClient protocol,
                               CodexEvidenceJournal journal, long attachmentGeneration, long connectionGeneration) {
 
     }
 
-    /** Tracks one bounded caller wait for an exact Codex lifecycle turn. */
+    /**
+     * Tracks one bounded caller wait for an exact Codex lifecycle turn.
+     */
     private record Waiter(String expectedThreadId, String expectedTurnId,
                           CompletableFuture<CodexLifecycleHttpClient.Response> future) {
 
     }
 
-    /** Routes protocol events into the owning lifecycle state machine. */
+    /**
+     * Routes protocol events into the owning lifecycle state machine.
+     */
     private final class Listener implements CodexAppServerProtocolClient.Listener {
 
         private final CompletableFuture<String> threadStarted;

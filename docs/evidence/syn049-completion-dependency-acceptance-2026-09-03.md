@@ -41,30 +41,30 @@ The command completed successfully. The resulting distribution was:
 
 The runtime/provider artifacts and SHA-256 values were:
 
-| Artifact | SHA-256 |
-| --- | --- |
-| `bin\synesis` | `066fc3dfb1f73a5f6738ffc83e5430a51195a99e7368d2ac9d938cc2d80b10df` |
-| `bin\synesis-mcp.exe` | `0472f2c43bdf91ce2eb779710c5a379e87d00c13dd593fa63b29d548af97fb8d` |
-| `bin\synesis.bat` | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
-| `lib\cli-0.1.0-SNAPSHOT.jar` | `db0708c56cad969c212a1d942fadc42d688e0f7f5fecf9ec0330ea34c54da6e5` |
-| `lib\coordination-0.1.0-SNAPSHOT.jar` | `7648e6ef85b0bbe75a4ca4e98047b0504119107ff4e5e65803df4ec0afe87af6` |
-| `lib\link-0.1.0-SNAPSHOT.jar` | `f6b228e50ca52c0353ea18637e0f98aa3b54913ff4c928467a32a42099a9dd6a` |
-| `lib\mcp-0.1.0-SNAPSHOT.jar` | `98fece1495c5fda943a3007dcdd21512ca535c6f5c944c043fe9690672f08692` |
-| `lib\mcp-contract-0.1.0-SNAPSHOT.jar` | `2b72e65fbb61ad8febffa9428b5b219d0e553add856a4c77b61333655c55e132` |
-| `lib\project-record-0.1.0-SNAPSHOT.jar` | `50a45aefc11fc11bd0e99aa7f239be5feba22e019f2853d075c1260380dcc95f` |
-| `lib\workspace-0.1.0-SNAPSHOT.jar` | `5921cfc5253e7ea4a4a2b9945cf744e2b52a09519bea720ced41d813b9169f07` |
-| `lib\core-3.5.4.jar` | `71de5d89341b5fcf5dd89da7f44e84d825d0e084cdf3ec77c9abe26b0f0ceb13` |
-| `lib\netty-buffer-4.2.16.Final.jar` | `cc36ae9fbd0b03fe755eb4eb4424ca53b59cfd297d7fd47d49e5b1059beded6c` |
-| `lib\netty-codec-base-4.2.16.Final.jar` | `feb410225938d9970de6b624a0c031d079804fa5cc5e1ec6e9298f16db5998a7` |
-| `lib\netty-codec-classes-quic-4.2.16.Final.jar` | `9b2856532681b109ecc1d15ba81341665fea4ba1aab78788e3d74c1aff38ca00` |
+| Artifact                                                      | SHA-256                                                            |
+|---------------------------------------------------------------|--------------------------------------------------------------------|
+| `bin\synesis`                                                 | `066fc3dfb1f73a5f6738ffc83e5430a51195a99e7368d2ac9d938cc2d80b10df` |
+| `bin\synesis-mcp.exe`                                         | `0472f2c43bdf91ce2eb779710c5a379e87d00c13dd593fa63b29d548af97fb8d` |
+| `bin\synesis.bat`                                             | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
+| `lib\cli-0.1.0-SNAPSHOT.jar`                                  | `db0708c56cad969c212a1d942fadc42d688e0f7f5fecf9ec0330ea34c54da6e5` |
+| `lib\coordination-0.1.0-SNAPSHOT.jar`                         | `7648e6ef85b0bbe75a4ca4e98047b0504119107ff4e5e65803df4ec0afe87af6` |
+| `lib\link-0.1.0-SNAPSHOT.jar`                                 | `f6b228e50ca52c0353ea18637e0f98aa3b54913ff4c928467a32a42099a9dd6a` |
+| `lib\mcp-0.1.0-SNAPSHOT.jar`                                  | `98fece1495c5fda943a3007dcdd21512ca535c6f5c944c043fe9690672f08692` |
+| `lib\mcp-contract-0.1.0-SNAPSHOT.jar`                         | `2b72e65fbb61ad8febffa9428b5b219d0e553add856a4c77b61333655c55e132` |
+| `lib\project-record-0.1.0-SNAPSHOT.jar`                       | `50a45aefc11fc11bd0e99aa7f239be5feba22e019f2853d075c1260380dcc95f` |
+| `lib\workspace-0.1.0-SNAPSHOT.jar`                            | `5921cfc5253e7ea4a4a2b9945cf744e2b52a09519bea720ced41d813b9169f07` |
+| `lib\core-3.5.4.jar`                                          | `71de5d89341b5fcf5dd89da7f44e84d825d0e084cdf3ec77c9abe26b0f0ceb13` |
+| `lib\netty-buffer-4.2.16.Final.jar`                           | `cc36ae9fbd0b03fe755eb4eb4424ca53b59cfd297d7fd47d49e5b1059beded6c` |
+| `lib\netty-codec-base-4.2.16.Final.jar`                       | `feb410225938d9970de6b624a0c031d079804fa5cc5e1ec6e9298f16db5998a7` |
+| `lib\netty-codec-classes-quic-4.2.16.Final.jar`               | `9b2856532681b109ecc1d15ba81341665fea4ba1aab78788e3d74c1aff38ca00` |
 | `lib\netty-codec-native-quic-4.2.16.Final-windows-x86_64.jar` | `ebe477b5374382f0d34583907b7441dc59c52492c890f946154deff47883041d` |
-| `lib\netty-codec-native-quic-4.2.16.Final.jar` | `cf2d2a587ea7e45f130ccd2a132e70e048979bc20e25efdbf332c2f18abe5230` |
-| `lib\netty-common-4.2.16.Final.jar` | `9825ee68a0dc4cd2b53e2f532502401b2211bad9b77e8b04882d9e64487283ff` |
-| `lib\netty-handler-4.2.16.Final.jar` | `a259ca496da05ac1981f95cd856211f894a328056a6129e9cd70dbbd5df401f7` |
-| `lib\netty-resolver-4.2.16.Final.jar` | `c9eca6a99036485cf1d186b4a6a595b0a54c53808319ee03924270eae04c32bb` |
-| `lib\netty-transport-4.2.16.Final.jar` | `cfa3f654caff906653385f4b7ddaa539d795b78f5711a622482b17d2b73484c0` |
-| `lib\netty-transport-native-unix-common-4.2.16.Final.jar` | `41ca8fe192083d17917be7ddcecded4da4fc1db1d1656d03d0bcb14e2f431155` |
-| `lib\picocli-4.7.7.jar` | `f86e30fffd10d2b13b8caa8d4b237a7ee61f2ffccf5b1941de718b765d235bf8` |
+| `lib\netty-codec-native-quic-4.2.16.Final.jar`                | `cf2d2a587ea7e45f130ccd2a132e70e048979bc20e25efdbf332c2f18abe5230` |
+| `lib\netty-common-4.2.16.Final.jar`                           | `9825ee68a0dc4cd2b53e2f532502401b2211bad9b77e8b04882d9e64487283ff` |
+| `lib\netty-handler-4.2.16.Final.jar`                          | `a259ca496da05ac1981f95cd856211f894a328056a6129e9cd70dbbd5df401f7` |
+| `lib\netty-resolver-4.2.16.Final.jar`                         | `c9eca6a99036485cf1d186b4a6a595b0a54c53808319ee03924270eae04c32bb` |
+| `lib\netty-transport-4.2.16.Final.jar`                        | `cfa3f654caff906653385f4b7ddaa539d795b78f5711a622482b17d2b73484c0` |
+| `lib\netty-transport-native-unix-common-4.2.16.Final.jar`     | `41ca8fe192083d17917be7ddcecded4da4fc1db1d1656d03d0bcb14e2f431155` |
+| `lib\picocli-4.7.7.jar`                                       | `f86e30fffd10d2b13b8caa8d4b237a7ee61f2ffccf5b1941de718b765d235bf8` |
 
 The installed Codex provider used the absolute rebuilt paths through normal
 provider installation. Its fixture metadata was
@@ -135,9 +135,13 @@ round-trip/rejection behavior, completion mode rejection, stale completion
 evidence, MCP schema/catalog, and provider guidance. The catalog remains
 exactly 10 tools. The selected source checks were:
 
-* `:coordination:test --tests org.synesis.coordination.collaboration.NoChangeCompletionTest --tests org.synesis.coordination.domain.prediction.PredictionEventWireCompatibilityTest` — PASS.
+*
+`:coordination:test --tests org.synesis.coordination.collaboration.NoChangeCompletionTest --tests org.synesis.coordination.domain.prediction.PredictionEventWireCompatibilityTest` —
+PASS.
 * `:mcp-contract:test` — PASS.
-* `:workspace:test --tests org.synesis.workspace.AgentNextActionServiceTest --tests org.synesis.workspace.application.agent.ReviewAdmissionOrderIndependenceTest --tests org.synesis.workspace.application.provider.ProviderManualServiceTest` — PASS.
+*
+`:workspace:test --tests org.synesis.workspace.AgentNextActionServiceTest --tests org.synesis.workspace.application.agent.ReviewAdmissionOrderIndependenceTest --tests org.synesis.workspace.application.provider.ProviderManualServiceTest` —
+PASS.
 
 The fresh real run provided the required sequence for Worker A:
 
@@ -188,7 +192,9 @@ and `TaskRepository`) before implementing its consumer lane.
 * `McpServerTest.ensureSessionCarriesExplicitDependenciesIntoDurableNextAction` — PASS against the rebuilt runtime.
 * Malformed dependency input coverage — PASS.
 * Durable capability projection/restart and requester-continuation coverage — PASS in the focused source suite.
-* Real fixture: dependency preserved, `NEEDS_CAPABILITY` projected, typed request durably created, provider response/publication accepted, B consumed the published contract through authorized Synesis visibility, and B's implementation tests passed.
+* Real fixture: dependency preserved, `NEEDS_CAPABILITY` projected, typed request durably created, provider
+  response/publication accepted, B consumed the published contract through authorized Synesis visibility, and B's
+  implementation tests passed.
 
 ## Fresh two-worker acceptance
 

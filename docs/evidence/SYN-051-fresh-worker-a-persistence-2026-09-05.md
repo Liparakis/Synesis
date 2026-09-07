@@ -32,12 +32,12 @@ used a different fresh binding, claim, launcher, and generation.
 - Minimal IPv4 `HttpServer` create/start/stop preflight: PASS.
 - Artifact hashes were recomputed before target state creation and matched:
 
-| artifact | SHA-256 |
-| --- | --- |
+| artifact                                                               | SHA-256                                                            |
+|------------------------------------------------------------------------|--------------------------------------------------------------------|
 | `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar` and installed copy | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
-| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar` and installed copy | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar` and installed copy | `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467` |
-| `cli/build/native-mcp/windows-x64/synesis-mcp.exe` and installed copy | `21c07b3ee2653fc262e150ed92144adceed7f67dd48e46f78edd24918ed3d8eb` |
+| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar` and installed copy             | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
+| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar` and installed copy             | `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467` |
+| `cli/build/native-mcp/windows-x64/synesis-mcp.exe` and installed copy  | `21c07b3ee2653fc262e150ed92144adceed7f67dd48e46f78edd24918ed3d8eb` |
 
 No rebuild was performed during this validation because provenance matched.
 

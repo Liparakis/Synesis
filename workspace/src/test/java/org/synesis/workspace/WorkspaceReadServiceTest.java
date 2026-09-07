@@ -1,12 +1,5 @@
 package org.synesis.workspace;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.agent.AgentResponse;
@@ -15,8 +8,14 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.workspace.WorkspaceReadService;
 import org.synesis.workspace.test.ProviderTestSupport;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
-/** Exercises read-only workspace inspection and path-boundary behavior. */
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Exercises read-only workspace inspection and path-boundary behavior.
+ */
 class WorkspaceReadServiceTest {
 
     private Path controlRoot;

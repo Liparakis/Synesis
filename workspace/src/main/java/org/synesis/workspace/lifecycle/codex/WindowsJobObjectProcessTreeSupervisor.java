@@ -14,16 +14,12 @@ import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Windows Job Object implementation of the managed process-tree boundary.
@@ -43,57 +39,69 @@ import java.util.concurrent.TimeUnit;
 @SuppressWarnings("restricted")
 public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProcessTreeSupervisor, AutoCloseable {
 
-    /** Minimal native process-tree lifecycle classification. */
-    public enum State {
-        /** Job exists but its root has not resumed. */
-        CREATED,
-        /** Root and descendants may execute inside the Job. */
-        RUNNING,
-        /** Job teardown has been requested and is being proven. */
-        TEARING_DOWN,
-        /** Root and Job are definitively dead and empty. */
-        DEAD,
-        /** Native ownership or liveness could not be proven. */
-        AMBIGUOUS
-    }
-
-    /** CREATE_SUSPENDED. */
+    /**
+     * CREATE_SUSPENDED.
+     */
     static final int CREATE_SUSPENDED = 0x00000004;
-    /** CREATE_UNICODE_ENVIRONMENT. */
+    /**
+     * CREATE_UNICODE_ENVIRONMENT.
+     */
     static final int CREATE_UNICODE_ENVIRONMENT = 0x00000400;
-    /** STARTF_USESTDHANDLES. */
+    /**
+     * STARTF_USESTDHANDLES.
+     */
     static final int STARTF_USESTDHANDLES = 0x00000100;
-    /** HANDLE_FLAG_INHERIT. */
+    /**
+     * HANDLE_FLAG_INHERIT.
+     */
     static final int HANDLE_FLAG_INHERIT = 0x00000001;
-    /** JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE. */
+    /**
+     * JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.
+     */
     static final int JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
-    /** JobObjectExtendedLimitInformation. */
+    /**
+     * JobObjectExtendedLimitInformation.
+     */
     static final int JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9;
-    /** JobObjectBasicAccountingInformation. */
+    /**
+     * JobObjectBasicAccountingInformation.
+     */
     static final int JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION = 1;
-    /** WAIT_OBJECT_0. */
+    /**
+     * WAIT_OBJECT_0.
+     */
     static final int WAIT_OBJECT_0 = 0;
-    /** WAIT_TIMEOUT. */
+    /**
+     * WAIT_TIMEOUT.
+     */
     static final int WAIT_TIMEOUT = 0x00000102;
-    /** INFINITE. */
+    /**
+     * INFINITE.
+     */
     static final int INFINITE = 0xFFFFFFFF;
-    /** x64 STARTUPINFO size. */
+    /**
+     * x64 STARTUPINFO size.
+     */
     static final long STARTUPINFO_SIZE = 104;
-    /** x64 PROCESS_INFORMATION size. */
+    /**
+     * x64 PROCESS_INFORMATION size.
+     */
     static final long PROCESS_INFORMATION_SIZE = 24;
-    /** x64 JOBOBJECT_EXTENDED_LIMIT_INFORMATION size. */
+    /**
+     * x64 JOBOBJECT_EXTENDED_LIMIT_INFORMATION size.
+     */
     static final long JOB_LIMITS_SIZE = 144;
-    /** x64 JOBOBJECT_BASIC_ACCOUNTING_INFORMATION size. */
+    /**
+     * x64 JOBOBJECT_BASIC_ACCOUNTING_INFORMATION size.
+     */
     static final long JOB_ACCOUNTING_SIZE = 48;
-
     private final NativeApi api;
     private final Map<WindowsManagedProcess, Job> jobs = new ConcurrentHashMap<>();
-
     /**
      * Creates the Windows supervisor.
      *
      * @throws IOException when the current platform is not Windows or the
-     * native kernel API cannot be loaded
+     *                     native kernel API cannot be loaded
      */
     public WindowsJobObjectProcessTreeSupervisor() throws IOException {
         if (!isWindows()) {
@@ -108,15 +116,66 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
      * @return true when the current operating system is Windows
      */
     public static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        return System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains("win");
+    }
+
+    private static String environmentBlock(Map<String, String> values) {
+        return values.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER))
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(java.util.stream.Collectors.joining("\0", "", "\0\0"));
+    }
+
+    private static MemorySegment utf16(Arena arena, String value) {
+        return arena.allocateFrom(JAVA_CHAR, (value + "\0").toCharArray());
+    }
+
+    private static String windowsCommandLine(List<String> command) {
+        return command.stream()
+                .map(WindowsJobObjectProcessTreeSupervisor::quoteWindowsArgument)
+                .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private static String quoteWindowsArgument(String value) {
+        if (value.indexOf(' ') < 0 && value.indexOf('\t') < 0 && value.indexOf('"') < 0 && !value.isEmpty()) {
+            return value;
+        }
+        StringBuilder quoted = new StringBuilder("\"");
+        int slashes = 0;
+        for (int i = 0; i < value.length(); i++) {
+            char character = value.charAt(i);
+            if (character == '\\') {
+                slashes++;
+            } else if (character == '"') {
+                quoted.append("\\".repeat(slashes * 2 + 1))
+                        .append('"');
+                slashes = 0;
+            } else {
+                quoted.append("\\".repeat(slashes))
+                        .append(character);
+                slashes = 0;
+            }
+        }
+        quoted.append("\\".repeat(slashes * 2))
+                .append('"');
+        return quoted.toString();
+    }
+
+    private static void requireHandle(MemorySegment handle) throws IOException {
+        if (handle == null || handle.address() == 0) {
+            throw new IOException("windows_handle_invalid");
+        }
     }
 
     /**
      * Launches one new root in one new Job before resuming it.
      *
-     * @param command executable argv
+     * @param command          executable argv
      * @param workingDirectory process working directory
-     * @param environment complete child environment
+     * @param environment      complete child environment
      * @return contained process
      * @throws IOException when native launch or Job assignment fails
      */
@@ -126,7 +185,8 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(workingDirectory, "workingDirectory");
         Objects.requireNonNull(environment, "environment");
-        if (command.isEmpty() || command.stream().anyMatch(Objects::isNull)) {
+        if (command.isEmpty() || command.stream()
+                .anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("command is empty or contains null");
         }
         Job job = null;
@@ -143,7 +203,10 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
             MemorySegment processInfo = arena.allocate(PROCESS_INFORMATION_SIZE, 8);
             MemorySegment commandLine = utf16(arena, windowsCommandLine(command));
             MemorySegment environmentBlock = utf16(arena, environmentBlock(environment));
-            MemorySegment directory = utf16(arena, workingDirectory.toAbsolutePath().normalize().toString());
+            MemorySegment directory = utf16(arena,
+                    workingDirectory.toAbsolutePath()
+                            .normalize()
+                            .toString());
             int created = api.createProcess(commandLine, CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
                     environmentBlock, directory, startup, processInfo);
             if (created == 0) {
@@ -282,7 +345,9 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
         return true;
     }
 
-    /** Releases any still-owned Job after best-effort teardown. */
+    /**
+     * Releases any still-owned Job after best-effort teardown.
+     */
     @Override
     public void close() {
         for (WindowsManagedProcess process : new ArrayList<>(jobs.keySet())) {
@@ -338,53 +403,35 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
                 parentOut, parentErr);
     }
 
-    private static String environmentBlock(Map<String, String> values) {
-        return values.entrySet()
-                .stream()
-                .sorted(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER))
-                .map(entry -> entry.getKey() + "=" + entry.getValue())
-                .collect(java.util.stream.Collectors.joining("\0", "", "\0\0"));
-    }
-
-    private static MemorySegment utf16(Arena arena, String value) {
-        return arena.allocateFrom(JAVA_CHAR, (value + "\0").toCharArray());
-    }
-
-    private static String windowsCommandLine(List<String> command) {
-        return command.stream().map(WindowsJobObjectProcessTreeSupervisor::quoteWindowsArgument)
-                .collect(java.util.stream.Collectors.joining(" "));
-    }
-
-    private static String quoteWindowsArgument(String value) {
-        if (value.indexOf(' ') < 0 && value.indexOf('\t') < 0 && value.indexOf('"') < 0 && !value.isEmpty()) {
-            return value;
-        }
-        StringBuilder quoted = new StringBuilder("\"");
-        int slashes = 0;
-        for (int i = 0; i < value.length(); i++) {
-            char character = value.charAt(i);
-            if (character == '\\') {
-                slashes++;
-            } else if (character == '"') {
-                quoted.append("\\".repeat(slashes * 2 + 1)).append('"');
-                slashes = 0;
-            } else {
-                quoted.append("\\".repeat(slashes)).append(character);
-                slashes = 0;
-            }
-        }
-        quoted.append("\\".repeat(slashes * 2)).append('"');
-        return quoted.toString();
-    }
-
-    private static void requireHandle(MemorySegment handle) throws IOException {
-        if (handle == null || handle.address() == 0) {
-            throw new IOException("windows_handle_invalid");
-        }
+    /**
+     * Minimal native process-tree lifecycle classification.
+     */
+    public enum State {
+        /**
+         * Job exists but its root has not resumed.
+         */
+        CREATED,
+        /**
+         * Root and descendants may execute inside the Job.
+         */
+        RUNNING,
+        /**
+         * Job teardown has been requested and is being proven.
+         */
+        TEARING_DOWN,
+        /**
+         * Root and Job are definitively dead and empty.
+         */
+        DEAD,
+        /**
+         * Native ownership or liveness could not be proven.
+         */
+        AMBIGUOUS
     }
 
     private record Handles(MemorySegment childStdInput, MemorySegment childStdOutput, MemorySegment childStdError,
-            MemorySegment parentStdInput, MemorySegment parentStdOutput, MemorySegment parentStdError) {
+                           MemorySegment parentStdInput, MemorySegment parentStdOutput, MemorySegment parentStdError) {
+
         private void closeChildEnds(NativeApi api) {
             api.closeHandle(childStdInput);
             api.closeHandle(childStdOutput);
@@ -400,6 +447,7 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
     }
 
     private static final class Job {
+
         private final MemorySegment handle;
         private final WindowsManagedProcess process;
         private boolean teardownIssued;
@@ -459,6 +507,7 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
     }
 
     private static final class WindowsManagedProcess extends Process {
+
         private final NativeApi api;
         private final MemorySegment processHandle;
         private final long pid;
@@ -567,6 +616,7 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
     }
 
     private static final class NativePipeInputStream extends InputStream {
+
         private final NativeApi api;
         private final MemorySegment handle;
         private volatile boolean closed;
@@ -621,6 +671,7 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
     }
 
     private static final class NativePipeOutputStream extends OutputStream {
+
         private final NativeApi api;
         private final MemorySegment handle;
         private volatile boolean closed;
@@ -632,7 +683,7 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
 
         @Override
         public void write(int value) throws IOException {
-            write(new byte[] {(byte) value}, 0, 1);
+            write(new byte[]{(byte) value}, 0, 1);
         }
 
         @Override
@@ -666,6 +717,7 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
     }
 
     private static final class NativeApi {
+
         private final Linker linker = Linker.nativeLinker();
         private final SymbolLookup kernel32 = SymbolLookup.libraryLookup("kernel32", Arena.global());
         private final MethodHandle createJobObject;
@@ -715,7 +767,8 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
         }
 
         private MethodHandle bind(String name, FunctionDescriptor descriptor) {
-            return linker.downcallHandle(kernel32.find(name).orElseThrow(), descriptor);
+            return linker.downcallHandle(kernel32.find(name)
+                    .orElseThrow(), descriptor);
         }
 
         private MemorySegment createJob(Arena arena) throws IOException {

@@ -90,15 +90,15 @@ reports `BUILD_COMMIT=UNKNOWN` in this local build, so that field is not used
 as provenance evidence; the committed source HEAD, exact artifact paths, and
 matching produced/installed hashes are recorded here.
 
-| Artifact | SHA-256 |
-|---|---|
-| `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar` | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
-| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar` | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar` | `becfa549c53b4eb324b4a23b6d63eb7490c9553eae89474f98d152f48bd22c8e` |
+| Artifact                                                     | SHA-256                                                            |
+|--------------------------------------------------------------|--------------------------------------------------------------------|
+| `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar`          | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
+| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar`                      | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
+| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar`                      | `becfa549c53b4eb324b4a23b6d63eb7490c9553eae89474f98d152f48bd22c8e` |
 | `cli/build/install/synesis/lib/workspace-0.1.0-SNAPSHOT.jar` | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
-| `cli/build/install/synesis/lib/mcp-0.1.0-SNAPSHOT.jar` | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar` | `becfa549c53b4eb324b4a23b6d63eb7490c9553eae89474f98d152f48bd22c8e` |
-| `cli/build/install/synesis/bin/synesis.bat` | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
+| `cli/build/install/synesis/lib/mcp-0.1.0-SNAPSHOT.jar`       | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
+| `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar`       | `becfa549c53b4eb324b4a23b6d63eb7490c9553eae89474f98d152f48bd22c8e` |
+| `cli/build/install/synesis/bin/synesis.bat`                  | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
 
 ## Acceptance boundary
 

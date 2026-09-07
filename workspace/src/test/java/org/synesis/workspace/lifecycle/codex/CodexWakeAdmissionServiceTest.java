@@ -25,14 +25,35 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.test.TestGit;
 import org.synesis.workspace.test.ProviderTestSupport;
+import org.synesis.workspace.test.TestGit;
 
-/** Tests exact dormant-participant wake admission and duplicate suppression. */
+/**
+ * Tests exact dormant-participant wake admission and duplicate suppression.
+ */
 class CodexWakeAdmissionServiceTest {
 
     @TempDir
     Path temp;
+
+    private static CodexWakeAdmissionService.DormantBinding candidate(String actionKey) {
+        return candidate(actionKey, CodexLifecycleStateStore.State.COMPLETED);
+    }
+
+    private static CodexWakeAdmissionService.DormantBinding candidate(String actionKey,
+            CodexLifecycleStateStore.State state) {
+        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService.Binding(
+                2, "session-1", "project-1", "node-1", "codex", "fingerprint-1", "supervisor-1",
+                "worker-1", "worktree-1", "C:/worktree-1", "C:/project-1", "synesis/codex/session-1",
+                "0123456789012345678901234567890123456789", "C:/git", "ALLOCATED", "VERIFIED",
+                "WORKTREE_VERIFIED", "BOUND", 1L, 2L, 3L, "VERIFIED", 1, null);
+        CodexLifecycleStateStore.Checkpoint checkpoint = new CodexLifecycleStateStore.Checkpoint(
+                "session-1", "project-1", "codex", 7L, state, "host-1", 2L, 3L, 42L, 4L,
+                "codex.exe", "codex.exe --app-server", "thread-1", "turn-1", null, true, 8L);
+        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        return new CodexWakeAdmissionService.DormantBinding(binding, checkpoint, "intent-1", 4L,
+                new CodexWakeAdmissionService.ActionableItem(actionKey, participant));
+    }
 
     @Test
     void liveAttachmentUsesNotifyWithExactAuthorityAndThread() throws Exception {
@@ -46,12 +67,18 @@ class CodexWakeAdmissionServiceTest {
         LifecycleControlRequestEnvelope request = dispatcher.requests.getFirst();
         assertEquals("thread-1", request.expectedThreadId());
         assertEquals("turn-1", request.expectedTurnId());
-        assertEquals("project-1", request.authority().projectId());
-        assertEquals("session-1", request.authority().bindingSessionId());
+        assertEquals("project-1",
+                request.authority()
+                        .projectId());
+        assertEquals("session-1",
+                request.authority()
+                        .bindingSessionId());
         assertEquals(WorkspaceCollaborationService.participantHandle("session-1"),
-                request.authority().participant());
+                request.authority()
+                        .participant());
         assertTrue(request.continuation());
-        assertTrue(request.input().contains("get_next_action"));
+        assertTrue(request.input()
+                .contains("get_next_action"));
         assertEquals(Set.of(result.admissionKey()), admissions.keys);
     }
 
@@ -65,8 +92,12 @@ class CodexWakeAdmissionServiceTest {
 
         assertEquals(CodexWakeAdmissionService.Outcome.DISPATCHED, result.outcome());
         assertEquals(LifecycleControlRequestEnvelope.Operation.RESUME, result.operation());
-        assertEquals("thread-1", dispatcher.requests.getFirst().expectedThreadId());
-        assertEquals("turn-1", dispatcher.requests.getFirst().expectedTurnId());
+        assertEquals("thread-1",
+                dispatcher.requests.getFirst()
+                        .expectedThreadId());
+        assertEquals("turn-1",
+                dispatcher.requests.getFirst()
+                        .expectedTurnId());
     }
 
     @Test
@@ -78,7 +109,8 @@ class CodexWakeAdmissionServiceTest {
         Files.writeString(project.resolve("README.md"), "wake fixture\n");
         TestGit.run(project, "add", ".");
         TestGit.run(project, "commit", "-m", "fixture");
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(project).location();
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(project)
+                .location();
         ProviderTestSupport.install(location, "codex");
 
         AgentSessionService sessionService = new AgentSessionService();
@@ -89,28 +121,54 @@ class CodexWakeAdmissionServiceTest {
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
         bindingService.verifyWorkspaceTrust(location, "codex", dormant.sessionId(), dormant.worktreePath());
         bindingService.verifyWorkspaceTrust(location, "codex", peer.sessionId(), peer.worktreePath());
-        ProviderSessionBindingService.Binding dormantBinding = bindingService.list(location, "codex").stream()
-                .filter(binding -> binding.sessionId().equals(dormant.sessionId()))
-                .findFirst().orElseThrow();
-        ProviderSessionBindingService.Binding peerBinding = bindingService.list(location, "codex").stream()
-                .filter(binding -> binding.sessionId().equals(peer.sessionId()))
-                .findFirst().orElseThrow();
+        ProviderSessionBindingService.Binding dormantBinding = bindingService.list(location, "codex")
+                .stream()
+                .filter(binding -> binding.sessionId()
+                        .equals(dormant.sessionId()))
+                .findFirst()
+                .orElseThrow();
+        ProviderSessionBindingService.Binding peerBinding = bindingService.list(location, "codex")
+                .stream()
+                .filter(binding -> binding.sessionId()
+                        .equals(peer.sessionId()))
+                .findFirst()
+                .orElseThrow();
 
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var dormantIntent = collaboration.announce(project, "codex", "wake-dormant",
                 "dormant lane", "wake acceptance", List.of(ResourceSelector.pathExact("README.md")));
         collaboration.announce(project, "codex", "wake-peer",
                 "peer lane", "peer acceptance", List.of(ResourceSelector.pathExact("peer.txt")));
-        collaboration.request(project, "codex", "wake-peer", dormantIntent.intent().intentId(),
-                CoordinationRequest.Kind.CONTRACT, "peer durable state changed");
+        collaboration.request(project,
+                "codex",
+                "wake-peer",
+                dormantIntent.intent()
+                        .intentId(),
+                CoordinationRequest.Kind.CONTRACT,
+                "peer durable state changed");
 
         CodexLifecycleStateStore stateStore = new CodexLifecycleStateStore(
-                CodexWakeAdmissionService.runtimeRoot(location).resolve("bindings"));
+                CodexWakeAdmissionService.runtimeRoot(location)
+                        .resolve("bindings"));
         stateStore.write(new CodexLifecycleStateStore.Checkpoint(
-                dormantBinding.sessionId(), location.projectId().toString(), "codex", 12L,
-                CodexLifecycleStateStore.State.COMPLETED, "host-fixture", 4L, 5L, 123L, 6L,
-                "codex.exe", "codex.exe --app-server", "thread-dormant", "turn-old", null,
-                true, System.currentTimeMillis()));
+                dormantBinding.sessionId(),
+                location.projectId()
+                        .toString(),
+                "codex",
+                12L,
+                CodexLifecycleStateStore.State.COMPLETED,
+                "host-fixture",
+                4L,
+                5L,
+                123L,
+                6L,
+                "codex.exe",
+                "codex.exe --app-server",
+                "thread-dormant",
+                "turn-old",
+                null,
+                true,
+                System.currentTimeMillis()));
 
         FakeDispatcher dispatcher = new FakeDispatcher(false);
         CodexWakeAdmissionService service = new CodexWakeAdmissionService(dispatcher,
@@ -118,17 +176,30 @@ class CodexWakeAdmissionServiceTest {
         List<CodexWakeAdmissionService.WakeResult> results = service.scan(project);
 
         assertEquals(1, results.size());
-        assertEquals(CodexWakeAdmissionService.Outcome.DISPATCHED, results.getFirst().outcome());
-        assertEquals(LifecycleControlRequestEnvelope.Operation.RESUME, results.getFirst().operation());
+        assertEquals(CodexWakeAdmissionService.Outcome.DISPATCHED,
+                results.getFirst()
+                        .outcome());
+        assertEquals(LifecycleControlRequestEnvelope.Operation.RESUME,
+                results.getFirst()
+                        .operation());
         LifecycleControlRequestEnvelope request = dispatcher.requests.getFirst();
-        assertEquals(location.projectId().toString(), request.authority().projectId());
-        assertEquals(dormantBinding.sessionId(), request.authority().bindingSessionId());
+        assertEquals(location.projectId()
+                        .toString(),
+                request.authority()
+                        .projectId());
+        assertEquals(dormantBinding.sessionId(),
+                request.authority()
+                        .bindingSessionId());
         assertEquals(WorkspaceCollaborationService.participantHandle(dormantBinding.sessionId()),
-                request.authority().participant());
+                request.authority()
+                        .participant());
         assertEquals("thread-dormant", request.expectedThreadId());
         assertEquals("turn-old", request.expectedTurnId());
-        assertTrue(request.input().contains("get_next_action"));
-        assertFalse(peerBinding.sessionId().equals(request.authority().bindingSessionId()));
+        assertTrue(request.input()
+                .contains("get_next_action"));
+        assertFalse(peerBinding.sessionId()
+                .equals(request.authority()
+                        .bindingSessionId()));
     }
 
     @Test
@@ -145,7 +216,8 @@ class CodexWakeAdmissionServiceTest {
 
         assertTrue(store.contains("key-2047"));
         IOException failure = assertThrows(IOException.class, () -> store.record("key-new"));
-        assertTrue(failure.getMessage().contains("exceeds bound"));
+        assertTrue(failure.getMessage()
+                .contains("exceeds bound"));
         assertFalse(store.contains("key-new"));
     }
 
@@ -181,7 +253,8 @@ class CodexWakeAdmissionServiceTest {
         CodexWakeAdmissionService.ActionableItem action = CodexWakeAdmissionService.capabilityAction(
                 available, binding, participant);
 
-        assertEquals("capability-request:" + available.handle().value(), action.key());
+        assertEquals("capability-request:" + available.handle()
+                .value(), action.key());
         assertEquals(participant, action.participant());
         assertEquals(null, CodexWakeAdmissionService.capabilityAction(
                 available.withUpdate(CapabilityLifecycleState.AWAITING_OWNER, null, null, 3L), binding, participant));
@@ -196,26 +269,8 @@ class CodexWakeAdmissionServiceTest {
         assertEquals(null, CodexWakeAdmissionService.capabilityAction(available, otherBinding, participant));
     }
 
-    private static CodexWakeAdmissionService.DormantBinding candidate(String actionKey) {
-        return candidate(actionKey, CodexLifecycleStateStore.State.COMPLETED);
-    }
-
-    private static CodexWakeAdmissionService.DormantBinding candidate(String actionKey,
-            CodexLifecycleStateStore.State state) {
-        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService.Binding(
-                2, "session-1", "project-1", "node-1", "codex", "fingerprint-1", "supervisor-1",
-                "worker-1", "worktree-1", "C:/worktree-1", "C:/project-1", "synesis/codex/session-1",
-                "0123456789012345678901234567890123456789", "C:/git", "ALLOCATED", "VERIFIED",
-                "WORKTREE_VERIFIED", "BOUND", 1L, 2L, 3L, "VERIFIED", 1, null);
-        CodexLifecycleStateStore.Checkpoint checkpoint = new CodexLifecycleStateStore.Checkpoint(
-                "session-1", "project-1", "codex", 7L, state, "host-1", 2L, 3L, 42L, 4L,
-                "codex.exe", "codex.exe --app-server", "thread-1", "turn-1", null, true, 8L);
-        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        return new CodexWakeAdmissionService.DormantBinding(binding, checkpoint, "intent-1", 4L,
-                new CodexWakeAdmissionService.ActionableItem(actionKey, participant));
-    }
-
     private static final class FakeDispatcher implements CodexWakeAdmissionService.LifecycleDispatcher {
+
         private final boolean live;
         private final List<LifecycleControlRequestEnvelope> requests = new ArrayList<>();
 
@@ -242,6 +297,7 @@ class CodexWakeAdmissionServiceTest {
     }
 
     private static final class MemoryAdmissionStore implements CodexWakeAdmissionService.AdmissionStore {
+
         private final Set<String> keys = new HashSet<>();
 
         @Override

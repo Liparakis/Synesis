@@ -24,7 +24,9 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
 import org.synesis.workspace.test.ProviderTestSupport;
 
-/** Exercises revision-checked workspace patch application. */
+/**
+ * Exercises revision-checked workspace patch application.
+ */
 @SuppressWarnings("ExtractMethodRecommender")
 class WorkspacePatchServiceTest {
 
@@ -376,7 +378,8 @@ class WorkspacePatchServiceTest {
         Path evidenceDir = controlRoot.resolve(".synesis/local/evidence/codex");
         assertTrue(Files.exists(evidenceDir));
         try (var files = Files.list(evidenceDir)) {
-            assertTrue(files.findAny().isPresent(), "Internal evidence record should be retained");
+            assertTrue(files.findAny()
+                    .isPresent(), "Internal evidence record should be retained");
         }
     }
 

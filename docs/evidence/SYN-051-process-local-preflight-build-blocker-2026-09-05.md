@@ -52,12 +52,12 @@ logged, or modified. Worker B, A2, and replacement were not invoked.
 
 The existing installed artifact hashes observed before the failed build were:
 
-| Artifact | SHA-256 |
-|---|---|
+| Artifact                         | SHA-256                                                            |
+|----------------------------------|--------------------------------------------------------------------|
 | workspace JAR and installed copy | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
-| MCP JAR and installed copy | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| CLI JAR and installed copy | `770c7df632d07481365e6177fc1559eb2ae8568a9c44619319d447d9b29c5c58` |
-| installed `synesis.bat` | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
+| MCP JAR and installed copy       | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
+| CLI JAR and installed copy       | `770c7df632d07481365e6177fc1559eb2ae8568a9c44619319d447d9b29c5c58` |
+| installed `synesis.bat`          | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
 
 These are observations only, not a new provenance lock.
 

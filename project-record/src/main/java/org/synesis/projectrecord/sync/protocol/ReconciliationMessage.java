@@ -766,8 +766,10 @@ public final class ReconciliationMessage {
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof InventoryEntry(UUID otherRecordId, long otherHeadVersion,
-                    byte[] otherHeadDigest))) {
+            if (!(o instanceof InventoryEntry(
+                    UUID otherRecordId, long otherHeadVersion,
+                    byte[] otherHeadDigest
+            ))) {
                 return false;
             }
             return headVersion == otherHeadVersion && recordId.equals(otherRecordId)

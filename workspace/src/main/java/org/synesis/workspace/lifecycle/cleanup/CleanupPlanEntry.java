@@ -1,9 +1,9 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
+import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
 /**
  * Single evaluation entry in a read-only cleanup plan.

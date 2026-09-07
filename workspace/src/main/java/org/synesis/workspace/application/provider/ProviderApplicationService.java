@@ -108,13 +108,16 @@ public final class ProviderApplicationService {
         if (!"codex".equals(provider)) {
             return "SESSION_BOUND";
         }
-        Path directory = location.synesisDirectory().resolve("local/runtime/managed-continuity");
+        Path directory = location.synesisDirectory()
+                .resolve("local/runtime/managed-continuity");
         if (!Files.isDirectory(directory)) {
             return "SESSION_BOUND";
         }
         try (var paths = Files.list(directory)) {
             boolean managed = paths.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .filter(path -> path.getFileName()
+                            .toString()
+                            .endsWith(".json"))
                     .map(path -> {
                         try {
                             return new org.synesis.workspace.application.provider.continuity.ManagedAttachmentStore(path)
@@ -1208,7 +1211,9 @@ public final class ProviderApplicationService {
         }
     }
 
-    /** Holds provider MCP health status for readiness reporting. */
+    /**
+     * Holds provider MCP health status for readiness reporting.
+     */
     private record McpHealth(boolean passed, String status) {
 
     }

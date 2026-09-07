@@ -37,12 +37,19 @@ import org.synesis.workspace.lifecycle.GitProcessRunner;
 @SuppressWarnings("DuplicatedCode")
 public final class ReviewSnapshotAccessService {
 
-    /** Resolves the project and creates only disposable review worktrees. */
+    /**
+     * Resolves the project and creates only disposable review worktrees.
+     */
     private final ProjectApplicationService projectService;
-    /** Enforces exact connection and review-authority identity. */
+    /**
+     * Enforces exact connection and review-authority identity.
+     */
     private final SessionAuthorityResolver authorityResolver;
-    /** Runs read-only commands inside the immutable review workspace. */
+    /**
+     * Runs read-only commands inside the immutable review workspace.
+     */
     private final ProjectProcessExecutor processExecutor;
+
     /**
      * Creates an immutable review access service.
      */
@@ -373,7 +380,9 @@ public final class ReviewSnapshotAccessService {
         }
     }
 
-    /** Couples an authorized grant with the immutable snapshot it permits. */
+    /**
+     * Couples an authorized grant with the immutable snapshot it permits.
+     */
     private record GrantSnapshot(LaneGrant grant, TaskSnapshotRecord snapshot) {
 
     }

@@ -17,7 +17,9 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.test.ProviderTestSupport;
 
-/** Exercises task cancellation authorization and durable outcome handling. */
+/**
+ * Exercises task cancellation authorization and durable outcome handling.
+ */
 class TaskCancellationTest {
 
     private static void git(Path root, String... arguments) throws Exception {
@@ -35,7 +37,8 @@ class TaskCancellationTest {
         git(projectRoot, "add", ".");
         git(projectRoot, "commit", "-m", "Initial commit");
         ProjectApplicationService projectService = new ProjectApplicationService();
-        ProjectApplicationService.ProjectLocation initialized = projectService.init(projectRoot).location();
+        ProjectApplicationService.ProjectLocation initialized = projectService.init(projectRoot)
+                .location();
         ProviderTestSupport.install(initialized, "codex");
 
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();

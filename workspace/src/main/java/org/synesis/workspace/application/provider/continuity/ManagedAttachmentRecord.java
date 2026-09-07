@@ -23,27 +23,19 @@ import java.util.Objects;
  * @param updatedAtEpochMillis record update time
  */
 public record ManagedAttachmentRecord(int schemaVersion, String projectId, String provider,
-                                     ProviderContinuityMode mode, String bindingSessionId,
-                                     String threadId, long generation, String proofHash,
-                                     String runtimeHomeId, Status status, long revision,
-                                     long updatedAtEpochMillis) {
+                                      ProviderContinuityMode mode, String bindingSessionId,
+                                      String threadId, long generation, String proofHash,
+                                      String runtimeHomeId, Status status, long revision,
+                                      long updatedAtEpochMillis) {
 
-    /** Current durable record format. */
+    /**
+     * Current durable record format.
+     */
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
-    /** Durable attachment lifecycle states. */
-    public enum Status {
-        /** Current attachment is accepted. */
-        ACTIVE,
-        /** Proof exists but the trusted provider-thread join is not complete. */
-        PENDING_ACTIVATION,
-        /** No current process is attached, but replacement may be authenticated. */
-        DISCONNECTED,
-        /** Binding or logical session is terminal and cannot be revived. */
-        TERMINAL
-    }
-
-    /** Validates the durable format and bounded fields. */
+    /**
+     * Validates the durable format and bounded fields.
+     */
     public ManagedAttachmentRecord {
         if (schemaVersion != CURRENT_SCHEMA_VERSION) {
             throw new IllegalArgumentException("unsupported managed attachment format");
@@ -81,5 +73,27 @@ public record ManagedAttachmentRecord(int schemaVersion, String projectId, Strin
         if (!value.matches("[0-9a-fA-F]{64}")) {
             throw new IllegalArgumentException(label + " is not a SHA-256 digest");
         }
+    }
+
+    /**
+     * Durable attachment lifecycle states.
+     */
+    public enum Status {
+        /**
+         * Current attachment is accepted.
+         */
+        ACTIVE,
+        /**
+         * Proof exists but the trusted provider-thread join is not complete.
+         */
+        PENDING_ACTIVATION,
+        /**
+         * No current process is attached, but replacement may be authenticated.
+         */
+        DISCONNECTED,
+        /**
+         * Binding or logical session is terminal and cannot be revived.
+         */
+        TERMINAL
     }
 }

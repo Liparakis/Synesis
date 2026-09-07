@@ -1,14 +1,14 @@
 package org.synesis.workspace.application.provider.continuity;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -30,7 +30,36 @@ public final class ManagedAttachmentStore {
      * @param file record file
      */
     public ManagedAttachmentStore(Path file) {
-        this.file = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        this.file = Objects.requireNonNull(file, "file")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    private static String text(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return text;
+    }
+
+    private static Number number(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof Number number)) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return number;
+    }
+
+    private static String optionalText(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (item == null) {
+            return null;
+        }
+        if (!(item instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return text;
     }
 
     /**
@@ -78,8 +107,8 @@ public final class ManagedAttachmentStore {
      * This is the cross-process one-winner fence for reattachment races.
      *
      * @param expectedGeneration current generation
-     * @param expectedProofHash current proof hash
-     * @param replacement replacement record
+     * @param expectedProofHash  current proof hash
+     * @param replacement        replacement record
      * @return false when another replacement won the race
      * @throws IOException when persistence fails
      */
@@ -91,7 +120,8 @@ public final class ManagedAttachmentStore {
         withLock(() -> {
             ManagedAttachmentRecord current = read().orElse(null);
             if (current == null || current.generation() != expectedGeneration
-                    || !current.proofHash().equals(expectedProofHash)) {
+                    || !current.proofHash()
+                    .equals(expectedProofHash)) {
                 return;
             }
             writeUnlocked(replacement);
@@ -102,8 +132,10 @@ public final class ManagedAttachmentStore {
 
     private void writeUnlocked(ManagedAttachmentRecord record) throws IOException {
         ManagedAttachmentRecord prior = read().orElse(null);
-        if (prior != null && (!prior.projectId().equals(record.projectId())
-                || !prior.bindingSessionId().equals(record.bindingSessionId())
+        if (prior != null && (!prior.projectId()
+                .equals(record.projectId())
+                || !prior.bindingSessionId()
+                .equals(record.bindingSessionId())
                 || record.revision() <= prior.revision()
                 || record.generation() < prior.generation())) {
             throw new IOException("managed attachment revision or identity regression");
@@ -112,13 +144,17 @@ public final class ManagedAttachmentStore {
         value.put("schemaVersion", record.schemaVersion());
         value.put("projectId", record.projectId());
         value.put("provider", record.provider());
-        value.put("mode", record.mode().name());
+        value.put("mode",
+                record.mode()
+                        .name());
         value.put("bindingSessionId", record.bindingSessionId());
         value.put("threadId", record.threadId());
         value.put("generation", record.generation());
         value.put("proofHash", record.proofHash());
         value.put("runtimeHomeId", record.runtimeHomeId());
-        value.put("status", record.status().name());
+        value.put("status",
+                record.status()
+                        .name());
         value.put("revision", record.revision());
         value.put("updatedAtEpochMillis", record.updatedAtEpochMillis());
         Files.createDirectories(file.getParent());
@@ -161,35 +197,9 @@ public final class ManagedAttachmentStore {
         return file;
     }
 
-    private static String text(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return text;
-    }
-
-    private static Number number(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof Number number)) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return number;
-    }
-
-    private static String optionalText(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (item == null) {
-            return null;
-        }
-        if (!(item instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("invalid " + key);
-        }
-        return text;
-    }
-
     @FunctionalInterface
     private interface LockedOperation {
+
         void run() throws IOException;
     }
 }

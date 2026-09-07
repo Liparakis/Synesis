@@ -1,8 +1,5 @@
 package org.synesis.workspace.application.constraint;
 
-import java.io.Serial;
-import java.util.Objects;
-import java.util.UUID;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.DecisionRecord;
@@ -12,6 +9,9 @@ import org.synesis.projectrecord.guardrail.ScopeMatcher;
 import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.security.Ed25519Signer;
 import org.synesis.workspace.application.ProjectApplicationService;
+import java.io.Serial;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Creates and persists typed project constraints without CLI concerns.

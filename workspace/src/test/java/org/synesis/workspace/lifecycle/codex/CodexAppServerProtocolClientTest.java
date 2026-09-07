@@ -1,8 +1,8 @@
 package org.synesis.workspace.lifecycle.codex;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -16,8 +16,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -134,7 +134,9 @@ class CodexAppServerProtocolClientTest {
         }
     }
 
-    /** Identifies an expected bounded protocol completion timeout in tests. */
+    /**
+     * Identifies an expected bounded protocol completion timeout in tests.
+     */
     private static final class CompletionTimeout extends RuntimeException {
 
         @java.io.Serial
@@ -145,7 +147,9 @@ class CodexAppServerProtocolClientTest {
         }
     }
 
-    /** Identifies an expected protocol completion failure in tests. */
+    /**
+     * Identifies an expected protocol completion failure in tests.
+     */
     private static final class CompletionFailure extends RuntimeException {
 
         @java.io.Serial
@@ -156,7 +160,9 @@ class CodexAppServerProtocolClientTest {
         }
     }
 
-    /** Owns disposable protocol-client resources for one lifecycle test. */
+    /**
+     * Owns disposable protocol-client resources for one lifecycle test.
+     */
     private static final class Fixture implements AutoCloseable {
 
         private final PipedOutputStream stdout = new PipedOutputStream();

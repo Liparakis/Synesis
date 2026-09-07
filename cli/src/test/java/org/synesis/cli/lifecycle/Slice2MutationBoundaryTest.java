@@ -25,7 +25,9 @@ import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
-/** Verifies the bounded lifecycle mutation command contract. */
+/**
+ * Verifies the bounded lifecycle mutation command contract.
+ */
 class Slice2MutationBoundaryTest {
 
     private static Invocation createInvocation(Path profile) {
@@ -121,7 +123,9 @@ class Slice2MutationBoundaryTest {
         assertTrue(execOut.contains("EVENT_LOG_MODIFIED=false"));
     }
 
-    /** Holds isolated streams and runtime for one mutation invocation. */
+    /**
+     * Holds isolated streams and runtime for one mutation invocation.
+     */
     private record Invocation(CliRuntime runtime, ByteArrayOutputStream out, ByteArrayOutputStream err) {
 
         private String output() {

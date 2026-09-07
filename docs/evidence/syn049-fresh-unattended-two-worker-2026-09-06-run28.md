@@ -35,12 +35,12 @@ full acceptance retry was used.
 
 Runtime artifacts and the validation-host install matched exactly:
 
-| artifact | SHA-256 |
-|---|---|
+| artifact      | SHA-256                                                            |
+|---------------|--------------------------------------------------------------------|
 | workspace JAR | `0224A99661EB961CB9F1803BFC6C7945E1C085874E0B929CD93DBA070DB9FF80` |
-| MCP JAR | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
-| CLI JAR | `2F76646F7794A12724ABF90D86C3667A8F6F88C3AC070F222632B4F67F1276DF` |
-| native MCP | `58C31651CC3BE0B7DE71204EA12AEA690D987E8403C31B96D9013B9EEB5360C8` |
+| MCP JAR       | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
+| CLI JAR       | `2F76646F7794A12724ABF90D86C3667A8F6F88C3AC070F222632B4F67F1276DF` |
+| native MCP    | `58C31651CC3BE0B7DE71204EA12AEA690D987E8403C31B96D9013B9EEB5360C8` |
 
 ## Fresh target and exact identities
 
@@ -160,8 +160,9 @@ substitution.
 At normal cleanup, A and B lifecycle checkpoints were generation 1 `STOPPED`
 with complete evidence; attachments were `DISCONNECTED`; ownership records
 retained the exact Thread A/Thread B pairs and `persistenceReady=true`, revision
+
 2. The run did not reach B capability consumption, B implementation, final
-integration, or WorkGroup terminalization.
+   integration, or WorkGroup terminalization.
 
 Provider-owned state was inspected read-only, without credentials:
 

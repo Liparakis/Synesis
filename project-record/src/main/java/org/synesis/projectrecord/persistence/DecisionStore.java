@@ -37,21 +37,37 @@ public final class DecisionStore {
      * Maximum head entries accepted by one read-only snapshot.
      */
     public static final int MAX_HEAD_SNAPSHOT = 1_024;
-    /** Maximum immutable revisions retained for one decision record. */
+    /**
+     * Maximum immutable revisions retained for one decision record.
+     */
     private static final int MAX_REVISIONS_PER_RECORD = 64;
-    /** Binary marker used to reject non-head files as head pointers. */
+    /**
+     * Binary marker used to reject non-head files as head pointers.
+     */
     private static final int HEAD_MAGIC = 0x53444831;
-    /** Version of the compact head-pointer encoding. */
+    /**
+     * Version of the compact head-pointer encoding.
+     */
     private static final int HEAD_VERSION = 1;
-    /** Profile-local root containing revisions, heads, and quarantined conflicts. */
+    /**
+     * Profile-local root containing revisions, heads, and quarantined conflicts.
+     */
     private final Path root;
-    /** Project namespace every accepted revision must match. */
+    /**
+     * Project namespace every accepted revision must match.
+     */
     private final UUID projectId;
-    /** Immutable revision files, grouped by decision identity. */
+    /**
+     * Immutable revision files, grouped by decision identity.
+     */
     private final Path decisions;
-    /** Atomically replaced pointers to the current revision of each decision. */
+    /**
+     * Atomically replaced pointers to the current revision of each decision.
+     */
     private final Path heads;
-    /** Authentic divergent or invalid revisions retained for inspection. */
+    /**
+     * Authentic divergent or invalid revisions retained for inspection.
+     */
     private final Path conflicts;
 
     /**

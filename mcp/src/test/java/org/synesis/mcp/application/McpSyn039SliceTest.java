@@ -60,7 +60,8 @@ final class McpSyn039SliceTest {
         git(project, "commit", "-m", "baseline");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        ProjectApplicationService.ProjectLocation initialized = projectService.init(project).location();
+        ProjectApplicationService.ProjectLocation initialized = projectService.init(project)
+                .location();
         McpProviderTestSupport.install(initialized, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService sessions = new AgentSessionService();
@@ -270,7 +271,8 @@ final class McpSyn039SliceTest {
         git(project, "commit", "-m", "baseline");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        var initialized = projectService.init(project).location();
+        var initialized = projectService.init(project)
+                .location();
         McpProviderTestSupport.install(initialized, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService sessions = new AgentSessionService();
@@ -510,7 +512,8 @@ final class McpSyn039SliceTest {
         git(project, "commit", "-m", "baseline");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        var initialized = projectService.init(project).location();
+        var initialized = projectService.init(project)
+                .location();
         McpProviderTestSupport.install(initialized, "codex");
         new ProviderManualService().install("codex");
         AgentSessionService ownerSessions = new AgentSessionService();
@@ -1162,12 +1165,16 @@ final class McpSyn039SliceTest {
         assertTrue(((List<?>) afterResult.get("reviewActions")).isEmpty(), afterResult.toString());
     }
 
-    /** Captures the durable IDs created by one collaboration fixture. */
+    /**
+     * Captures the durable IDs created by one collaboration fixture.
+     */
     private record UUIDs(java.util.UUID groupId, java.util.UUID intentId) {
 
     }
 
-    /** Holds the owner and review-side handlers for snapshot admission tests. */
+    /**
+     * Holds the owner and review-side handlers for snapshot admission tests.
+     */
     private record ReviewFixture(Path project, Path ownerWorktree, McpProtocolHandler owner,
                                  McpProtocolHandler reviewer, UUID groupId, UUID intentId) {
 

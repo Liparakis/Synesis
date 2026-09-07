@@ -17,7 +17,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 @SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandStore {
 
-    /** Canonical host-wide namespace under which command scopes are stored. */
+    /**
+     * Canonical host-wide namespace under which command scopes are stored.
+     */
     private final Path namespaceRoot;
 
     /**
@@ -161,6 +163,33 @@ public final class ProjectCommandStore {
             throw new CommandFormatException("COMMAND_RECORD_FIELD_MISSING:" + key);
         }
         return bool;
+    }
+
+    /**
+     * Reads and verifies one durable command record.
+     *
+     * @param path record path
+     * @return verified record fields
+     * @throws IOException if the record is corrupt or incompatible
+     */
+    private static Map<String, Object> readRecord(Path path) throws IOException {
+        try {
+            Object parsed = ProviderJson.parse(Files.readString(path, StandardCharsets.UTF_8));
+            if (!(parsed instanceof Map<?, ?> parsedMap)) {
+                throw new CommandFormatException("COMMAND_RECORD_NOT_OBJECT");
+            }
+            Map<String, Object> value = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : parsedMap.entrySet()) {
+                if (!(entry.getKey() instanceof String name)) {
+                    throw new CommandFormatException("COMMAND_RECORD_KEY_INVALID");
+                }
+                value.put(name, entry.getValue());
+            }
+            CommandDurableFormat.verify(value);
+            return value;
+        } catch (RuntimeException failure) {
+            throw new CommandFormatException("COMMAND_RECORD_CORRUPT", failure);
+        }
     }
 
     /**
@@ -341,33 +370,6 @@ public final class ProjectCommandStore {
             throw new CommandFormatException("COMMAND_RECORD_CORRUPT", failure);
         }
         return false;
-    }
-
-    /**
-     * Reads and verifies one durable command record.
-     *
-     * @param path record path
-     * @return verified record fields
-     * @throws IOException if the record is corrupt or incompatible
-     */
-    private static Map<String, Object> readRecord(Path path) throws IOException {
-        try {
-            Object parsed = ProviderJson.parse(Files.readString(path, StandardCharsets.UTF_8));
-            if (!(parsed instanceof Map<?, ?> parsedMap)) {
-                throw new CommandFormatException("COMMAND_RECORD_NOT_OBJECT");
-            }
-            Map<String, Object> value = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : parsedMap.entrySet()) {
-                if (!(entry.getKey() instanceof String name)) {
-                    throw new CommandFormatException("COMMAND_RECORD_KEY_INVALID");
-                }
-                value.put(name, entry.getValue());
-            }
-            CommandDurableFormat.verify(value);
-            return value;
-        } catch (RuntimeException failure) {
-            throw new CommandFormatException("COMMAND_RECORD_CORRUPT", failure);
-        }
     }
 
     private Path scopePath(String scopeLocator) {

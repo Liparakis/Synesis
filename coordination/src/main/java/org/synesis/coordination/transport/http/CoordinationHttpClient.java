@@ -171,7 +171,9 @@ public final class CoordinationHttpClient {
         }
     }
 
-    /** Preserves bounded event-stream failure classification for callers. */
+    /**
+     * Preserves bounded event-stream failure classification for callers.
+     */
     private static final class EventStreamFailure extends RuntimeException {
 
         @java.io.Serial

@@ -42,8 +42,10 @@ final class McpProjectRootAuthority {
             if (advertised == null) {
                 return Selection.rejected("PROJECT_ROOT_PIN_VERIFICATION_FAILED");
             }
-            if (!pinned.projectId().equals(advertised.projectId())
-                    || !pinned.gitCommonDirectory().equals(advertised.gitCommonDirectory())) {
+            if (!pinned.projectId()
+                    .equals(advertised.projectId())
+                    || !pinned.gitCommonDirectory()
+                    .equals(advertised.gitCommonDirectory())) {
                 return Selection.rejected("PROJECT_ROOT_PIN_MISMATCH");
             }
         }
@@ -55,7 +57,8 @@ final class McpProjectRootAuthority {
         if (normalized == null) {
             return false;
         }
-        String portable = normalized.toString().replace('\\', '/');
+        String portable = normalized.toString()
+                .replace('\\', '/');
         Path reservedWorkspaces = AdministrativeStateLocator.applicationStateRoot()
                 .resolve("workspaces")
                 .toAbsolutePath()
@@ -90,10 +93,12 @@ final class McpProjectRootAuthority {
         if (advertised == null) {
             return null;
         }
-        if (Files.isDirectory(advertised.root().resolve(".git"))) {
+        if (Files.isDirectory(advertised.root()
+                .resolve(".git"))) {
             return advertised.root();
         }
-        if (!Files.isRegularFile(advertised.root().resolve(".git"))) {
+        if (!Files.isRegularFile(advertised.root()
+                .resolve(".git"))) {
             return null;
         }
 
@@ -104,19 +109,24 @@ final class McpProjectRootAuthority {
                 return null;
             }
             Path resolved = null;
-            for (String line : result.output().lines().toList()) {
+            for (String line : result.output()
+                    .lines()
+                    .toList()) {
                 if (!line.startsWith("worktree ")) {
                     continue;
                 }
-                String listedText = line.substring("worktree ".length()).trim();
+                String listedText = line.substring("worktree ".length())
+                        .trim();
                 if (listedText.isEmpty()) {
                     continue;
                 }
                 Path listedRoot = normalize(Path.of(listedText));
                 ProjectIdentity main = inspect(listedRoot, true);
                 if (main == null
-                        || !advertised.projectId().equals(main.projectId())
-                        || !advertised.gitCommonDirectory().equals(main.gitCommonDirectory())) {
+                        || !advertised.projectId()
+                        .equals(main.projectId())
+                        || !advertised.gitCommonDirectory()
+                        .equals(main.gitCommonDirectory())) {
                     continue;
                 }
                 if (resolved != null && !resolved.equals(main.root())) {
@@ -160,7 +170,8 @@ final class McpProjectRootAuthority {
 
     private static Path normalize(Path path) {
         try {
-            return path == null ? null : path.toAbsolutePath().normalize();
+            return path == null ? null : path.toAbsolutePath()
+                                         .normalize();
         } catch (Exception invalid) {
             return null;
         }
@@ -182,5 +193,6 @@ final class McpProjectRootAuthority {
     }
 
     private record ProjectIdentity(Path root, UUID projectId, Path gitCommonDirectory) {
+
     }
 }

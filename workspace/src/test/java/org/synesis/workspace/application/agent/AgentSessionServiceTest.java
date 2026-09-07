@@ -19,7 +19,9 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 
-/** Exercises agent-session binding, renewal, and authority checks. */
+/**
+ * Exercises agent-session binding, renewal, and authority checks.
+ */
 class AgentSessionServiceTest {
 
     private AgentSessionService sessionService;
@@ -45,11 +47,16 @@ class AgentSessionServiceTest {
         projectService.init(tempRoot);
         previousLauncher = System.getProperty("synesis.launcher");
         previousMcpLauncher = System.getProperty("synesis.mcp.launcher");
-        System.setProperty("synesis.launcher", Files.createTempFile("synesis-test-launcher-", ".bat").toString());
-        System.setProperty("synesis.mcp.launcher", Files.createTempFile("synesis-test-mcp-", ".exe").toString());
+        System.setProperty("synesis.launcher",
+                Files.createTempFile("synesis-test-launcher-", ".bat")
+                        .toString());
+        System.setProperty("synesis.mcp.launcher",
+                Files.createTempFile("synesis-test-mcp-", ".exe")
+                        .toString());
         ProviderApplicationService providerService = new ProviderApplicationService();
         var installed = providerService.install(projectService.locate(tempRoot), "codex");
-        assertTrue(installed.values().containsKey("PROVIDER_INSTALL_RESULT"));
+        assertTrue(installed.values()
+                .containsKey("PROVIDER_INSTALL_RESULT"));
         sessionService = new AgentSessionService();
     }
 

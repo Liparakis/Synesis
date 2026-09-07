@@ -26,7 +26,8 @@ had no provider `threads` row, history items, or rollout and could not be read
 or resumed by a fresh process. A thread with one completed turn produced all
 three durable artifacts and was successfully read and resumed by a fresh
 process using the same normal provider home and executable. The detailed
-record is [`SYN-051-provider-thread-provenance-2026-09-04.md`](../evidence/SYN-051-provider-thread-provenance-2026-09-04.md).
+record is [
+`SYN-051-provider-thread-provenance-2026-09-04.md`](../evidence/SYN-051-provider-thread-provenance-2026-09-04.md).
 
 The finding is a PASS-B architecture simplification, not a claim that full
 managed A1/A2 acceptance has passed. The current bootstrap-created handoff

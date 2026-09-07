@@ -343,12 +343,16 @@ public final class SemanticIndexFingerprint {
         }
     }
 
-    /** Represents one normalized index entry in a semantic fingerprint. */
+    /**
+     * Represents one normalized index entry in a semantic fingerprint.
+     */
     private record Entry(String path, String mode, String blob, int stage, boolean intentToAdd) {
 
     }
 
-    /** Captures the bounded Git result used during fingerprint collection. */
+    /**
+     * Captures the bounded Git result used during fingerprint collection.
+     */
     private record Result(int exitCode, String output) {
 
     }

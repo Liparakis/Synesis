@@ -45,4 +45,5 @@ are unchanged. No production continuity code, Codex source, auth policy,
 
 ## Evidence
 
-See [`SYN-051-job-object-process-tree-feasibility-2026-09-03.md`](../evidence/SYN-051-job-object-process-tree-feasibility-2026-09-03.md).
+See [
+`SYN-051-job-object-process-tree-feasibility-2026-09-03.md`](../evidence/SYN-051-job-object-process-tree-feasibility-2026-09-03.md).

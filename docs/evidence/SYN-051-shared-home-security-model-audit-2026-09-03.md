@@ -26,14 +26,14 @@ model.
 
 ## 1. Starting state and scope
 
-| Item | Result |
-| --- | --- |
-| Starting HEAD | `50865a2a67344ef37d597a9f92a578a21ce11921` |
-| Starting Git state | `master`, clean; no push |
-| Active task | `SYN-051`, active; managed acceptance remains blocked |
-| Existing implementation | Dedicated retained Codex home, App Server, exact thread, proof, and generation slice; no production shared-home mode |
-| Audit mode | Source/evidence analysis only; no production code, provider state, credentials, fixtures, or `.synesis` state changed |
-| Targeted probes | None. Source and existing bounded broker evidence resolved the requested ambiguity |
+| Item                    | Result                                                                                                                |
+|-------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| Starting HEAD           | `50865a2a67344ef37d597a9f92a578a21ce11921`                                                                            |
+| Starting Git state      | `master`, clean; no push                                                                                              |
+| Active task             | `SYN-051`, active; managed acceptance remains blocked                                                                 |
+| Existing implementation | Dedicated retained Codex home, App Server, exact thread, proof, and generation slice; no production shared-home mode  |
+| Audit mode              | Source/evidence analysis only; no production code, provider state, credentials, fixtures, or `.synesis` state changed |
+| Targeted probes         | None. Source and existing bounded broker evidence resolved the requested ambiguity                                    |
 
 ## 2. Accepted threat model
 
@@ -75,21 +75,21 @@ is not a substitute for either authentication or authorization.
 
 ## 4. Authority-layer model
 
-| Object | Classification | Audit consequence |
-| --- | --- | --- |
-| Codex account/authentication | Provider authentication root | Allows provider use; does not identify a Synesis worker |
-| `CODEX_HOME` | Provider storage/configuration scope | Shared visibility is not Synesis identity; isolated homes add provider/runtime separation |
-| Persisted Codex thread ID | Provider resource selector/correlation | Resume target and scope check; not a credential |
-| Synesis project | Logical namespace | Selects durable project state; not worker authentication |
-| Participant/binding/session | Durable Synesis logical identity | Owns worker/session authority and exact connection binding |
-| WorkIntent/claims | Coordination authorization state | Governs task/claim permissions after session authority |
-| Managed attachment | Runtime-to-binding authentication record | Relates a disposable runtime to an existing binding; creates no new worker identity |
-| Attachment generation | Freshness/fencing state | Only the current generation may exercise managed authority |
-| Attachment proof | Runtime authentication credential | High-entropy, process-private, hash-only at rest, rotated and replay-fenced |
-| Broker | Trusted lifecycle boundary | Derives/pins the provider thread, controls App Server protocol, and mediates attachment |
-| Pinned provider thread | Exact provider resource ownership selector | Must be durably unique per active managed binding; not itself a credential |
-| Owned process tree / Job Object | Liveness and containment evidence | Establishes which processes belong to an attachment and enables teardown; not thread identity |
-| MCP connection | Runtime transport/incarnation | Carries requests after startup admission; exact connection identity alone is not managed proof |
+| Object                          | Classification                             | Audit consequence                                                                              |
+|---------------------------------|--------------------------------------------|------------------------------------------------------------------------------------------------|
+| Codex account/authentication    | Provider authentication root               | Allows provider use; does not identify a Synesis worker                                        |
+| `CODEX_HOME`                    | Provider storage/configuration scope       | Shared visibility is not Synesis identity; isolated homes add provider/runtime separation      |
+| Persisted Codex thread ID       | Provider resource selector/correlation     | Resume target and scope check; not a credential                                                |
+| Synesis project                 | Logical namespace                          | Selects durable project state; not worker authentication                                       |
+| Participant/binding/session     | Durable Synesis logical identity           | Owns worker/session authority and exact connection binding                                     |
+| WorkIntent/claims               | Coordination authorization state           | Governs task/claim permissions after session authority                                         |
+| Managed attachment              | Runtime-to-binding authentication record   | Relates a disposable runtime to an existing binding; creates no new worker identity            |
+| Attachment generation           | Freshness/fencing state                    | Only the current generation may exercise managed authority                                     |
+| Attachment proof                | Runtime authentication credential          | High-entropy, process-private, hash-only at rest, rotated and replay-fenced                    |
+| Broker                          | Trusted lifecycle boundary                 | Derives/pins the provider thread, controls App Server protocol, and mediates attachment        |
+| Pinned provider thread          | Exact provider resource ownership selector | Must be durably unique per active managed binding; not itself a credential                     |
+| Owned process tree / Job Object | Liveness and containment evidence          | Establishes which processes belong to an attachment and enables teardown; not thread identity  |
+| MCP connection                  | Runtime transport/incarnation              | Carries requests after startup admission; exact connection identity alone is not managed proof |
 
 ## 5. Exact attack analysis
 
@@ -154,16 +154,16 @@ provider guarantee.
 
 Production thread-ID uses were classified as follows:
 
-| Usage | Classification | Result |
-| --- | --- | --- |
-| `ManagedAttachmentRecord.threadId` | Durable exact provider scope | Compared with the attachment request; not standalone auth |
-| `AttachmentRequest.threadId` | Caller/runtime selector | Accepted only together with binding, generation, and proof; not sufficient alone |
-| `CodexLifecycleStateStore.Checkpoint.threadId` | Durable lifecycle correlation and exact protocol scope | Used to constrain `thread/resume`, `thread/read`, `turn/start`, steer, wait, and interrupt |
-| `LifecycleControlRequestEnvelope.expectedThreadId` | Signed/digested lifecycle request scope | Exact request predicate; not an independent credential |
-| App Server `thread/start` response | Provider correlation | Stored only after exact response/event identity checks |
-| App Server `thread/resume` and `thread/read` params | Resume target | Derived from the prior checkpoint and checked against returned identity |
-| Evidence/journal thread values | Audit/log correlation | Must be redacted/bounded; not authorization input by themselves |
-| Provider binding `sessionId`/connection evidence | Exact ordinary connection lookup | Not a managed attachment proof; no latest fallback |
+| Usage                                               | Classification                                         | Result                                                                                     |
+|-----------------------------------------------------|--------------------------------------------------------|--------------------------------------------------------------------------------------------|
+| `ManagedAttachmentRecord.threadId`                  | Durable exact provider scope                           | Compared with the attachment request; not standalone auth                                  |
+| `AttachmentRequest.threadId`                        | Caller/runtime selector                                | Accepted only together with binding, generation, and proof; not sufficient alone           |
+| `CodexLifecycleStateStore.Checkpoint.threadId`      | Durable lifecycle correlation and exact protocol scope | Used to constrain `thread/resume`, `thread/read`, `turn/start`, steer, wait, and interrupt |
+| `LifecycleControlRequestEnvelope.expectedThreadId`  | Signed/digested lifecycle request scope                | Exact request predicate; not an independent credential                                     |
+| App Server `thread/start` response                  | Provider correlation                                   | Stored only after exact response/event identity checks                                     |
+| App Server `thread/resume` and `thread/read` params | Resume target                                          | Derived from the prior checkpoint and checked against returned identity                    |
+| Evidence/journal thread values                      | Audit/log correlation                                  | Must be redacted/bounded; not authorization input by themselves                            |
+| Provider binding `sessionId`/connection evidence    | Exact ordinary connection lookup                       | Not a managed attachment proof; no latest fallback                                         |
 
 No production path was found that hashes or treats `threadId` alone as a
 credential. Conversely, no current durable index enforces one active managed

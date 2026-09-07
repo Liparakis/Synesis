@@ -14,7 +14,9 @@ import org.synesis.link.demo.DemoWorkResult;
 import org.synesis.link.demo.DemoWorkStatus;
 import org.synesis.link.protocol.ProtocolVersion;
 
-/** Verifies authenticated demo-work binding ownership and lifecycle rules. */
+/**
+ * Verifies authenticated demo-work binding ownership and lifecycle rules.
+ */
 final class DemoWorkBindingTest {
 
     private static PeerSession session(StubWork binding) {
@@ -41,7 +43,9 @@ final class DemoWorkBindingTest {
         assertEquals(DemoWorkStatus.OK, result.status());
     }
 
-    /** Provides controlled demo-work state for binding tests. */
+    /**
+     * Provides controlled demo-work state for binding tests.
+     */
     @SuppressWarnings("ClassCanBeRecord")
     private static final class StubWork implements PeerSession.ControlBinding {
 

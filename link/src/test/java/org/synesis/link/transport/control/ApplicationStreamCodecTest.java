@@ -7,7 +7,9 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
-/** Verifies bounded application-stream frame encoding and decoding. */
+/**
+ * Verifies bounded application-stream frame encoding and decoding.
+ */
 final class ApplicationStreamCodecTest {
 
     @Test

@@ -96,6 +96,8 @@ public final class InvitationAdmission implements AutoCloseable {
         }
     }
 
-    /** Monotonic local admission states for a one-time invitation. */
+    /**
+     * Monotonic local admission states for a one-time invitation.
+     */
     private enum State {AVAILABLE, RESERVED, CONSUMED}
 }

@@ -25,18 +25,18 @@ public final class ManagedPathPolicy {
 
     private static final List<String> DEFAULT_MANAGED_PATHS = List.of(".synesis/project.json", "AGENTS.md");
 
+    /**
+     * Creates a policy using the canonical managed contract paths.
+     */
+    public ManagedPathPolicy() {
+    }
+
     private static Map<String, String> absentStates(List<String> paths) {
         Map<String, String> states = new LinkedHashMap<>();
         for (String path : paths) {
             states.put(path, StartState.ABSENT.name());
         }
         return states;
-    }
-
-    /**
-     * Creates a policy using the canonical managed contract paths.
-     */
-    public ManagedPathPolicy() {
     }
 
     private static String statusPath(String line) {
@@ -320,7 +320,9 @@ public final class ManagedPathPolicy {
         }
     }
 
-    /** Captures bounded command output used by managed-path decisions. */
+    /**
+     * Captures bounded command output used by managed-path decisions.
+     */
     private record Result(int exitCode, String output) {
 
     }

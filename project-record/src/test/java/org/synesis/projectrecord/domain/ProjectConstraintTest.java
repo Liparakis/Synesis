@@ -14,7 +14,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.synesis.projectrecord.security.Ed25519Signer;
 
-/** Exercises project-constraint bounds, scope matching, and signatures. */
+/**
+ * Exercises project-constraint bounds, scope matching, and signatures.
+ */
 final class ProjectConstraintTest {
 
     @Test

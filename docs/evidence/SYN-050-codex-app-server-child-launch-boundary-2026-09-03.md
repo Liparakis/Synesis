@@ -50,9 +50,12 @@ The version-matched upstream source was the official `rust-v0.145.0` tag
 (tag commit `25af12f7e61572b0bc18ddb1008be543b91519b0`). The relevant sources
 are [`codex-mcp/runtime.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/runtime.rs),
 [`codex-mcp/rmcp_client.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/rmcp_client.rs),
-[`rmcp-client/stdio_server_launcher.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/rmcp-client/src/stdio_server_launcher.rs),
-[`codex-mcp/connection_manager.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/connection_manager.rs),
-and the [App Server thread lifecycle](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/app-server/src/request_processors/thread_lifecycle.rs).
+[
+`rmcp-client/stdio_server_launcher.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/rmcp-client/src/stdio_server_launcher.rs),
+[
+`codex-mcp/connection_manager.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/connection_manager.rs),
+and
+the [App Server thread lifecycle](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/app-server/src/request_processors/thread_lifecycle.rs).
 
 The final disposable run is under:
 
@@ -70,11 +73,11 @@ C:\Program Files\Eclipse Adoptium\jdk-25.0.0.36-hotspot\bin\javac.exe
 
 Final disposable source hashes:
 
-| File | SHA-256 |
-| --- | --- |
+| File                               | SHA-256                                                            |
+|------------------------------------|--------------------------------------------------------------------|
 | `BoundaryLaunchInvestigation.java` | `9622DCE3E62E8DF5E7FD414C8C4466AA3ACCA526A3FB24A00EED51416354C9EA` |
-| `BoundaryMcp.java` | `FFFC5DDC611C372A72242C0A0B3284A8FD238CA3D538DDA5649EAD020023A513` |
-| `BoundaryWrapper.java` | `D4F8C46C864B9D4C9182CE81D6A9EECE8B22AE7604CC5592A2BD2361F1CEDA6F` |
+| `BoundaryMcp.java`                 | `FFFC5DDC611C372A72242C0A0B3284A8FD238CA3D538DDA5649EAD020023A513` |
+| `BoundaryWrapper.java`             | `D4F8C46C864B9D4C9182CE81D6A9EECE8B22AE7604CC5592A2BD2361F1CEDA6F` |
 
 The final report hash is
 `13399470EE0AE6A90915591DD587197102D591870483E38510124B2077A9F8A4`,
@@ -111,11 +114,11 @@ local confirmation for `codex-cli 0.145.0`.
 The disposable MCP server recorded its parent PID and the safe presence of
 parent-only and static-config markers:
 
-| Scenario | App Server | Wrapper starts | MCP starts | Observation |
-| --- | ---: | ---: | ---: | --- |
-| One App Server, two threads | 1 | 2 | 2 | each exact thread call caused its own wrapper/MCP chain under the same App Server PID |
-| Dedicated A/B | 2 concurrent | 1 each | 1 each | distinct App Server, wrapper, and MCP processes |
-| A successor after restart | replacement A | 1 | 1 | new wrapper/MCP chain under replacement A |
+| Scenario                    |    App Server | Wrapper starts | MCP starts | Observation                                                                           |
+|-----------------------------|--------------:|---------------:|-----------:|---------------------------------------------------------------------------------------|
+| One App Server, two threads |             1 |              2 |          2 | each exact thread call caused its own wrapper/MCP chain under the same App Server PID |
+| Dedicated A/B               |  2 concurrent |         1 each |     1 each | distinct App Server, wrapper, and MCP processes                                       |
+| A successor after restart   | replacement A |              1 |          1 | new wrapper/MCP chain under replacement A                                             |
 
 The shared run returned two naturally created distinct provider thread IDs and
 called the disposable MCP tool with each exact thread. The dedicated run

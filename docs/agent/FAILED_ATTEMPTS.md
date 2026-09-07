@@ -40,7 +40,9 @@ global settings, or remote state was touched.
 Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
 and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
-Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on
+existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a
+lane in this slice.
 
 # Failed Attempts
 
@@ -839,6 +841,7 @@ run focused verification only.
 - Next hypothesis: Verify the supported Antigravity workspace/project loading
   mode or obtain a trusted diagnostic that proves `.agents/hooks.json` is
   loaded before changing the adapter again.
+
 ## 2026-09-05 — SYN-051 disposable observation harness closed before completion
 
 The first fresh same-process harness reached generation-1 ACTIVE and observed

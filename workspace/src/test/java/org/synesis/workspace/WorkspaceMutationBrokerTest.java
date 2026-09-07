@@ -26,7 +26,9 @@ import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Mutat
 import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-/** Exercises workspace mutation admission and repository safety boundaries. */
+/**
+ * Exercises workspace mutation admission and repository safety boundaries.
+ */
 class WorkspaceMutationBrokerTest {
 
     private Path tempDir;

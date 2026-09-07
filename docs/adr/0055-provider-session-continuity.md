@@ -81,7 +81,8 @@ single-use, snapshot-backed transfer to a new participant and WorkIntent, not
 same-session reattachment.
 
 The source trace and expanded capability analysis are recorded in
-[`syn050-provider-session-continuity-capability-design-2026-09-03.md`](../evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md).
+[
+`syn050-provider-session-continuity-capability-design-2026-09-03.md`](../evidence/syn050-provider-session-continuity-capability-design-2026-09-03.md).
 
 ## Provider-boundary feasibility spike — 2026-09-03
 
@@ -92,7 +93,8 @@ hook/session evidence is separate from that MCP process. The local Claude MCP
 boundary likewise provides static command/environment configuration and a
 project root, while Claude hook `session_id` metadata is not automatically
 carried into MCP. The detailed evidence is recorded in
-[`SYN-050-provider-boundary-feasibility-2026-09-03.md`](../evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md).
+[
+`SYN-050-provider-boundary-feasibility-2026-09-03.md`](../evidence/SYN-050-provider-boundary-feasibility-2026-09-03.md).
 
 The resulting classifications are deliberately boundary-specific:
 
@@ -165,7 +167,8 @@ while B remained live; a wrong-thread request was rejected. Every wrapper and
 child received the static configuration marker, but not parent-only process
 environment, thread context, or attachment proof. A wrapper is therefore
 operationally viable but not an authentication boundary. The detailed record
-is [`SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).
+is [
+`SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).
 
 The conservative one-App-Server-per-worker topology is operationally viable,
 but dynamic private proof delivery is not proven and is classified FAIL at the
@@ -209,7 +212,8 @@ The `env_vars` form keeps the proof out of `config.toml` while still placing it
 in the managed App Server/child process environment. This remains within the
 accepted non-compromised-local-OS threat boundary, not a kernel-isolated
 secret. The disposable report and hygiene results are recorded in
-[`SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`](../evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md).
+[
+`SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md`](../evidence/SYN-050-stock-codex-isolated-runtime-feasibility-2026-09-03.md).
 
 This is **PASS-A feasibility**, not production implementation. The earlier
 child-launch result remains a narrower FAIL for dynamic thread/proof/
@@ -340,11 +344,11 @@ lifecycle. A local broker/launcher channel is authorized only for the
 explicitly managed Codex profile described below; it is not used by
 provider-authenticated mode. Anonymous providers remain session-bound.
 
-| Profile | Root of trust | Supported continuity |
-| --- | --- | --- |
-| Provider-authenticated | Verifiable provider-controlled conversation/session assertion | Full continuity after scope, replay, and generation checks. |
-| Synesis-managed | Protected Synesis launcher/broker attachment credential | Continuity only when Synesis truly mediates the provider boundary. |
-| Anonymous | No runtime authentication root | Current transport only; restart continuity is unsupported. |
+| Profile                | Root of trust                                                 | Supported continuity                                               |
+|------------------------|---------------------------------------------------------------|--------------------------------------------------------------------|
+| Provider-authenticated | Verifiable provider-controlled conversation/session assertion | Full continuity after scope, replay, and generation checks.        |
+| Synesis-managed        | Protected Synesis launcher/broker attachment credential       | Continuity only when Synesis truly mediates the provider boundary. |
+| Anonymous              | No runtime authentication root                                | Current transport only; restart continuity is unsupported.         |
 
 Ordinary Codex stdio is currently `SESSION_BOUND` at this boundary. Codex App
 Server is the first approved `MANAGED_CONTINUITY` adapter target, subject to
@@ -387,11 +391,11 @@ implement a workaround.
 
 The approved capability model is:
 
-| Profile | Trust input | Continuity disposition |
-| --- | --- | --- |
-| `NATIVE_CONTINUITY` | Provider-controlled, non-model-visible conversation assertion | Future provider adapter path. |
-| `MANAGED_CONTINUITY` | Protected Synesis-managed runtime attachment proof | Approved capability; Codex App Server is the first target. |
-| `SESSION_BOUND` | Current authenticated transport only | Ordinary Codex/Claude MCP; restart continuity is explicitly unsupported. |
+| Profile              | Trust input                                                   | Continuity disposition                                                   |
+|----------------------|---------------------------------------------------------------|--------------------------------------------------------------------------|
+| `NATIVE_CONTINUITY`  | Provider-controlled, non-model-visible conversation assertion | Future provider adapter path.                                            |
+| `MANAGED_CONTINUITY` | Protected Synesis-managed runtime attachment proof            | Approved capability; Codex App Server is the first target.               |
+| `SESSION_BOUND`      | Current authenticated transport only                          | Ordinary Codex/Claude MCP; restart continuity is explicitly unsupported. |
 
 The managed trust root is the combination of the existing admitted Synesis
 binding and claims, Synesis ownership of the App Server launch, the exact
@@ -476,7 +480,8 @@ unknowns, and evidence classification are recorded in
 and
 [`SYN-050-managed-attachment-design-2026-09-03.md`](../evidence/SYN-050-managed-attachment-design-2026-09-03.md).
 The exact child-launch source trace and disposable result are in
-[`SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).
+[
+`SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).
 
 ## Explicit non-decisions
 

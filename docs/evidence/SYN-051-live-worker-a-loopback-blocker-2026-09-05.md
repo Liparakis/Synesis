@@ -18,13 +18,13 @@ remained `a7697bbb5de83ced8b61b275056f9204e4467fbc`; the intervening source
 repository change was documentation-only. Installed artifacts were not
 rebuilt during this pass and retained the previously matched hashes:
 
-| Artifact | SHA-256 |
-|---|---|
+| Artifact                         | SHA-256                                                            |
+|----------------------------------|--------------------------------------------------------------------|
 | workspace JAR and installed copy | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
-| MCP JAR and installed copy | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| CLI JAR and installed copy | `770c7df632d07481365e6177fc1559eb2ae8568a9c44619319d447d9b29c5c58` |
-| native MCP and installed copy | `10d63a1c7f763ac44723c3c4ccde9f270c14a7fe0048f4719bc0ec5d32133dca` |
-| installed `synesis.bat` | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
+| MCP JAR and installed copy       | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
+| CLI JAR and installed copy       | `770c7df632d07481365e6177fc1559eb2ae8568a9c44619319d447d9b29c5c58` |
+| native MCP and installed copy    | `10d63a1c7f763ac44723c3c4ccde9f270c14a7fe0048f4719bc0ec5d32133dca` |
+| installed `synesis.bat`          | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
 
 The target was `C:\Users\Liparakis\Desktop\SkibidiToilert`, on `main`, at
 `8cf929c4def2a5d900f654c5b99d9ebef8bc972e`, with clean tracked state and only
@@ -42,7 +42,8 @@ collaboration services:
 - WorkIntent: `c340aab7-376f-3172-b43f-2580c3045603`
 - claim: `probe-runtime/persistence-live-a-40ff76be-a20b-4148-99d1-d04a153152b7.txt`
 - binding: `session-756b644a-bac0-479c-be24-577581f286c6`
-- assigned worktree: `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\2449acd9-6b8f-450e-9287-3f6a6032e489\worktrees\session-756b644a-bac0-479c-be24-577581f286c6`
+- assigned worktree:
+  `C:\Users\Liparakis\AppData\Local\Synesis\workspaces\2449acd9-6b8f-450e-9287-3f6a6032e489\worktrees\session-756b644a-bac0-479c-be24-577581f286c6`
 
 The binding was `BOUND` with verified verification and trust. Its assigned
 worktree was clean and the exact claim file did not exist before the probe.

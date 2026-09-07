@@ -43,6 +43,13 @@ class ProjectRuntimeHostWakeTest {
     @TempDir
     Path temp;
 
+    private static LifecycleControlRequestEnvelope.AuthorityContext authority(String connection) {
+        return new LifecycleControlRequestEnvelope.AuthorityContext(
+                "project", "C:\\project", "codex", connection, "binding", "fingerprint", 1,
+                "participant", "intent", 1L, "C:\\worktree", "C:\\worktree", "C:\\git",
+                "main", "base", "supervisor", "worker");
+    }
+
     @Test
     void fingerprintQualifiedWakePreservesSessionBoundRuntimeAuthority() {
         LifecycleControlRequestEnvelope.AuthorityContext retained = authority("session-connection");
@@ -70,16 +77,20 @@ class ProjectRuntimeHostWakeTest {
         Files.writeString(project.resolve("README.md"), "owner wake fixture\n");
         TestGit.run(project, "add", ".");
         TestGit.run(project, "commit", "-m", "fixture");
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(project).location();
+        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(project)
+                .location();
         ProviderTestSupport.install(location, "codex");
 
         AgentSessionService.AgentSessionContext session = new AgentSessionService().resolveSessionContext(
                 new AgentSessionService.SessionResolutionRequest(project, "codex", "owner-wake", null, false));
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
         bindingService.verifyWorkspaceTrust(location, "codex", session.sessionId(), session.worktreePath());
-        ProviderSessionBindingService.Binding binding = bindingService.list(location, "codex").stream()
-                .filter(candidate -> candidate.sessionId().equals(session.sessionId()))
-                .findFirst().orElseThrow();
+        ProviderSessionBindingService.Binding binding = bindingService.list(location, "codex")
+                .stream()
+                .filter(candidate -> candidate.sessionId()
+                        .equals(session.sessionId()))
+                .findFirst()
+                .orElseThrow();
 
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var claim = collaboration.announce(project, "codex", "owner-wake",
@@ -87,24 +98,49 @@ class ProjectRuntimeHostWakeTest {
                 List.of(ResourceSelector.pathExact("README.md")));
 
         CodexLifecycleStateStore stateStore = new CodexLifecycleStateStore(
-                CodexWakeAdmissionService.runtimeRoot(location).resolve("bindings"));
+                CodexWakeAdmissionService.runtimeRoot(location)
+                        .resolve("bindings"));
         stateStore.write(new CodexLifecycleStateStore.Checkpoint(
-                binding.sessionId(), location.projectId().toString(), "codex", 12L,
-                CodexLifecycleStateStore.State.COMPLETED, "previous-host", 4L, 5L, -1L, 6L,
-                "codex.exe", "codex.exe --app-server", "thread-dormant", "turn-old", null,
-                true, System.currentTimeMillis()));
+                binding.sessionId(),
+                location.projectId()
+                        .toString(),
+                "codex",
+                12L,
+                CodexLifecycleStateStore.State.COMPLETED,
+                "previous-host",
+                4L,
+                5L,
+                -1L,
+                6L,
+                "codex.exe",
+                "codex.exe --app-server",
+                "thread-dormant",
+                "turn-old",
+                null,
+                true,
+                System.currentTimeMillis()));
 
-        NodeIdentity owner = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        NodeIdentity owner = new IdentityBootstrap(location.profile()
+                .resolve("link")).loadOrCreate()
+                .identity();
         try (FakeAppServer server = new FakeAppServer();
                 ProjectRuntimeHost host = new ProjectRuntimeHost(location, owner,
                         (ignored, generation) -> server.process(), new ProcessTreeTerminator())) {
             CodexLifecycleStateStore.Checkpoint reconciled = stateStore.read(
-                    binding.sessionId(), location.projectId().toString());
-            Path assigned = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
+                    binding.sessionId(),
+                    location.projectId()
+                            .toString());
+            Path assigned = Path.of(binding.worktreePath())
+                    .toAbsolutePath()
+                    .normalize();
             LifecycleControlRequestEnvelope.AuthorityContext authority =
                     new LifecycleControlRequestEnvelope.AuthorityContext(
-                            location.projectId().toString(),
-                            location.root().toAbsolutePath().normalize().toString(),
+                            location.projectId()
+                                    .toString(),
+                            location.root()
+                                    .toAbsolutePath()
+                                    .normalize()
+                                    .toString(),
                             "codex",
                             CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX
                                     + binding.providerInstanceFingerprint(),
@@ -112,10 +148,14 @@ class ProjectRuntimeHostWakeTest {
                             binding.providerInstanceFingerprint(),
                             binding.bindingVersion(),
                             WorkspaceCollaborationService.participantHandle(binding.sessionId()),
-                            claim.intent().intentId().toString(),
-                            claim.intent().version(),
+                            claim.intent()
+                                    .intentId()
+                                    .toString(),
+                            claim.intent()
+                                    .version(),
                             assigned.toString(),
-                            assigned.toRealPath().toString(),
+                            assigned.toRealPath()
+                                    .toString(),
                             binding.gitCommonDir(),
                             binding.branch(),
                             binding.baseCommit(),
@@ -126,7 +166,9 @@ class ProjectRuntimeHostWakeTest {
                     LifecycleControlRequestEnvelope.Operation.RESUME, reconciled.revision(),
                     "thread-dormant", "turn-old", true,
                     CodexWakeAdmissionService.GET_NEXT_ACTION_INPUT,
-                    Instant.now().plusSeconds(20).toEpochMilli(), Map.of());
+                    Instant.now()
+                            .plusSeconds(20)
+                            .toEpochMilli(), Map.of());
 
             CodexLifecycleHttpClient.Response response = host.dispatch(request);
 
@@ -140,13 +182,17 @@ class ProjectRuntimeHostWakeTest {
             assertTrue(server.turnInput.contains("get_next_action"));
 
             CodexLifecycleStateStore.Checkpoint afterResume = stateStore.read(
-                    binding.sessionId(), location.projectId().toString());
+                    binding.sessionId(),
+                    location.projectId()
+                            .toString());
             LifecycleControlRequestEnvelope notify = new LifecycleControlRequestEnvelope(
                     UUID.randomUUID(), host.hostInstanceId(), authority,
                     LifecycleControlRequestEnvelope.Operation.NOTIFY, afterResume.revision(),
                     response.threadId(), response.turnId(), true,
                     CodexWakeAdmissionService.GET_NEXT_ACTION_INPUT,
-                    Instant.now().plusSeconds(20).toEpochMilli(), Map.of());
+                    Instant.now()
+                            .plusSeconds(20)
+                            .toEpochMilli(), Map.of());
 
             CodexLifecycleHttpClient.Response notified = host.dispatch(notify);
 
@@ -158,14 +204,8 @@ class ProjectRuntimeHostWakeTest {
         }
     }
 
-    private static LifecycleControlRequestEnvelope.AuthorityContext authority(String connection) {
-        return new LifecycleControlRequestEnvelope.AuthorityContext(
-                "project", "C:\\project", "codex", connection, "binding", "fingerprint", 1,
-                "participant", "intent", 1L, "C:\\worktree", "C:\\worktree", "C:\\git",
-                "main", "base", "supervisor", "worker");
-    }
-
     private static final class FakeAppServer implements AutoCloseable {
+
         private final PipedInputStream serverInput;
         private final PipedOutputStream clientOutput;
         private final FakeProcess process;
@@ -185,6 +225,27 @@ class ProjectRuntimeHostWakeTest {
             thread = new Thread(() -> serve(serverInput, clientOutput), "fake-codex-owner-wake");
             thread.setDaemon(true);
             thread.start();
+        }
+
+        private static String textParam(Map<String, Object> request, String name) {
+            Object params = request.get("params");
+            if (!(params instanceof Map<?, ?> raw)) {
+                return "";
+            }
+            Object value = raw.get(name);
+            return value == null ? "" : String.valueOf(value);
+        }
+
+        private static void write(OutputStream output, Map<String, ?> value) throws IOException {
+            output.write((ProviderJson.write(value) + "\n").getBytes(StandardCharsets.UTF_8));
+            output.flush();
+        }
+
+        @SuppressWarnings("unchecked")
+        private static Map<String, Object> map(Object value) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            ((Map<?, ?>) value).forEach((key, item) -> result.put(String.valueOf(key), item));
+            return result;
         }
 
         private CodexAppServerLifecycleService.AppServerProcess process() {
@@ -243,27 +304,6 @@ class ProjectRuntimeHostWakeTest {
             }
         }
 
-        private static String textParam(Map<String, Object> request, String name) {
-            Object params = request.get("params");
-            if (!(params instanceof Map<?, ?> raw)) {
-                return "";
-            }
-            Object value = raw.get(name);
-            return value == null ? "" : String.valueOf(value);
-        }
-
-        private static void write(OutputStream output, Map<String, ?> value) throws IOException {
-            output.write((ProviderJson.write(value) + "\n").getBytes(StandardCharsets.UTF_8));
-            output.flush();
-        }
-
-        @SuppressWarnings("unchecked")
-        private static Map<String, Object> map(Object value) {
-            Map<String, Object> result = new LinkedHashMap<>();
-            ((Map<?, ?>) value).forEach((key, item) -> result.put(String.valueOf(key), item));
-            return result;
-        }
-
         @Override
         public void close() throws IOException {
             process.destroy();
@@ -272,12 +312,14 @@ class ProjectRuntimeHostWakeTest {
             try {
                 thread.join(1_000L);
             } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                        .interrupt();
             }
         }
     }
 
     private static final class FakeProcess extends Process {
+
         private final InputStream stdout;
         private final OutputStream stdin;
         private volatile boolean alive = true;

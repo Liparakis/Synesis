@@ -399,7 +399,9 @@ public final class CodexEvidenceJournal implements AutoCloseable {
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     }
 
-    /** Represents one bounded evidence entry in the lifecycle journal. */
+    /**
+     * Represents one bounded evidence entry in the lifecycle journal.
+     */
     private record Entry(String category, String encoded, boolean terminal) {
 
     }

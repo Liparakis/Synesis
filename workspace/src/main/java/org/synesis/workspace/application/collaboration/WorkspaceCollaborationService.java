@@ -105,14 +105,14 @@ public final class WorkspaceCollaborationService {
     /**
      * Announces an intent with explicit review-routing metadata.
      *
-     * @param projectRoot          project root
-     * @param provider             provider ID
-     * @param connectionInstanceId connection ID
-     * @param goal                 goal
-     * @param acceptance           acceptance criteria
-     * @param selectors            claims
-     * @param workGroupId          group ID
-     * @param role                 semantic role
+     * @param projectRoot           project root
+     * @param provider              provider ID
+     * @param connectionInstanceId  connection ID
+     * @param goal                  goal
+     * @param acceptance            acceptance criteria
+     * @param selectors             claims
+     * @param workGroupId           group ID
+     * @param role                  semantic role
      * @param reviewTargetSelectors non-ownership review selectors
      * @return claim result
      * @throws Exception resolution or append failure

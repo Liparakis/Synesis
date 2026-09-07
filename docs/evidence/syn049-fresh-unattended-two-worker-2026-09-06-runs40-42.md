@@ -36,12 +36,12 @@ its own isolated worktree without re-announcing its existing claim.
 - No global Java, network, or Synesis production setting was changed.
 - Produced and installed artifacts were hash-equal for the disposable run:
 
-| artifact | SHA-256 |
-|---|---|
+| artifact      | SHA-256                                                            |
+|---------------|--------------------------------------------------------------------|
 | workspace JAR | `25045AD6AAEC648584C06BC7D4BA733E04BF239BCCCE82CE60A7E167FAFDB9CD` |
-| MCP JAR | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
-| CLI JAR | `09C148533300A5D60BFA3925BF3DD534511040CBBFB144E5F38A86062D4C658` |
-| native MCP | `B49E39D87EEE01FB21821C05A4EAD8BCB96DF58209E5558391A270BF7FC6C48E` |
+| MCP JAR       | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
+| CLI JAR       | `09C148533300A5D60BFA3925BF3DD534511040CBBFB144E5F38A86062D4C658`  |
+| native MCP    | `B49E39D87EEE01FB21821C05A4EAD8BCB96DF58209E5558391A270BF7FC6C48E` |
 
 The supported provider-install flow temporarily registered the fresh target
 in the user Codex configuration. Supported provider uninstall then reported
@@ -70,8 +70,10 @@ Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260906-42
 - WorkIntent B: `7525d6bf-8614-3e58-a806-4e6e627ff795`;
 - exact B dependency: `tasktracker.domain.persistence`;
 - capability handle: `req_E2F393K6D3S6000527Y4C5C682A2V1N2`;
-- A claims: `src/main/java/tasktracker/domain`, `src/main/java/tasktracker/persistence`, `src/test/java/tasktracker/domain`, `src/test/java/tasktracker/persistence`;
-- B claims: `src/main/java/tasktracker/application`, `src/main/java/tasktracker/api`, `src/test/java/tasktracker/application`, `src/test/java/tasktracker/api`.
+- A claims: `src/main/java/tasktracker/domain`, `src/main/java/tasktracker/persistence`,
+  `src/test/java/tasktracker/domain`, `src/test/java/tasktracker/persistence`;
+- B claims: `src/main/java/tasktracker/application`, `src/main/java/tasktracker/api`,
+  `src/test/java/tasktracker/application`, `src/test/java/tasktracker/api`.
 
 No historical lane was reused. The target was new, no `.synesis` state was
 copied or manually edited, and no substitute worker was created.
@@ -102,8 +104,10 @@ Run #42 reached:
 
 Read-only continuity inspection for run #42 recorded:
 
-- Thread A: `01a074d7-47b7-7340-99b5-e8b2b055b18a`, generation 1, lifecycle `COMPLETED`, ownership revision 2, `persistenceReady=true`, provider row/rollout/history present;
-- Thread B: `01a074d6-a0a9-7f13-b705-1212c8aa9475`, generation 1, lifecycle `COMPLETED`, ownership revision 2, `persistenceReady=true`, provider row/rollout/history present;
+- Thread A: `01a074d7-47b7-7340-99b5-e8b2b055b18a`, generation 1, lifecycle `COMPLETED`, ownership revision 2,
+  `persistenceReady=true`, provider row/rollout/history present;
+- Thread B: `01a074d6-a0a9-7f13-b705-1212c8aa9475`, generation 1, lifecycle `COMPLETED`, ownership revision 2,
+  `persistenceReady=true`, provider row/rollout/history present;
 - A checkpoint revision 12 and B checkpoint revision 16, both `evidenceComplete=true`;
 - A and B managed attachments remained generation-1 `ACTIVE` records after normal cleanup.
 

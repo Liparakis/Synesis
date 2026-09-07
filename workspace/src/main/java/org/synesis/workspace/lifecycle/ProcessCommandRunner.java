@@ -374,7 +374,9 @@ final class ProcessCommandRunner {
         }
     }
 
-    /** Collects stdout or stderr without exceeding the configured byte bound. */
+    /**
+     * Collects stdout or stderr without exceeding the configured byte bound.
+     */
     private static final class OutputCollector implements Runnable {
 
         private final InputStream input;

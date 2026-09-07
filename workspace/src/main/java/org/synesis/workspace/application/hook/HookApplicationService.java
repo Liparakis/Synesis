@@ -1,16 +1,16 @@
 package org.synesis.workspace.application.hook;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.util.Map;
-import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
 import org.synesis.workspace.provider.codex.CodexNativePatchRouter;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Adapts provider hook streams to structured provider results.

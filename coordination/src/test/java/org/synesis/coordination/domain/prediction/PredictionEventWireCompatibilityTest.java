@@ -55,7 +55,7 @@ class PredictionEventWireCompatibilityTest {
         for (int version = 1; version <= 6; version++) {
             int removedVersion = version;
             IOException failure = assertThrows(IOException.class,
-                    () -> CollaborationCodec.decodeIntent(new byte[] {0x53, 0x49, 0x4e,
+                    () -> CollaborationCodec.decodeIntent(new byte[]{0x53, 0x49, 0x4e,
                             (byte) ('0' + removedVersion)}));
             assertTrue(failure.getMessage()
                     .contains("fresh initialization required"), failure.getMessage());

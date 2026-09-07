@@ -24,9 +24,13 @@ import org.synesis.workspace.infrastructure.process.ProcessInspector;
 @SuppressWarnings("DuplicatedCode")
 public final class SessionLeaseService {
 
-    /** Durable lease reader/writer for the external project administration area. */
+    /**
+     * Durable lease reader/writer for the external project administration area.
+     */
     private final SessionLeaseStore store;
-    /** Process evidence source used to distinguish absence from PID reuse. */
+    /**
+     * Process evidence source used to distinguish absence from PID reuse.
+     */
     private final ProcessInspector processInspector;
 
     /**

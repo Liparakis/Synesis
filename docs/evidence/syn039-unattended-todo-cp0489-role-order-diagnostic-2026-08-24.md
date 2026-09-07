@@ -165,7 +165,9 @@ separately classified.
 Passed:
 
 -
+
 `gradlew.bat :workspace:test --tests org.synesis.workspace.agent.AgentWorkflowReducerTest --tests org.synesis.workspace.Syn037CompletionValidationTest :mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest --no-daemon --max-workers=1 --console=plain`
+
 - `gradlew.bat :workspace:javadoc :mcp:javadoc :coordination:javadoc --no-daemon --max-workers=1 --console=plain`
 - `scripts/agent-validate-deferred.ps1`
 - `scripts/agent-validate-fixtures.ps1`

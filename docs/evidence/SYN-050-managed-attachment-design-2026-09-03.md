@@ -62,11 +62,15 @@ The current implementation traces are:
 
 Relevant source locations include:
 
-* [`CodexAppServerLifecycleService`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexAppServerLifecycleService.java)
+* [
+  `CodexAppServerLifecycleService`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexAppServerLifecycleService.java)
 * [`ProjectRuntimeHost`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/ProjectRuntimeHost.java)
-* [`CodexLifecycleStateStore`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexLifecycleStateStore.java)
-* [`SessionAuthorityResolver`](../../workspace/src/main/java/org/synesis/workspace/application/provider/SessionAuthorityResolver.java)
-* [`ProviderSessionBindingService`](../../workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java)
+* [
+  `CodexLifecycleStateStore`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexLifecycleStateStore.java)
+* [
+  `SessionAuthorityResolver`](../../workspace/src/main/java/org/synesis/workspace/application/provider/SessionAuthorityResolver.java)
+* [
+  `ProviderSessionBindingService`](../../workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java)
 
 ### Local runtime evidence
 
@@ -97,11 +101,11 @@ prototype gate.
 
 ## Capability model
 
-| Profile | Trust input | Supported continuity |
-| --- | --- | --- |
-| `NATIVE_CONTINUITY` | A provider-controlled, verifiable, non-model-visible conversation/session assertion | Synesis verifies the assertion through a provider adapter and then uses existing authorization. |
-| `MANAGED_CONTINUITY` | A protected Synesis-managed attachment proof bound to a provider runtime/thread | Synesis may replace a disposable runtime after exact revalidation and generation fencing. |
-| `SESSION_BOUND` | The current authenticated transport/session only | Coordination works for the attachment lifetime; unattended restart continuity is explicitly unsupported. |
+| Profile              | Trust input                                                                         | Supported continuity                                                                                     |
+|----------------------|-------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `NATIVE_CONTINUITY`  | A provider-controlled, verifiable, non-model-visible conversation/session assertion | Synesis verifies the assertion through a provider adapter and then uses existing authorization.          |
+| `MANAGED_CONTINUITY` | A protected Synesis-managed attachment proof bound to a provider runtime/thread     | Synesis may replace a disposable runtime after exact revalidation and generation fencing.                |
+| `SESSION_BOUND`      | The current authenticated transport/session only                                    | Coordination works for the attachment lifetime; unattended restart continuity is explicitly unsupported. |
 
 The provider ID remains `codex`; managed continuity is a capability/profile,
 not a second Codex identity namespace. Codex App Server is the first managed
@@ -195,15 +199,15 @@ environment is never sufficient for multiplexed threads.
 
 ### Candidates considered
 
-| Candidate | Boundary | Decision |
-| --- | --- | --- |
-| Static MCP environment/configuration | Shared by every process/thread using the entry; inspectable and not conversation-scoped | Reject. It cannot distinguish Worker A from Worker B. |
-| Model-visible bearer returned by a tool | The model can copy, lose, disclose, or replay it; no conversation proof | Reject. Guidance cannot make a bearer confidential. |
-| Project file or ordinary local secret | Shared with other chats and tooling; survives longer than its authority scope | Reject. It becomes a project-wide credential. |
-| PID, parent lineage, command line, or start time | Liveness/diagnostic evidence only; values can be reused or become ambiguous | Reject as an authentication root. |
-| OS credential store lookup alone | Identifies a user/machine, not an exact provider thread or attachment generation | Reject alone. It may protect a launcher secret but is not the binding proof. |
-| App Server WebSocket authentication | Protects App Server transport, not the relationship between one thread and one MCP bridge | Reuse only as transport protection; not the continuity root. |
-| Per-attachment OS-local IPC with one-time challenge proof | Can be scoped to a managed launch, kept out of model context, and rotated per generation | Select for the Codex prototype, with inherited-handle delivery as the primary variant. |
+| Candidate                                                 | Boundary                                                                                  | Decision                                                                               |
+|-----------------------------------------------------------|-------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+| Static MCP environment/configuration                      | Shared by every process/thread using the entry; inspectable and not conversation-scoped   | Reject. It cannot distinguish Worker A from Worker B.                                  |
+| Model-visible bearer returned by a tool                   | The model can copy, lose, disclose, or replay it; no conversation proof                   | Reject. Guidance cannot make a bearer confidential.                                    |
+| Project file or ordinary local secret                     | Shared with other chats and tooling; survives longer than its authority scope             | Reject. It becomes a project-wide credential.                                          |
+| PID, parent lineage, command line, or start time          | Liveness/diagnostic evidence only; values can be reused or become ambiguous               | Reject as an authentication root.                                                      |
+| OS credential store lookup alone                          | Identifies a user/machine, not an exact provider thread or attachment generation          | Reject alone. It may protect a launcher secret but is not the binding proof.           |
+| App Server WebSocket authentication                       | Protects App Server transport, not the relationship between one thread and one MCP bridge | Reuse only as transport protection; not the continuity root.                           |
+| Per-attachment OS-local IPC with one-time challenge proof | Can be scoped to a managed launch, kept out of model context, and rotated per generation  | Select for the Codex prototype, with inherited-handle delivery as the primary variant. |
 
 ### Selected channel
 

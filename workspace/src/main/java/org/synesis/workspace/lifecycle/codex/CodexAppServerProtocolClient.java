@@ -68,6 +68,7 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
     private final AtomicLong oversizedFrames = new AtomicLong();
     private volatile boolean closed;
     private volatile Throwable failure;
+
     /**
      * Creates and starts a protocol reader.
      *
@@ -650,7 +651,9 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
 
     }
 
-    /** Tracks one request awaiting a bounded protocol response. */
+    /**
+     * Tracks one request awaiting a bounded protocol response.
+     */
     private record Pending(String id, String method, LifecycleControlRequestEnvelope.Classification classification,
                            String digest, String expectedThreadId, String expectedTurnId, long sentAtEpochMillis,
                            CompletableFuture<Response> future) {

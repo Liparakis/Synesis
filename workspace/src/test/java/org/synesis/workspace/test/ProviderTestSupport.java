@@ -28,7 +28,8 @@ public final class ProviderTestSupport {
         isolateHome();
         ProviderApplicationService.ProviderResult result = new ProviderApplicationService().install(location,
                 provider);
-        if (!result.values().containsKey("PROVIDER_INSTALL_RESULT")) {
+        if (!result.values()
+                .containsKey("PROVIDER_INSTALL_RESULT")) {
             throw new IllegalStateException("Provider test installation returned no result: " + result.values());
         }
     }

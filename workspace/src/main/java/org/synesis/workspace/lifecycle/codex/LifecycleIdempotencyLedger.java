@@ -50,6 +50,7 @@ public final class LifecycleIdempotencyLedger {
     private long conflicts;
     private long initialPersistenceFailures;
     private long resultStorageFailures;
+
     /**
      * Opens the default project-local ledger.
      *
@@ -59,6 +60,7 @@ public final class LifecycleIdempotencyLedger {
     public LifecycleIdempotencyLedger(Path file) throws IOException {
         this(file, new FileDurableStore(file));
     }
+
     /**
      * Opens a ledger with an injected durable store.
      *
@@ -615,7 +617,9 @@ public final class LifecycleIdempotencyLedger {
         }
     }
 
-    /** Persists idempotency entries in the lifecycle's bounded file store. */
+    /**
+     * Persists idempotency entries in the lifecycle's bounded file store.
+     */
     @SuppressWarnings({"ClassCanBeRecord", "DuplicatedCode"})
     private static final class FileDurableStore implements DurableStore {
 

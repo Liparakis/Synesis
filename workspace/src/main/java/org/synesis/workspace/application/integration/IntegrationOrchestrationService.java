@@ -827,7 +827,9 @@ public final class IntegrationOrchestrationService {
         }
     }
 
-    /** Holds resolved integration dependencies and readiness evidence. */
+    /**
+     * Holds resolved integration dependencies and readiness evidence.
+     */
     private record CandidateResolution(boolean ready, List<TaskSnapshotRecord> dependencies,
                                        List<String> structuralFailures) {
 

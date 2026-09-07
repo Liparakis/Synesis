@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 
-/** Exercises quarantine of unsafe or ambiguous lifecycle state. */
+/**
+ * Exercises quarantine of unsafe or ambiguous lifecycle state.
+ */
 class QuarantineTest {
 
     @Test

@@ -141,7 +141,9 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                 role, List.of(), List.of());
     }
 
-    /** Constructs an intent with the historical review-target shape. */
+    /**
+     * Constructs an intent with the historical review-target shape.
+     */
     public WorkIntent(UUID intentId, UUID projectId, String participant,
             String provider, UUID taskId, String goal, String acceptance, String baseCommit,
             List<ResourceSelector> selectors, long version, UUID workGroupId, UUID authorityLineageId,
@@ -180,8 +182,9 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
         }
         reviewTargetSelectors = List.copyOf(reviewTargetSelectors);
         Objects.requireNonNull(knownDependencies, "knownDependencies");
-        if (knownDependencies.size() > 50 || knownDependencies.stream().anyMatch(value -> value == null || value.isBlank()
-                || value.length() > 128)) {
+        if (knownDependencies.size() > 50 || knownDependencies.stream()
+                .anyMatch(value -> value == null || value.isBlank()
+                        || value.length() > 128)) {
             throw new IllegalArgumentException("known dependency bound");
         }
         knownDependencies = List.copyOf(knownDependencies);

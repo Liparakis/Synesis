@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-/** Exercises process identity inspection and PID-reuse classification. */
+/**
+ * Exercises process identity inspection and PID-reuse classification.
+ */
 class ProcessInspectorTest {
 
     @Test

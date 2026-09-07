@@ -31,11 +31,11 @@ filesystem, CLI, or coordination bypass was used.
 - No global Java, network, or Synesis production setting was changed.
 - Runtime artifacts used by the harness were the current build outputs:
 
-| artifact | SHA-256 |
-|---|---|
-| workspace JAR | `25045AD6AAEC648584C06BC7D4BA733E04BF239BCCCE82CE60A7E167FAFDB9CD` |
-| MCP JAR | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
-| CLI JAR | `1DC305D844A5F309FFF9B7692F8838C27552C2EDAC45C3A13AC7C95A115E335F` |
+| artifact                      | SHA-256                                                            |
+|-------------------------------|--------------------------------------------------------------------|
+| workspace JAR                 | `25045AD6AAEC648584C06BC7D4BA733E04BF239BCCCE82CE60A7E167FAFDB9CD` |
+| MCP JAR                       | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
+| CLI JAR                       | `1DC305D844A5F309FFF9B7692F8838C27552C2EDAC45C3A13AC7C95A115E335F` |
 | native MCP passed to launcher | `275A143B8B1D911B3E04E5CB5FC02B0DE28FC4E5C0CB903A1E859C5700A6EB72` |
 
 The supported provider-install flow temporarily changed the user Codex

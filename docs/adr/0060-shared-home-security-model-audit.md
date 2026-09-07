@@ -76,4 +76,5 @@ fixtures, ten-tool MCP contract, and SYN-049 `PARTIAL` status remain unchanged.
 
 ## Evidence
 
-See [`SYN-051-shared-home-security-model-audit-2026-09-03.md`](../evidence/SYN-051-shared-home-security-model-audit-2026-09-03.md).
+See [
+`SYN-051-shared-home-security-model-audit-2026-09-03.md`](../evidence/SYN-051-shared-home-security-model-audit-2026-09-03.md).

@@ -23,6 +23,7 @@ public final class TextFileDocument {
     private final String logicalText;
     private final LineEndingStyle lineEndingStyle;
     private final boolean utf8Bom;
+
     private TextFileDocument(byte[] rawBytes, String logicalText, LineEndingStyle lineEndingStyle,
             boolean utf8Bom) {
         this.rawBytes = rawBytes.clone();

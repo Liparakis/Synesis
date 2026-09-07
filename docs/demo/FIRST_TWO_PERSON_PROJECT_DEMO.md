@@ -90,7 +90,8 @@ INVITATION=synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&record
 > [!IMPORTANT]
 > The `--expect-host` parameter is used to bootstrap cryptographic trust for a new project. It is secure and trustworthy
 **only** when the expected host identity (fingerprint) is obtained through an independent, verified out-of-band
-> channel (e.g., in person, via secure chat, or a pre-trusted document). Never trust a fingerprint received over the same
+> channel (e.g., in person, via secure chat, or a pre-trusted document). Never trust a fingerprint received over the
+> same
 > untrusted transport channel as the invitation URI convenience bundle.
 
 Operator B can now onboard and sync the record with a single command by passing the parameterized invitation link and

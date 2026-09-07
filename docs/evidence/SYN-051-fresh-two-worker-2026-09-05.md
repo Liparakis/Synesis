@@ -18,10 +18,10 @@ close the broader SYN-049 integration/workgroup acceptance.
   `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
 - `Selector.open()` passed; minimal `HttpServer` create/start/stop passed.
 - Produced and installed hashes matched exactly:
-  - workspace: `a7049e8b0a9c7de792038c254f1c546515de1c02757ec97834ac67be5e6863a1`
-  - MCP: `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
-  - CLI: `07f6770592f923a78f3071be39e27d8dea4dfd13b99f99acbd5a8937d98cd0bb`
-  - native MCP: `37a2db02909d434a6a8135a6326e2592ecf5f2e83c873e146e589b95a27f97ea`
+    - workspace: `a7049e8b0a9c7de792038c254f1c546515de1c02757ec97834ac67be5e6863a1`
+    - MCP: `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
+    - CLI: `07f6770592f923a78f3071be39e27d8dea4dfd13b99f99acbd5a8937d98cd0bb`
+    - native MCP: `37a2db02909d434a6a8135a6326e2592ecf5f2e83c873e146e589b95a27f97ea`
 - Target baseline: branch `main`, tracked HEAD
   `8cf929c4def2a5d900f654c5b99d9ebef8bc972e`; only pre-existing untracked
   `probe-runtime/` existed in the control checkout.
@@ -31,14 +31,14 @@ close the broader SYN-049 integration/workgroup acceptance.
 
 ## Fresh workers and generation 1
 
-| | Worker A | Worker B |
-|---|---|---|
-| Connection | `syn051-final-ab-a-99b9f163-3e17-456b-ad86-4293bc677925` | `syn051-final-ab-b-4ac9d1a8-a34d-4f40-9cae-1a8f1107b2dc` |
-| Binding | `session-61a3ec50-0fe7-4106-9ac2-cceda3a96615` | `session-84b268af-b448-4059-9c97-cb8c73f5615f` |
-| Participant | `agt_971db454-30b8-346f-a91d-91570a54bfa3` | `agt_f68d651b-150c-35e3-a2e1-8026e2ce69fc` |
-| WorkIntent | `54bfa3ae-46ab-382d-907f-4db7f82394e5` | `8fa013b7-c415-3cf4-865b-7390b2ffeb0d` |
-| Claim | `probe-runtime/persistence-ab-a-8c5eafea-90cd-46d4-b29d-ec93acca78d8.txt` | `probe-runtime/persistence-ab-b-01a3cc44-b042-452a-af9f-88f5e73f3337.txt` |
-| Generation-1 proof digest | `35f5426f5784d00340bea2ae0b3941d8e43abc2a29f5fbd2d9c0f7f1d3bfefe7` | `564a5662b41e4f846146633ba7e5a016ffc98d70a6b6142d9c41c52b151e0cee` |
+|                           | Worker A                                                                  | Worker B                                                                  |
+|---------------------------|---------------------------------------------------------------------------|---------------------------------------------------------------------------|
+| Connection                | `syn051-final-ab-a-99b9f163-3e17-456b-ad86-4293bc677925`                  | `syn051-final-ab-b-4ac9d1a8-a34d-4f40-9cae-1a8f1107b2dc`                  |
+| Binding                   | `session-61a3ec50-0fe7-4106-9ac2-cceda3a96615`                            | `session-84b268af-b448-4059-9c97-cb8c73f5615f`                            |
+| Participant               | `agt_971db454-30b8-346f-a91d-91570a54bfa3`                                | `agt_f68d651b-150c-35e3-a2e1-8026e2ce69fc`                                |
+| WorkIntent                | `54bfa3ae-46ab-382d-907f-4db7f82394e5`                                    | `8fa013b7-c415-3cf4-865b-7390b2ffeb0d`                                    |
+| Claim                     | `probe-runtime/persistence-ab-a-8c5eafea-90cd-46d4-b29d-ec93acca78d8.txt` | `probe-runtime/persistence-ab-b-01a3cc44-b042-452a-af9f-88f5e73f3337.txt` |
+| Generation-1 proof digest | `35f5426f5784d00340bea2ae0b3941d8e43abc2a29f5fbd2d9c0f7f1d3bfefe7`        | `564a5662b41e4f846146633ba7e5a016ffc98d70a6b6142d9c41c52b151e0cee`        |
 
 Both fresh preparations returned generation 1 `PENDING_ACTIVATION`, unresolved
 provider thread, absent ownership, and raw proof retained only in volatile

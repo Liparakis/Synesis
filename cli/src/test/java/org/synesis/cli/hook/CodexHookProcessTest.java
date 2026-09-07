@@ -61,6 +61,20 @@ final class CodexHookProcessTest {
         }
     }
 
+    private static void git(Path project, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = project.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command)
+                .redirectErrorStream(true)
+                .start();
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        String output = DistributionLauncherTest.output(process);
+        assertEquals(0, process.exitValue(), output);
+    }
+
     @Test
     void generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned() throws Exception {
         Path project = Files.createTempDirectory("synesis-codex-process-");
@@ -92,21 +106,9 @@ final class CodexHookProcessTest {
         }
     }
 
-    private static void git(Path project, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = project.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start();
-        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
-        String output = DistributionLauncherTest.output(process);
-        assertEquals(0, process.exitValue(), output);
-    }
-
-    /** Captures one hook subprocess result for protocol assertions. */
+    /**
+     * Captures one hook subprocess result for protocol assertions.
+     */
     private record CommandResult(int exit, String output) {
 
     }

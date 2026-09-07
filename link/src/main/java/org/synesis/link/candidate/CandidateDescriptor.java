@@ -1,7 +1,11 @@
 package org.synesis.link.candidate;
 
-import org.synesis.link.identity.NodeIdentity;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -10,7 +14,15 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * A bounded, signed, canonical candidate descriptor.

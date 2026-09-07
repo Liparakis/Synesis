@@ -1,11 +1,5 @@
 package org.synesis.coordination.domain.task;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.nio.file.Path;
-import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.WorkIntentService;
@@ -15,6 +9,12 @@ import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests Stage 2B Slice 3 task completion and integration projection state machine.

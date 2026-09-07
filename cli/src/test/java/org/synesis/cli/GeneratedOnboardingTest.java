@@ -88,7 +88,9 @@ final class GeneratedOnboardingTest {
         }
     }
 
-    /** Captures one generated onboarding host result for assertions. */
+    /**
+     * Captures one generated onboarding host result for assertions.
+     */
     private record CapturedHost(String link, String output) {
 
     }

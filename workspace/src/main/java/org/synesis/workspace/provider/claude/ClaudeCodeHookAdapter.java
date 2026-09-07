@@ -257,7 +257,7 @@ public final class ClaudeCodeHookAdapter {
                 var warningConstraint = finalResponse.warningConstraint();
                 String warningTitle = warningConstraint == null ? "Warning" : warningConstraint.title();
                 String warningRationale = warningConstraint == null ? finalResponse.message()
-                                                                     : warningConstraint.rationale();
+                        : warningConstraint.rationale();
                 String warningDiag = "SYNESIS_HOOK_RESULT=WARNING\nCONSTRAINT_TITLE="
                         + warningTitle + "\nREASON=" + finalResponse.message();
                 yield new Result(Outcome.WARNING, warnJson(warningTitle, warningRationale), warningDiag);

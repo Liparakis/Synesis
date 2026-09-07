@@ -10,7 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** Exercises capability-request handle validation and identity fields. */
+/**
+ * Exercises capability-request handle validation and identity fields.
+ */
 class CapabilityRequestHandleTest {
 
     @Test

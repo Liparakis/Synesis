@@ -11,16 +11,7 @@ import java.util.Locale;
  */
 public final class CodexManagedAuthentication {
 
-    /** Supported managed authentication choices. */
-    public enum Strategy {
-        /** The managed home uses the user's provider keyring entry. */
-        SHARED_KEYRING,
-        /** The provider reads credentials from its own normal home. */
-        NORMAL_PROVIDER_HOME,
-        /** A file credential was found but cannot be safely copied in v1. */
-        UNSAFE_FILE_AUTH,
-        /** No supported authentication evidence was found. */
-        UNAVAILABLE
+    private CodexManagedAuthentication() {
     }
 
     /**
@@ -29,7 +20,7 @@ public final class CodexManagedAuthentication {
      * <p>Normal-home mode deliberately does not inspect or classify provider
      * credential files; Codex owns that authentication boundary.</p>
      *
-     * @param mode managed runtime-home mode
+     * @param mode          managed runtime-home mode
      * @param userCodexHome normal provider home
      * @return strategy classification
      * @throws IOException when isolated-home inspection cannot read config
@@ -39,9 +30,6 @@ public final class CodexManagedAuthentication {
             return Strategy.NORMAL_PROVIDER_HOME;
         }
         return inspect(userCodexHome);
-    }
-
-    private CodexManagedAuthentication() {
     }
 
     /**
@@ -60,7 +48,8 @@ public final class CodexManagedAuthentication {
         if (Files.isRegularFile(config)) {
             String text = Files.readString(config);
             for (String line : text.split("\\R")) {
-                String normalized = line.trim().toLowerCase(Locale.ROOT);
+                String normalized = line.trim()
+                        .toLowerCase(Locale.ROOT);
                 if (normalized.startsWith("cli_auth_credentials_store") && normalized.contains("keyring")) {
                     return Strategy.SHARED_KEYRING;
                 }
@@ -78,7 +67,33 @@ public final class CodexManagedAuthentication {
     public static Path userHome() {
         String configured = System.getenv("CODEX_HOME");
         return configured == null || configured.isBlank()
-                ? Path.of(System.getProperty("user.home"), ".codex").toAbsolutePath().normalize()
-                : Path.of(configured).toAbsolutePath().normalize();
+                ? Path.of(System.getProperty("user.home"), ".codex")
+                  .toAbsolutePath()
+                  .normalize()
+                : Path.of(configured)
+                  .toAbsolutePath()
+                  .normalize();
+    }
+
+    /**
+     * Supported managed authentication choices.
+     */
+    public enum Strategy {
+        /**
+         * The managed home uses the user's provider keyring entry.
+         */
+        SHARED_KEYRING,
+        /**
+         * The provider reads credentials from its own normal home.
+         */
+        NORMAL_PROVIDER_HOME,
+        /**
+         * A file credential was found but cannot be safely copied in v1.
+         */
+        UNSAFE_FILE_AUTH,
+        /**
+         * No supported authentication evidence was found.
+         */
+        UNAVAILABLE
     }
 }

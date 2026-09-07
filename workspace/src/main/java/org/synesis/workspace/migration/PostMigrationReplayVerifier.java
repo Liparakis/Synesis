@@ -1,5 +1,12 @@
 package org.synesis.workspace.migration;
 
+import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.task.TaskCompletionProjection;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.IdentityBootstrap;
+import org.synesis.workspace.application.ProjectApplicationService;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.RecordComponent;
@@ -8,21 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
-import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
-import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
-import org.synesis.coordination.domain.task.TaskCompletionProjection;
-import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.workspace.application.ProjectApplicationService;
+import java.util.*;
 
 /**
  * Replays the existing durable event store and compares canonical semantic

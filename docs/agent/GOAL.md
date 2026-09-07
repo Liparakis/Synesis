@@ -33,7 +33,8 @@ Focused workspace and MCP tests stalled after compilation without assertions
 and remain incomplete. No Worker A or managed runtime was created. SYN-051
 remains ACTIVE / PARTIAL.
 
-- Exact next action: run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
+- Exact next action: run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property,
+  keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
 
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
@@ -45,7 +46,9 @@ before task execution with `Unable to establish loopback connection`, so the
 workaround was not broadened to build logic and no fresh Worker-A lane was
 created. SYN-051 remains ACTIVE / PARTIAL.
 
-- Exact next action: obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then fresh-build and provenance-lock the runtime before creating any new Worker-A lane; do not launch or reuse a lane.
+- Exact next action: obtain separate authorization for a bounded process-local compatibility path for the build/Gradle
+  JVM itself, then fresh-build and provenance-lock the runtime before creating any new Worker-A lane; do not launch or
+  reuse a lane.
 
 ## SYN-051 standalone host compatibility — 2026-09-05
 
@@ -65,7 +68,9 @@ global settings, or remote state was touched.
 Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
 and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
-Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on
+existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a
+lane in this slice.
 
 # Goal
 

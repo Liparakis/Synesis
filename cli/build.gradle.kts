@@ -1,15 +1,4 @@
 import org.gradle.internal.os.OperatingSystem
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.provider.Property
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.OutputDirectory
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.Sync
-import org.gradle.api.tasks.TaskAction
 import java.io.DataOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -225,7 +214,10 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
             environment["GOOS"] = target.first
             environment["GOARCH"] = target.second
             environment["CGO_ENABLED"] = "0"
-            for ((binaryName, packagePath) in listOf("synesis-mcp$suffix" to "./cmd/synesis-mcp", "synesis-installer$suffix" to ".")) {
+            for ((binaryName, packagePath) in listOf(
+                "synesis-mcp$suffix" to "./cmd/synesis-mcp",
+                "synesis-installer$suffix" to "."
+            )) {
                 val output = outputDirectory.resolve(binaryName)
                 val process = ProcessBuilder(
                     "go", "build", "-trimpath", "-ldflags=-s -w", "-o", output.absolutePath, packagePath
@@ -469,7 +461,8 @@ tasks.register("bundleSmokeTest") {
         }
         val bundleRoot = extractedRoot.resolve(platformBundleDirectory.get().asFile.name)
         val launcher = bundleRoot.resolve("bin").resolve(if (isWindows) "synesis.cmd" else "synesis")
-        val installer = bundleRoot.resolve("bin").resolve(if (isWindows) "synesis-installer.exe" else "synesis-installer")
+        val installer =
+            bundleRoot.resolve("bin").resolve(if (isWindows) "synesis-installer.exe" else "synesis-installer")
         require(installer.isFile) { "Native installer missing from bundle: $installer" }
         if (!isWindows) {
             require(launcher.setExecutable(true)) { "Unable to restore Unix launcher permissions after extraction" }
@@ -510,7 +503,8 @@ tasks.register("bundleSmokeTest") {
             } else {
                 mutableListOf(installer.absolutePath, "version")
             }
-            val installerResult = ProcessBuilder(installerCommand).directory(smokeRoot).redirectErrorStream(true).start()
+            val installerResult =
+                ProcessBuilder(installerCommand).directory(smokeRoot).redirectErrorStream(true).start()
             val installerOutput = installerResult.inputStream.bufferedReader().readText()
             require(installerResult.waitFor() == 0 && "SYNESIS_BOOTSTRAP_VERSION=" in installerOutput) {
                 "Native installer version check failed:\n$installerOutput"

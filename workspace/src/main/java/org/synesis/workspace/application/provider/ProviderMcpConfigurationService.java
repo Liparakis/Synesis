@@ -1,5 +1,9 @@
 package org.synesis.workspace.application.provider;
 
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -8,10 +12,6 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 
 /**
  * Owns provider MCP configuration installation and removal.

@@ -1,26 +1,26 @@
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Gradle JVM carrier | Command-local `GRADLE_OPTS`, `TEMP/TMP=C:\t` | PASS | build provenance evidence |
-| Gradle startup/task | `--version`, `help` | PASS | build provenance evidence |
-| Focused workspace tests | Managed/lifecycle/ownership/Job selections | INCOMPLETE: stalled after compilation | build provenance evidence |
-| Focused MCP tests | Catalog/server/frame selections | INCOMPLETE: stalled after compilation | build provenance evidence |
-| Clean build/install | `clean :cli:installDist` | PASS | build provenance evidence |
-| Artifact provenance | Produced == installed hashes | PASS | build provenance evidence |
-| Worker A/runtime | Explicitly excluded | NOT RUN | scope boundary |
+| Area                    | Check                                        | Result                                | Evidence                  |
+|-------------------------|----------------------------------------------|---------------------------------------|---------------------------|
+| Gradle JVM carrier      | Command-local `GRADLE_OPTS`, `TEMP/TMP=C:\t` | PASS                                  | build provenance evidence |
+| Gradle startup/task     | `--version`, `help`                          | PASS                                  | build provenance evidence |
+| Focused workspace tests | Managed/lifecycle/ownership/Job selections   | INCOMPLETE: stalled after compilation | build provenance evidence |
+| Focused MCP tests       | Catalog/server/frame selections              | INCOMPLETE: stalled after compilation | build provenance evidence |
+| Clean build/install     | `clean :cli:installDist`                     | PASS                                  | build provenance evidence |
+| Artifact provenance     | Produced == installed hashes                 | PASS                                  | build provenance evidence |
+| Worker A/runtime        | Explicitly excluded                          | NOT RUN                               | scope boundary            |
 
 Exact next action: run one fresh lawful Worker-A validation with the same
 process-local property and same-live-caller `prepareFirst → START` boundary.
 
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| JDK25 selector | `Selector.open()` with process-local UNIX temp directory | PASS | blocker evidence |
-| JDK25 HTTP | IPv4/IPv6 `HttpServer.create/start/stop` with same property | PASS | blocker evidence |
-| Clean provenance build | `:cli:installDist` without workaround propagation | STOPPED: Gradle JVM loopback failure before task execution | blocker evidence |
-| Fresh Worker A | New lawful lane and managed runtime | NOT RUN | artifact provenance gate |
+| Area                   | Check                                                       | Result                                                     | Evidence                 |
+|------------------------|-------------------------------------------------------------|------------------------------------------------------------|--------------------------|
+| JDK25 selector         | `Selector.open()` with process-local UNIX temp directory    | PASS                                                       | blocker evidence         |
+| JDK25 HTTP             | IPv4/IPv6 `HttpServer.create/start/stop` with same property | PASS                                                       | blocker evidence         |
+| Clean provenance build | `:cli:installDist` without workaround propagation           | STOPPED: Gradle JVM loopback failure before task execution | blocker evidence         |
+| Fresh Worker A         | New lawful lane and managed runtime                         | NOT RUN                                                    | artifact provenance gate |
 
 Exact next action: obtain separate authorization for a bounded process-local
 build-JVM compatibility path, then fresh-build/install and lock provenance
@@ -44,23 +44,25 @@ global settings, or remote state was touched.
 Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
 and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
-Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on
+existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a
+lane in this slice.
 
 # SYN-051 fresh single-worker managed-runtime validation — 2026-09-05
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Source/runtime provenance | Source commit, runtime baseline, installed hashes | PASS / unchanged | validation evidence |
-| Target identity | `SkibidiToilert` Git baseline and tracked state | PASS | validation evidence |
-| Fresh lawful lane | New connection, participant, WorkIntent, binding, exact claim | PASS | public application state |
-| Same live caller | One launcher and production runtime host constructed | PASS up to host creation | disposable caller output |
-| Loopback boundary | JDK 25 `HttpServer.create(...)` | FAIL: `Unable to establish loopback connection` / invalid argument | `SYN-051-live-worker-a-loopback-blocker-2026-09-05.md` |
-| Managed preparation/START | `prepareFirst` followed by START | NOT REACHED | stopped on first material failure |
-| App Server/MCP/Job | Real managed child topology and containment | NOT REACHED | stopped on first material failure |
-| Provider thread/turn | Thread A, ownership, `turn/completed`, persistence readiness | NOT REACHED | stopped on first material failure |
-| Mutation scope | Claimed mutation and out-of-claim inspection | NOT REACHED | stopped on first material failure |
-| Cleanup | Normal host close; no replacement/A2/B invocation | PASS | disposable caller output |
-| Broader acceptance | Worker B, A/B, A1/A2, full acceptance | NOT RUN | explicit scope boundary |
+| Area                      | Check                                                         | Result                                                             | Evidence                                               |
+|---------------------------|---------------------------------------------------------------|--------------------------------------------------------------------|--------------------------------------------------------|
+| Source/runtime provenance | Source commit, runtime baseline, installed hashes             | PASS / unchanged                                                   | validation evidence                                    |
+| Target identity           | `SkibidiToilert` Git baseline and tracked state               | PASS                                                               | validation evidence                                    |
+| Fresh lawful lane         | New connection, participant, WorkIntent, binding, exact claim | PASS                                                               | public application state                               |
+| Same live caller          | One launcher and production runtime host constructed          | PASS up to host creation                                           | disposable caller output                               |
+| Loopback boundary         | JDK 25 `HttpServer.create(...)`                               | FAIL: `Unable to establish loopback connection` / invalid argument | `SYN-051-live-worker-a-loopback-blocker-2026-09-05.md` |
+| Managed preparation/START | `prepareFirst` followed by START                              | NOT REACHED                                                        | stopped on first material failure                      |
+| App Server/MCP/Job        | Real managed child topology and containment                   | NOT REACHED                                                        | stopped on first material failure                      |
+| Provider thread/turn      | Thread A, ownership, `turn/completed`, persistence readiness  | NOT REACHED                                                        | stopped on first material failure                      |
+| Mutation scope            | Claimed mutation and out-of-claim inspection                  | NOT REACHED                                                        | stopped on first material failure                      |
+| Cleanup                   | Normal host close; no replacement/A2/B invocation             | PASS                                                               | disposable caller output                               |
+| Broader acceptance        | Worker B, A/B, A1/A2, full acceptance                         | NOT RUN                                                            | explicit scope boundary                                |
 
 Exact next action: separately resolve or investigate the JDK 25 loopback
 compatibility blocker, then run a new fresh lawful Worker-A validation with
@@ -71,30 +73,30 @@ lane or broaden acceptance.
 
 ## SYN-051 generation-1 persistence-boundary implementation — 2026-09-04
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Same-process generation 1 | Managed lifecycle uses `thread/start` without bootstrap handoff | PASS focused lifecycle regression | `CodexLifecycleWaitControlTest` |
-| Boundary ordering | Verify, finalize, activate occur in order | PASS | `CodexLifecycleWaitControlTest` |
-| Persistence signal | Exact completed event reaches provider owner | PASS | `CodexLifecycleWaitControlTest`, launcher callback |
-| Durable ownership | Scoped/idempotent readiness and wrong-owner rejection | PASS | `ProviderThreadOwnershipStoreTest` |
-| Attachment gate | Pending thread bind, idempotence, mismatch rejection | PASS | `ManagedAttachmentServiceTest` |
-| Replacement gate | Provisional blocked; persisted plus trusted death allowed | PASS focused | `ManagedAttachmentServiceTest` |
-| Compatibility regressions | Protocol, broker, lifecycle focused classes | PASS | explicit Gradle test selection |
-| MCP package tests | Selected MCP tests | INCOMPLETE: stalled and stopped | `FAILED_ATTEMPTS.md` |
-| Build/install | Clean `:cli:installDist` | PASS | SYN-051 implementation evidence |
-| Artifact provenance | Produced vs installed SHA-256 | PASS | SYN-051 implementation evidence |
-| Real managed acceptance | Worker A/B, A1/A2, full acceptance | NOT RUN | explicit scope boundary |
+| Area                      | Check                                                           | Result                            | Evidence                                           |
+|---------------------------|-----------------------------------------------------------------|-----------------------------------|----------------------------------------------------|
+| Same-process generation 1 | Managed lifecycle uses `thread/start` without bootstrap handoff | PASS focused lifecycle regression | `CodexLifecycleWaitControlTest`                    |
+| Boundary ordering         | Verify, finalize, activate occur in order                       | PASS                              | `CodexLifecycleWaitControlTest`                    |
+| Persistence signal        | Exact completed event reaches provider owner                    | PASS                              | `CodexLifecycleWaitControlTest`, launcher callback |
+| Durable ownership         | Scoped/idempotent readiness and wrong-owner rejection           | PASS                              | `ProviderThreadOwnershipStoreTest`                 |
+| Attachment gate           | Pending thread bind, idempotence, mismatch rejection            | PASS                              | `ManagedAttachmentServiceTest`                     |
+| Replacement gate          | Provisional blocked; persisted plus trusted death allowed       | PASS focused                      | `ManagedAttachmentServiceTest`                     |
+| Compatibility regressions | Protocol, broker, lifecycle focused classes                     | PASS                              | explicit Gradle test selection                     |
+| MCP package tests         | Selected MCP tests                                              | INCOMPLETE: stalled and stopped   | `FAILED_ATTEMPTS.md`                               |
+| Build/install             | Clean `:cli:installDist`                                        | PASS                              | SYN-051 implementation evidence                    |
+| Artifact provenance       | Produced vs installed SHA-256                                   | PASS                              | SYN-051 implementation evidence                    |
+| Real managed acceptance   | Worker A/B, A1/A2, full acceptance                              | NOT RUN                           | explicit scope boundary                            |
 
 ## SYN-051 provider-thread provenance review — 2026-09-04
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Provider source meaning | 0.153.0 `thread/read` missing-live/missing-store branch | PASS | official `thread_processor.rs`; detailed evidence record |
-| Provenance | Bootstrap and successor effective home/state/history/rollout roots | PASS: matched | detailed evidence record |
-| T1 start-only | Same-process live read; fresh-process read/resume | PASS then FAIL as expected | disposable provider probe; T1 durable store absent |
-| T2 completed turn | Fresh-process read and exact resume | PASS | disposable provider probe; T2 durable store/rollout present |
-| Version comparison | 0.145 source and historical completed-turn acceptance | NO regression found | official 0.145 source and existing repo evidence |
-| Managed acceptance | A1/A2, controlled crash, Worker B, full acceptance | NOT RUN | read-only scope boundary |
+| Area                    | Check                                                              | Result                     | Evidence                                                    |
+|-------------------------|--------------------------------------------------------------------|----------------------------|-------------------------------------------------------------|
+| Provider source meaning | 0.153.0 `thread/read` missing-live/missing-store branch            | PASS                       | official `thread_processor.rs`; detailed evidence record    |
+| Provenance              | Bootstrap and successor effective home/state/history/rollout roots | PASS: matched              | detailed evidence record                                    |
+| T1 start-only           | Same-process live read; fresh-process read/resume                  | PASS then FAIL as expected | disposable provider probe; T1 durable store absent          |
+| T2 completed turn       | Fresh-process read and exact resume                                | PASS                       | disposable provider probe; T2 durable store/rollout present |
+| Version comparison      | 0.145 source and historical completed-turn acceptance              | NO regression found        | official 0.145 source and existing repo evidence            |
+| Managed acceptance      | A1/A2, controlled crash, Worker B, full acceptance                 | NOT RUN                    | read-only scope boundary                                    |
 
 Exact next action: implement managed generation-1 `thread/start`, broker exact
 ownership/pinning, and the persisted-turn gate; rebuild/install and run only
@@ -103,17 +105,17 @@ out of scope.
 
 ## SYN-051 real-runtime validation — 2026-09-04
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Source/build provenance | Fresh current-source install from `088cb239f2e2109c4dddd40cbaee36c158337e82` | PASS | local distribution hashes |
-| Focused verification | Lifecycle/MCP tests, strict quality checks, deferred register | PASS | Gradle reports and validator |
-| Fresh Worker A | Lawful binding, participant, intent, exact claim, provider-thread owner | PASS | public application state |
-| Managed A1 launch | Generation-1 pending attachment and Job-contained App Server launch | PARTIAL | lifecycle checkpoint/evidence journal |
-| Exact thread join | New App Server `thread/resume` for bootstrap-created exact thread | FAIL: `thread not loaded` | `probe-runtime/.../generation-1.jsonl` |
-| Startup cleanup | Lifecycle failed closed and trusted generation-1 receipt was written | PASS | public receipt store; not crash evidence |
-| Controlled A1 root failure | Kill only active App Server root after A1 turn | NOT RUN | stop-on-first-failure |
-| Replacement/A2 | Fresh proof, generation 2 activation, exact resume, real turn | NOT RUN; aborted harness reached generation-2 pending, then terminalized | stop-on-first-failure |
-| Worker B/A-B acceptance | B, isolation, cross-proof, full acceptance | NOT RUN | explicit scope boundary |
+| Area                       | Check                                                                        | Result                                                                   | Evidence                                 |
+|----------------------------|------------------------------------------------------------------------------|--------------------------------------------------------------------------|------------------------------------------|
+| Source/build provenance    | Fresh current-source install from `088cb239f2e2109c4dddd40cbaee36c158337e82` | PASS                                                                     | local distribution hashes                |
+| Focused verification       | Lifecycle/MCP tests, strict quality checks, deferred register                | PASS                                                                     | Gradle reports and validator             |
+| Fresh Worker A             | Lawful binding, participant, intent, exact claim, provider-thread owner      | PASS                                                                     | public application state                 |
+| Managed A1 launch          | Generation-1 pending attachment and Job-contained App Server launch          | PARTIAL                                                                  | lifecycle checkpoint/evidence journal    |
+| Exact thread join          | New App Server `thread/resume` for bootstrap-created exact thread            | FAIL: `thread not loaded`                                                | `probe-runtime/.../generation-1.jsonl`   |
+| Startup cleanup            | Lifecycle failed closed and trusted generation-1 receipt was written         | PASS                                                                     | public receipt store; not crash evidence |
+| Controlled A1 root failure | Kill only active App Server root after A1 turn                               | NOT RUN                                                                  | stop-on-first-failure                    |
+| Replacement/A2             | Fresh proof, generation 2 activation, exact resume, real turn                | NOT RUN; aborted harness reached generation-2 pending, then terminalized | stop-on-first-failure                    |
+| Worker B/A-B acceptance    | B, isolation, cross-proof, full acceptance                                   | NOT RUN                                                                  | explicit scope boundary                  |
 
 The read-only provider repro returned `thread not loaded:
 01a069b4-1028-7472-8a77-21e847c51cc7` in a new App Server process. The fresh
@@ -123,56 +125,56 @@ without a receipt.
 
 ## Production lifecycle replacement slice — 2026-09-04
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Trusted death evidence | Supervisor evidence is emitted only after root/Job/active-process proof | PASS direct compilation; real rerun not performed | `ManagedProcessTreeSupervisor` |
-| Receipt scope | Binding and generation are persisted without raw proof or credentials | PASS direct compilation and focused tests | `ManagedRuntimeDeathReceiptStore`, `ManagedAttachmentServiceTest` |
-| Replacement gates | Missing, wrong-scope, terminal, stale, or old-proof replacement rejects | PASS 14/14 direct JUnit | `ManagedAttachmentServiceTest` |
-| Replacement race | Two proofless replacements have one winner and a fresh generation | PASS direct JUnit | `ManagedAttachmentServiceTest` |
-| Lifecycle wiring | Managed exit/teardown records evidence before disconnecting | PASS direct changed-source compilation | `ManagedCodexProcessLauncher`, `CodexAppServerLifecycleService` |
-| Pending MCP regression | Quarantine and in-place promotion remain intact | PASS 2/2 direct JUnit | `McpServerTest` |
-| Gradle/build provenance | Repository build and install of current source | BLOCKED | workstation loopback failure |
-| Real A1-to-A2 | Historical generation replacement | NOT RUN / no trusted receipt | existing fixture left untouched |
+| Area                    | Check                                                                   | Result                                            | Evidence                                                          |
+|-------------------------|-------------------------------------------------------------------------|---------------------------------------------------|-------------------------------------------------------------------|
+| Trusted death evidence  | Supervisor evidence is emitted only after root/Job/active-process proof | PASS direct compilation; real rerun not performed | `ManagedProcessTreeSupervisor`                                    |
+| Receipt scope           | Binding and generation are persisted without raw proof or credentials   | PASS direct compilation and focused tests         | `ManagedRuntimeDeathReceiptStore`, `ManagedAttachmentServiceTest` |
+| Replacement gates       | Missing, wrong-scope, terminal, stale, or old-proof replacement rejects | PASS 14/14 direct JUnit                           | `ManagedAttachmentServiceTest`                                    |
+| Replacement race        | Two proofless replacements have one winner and a fresh generation       | PASS direct JUnit                                 | `ManagedAttachmentServiceTest`                                    |
+| Lifecycle wiring        | Managed exit/teardown records evidence before disconnecting             | PASS direct changed-source compilation            | `ManagedCodexProcessLauncher`, `CodexAppServerLifecycleService`   |
+| Pending MCP regression  | Quarantine and in-place promotion remain intact                         | PASS 2/2 direct JUnit                             | `McpServerTest`                                                   |
+| Gradle/build provenance | Repository build and install of current source                          | BLOCKED                                           | workstation loopback failure                                      |
+| Real A1-to-A2           | Historical generation replacement                                       | NOT RUN / no trusted receipt                      | existing fixture left untouched                                   |
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Pending transport | Proof-bearing `PENDING_ACTIVATION` transport initializes without authority | PASS focused; PASS real startup boundary | `ManagedAttachmentServiceTest`, `McpServerTest`, real generation-1 journal |
-| Pending authority | `ensure_session` and mutation tools remain blocked before activation | PASS focused JUnit | `McpServerTest.pendingManagedTransportStaysQuarantinedThenPromotesInPlace` |
-| Promotion | Same handler/connection becomes active after exact durable activation | PASS focused; real post-activation MCP call reached Synesis | same test and `SkibidiToilert/probe-runtime/session-72ed.../evidence/generation-1.jsonl` |
-| Selector carrier | Managed launcher forwards non-secret connection selector explicitly while proof uses `env_vars` | PASS source/build and real MCP `ready` | `ManagedCodexProcessLauncher`, real startup status |
-| Duplicate transport | One connection wins per pending generation; slot is reusable after close | PASS focused JUnit | `ManagedAttachmentServiceTest` |
-| Real containment | Harness, App Server, MCP child observed in one Windows Job | PASS real A retry | PIDs 6124/20412/15464; `IsProcessInJob=IN_JOB` |
-| Real model turn | Codex turn invoked Synesis; requested mutation failed closed on mismatched claim path | PARTIAL / harness input mismatch | real generation-1 journal |
-| Broader acceptance | Worker B, A/B, A1/A2, full tracker | NOT RUN | explicit scope boundary |
+| Area                | Check                                                                                           | Result                                                      | Evidence                                                                                 |
+|---------------------|-------------------------------------------------------------------------------------------------|-------------------------------------------------------------|------------------------------------------------------------------------------------------|
+| Pending transport   | Proof-bearing `PENDING_ACTIVATION` transport initializes without authority                      | PASS focused; PASS real startup boundary                    | `ManagedAttachmentServiceTest`, `McpServerTest`, real generation-1 journal               |
+| Pending authority   | `ensure_session` and mutation tools remain blocked before activation                            | PASS focused JUnit                                          | `McpServerTest.pendingManagedTransportStaysQuarantinedThenPromotesInPlace`               |
+| Promotion           | Same handler/connection becomes active after exact durable activation                           | PASS focused; real post-activation MCP call reached Synesis | same test and `SkibidiToilert/probe-runtime/session-72ed.../evidence/generation-1.jsonl` |
+| Selector carrier    | Managed launcher forwards non-secret connection selector explicitly while proof uses `env_vars` | PASS source/build and real MCP `ready`                      | `ManagedCodexProcessLauncher`, real startup status                                       |
+| Duplicate transport | One connection wins per pending generation; slot is reusable after close                        | PASS focused JUnit                                          | `ManagedAttachmentServiceTest`                                                           |
+| Real containment    | Harness, App Server, MCP child observed in one Windows Job                                      | PASS real A retry                                           | PIDs 6124/20412/15464; `IsProcessInJob=IN_JOB`                                           |
+| Real model turn     | Codex turn invoked Synesis; requested mutation failed closed on mismatched claim path           | PARTIAL / harness input mismatch                            | real generation-1 journal                                                                |
+| Broader acceptance  | Worker B, A/B, A1/A2, full tracker                                                              | NOT RUN                                                     | explicit scope boundary                                                                  |
 
 # SYN-051 shared-normal-home implementation slice — 2026-09-03
 
 ## Real-runtime validation — 2026-09-04
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Exact artifact provenance | Build and install workspace/MCP/CLI artifacts; compare SHA-256 | PASS | local distribution hashes |
-| Fresh fixture | Git baseline plus supported Synesis initialization for `SkibidiToilert` | PASS | baseline `8cf929c` |
-| Managed Worker A launch | Real Codex App Server root launched through Job supervisor | PASS until next gate | real PID/Job membership |
-| Managed MCP A admission | Child starts before lifecycle activation and receives pending proof | FAIL / first material failure | `generation-1.jsonl`, MCP initialize failure |
-| Real A/B/restart acceptance | Worker B, A1/A2, isolation, recovery | NOT RUN | stop-on-first-failure |
+| Area                        | Check                                                                   | Result                        | Evidence                                     |
+|-----------------------------|-------------------------------------------------------------------------|-------------------------------|----------------------------------------------|
+| Exact artifact provenance   | Build and install workspace/MCP/CLI artifacts; compare SHA-256          | PASS                          | local distribution hashes                    |
+| Fresh fixture               | Git baseline plus supported Synesis initialization for `SkibidiToilert` | PASS                          | baseline `8cf929c`                           |
+| Managed Worker A launch     | Real Codex App Server root launched through Job supervisor              | PASS until next gate          | real PID/Job membership                      |
+| Managed MCP A admission     | Child starts before lifecycle activation and receives pending proof     | FAIL / first material failure | `generation-1.jsonl`, MCP initialize failure |
+| Real A/B/restart acceptance | Worker B, A1/A2, isolation, recovery                                    | NOT RUN                       | stop-on-first-failure                        |
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Windows Job launch | Root plus descendant created inside one Job; assignment precedes resume; teardown proves empty | PASS on real Windows runtime | `WindowsJobObjectProcessTreeSupervisorTest` |
-| Lifecycle integration | Managed App Server launch/exit/failure/shutdown routes through supervisor; ordinary launcher remains unchanged | Source-compiled; focused lifecycle tests pass | `CodexAppServerLifecycleService`, `CodexLifecycleWaitControlTest` |
-| Proof activation fence | Early managed proof is pending/rejected; exact thread readback activates current generation | PASS focused JUnit | `ManagedAttachmentServiceTest`, `SynesisMcpServerTest` |
-| Proof carrier | Launch-local `env_vars` selects `SYNESIS_ATTACH_PROOF`; no global config rewrite | Source review only; real Codex child probe pending | `ManagedCodexProcessLauncher`, ADR-0062 |
-| Real managed A/B restart | Real Codex A/B turns, A1 Job death, A2 fresh proof/generation, B isolation | NOT RUN | next session |
+| Area                     | Check                                                                                                          | Result                                             | Evidence                                                          |
+|--------------------------|----------------------------------------------------------------------------------------------------------------|----------------------------------------------------|-------------------------------------------------------------------|
+| Windows Job launch       | Root plus descendant created inside one Job; assignment precedes resume; teardown proves empty                 | PASS on real Windows runtime                       | `WindowsJobObjectProcessTreeSupervisorTest`                       |
+| Lifecycle integration    | Managed App Server launch/exit/failure/shutdown routes through supervisor; ordinary launcher remains unchanged | Source-compiled; focused lifecycle tests pass      | `CodexAppServerLifecycleService`, `CodexLifecycleWaitControlTest` |
+| Proof activation fence   | Early managed proof is pending/rejected; exact thread readback activates current generation                    | PASS focused JUnit                                 | `ManagedAttachmentServiceTest`, `SynesisMcpServerTest`            |
+| Proof carrier            | Launch-local `env_vars` selects `SYNESIS_ATTACH_PROOF`; no global config rewrite                               | Source review only; real Codex child probe pending | `ManagedCodexProcessLauncher`, ADR-0062                           |
+| Real managed A/B restart | Real Codex A/B turns, A1 Job death, A2 fresh proof/generation, B isolation                                     | NOT RUN                                            | next session                                                      |
 
-| Area | Check | Result | Evidence |
-|---|---|---|---|
-| Provider-thread ownership | Two bindings race for one Codex thread; one durable owner remains | PASS by direct Java runtime check; Gradle JUnit incomplete | `ProviderThreadOwnershipStoreTest`, `SYN-051-shared-normal-home-implementation-2026-09-03.md` |
-| Managed thread pin | Active owner accepts exact thread and rejects a changed thread | PASS by direct Java runtime check; Gradle JUnit incomplete | `ManagedCodexThreadBrokerTest`, same evidence |
-| Managed admission | Exact managed binding without proof is rejected; managed resolution requires active record | Source-compiled; Gradle JUnit incomplete | `SynesisMcpServerTest`, same evidence |
-| Credential boundary | Normal-home mode classifies provider-owned auth without inspecting credential files; isolated file auth remains unsafe | Source-compiled; Gradle JUnit incomplete | `CodexManagedRuntimeHomeTest`, same evidence |
-| Process containment | Assignment-before-resume Windows Job supervisor integrated into lifecycle | BLOCKED / not implemented in this slice | ADR-0059, same evidence |
-| Full managed acceptance | Fresh real A/B, restart, model turn, provenance, task tracker | NOT RUN | same evidence |
+| Area                      | Check                                                                                                                  | Result                                                     | Evidence                                                                                      |
+|---------------------------|------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| Provider-thread ownership | Two bindings race for one Codex thread; one durable owner remains                                                      | PASS by direct Java runtime check; Gradle JUnit incomplete | `ProviderThreadOwnershipStoreTest`, `SYN-051-shared-normal-home-implementation-2026-09-03.md` |
+| Managed thread pin        | Active owner accepts exact thread and rejects a changed thread                                                         | PASS by direct Java runtime check; Gradle JUnit incomplete | `ManagedCodexThreadBrokerTest`, same evidence                                                 |
+| Managed admission         | Exact managed binding without proof is rejected; managed resolution requires active record                             | Source-compiled; Gradle JUnit incomplete                   | `SynesisMcpServerTest`, same evidence                                                         |
+| Credential boundary       | Normal-home mode classifies provider-owned auth without inspecting credential files; isolated file auth remains unsafe | Source-compiled; Gradle JUnit incomplete                   | `CodexManagedRuntimeHomeTest`, same evidence                                                  |
+| Process containment       | Assignment-before-resume Windows Job supervisor integrated into lifecycle                                              | BLOCKED / not implemented in this slice                    | ADR-0059, same evidence                                                                       |
+| Full managed acceptance   | Fresh real A/B, restart, model turn, provenance, task tracker                                                          | NOT RUN                                                    | same evidence                                                                                 |
 
 # SYN-041 measurement-design evidence
 

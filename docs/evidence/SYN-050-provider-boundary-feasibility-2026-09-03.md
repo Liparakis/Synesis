@@ -62,7 +62,8 @@ VERIFIED locally:
 
 The Codex MCP documentation describes standard MCP over stdio and configured
 server launchers, while its thread RPCs are part of the separate application
-server interface. See [Codex MCP interface](https://github.com/openai/codex/blob/main/codex-rs/docs/codex_mcp_interface.md).
+server interface.
+See [Codex MCP interface](https://github.com/openai/codex/blob/main/codex-rs/docs/codex_mcp_interface.md).
 
 PRIMARY UPSTREAM ISSUE EVIDENCE: Codex issue #19937 documents that the tested
 stdio MCP path does not receive an active `CODEX_THREAD_ID` and discusses
@@ -103,7 +104,8 @@ VERIFIED locally in `CodexAppServerLifecycleService`:
 
 The Codex App Server protocol supports exact `thread/resume` by `threadId`; its
 documentation also states that concurrent writers for the same paginated
-thread are not supported. See [Codex App Server README](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md).
+thread are not supported.
+See [Codex App Server README](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md).
 
 This makes a Synesis-supervised App Server mode a credible managed-continuity
 candidate, but it is a distinct product mode. It is not evidence that ordinary
@@ -177,12 +179,12 @@ DERIVED:
 
 ## 5. Provider comparison matrix
 
-| Boundary | Per-conversation input reaches ordinary MCP? | Wrapper alone | Broker alone | Managed launch | Classification |
-| --- | --- | --- | --- | --- | --- |
-| Codex stdio MCP | No trusted thread/conversation proof observed | Mediates process only | Routes anonymous channel only | Required for a private channel | D |
-| Codex App Server | Exact thread is controlled by managed App Server lifecycle | Can be part of managed mode | Can be part of managed mode | Existing lifecycle is the candidate seam | C candidate |
-| Claude stdio MCP | No documented session proof in MCP init | Mediates process only | Routes anonymous channel only | Required to join hook/runtime proof | D |
-| Claude hooks + MCP | Hook has session metadata, MCP does not | Requires explicit join | Requires provider-carried proof | Required for a trusted join | C candidate |
+| Boundary           | Per-conversation input reaches ordinary MCP?               | Wrapper alone               | Broker alone                    | Managed launch                           | Classification |
+|--------------------|------------------------------------------------------------|-----------------------------|---------------------------------|------------------------------------------|----------------|
+| Codex stdio MCP    | No trusted thread/conversation proof observed              | Mediates process only       | Routes anonymous channel only   | Required for a private channel           | D              |
+| Codex App Server   | Exact thread is controlled by managed App Server lifecycle | Can be part of managed mode | Can be part of managed mode     | Existing lifecycle is the candidate seam | C candidate    |
+| Claude stdio MCP   | No documented session proof in MCP init                    | Mediates process only       | Routes anonymous channel only   | Required to join hook/runtime proof      | D              |
+| Claude hooks + MCP | Hook has session metadata, MCP does not                    | Requires explicit join      | Requires provider-carried proof | Required for a trusted join              | C candidate    |
 
 The matrix is a boundary assessment, not a claim that all future provider
 support is impossible. A provider-native per-conversation MCP credential or
@@ -246,13 +248,13 @@ recovery path.
 The recommended profiles are:
 
 1. `SESSION_BOUND` for ordinary Codex stdio MCP and ordinary Claude stdio MCP:
-     accept only the current connection/session binding; do not claim
+   accept only the current connection/session binding; do not claim
    conversation continuity across ambiguous restart or replacement.
 2. `MANAGED_CONTINUITY_CANDIDATE` for Synesis-supervised Codex App Server:
-     continue design around its exact thread/resume and generation fences, but
+   continue design around its exact thread/resume and generation fences, but
    require a protected attachment channel before claiming completion.
 3. `MANAGED_CONTINUITY_CANDIDATE` for a future Synesis-managed Claude launch:
-     join hook/runtime session evidence to the MCP child through a protected
+   join hook/runtime session evidence to the MCP child through a protected
    channel; do not treat hooks alone as authorization.
 4. `PROVIDER_NATIVE_CONTINUITY` as the preferred long-term ordinary UX when a
    provider exposes an authenticated per-conversation MCP identity.

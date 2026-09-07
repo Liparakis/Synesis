@@ -180,6 +180,44 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
     }
 
     /**
+     * Compares a retained runtime authority with an incoming lifecycle
+     * authority. Wake admission may identify the same verified binding through
+     * its fingerprint-qualified connection identity, while the retained live
+     * runtime was created from the original provider connection identity.
+     * Every other authority field remains exact.
+     *
+     * @param retained authority captured when the runtime was established
+     * @param incoming authority being dispatched
+     * @return whether both authorities describe the same exact runtime
+     */
+    static boolean sameRuntimeAuthority(LifecycleControlRequestEnvelope.AuthorityContext retained,
+            LifecycleControlRequestEnvelope.AuthorityContext incoming) {
+        if (retained.equals(incoming)) {
+            return true;
+        }
+        if (!incoming.connectionInstanceId()
+                .startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX)) {
+            return false;
+        }
+        return Objects.equals(retained.projectId(), incoming.projectId())
+                && Objects.equals(retained.controlProjectRoot(), incoming.controlProjectRoot())
+                && Objects.equals(retained.provider(), incoming.provider())
+                && Objects.equals(retained.bindingSessionId(), incoming.bindingSessionId())
+                && Objects.equals(retained.bindingFingerprint(), incoming.bindingFingerprint())
+                && retained.bindingVersion() == incoming.bindingVersion()
+                && Objects.equals(retained.participant(), incoming.participant())
+                && Objects.equals(retained.workIntentId(), incoming.workIntentId())
+                && retained.laneEpoch() == incoming.laneEpoch()
+                && Objects.equals(retained.canonicalWorktree(), incoming.canonicalWorktree())
+                && Objects.equals(retained.realWorktree(), incoming.realWorktree())
+                && Objects.equals(retained.gitCommonDirectory(), incoming.gitCommonDirectory())
+                && Objects.equals(retained.branch(), incoming.branch())
+                && Objects.equals(retained.baseCommit(), incoming.baseCommit())
+                && Objects.equals(retained.supervisorId(), incoming.supervisorId())
+                && Objects.equals(retained.workerId(), incoming.workerId());
+    }
+
+    /**
      * Returns the exact owner instance ID.
      *
      * @return owner instance ID
@@ -201,7 +239,8 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
             return false;
         }
         BindingRuntime runtime = bindings.get(bindingSessionId);
-        return runtime != null && runtime.service().attachmentAlive();
+        return runtime != null && runtime.service()
+                .attachmentAlive();
     }
 
     /**
@@ -585,44 +624,6 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         }
     }
 
-    /**
-     * Compares a retained runtime authority with an incoming lifecycle
-     * authority. Wake admission may identify the same verified binding through
-     * its fingerprint-qualified connection identity, while the retained live
-     * runtime was created from the original provider connection identity.
-     * Every other authority field remains exact.
-     *
-     * @param retained authority captured when the runtime was established
-     * @param incoming authority being dispatched
-     * @return whether both authorities describe the same exact runtime
-     */
-    static boolean sameRuntimeAuthority(LifecycleControlRequestEnvelope.AuthorityContext retained,
-            LifecycleControlRequestEnvelope.AuthorityContext incoming) {
-        if (retained.equals(incoming)) {
-            return true;
-        }
-        if (!incoming.connectionInstanceId()
-                .startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX)) {
-            return false;
-        }
-        return Objects.equals(retained.projectId(), incoming.projectId())
-                && Objects.equals(retained.controlProjectRoot(), incoming.controlProjectRoot())
-                && Objects.equals(retained.provider(), incoming.provider())
-                && Objects.equals(retained.bindingSessionId(), incoming.bindingSessionId())
-                && Objects.equals(retained.bindingFingerprint(), incoming.bindingFingerprint())
-                && retained.bindingVersion() == incoming.bindingVersion()
-                && Objects.equals(retained.participant(), incoming.participant())
-                && Objects.equals(retained.workIntentId(), incoming.workIntentId())
-                && retained.laneEpoch() == incoming.laneEpoch()
-                && Objects.equals(retained.canonicalWorktree(), incoming.canonicalWorktree())
-                && Objects.equals(retained.realWorktree(), incoming.realWorktree())
-                && Objects.equals(retained.gitCommonDirectory(), incoming.gitCommonDirectory())
-                && Objects.equals(retained.branch(), incoming.branch())
-                && Objects.equals(retained.baseCommit(), incoming.baseCommit())
-                && Objects.equals(retained.supervisorId(), incoming.supervisorId())
-                && Objects.equals(retained.workerId(), incoming.workerId());
-    }
-
     private void pruneRequestLocks() {
         if (requestLocks.size() <= LifecycleIdempotencyLedger.MAX_HOST_ENTRIES * 2) {
             return;
@@ -678,11 +679,12 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
     private void verifyAuthority(LifecycleControlRequestEnvelope request) throws Exception {
         ProjectApplicationService.ProjectLocation current = new ProjectApplicationService().locate(location.root());
         ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        String connectionIdentity = request.authority().connectionInstanceId();
+        String connectionIdentity = request.authority()
+                .connectionInstanceId();
         java.util.Optional<ProviderSessionBindingService.Binding> resolved =
                 connectionIdentity.startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX)
                         ? bindingService.findByFingerprint(current, "codex", connectionIdentity.substring(
-                                CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX.length()))
+                        CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX.length()))
                         : bindingService.find(current, "codex", connectionIdentity);
         ProviderSessionBindingService.Binding binding = resolved
                 .orElseThrow(() -> new IOException("lifecycle_binding_missing"));
@@ -843,7 +845,9 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         }
     }
 
-    /** Owns runtime resources for one exact provider binding. */
+    /**
+     * Owns runtime resources for one exact provider binding.
+     */
     private final class BindingRuntime {
 
         private final String bindingSessionId;

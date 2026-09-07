@@ -9,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
-/** Verifies managed-home isolation, configuration hygiene, and auth gating. */
+/**
+ * Verifies managed-home isolation, configuration hygiene, and auth gating.
+ */
 final class CodexManagedRuntimeHomeTest {
 
     @Test
@@ -19,16 +21,27 @@ final class CodexManagedRuntimeHomeTest {
         try {
             assertNotEquals(first.homeId(), second.homeId());
             assertTrue(Files.isDirectory(first.path()));
-            assertFalse(first.path().startsWith(Path.of(System.getProperty("user.dir"))));
-            Path launcher = first.path().resolve("synesis-mcp.exe");
+            assertFalse(first.path()
+                    .startsWith(Path.of(System.getProperty("user.dir"))));
+            Path launcher = first.path()
+                    .resolve("synesis-mcp.exe");
             first.writeConfiguration(launcher, Path.of("C:/fixture"),
                     CodexManagedAuthentication.Strategy.SHARED_KEYRING);
             String config = Files.readString(first.configPath());
             assertTrue(config.contains("env_vars = [\"SYNESIS_ATTACH_PROOF\"]"));
             assertFalse(config.contains("secret-proof"));
-            assertEquals(first.path().toString(), first.environment("secret-proof").values().get("CODEX_HOME"));
-            assertEquals("secret-proof", first.environment("secret-proof").values().get("SYNESIS_ATTACH_PROOF"));
-            assertTrue(first.environment("secret-proof").toString().contains("<redacted>"));
+            assertEquals(first.path()
+                            .toString(),
+                    first.environment("secret-proof")
+                            .values()
+                            .get("CODEX_HOME"));
+            assertEquals("secret-proof",
+                    first.environment("secret-proof")
+                            .values()
+                            .get("SYNESIS_ATTACH_PROOF"));
+            assertTrue(first.environment("secret-proof")
+                    .toString()
+                    .contains("<redacted>"));
         } finally {
             first.deleteAfterTerminal();
             second.deleteAfterTerminal();
@@ -52,7 +65,8 @@ final class CodexManagedRuntimeHomeTest {
         assertEquals(CodexManagedAuthentication.Strategy.NORMAL_PROVIDER_HOME,
                 CodexManagedAuthentication.forMode(ManagedCodexRuntimeMode.NORMAL_PROVIDER_HOME_MANAGED, home));
         CodexManagedRuntimeHome normal = CodexManagedRuntimeHome.normalProviderHome();
-        assertEquals(home.toAbsolutePath().normalize(), normal.path());
+        assertEquals(home.toAbsolutePath()
+                .normalize(), normal.path());
         normal.deleteAfterTerminal();
     }
 }

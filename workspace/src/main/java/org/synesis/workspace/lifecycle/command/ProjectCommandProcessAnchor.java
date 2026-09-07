@@ -1,11 +1,11 @@
 package org.synesis.workspace.lifecycle.command;
 
+import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
  * Immutable identity of one exact MCP process bound to one physical scope.

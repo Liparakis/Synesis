@@ -39,7 +39,8 @@ public final class LifecycleInventoryService {
      * @param projectService application service for project location
      * @param bindingService application service for provider session bindings
      */
-    public LifecycleInventoryService(ProjectApplicationService projectService, ProviderSessionBindingService bindingService) {
+    public LifecycleInventoryService(ProjectApplicationService projectService,
+            ProviderSessionBindingService bindingService) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         Objects.requireNonNull(bindingService, "bindingService");
     }
@@ -425,7 +426,9 @@ public final class LifecycleInventoryService {
         }
     }
 
-    /** Holds the normalized identity of one Git worktree inventory entry. */
+    /**
+     * Holds the normalized identity of one Git worktree inventory entry.
+     */
     private record GitWorktreeEntry(String path, String headCommit, String branch) {
 
     }

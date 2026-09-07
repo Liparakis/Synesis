@@ -79,7 +79,9 @@ class ProcessTreeTerminatorTest {
         assertTrue(fixture.forceCalls.isEmpty());
     }
 
-    /** Supplies deterministic process-tree evidence to terminator tests. */
+    /**
+     * Supplies deterministic process-tree evidence to terminator tests.
+     */
     private static final class Fixture implements ProcessTreeTerminator.Inspector {
 
         private final Map<Long, ProcessTreeTerminator.ObservedProcess> processes = new LinkedHashMap<>();

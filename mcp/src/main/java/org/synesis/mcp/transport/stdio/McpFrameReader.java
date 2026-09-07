@@ -26,7 +26,9 @@ final class McpFrameReader {
      */
     static final int MAX_FRAME_BYTES = 32 * 1024 * 1024;
 
-    /** Stdio stream owned by the enclosing MCP server. */
+    /**
+     * Stdio stream owned by the enclosing MCP server.
+     */
     private final InputStream input;
 
     McpFrameReader(InputStream input) {

@@ -3,7 +3,8 @@
 ## Classification
 
 **PASS-A for the requested runtime path; SYN-051 remains ACTIVE / PARTIAL
-overall because the repository-wide MCP test gate is incomplete.** One fresh lawful Worker A completed the corrected generation-1
+overall because the repository-wide MCP test gate is incomplete.** One fresh lawful Worker A completed the corrected
+generation-1
 managed lifecycle, one real exact-claim Codex turn, trusted persistence, a
 controlled A1 hard stop with a trusted death receipt, exact generation-2
 resume, and a second exact-claim turn on the same provider Thread A. No
@@ -31,14 +32,14 @@ Worker B or full SYN-049 acceptance was run.
   managed runtime path, but the broader test gate is not green.
 - The authorized rebuild/install passed with `--max-workers=1` and the
   process-local AF_UNIX workaround. Produced and installed hashes matched:
-  - workspace:
-    `7b3b5066f46140cae88a3357f0156e45cfb8b432ea1e07f6844983fe5141163a`
-  - MCP:
-    `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
-  - CLI:
-    `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467`
-  - native MCP:
-    `d24737530957fbe82ac05f3d5f43588d5357fdc8eff7377712e3151e0bc25c30`
+    - workspace:
+      `7b3b5066f46140cae88a3357f0156e45cfb8b432ea1e07f6844983fe5141163a`
+    - MCP:
+      `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
+    - CLI:
+      `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467`
+    - native MCP:
+      `d24737530957fbe82ac05f3d5f43588d5357fdc8eff7377712e3151e0bc25c30`
 - JDK: `C:\Program Files\Eclipse Adoptium\jdk-25.0.0.36-hotspot\bin\java.exe`,
   Temurin `25+36-LTS`. The process-local property was
   `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
@@ -123,7 +124,8 @@ path.
 Read-only provider inspection for exact Thread A found:
 
 - `C:\Users\Liparakis\.codex\state_5.sqlite`: exact thread row and rollout
-  path `C:\Users\Liparakis\.codex\sessions\2026\09\05\rollout-2026-09-05T14-24-39-01a07150-405b-7931-b030-9af8e0dec788.jsonl`.
+  path
+  `C:\Users\Liparakis\.codex\sessions\2026\09\05\rollout-2026-09-05T14-24-39-01a07150-405b-7931-b030-9af8e0dec788.jsonl`.
 - `C:\Users\Liparakis\.codex\thread_history_1.sqlite`: two exact Thread-A
   turns, both `completed`.
 - Rollout file exists and contains the provider records for both turns.

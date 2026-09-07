@@ -1,20 +1,5 @@
 package org.synesis.projectrecord.sync;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.security.GeneralSecurityException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.stream.Collectors;
 import org.synesis.link.session.PeerSession;
 import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.ProjectConfig;
@@ -22,6 +7,13 @@ import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.persistence.DecisionStore.SaveResult;
 import org.synesis.projectrecord.sync.protocol.ReconciliationMessage;
 import org.synesis.projectrecord.sync.protocol.ReconciliationMessage.InventoryEntry;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.stream.Collectors;
 
 /**
  * Handles project-wide bidirectional reconciliation (PRP1) over one authenticated session.
@@ -473,7 +465,8 @@ public final class ProjectReconciliationSync {
     }
 
     private boolean isForeignProject(ReconciliationMessage message) {
-        return !config.projectId().equals(message.projectId());
+        return !config.projectId()
+                .equals(message.projectId());
     }
 
     private CompletionStage<byte[]> handle(String remoteNodeId, byte[] payload) {

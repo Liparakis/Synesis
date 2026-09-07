@@ -75,20 +75,20 @@ JDK25 source inspection; it was also compiled once and reused across JDKs.
 ## Baseline comparison
 
 | Independent baseline case | JDK 25 | JDK 21 |
-|---|---|---|
-| 01-pipe | PASS | PASS |
-| 02-selector | FAIL | FAIL |
-| 03-wakeup | FAIL | FAIL |
-| 04-nio-ipv4 | PASS | PASS |
-| 05-nio-ipv6 | PASS | PASS |
-| 06-nio-default | PASS | PASS |
-| 07-localhost-resolution | PASS | PASS |
-| 07-localhost-address-0 | PASS | PASS |
-| 07-localhost-address-1 | PASS | PASS |
-| 08-classic-ipv4 | PASS | PASS |
-| 09-classic-ipv6 | PASS | PASS |
-| 10-http-ipv4 | FAIL | FAIL |
-| 11-http-ipv6 | FAIL | FAIL |
+|---------------------------|--------|--------|
+| 01-pipe                   | PASS   | PASS   |
+| 02-selector               | FAIL   | FAIL   |
+| 03-wakeup                 | FAIL   | FAIL   |
+| 04-nio-ipv4               | PASS   | PASS   |
+| 05-nio-ipv6               | PASS   | PASS   |
+| 06-nio-default            | PASS   | PASS   |
+| 07-localhost-resolution   | PASS   | PASS   |
+| 07-localhost-address-0    | PASS   | PASS   |
+| 07-localhost-address-1    | PASS   | PASS   |
+| 08-classic-ipv4           | PASS   | PASS   |
+| 09-classic-ipv6           | PASS   | PASS   |
+| 10-http-ipv4              | FAIL   | FAIL   |
+| 11-http-ipv6              | FAIL   | FAIL   |
 
 Both runtimes: 9 PASS / 4 FAIL. Both resolve localhost in this baseline to
 `::1` followed by `127.0.0.1`; each returned address independently passed
@@ -157,11 +157,11 @@ warranted after the AF_UNIX stack and healthy baseline IPv6 TCP evidence.
 
 The separate direct UNIX-channel probe has these results on BOTH JDKs:
 
-| Socket location | Bind | Connect and byte transfer |
-|---|---|---|
-| Automatic inherited TEMP (`LIPARA~1`) | PASS | FAIL at connect, Invalid argument |
+| Socket location                                             | Bind | Connect and byte transfer         |
+|-------------------------------------------------------------|------|-----------------------------------|
+| Automatic inherited TEMP (`LIPARA~1`)                       | PASS | FAIL at connect, Invalid argument |
 | Explicit `C:\Users\Liparakis\AppData\Local\Temp\u-<unique>` | PASS | FAIL at connect, Invalid argument |
-| Explicit `C:\t\synesis-loopback-probe\u-<unique>` | PASS | PASS |
+| Explicit `C:\t\synesis-loopback-probe\u-<unique>`           | PASS | PASS                              |
 
 The expanded username also failing means an 8.3 spelling alone is not a
 demonstrated explanation. No claim is made that path length, permissions,
@@ -202,14 +202,14 @@ complete temporary-file cleanup. Production/target state was not involved.
 
 All six suite manifests have identical original source and class SHA-256.
 
-| Diagnostic artifact | SHA-256 |
-|---|---|
-| `LoopbackProbe.java` | `cb6a04c3a9403234c04baee2a2c475ff2ddbc21793e20d08f210fe3f3e9ea4c9` |
-| `LoopbackProbe.class` | `7cd18ed9c202056f01f5dc579d6590dd4ef7018f84b065815e49f089ba4c0ec6` |
-| `UnixSocketProbe.java` | `22217dbe0279b347994487f7bff1856b28b9fe7e2e66b9d8d53842ae142d96fb` |
+| Diagnostic artifact     | SHA-256                                                            |
+|-------------------------|--------------------------------------------------------------------|
+| `LoopbackProbe.java`    | `cb6a04c3a9403234c04baee2a2c475ff2ddbc21793e20d08f210fe3f3e9ea4c9` |
+| `LoopbackProbe.class`   | `7cd18ed9c202056f01f5dc579d6590dd4ef7018f84b065815e49f089ba4c0ec6` |
+| `UnixSocketProbe.java`  | `22217dbe0279b347994487f7bff1856b28b9fe7e2e66b9d8d53842ae142d96fb` |
 | `UnixSocketProbe.class` | `ebe439d8a63e9dbc300ed978f1bda3fcab4da2ec8797a1dac9c8788a725e2c47` |
-| `run_probe.py` | `d7b93e06d9e14f72882ae6dafb387d7cf4b7271470b20bff440a5ff545882b33` |
-| `run_unix.py` | `4473ae5d4f114df2a091e4426dbc9ccdf1567ecf9992235a5303d83105fd2f4a` |
+| `run_probe.py`          | `d7b93e06d9e14f72882ae6dafb387d7cf4b7271470b20bff440a5ff545882b33` |
+| `run_unix.py`           | `4473ae5d4f114df2a091e4426dbc9ccdf1567ecf9992235a5303d83105fd2f4a` |
 
 Raw evidence: [complete command/result/trace transcript](SYN-051-standalone-loopback-compatibility-2026-09-05-raw.txt).
 Diagnostics remain at `C:\t\synesis-loopback-probe` for inspection.

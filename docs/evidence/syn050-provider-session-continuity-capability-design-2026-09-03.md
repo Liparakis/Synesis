@@ -63,28 +63,31 @@ normal work-intent identifier is derived from the provider and binding session.
 The source does not treat a participant ID, WorkIntent ID, or workgroup ID as a
 recovery credential.
 
-Relevant source symbols are [`ProjectLocation`](../../workspace/src/main/java/org/synesis/workspace/application/ProjectApplicationService.java#L615),
-[`Binding`](../../workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java#L1343),
+Relevant source symbols are [
+`ProjectLocation`](../../workspace/src/main/java/org/synesis/workspace/application/ProjectApplicationService.java#L615),
+[
+`Binding`](../../workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java#L1343),
 [`WorkIntent`](../../coordination/src/main/java/org/synesis/coordination/domain/collaboration/WorkIntent.java#L17),
 [`Participant`](../../coordination/src/main/java/org/synesis/coordination/domain/collaboration/Participant.java#L17),
-and [`participantHandle`](../../workspace/src/main/java/org/synesis/workspace/application/collaboration/WorkspaceCollaborationService.java#L62).
+and [
+`participantHandle`](../../workspace/src/main/java/org/synesis/workspace/application/collaboration/WorkspaceCollaborationService.java#L62).
 
 ## 3. Durability and authority classification
 
-| Value | Classification | Finding |
-| --- | --- | --- |
-| `ProjectLocation.projectId` | durable logical identity | Project metadata identity. |
-| `Binding.sessionId` | durable logical identity | Current durable provider-session/binding identity. |
-| Participant handle and `WorkIntent` IDs | durable logical identity | Signed/event-projected coordination identities; not secrets. |
-| `workGroupId`, `authorityLineageId`, intent version, claims | durable authority state | Existing coordination and claim fencing. |
-| Node identity/signatures | authority credential | Existing local event-authentication mechanism; not a Codex conversation proof. |
-| `connectionInstanceId` | ephemeral transport identity | Launcher value or random per-MCP-process value; also persisted only as binding fingerprint/lease evidence. |
-| MCP process, PID, start time, command line, nonce | ephemeral/diagnostic | Process evidence used for liveness and close fencing, not conversation identity. |
-| `SessionLeaseRecord` | durable diagnostic/liveness record | Exact connection key, session reference, and process evidence; it does not authenticate a replacement process. |
-| App Server `attachmentGeneration`/`connectionGeneration` | durable generation state in separate path | Fences the supervised App Server attachment, not ordinary stdio MCP. |
-| App Server `threadId`/`turnId` | authority-scoped provider correlation in separate path | Exact-thread resume input for the existing App Server lifecycle; not supplied to normal stdio MCP. |
-| hook `session_id`/`conversation_id` | diagnostic provider correlation | Seen by a separate hook process and not forwarded to ordinary MCP. |
-| no resume token/capability | absent | No existing continuity credential or generic same-session rebind record exists. |
+| Value                                                       | Classification                                         | Finding                                                                                                        |
+|-------------------------------------------------------------|--------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
+| `ProjectLocation.projectId`                                 | durable logical identity                               | Project metadata identity.                                                                                     |
+| `Binding.sessionId`                                         | durable logical identity                               | Current durable provider-session/binding identity.                                                             |
+| Participant handle and `WorkIntent` IDs                     | durable logical identity                               | Signed/event-projected coordination identities; not secrets.                                                   |
+| `workGroupId`, `authorityLineageId`, intent version, claims | durable authority state                                | Existing coordination and claim fencing.                                                                       |
+| Node identity/signatures                                    | authority credential                                   | Existing local event-authentication mechanism; not a Codex conversation proof.                                 |
+| `connectionInstanceId`                                      | ephemeral transport identity                           | Launcher value or random per-MCP-process value; also persisted only as binding fingerprint/lease evidence.     |
+| MCP process, PID, start time, command line, nonce           | ephemeral/diagnostic                                   | Process evidence used for liveness and close fencing, not conversation identity.                               |
+| `SessionLeaseRecord`                                        | durable diagnostic/liveness record                     | Exact connection key, session reference, and process evidence; it does not authenticate a replacement process. |
+| App Server `attachmentGeneration`/`connectionGeneration`    | durable generation state in separate path              | Fences the supervised App Server attachment, not ordinary stdio MCP.                                           |
+| App Server `threadId`/`turnId`                              | authority-scoped provider correlation in separate path | Exact-thread resume input for the existing App Server lifecycle; not supplied to normal stdio MCP.             |
+| hook `session_id`/`conversation_id`                         | diagnostic provider correlation                        | Seen by a separate hook process and not forwarded to ordinary MCP.                                             |
+| no resume token/capability                                  | absent                                                 | No existing continuity credential or generic same-session rebind record exists.                                |
 
 ## 4. Exact transport/authority coupling
 
@@ -96,7 +99,8 @@ operation requests. `AgentSessionService` calls
 `ProviderSessionBindingService.ensure` with it. The normal binding path stores
 the SHA-256 fingerprint under a connection-derived session file and
 `SessionAuthorityResolver` accepts only an exact fingerprint/raw-session match
-with `BOUND` status ([resolver](../../workspace/src/main/java/org/synesis/workspace/application/provider/SessionAuthorityResolver.java#L34)).
+with `BOUND`
+status ([resolver](../../workspace/src/main/java/org/synesis/workspace/application/provider/SessionAuthorityResolver.java#L34)).
 
 The coupling is therefore not that the durable binding lacks a session ID. The
 coupling is that the only input which selects that binding is the current
@@ -170,7 +174,8 @@ value from an earlier MCP result, rely on the same Codex conversation retaining
 that result in context, and have the model include it in a later
 `ensure_session` call. MCP server restart does not cause the server to replay
 tool results or receive the old conversation transcript. The current
-`ensure_session` schema has no continuity field ([schema](../../mcp-contract/src/main/java/org/synesis/mcp/contract/McpToolCatalog.java#L235)).
+`ensure_session` schema has no continuity
+field ([schema](../../mcp-contract/src/main/java/org/synesis/mcp/contract/McpToolCatalog.java#L235)).
 
 That path is not sufficient for this acceptance:
 
@@ -194,16 +199,16 @@ boundary.
 
 ## 8. Non-model-visible alternatives
 
-| Candidate | Present in ordinary Codex today? | Assessment |
-| --- | --- | --- |
-| Static `~/.codex/config.toml` | Yes, but static | Project/provider configuration is shared by every matching chat and carries no conversation binding. |
-| Launcher environment | Only for process-level values | `SYNESIS_MCP_CONNECTION_INSTANCE_ID` is not conversation-scoped; current `env: -` config supplies no per-thread secret. |
-| Codex `CODEX_THREAD_ID` | Shell/tool context only | Local upstream issue [#19937](https://github.com/openai/codex/issues/19937) documents that the thread ID is not injected into local stdio MCP startup; the issue is closed as not planned. |
-| Provider hook metadata | Hook sees it | Hook and ordinary MCP are separate processes; no current authenticated bridge forwards it. |
-| Project-local attachment file | No | Shared/copyable by same-project processes and unsafe for unrelated-chat isolation. |
-| OS credential store | No Synesis integration | A credential lookup without a provider conversation binding would still be host/project/process scoped, not chat scoped. |
-| Synesis local broker | No | Would be a new provider trust channel and would still need provider-authenticated conversation context. |
-| Codex thread state | Only in App Server path | `CodexAppServerLifecycleService` and `CodexLifecycleStateStore` use exact binding-scoped thread/turn and generation state, but ordinary stdio MCP is not supervised by that path. |
+| Candidate                     | Present in ordinary Codex today? | Assessment                                                                                                                                                                                 |
+|-------------------------------|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Static `~/.codex/config.toml` | Yes, but static                  | Project/provider configuration is shared by every matching chat and carries no conversation binding.                                                                                       |
+| Launcher environment          | Only for process-level values    | `SYNESIS_MCP_CONNECTION_INSTANCE_ID` is not conversation-scoped; current `env: -` config supplies no per-thread secret.                                                                    |
+| Codex `CODEX_THREAD_ID`       | Shell/tool context only          | Local upstream issue [#19937](https://github.com/openai/codex/issues/19937) documents that the thread ID is not injected into local stdio MCP startup; the issue is closed as not planned. |
+| Provider hook metadata        | Hook sees it                     | Hook and ordinary MCP are separate processes; no current authenticated bridge forwards it.                                                                                                 |
+| Project-local attachment file | No                               | Shared/copyable by same-project processes and unsafe for unrelated-chat isolation.                                                                                                         |
+| OS credential store           | No Synesis integration           | A credential lookup without a provider conversation binding would still be host/project/process scoped, not chat scoped.                                                                   |
+| Synesis local broker          | No                               | Would be a new provider trust channel and would still need provider-authenticated conversation context.                                                                                    |
+| Codex thread state            | Only in App Server path          | `CodexAppServerLifecycleService` and `CodexLifecycleStateStore` use exact binding-scoped thread/turn and generation state, but ordinary stdio MCP is not supervised by that path.          |
 
 No current non-model-visible mechanism provides the required pair:
 
@@ -359,11 +364,11 @@ authenticated launch/attachment channel for a provider that has no trusted
 identity. A broker that merely reads a project file or a model-visible token
 would not solve the trust problem.
 
-| Provider capability class | Authentication root | Continuity result |
-| --- | --- | --- |
-| Provider-authenticated | Provider-controlled, verifiable per-conversation/session assertion | Full restart continuity can be supported after exact scope and generation checks. |
-| Synesis-managed | Synesis-controlled launcher/broker plus protected attachment credential | Managed continuity can be supported if the provider boundary is actually mediated and the credential is not model-visible. |
-| Anonymous/session-bound | None at the runtime boundary | Current transport may coordinate, but restart continuity is explicitly unsupported; use a new admission or the existing audited recovery path. |
+| Provider capability class | Authentication root                                                     | Continuity result                                                                                                                              |
+|---------------------------|-------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| Provider-authenticated    | Provider-controlled, verifiable per-conversation/session assertion      | Full restart continuity can be supported after exact scope and generation checks.                                                              |
+| Synesis-managed           | Synesis-controlled launcher/broker plus protected attachment credential | Managed continuity can be supported if the provider boundary is actually mediated and the credential is not model-visible.                     |
+| Anonymous/session-bound   | None at the runtime boundary                                            | Current transport may coordinate, but restart continuity is explicitly unsupported; use a new admission or the existing audited recovery path. |
 
 Current classifications are conservative: ordinary Codex stdio is anonymous
 at this continuity boundary; the Codex App Server route is a separate
@@ -438,13 +443,13 @@ lease states, and App Server journals remain intact.
 
 ## 17. Proof inventory and trusted roots
 
-| Proof candidate | Issuer/verifier | Confidentiality and replay assessment | Decision |
-| --- | --- | --- | --- |
-| Provider-signed or provider-authenticated assertion | Provider adapter verifies provider root | Can be non-model-visible, scoped, and renewed by provider; must carry conversation binding and expiry/rotation semantics | Preferred provider-authenticated input when actually exposed. |
-| Synesis-issued rotating capability | Synesis issues; core stores a hash and consumes/rotates it | Good server-side replay properties only if presented through a trusted channel; a model-visible bearer is copyable and not conversation-authenticating | Valid protocol shape, unavailable carrier in ordinary Codex stdio. |
-| Launcher-injected secret or signed attachment ticket | Synesis launcher/broker verifies protected process handoff | Requires private process channel, OS protection, scope, one-winner consume, and crash-safe rotation; a plain file/env value is shared | Candidate only for a genuinely Synesis-managed mode. |
-| NodeIdentity/Ed25519 signature | Existing Synesis node key verifies signed Link/events | Authenticates the Synesis node/event signer, not the provider conversation; must not be repurposed without an explicit binding contract | Reusable event-authentication primitive, not current continuity proof. |
-| Thread/session/connection/PID/worktree/public ID | Caller or runtime supplies it | Stable or observable values have no trusted issuer, are replayable/selectable, and do not separate same-human chats | Diagnostic/selector data only; rejected as proof. |
+| Proof candidate                                      | Issuer/verifier                                            | Confidentiality and replay assessment                                                                                                                  | Decision                                                               |
+|------------------------------------------------------|------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
+| Provider-signed or provider-authenticated assertion  | Provider adapter verifies provider root                    | Can be non-model-visible, scoped, and renewed by provider; must carry conversation binding and expiry/rotation semantics                               | Preferred provider-authenticated input when actually exposed.          |
+| Synesis-issued rotating capability                   | Synesis issues; core stores a hash and consumes/rotates it | Good server-side replay properties only if presented through a trusted channel; a model-visible bearer is copyable and not conversation-authenticating | Valid protocol shape, unavailable carrier in ordinary Codex stdio.     |
+| Launcher-injected secret or signed attachment ticket | Synesis launcher/broker verifies protected process handoff | Requires private process channel, OS protection, scope, one-winner consume, and crash-safe rotation; a plain file/env value is shared                  | Candidate only for a genuinely Synesis-managed mode.                   |
+| NodeIdentity/Ed25519 signature                       | Existing Synesis node key verifies signed Link/events      | Authenticates the Synesis node/event signer, not the provider conversation; must not be repurposed without an explicit binding contract                | Reusable event-authentication primitive, not current continuity proof. |
+| Thread/session/connection/PID/worktree/public ID     | Caller or runtime supplies it                              | Stable or observable values have no trusted issuer, are replayable/selectable, and do not separate same-human chats                                    | Diagnostic/selector data only; rejected as proof.                      |
 
 Any accepted credential must be scoped to project, provider adapter, logical
 binding/session, authority lineage, and current generation; expire or rotate;

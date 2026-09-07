@@ -1,5 +1,6 @@
 package org.synesis.workspace.lifecycle.command;
 
+import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -7,7 +8,6 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Objects;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
 
 /**
  * Verified physical worktree identity used as the only command exclusion key.

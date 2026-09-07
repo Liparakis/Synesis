@@ -155,7 +155,8 @@ the reason shared-process or provider-thread dynamic injection is not claimed.
 
 ## Reproducibility
 
-- Probe source: `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\IsolatedRuntimeInvestigation.java`.
+- Probe source:
+  `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\IsolatedRuntimeInvestigation.java`.
 - Wrapper source: `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\BoundaryWrapper.java`.
 - MCP source: `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\BoundaryMcp.java`.
 - Report: `C:\Users\Liparakis\AppData\Local\Temp\syn050-isolated-runtime-20260903-05\isolated-runtime-report.txt`.

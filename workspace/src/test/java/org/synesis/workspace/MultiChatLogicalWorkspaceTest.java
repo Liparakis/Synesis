@@ -2,11 +2,11 @@ package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -27,7 +27,6 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
-import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.WorkspacePatchService;
@@ -160,12 +159,14 @@ final class MultiChatLogicalWorkspaceTest {
                         .count());
 
         WorkspacePatchService patches = new WorkspacePatchService();
-        assertSame(AgentStatus.COMPLETED, patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-a",
-                        "src/a.py", true, "a\n", null, List.of()))
-                .status());
-        assertSame(AgentStatus.COMPLETED, patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-b",
-                        "src/b.py", true, "b\n", null, List.of()))
-                .status());
+        assertSame(AgentStatus.COMPLETED,
+                patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-a",
+                                "src/a.py", true, "a\n", null, List.of()))
+                        .status());
+        assertSame(AgentStatus.COMPLETED,
+                patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-b",
+                                "src/b.py", true, "b\n", null, List.of()))
+                        .status());
         assertTrue(Files.exists(laneAWorktree
                 .resolve("src/a.py")));
         assertTrue(Files.exists(laneBWorktree

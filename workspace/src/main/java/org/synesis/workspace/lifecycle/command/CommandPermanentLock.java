@@ -72,7 +72,8 @@ public final class CommandPermanentLock implements AutoCloseable {
                 java.util.concurrent.locks.LockSupport.parkNanos(
                         java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10L));
                 if (Thread.interrupted()) {
-                    Thread.currentThread().interrupt();
+                    Thread.currentThread()
+                            .interrupt();
                     throw new IOException("COMMAND_LOCK_INTERRUPTED");
                 }
             }

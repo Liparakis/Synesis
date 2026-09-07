@@ -4,20 +4,22 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
-/** Focused real Windows Job Object containment test. */
+/**
+ * Focused real Windows Job Object containment test.
+ */
 class WindowsJobObjectProcessTreeSupervisorTest {
 
-    /** Proves assignment happens before the launched root is allowed to run. */
+    /**
+     * Proves assignment happens before the launched root is allowed to run.
+     */
     @Test
     void launchesAndTeardownsRootAndDescendantAsOneOwnedJob() throws Exception {
         Assumptions.assumeTrue(WindowsJobObjectProcessTreeSupervisor.isWindows());
@@ -29,20 +31,29 @@ class WindowsJobObjectProcessTreeSupervisorTest {
             try (BufferedReader output = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 assertTrue("READY".equals(output.readLine()));
                 long childPid = Long.parseLong(output.readLine());
-                assertTrue(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false));
+                assertTrue(ProcessHandle.of(childPid)
+                        .map(ProcessHandle::isAlive)
+                        .orElse(false));
                 assertTrue(supervisor.teardownAndProveEmpty(process));
                 assertFalse(process.isAlive());
-                assertFalse(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false));
+                assertFalse(ProcessHandle.of(childPid)
+                        .map(ProcessHandle::isAlive)
+                        .orElse(false));
             }
         }
     }
 
-    /** Child used only to create a normal descendant below the contained root. */
+    /**
+     * Child used only to create a normal descendant below the contained root.
+     */
     public static final class ChildFixture {
+
         private ChildFixture() {
         }
 
-        /** @param arguments ignored */
+        /**
+         * @param arguments ignored
+         */
         public static void main(String[] arguments) throws Exception {
             Process child = new ProcessBuilder("cmd.exe", "/c", "ping", "127.0.0.1", "-n", "30")
                     .redirectError(ProcessBuilder.Redirect.DISCARD)

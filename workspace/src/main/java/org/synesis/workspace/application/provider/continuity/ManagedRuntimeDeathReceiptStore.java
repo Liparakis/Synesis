@@ -1,14 +1,14 @@
 package org.synesis.workspace.application.provider.continuity;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -34,7 +34,9 @@ public final class ManagedRuntimeDeathReceiptStore {
      * @param root receipt directory
      */
     public ManagedRuntimeDeathReceiptStore(Path root) {
-        this.root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
+        this.root = Objects.requireNonNull(root, "root")
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**
@@ -45,15 +47,48 @@ public final class ManagedRuntimeDeathReceiptStore {
      */
     public static ManagedRuntimeDeathReceiptStore storeFor(ProjectApplicationService.ProjectLocation location) {
         Objects.requireNonNull(location, "location");
-        return new ManagedRuntimeDeathReceiptStore(location.synesisDirectory().resolve("local/runtime")
+        return new ManagedRuntimeDeathReceiptStore(location.synesisDirectory()
+                .resolve("local/runtime")
                 .resolve(DIRECTORY));
+    }
+
+    private static void withLock(Path file, LockedOperation operation) throws IOException {
+        Path lock = file.resolveSibling(file.getFileName() + ".lock");
+        Files.createDirectories(lock.getParent());
+        try (FileChannel channel = FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            FileLock held;
+            try {
+                held = channel.lock();
+            } catch (OverlappingFileLockException failure) {
+                throw new IOException("managed death receipt update already active", failure);
+            }
+            try (held) {
+                operation.run();
+            }
+        }
+    }
+
+    private static String text(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return text;
+    }
+
+    private static Number number(Map<String, Object> value, String key) {
+        Object item = value.get(key);
+        if (!(item instanceof Number number)) {
+            throw new IllegalArgumentException("missing " + key);
+        }
+        return number;
     }
 
     /**
      * Reads the receipt for one exact binding generation.
      *
      * @param bindingSessionId exact binding
-     * @param generation exact attachment generation
+     * @param generation       exact attachment generation
      * @return receipt when trusted evidence exists
      * @throws IOException when the receipt is malformed
      */
@@ -97,7 +132,8 @@ public final class ManagedRuntimeDeathReceiptStore {
         Path file = file(receipt.bindingSessionId(), receipt.generation());
         withLock(file, () -> {
             Optional<ManagedRuntimeDeathReceipt> prior = read(receipt.bindingSessionId(), receipt.generation());
-            if (prior.isPresent() && !prior.get().equals(receipt)) {
+            if (prior.isPresent() && !prior.get()
+                    .equals(receipt)) {
                 throw new IOException("managed death receipt conflict");
             }
             if (prior.isPresent()) {
@@ -148,40 +184,9 @@ public final class ManagedRuntimeDeathReceiptStore {
         return root.resolve(bindingSessionId + ".generation-" + generation + ".death.json");
     }
 
-    private static void withLock(Path file, LockedOperation operation) throws IOException {
-        Path lock = file.resolveSibling(file.getFileName() + ".lock");
-        Files.createDirectories(lock.getParent());
-        try (FileChannel channel = FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            FileLock held;
-            try {
-                held = channel.lock();
-            } catch (OverlappingFileLockException failure) {
-                throw new IOException("managed death receipt update already active", failure);
-            }
-            try (held) {
-                operation.run();
-            }
-        }
-    }
-
-    private static String text(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return text;
-    }
-
-    private static Number number(Map<String, Object> value, String key) {
-        Object item = value.get(key);
-        if (!(item instanceof Number number)) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return number;
-    }
-
     @FunctionalInterface
     private interface LockedOperation {
+
         void run() throws IOException;
     }
 }

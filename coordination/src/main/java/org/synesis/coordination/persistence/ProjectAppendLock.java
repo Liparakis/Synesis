@@ -18,9 +18,13 @@ import java.util.Objects;
  */
 public final class ProjectAppendLock implements AutoCloseable {
 
-    /** File channel whose operating-system lock coordinates local processes. */
+    /**
+     * File channel whose operating-system lock coordinates local processes.
+     */
     private final FileChannel channel;
-    /** The exclusive lock held for the lifetime of this handle. */
+    /**
+     * The exclusive lock held for the lifetime of this handle.
+     */
     private final FileLock lock;
 
     private ProjectAppendLock(FileChannel channel, FileLock lock) {
@@ -34,7 +38,7 @@ public final class ProjectAppendLock implements AutoCloseable {
      * @param root project coordination root containing {@code append.lock}
      * @return lock handle
      * @throws IOException when the lock cannot be acquired within two seconds
-     *         or the acquisition thread is interrupted
+     *                     or the acquisition thread is interrupted
      */
     public static ProjectAppendLock acquire(Path root) throws IOException {
         Objects.requireNonNull(root, "root");
@@ -58,7 +62,8 @@ public final class ProjectAppendLock implements AutoCloseable {
                 java.util.concurrent.locks.LockSupport.parkNanos(
                         java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10L));
                 if (Thread.interrupted()) {
-                    Thread.currentThread().interrupt();
+                    Thread.currentThread()
+                            .interrupt();
                     throw new IOException("event append lock interrupted");
                 }
             }

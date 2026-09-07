@@ -34,9 +34,13 @@ import org.synesis.link.identity.NodeIdentity;
 @SuppressWarnings("DuplicatedCode")
 public final class WorkIntentService {
 
-    /** Event store whose projections are the source of current claim state. */
+    /**
+     * Event store whose projections are the source of current claim state.
+     */
     private final PredictionEventStore store;
-    /** Identity used to authenticate every event emitted by this service. */
+    /**
+     * Identity used to authenticate every event emitted by this service.
+     */
     private final NodeIdentity signer;
 
     /**
@@ -1179,7 +1183,9 @@ public final class WorkIntentService {
         return new PredictionEventStore(store.rootDirectory(), store.projectId());
     }
 
-    /** Aggregates the participant facts required for intent validation. */
+    /**
+     * Aggregates the participant facts required for intent validation.
+     */
     private static final class ParticipantState {
 
         private static void requireHeld(PredictionEventStore store, String participant) throws IOException {

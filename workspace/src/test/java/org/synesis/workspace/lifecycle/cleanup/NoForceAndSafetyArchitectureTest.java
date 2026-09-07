@@ -8,7 +8,9 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** Verifies cleanup architecture does not expose forceful destructive paths. */
+/**
+ * Verifies cleanup architecture does not expose forceful destructive paths.
+ */
 class NoForceAndSafetyArchitectureTest {
 
     @Test

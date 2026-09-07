@@ -203,7 +203,7 @@ public final class CapabilityRequestService {
             UUID inferredOwnerLineage = requestedOwnerLineage != null
                     ? requestedOwnerLineage
                     : requesterIntent.map(intent -> inferUniqueOwnerLineage(store, intent.participant()))
-                            .orElse(null);
+                      .orElse(null);
 
             // First-release collaboration lanes are the authoritative owner
             // source.  The older semantic-ownership projection is still
@@ -234,10 +234,12 @@ public final class CapabilityRequestService {
             }
 
             // Check existing active request for (requester, capability)
-            Optional<CapabilityRequestRecord> activeOpt = projection.findAllForRequester(requesterNodeId).stream()
+            Optional<CapabilityRequestRecord> activeOpt = projection.findAllForRequester(requesterNodeId)
+                    .stream()
                     .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(),
                             binding.workerId()))
-                    .filter(record -> record.capability().equals(capability))
+                    .filter(record -> record.capability()
+                            .equals(capability))
                     .filter(record -> record.state() == CapabilityLifecycleState.AWAITING_OWNER
                             || record.state() == CapabilityLifecycleState.REVISION_REQUESTED)
                     .findFirst();

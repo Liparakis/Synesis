@@ -81,7 +81,8 @@ class ProviderSessionTerminalizationServiceTest {
         assertEquals("TERMINAL",
                 bindingService.list(location, "codex")
                         .stream()
-                        .filter(candidate -> candidate.sessionId().equals(binding.sessionId()))
+                        .filter(candidate -> candidate.sessionId()
+                                .equals(binding.sessionId()))
                         .findFirst()
                         .orElseThrow()
                         .status());

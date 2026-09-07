@@ -11,7 +11,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
-/** Exercises cleanup validation and integration-boundary protections. */
+/**
+ * Exercises cleanup validation and integration-boundary protections.
+ */
 class ValidationAndIntegrationCleanupTest {
 
     private static void runGit(Path root, String... args) throws Exception {

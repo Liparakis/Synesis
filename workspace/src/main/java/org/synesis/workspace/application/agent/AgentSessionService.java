@@ -100,10 +100,13 @@ public final class AgentSessionService {
 
         if (request.managedAdmission()) {
             ProviderSessionBindingService.Binding managedBinding = bindingService.find(location, request.provider(),
-                    request.connectionInstanceId()).orElseThrow(() -> new IllegalStateException("managed_binding_missing"));
+                            request.connectionInstanceId())
+                    .orElseThrow(() -> new IllegalStateException("managed_binding_missing"));
             ManagedAttachmentRecord managed = ManagedAttachmentService.storeFor(location, managedBinding.sessionId())
-                    .read().orElseThrow(() -> new IllegalStateException("managed_attachment_missing"));
-            if (managed.mode() != org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY
+                    .read()
+                    .orElseThrow(() -> new IllegalStateException("managed_attachment_missing"));
+            if (managed.mode()
+                    != org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY
                     || managed.status() != ManagedAttachmentRecord.Status.ACTIVE) {
                 throw new IllegalStateException("managed_attachment_not_active");
             }
@@ -328,11 +331,11 @@ public final class AgentSessionService {
         /**
          * Constructs ordinary session-bound resolution parameters.
          *
-         * @param projectRoot project root
-         * @param provider provider identifier
+         * @param projectRoot          project root
+         * @param provider             provider identifier
          * @param connectionInstanceId connection selector
-         * @param taskIntent optional task intent
-         * @param refresh explicit refresh flag
+         * @param taskIntent           optional task intent
+         * @param refresh              explicit refresh flag
          */
         public SessionResolutionRequest(Path projectRoot, String provider, String connectionInstanceId,
                 AgentTaskIntent taskIntent, boolean refresh) {

@@ -37,9 +37,13 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
  */
 public final class ProviderSessionTerminalizationService {
 
-    /** Resolves and updates the exact durable provider binding. */
+    /**
+     * Resolves and updates the exact durable provider binding.
+     */
     private final ProviderSessionBindingService bindingService;
-    /** Maintains the process/liveness view associated with the binding. */
+    /**
+     * Maintains the process/liveness view associated with the binding.
+     */
     private final SessionLeaseService leaseService;
 
     /**
@@ -48,6 +52,7 @@ public final class ProviderSessionTerminalizationService {
     public ProviderSessionTerminalizationService() {
         this(new ProviderSessionBindingService(), new SessionLeaseService());
     }
+
     /**
      * Creates a terminalization service with explicit lifecycle collaborators.
      *

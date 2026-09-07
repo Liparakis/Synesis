@@ -163,8 +163,10 @@ a reason to alter production lifecycle semantics.
 
 - `:coordination:test --tests org.synesis.coordination.collaboration.WorkIntentServiceTest`: PASS
 -
+
 `:workspace:test --tests org.synesis.workspace.MultiChatLogicalWorkspaceTest --tests org.synesis.workspace.AgentNextActionServiceTest`:
 PASS
+
 - `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest`: PASS, 15 tests; the known Git child-process wait
   was observed during fixture setup but the suite completed
 - `:coordination:javadoc :workspace:javadoc :mcp:javadoc`: PASS

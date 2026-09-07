@@ -666,7 +666,9 @@ public final class ManagedBaselineTransactionService {
         void after(Phase phase) throws IOException;
     }
 
-    /** Owns the OS lock held while a managed baseline transaction is active. */
+    /**
+     * Owns the OS lock held while a managed baseline transaction is active.
+     */
     private record ProjectLock(FileChannel channel, FileLock lock) implements AutoCloseable {
 
         private static ProjectLock acquire(Path administrativeRoot) throws IOException {

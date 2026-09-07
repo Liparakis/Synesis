@@ -147,7 +147,8 @@ consumption. Resuming the same task created a new participant whose claims were
 correctly rejected as overlapping. The run is **PARTIAL**; no integration or
 terminalization was reached.
 
-- Exact next action: preserve `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05.md`; do not reuse the partial target or repair its durable state.
+- Exact next action: preserve `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05.md`; do not reuse the partial
+  target or repair its durable state.
 
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
@@ -160,7 +161,8 @@ No Worker A or managed runtime was created.
 
 ## Immediate next action
 
-Run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in one live caller; do not start Worker B or test replacement.
+Run one fresh lawful Worker-A validation on JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst`
+and START in one live caller; do not start Worker B or test replacement.
 
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
@@ -179,7 +181,8 @@ project plus pre-existing `probe-runtime/` remained untouched.
 
 ## Immediate next action
 
-Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then fresh-build and provenance-lock the runtime before creating a new Worker-A lane; do not launch or reuse a lane.
+Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then
+fresh-build and provenance-lock the runtime before creating a new Worker-A lane; do not launch or reuse a lane.
 
 ## SYN-051 standalone host compatibility — 2026-09-05
 
@@ -199,7 +202,9 @@ global settings, or remote state was touched.
 Evidence: `docs/evidence/SYN-051-standalone-loopback-compatibility-2026-09-05.md`
 and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
-Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+Next action: Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on
+existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a
+lane in this slice.
 
 ## SYN-051 fresh Worker-A A1/A2 runtime validation — 2026-09-05
 
@@ -3499,11 +3504,13 @@ a new production readiness defect. Exact next action: run the fresh unattended
 two-agent Todo acceptance with both MCP processes independently verified
 current/project-pinned, then preserve the first post-publication lifecycle
 blocker. Do not create SYN-040 or push.
+
 # Historical task override
 
 The earlier SYN-043 active-task override is retained as historical context.
 SYN-046 is the current single active implementation slice; preserve the
 uncommitted SYN-043 work and do not stage it as part of SYN-046.
+
 ## SYN-051 fresh Worker-A persistence validation — 2026-09-05
 
 Status is **PARTIAL**. Exact artifact provenance and JDK25 process-local
@@ -3527,6 +3534,7 @@ occurred. Evidence:
 ## Immediate next action
 
 Checkpoint and stop; do not invoke A1-to-A2 replacement or start Worker B.
+
 ## 2026-09-05 — SYN-051 fresh two-worker/restart acceptance
 
 SYN-051 is **PASS-A / COMPLETE for its bounded managed continuity acceptance**.
@@ -3553,6 +3561,7 @@ were not required by this bounded SYN-051 task and were not run.
 
 Preserve the SYN-051 PASS-A evidence; do not reopen the accepted managed
 runtime or run full SYN-049 acceptance without a new explicit task.
+
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05
 
 SYN-049 is the sole active task for this run and remains PARTIAL pending a
@@ -3566,6 +3575,7 @@ production source changes are permitted.
 
 - Exact next action: verify installed artifact provenance and JDK25
   process-local compatibility before creating any target state.
+
 ## SYN-049 fresh unattended two-worker acceptance — 2026-09-05 run #08
 
 Run #08 used a fresh target and the rebuilt provenance-locked artifacts. Both
@@ -3585,6 +3595,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run08.md`
 Review the run #08 `lifecycle_binding_stale` evidence and current binding
 verification path; if a production correction is justified, test and rebuild
 it before creating a new fresh SYN-049 target. Do not reuse run #08.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #12–#16 — 2026-09-05
 
 Runs #12–#16 were fresh and stopped at the same material runtime boundary.
@@ -3600,6 +3611,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-05-run12-run
 
 Immediate next action: diagnose the exact production admission/dispatch
 rejection read-only; do not reuse a target or manually invoke wake.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #25
 
 Run #25 is **PARTIAL**. Fresh generation-1 A/B preparation and START succeeded
@@ -3619,6 +3631,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run25.md`
 Perform a bounded read-only diagnosis of why the exact active A lane does not
 consume the projected completion/finish action after the validated dependency;
 do not reuse the run, invoke A2/B replacement, or edit `.synesis` state.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #45–#50
 
 Runs #45–#50 remain **PARTIAL / ACTIVE**. Run #45 reached the first material
@@ -3644,6 +3657,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs45-48
 Diagnose the final B-side review/finish/terminalization boundary read-only
 before a new fresh acceptance fixture; do not reuse or repair any run #45–#50
 state.
+
 ## 2026-09-06 — SYN-049 run #59
 
 Run #59 passed fresh provenance, JDK25 process-local compatibility, lawful A/B
@@ -3661,6 +3675,7 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-run59.md`
 Read-only diagnosis of snapshot materialization and review-workspace routing;
 do not bypass grants, copy worktrees, repair state, invoke replacement, create
 A2, or start a substitute B.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance runs #68–#69
 
 Runs #68–#69 are **PARTIAL / ACTIVE**. Both fresh targets passed the

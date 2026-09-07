@@ -36,17 +36,17 @@ Read-only provider confirmation in a new App Server process returned:
 
 ## Runtime matrix
 
-| Gate | Result |
-|---|---|
-| Build/install provenance | PASS |
-| Focused lifecycle/MCP and strict quality checks | PASS |
-| Fresh binding/participant/claim/ownership | PASS |
-| Job-contained managed App Server launch | PARTIAL |
-| Exact pinned thread join | FAIL: `thread not loaded` |
-| A1 managed turn and mutation | NOT RUN |
-| Controlled root failure and trusted teardown | NOT RUN |
-| Proofless replacement and A2 | NOT RUN as validation; aborted harness created gen2 pending and cleanup terminalized it |
-| Worker B/A-B/full acceptance | NOT RUN |
+| Gate                                            | Result                                                                                  |
+|-------------------------------------------------|-----------------------------------------------------------------------------------------|
+| Build/install provenance                        | PASS                                                                                    |
+| Focused lifecycle/MCP and strict quality checks | PASS                                                                                    |
+| Fresh binding/participant/claim/ownership       | PASS                                                                                    |
+| Job-contained managed App Server launch         | PARTIAL                                                                                 |
+| Exact pinned thread join                        | FAIL: `thread not loaded`                                                               |
+| A1 managed turn and mutation                    | NOT RUN                                                                                 |
+| Controlled root failure and trusted teardown    | NOT RUN                                                                                 |
+| Proofless replacement and A2                    | NOT RUN as validation; aborted harness created gen2 pending and cleanup terminalized it |
+| Worker B/A-B/full acceptance                    | NOT RUN                                                                                 |
 
 ## Next action
 

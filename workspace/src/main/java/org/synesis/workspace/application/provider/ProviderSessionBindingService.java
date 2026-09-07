@@ -572,7 +572,7 @@ public final class ProviderSessionBindingService {
      * continuation fail the lifecycle worktree fence.</p>
      *
      * @param location initialized project location
-     * @param binding exact provider binding
+     * @param binding  exact provider binding
      * @return {@code true} only for an active managed attachment on this binding
      */
     private static boolean hasActiveManagedAttachment(
@@ -584,8 +584,10 @@ public final class ProviderSessionBindingService {
             return attachment != null
                     && attachment.mode() == ProviderContinuityMode.MANAGED_CONTINUITY
                     && attachment.status() == ManagedAttachmentRecord.Status.ACTIVE
-                    && attachment.projectId().equals(binding.projectId())
-                    && attachment.bindingSessionId().equals(binding.sessionId());
+                    && attachment.projectId()
+                    .equals(binding.projectId())
+                    && attachment.bindingSessionId()
+                    .equals(binding.sessionId());
         } catch (Exception ignored) {
             return false;
         }
@@ -839,8 +841,8 @@ public final class ProviderSessionBindingService {
      * than raw provider connection evidence. It never falls back to the newest
      * binding and rejects duplicate fingerprints.</p>
      *
-     * @param location initialized control project
-     * @param provider stable provider identifier
+     * @param location    initialized control project
+     * @param provider    stable provider identifier
      * @param fingerprint exact persisted fingerprint
      * @return matching binding, or empty when absent
      * @throws BindingException when stored bindings are malformed or ambiguous
@@ -858,7 +860,8 @@ public final class ProviderSessionBindingService {
             throw new BindingException("SESSION_BINDING_AMBIGUOUS",
                     "Multiple provider bindings share the same fingerprint");
         }
-        return matches.stream().findFirst();
+        return matches.stream()
+                .findFirst();
     }
 
     /**
@@ -1194,7 +1197,8 @@ public final class ProviderSessionBindingService {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             }
             String currentWorkerHead = git(assigned, "rev-parse", "HEAD");
-            if (!binding.baseCommit().equals(currentWorkerHead)
+            if (!binding.baseCommit()
+                    .equals(currentWorkerHead)
                     && (!allowCommittedGeneration || !isWorktreeClean(binding))) {
                 return new WorkspaceCheck(false, "WORKSPACE_GENERATION_MISMATCH");
             }

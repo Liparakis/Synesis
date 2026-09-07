@@ -222,6 +222,29 @@ public final class ResetRecoveryService {
         }
     }
 
+    private static Map<String, Object> journalMap(Journal journal) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("transactionId", journal.transactionId());
+        map.put("repositoryIdentity", journal.repositoryIdentity());
+        map.put("oldProjectId", journal.oldProjectId());
+        map.put("newProjectId", journal.newProjectId());
+        map.put("oldNamespace",
+                journal.oldNamespace()
+                        .toString());
+        map.put("newNamespace",
+                journal.newNamespace()
+                        .toString());
+        map.put("stagingNamespace",
+                journal.stagingNamespace()
+                        .toString());
+        map.put("baselineReference", journal.baselineReference());
+        map.put("phase",
+                journal.phase()
+                        .name());
+        map.put("failure", journal.failure());
+        return map;
+    }
+
     /**
      * Prepares a reset journal without granting authority or changing a
      * project namespace.
@@ -453,21 +476,6 @@ public final class ResetRecoveryService {
         } catch (Exception failure) {
             throw failure("RESET_JOURNAL_UNAVAILABLE", diagnostic(failure), failure);
         }
-    }
-
-    private static Map<String, Object> journalMap(Journal journal) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("transactionId", journal.transactionId());
-        map.put("repositoryIdentity", journal.repositoryIdentity());
-        map.put("oldProjectId", journal.oldProjectId());
-        map.put("newProjectId", journal.newProjectId());
-        map.put("oldNamespace", journal.oldNamespace().toString());
-        map.put("newNamespace", journal.newNamespace().toString());
-        map.put("stagingNamespace", journal.stagingNamespace().toString());
-        map.put("baselineReference", journal.baselineReference());
-        map.put("phase", journal.phase().name());
-        map.put("failure", journal.failure());
-        return map;
     }
 
     private void writeJournal(AdministrativeStateLocator.Resolution resolution, Journal journal) throws IOException {

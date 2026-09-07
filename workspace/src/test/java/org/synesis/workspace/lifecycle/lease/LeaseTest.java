@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 
-/** Exercises provider-session lease creation, renewal, and closure. */
+/**
+ * Exercises provider-session lease creation, renewal, and closure.
+ */
 class LeaseTest {
 
     @Test

@@ -221,12 +221,24 @@ final class ProviderSessionBindingServiceTest {
         var service = new ProviderSessionBindingService();
         var first = service.ensure(location, "codex", "managed-control-advance")
                 .binding();
-        ManagedAttachmentService.storeFor(location, first.sessionId()).write(
-                new ManagedAttachmentRecord(1, location.projectId().toString(), "codex",
-                        ProviderContinuityMode.MANAGED_CONTINUITY, first.sessionId(), "thread-managed", 1,
-                        "a".repeat(64), "normal-provider-home", ManagedAttachmentRecord.Status.ACTIVE, 1,
-                        System.currentTimeMillis()));
-        var attachment = ManagedAttachmentService.storeFor(location, first.sessionId()).read().orElseThrow();
+        ManagedAttachmentService.storeFor(location, first.sessionId())
+                .write(
+                        new ManagedAttachmentRecord(1,
+                                location.projectId()
+                                        .toString(),
+                                "codex",
+                                ProviderContinuityMode.MANAGED_CONTINUITY,
+                                first.sessionId(),
+                                "thread-managed",
+                                1,
+                                "a".repeat(64),
+                                "normal-provider-home",
+                                ManagedAttachmentRecord.Status.ACTIVE,
+                                1,
+                                System.currentTimeMillis()));
+        var attachment = ManagedAttachmentService.storeFor(location, first.sessionId())
+                .read()
+                .orElseThrow();
         assertEquals(first.projectId(), attachment.projectId());
         assertEquals(first.sessionId(), attachment.bindingSessionId());
         assertEquals(ProviderContinuityMode.MANAGED_CONTINUITY, attachment.mode());

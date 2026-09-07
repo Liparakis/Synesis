@@ -690,12 +690,13 @@ public final class AgentTaskCompletionService {
                         binding.sessionId(),
                         laneIntent.map(WorkIntent::version)
                                 .orElse(1L),
-                         laneIntent.map(WorkIntent::authorityLineageId)
-                                 .orElse(org.synesis.coordination.domain.collaboration.WorkIntent
-                                         .defaultAuthorityLineage(taskId)),
-                         List.of(),
-                         reviewRequired,
-                         laneIntent.map(WorkIntent::baseCommit).orElse(null));
+                        laneIntent.map(WorkIntent::authorityLineageId)
+                                .orElse(org.synesis.coordination.domain.collaboration.WorkIntent
+                                        .defaultAuthorityLineage(taskId)),
+                        List.of(),
+                        reviewRequired,
+                        laneIntent.map(WorkIntent::baseCommit)
+                                .orElse(null));
             } catch (IllegalStateException immutabilityError) {
                 // Task snapshot is immutable and content changed after completion
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);

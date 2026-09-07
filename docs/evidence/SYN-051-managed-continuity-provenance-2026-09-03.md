@@ -18,15 +18,15 @@ does not claim that authenticated managed-Codex acceptance passed.
 The installed distribution is `cli/build/install/synesis`. The source jars
 and their installed copies have matching SHA-256 hashes:
 
-| Artifact | SHA-256 |
-|---|---|
-| `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar` | `ea7501e7e57fd728daa6448fa794596441b47a975fd2290e59e7e1b879beea1b` |
-| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar` | `dc79eee420e9962da8712cb2a2028b83f327f88ba3a540e542b210df849a8185` |
-| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar` | `baadc04e282f603153f524426e851db249405887cfbb82db89429c427f4b39ee` |
+| Artifact                                                     | SHA-256                                                            |
+|--------------------------------------------------------------|--------------------------------------------------------------------|
+| `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar`          | `ea7501e7e57fd728daa6448fa794596441b47a975fd2290e59e7e1b879beea1b` |
+| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar`                      | `dc79eee420e9962da8712cb2a2028b83f327f88ba3a540e542b210df849a8185` |
+| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar`                      | `baadc04e282f603153f524426e851db249405887cfbb82db89429c427f4b39ee` |
 | `cli/build/install/synesis/lib/workspace-0.1.0-SNAPSHOT.jar` | `ea7501e7e57fd728daa6448fa794596441b47a975fd2290e59e7e1b879beea1b` |
-| `cli/build/install/synesis/lib/mcp-0.1.0-SNAPSHOT.jar` | `dc79eee420e9962da8712cb2a2028b83f327f88ba3a540e542b210df849a8185` |
-| `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar` | `baadc04e282f603153f524426e851db249405887cfbb82db89429c427f4b39ee` |
-| `cli/build/install/synesis/bin/synesis.bat` | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
+| `cli/build/install/synesis/lib/mcp-0.1.0-SNAPSHOT.jar`       | `dc79eee420e9962da8712cb2a2028b83f327f88ba3a540e542b210df849a8185` |
+| `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar`       | `baadc04e282f603153f524426e851db249405887cfbb82db89429c427f4b39ee` |
+| `cli/build/install/synesis/bin/synesis.bat`                  | `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e` |
 
 The installed launcher smoke command was:
 

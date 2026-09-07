@@ -49,13 +49,21 @@ import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 @SuppressWarnings({"DuplicatedCode", "ExtractMethodRecommender"})
 public final class AgentNextActionService {
 
-    /** Resolves project metadata and durable project-local paths. */
+    /**
+     * Resolves project metadata and durable project-local paths.
+     */
     private final ProjectApplicationService projectService;
-    /** Verifies the exact provider binding and assigned worktree. */
+    /**
+     * Verifies the exact provider binding and assigned worktree.
+     */
     private final WorkspaceReadinessService readinessService;
-    /** Adds durable continuation metadata to the projected response. */
+    /**
+     * Adds durable continuation metadata to the projected response.
+     */
     private final AgentWorkflowReducer workflowReducer;
-    /** Resolves and validates immutable review snapshots when authorized. */
+    /**
+     * Resolves and validates immutable review snapshots when authorized.
+     */
     private final TaskSnapshotService snapshotService;
 
     /**
@@ -443,7 +451,8 @@ public final class AgentNextActionService {
         return requesterRequests.stream()
                 .anyMatch(request -> request.state()
                         != org.synesis.coordination.domain.capability.CapabilityLifecycleState.VALIDATED)
-                || !projection.allValidationContexts().isEmpty();
+                || !projection.allValidationContexts()
+                .isEmpty();
     }
 
     /**
@@ -1001,8 +1010,12 @@ public final class AgentNextActionService {
             result.put("nextProtocolAction", "finish_lane");
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("summary", "Publish the completed immutable snapshot");
-            payload.put("intentId", intent.intentId().toString());
-            payload.put("workGroupId", intent.workGroupId().toString());
+            payload.put("intentId",
+                    intent.intentId()
+                            .toString());
+            payload.put("workGroupId",
+                    intent.workGroupId()
+                            .toString());
             payload.put("claimEpoch", intent.version());
             payload.put("workGroupVersion", group.version());
             payload.put("expectedRevision", store.headSequence());
@@ -1143,7 +1156,9 @@ public final class AgentNextActionService {
                 // remains gated on reviewer admission and consumption.
                 if (assignedWorktree != null) {
                     try {
-                        if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors(), intent.baseCommit())) {
+                        if (!snapshotService.hasPublishableChanges(assignedWorktree,
+                                intent.selectors(),
+                                intent.baseCommit())) {
                             continue;
                         }
                     } catch (Exception ignored) {
@@ -1414,6 +1429,84 @@ public final class AgentNextActionService {
     }
 
     /**
+     * Projects the idempotent finish required after a reviewed snapshot is
+     * accepted, including when the original worker lane remains dirty.
+     *
+     * <p>{@code finish_lane} snapshots the visible lane into an immutable
+     * commit and deliberately does not require the harness to commit its
+     * worktree first.  Once review accepts that snapshot, the producer still
+     * needs one exact finish call to drive integration and release its
+     * binding.  This projection is therefore based only on the durable
+     * snapshot and current producer intent; it never authorizes another
+     * mutable workspace operation.</p>
+     *
+     * @param store         durable project event store
+     * @param participantId exact caller participant
+     * @param nodeId        caller node identity
+     * @param supervisorId  caller supervisor identity
+     * @param workerId      caller worker identity
+     * @return projected finish payload, or {@code null} when no accepted
+     *         published snapshot awaits producer completion
+     */
+    private static Map<String, Object> publishedSnapshotCompletionAction(
+            org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+            String nodeId, String supervisorId, String workerId) {
+        if (participantId == null || participantId.isBlank()) {
+            return null;
+        }
+        for (WorkIntent intent : store.collaborationProjection()
+                .activeIntents()) {
+            if (!participantId.equals(intent.participant()) || intent.role() != WorkIntent.Role.PRODUCER) {
+                continue;
+            }
+            if (hasUnresolvedCapabilityObligation(store, intent, nodeId, supervisorId, workerId)) {
+                continue;
+            }
+            TaskSnapshotRecord snapshot = store.taskCompletionProjection()
+                    .findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version())
+                    .orElse(null);
+            if (snapshot == null) {
+                continue;
+            }
+            TaskCompletionState state = store.taskCompletionProjection()
+                    .snapshotState(snapshot.snapshotId())
+                    .orElse(TaskCompletionState.ACTIVE);
+            if (state != TaskCompletionState.REVIEW_ACCEPTED && state != TaskCompletionState.INTEGRATED) {
+                continue;
+            }
+            WorkGroup group = store.workGroupProjection()
+                    .group(intent.workGroupId())
+                    .orElse(null);
+            if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
+                continue;
+            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("summary", "Publish the completed immutable snapshot");
+            payload.put("intentId",
+                    intent.intentId()
+                            .toString());
+            payload.put("workGroupId",
+                    intent.workGroupId()
+                            .toString());
+            payload.put("claimEpoch", intent.version());
+            payload.put("workGroupVersion", group.version());
+            payload.put("expectedRevision", store.headSequence());
+            payload.put("participant", participantId);
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("state", state.name());
+            result.put("snapshotAlreadyPublished", true);
+            result.put("snapshot", snapshotMap(snapshot));
+            result.put("currentIntent", intentMap(intent));
+            result.put("nextProtocolAction", "finish_lane");
+            result.put("nextProtocolKind", "snapshot_completion");
+            result.put("nextProtocolPayload", payload);
+            return result;
+        }
+        return null;
+    }
+
+    /**
      * Resolves the single highest-priority actionable coordination item for the active session worker.
      *
      * @param request request payload
@@ -1648,19 +1741,26 @@ public final class AgentNextActionService {
                             AgentNextAction.ENSURE_SESSION, claimRequired);
                 }
 
-                boolean coordinationActivated = store.collaborationProjection().activated();
-                var callerIntent = store.collaborationProjection().activeIntents().stream()
-                        .filter(intent -> intent.participant().equals(callerParticipant))
+                boolean coordinationActivated = store.collaborationProjection()
+                        .activated();
+                var callerIntent = store.collaborationProjection()
+                        .activeIntents()
+                        .stream()
+                        .filter(intent -> intent.participant()
+                                .equals(callerParticipant))
                         .findFirst();
                 List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerPending = capProj
-                        .findPendingForOwner(callerNodeId).stream()
+                        .findPendingForOwner(callerNodeId)
+                        .stream()
                         .filter(candidate -> !coordinationActivated
                                 || callerIntent.map(intent -> intent.authorityLineageId()
                                         .equals(candidate.authorityLineageId()))
-                                        .orElse(false))
+                                .orElse(false))
                         .toList();
                 List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> ownerAccepted = capProj
-                        .records().values().stream()
+                        .records()
+                        .values()
+                        .stream()
                         .filter(candidate -> candidate.matchesOwner(callerNodeId, binding.supervisorId(),
                                 binding.workerId()))
                         .filter(candidate -> candidate.state()
@@ -1670,7 +1770,7 @@ public final class AgentNextActionService {
                         .filter(candidate -> !coordinationActivated
                                 || callerIntent.map(intent -> intent.authorityLineageId()
                                         .equals(candidate.authorityLineageId()))
-                                        .orElse(false))
+                                .orElse(false))
                         .toList();
 
                 // Slice 3: Check active integration projection states
@@ -1703,22 +1803,34 @@ public final class AgentNextActionService {
                                 result);
                     }
                 }
-                if (callerIntent.isPresent() && !callerIntent.get().knownDependencies().isEmpty()) {
-                    var requestedCapabilities = capProj.findAllForRequester(callerNodeId).stream()
+                if (callerIntent.isPresent() && !callerIntent.get()
+                        .knownDependencies()
+                        .isEmpty()) {
+                    var requestedCapabilities = capProj.findAllForRequester(callerNodeId)
+                            .stream()
                             .filter(candidate -> candidate.matchesRequester(callerNodeId, binding.supervisorId(),
                                     binding.workerId()))
                             .map(org.synesis.coordination.domain.capability.CapabilityRequestRecord::capability)
                             .collect(java.util.stream.Collectors.toSet());
-                    String missingDependency = callerIntent.get().knownDependencies().stream()
+                    String missingDependency = callerIntent.get()
+                            .knownDependencies()
+                            .stream()
                             .filter(dependency -> !requestedCapabilities.contains(dependency))
-                            .findFirst().orElse(null);
+                            .findFirst()
+                            .orElse(null);
                     if (missingDependency != null) {
                         Map<String, Object> result = new LinkedHashMap<>();
                         result.put("capability", missingDependency);
-                        result.put("requiredFields", List.of("inputs", "output", "requiredBehavior", "acceptanceTests"));
-                        result.put("pending", callerIntent.get().knownDependencies().size());
+                        result.put("requiredFields",
+                                List.of("inputs", "output", "requiredBehavior", "acceptanceTests"));
+                        result.put("pending",
+                                callerIntent.get()
+                                        .knownDependencies()
+                                        .size());
                         result.put("currentIntent", intentMap(callerIntent.get()));
-                        result.put("knownDependencies", callerIntent.get().knownDependencies());
+                        result.put("knownDependencies",
+                                callerIntent.get()
+                                        .knownDependencies());
                         result.put("coordinationKind", "capability_request");
                         return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED,
                                 AgentNextAction.REQUEST_COORDINATION, result);
@@ -1755,15 +1867,27 @@ public final class AgentNextActionService {
                 if (!ownerAccepted.isEmpty()) {
                     org.synesis.coordination.domain.capability.CapabilityRequestRecord topReq = ownerAccepted.getFirst();
                     Map<String, Object> contractMap = new LinkedHashMap<>();
-                    contractMap.put("inputs", topReq.contract().inputs());
-                    contractMap.put("output", topReq.contract().output());
-                    contractMap.put("requiredBehavior", topReq.contract().requiredBehavior());
-                    contractMap.put("acceptanceTests", topReq.contract().acceptanceTests());
+                    contractMap.put("inputs",
+                            topReq.contract()
+                                    .inputs());
+                    contractMap.put("output",
+                            topReq.contract()
+                                    .output());
+                    contractMap.put("requiredBehavior",
+                            topReq.contract()
+                                    .requiredBehavior());
+                    contractMap.put("acceptanceTests",
+                            topReq.contract()
+                                    .acceptanceTests());
 
                     Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("capabilityRequestHandle", topReq.handle().value());
+                    result.put("capabilityRequestHandle",
+                            topReq.handle()
+                                    .value());
                     result.put("capability", topReq.capability());
-                    result.put("authorityLineageId", topReq.authorityLineageId().toString());
+                    result.put("authorityLineageId",
+                            topReq.authorityLineageId()
+                                    .toString());
                     result.put("contract", contractMap);
                     result.put("pending", ownerAccepted.size());
                     return new AgentResponse(AgentStatus.WAITING,
@@ -1774,11 +1898,12 @@ public final class AgentNextActionService {
 
                 // Slice 2: owner must respond to a validation revision
                 List<org.synesis.coordination.domain.capability.CapabilityRequestRecord> validationRevList = capProj
-                        .findValidationRevisionForOwner(callerNodeId).stream()
+                        .findValidationRevisionForOwner(callerNodeId)
+                        .stream()
                         .filter(candidate -> !coordinationActivated
                                 || callerIntent.map(intent -> intent.authorityLineageId()
                                         .equals(candidate.authorityLineageId()))
-                                        .orElse(false))
+                                .orElse(false))
                         .toList();
                 if (!validationRevList.isEmpty()) {
                     org.synesis.coordination.domain.capability.CapabilityRequestRecord topReq = validationRevList.getFirst();
@@ -1869,7 +1994,8 @@ public final class AgentNextActionService {
                                     topReq.handle()
                                             .value());
                             result.put("inboxItemId", UUID.nameUUIDFromBytes(("capability:"
-                                    + topReq.handle().value()).getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                                            + topReq.handle()
+                                            .value()).getBytes(java.nio.charset.StandardCharsets.UTF_8))
                                     .toString());
                             result.put("capability", topReq.capability());
                             result.put("authorityLineageId",
@@ -2166,80 +2292,6 @@ public final class AgentNextActionService {
         } catch (Exception ignored) {
             return null;
         }
-    }
-
-    /**
-     * Projects the idempotent finish required after a reviewed snapshot is
-     * accepted, including when the original worker lane remains dirty.
-     *
-     * <p>{@code finish_lane} snapshots the visible lane into an immutable
-     * commit and deliberately does not require the harness to commit its
-     * worktree first.  Once review accepts that snapshot, the producer still
-     * needs one exact finish call to drive integration and release its
-     * binding.  This projection is therefore based only on the durable
-     * snapshot and current producer intent; it never authorizes another
-     * mutable workspace operation.</p>
-     *
-     * @param store         durable project event store
-     * @param participantId exact caller participant
-     * @param nodeId        caller node identity
-     * @param supervisorId  caller supervisor identity
-     * @param workerId      caller worker identity
-     * @return projected finish payload, or {@code null} when no accepted
-     *         published snapshot awaits producer completion
-     */
-    private static Map<String, Object> publishedSnapshotCompletionAction(
-            org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
-            String nodeId, String supervisorId, String workerId) {
-        if (participantId == null || participantId.isBlank()) {
-            return null;
-        }
-        for (WorkIntent intent : store.collaborationProjection()
-                .activeIntents()) {
-            if (!participantId.equals(intent.participant()) || intent.role() != WorkIntent.Role.PRODUCER) {
-                continue;
-            }
-            if (hasUnresolvedCapabilityObligation(store, intent, nodeId, supervisorId, workerId)) {
-                continue;
-            }
-            TaskSnapshotRecord snapshot = store.taskCompletionProjection()
-                    .findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version())
-                    .orElse(null);
-            if (snapshot == null) {
-                continue;
-            }
-            TaskCompletionState state = store.taskCompletionProjection()
-                    .snapshotState(snapshot.snapshotId())
-                    .orElse(TaskCompletionState.ACTIVE);
-            if (state != TaskCompletionState.REVIEW_ACCEPTED && state != TaskCompletionState.INTEGRATED) {
-                continue;
-            }
-            WorkGroup group = store.workGroupProjection()
-                    .group(intent.workGroupId())
-                    .orElse(null);
-            if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
-                continue;
-            }
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("summary", "Publish the completed immutable snapshot");
-            payload.put("intentId", intent.intentId().toString());
-            payload.put("workGroupId", intent.workGroupId().toString());
-            payload.put("claimEpoch", intent.version());
-            payload.put("workGroupVersion", group.version());
-            payload.put("expectedRevision", store.headSequence());
-            payload.put("participant", participantId);
-
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("state", state.name());
-            result.put("snapshotAlreadyPublished", true);
-            result.put("snapshot", snapshotMap(snapshot));
-            result.put("currentIntent", intentMap(intent));
-            result.put("nextProtocolAction", "finish_lane");
-            result.put("nextProtocolKind", "snapshot_completion");
-            result.put("nextProtocolPayload", payload);
-            return result;
-        }
-        return null;
     }
 
     /**

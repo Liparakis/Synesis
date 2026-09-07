@@ -76,9 +76,13 @@ import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
  */
 public final class McpProtocolHandler {
 
-    /** Protocol version selected when a client omits its requested version. */
+    /**
+     * Protocol version selected when a client omits its requested version.
+     */
     private static final String DEFAULT_PROTOCOL_VERSION = "2024-11-05";
-    /** MCP protocol versions accepted by the handshake. */
+    /**
+     * MCP protocol versions accepted by the handshake.
+     */
     private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of(
             "2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25");
 
@@ -100,28 +104,50 @@ public final class McpProtocolHandler {
     private final SessionLeaseService leaseService;
     private final SessionLeasePolicy leasePolicy;
     private final ProviderManualService manualService;
-    /** Project root supplied by the launcher before MCP roots are resolved. */
+    /**
+     * Project root supplied by the launcher before MCP roots are resolved.
+     */
     private final Path initialProjectRoot;
-    /** Whether the launcher explicitly pinned the initial project root. */
+    /**
+     * Whether the launcher explicitly pinned the initial project root.
+     */
     private final boolean projectRootPinned;
-    /** Stable provider ID associated with this connection's binding. */
+    /**
+     * Stable provider ID associated with this connection's binding.
+     */
     private final String provider;
-    /** Connection incarnation used to prevent cross-connection authority reuse. */
+    /**
+     * Connection incarnation used to prevent cross-connection authority reuse.
+     */
     private final String connectionInstanceId;
-    /** Process evidence captured once so later close callbacks remain PID-gated. */
+    /**
+     * Process evidence captured once so later close callbacks remain PID-gated.
+     */
     private final SessionProcessIdentity commandProcessIdentity;
-    /** Project root selected from the initialized request or roots notification. */
-    private Path activeProjectRoot;
-    /** Whether initialize has successfully bound this connection to a session. */
-    private boolean isSessionBound;
-    /** Whether the launcher authenticated this process as managed continuity. */
+    /**
+     * Whether the launcher authenticated this process as managed continuity.
+     */
     private final boolean managedAdmission;
-    /** Binding and generation authenticated for a managed process-local connection. */
+    /**
+     * Binding and generation authenticated for a managed process-local connection.
+     */
     private final String managedBindingSessionId;
     private final long managedAttachmentGeneration;
-    /** Fail-closed root-authority diagnostic set before provider admission. */
+    /**
+     * Project root selected from the initialized request or roots notification.
+     */
+    private Path activeProjectRoot;
+    /**
+     * Whether initialize has successfully bound this connection to a session.
+     */
+    private boolean isSessionBound;
+    /**
+     * Fail-closed root-authority diagnostic set before provider admission.
+     */
     private String projectRootAuthorityFailure;
-    /** Durable command anchor refreshed only after verified session activity. */
+    /**
+     * Durable command anchor refreshed only after verified session activity.
+     */
     private ProjectCommandProcessAnchor commandProcessAnchor;
 
     /**
@@ -188,13 +214,13 @@ public final class McpProtocolHandler {
     /**
      * Creates an MCP handler after an explicit managed attachment admission.
      *
-     * @param sessionService application session service
-     * @param projectRoot initial launcher project root
-     * @param provider stable provider name
+     * @param sessionService       application session service
+     * @param projectRoot          initial launcher project root
+     * @param provider             stable provider name
      * @param connectionInstanceId exact connection selector
-     * @param processIdentity captured process identity
-     * @param projectRootPinned whether the root was launcher-pinned
-     * @param managedAdmission whether exact managed proof was verified at startup
+     * @param processIdentity      captured process identity
+     * @param projectRootPinned    whether the root was launcher-pinned
+     * @param managedAdmission     whether exact managed proof was verified at startup
      */
     public McpProtocolHandler(AgentSessionService sessionService,
             Path projectRoot,
@@ -958,6 +984,41 @@ public final class McpProtocolHandler {
         return number.doubleValue() == value;
     }
 
+    private static boolean completedReviewTool(String toolName) {
+        return ("synesis." + McpToolCatalog.GET_NEXT_ACTION).equals(toolName)
+                || ("synesis." + McpToolCatalog.REQUEST_COORDINATION).equals(toolName)
+                || ("synesis." + McpToolCatalog.RESPOND_COORDINATION).equals(toolName);
+    }
+
+    /**
+     * Parses the bounded structured capability identifiers supplied at admission.
+     *
+     * @param rawDependencies raw task field
+     * @return immutable dependency identifiers
+     * @throws IllegalArgumentException when the field is not a bounded string list
+     */
+    private static List<String> parseKnownDependencies(Object rawDependencies) {
+        if (rawDependencies == null) {
+            return List.of();
+        }
+        if (!(rawDependencies instanceof List<?> entries)) {
+            throw new IllegalArgumentException("knownDependencies must be an array");
+        }
+        if (entries.size() > 50) {
+            throw new IllegalArgumentException("knownDependencies exceeds 50 items");
+        }
+        List<String> dependencies = new java.util.ArrayList<>(entries.size());
+        for (Object entry : entries) {
+            if (!(entry instanceof String dependency)
+                    || dependency.isBlank()
+                    || dependency.length() > 128) {
+                throw new IllegalArgumentException("knownDependencies entries must be bounded strings");
+            }
+            dependencies.add(dependency);
+        }
+        return List.copyOf(dependencies);
+    }
+
     /**
      * Returns the currently resolved active control project root path.
      *
@@ -1188,7 +1249,8 @@ public final class McpProtocolHandler {
                 return ManagedAdmissionState.REJECTED;
             }
             ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, managedBindingSessionId)
-                    .read().orElse(null);
+                    .read()
+                    .orElse(null);
             if (record == null || record.mode()
                     != org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY
                     || record.generation() != managedAttachmentGeneration
@@ -1208,12 +1270,6 @@ public final class McpProtocolHandler {
         }
     }
 
-    private static boolean completedReviewTool(String toolName) {
-        return ("synesis." + McpToolCatalog.GET_NEXT_ACTION).equals(toolName)
-                || ("synesis." + McpToolCatalog.REQUEST_COORDINATION).equals(toolName)
-                || ("synesis." + McpToolCatalog.RESPOND_COORDINATION).equals(toolName);
-    }
-
     /**
      * Creates the deterministic response for a quarantined or fenced managed
      * transport without invoking any application mutation service.
@@ -1224,18 +1280,6 @@ public final class McpProtocolHandler {
         Map<String, Object> text = Map.of("status", "blocked", "reason", reason);
         return createResultResponse(id, Map.of("content", List.of(Map.of("type", "text",
                 "text", ProviderJson.write(text))), "isError", true));
-    }
-
-    /** Managed connection admission states visible only inside this handler. */
-    private enum ManagedAdmissionState {
-        /** The exact managed attachment is active. */
-        ACTIVE,
-        /** The completed binding may continue exact review coordination only. */
-        REVIEW_ONLY,
-        /** The proof-bearing transport is connected but has no authority. */
-        PENDING,
-        /** The attachment or exact binding is no longer admissible. */
-        REJECTED
     }
 
     /**
@@ -2040,23 +2084,24 @@ public final class McpProtocolHandler {
                                                 failedTests));
                             }
                             case "review_validation" -> agentResponse = reviewValidationService.validate(
-                                        new ReviewValidationService.ValidateRequest(
-                                                activeProjectRoot, provider, connectionInstanceId,
-                                                UUID.fromString(String.valueOf(payload.get("grantId"))),
-                                                String.valueOf(payload.get("snapshotId")),
-                                                UUID.fromString(String.valueOf(payload.get("intentId"))),
-                                                ((Number) payload.get("claimEpoch")).longValue(),
-                                                String.valueOf(payload.get("result")),
-                                                payload.get("reason") == null ? null
-                                                        : String.valueOf(payload.get("reason"))));
-                            case "capability_response" -> agentResponse = capabilityResponseService.respondToOwnerRequest(
-                                        new CapabilityResponseService.OwnerResponseRequest(
-                                                activeProjectRoot, provider, connectionInstanceId,
-                                                String.valueOf(payload.get("capabilityRequestHandle")),
-                                                String.valueOf(payload.get("response")),
-                                                parseContract(payload.get("revision")),
-                                                payload.get("reason") == null ? null
-                                                        : String.valueOf(payload.get("reason"))));
+                                    new ReviewValidationService.ValidateRequest(
+                                            activeProjectRoot, provider, connectionInstanceId,
+                                            UUID.fromString(String.valueOf(payload.get("grantId"))),
+                                            String.valueOf(payload.get("snapshotId")),
+                                            UUID.fromString(String.valueOf(payload.get("intentId"))),
+                                            ((Number) payload.get("claimEpoch")).longValue(),
+                                            String.valueOf(payload.get("result")),
+                                            payload.get("reason") == null ? null
+                                                    : String.valueOf(payload.get("reason"))));
+                            case "capability_response" ->
+                                    agentResponse = capabilityResponseService.respondToOwnerRequest(
+                                            new CapabilityResponseService.OwnerResponseRequest(
+                                                    activeProjectRoot, provider, connectionInstanceId,
+                                                    String.valueOf(payload.get("capabilityRequestHandle")),
+                                                    String.valueOf(payload.get("response")),
+                                                    parseContract(payload.get("revision")),
+                                                    payload.get("reason") == null ? null
+                                                            : String.valueOf(payload.get("reason"))));
                             case "coordination_response" -> {
                                 CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(
                                         String.valueOf(payload.get("coordinationStatus")));
@@ -2250,35 +2295,6 @@ public final class McpProtocolHandler {
     }
 
     /**
-     * Parses the bounded structured capability identifiers supplied at admission.
-     *
-     * @param rawDependencies raw task field
-     * @return immutable dependency identifiers
-     * @throws IllegalArgumentException when the field is not a bounded string list
-     */
-    private static List<String> parseKnownDependencies(Object rawDependencies) {
-        if (rawDependencies == null) {
-            return List.of();
-        }
-        if (!(rawDependencies instanceof List<?> entries)) {
-            throw new IllegalArgumentException("knownDependencies must be an array");
-        }
-        if (entries.size() > 50) {
-            throw new IllegalArgumentException("knownDependencies exceeds 50 items");
-        }
-        List<String> dependencies = new java.util.ArrayList<>(entries.size());
-        for (Object entry : entries) {
-            if (!(entry instanceof String dependency)
-                    || dependency.isBlank()
-                    || dependency.length() > 128) {
-                throw new IllegalArgumentException("knownDependencies entries must be bounded strings");
-            }
-            dependencies.add(dependency);
-        }
-        return List.copyOf(dependencies);
-    }
-
-    /**
      * Parses the bounded non-ownership selectors used to identify review targets.
      */
     private List<ResourceSelector> parseSelectorList(Object rawSelectors) {
@@ -2370,5 +2386,27 @@ public final class McpProtocolHandler {
         response.put("id", id);
         response.put("error", error);
         return ProviderJson.write(response);
+    }
+
+    /**
+     * Managed connection admission states visible only inside this handler.
+     */
+    private enum ManagedAdmissionState {
+        /**
+         * The exact managed attachment is active.
+         */
+        ACTIVE,
+        /**
+         * The completed binding may continue exact review coordination only.
+         */
+        REVIEW_ONLY,
+        /**
+         * The proof-bearing transport is connected but has no authority.
+         */
+        PENDING,
+        /**
+         * The attachment or exact binding is no longer admissible.
+         */
+        REJECTED
     }
 }

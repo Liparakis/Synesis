@@ -17,10 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
-import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
@@ -186,7 +185,8 @@ final class McpSyn039NoChangeCompletionTest {
         Map<String, Object> result = (Map<String, Object>) completed.get("result");
         assertEquals("SESSION_TERMINATED", result.get("sessionTermination"), result.toString());
         var terminalBinding = new ProviderSessionBindingService().find(fixture.location(), "codex",
-                fixture.connection()).orElseThrow();
+                        fixture.connection())
+                .orElseThrow();
         assertTrue(fixture.store()
                 .collaborationProjection()
                 .isSessionTerminal(terminalBinding.sessionId()));
@@ -348,11 +348,22 @@ final class McpSyn039NoChangeCompletionTest {
         ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService()
                 .find(fixture.location(), "codex", fixture.connection())
                 .orElseThrow();
-        ManagedAttachmentService.storeFor(fixture.location(), binding.sessionId()).write(
-                new ManagedAttachmentRecord(1, fixture.location().projectId().toString(), "codex",
-                        ProviderContinuityMode.MANAGED_CONTINUITY, binding.sessionId(), "thread-managed", 1,
-                        "a".repeat(64), "normal-provider-home", ManagedAttachmentRecord.Status.ACTIVE, 1,
-                        System.currentTimeMillis()));
+        ManagedAttachmentService.storeFor(fixture.location(), binding.sessionId())
+                .write(
+                        new ManagedAttachmentRecord(1,
+                                fixture.location()
+                                        .projectId()
+                                        .toString(),
+                                "codex",
+                                ProviderContinuityMode.MANAGED_CONTINUITY,
+                                binding.sessionId(),
+                                "thread-managed",
+                                1,
+                                "a".repeat(64),
+                                "normal-provider-home",
+                                ManagedAttachmentRecord.Status.ACTIVE,
+                                1,
+                                System.currentTimeMillis()));
 
         Files.writeString(fixture.project.resolve("control-advance.txt"), "integrated elsewhere\n");
         git(fixture.project, "add", "control-advance.txt");
@@ -360,7 +371,9 @@ final class McpSyn039NoChangeCompletionTest {
 
         var readiness = new WorkspaceReadinessService().assess(fixture.location, "codex", fixture.connection);
         assertTrue(readiness.ready(), readiness.toString());
-        assertEquals(binding.worktreePath(), readiness.worktree().toString());
+        assertEquals(binding.worktreePath(),
+                readiness.worktree()
+                        .toString());
 
         var response = new AgentSessionService().ensureSession(
                 new AgentSessionService.SessionResolutionRequest(fixture.project, "codex", fixture.connection,
@@ -508,7 +521,9 @@ final class McpSyn039NoChangeCompletionTest {
         return new Fixture(project, location, connection, handler, intent.intentId(), intent.workGroupId());
     }
 
-    /** Holds the isolated project and exact session identity for a no-change test. */
+    /**
+     * Holds the isolated project and exact session identity for a no-change test.
+     */
     private record Fixture(Path project, ProjectApplicationService.ProjectLocation location, String connection,
                            McpProtocolHandler handler, UUID intentId, UUID groupId) {
 

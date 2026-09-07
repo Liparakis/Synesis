@@ -380,19 +380,24 @@ Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
 
 ## Immediate next action
 
-Historical next action: run one fresh lawful SYN-051 Worker-A validation using JDK25 with the same process-local AF_UNIX property, keeping `prepareFirst` and START in the same live caller; do not start Worker B or invoke A1-to-A2 replacement.
+Historical next action: run one fresh lawful SYN-051 Worker-A validation using JDK25 with the same process-local AF_UNIX
+property, keeping `prepareFirst` and START in the same live caller; do not start Worker B or invoke A1-to-A2
+replacement.
 
 ## Work completed
 
-Proved the build-JVM compatibility carrier, completed clean build/install, and established exact produced-to-installed artifact provenance.
+Proved the build-JVM compatibility carrier, completed clean build/install, and established exact produced-to-installed
+artifact provenance.
 
 ## Current failures
 
-Focused workspace and MCP test tasks remain incomplete because they stalled after compilation without assertion output. Package-wide acceptance remains unrun.
+Focused workspace and MCP test tasks remain incomplete because they stalled after compilation without assertion output.
+Package-wide acceptance remains unrun.
 
 ## Verification
 
-`gradlew --version`, `help`, clean `:cli:installDist`, deferred validation, artifact hash equality, target identity, and persistent-environment checks passed. No Worker A or managed runtime was run.
+`gradlew --version`, `help`, clean `:cli:installDist`, deferred validation, artifact hash equality, target identity, and
+persistent-environment checks passed. No Worker A or managed runtime was run.
 
 ## SYN-051 process-local preflight and clean-build gate — 2026-09-05
 
@@ -414,19 +419,25 @@ Evidence: `docs/evidence/SYN-051-process-local-preflight-build-blocker-2026-09-0
 
 ## Immediate next action
 
-Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then perform a fresh clean build/install and provenance lock before creating any new Worker-A lane; do not launch or reuse a lane.
+Obtain separate authorization for a bounded process-local compatibility path for the build/Gradle JVM itself, then
+perform a fresh clean build/install and provenance lock before creating any new Worker-A lane; do not launch or reuse a
+lane.
 
 ## Work completed
 
-Committed the standalone compatibility evidence, passed the exact JDK25 selector and HTTP preflight, verified the target baseline, and attempted the required clean build without global settings changes.
+Committed the standalone compatibility evidence, passed the exact JDK25 selector and HTTP preflight, verified the target
+baseline, and attempted the required clean build without global settings changes.
 
 ## Current failures
 
-Gradle's JDK25 process independently reproduces the Windows AF_UNIX loopback failure before task execution. Existing installed hashes are observations only and are not a new provenance lock for this slice.
+Gradle's JDK25 process independently reproduces the Windows AF_UNIX loopback failure before task execution. Existing
+installed hashes are observations only and are not a new provenance lock for this slice.
 
 ## Verification
 
-`git diff --check`, deferred validation, JDK25 selector preflight, JDK25 IPv4/IPv6 HTTP preflight, target Git identity, and environment-setting checks passed. Clean `:cli:installDist` stopped before task execution. No fresh lane or managed runtime was run.
+`git diff --check`, deferred validation, JDK25 selector preflight, JDK25 IPv4/IPv6 HTTP preflight, target Git identity,
+and environment-setting checks passed. Clean `:cli:installDist` stopped before task execution. No fresh lane or managed
+runtime was run.
 
 ## SYN-051 standalone host compatibility — 2026-09-05
 
@@ -448,19 +459,25 @@ and its `-raw.txt` companion. Checkpoint: CP-0683.md.
 
 ## Immediate next action
 
-Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this slice.
+Review the standalone compatibility evidence and obtain separate authorization for one new Worker-A run on existing
+JDK25 with a process-local UNIX socket directory and matching primitive preflight; do not launch or reuse a lane in this
+slice.
 
 ## Work completed
 
-Completed standalone JDK25/JDK21 comparison and source-supported AF_UNIX reduction; recorded exact results and traces. Production unchanged. No managed acceptance run.
+Completed standalone JDK25/JDK21 comparison and source-supported AF_UNIX reduction; recorded exact results and traces.
+Production unchanged. No managed acceptance run.
 
 ## Current failures
 
-Both default JDKs fail selector initialization at UNIX socket connect in user TEMP. Process-local diagnostic directory resolves all 13 primitive cases on both JDKs. User-TEMP socket cleanup failed; root cause and managed runtime remain unverified.
+Both default JDKs fail selector initialization at UNIX socket connect in user TEMP. Process-local diagnostic directory
+resolves all 13 primitive cases on both JDKs. User-TEMP socket cleanup failed; root cause and managed runtime remain
+unverified.
 
 ## Verification
 
-Commands: external run_probe.py baseline, run_probe.py ipv4, run_unix.py; exact command arrays and all results in evidence. Run git diff --check and scripts/agent-checkpoint.ps1; no Doctor, MCP, or production test invocation.
+Commands: external run_probe.py baseline, run_probe.py ipv4, run_unix.py; exact command arrays and all results in
+evidence. Run git diff --check and scripts/agent-checkpoint.ps1; no Doctor, MCP, or production test invocation.
 
 ## Historical handoffs (superseded by the current entry above)
 
@@ -813,8 +830,9 @@ provider-authentication compatibility pass is recorded in
 `docs/evidence/SYN-051-keyring-auth-compatibility-2026-09-03.md`. Codex
 `0.145.0` reports the normal home as file-backed, explicit keyring mode has no
 credentials, and a fresh isolated home fails its real model turn with HTTP
+
 401. Preserve the hard stop; do not copy `auth.json`, perform destructive
-provider migration, or run managed Codex acceptance.
+     provider migration, or run managed Codex acceptance.
 
 The source map is recorded in
 `docs/evidence/SYN-051-source-insertion-map-2026-09-03.md`. The first

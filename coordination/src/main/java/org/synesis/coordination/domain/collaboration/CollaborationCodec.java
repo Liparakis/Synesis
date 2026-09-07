@@ -1,10 +1,6 @@
 package org.synesis.coordination.domain.collaboration;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,7 +70,8 @@ public final class CollaborationCodec {
                         .ordinal());
                 text(out, selector.value());
             }
-            out.writeInt(intent.knownDependencies().size());
+            out.writeInt(intent.knownDependencies()
+                    .size());
             for (String dependency : intent.knownDependencies()) {
                 text(out, dependency);
             }

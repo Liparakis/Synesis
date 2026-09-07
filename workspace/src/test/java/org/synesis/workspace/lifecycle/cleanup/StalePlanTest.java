@@ -11,7 +11,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 
-/** Exercises stale plan detection and rejection. */
+/**
+ * Exercises stale plan detection and rejection.
+ */
 class StalePlanTest {
 
     @Test

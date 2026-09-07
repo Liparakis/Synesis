@@ -37,7 +37,8 @@ not a successor-loadable provider resource in the observed lifecycle.
 ## Provider source meaning
 
 The authoritative 0.153.0 implementation is
-[`thread_processor.rs`](https://raw.githubusercontent.com/openai/codex/rust-v0.153.0/codex-rs/app-server/src/request_processors/thread_processor.rs).
+[
+`thread_processor.rs`](https://raw.githubusercontent.com/openai/codex/rust-v0.153.0/codex-rs/app-server/src/request_processors/thread_processor.rs).
 `read_thread_view` first looks for a live thread in the current
 `ThreadManager`, then attempts persisted metadata/history. When neither is
 available, it returns `-32600` with `thread not loaded: {thread_id}`. The
@@ -53,7 +54,8 @@ There is no separate `thread/load` method in the observed 0.153 method
 inventory. Resume reads the stored thread/rollout directly. The current
 protocol documentation also describes resuming by exact `thread_id` as the
 preferred persisted-thread mode:
-[`ThreadResumeParams`](https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/thread.rs).
+[
+`ThreadResumeParams`](https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/thread.rs).
 
 `ThreadManager` is explicitly an in-memory owner of live `CodexThread`
 objects. `thread/start` reserves/creates that live object; App Server starts
@@ -64,18 +66,18 @@ observed method inventory.
 
 ## Environment and provenance comparison
 
-| Property | Bootstrap | Managed successor |
-|---|---|---|
-| Codex | `codex-cli 0.153.0` | `codex-cli 0.153.0` |
-| Executable | Direct `codex app-server --stdio -c mcp_servers.synesis.enabled=false`; exact bootstrap PID/path was not retained | Root PID `4952`; package executable `C:\Users\Liparakis\.codex\packages\standalone\releases\0.153.0-x86_64-pc-windows-msvc\bin\codex.exe` |
-| `CODEX_HOME` | Normal user-home fallback | Explicit `C:\Users\Liparakis\.codex` |
-| `CODEX_SQLITE_HOME` | Unset | Unset; process/user/machine checks were empty |
-| Effective provider home | `C:\Users\Liparakis\.codex` | `C:\Users\Liparakis\.codex` |
-| CWD | Assigned managed worktree | Same assigned managed worktree |
-| Provider state DB | `C:\Users\Liparakis\.codex\state_5.sqlite` | Same |
-| Provider history DB | `C:\Users\Liparakis\.codex\thread_history_1.sqlite` | Same |
-| Rollout root | `C:\Users\Liparakis\.codex\sessions\` | Same |
-| Additional configuration | Synesis MCP disabled for bootstrap | Synesis MCP command/args, proof env, and connection-instance metadata |
+| Property                 | Bootstrap                                                                                                         | Managed successor                                                                                                                         |
+|--------------------------|-------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| Codex                    | `codex-cli 0.153.0`                                                                                               | `codex-cli 0.153.0`                                                                                                                       |
+| Executable               | Direct `codex app-server --stdio -c mcp_servers.synesis.enabled=false`; exact bootstrap PID/path was not retained | Root PID `4952`; package executable `C:\Users\Liparakis\.codex\packages\standalone\releases\0.153.0-x86_64-pc-windows-msvc\bin\codex.exe` |
+| `CODEX_HOME`             | Normal user-home fallback                                                                                         | Explicit `C:\Users\Liparakis\.codex`                                                                                                      |
+| `CODEX_SQLITE_HOME`      | Unset                                                                                                             | Unset; process/user/machine checks were empty                                                                                             |
+| Effective provider home  | `C:\Users\Liparakis\.codex`                                                                                       | `C:\Users\Liparakis\.codex`                                                                                                               |
+| CWD                      | Assigned managed worktree                                                                                         | Same assigned managed worktree                                                                                                            |
+| Provider state DB        | `C:\Users\Liparakis\.codex\state_5.sqlite`                                                                        | Same                                                                                                                                      |
+| Provider history DB      | `C:\Users\Liparakis\.codex\thread_history_1.sqlite`                                                               | Same                                                                                                                                      |
+| Rollout root             | `C:\Users\Liparakis\.codex\sessions\`                                                                             | Same                                                                                                                                      |
+| Additional configuration | Synesis MCP disabled for bootstrap                                                                                | Synesis MCP command/args, proof env, and connection-instance metadata                                                                     |
 
 The state roots and provider identity matched. The successor’s MCP/proof
 overrides govern Synesis admission and transport; they do not select a
@@ -148,7 +150,8 @@ admission, Worker A/B isolation, or process-tree acceptance.
 The official 0.145.0 source has the same relevant architecture: asynchronous
 `thread/start`, live in-memory thread management, persisted-store lookup for
 cold `thread/resume`, and the same missing-thread read failure branch. See the
-[`0.145.0 thread processor`](https://raw.githubusercontent.com/openai/codex/rust-v0.145.0/codex-rs/app-server/src/request_processors/thread_processor.rs).
+[
+`0.145.0 thread processor`](https://raw.githubusercontent.com/openai/codex/rust-v0.145.0/codex-rs/app-server/src/request_processors/thread_processor.rs).
 Repository evidence from the earlier 0.145 real-runtime acceptance records
 successful exact-thread restart/resume after completed turns. No relevant
 0.145-to-0.153 behavior delta was found. 0.153’s paginated-history support is

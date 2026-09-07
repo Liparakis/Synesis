@@ -23,7 +23,9 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-/** Exercises the synthetic two-process collaboration lifecycle. */
+/**
+ * Exercises the synthetic two-process collaboration lifecycle.
+ */
 @SuppressWarnings("TextBlockMigration")
 class SyntheticTwoProcessCollaborationTest {
 
@@ -154,8 +156,10 @@ class SyntheticTwoProcessCollaborationTest {
                             .worktreePath()));
         }
 
-        b1 = bindingService.find(location, "claude", "inst-req-1").orElseThrow();
-        b2 = bindingService.find(location, "codex", "inst-owner-1").orElseThrow();
+        b1 = bindingService.find(location, "claude", "inst-req-1")
+                .orElseThrow();
+        b2 = bindingService.find(location, "codex", "inst-owner-1")
+                .orElseThrow();
 
         var identity = new IdentityBootstrap(location.profile()
                 .resolve("link")).loadOrCreate()

@@ -13,15 +13,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.provider.ProviderRegistry;
 
 /**
  * Verifies provider registry and isolated lifecycle behavior.
@@ -295,7 +295,8 @@ final class ProviderApplicationServiceTest {
         git(root, "commit", "-m", "Initial commit");
 
         ProjectApplicationService projectService = new ProjectApplicationService();
-        var location = projectService.init(root).location();
+        var location = projectService.init(root)
+                .location();
         ProviderApplicationService service = new ProviderApplicationService();
 
         var beforeInstall = service.assessWorkAdmission(location, "codex");
@@ -303,19 +304,25 @@ final class ProviderApplicationServiceTest {
         assertEquals("NOT_INSTALLED", beforeInstall.status());
         assertEquals(AgentStatus.BLOCKED,
                 new AgentSessionService().ensureSession(new AgentSessionService.SessionResolutionRequest(root,
-                        "codex", "uninstalled", null, false)).status());
+                                "codex", "uninstalled", null, false))
+                        .status());
 
         Path launcher = Files.createTempFile("synesis-admission-launcher-", ".bat");
         String previous = System.getProperty("synesis.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
         try {
             service.install(location, "codex");
-            assertTrue(service.assessWorkAdmission(location, "codex").admitted());
+            assertTrue(service.assessWorkAdmission(location, "codex")
+                    .admitted());
             var installedReadiness = new WorkspaceReadinessService().assess(location, "codex", "missing-connection");
-            assertEquals(AgentReason.SESSION_NOT_READY, installedReadiness.response().reason());
+            assertEquals(AgentReason.SESSION_NOT_READY,
+                    installedReadiness.response()
+                            .reason());
             service.uninstall(location, "codex");
             var removedReadiness = new WorkspaceReadinessService().assess(location, "codex", "missing-connection");
-            assertEquals(AgentReason.PROVIDER_INTEGRATION_REQUIRED, removedReadiness.response().reason());
+            assertEquals(AgentReason.PROVIDER_INTEGRATION_REQUIRED,
+                    removedReadiness.response()
+                            .reason());
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");
@@ -368,7 +375,7 @@ final class ProviderApplicationServiceTest {
             Map<?, ?> after = (Map<?, ?>) ProviderJson.parse(Files.readString(mcp));
             assertEquals(Boolean.TRUE, after.get("custom"));
             assertTrue(((Map<?, ?>) after.get("mcpServers")).containsKey("other"));
-        assertFalse(((Map<?, ?>) after.get("mcpServers")).containsKey("synesis"));
+            assertFalse(((Map<?, ?>) after.get("mcpServers")).containsKey("synesis"));
         } finally {
             if (previous == null) {
                 System.clearProperty("synesis.launcher");

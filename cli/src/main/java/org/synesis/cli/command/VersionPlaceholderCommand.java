@@ -8,7 +8,9 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import picocli.CommandLine.Command;
 
-/** Holds the generated build metadata exposed by the version command. */
+/**
+ * Holds the generated build metadata exposed by the version command.
+ */
 final class BuildInfo {
 
     private BuildInfo() {

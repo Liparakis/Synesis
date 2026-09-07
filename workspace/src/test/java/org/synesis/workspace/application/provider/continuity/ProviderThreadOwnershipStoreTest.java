@@ -12,8 +12,22 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
-/** Verifies durable uniqueness and lawful release of provider-thread ownership. */
+/**
+ * Verifies durable uniqueness and lawful release of provider-thread ownership.
+ */
 final class ProviderThreadOwnershipStoreTest {
+
+    private static boolean attempt(ProviderThreadOwnershipStore store, String binding, CountDownLatch ready,
+            CountDownLatch start) {
+        ready.countDown();
+        try {
+            start.await(5, TimeUnit.SECONDS);
+            store.acquire("project", "codex", "thread-x", binding);
+            return true;
+        } catch (Exception expectedForLoser) {
+            return false;
+        }
+    }
 
     @Test
     void sameBindingCanReadItsOwnerButAnotherBindingConflicts() throws Exception {
@@ -26,7 +40,10 @@ final class ProviderThreadOwnershipStoreTest {
         assertEquals(owner, store.acquire("project", "codex", "thread-x", "binding-a"));
         assertThrows(java.io.IOException.class,
                 () -> store.acquire("project", "codex", "thread-x", "binding-b"));
-        assertEquals("thread-x", store.findByBinding("codex", "binding-a").orElseThrow().providerThreadId());
+        assertEquals("thread-x",
+                store.findByBinding("codex", "binding-a")
+                        .orElseThrow()
+                        .providerThreadId());
     }
 
     @Test
@@ -50,7 +67,8 @@ final class ProviderThreadOwnershipStoreTest {
             }
             assertEquals(1, winners);
         }
-        var durable = first.find("codex", "thread-x").orElseThrow();
+        var durable = first.find("codex", "thread-x")
+                .orElseThrow();
         assertEquals(ProviderThreadOwnershipRecord.Status.ACTIVE, durable.status());
     }
 
@@ -82,7 +100,8 @@ final class ProviderThreadOwnershipStoreTest {
         assertEquals(owner.providerThreadId(), repeated.providerThreadId());
         assertEquals(owner.bindingSessionId(), repeated.bindingSessionId());
         assertTrue(new ProviderThreadOwnershipStore(directory).find("codex", "thread-x")
-                .orElseThrow().persistenceReady());
+                .orElseThrow()
+                .persistenceReady());
     }
 
     @Test
@@ -95,18 +114,8 @@ final class ProviderThreadOwnershipStoreTest {
                 () -> store.markPersistenceReady("project", "codex", "thread-other", "binding-a"));
         assertThrows(java.io.IOException.class,
                 () -> store.markPersistenceReady("project", "codex", "thread-x", "binding-b"));
-        assertTrue(!store.find("codex", "thread-x").orElseThrow().persistenceReady());
-    }
-
-    private static boolean attempt(ProviderThreadOwnershipStore store, String binding, CountDownLatch ready,
-            CountDownLatch start) {
-        ready.countDown();
-        try {
-            start.await(5, TimeUnit.SECONDS);
-            store.acquire("project", "codex", "thread-x", binding);
-            return true;
-        } catch (Exception expectedForLoser) {
-            return false;
-        }
+        assertTrue(!store.find("codex", "thread-x")
+                .orElseThrow()
+                .persistenceReady());
     }
 }

@@ -26,11 +26,11 @@ second generation, Worker B, or state surgery was used.
 Current installed artifacts were hash-checked before launch and matched the
 rebuilt provenance-locked distribution:
 
-| artifact | SHA-256 |
-|---|---|
-| workspace JAR | `0224A99661EB961CB9F1803BFC6C7945E1C085874E0B929CD93DBA070DB9FF80` |
-| MCP JAR | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
-| CLI JAR | `2F76646F7794A12724ABF90D86C3667A8F6F88C3AC070F222632B4F67F1276DF` |
+| artifact                     | SHA-256                                                            |
+|------------------------------|--------------------------------------------------------------------|
+| workspace JAR                | `0224A99661EB961CB9F1803BFC6C7945E1C085874E0B929CD93DBA070DB9FF80` |
+| MCP JAR                      | `029CCA350D77A9D362B37F5AE74BB7FA32EB1E20C30138C96D948900556AEB5F` |
+| CLI JAR                      | `2F76646F7794A12724ABF90D86C3667A8F6F88C3AC070F222632B4F67F1276DF` |
 | native MCP and installed MCP | `58C31651CC3BE0B7DE71204EA12AEA690D987E8403C31B96D9013B9EEB5360C8` |
 
 ## Fresh target and identities

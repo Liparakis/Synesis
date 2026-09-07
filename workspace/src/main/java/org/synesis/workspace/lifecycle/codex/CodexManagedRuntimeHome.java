@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -22,7 +21,9 @@ import java.util.UUID;
  */
 public final class CodexManagedRuntimeHome {
 
-    /** Production attachment proof environment variable. */
+    /**
+     * Production attachment proof environment variable.
+     */
     public static final String ATTACHMENT_PROOF_ENV = "SYNESIS_ATTACH_PROOF";
     private final String homeId;
     private final Path home;
@@ -45,8 +46,12 @@ public final class CodexManagedRuntimeHome {
         Path root = base == null || base.isBlank()
                 ? Path.of(System.getProperty("user.home"), ".synesis", "managed-runtime")
                 : Path.of(base, "Synesis", "managed-runtime");
-        String homeId = UUID.randomUUID().toString();
-        Path home = root.resolve(projectId).resolve(homeId).toAbsolutePath().normalize();
+        String homeId = UUID.randomUUID()
+                .toString();
+        Path home = root.resolve(projectId)
+                .resolve(homeId)
+                .toAbsolutePath()
+                .normalize();
         Files.createDirectories(home);
         return new CodexManagedRuntimeHome(homeId, home);
     }
@@ -59,6 +64,35 @@ public final class CodexManagedRuntimeHome {
      */
     public static CodexManagedRuntimeHome normalProviderHome() {
         return new CodexManagedRuntimeHome("normal-provider-home", CodexManagedAuthentication.userHome());
+    }
+
+    private static String quote(Path path) {
+        return "\"" + path.toString()
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"") + "\"";
+    }
+
+    private static void requireText(String value, String label) {
+        Objects.requireNonNull(value, label);
+        if (value.isBlank() || value.length() > 8_192 || value.contains("\r") || value.contains("\n")) {
+            throw new IllegalArgumentException(label + " is invalid");
+        }
+    }
+
+    private static void atomicWrite(Path path, String value) throws IOException {
+        Files.createDirectories(path.getParent());
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());
+        Files.writeString(temporary, value, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE);
+        try {
+            try {
+                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     /**
@@ -91,8 +125,8 @@ public final class CodexManagedRuntimeHome {
     /**
      * Writes the managed Codex configuration with an allow-listed proof name.
      *
-     * @param launcher Synesis MCP launcher
-     * @param projectRoot control project root
+     * @param launcher       Synesis MCP launcher
+     * @param projectRoot    control project root
      * @param authentication safe authentication strategy
      * @throws IOException when configuration cannot be written
      */
@@ -104,14 +138,19 @@ public final class CodexManagedRuntimeHome {
             throw new IOException("MANAGED_CODEX_AUTH_UNAVAILABLE");
         }
         String command = quote(launcher);
-        String project = quote(projectRoot.toAbsolutePath().normalize());
+        String project = quote(projectRoot.toAbsolutePath()
+                .normalize());
         String text = "cli_auth_credentials_store = \"keyring\"\n\n"
                 + "[mcp_servers.synesis]\n"
-                + "command = '" + launcher.toAbsolutePath().normalize().toString().replace("'", "''") + "'\n"
+                + "command = '" + launcher.toAbsolutePath()
+                .normalize()
+                .toString()
+                .replace("'", "''") + "'\n"
                 + "args = [\"mcp\", \"--provider\", \"codex\", \"--project\", " + project + "]\n"
                 + "env_vars = [\"" + ATTACHMENT_PROOF_ENV + "\"]\n";
         atomicWrite(configPath(), text);
-        if (Files.readString(configPath()).contains(ATTACHMENT_PROOF_ENV + "=\"")) {
+        if (Files.readString(configPath())
+                .contains(ATTACHMENT_PROOF_ENV + "=\"")) {
             throw new IOException("managed configuration contains raw attachment assignment");
         }
         // Keep the quote helper exercised at the boundary where command values
@@ -149,36 +188,10 @@ public final class CodexManagedRuntimeHome {
             return;
         }
         try (var paths = Files.walk(home)) {
-            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+            for (Path path : paths.sorted(java.util.Comparator.reverseOrder())
+                    .toList()) {
                 Files.deleteIfExists(path);
             }
-        }
-    }
-
-    private static String quote(Path path) {
-        return "\"" + path.toString().replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-    }
-
-    private static void requireText(String value, String label) {
-        Objects.requireNonNull(value, label);
-        if (value.isBlank() || value.length() > 8_192 || value.contains("\r") || value.contains("\n")) {
-            throw new IllegalArgumentException(label + " is invalid");
-        }
-    }
-
-    private static void atomicWrite(Path path, String value) throws IOException {
-        Files.createDirectories(path.getParent());
-        Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());
-        Files.writeString(temporary, value, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE);
-        try {
-            try {
-                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
         }
     }
 
@@ -186,6 +199,7 @@ public final class CodexManagedRuntimeHome {
      * Trusted managed-launch environment that redacts its secret on logging.
      */
     public static final class LaunchEnvironment {
+
         private final Map<String, String> values;
 
         private LaunchEnvironment(Map<String, String> values) {
@@ -201,7 +215,9 @@ public final class CodexManagedRuntimeHome {
             return new LinkedHashMap<>(values);
         }
 
-        /** @return redacted diagnostic text */
+        /**
+         * @return redacted diagnostic text
+         */
         @Override
         public String toString() {
             return "LaunchEnvironment[CODEX_HOME=<managed>, SYNESIS_ATTACH_PROOF=<redacted>]";

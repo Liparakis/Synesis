@@ -1,5 +1,7 @@
 package org.synesis.workspace.application.integration;
 
+import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
+import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,9 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-
-import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
-import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 
 /**
  * Manages disposable Git validation worktrees for capability request validation.

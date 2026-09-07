@@ -2,17 +2,16 @@ package org.synesis.workspace.application.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
@@ -88,7 +87,7 @@ final class ReviewAdmissionOrderIndependenceTest {
 
         AgentNextActionService next = new AgentNextActionService();
         AgentResponse reviewerAdmission = next.getNextAction(new AgentNextActionService.NextActionRequest(
-                    project, "claude", reviewerConnection));
+                project, "claude", reviewerConnection));
         Map<String, Object> reviewerResult = map(reviewerAdmission.result());
         Map<String, Object> workflow = map(reviewerResult.get("workflow"));
         Map<String, Object> arguments = map(workflow.get("arguments"));
@@ -353,7 +352,7 @@ final class ReviewAdmissionOrderIndependenceTest {
         var producer = collaboration.announce(project, "codex", "three-producer",
                 "Produce source", "Publish source snapshot",
                 List.of(ResourceSelector.pathExact("src/producer.py")), null,
-                    WorkIntent.Role.PRODUCER, List.of());
+                WorkIntent.Role.PRODUCER, List.of());
         var reviewer = collaboration.announce(project,
                 "claude",
                 "three-reviewer",
@@ -371,9 +370,18 @@ final class ReviewAdmissionOrderIndependenceTest {
         assertNotNull(unrelated.intent());
         assertNotNull(producer.intent());
         assertNotNull(reviewer.intent());
-        assertNotEquals(unrelated.intent().intentId(), producer.intent().intentId());
-        assertNotEquals(unrelated.intent().intentId(), reviewer.intent().intentId());
-        assertNotEquals(producer.intent().intentId(), reviewer.intent().intentId());
+        assertNotEquals(unrelated.intent()
+                        .intentId(),
+                producer.intent()
+                        .intentId());
+        assertNotEquals(unrelated.intent()
+                        .intentId(),
+                reviewer.intent()
+                        .intentId());
+        assertNotEquals(producer.intent()
+                        .intentId(),
+                reviewer.intent()
+                        .intentId());
         assertEquals(unrelated.intent()
                         .workGroupId(),
                 producer.intent()
@@ -389,7 +397,9 @@ final class ReviewAdmissionOrderIndependenceTest {
         assertEquals(producer.intent()
                 .intentId()
                 .toString(), payload.get("intentId"));
-        assertNotEquals(unrelated.intent().intentId().toString(), payload.get("intentId"));
+        assertNotEquals(unrelated.intent()
+                .intentId()
+                .toString(), payload.get("intentId"));
         assertNotNull(reviewer.intent());
     }
 

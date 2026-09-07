@@ -26,12 +26,6 @@ import org.synesis.workspace.application.ProjectApplicationService;
  */
 final class CodexWakeCoordinator implements AutoCloseable {
 
-    @FunctionalInterface
-    interface ScanAction {
-        /** Runs one bounded durable wake scan. */
-        void run() throws Exception;
-    }
-
     private final Path projectRoot;
     private final Path eventsDirectory;
     private final CodexWakeAdmissionService admissionService;
@@ -41,19 +35,22 @@ final class CodexWakeCoordinator implements AutoCloseable {
     private volatile boolean closed;
     private volatile String lastDiagnostic = "";
     private volatile long scanCount;
-
     /**
      * Creates a relay for one project lifecycle owner.
      *
-     * @param location initialized project location
+     * @param location   initialized project location
      * @param dispatcher exact lifecycle owner
      */
     CodexWakeCoordinator(ProjectApplicationService.ProjectLocation location,
             CodexWakeAdmissionService.LifecycleDispatcher dispatcher) {
         Path runtimeRoot = CodexWakeAdmissionService.runtimeRoot(location);
         this.projectRoot = location.root();
-        this.eventsDirectory = location.root().resolve(".synesis").resolve("coordination").resolve("events")
-                .toAbsolutePath().normalize();
+        this.eventsDirectory = location.root()
+                .resolve(".synesis")
+                .resolve("coordination")
+                .resolve("events")
+                .toAbsolutePath()
+                .normalize();
         this.admissionService = new CodexWakeAdmissionService(dispatcher,
                 runtimeRoot.resolve("wake-admissions.json"));
         this.scanAction = () -> this.admissionService.scan(this.projectRoot);
@@ -64,17 +61,24 @@ final class CodexWakeCoordinator implements AutoCloseable {
     /**
      * Creates a relay with an injected scan action for deterministic lifecycle tests.
      *
-     * @param projectRoot project root identity
+     * @param projectRoot     project root identity
      * @param eventsDirectory durable event directory
-     * @param scanAction bounded scan action
+     * @param scanAction      bounded scan action
      */
     CodexWakeCoordinator(Path projectRoot, Path eventsDirectory, ScanAction scanAction) {
-        this.projectRoot = projectRoot.toAbsolutePath().normalize();
-        this.eventsDirectory = eventsDirectory.toAbsolutePath().normalize();
+        this.projectRoot = projectRoot.toAbsolutePath()
+                .normalize();
+        this.eventsDirectory = eventsDirectory.toAbsolutePath()
+                .normalize();
         this.admissionService = null;
         this.scanAction = scanAction;
         this.thread = new Thread(this::run, "synesis-codex-wake-relay");
         this.thread.setDaemon(true);
+    }
+
+    private static String diagnostic(Exception failure) {
+        return failure.getMessage() == null ? failure.getClass()
+                                              .getSimpleName() : failure.getMessage();
     }
 
     /**
@@ -115,20 +119,24 @@ final class CodexWakeCoordinator implements AutoCloseable {
     }
 
     private void run() {
-        try (WatchService service = FileSystems.getDefault().newWatchService()) {
+        try (WatchService service = FileSystems.getDefault()
+                .newWatchService()) {
             watchService.set(service);
             eventsDirectory.register(service, StandardWatchEventKinds.ENTRY_CREATE,
                     StandardWatchEventKinds.ENTRY_MODIFY);
             scanSafely();
             while (!closed) {
                 WatchKey key = service.take();
-                boolean relevant = key.pollEvents().stream().anyMatch(event -> {
-                    if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
-                        return true;
-                    }
-                    Object context = event.context();
-                    return context != null && context.toString().endsWith(".sce");
-                });
+                boolean relevant = key.pollEvents()
+                        .stream()
+                        .anyMatch(event -> {
+                            if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                                return true;
+                            }
+                            Object context = event.context();
+                            return context != null && context.toString()
+                                    .endsWith(".sce");
+                        });
                 if (!key.reset()) {
                     lastDiagnostic = "coordination_watch_key_invalid";
                     return;
@@ -140,7 +148,8 @@ final class CodexWakeCoordinator implements AutoCloseable {
         } catch (java.nio.file.ClosedWatchServiceException closedService) {
             // Normal close unblocks WatchService.take() with this signal.
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
         } catch (IOException failure) {
             if (!closed) {
                 lastDiagnostic = diagnostic(failure);
@@ -178,11 +187,17 @@ final class CodexWakeCoordinator implements AutoCloseable {
         try {
             thread.join(1_000L);
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                    .interrupt();
         }
     }
 
-    private static String diagnostic(Exception failure) {
-        return failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+    @FunctionalInterface
+    interface ScanAction {
+
+        /**
+         * Runs one bounded durable wake scan.
+         */
+        void run() throws Exception;
     }
 }

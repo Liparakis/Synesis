@@ -81,17 +81,29 @@ public final class ProjectCommandNamespace implements AutoCloseable {
     @SuppressWarnings("unused")
     public static final int MAX_RETRIES = 3;
 
-    /** Normalized host-wide namespace root. */
+    /**
+     * Normalized host-wide namespace root.
+     */
     private final Path root;
-    /** Integrity-protected summary of indexed scope and anchor counts. */
+    /**
+     * Integrity-protected summary of indexed scope and anchor counts.
+     */
     private final Path indexPath;
-    /** Process-anchor directories used to bind command ownership to runtimes. */
+    /**
+     * Process-anchor directories used to bind command ownership to runtimes.
+     */
     private final Path processScopesPath;
-    /** Permanent lock objects preventing unsafe scope reuse. */
+    /**
+     * Permanent lock objects preventing unsafe scope reuse.
+     */
     private final Path locksPath;
-    /** Per-scope command records and reservations. */
+    /**
+     * Per-scope command records and reservations.
+     */
     private final Path scopesPath;
-    /** OS-backed lock held for this namespace handle's lifetime. */
+    /**
+     * OS-backed lock held for this namespace handle's lifetime.
+     */
     private final CommandPermanentLock namespaceLock;
 
     private ProjectCommandNamespace(Path root, CommandPermanentLock namespaceLock) throws IOException {

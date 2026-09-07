@@ -9,16 +9,16 @@ import java.util.Objects;
  * Its key is the provider and exact provider thread; attachment generations
  * remain a separate runtime-freshness fence.</p>
  *
- * @param schemaVersion durable record schema version
- * @param projectId project owning the binding
- * @param provider canonical provider identifier
- * @param providerThreadId exact provider thread selector
- * @param bindingSessionId existing Synesis provider binding
- * @param status ownership lifecycle state
- * @param persistenceReady whether trusted provider history makes cold resume eligible
- * @param revision monotonically increasing record revision
+ * @param schemaVersion         durable record schema version
+ * @param projectId             project owning the binding
+ * @param provider              canonical provider identifier
+ * @param providerThreadId      exact provider thread selector
+ * @param bindingSessionId      existing Synesis provider binding
+ * @param status                ownership lifecycle state
+ * @param persistenceReady      whether trusted provider history makes cold resume eligible
+ * @param revision              monotonically increasing record revision
  * @param acquiredAtEpochMillis first acquisition time
- * @param updatedAtEpochMillis last record update time
+ * @param updatedAtEpochMillis  last record update time
  */
 public record ProviderThreadOwnershipRecord(
         int schemaVersion,
@@ -32,18 +32,14 @@ public record ProviderThreadOwnershipRecord(
         long acquiredAtEpochMillis,
         long updatedAtEpochMillis) {
 
-    /** Current durable ownership record format. */
+    /**
+     * Current durable ownership record format.
+     */
     public static final int CURRENT_SCHEMA_VERSION = 2;
 
-    /** Lifecycle states for a provider-thread ownership record. */
-    public enum Status {
-        /** The provider thread is owned by the binding. */
-        ACTIVE,
-        /** Ownership was released by an explicit lawful terminal lifecycle. */
-        RELEASED
-    }
-
-    /** Validates the durable ownership record. */
+    /**
+     * Validates the durable ownership record.
+     */
     public ProviderThreadOwnershipRecord {
         if (schemaVersion != 1 && schemaVersion != CURRENT_SCHEMA_VERSION) {
             throw new IllegalArgumentException("unsupported provider-thread ownership format");
@@ -61,15 +57,15 @@ public record ProviderThreadOwnershipRecord(
     /**
      * Reads the pre-persistence-boundary shape conservatively as provisional.
      *
-     * @param schemaVersion legacy durable record schema version
-     * @param projectId project owning the binding
-     * @param provider canonical provider identifier
-     * @param providerThreadId exact provider thread selector
-     * @param bindingSessionId existing Synesis provider binding
-     * @param status ownership lifecycle state
-     * @param revision monotonically increasing record revision
+     * @param schemaVersion         legacy durable record schema version
+     * @param projectId             project owning the binding
+     * @param provider              canonical provider identifier
+     * @param providerThreadId      exact provider thread selector
+     * @param bindingSessionId      existing Synesis provider binding
+     * @param status                ownership lifecycle state
+     * @param revision              monotonically increasing record revision
      * @param acquiredAtEpochMillis first acquisition time
-     * @param updatedAtEpochMillis last record update time
+     * @param updatedAtEpochMillis  last record update time
      */
     public ProviderThreadOwnershipRecord(int schemaVersion, String projectId, String provider,
             String providerThreadId, String bindingSessionId, Status status, long revision,
@@ -90,5 +86,19 @@ public record ProviderThreadOwnershipRecord(
         if (!value.matches("[a-z0-9_-]{1,64}")) {
             throw new IllegalArgumentException("provider is invalid");
         }
+    }
+
+    /**
+     * Lifecycle states for a provider-thread ownership record.
+     */
+    public enum Status {
+        /**
+         * The provider thread is owned by the binding.
+         */
+        ACTIVE,
+        /**
+         * Ownership was released by an explicit lawful terminal lifecycle.
+         */
+        RELEASED
     }
 }

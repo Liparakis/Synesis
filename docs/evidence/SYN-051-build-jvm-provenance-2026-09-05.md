@@ -38,12 +38,12 @@ fail the build.
 
 ## Artifact provenance
 
-| Produced artifact | SHA-256 | Installed artifact | SHA-256 |
-|---|---|---|---|
+| Produced artifact                                   | SHA-256                                                            | Installed artifact                                           | SHA-256                                                            |
+|-----------------------------------------------------|--------------------------------------------------------------------|--------------------------------------------------------------|--------------------------------------------------------------------|
 | `workspace/build/libs/workspace-0.1.0-SNAPSHOT.jar` | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` | `cli/build/install/synesis/lib/workspace-0.1.0-SNAPSHOT.jar` | `af41102bb20b03d87c76c3dd8547840905d16f0338443ec039253e6c56248f6a` |
-| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar` | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` | `cli/build/install/synesis/lib/mcp-0.1.0-SNAPSHOT.jar` | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
-| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar` | `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467` | `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar` | `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467` |
-| `cli/build/native-mcp/windows-x64/synesis-mcp.exe` | `21c07b3ee2653fc262e150ed92144adceed7f67dd48e46f78edd24918ed3d8eb` | `cli/build/install/synesis/bin/synesis-mcp.exe` | `21c07b3ee2653fc262e150ed92144adceed7f67dd48e46f78edd24918ed3d8eb` |
+| `mcp/build/libs/mcp-0.1.0-SNAPSHOT.jar`             | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` | `cli/build/install/synesis/lib/mcp-0.1.0-SNAPSHOT.jar`       | `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd` |
+| `cli/build/libs/cli-0.1.0-SNAPSHOT.jar`             | `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467` | `cli/build/install/synesis/lib/cli-0.1.0-SNAPSHOT.jar`       | `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467` |
+| `cli/build/native-mcp/windows-x64/synesis-mcp.exe`  | `21c07b3ee2653fc262e150ed92144adceed7f67dd48e46f78edd24918ed3d8eb` | `cli/build/install/synesis/bin/synesis-mcp.exe`              | `21c07b3ee2653fc262e150ed92144adceed7f67dd48e46f78edd24918ed3d8eb` |
 
 Installed `synesis.bat` hash: `b8bcb137eb83659360f332c6ca6c17b328300844f83f28f82977cdec56c0670e`.
 The installed version reports `BUILD_COMMIT=UNKNOWN` and

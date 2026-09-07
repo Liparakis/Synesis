@@ -15,7 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 
-/** Exercises cleanup eligibility decisions and safety evidence. */
+/**
+ * Exercises cleanup eligibility decisions and safety evidence.
+ */
 class CleanupEligibilityServiceTest {
 
     @Test

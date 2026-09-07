@@ -192,7 +192,9 @@ public final class NodeIdentity {
                 .clone();
     }
 
-    /** Supplies the platform-independent Ed25519 key-pair generator. */
+    /**
+     * Supplies the platform-independent Ed25519 key-pair generator.
+     */
     private static final class KeyPairGeneratorFactory {
 
         private KeyPair generate() throws GeneralSecurityException {

@@ -28,7 +28,7 @@ final class ProjectMigrationServiceTest {
                         .outcome());
         assertEquals(before, Files.readString(location.metadataFile()));
         assertEquals(location.projectId()
-                        .toString(), plan.entry()
+                .toString(), plan.entry()
                 .projectId());
     }
 

@@ -32,14 +32,92 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
     private String previousMcpLauncher;
     private Fixture fixture;
 
+    private static Fixture createFixture() throws Exception {
+        Path controlRoot = Files.createTempDirectory("synesis-linked-control-");
+        initializeGitRepository(controlRoot, "Control repository");
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        ProjectApplicationService.ProjectLocation location = projectService.init(controlRoot)
+                .location();
+        McpProviderTestSupport.install(location, "codex");
+
+        Path linkedWorktree = Files.createTempDirectory("synesis-linked-worktree-parent-")
+                .resolve("codex-linked-worktree");
+        GitProcessRunner.run(controlRoot, "worktree", "add", linkedWorktree.toString(), "HEAD");
+
+        String controlCommonDirectory = GitProcessRunner.run(controlRoot,
+                        "rev-parse", "--path-format=absolute", "--git-common-dir")
+                .trim();
+        String linkedCommonDirectory = GitProcessRunner.run(linkedWorktree,
+                        "rev-parse", "--path-format=absolute", "--git-common-dir")
+                .trim();
+        assertAll(
+                () -> assertEquals(Path.of(controlCommonDirectory)
+                                .toAbsolutePath()
+                                .normalize(),
+                        Path.of(linkedCommonDirectory)
+                                .toAbsolutePath()
+                                .normalize()),
+                () -> assertTrue(Files.isRegularFile(linkedWorktree.resolve(".git"))),
+                () -> assertFalse(Files.exists(linkedWorktree.resolve(".synesis/local"))),
+                () -> assertFalse(Files.exists(linkedWorktree.resolve(".codex/hooks.json"))),
+                () -> assertTrue(Files.exists(controlRoot.resolve(".synesis/local/providers/codex.json"))));
+        return new Fixture(controlRoot, linkedWorktree);
+    }
+
+    private static void initializeGitRepository(Path root, String readmeTitle) throws Exception {
+        GitProcessRunner.run(root, "init");
+        GitProcessRunner.run(root, "config", "user.name", "Synesis Test");
+        GitProcessRunner.run(root, "config", "user.email", "synesis-test@example.com");
+        Files.writeString(root.resolve("README.md"), "# " + readmeTitle + "\n");
+        GitProcessRunner.run(root, "add", ".");
+        GitProcessRunner.run(root, "commit", "-m", "Initial commit");
+    }
+
+    private static String initializeRequest(Path advertisedRoot) {
+        return "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
+                + advertisedRoot.toUri() + "\"}}";
+    }
+
+    private static String rootsChangedNotification(Path advertisedRoot) {
+        return "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{"
+                + "\"workspaceFolders\":[{\"uri\":\"" + advertisedRoot.toUri() + "\"}]}}";
+    }
+
+    private static String ensureSessionRequest() {
+        return "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{"
+                + "\"name\":\"ensure_session\",\"arguments\":{}}}";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String toolText(String response) {
+        Map<String, Object> envelope = (Map<String, Object>) ProviderJson.parse(response);
+        Map<String, Object> result = (Map<String, Object>) envelope.get("result");
+        List<Object> content = (List<Object>) result.get("content");
+        return (String) ((Map<String, Object>) content.getFirst()).get("text");
+    }
+
+    private static void restoreProperty(String name, String value) {
+        if (value == null) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, value);
+        }
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         previousUserHome = System.getProperty("user.home");
         previousLauncher = System.getProperty("synesis.launcher");
         previousMcpLauncher = System.getProperty("synesis.mcp.launcher");
-        System.setProperty("user.home", Files.createTempDirectory("synesis-linked-provider-home-").toString());
-        System.setProperty("synesis.launcher", Files.createTempFile("synesis-linked-launcher-", ".cmd").toString());
-        System.setProperty("synesis.mcp.launcher", Files.createTempFile("synesis-linked-mcp-", ".exe").toString());
+        System.setProperty("user.home",
+                Files.createTempDirectory("synesis-linked-provider-home-")
+                        .toString());
+        System.setProperty("synesis.launcher",
+                Files.createTempFile("synesis-linked-launcher-", ".cmd")
+                        .toString());
+        System.setProperty("synesis.mcp.launcher",
+                Files.createTempFile("synesis-linked-mcp-", ".exe")
+                        .toString());
         fixture = createFixture();
     }
 
@@ -83,7 +161,10 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
         String response = toolText(handler.handleMessage(ensureSessionRequest()));
 
         assertAll(
-                () -> assertEquals(fixture.controlRoot().toRealPath(), handler.activeProjectRoot().toRealPath(),
+                () -> assertEquals(fixture.controlRoot()
+                                .toRealPath(),
+                        handler.activeProjectRoot()
+                                .toRealPath(),
                         "an unpinned linked worktree must resolve to its main checkout"),
                 () -> assertTrue(response.contains("\"status\":\"ready\""), response),
                 () -> assertTrue(response.contains("\"workspace\":\"isolated\""), response));
@@ -141,7 +222,8 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
         Path unrelated = Files.createTempDirectory("synesis-copied-project-id-");
         initializeGitRepository(unrelated, "Copied project identity");
         new ProjectApplicationService().init(unrelated);
-        Files.copy(fixture.controlRoot().resolve(".synesis/project.json"),
+        Files.copy(fixture.controlRoot()
+                        .resolve(".synesis/project.json"),
                 unrelated.resolve(".synesis/project.json"),
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
@@ -150,10 +232,13 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
 
     @Test
     void differentProjectIdInSameRepositoryCannotConfirmPinnedControlRoot() throws Exception {
-        Path metadata = fixture.linkedWorktree().resolve(".synesis/project.json");
-        String changed = Files.readString(metadata).replaceFirst(
-                "(?<=\\\"projectId\\\": \\\")[0-9a-f-]+",
-                UUID.randomUUID().toString());
+        Path metadata = fixture.linkedWorktree()
+                .resolve(".synesis/project.json");
+        String changed = Files.readString(metadata)
+                .replaceFirst(
+                        "(?<=\\\"projectId\\\": \\\")[0-9a-f-]+",
+                        UUID.randomUUID()
+                                .toString());
         Files.writeString(metadata, changed);
 
         assertRootMismatch(fixture.linkedWorktree(), "codex-different-project-id-regression");
@@ -199,7 +284,8 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
     @Test
     void linkedRootInspectionDoesNotRepairGitExclusions() throws Exception {
         Path common = Path.of(GitProcessRunner.run(fixture.controlRoot(),
-                "rev-parse", "--path-format=absolute", "--git-common-dir").trim());
+                        "rev-parse", "--path-format=absolute", "--git-common-dir")
+                .trim());
         Path exclude = common.resolve("info/exclude");
         byte[] before = Files.readAllBytes(exclude);
 
@@ -267,45 +353,6 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
                 () -> assertTrue(response.contains("PROJECT_ROOT_PIN_MISMATCH"), response));
     }
 
-    private static Fixture createFixture() throws Exception {
-        Path controlRoot = Files.createTempDirectory("synesis-linked-control-");
-        initializeGitRepository(controlRoot, "Control repository");
-        ProjectApplicationService projectService = new ProjectApplicationService();
-        ProjectApplicationService.ProjectLocation location = projectService.init(controlRoot).location();
-        McpProviderTestSupport.install(location, "codex");
-
-        Path linkedWorktree = Files.createTempDirectory("synesis-linked-worktree-parent-")
-                .resolve("codex-linked-worktree");
-        GitProcessRunner.run(controlRoot, "worktree", "add", linkedWorktree.toString(), "HEAD");
-
-        String controlCommonDirectory = GitProcessRunner.run(controlRoot,
-                "rev-parse", "--path-format=absolute", "--git-common-dir").trim();
-        String linkedCommonDirectory = GitProcessRunner.run(linkedWorktree,
-                "rev-parse", "--path-format=absolute", "--git-common-dir").trim();
-        assertAll(
-                () -> assertEquals(Path.of(controlCommonDirectory).toAbsolutePath().normalize(),
-                        Path.of(linkedCommonDirectory).toAbsolutePath().normalize()),
-                () -> assertTrue(Files.isRegularFile(linkedWorktree.resolve(".git"))),
-                () -> assertFalse(Files.exists(linkedWorktree.resolve(".synesis/local"))),
-                () -> assertFalse(Files.exists(linkedWorktree.resolve(".codex/hooks.json"))),
-                () -> assertTrue(Files.exists(controlRoot.resolve(".synesis/local/providers/codex.json"))));
-        return new Fixture(controlRoot, linkedWorktree);
-    }
-
-    private static void initializeGitRepository(Path root, String readmeTitle) throws Exception {
-        GitProcessRunner.run(root, "init");
-        GitProcessRunner.run(root, "config", "user.name", "Synesis Test");
-        GitProcessRunner.run(root, "config", "user.email", "synesis-test@example.com");
-        Files.writeString(root.resolve("README.md"), "# " + readmeTitle + "\n");
-        GitProcessRunner.run(root, "add", ".");
-        GitProcessRunner.run(root, "commit", "-m", "Initial commit");
-    }
-
-    private static String initializeRequest(Path advertisedRoot) {
-        return "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
-                + advertisedRoot.toUri() + "\"}}";
-    }
-
     private void assertRootMismatch(Path advertisedRoot, String connection) {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), fixture.controlRoot(),
                 "codex", connection, true);
@@ -318,32 +365,7 @@ class CodexLinkedWorktreeRootSelectionRegressionTest {
                 () -> assertTrue(response.contains("PROJECT_ROOT_PIN_MISMATCH"), response));
     }
 
-    private static String rootsChangedNotification(Path advertisedRoot) {
-        return "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{"
-                + "\"workspaceFolders\":[{\"uri\":\"" + advertisedRoot.toUri() + "\"}]}}";
-    }
-
-    private static String ensureSessionRequest() {
-        return "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{"
-                + "\"name\":\"ensure_session\",\"arguments\":{}}}";
-    }
-
-    @SuppressWarnings("unchecked")
-    private static String toolText(String response) {
-        Map<String, Object> envelope = (Map<String, Object>) ProviderJson.parse(response);
-        Map<String, Object> result = (Map<String, Object>) envelope.get("result");
-        List<Object> content = (List<Object>) result.get("content");
-        return (String) ((Map<String, Object>) content.getFirst()).get("text");
-    }
-
-    private static void restoreProperty(String name, String value) {
-        if (value == null) {
-            System.clearProperty(name);
-        } else {
-            System.setProperty(name, value);
-        }
-    }
-
     private record Fixture(Path controlRoot, Path linkedWorktree) {
+
     }
 }
