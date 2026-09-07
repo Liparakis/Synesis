@@ -1,6 +1,6 @@
 # SYN-051 fresh single-worker managed-runtime validation — loopback blocker
 
-Date: 2026-09-05  
+Date: 2026-09-05
 Classification: **PARTIAL — STOPPED ON FIRST MATERIAL HARNESS/HOST FAILURE**
 
 ## Scope and safety boundary

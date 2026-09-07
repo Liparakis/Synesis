@@ -1,8 +1,8 @@
 # SYN-049 fresh unattended two-worker acceptance — runs #68–#69
 
-Date: 2026-09-06  
-Classification: **PARTIAL / ACTIVE**  
-Production source changes: **none**  
+Date: 2026-09-06
+Classification: **PARTIAL / ACTIVE**
+Production source changes: **none**
 Push: **none**
 
 ## Scope and host boundary
@@ -36,8 +36,8 @@ cli/build/native-mcp/windows-x64/synesis-mcp.exe
 
 ## Run #68
 
-Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260906-68`  
-Project: `82df5b28-14e6-4a82-b9f7-5f36ed26e801`  
+Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260906-68`
+Project: `82df5b28-14e6-4a82-b9f7-5f36ed26e801`
 WorkGroup: `18eaa79f-b55d-3b4d-997a-1d1ae411345b`
 
 Fresh A binding/participant/intent:
@@ -80,8 +80,8 @@ treated as acceptance success.
 
 ## Run #69
 
-Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260906-69`  
-Project: `e0c72166-c84a-4eab-9ec9-1b83cd02941d`  
+Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260906-69`
+Project: `e0c72166-c84a-4eab-9ec9-1b83cd02941d`
 WorkGroup: `3accd81a-4696-3b27-b1b2-3bebbb474078`
 
 The target was initialized from a new fixture commit and then used only for

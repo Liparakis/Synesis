@@ -1,9 +1,9 @@
 # SYN-049 fresh unattended two-worker acceptance — run #08
 
-Date: 2026-09-05  
-Classification: **PARTIAL**  
-Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260905-08`  
-Project: `8b7abee0-950a-4d7a-81a7-70c5daa81e69`  
+Date: 2026-09-05
+Classification: **PARTIAL**
+Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260905-08`
+Project: `8b7abee0-950a-4d7a-81a7-70c5daa81e69`
 WorkGroup: `7ed6723d-06c7-3d59-9e26-8285576b474e`
 
 ## Scope and provenance

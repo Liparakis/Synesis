@@ -1,7 +1,7 @@
 # SYN-049 fresh unattended two-worker acceptance — runs #55–#58
 
-Date: 2026-09-06  
-Classification: **PARTIAL / ACTIVE**  
+Date: 2026-09-06
+Classification: **PARTIAL / ACTIVE**
 Production source changes in these runs: **none**
 
 ## Scope and provenance
@@ -26,13 +26,13 @@ setting was changed.
 
 ## Run #55
 
-Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-55`  
-Project: `6e449fe9-ebad-4cbb-9f4f-23f2dd9e1de6`  
-WorkGroup: `d574de5c-f188-3b04-83f7-dad0c15bd315`  
+Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-55`
+Project: `6e449fe9-ebad-4cbb-9f4f-23f2dd9e1de6`
+WorkGroup: `d574de5c-f188-3b04-83f7-dad0c15bd315`
 A binding/participant/intent:
 `session-1c87c586-d0b8-4ccd-8475-ef058f4e05a3` /
 `agt_f6b05649-4c50-3192-93c1-c8b783f60496` /
-`54793fa1-dd48-36e9-b3fe-bf15a7488eb2`  
+`54793fa1-dd48-36e9-b3fe-bf15a7488eb2`
 B binding/participant/intent:
 `session-e193a5a6-46c2-4b16-8a24-ca1b1c2aa9eb` /
 `agt_857ce96e-f16a-3929-a46a-303dbe111ac9` /
@@ -47,13 +47,13 @@ post-review continuation.
 
 ## Run #56
 
-Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-56`  
-Project: `a63c9c10-0943-4416-aae8-c3a1405267ef`  
-WorkGroup: `69a5c047-97df-31a4-9919-e312c0cb5d1e`  
+Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-56`
+Project: `a63c9c10-0943-4416-aae8-c3a1405267ef`
+WorkGroup: `69a5c047-97df-31a4-9919-e312c0cb5d1e`
 A binding/participant/intent:
 `session-8b76fa0d-0801-4dd3-b447-33067a228c73` /
 `agt_04aa9117-413e-3296-b1a9-763252e92458` /
-`8f5bcbeb-4541-3383-b4e5-127830267ad6`  
+`8f5bcbeb-4541-3383-b4e5-127830267ad6`
 B binding/participant/intent:
 `session-50b98687-35f0-4005-b4d2-26516b6b9d12` /
 `agt_f7b460d6-d2b6-337c-b1f0-cf3f31a05066` /
@@ -69,13 +69,13 @@ a publishable snapshot.
 
 ## Run #57
 
-Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-57`  
-Project: `7ee87935-5d82-41d8-baa6-311fb00cc47f`  
-WorkGroup: `091a6010-9394-3682-ac6d-4149d88cece5`  
+Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-57`
+Project: `7ee87935-5d82-41d8-baa6-311fb00cc47f`
+WorkGroup: `091a6010-9394-3682-ac6d-4149d88cece5`
 A binding/participant/intent:
 `session-a35e92cc-6953-445a-83e6-2fa5607ac598` /
 `agt_cefd2b6d-4d84-3351-a5f8-ddc9c1ba9506` /
-`ef3e847e-c4be-3676-be53-254285c5df6c`  
+`ef3e847e-c4be-3676-be53-254285c5df6c`
 B binding/participant/intent:
 `session-59934748-5516-4f1b-810e-88b8a8fa065e` /
 `agt_56091e39-c13b-3bdd-8888-9612a9a15cc7` /
@@ -100,13 +100,13 @@ was changed.
 
 ## Run #58
 
-Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-58`  
-Project: `26fb3a84-e0f3-47a0-a76b-cd05e20cb623`  
-WorkGroup: `d212eec4-03c4-37ad-a292-89f0ef34d28c`  
+Fresh target: `SynesisTaskTrackerRealAcceptance-20260906-58`
+Project: `26fb3a84-e0f3-47a0-a76b-cd05e20cb623`
+WorkGroup: `d212eec4-03c4-37ad-a292-89f0ef34d28c`
 A binding/participant/intent:
 `session-2b2eaa22-e32a-4bf4-ac4b-c92729eac4e3` /
 `agt_34bd1e78-9066-32fa-9f67-2003ac23c119` /
-`d0dcf920-973b-3683-97cc-2241d6db3b38`  
+`d0dcf920-973b-3683-97cc-2241d6db3b38`
 B binding/participant/intent:
 `session-35a823ff-4e70-4e5b-ab6d-8ead073ea32e` /
 `agt_273ef498-b7c2-30b2-8369-429a696fd842` /

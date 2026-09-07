@@ -1,7 +1,7 @@
 # SYN-049 fresh unattended two-worker acceptance — run #59
 
-Date: 2026-09-06  
-Classification: **PARTIAL / ACTIVE; run stopped at first material production boundary**  
+Date: 2026-09-06
+Classification: **PARTIAL / ACTIVE; run stopped at first material production boundary**
 Production source changes: **none**
 
 ## Provenance and host

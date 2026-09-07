@@ -1,6 +1,6 @@
 # SYN-051 build-JVM compatibility and provenance
 
-Date: 2026-09-05  
+Date: 2026-09-05
 Classification: **PASS-A for the bounded build/provenance slice; runtime not run**
 
 ## Source and environment

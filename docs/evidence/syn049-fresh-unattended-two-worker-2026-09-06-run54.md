@@ -1,6 +1,6 @@
 # SYN-049 fresh unattended two-worker acceptance — run #54
 
-Date: 2026-09-06  
+Date: 2026-09-06
 Classification: **PARTIAL**
 
 ## Provenance and host
@@ -29,7 +29,7 @@ The target was a new `main` checkout at final immutable lane snapshot
 No historical lane, old provider binding, copied state, substitute worker,
 replacement, or manual `.synesis` edit was used.
 
-Project: `487bd72c-21f9-4ba5-b819-84cd8d9d871d`  
+Project: `487bd72c-21f9-4ba5-b819-84cd8d9d871d`
 WorkGroup: `e390a2d9-56c7-3b92-8c98-0d22a7c41ec8`
 
 Worker A:

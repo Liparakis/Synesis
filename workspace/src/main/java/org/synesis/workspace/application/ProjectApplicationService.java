@@ -47,9 +47,9 @@ public final class ProjectApplicationService {
     private static final String AGENTS_END = "<!-- SYNESIS-END -->";
     private static final String AGENTS_BODY = """
             ## Synesis
-            
+
             This repository uses Synesis.
-            
+
             - Use Synesis tools for project reads, file changes, and commands.
             - One persistent MCP connection owns one provider binding and one isolated worker context.
             - After synesis init succeeds, install the integration matching the responding harness before starting work: Claude Code uses `synesis provider install claude`, and Codex uses `synesis provider install codex`. The matching `claude` or `codex` executable must already be installed and available to that harness; installing one provider is not a substitute for the other.

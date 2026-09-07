@@ -143,6 +143,22 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
 
     /**
      * Constructs an intent with the historical review-target shape.
+     *
+     * @param intentId           intent ID
+     * @param projectId          project ID
+     * @param participant        participant
+     * @param provider           provider
+     * @param taskId             task ID
+     * @param goal               goal
+     * @param acceptance         acceptance criteria
+     * @param baseCommit         base commit
+     * @param selectors          resource selectors
+     * @param version            intent version
+     * @param workGroupId        work-group ID
+     * @param authorityLineageId authority lineage
+     * @param status             lifecycle status
+     * @param role               semantic role
+     * @param reviewTargetSelectors review-target selectors
      */
     public WorkIntent(UUID intentId, UUID projectId, String participant,
             String provider, UUID taskId, String goal, String acceptance, String baseCommit,

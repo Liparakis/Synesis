@@ -1,7 +1,7 @@
 # SYN-049 fresh unattended two-worker acceptance — runs #45–#50
 
-Date: 2026-09-06  
-Classification: **PARTIAL**  
+Date: 2026-09-06
+Classification: **PARTIAL**
 Repository source checkout: `0901417067ca11f9a8c2f5b922bca6ba16051031` before the final evidence checkpoint
 Runtime source provenance: `a7697bbb5de83ced8b61b275056f9204e4467fbc`
 
@@ -58,16 +58,16 @@ provider was uninstalled through the supported flow.
 Run #48 used a fresh target:
 `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260906-48`
 
-Project: `beb5dc32-d890-4bbd-a746-84494bbe8d82`  
-WorkGroup: `9c015232-a400-39ca-a754-ed706624ee11`  
-Participant A: `agt_a6331d8a-6ed9-3dfd-a741-72495b155a45`  
-Intent A: `407458cf-f6ff-3224-bbd4-4675f86f89a4`  
-Binding A: `session-18852f25-47a6-4a0e-93a7-8443fca5325d`  
-Thread A: `01a0752e-067a-7080-a934-c2e5cec4ba7a`  
-Participant B: `agt_23264f1d-5ff1-3c24-9ea5-db74a091aca2`  
-Intent B: `da04b7f2-c58c-3323-acfe-92bd56e49161`  
-Binding B: `session-ccd4e47d-a7e8-4584-ba08-552e60658db7`  
-Thread B: `01a0752c-b55d-7082-bc6a-2a98d474103d`  
+Project: `beb5dc32-d890-4bbd-a746-84494bbe8d82`
+WorkGroup: `9c015232-a400-39ca-a754-ed706624ee11`
+Participant A: `agt_a6331d8a-6ed9-3dfd-a741-72495b155a45`
+Intent A: `407458cf-f6ff-3224-bbd4-4675f86f89a4`
+Binding A: `session-18852f25-47a6-4a0e-93a7-8443fca5325d`
+Thread A: `01a0752e-067a-7080-a934-c2e5cec4ba7a`
+Participant B: `agt_23264f1d-5ff1-3c24-9ea5-db74a091aca2`
+Intent B: `da04b7f2-c58c-3323-acfe-92bd56e49161`
+Binding B: `session-ccd4e47d-a7e8-4584-ba08-552e60658db7`
+Thread B: `01a0752c-b55d-7082-bc6a-2a98d474103d`
 Dependency: `tasktracker.domain.persistence`
 
 Both bindings were prepared and started in one live validation JVM. Both
