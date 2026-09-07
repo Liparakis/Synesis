@@ -22,7 +22,6 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentSessionService;
-import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
@@ -61,8 +60,8 @@ class McpServerTest {
         ProjectApplicationService projectService = new ProjectApplicationService();
         ProjectApplicationService.ProjectLocation location = projectService.init(tempRoot)
                 .location();
-        new ProviderApplicationService().install(location, "codex");
-        new ProviderApplicationService().install(location, "claude");
+        McpProviderTestSupport.install(location, "codex");
+        McpProviderTestSupport.install(location, "claude");
         new ProviderManualService().install("codex");
         new ProviderManualService().install("claude");
     }

@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -15,6 +17,23 @@ import org.synesis.workspace.application.ProjectApplicationService;
  * Exercises workspace doctor diagnostics and failure classification.
  */
 public class DoctorServiceTest {
+
+    private String previousUserHome;
+
+    @BeforeEach
+    void isolateUserHome() throws IOException {
+        previousUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", Files.createTempDirectory("synesis-doctor-home-").toString());
+    }
+
+    @AfterEach
+    void restoreUserHome() {
+        if (previousUserHome == null) {
+            System.clearProperty("user.home");
+        } else {
+            System.setProperty("user.home", previousUserHome);
+        }
+    }
 
     @Test
     public void testDoctorReadOnlyGuarantee(@TempDir Path tempDir) throws Exception {
