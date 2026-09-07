@@ -556,6 +556,7 @@ tasks.register("bundleSmokeTest") {
             run("provider", "install", "claude", "--project", project.absolutePath)
             run("provider", "status", "claude", "--project", project.absolutePath)
             run("provider", "uninstall", "claude", "--project", project.absolutePath)
+            run("provider", "install", "codex", "--project", project.absolutePath)
             run("doctor", "--project", project.absolutePath)
 
             // Installed stdio MCP smoke test
