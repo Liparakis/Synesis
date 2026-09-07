@@ -12,6 +12,8 @@ import org.synesis.workspace.application.provider.ProviderApplicationService;
 public final class ProviderTestSupport {
 
     private static final String ISOLATED_HOME = "synesis.test.provider.home";
+    private static final String TEST_LAUNCHER = "synesis.test.launcher";
+    private static final String TEST_MCP_LAUNCHER = "synesis.test.mcp.launcher";
 
     private ProviderTestSupport() {
     }
@@ -28,9 +30,9 @@ public final class ProviderTestSupport {
         isolateHome();
         ProviderApplicationService.ProviderResult result = new ProviderApplicationService().install(location,
                 provider);
-        if (!result.values()
-                .containsKey("PROVIDER_INSTALL_RESULT")) {
-            throw new IllegalStateException("Provider test installation returned no result: " + result.values());
+        if (result.exitCode() != 0 || !"BOUND".equals(result.values()
+                .get("SESSION_BINDING"))) {
+            throw new IllegalStateException("Provider test installation did not bind a session: " + result.values());
         }
     }
 
@@ -42,5 +44,20 @@ public final class ProviderTestSupport {
             System.setProperty(ISOLATED_HOME, isolatedHome);
         }
         System.setProperty("user.home", isolatedHome);
+        ensureLauncher("synesis.launcher", TEST_LAUNCHER);
+        ensureLauncher("synesis.mcp.launcher", TEST_MCP_LAUNCHER);
+    }
+
+    private static void ensureLauncher(String property, String testProperty) throws Exception {
+        String configured = System.getProperty(property);
+        if (configured != null && Files.isRegularFile(Path.of(configured))) {
+            return;
+        }
+        String existing = System.getProperty(testProperty);
+        if (existing == null || !Files.isRegularFile(Path.of(existing))) {
+            existing = Files.createTempFile(testProperty, ".launcher").toString();
+            System.setProperty(testProperty, existing);
+        }
+        System.setProperty(property, existing);
     }
 }
