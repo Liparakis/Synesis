@@ -12,8 +12,9 @@ Node runtime or development server after installation.
   work. UI commits remain local until separately authorized.
 - Planning basis: user-provided browser-UI goal, current-source investigation,
   and ADR-0069.
-- Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
-  commit boundary, and do not push UI commits without explicit authorization.
+- Exact next action: preserve the verified local UI commits and do not push UI
+  commits without explicit authorization; on resume, review the acceptance
+  evidence before making another change.
 - Security boundary: preserve loopback-only binding, exact Host/Origin checks,
   one-time fragment bootstrap, session/CSRF headers, explicit DTOs, bounded
   SSE, and no secret exposure.

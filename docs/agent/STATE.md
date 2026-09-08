@@ -13,9 +13,9 @@ will consume typed snapshot/SSE DTOs and keep domain authority in Synesis.
 
 ## Exact next action
 
-Run `scripts/agent-checkpoint.ps1` for the verified local SYN-053 slice, review
-the local UI commit boundary, and leave UI commits unpushed unless separately
-authorized.
+Preserve the verified local SYN-053 commits and leave UI commits unpushed
+unless separately authorized. On resume, review the recorded acceptance
+evidence before making another change.
 
 ## SYN-053 implementation evidence
 

@@ -14,9 +14,10 @@ bootstrap, a typed snapshot/SSE client, and a dedicated `synesis ui` command.
 
 ## Immediate next action
 
-Run `scripts/agent-checkpoint.ps1` for the verified local SYN-053 slice, then
-review the local commit boundary. Do not push UI commits without a separate
-explicit instruction.
+Preserve the verified local SYN-053 commits and do not push UI changes without
+a separate explicit instruction. If the task resumes, start with
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` and review
+the existing acceptance evidence before any further change.
 
 ## Current constraints
 
@@ -43,6 +44,26 @@ security headers, and `synesis ui` composes the server and optional browser
 open. Frontend typecheck, lint, tests, build, Java compilation, static-handler
 tests, installed static/session/snapshot/SSE acceptance, and browser visual/
 functional QA pass. See `docs/evidence/syn-053-installed-browser-ui-2026-09-08.md`.
+
+## Work completed
+
+Implemented the install-bundled `web-ui` module, locked npm toolchain,
+typed control-plane client, fetch-based SSE, real-state screens, empty and
+`UNCONFIGURED` states, onboarding controls, same-origin static resource
+handler, `synesis ui` startup, browser opening, security headers, packaging,
+focused tests, installed acceptance, and browser functional/visual QA. Added
+the architecture, API, README, test-matrix, and evidence documentation.
+
+## Current failures
+
+No SYN-053 implementation gate is failing. The existing repository-wide
+`:link:formatCheck` remains blocked by trailing whitespace in the pre-existing
+`docs/agent/checkpoints/CP-0752.md`; Link tests/static analysis/Javadocs and
+relay tests/static analysis/Javadocs pass when that unrelated format task is
+not selected. The broad historical workspace/CLI fixture suite remains
+outside this slice and is not claimed as a full pass. Configured overlay and
+relay acceptance remains correctly unavailable without a signed membership
+authority source.
 
 ## SYN-052 local control-plane backend — implementation and acceptance gate — 2026-09-08
 

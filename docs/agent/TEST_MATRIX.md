@@ -15,8 +15,9 @@
 | Onboarding | invite, join, host-answer failure boundary | PASS — backend-owned result preserved | in-app browser pass |
 | Offline/security | no CDN bundle, CSP, nosniff, same-origin assets | PASS | installed HTTP acceptance |
 
-Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
-commit boundary, and do not push UI commits without separate authorization.
+Exact next action: preserve the verified local UI commits and do not push UI
+commits without separate authorization; on resume, review the acceptance
+evidence before another change.
 
 ## SYN-052 local control-plane backend — HTTP/SSE acceptance — 2026-09-08
 

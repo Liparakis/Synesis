@@ -6,8 +6,9 @@ first-class `web-ui` Gradle module with a locked TypeScript/React/Vite/Tailwind
 build, resource-JAR packaging, same-origin static serving, fragment bootstrap,
 and a dedicated `synesis ui` startup path.
 
-- Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
-  commit boundary, and keep UI commits unpushed unless separately authorized.
+- Exact next action: preserve the verified local UI commits and keep them
+  unpushed unless separately authorized; on resume, review the acceptance
+  evidence before making another change.
 - Keep the frontend server-backed; do not fabricate state or duplicate
   WorkGroup, claim, routing, Link, overlay, or onboarding rules.
 - Preserve loopback, Host/Origin, one-time bootstrap, session/CSRF, SSE bounds,

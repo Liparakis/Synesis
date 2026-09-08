@@ -26,8 +26,9 @@
   root packaging, installed CLI/static HTTP smoke, real session and snapshot,
   SSE update, invite flow, Link/relay/control-plane regressions, deferred
   validation, and `git diff --check`.
-- Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
-  commit boundary, and keep UI commits unpushed until separately authorized.
+- Exact next action: preserve the verified local UI commits and keep them
+  unpushed until separately authorized; on resume, review the recorded
+  acceptance evidence before making another change.
 - Scope exclusions: no Electron/native GUI, cloud dashboard, SaaS login,
   telemetry, external CDN, browser-side P2P, OS URI registration, fake
   production data, Link/overlay redesign, WorkGroup semantics redesign, or
