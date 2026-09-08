@@ -2,6 +2,11 @@
 
 Product decisions are indexed in ADRs under `docs/adr/`.
 
+- ADR-0069: Installed browser UI over the local control plane — accepted for
+  SYN-053; a locked TypeScript/React/Vite/Tailwind `web-ui` module produces
+  packaged static resources served same-origin by the existing loopback server,
+  with fragment bootstrap, typed snapshot/SSE state, and no Node runtime.
+
 ## Persistence-system decisions
 
 1. Repository files, not conversation history, are authoritative.

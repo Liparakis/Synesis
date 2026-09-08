@@ -5844,3 +5844,20 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69
 
 Exact next action: diagnose the ordering projection read-only; do not bypass
 Synesis, edit durable state, copy worktrees, or patch production speculatively.
+## 2026-09-08 — SYN-053 first installed browser UI activation
+
+The explicit browser-product goal activates `SYN-053` after the backend
+baseline was verified and pushed. Starting UI baseline is commit `2be88cf` on
+`master`; the working tree was clean and no UI changes were included in the
+push to `origin/master`.
+
+Source investigation found no existing frontend module, Node manifest,
+static-resource handler, or browser-opening command. The existing JDK
+`CoordinationHttpServer` accepts injected handlers and the control plane
+already exposes the required authenticated snapshot/SSE/onboarding seams.
+ADR-0069 selects the smallest integration: a locked `web-ui` resource JAR,
+same-origin static serving, fragment bootstrap, and a dedicated `synesis ui`
+command. UI commits remain local until separately authorized.
+
+Exact next action: create the `web-ui` module and resource-packaging seam, then
+add static serving and browser startup while preserving server-owned state.

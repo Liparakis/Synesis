@@ -1,3 +1,26 @@
+# SYN-053 first installed Synesis browser UI — activated 2026-09-08
+
+Build and integrate the first real Synesis browser UI as a first-class,
+install-bundled repository module over the existing local control plane. The
+browser must render actual local project, agent, WorkGroup, peer, network, and
+diagnostic state; use the existing authenticated snapshot/SSE/onboarding
+contract; remain truthful for empty and `UNCONFIGURED` states; and require no
+Node runtime or development server after installation.
+
+- Status: ACTIVE / architecture accepted; implementation not yet started
+- Baseline: backend commit `2be88cf` was pushed to `origin/master` before UI
+  work. UI commits remain local until separately authorized.
+- Planning basis: user-provided browser-UI goal, current-source investigation,
+  and ADR-0069.
+- Exact next action: create the `web-ui` module and static packaging seam,
+  then integrate same-origin static serving and `synesis ui` startup.
+- Security boundary: preserve loopback-only binding, exact Host/Origin checks,
+  one-time fragment bootstrap, session/CSRF headers, explicit DTOs, bounded
+  SSE, and no secret exposure.
+- Scope exclusions: no Electron/native GUI, cloud dashboard, SaaS login,
+  telemetry, external CDN, browser P2P, OS URI registration, fake runtime
+  data, Link/overlay redesign, WorkGroup redesign, or automatic UI push.
+
 ## SYN-052 local control-plane backend — activated 2026-09-08
 
 Build the local Synesis control-plane backend described by the user-provided

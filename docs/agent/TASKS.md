@@ -1,8 +1,43 @@
+## SYN-053
+
+### First installed Synesis browser UI — activated 2026-09-08
+
+- Status: ACTIVE
+- Verification: ARCHITECTURE ACCEPTED; implementation not yet started
+- Purpose: build and integrate the first real browser UI as an install-bundled
+  static frontend over the existing authenticated local control plane.
+- Planning basis: explicit user-provided browser-UI goal, current-source
+  investigation, and ADR-0069.
+- Baseline: backend commit `2be88cf` was clean, verified, and pushed to
+  `origin/master` before UI work. No UI files were included in that push.
+- Architecture: `web-ui` owns TypeScript/React/Vite/Tailwind source and a
+  committed npm lockfile; Gradle packages the production output into the CLI
+  distribution; the existing loopback server serves it same-origin with
+  `/api/v1`.
+- Acceptance criteria: packaged static assets load from the Synesis-owned
+  server; `synesis ui` starts the runtime and opens the browser; bootstrap,
+  session/CSRF, snapshot, SSE, invite/join, and failure flows use the real
+  control plane; dashboard, projects, agents, WorkGroups, peers/network, and
+  diagnostics render only authoritative state; empty and `UNCONFIGURED` states
+  remain truthful; Node is not required at runtime; offline asset loading,
+  security headers, accessibility, responsive behavior, and bundle size are
+  checked.
+- Required verification: frontend typecheck, lint, tests, production build,
+  root packaging, installed CLI/static HTTP smoke, real session and snapshot,
+  SSE update, invite flow, Link/relay/control-plane regressions, deferred
+  validation, and `git diff --check`.
+- Exact next action: create the `web-ui` module and resource-packaging build
+  seam, then add the smallest static-serving and `synesis ui` startup slice.
+- Scope exclusions: no Electron/native GUI, cloud dashboard, SaaS login,
+  telemetry, external CDN, browser-side P2P, OS URI registration, fake
+  production data, Link/overlay redesign, WorkGroup semantics redesign, or
+  automatic push of UI commits.
+
 ## SYN-052
 
 ### Local Synesis control-plane backend — activated 2026-09-08
 
-- Status: ACTIVE
+- Status: COMPLETE FOR CURRENT SCOPE; backend baseline pushed before SYN-053
 - Verification: IMPLEMENTATION FOUNDATION / FOCUSED, REAL-CLI, AND RETAINED
   LINK-OWNER ACCEPTANCE PASS; configured CLI membership authority remains open.
 - Purpose: expose authoritative Synesis project, agent, WorkGroup, claim, capability, Link, overlay, route, relay, diagnostic, and onboarding state through a bounded local HTTP/SSE adapter for a future browser UI.

@@ -1,5 +1,49 @@
 # Current Task
 
+# Current Task
+
+## SYN-053 first installed Synesis browser UI — implementation and acceptance gate — 2026-09-08
+
+Status: **ACTIVE / ARCHITECTURE ACCEPTED; IMPLEMENTATION NOT STARTED**.
+The user-provided browser goal now activates the first product UI over the
+verified local control plane. ADR-0069 selects an install-bundled `web-ui`
+module, same-origin static serving from the existing JDK listener, fragment
+bootstrap, a typed snapshot/SSE client, and a dedicated `synesis ui` command.
+
+- Task ID: SYN-053
+- Baseline: backend commit `2be88cf` was clean and pushed to `origin/master`
+  before UI work. No UI changes were included in that push.
+
+## Immediate next action
+
+Create the `web-ui` module and deterministic resource-packaging seam, then add
+the smallest static-serving and `synesis ui` startup slice. Keep browser state
+server-backed and preserve the existing session, CSRF, Host, Origin, loopback,
+and `UNCONFIGURED` boundaries.
+
+## Current constraints
+
+- No Node, npm, Vite, or frontend server at runtime; build tooling is
+  development/CI-only.
+- Serve only packaged static assets from the existing loopback origin; keep
+  `/api/v1`, `/events`, and lifecycle routes separate from SPA fallback.
+- Put the one-time bootstrap in the URL fragment, exchange it through the real
+  session endpoint, and remove it from browser history.
+- Use typed DTOs and the existing SSE contract; do not duplicate domain logic,
+  infer routes, or fabricate project/agent/network data.
+- Treat empty projects, `UNCONFIGURED` overlay, disabled relay, missing peers,
+  session expiry, and diagnostics as first-class states.
+- No external CDN, cloud API, telemetry, Electron, native GUI, OS URI
+  registration, Link/overlay redesign, WorkGroup redesign, or UI push.
+
+## SYN-053 implementation evidence
+
+Architecture and packaging investigation is complete. The repository currently
+has no Node manifest, web module, static-resource handler, or browser-opening
+command. The existing `CoordinationHttpServer` already accepts injected
+handlers and the control plane already exposes the required versioned routes,
+one-time bootstrap, session/CSRF headers, and live-only SSE semantics.
+
 ## SYN-052 local control-plane backend — implementation and acceptance gate — 2026-09-08
 
 Status: **ACTIVE / LIVE OWNER SLICE COMPLETE; AUTHORITY SOURCE BOUNDARY OPEN**.

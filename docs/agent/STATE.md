@@ -1,3 +1,22 @@
+## 2026-09-08 — SYN-053 first installed browser UI activation
+
+The user-provided product goal activates the first real Synesis browser UI over
+the verified local control plane. The clean backend baseline at `2be88cf` was
+pushed to `origin/master` before any UI work. No UI source or unfinished work
+was included in that push.
+
+ADR-0069 selects a first-class `web-ui` Gradle module using a locked
+TypeScript/React/Vite/Tailwind build, a resource JAR packaged into the existing
+CLI distribution, same-origin static serving from the existing JDK listener,
+and a `synesis ui` command that opens a fragment-bootstrap URL. The browser
+will consume typed snapshot/SSE DTOs and keep domain authority in Synesis.
+
+## Exact next action
+
+Create the `web-ui` module and deterministic resource-packaging seam, then add
+the smallest static-serving and `synesis ui` startup slice. Preserve the
+control-plane security boundary and truthful `UNCONFIGURED` behavior.
+
 ## 2026-09-08 — SYN-052 local control-plane activation
 
 The explicit user brief activates a new backend control-plane task after

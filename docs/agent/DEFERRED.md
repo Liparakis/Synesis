@@ -1,5 +1,19 @@
 # Deferred Functionality Register
 
+## SYN-053 promotion review — 2026-09-08
+
+The explicit user goal promotes the first installed browser UI over the
+already-verified local control plane. This is a product-surface task, not a
+new networking, membership, provider, or authority capability. ADR-0069 fixes
+the boundary: one static frontend module, one same-origin loopback server, and
+one typed snapshot/SSE client; no second daemon, public API, or browser-owned
+business logic. The pushed backend baseline is `2be88cf`.
+
+Promotion requires the production bundle, installed CLI/static acceptance,
+real control-plane/session/SSE evidence, frontend quality gates, and explicit
+empty/unconfigured/security checks. It does not promote Electron, a native
+GUI, cloud hosting, OS URI registration, telemetry, or a Link/overlay redesign.
+
 ## SYN-052 promotion review — 2026-09-08
 
 The explicit user goal promotes a local backend control surface, not the

@@ -1,3 +1,21 @@
+## 2026-09-08 — SYN-053 first installed Synesis browser UI activation
+
+The new active task is `SYN-053`. The backend baseline at `2be88cf` was clean,
+verified, and pushed to `origin/master` before UI work. ADR-0069 selects a
+first-class `web-ui` Gradle module with a locked TypeScript/React/Vite/Tailwind
+build, resource-JAR packaging, same-origin static serving, fragment bootstrap,
+and a dedicated `synesis ui` startup path.
+
+- Exact next action: create the `web-ui` module and resource-packaging seam,
+  then add static serving and the browser-opening command.
+- Keep the frontend server-backed; do not fabricate state or duplicate
+  WorkGroup, claim, routing, Link, overlay, or onboarding rules.
+- Preserve loopback, Host/Origin, one-time bootstrap, session/CSRF, SSE bounds,
+  offline assets, and `UNCONFIGURED` overlay behavior.
+- Do not push UI commits automatically; only the already-authorized backend
+  baseline was pushed.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-09-08 — SYN-052 local control-plane backend activation
 
 The new active task is `SYN-052`. The user-provided goal requires a local
