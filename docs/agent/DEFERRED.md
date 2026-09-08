@@ -242,3 +242,17 @@ or architecture. Lease expiry is for abandoned participants, not healthy circula
 ranking is implied.
 **Related documents:** `docs/architecture/CAF-PHASE-MAP-AND-RECORD-SLICE.md`, `docs/security/THREAT_MODEL.md`
 **Last reviewed:** 2026-07-27
+
+## SL-D-040 — Distributed project overlay, routed envelopes, and self-hosted relay
+
+**Status:** DEFERRED / PROMOTED TO ACTIVE TASK
+**Priority:** Current
+**Area:** Link overlay networking and project delivery
+**Current verified capability:** Authenticated direct Link adjacencies, durable Ed25519 node identities, bounded control/application streams, and local/two-process direct evidence.
+**Missing capability:** Authenticated project membership authority; opaque E2E logical envelopes; bounded deterministic topology; peer-transit forwarding; route selection; optional self-hosted live relay; replay/loop/queue controls; and read models suitable for a future adapter.
+**Reason deferred:** The current Link layer is one-hop and signing-only, while the project model has only a local peer allowlist. E2E crypto compatibility, membership authority, wire contracts, transit policy, and relay operations require one coherent security/design task.
+**Activation trigger:** Explicit requirement for project messages to reach members through direct, peer-transit, or organization-relay paths without exposing application plaintext to transit infrastructure.
+**Evidence required before planning:** Current-source and planning re-investigation, membership/trust model, ADR-0066, Java 25 crypto compatibility probe, bounded envelope/key-agreement vectors, and explicit owners/contracts for the overlay and relay.
+**Public-claims impact:** Synesis may claim only the route classes and confidentiality boundaries demonstrated by evidence. It must not claim metadata anonymity, generic proxying, offline delivery, universal reachability, TURN compatibility, or reconnect.
+**Related documents:** `docs/adr/0066-distributed-project-overlay-proposal.md`, `docs/protocol/SYNESIS_LINK_V1.md`, `docs/security/THREAT_MODEL.md`, `docs/operations/NETWORK_VALIDATION_MATRIX.md`
+**Last reviewed:** 2026-09-08

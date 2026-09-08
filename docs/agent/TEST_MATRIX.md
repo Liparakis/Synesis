@@ -1,3 +1,21 @@
+## SL-D-040 distributed project overlay — foundation and relay gate — 2026-09-08
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Java 25 crypto compatibility | X25519, HKDF-SHA256, ChaCha20-Poly1305 probe | PASS | `docs/evidence/sl-d-040-java25-crypto-probe-2026-09-08.md` |
+| Signed membership and E2E records | SLM1/SLK1/SLE1 round trip, signatures, substitution, tamper, replay | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Topology policy and advertisements | bounded ring connectivity, stale/conflicting sequence, signed topology | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Peer transit | A→B→C opaque forwarding, destination decrypt, transit decrypt rejection, duplicate/hop bounds | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| In-memory relay | allowlist, opaque live forwarding, duplicate/no-route, bounded policy | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Relay wire/auth codec | pinned Ed25519 hello/ack and SLF1 frame vectors | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Standalone Netty relay socket | real client/server/concurrency acceptance | BLOCKED before event-loop creation | Java 25 loopback: `Unable to establish loopback connection` / `Invalid argument: connect` |
+| Gradle Link/relay checks | configured build/test tasks | BLOCKED before task execution | Gradle loopback failure; focused compile evidence is separate |
+
+Exact next action: resolve or obtain a loopback-compatible verification host,
+then run the standalone relay socket tests, the independent six-to-eight-node
+runtime acceptance, and the existing Link regression suite before closing
+SL-D-040 or making physical-network claims.
+
 ## SL-D-035 coordinated direct traversal — architecture gate — 2026-09-08
 
 | Area | Check | Result | Evidence |

@@ -1,0 +1,471 @@
+package org.synesis.link.overlay;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.security.GeneralSecurityException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.Test;
+
+import org.synesis.link.identity.NodeIdentity;
+
+/**
+ * Exercises the signed overlay records, E2E binding, replay rejection, and
+ * hop-budget enforcement without opening a physical socket.
+ */
+final class OverlayProtocolTest {
+
+    @Test
+    void membershipRoundTripAndTamperAreVisible() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity peer = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot snapshot = membership(projectId, authority, peer);
+
+        assertTrue(snapshot.verify());
+        assertTrue(snapshot.allows(authority.nodeId()));
+        assertTrue(snapshot.allows(peer.nodeId()));
+
+        OverlayMembershipSnapshot decoded = OverlayMembershipSnapshot.decode(snapshot.encoded());
+        assertArrayEquals(snapshot.encoded(), decoded.encoded());
+        assertTrue(decoded.verify());
+
+        byte[] tamperedBytes = snapshot.encoded();
+        tamperedBytes[tamperedBytes.length - 1] ^= 1;
+        OverlayMembershipSnapshot tampered = OverlayMembershipSnapshot.decode(tamperedBytes);
+        assertFalse(tampered.verify());
+    }
+
+    @Test
+    void keyAgreementProducesBidirectionalBoundOpaqueEnvelopesAndRejectsReplayAndTamper() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity destination = NodeIdentity.generate();
+        NodeIdentity origin = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot snapshot = membership(projectId, authority, destination, origin);
+        UUID sessionId = UUID.randomUUID();
+
+        OverlayKeyAgreement.Initiator initiator = OverlayKeyAgreement.start(projectId, destination.nodeId(),
+                sessionId, snapshot.revision(), origin);
+        OverlayKeyAgreement.InitRecord init = OverlayKeyAgreement.InitRecord.decode(initiator.init().encoded());
+        assertDoesNotThrow(() -> init.verifyAgainst(snapshot));
+
+        OverlayKeyAgreement.Responder responder = OverlayKeyAgreement.respond(init, destination, snapshot);
+        OverlayKeyAgreement.ResponseRecord response = OverlayKeyAgreement.ResponseRecord.decode(
+                responder.response().encoded());
+        OverlayKeyAgreement.E2eSession originSession = OverlayKeyAgreement.finish(initiator, response, snapshot);
+        OverlayKeyAgreement.E2eSession destinationSession = responder.session();
+        UUID messageId = UUID.randomUUID();
+        byte[] plaintext = "opaque A-to-C payload".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        OverlayEnvelope envelope = originSession.encrypt(messageId, plaintext);
+        OverlayEnvelope decodedEnvelope = OverlayEnvelope.decode(envelope.encoded());
+        assertArrayEquals(plaintext, destinationSession.decrypt(decodedEnvelope));
+        assertThrows(GeneralSecurityException.class, () -> destinationSession.decrypt(decodedEnvelope));
+
+        byte[] responsePlaintext = "opaque C-to-A payload".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        OverlayEnvelope responseEnvelope = destinationSession.encrypt(UUID.randomUUID(), responsePlaintext);
+        assertEquals(destination.nodeId(), responseEnvelope.originNodeId());
+        assertEquals(origin.nodeId(), responseEnvelope.destinationNodeId());
+        assertArrayEquals(responsePlaintext, originSession.decrypt(responseEnvelope));
+        assertThrows(GeneralSecurityException.class, () -> destinationSession.decrypt(responseEnvelope));
+
+        UUID sameMessageId = UUID.randomUUID();
+        byte[] samePlaintext = "same plaintext, different directions".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8);
+        OverlayEnvelope forwardAtSameSequence = originSession.encrypt(sameMessageId, 7, samePlaintext);
+        OverlayEnvelope reverseAtSameSequence = destinationSession.encrypt(sameMessageId, 7, samePlaintext);
+        assertFalse(Arrays.equals(forwardAtSameSequence.ciphertext(), reverseAtSameSequence.ciphertext()));
+        assertArrayEquals(samePlaintext, destinationSession.decrypt(forwardAtSameSequence));
+        assertArrayEquals(samePlaintext, originSession.decrypt(reverseAtSameSequence));
+        assertThrows(GeneralSecurityException.class,
+                () -> originSession.encrypt(sameMessageId, 7, samePlaintext));
+
+        byte[] tamperedBytes = envelope.encoded();
+        tamperedBytes[tamperedBytes.length - 1] ^= 1;
+        OverlayEnvelope tamperedEnvelope = OverlayEnvelope.decode(tamperedBytes);
+        assertThrows(GeneralSecurityException.class, () -> destinationSession.decrypt(tamperedEnvelope));
+
+        byte[] wrongDestinationBytes = initiator.init().encoded();
+        int signatureOffset = wrongDestinationBytes.length - OverlayCodecSupport.SIGNATURE_BYTES - Short.BYTES;
+        wrongDestinationBytes[signatureOffset + Short.BYTES] ^= 1;
+        OverlayKeyAgreement.InitRecord tamperedInit = OverlayKeyAgreement.InitRecord.decode(wrongDestinationBytes);
+        assertThrows(GeneralSecurityException.class, () -> OverlayKeyAgreement.respond(tamperedInit, destination,
+                snapshot));
+
+        originSession.close();
+        destinationSession.close();
+    }
+
+    @Test
+    void forwardingFrameIsOpaqueAndConsumesItsBudget() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity destination = NodeIdentity.generate();
+        NodeIdentity origin = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot snapshot = membership(projectId, authority, destination, origin);
+        OverlayKeyAgreement.Initiator initiator = OverlayKeyAgreement.start(projectId, destination.nodeId(),
+                UUID.randomUUID(), snapshot.revision(), origin);
+        OverlayForwardingFrame frame = OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                UUID.randomUUID(), 3, initiator.init().encoded());
+
+        OverlayForwardingFrame decoded = OverlayForwardingFrame.decode(frame.encoded());
+        assertEquals(frame.innerRecord().length, decoded.innerRecord().length);
+        assertArrayEquals(frame.innerRecord(), decoded.innerRecord());
+        OverlayForwardingFrame next = decoded.forwardOneHop();
+        assertEquals(2, next.remainingHops());
+        assertEquals(1, decoded.forwardOneHop().forwardOneHop().remainingHops());
+        assertEquals(0, decoded.forwardOneHop().forwardOneHop().forwardOneHop().remainingHops());
+        assertThrows(IllegalStateException.class,
+                () -> decoded.forwardOneHop().forwardOneHop().forwardOneHop().forwardOneHop());
+    }
+
+    @Test
+    void topologyIsSignedSequencedAndRoutesAroundAForcedTransit() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity transit = NodeIdentity.generate();
+        NodeIdentity origin = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot snapshot = membership(projectId, authority, transit, origin);
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        OverlayTopologyAdvertisement advertisement = OverlayTopologyAdvertisement.create(projectId,
+                snapshot.revision(), 1, now.plusSeconds(60), List.of(authority.nodeId(), origin.nodeId()), transit);
+        OverlayTopologyAdvertisement decoded = OverlayTopologyAdvertisement.decode(advertisement.encoded());
+        decoded.verifyAgainst(snapshot, now);
+
+        OverlayTopologyView view = new OverlayTopologyView();
+        assertEquals(OverlayTopologyView.Acceptance.ACCEPTED, view.accept(decoded, snapshot, now));
+        assertEquals(OverlayTopologyView.Acceptance.DUPLICATE, view.accept(decoded, snapshot, now));
+
+        OverlayTopologyAdvertisement newer = OverlayTopologyAdvertisement.create(projectId, snapshot.revision(), 2,
+                now.plusSeconds(60), List.of(authority.nodeId(), origin.nodeId()), transit);
+        assertEquals(OverlayTopologyView.Acceptance.ACCEPTED, view.accept(newer, snapshot, now));
+        assertEquals(OverlayTopologyView.Acceptance.STALE, view.accept(decoded, snapshot, now));
+
+        byte[] tamperedBytes = advertisement.encoded();
+        tamperedBytes[tamperedBytes.length - 1] ^= 1;
+        OverlayTopologyAdvertisement tampered = OverlayTopologyAdvertisement.decode(tamperedBytes);
+        assertThrows(GeneralSecurityException.class, () -> tampered.verifyAgainst(snapshot, now));
+
+        OverlayTopologyView forcedTransit = new OverlayTopologyView();
+        OverlayTopologyAdvertisement transitToBoth = OverlayTopologyAdvertisement.create(projectId,
+                snapshot.revision(), 1, now.plusSeconds(60), List.of(authority.nodeId(), origin.nodeId()), transit);
+        forcedTransit.accept(transitToBoth, snapshot, now);
+        OverlayRoute forward = OverlayRouteSelector.select(authority.nodeId(), origin.nodeId(), snapshot,
+                Set.of(transit.nodeId()), forcedTransit, now, null);
+        assertEquals(OverlayRoute.Kind.PEER_TRANSIT, forward.kind());
+        assertEquals(List.of(transit.nodeId(), origin.nodeId()), forward.path());
+        OverlayRoute reverse = OverlayRouteSelector.select(origin.nodeId(), authority.nodeId(), snapshot,
+                Set.of(transit.nodeId()), forcedTransit, now, null);
+        assertEquals(List.of(transit.nodeId(), authority.nodeId()), reverse.path());
+        assertEquals(OverlayRoute.Kind.DIRECT, OverlayRouteSelector.select(authority.nodeId(), origin.nodeId(),
+                snapshot, Set.of(origin.nodeId()), forcedTransit, now, null).kind());
+        assertEquals(OverlayRoute.Kind.ORGANIZATION_RELAY, OverlayRouteSelector.select(authority.nodeId(),
+                origin.nodeId(), snapshot, Set.of(), new OverlayTopologyView(), now, "relay-1").kind());
+    }
+
+    @Test
+    void topologyPolicyStaysConnectedAndDuplicateGuardExpiresBoundedly() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        List<NodeIdentity> identities = new ArrayList<>();
+        identities.add(authority);
+        for (int index = 0; index < 7; index++) {
+            identities.add(NodeIdentity.generate());
+        }
+        List<OverlayMembershipSnapshot.Member> members = identities.stream().map(identity ->
+                new OverlayMembershipSnapshot.Member(identity.nodeId(), OverlayMembershipSnapshot.STATUS_ACTIVE,
+                        identity.publicKeyEncoded())).toList();
+        UUID projectId = UUID.randomUUID();
+        Instant issuedAt = Instant.now().minusSeconds(1).truncatedTo(ChronoUnit.MILLIS);
+        OverlayMembershipSnapshot snapshot = OverlayMembershipSnapshot.create(projectId, 1, issuedAt,
+                issuedAt.plusSeconds(300), members, authority);
+        Map<String, List<String>> graph = new OverlayTopologyPolicy().desiredNeighbors(snapshot.members());
+        assertEquals(identities.size(), graph.size());
+        assertTrue(graph.values().stream().allMatch(neighbors -> neighbors.size() <= OverlayTopologyPolicy.MAX_DEGREE));
+        assertTrue(graph.values().stream().allMatch(neighbors -> neighbors.size() >= 2));
+        assertTrue(isConnected(graph));
+
+        OverlayKeyAgreement.Initiator initiator = OverlayKeyAgreement.start(projectId, identities.get(2).nodeId(),
+                UUID.randomUUID(), snapshot.revision(), identities.get(1));
+        OverlayForwardingFrame frame = OverlayForwardingFrame.create(projectId, identities.get(2).nodeId(),
+                UUID.randomUUID(), 4, initiator.init().encoded());
+        OverlayDuplicateGuard guard = new OverlayDuplicateGuard(2, Duration.ofSeconds(1));
+        assertTrue(guard.firstSeen(frame, issuedAt));
+        assertFalse(guard.firstSeen(frame, issuedAt.plusMillis(100)));
+        assertTrue(guard.firstSeen(frame, issuedAt.plusSeconds(2)));
+    }
+
+    @Test
+    void peerForwarderKeepsEnvelopeOpaqueAndSuppressesDuplicates() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity transit = NodeIdentity.generate();
+        NodeIdentity destination = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot snapshot = membership(projectId, authority, transit, destination);
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+        OverlayTopologyView authorityTopology = new OverlayTopologyView();
+        authorityTopology.accept(OverlayTopologyAdvertisement.create(projectId, snapshot.revision(), 1,
+                now.plusSeconds(60), List.of(destination.nodeId()), transit), snapshot, now);
+        OverlayKeyAgreement.Initiator originAgreement = OverlayKeyAgreement.start(projectId, destination.nodeId(),
+                UUID.randomUUID(), snapshot.revision(), authority);
+        OverlayKeyAgreement.InitRecord init = OverlayKeyAgreement.InitRecord.decode(
+                originAgreement.init().encoded());
+        OverlayKeyAgreement.Responder destinationAgreement = OverlayKeyAgreement.respond(init, destination, snapshot);
+        OverlayKeyAgreement.E2eSession originSession = OverlayKeyAgreement.finish(originAgreement,
+                OverlayKeyAgreement.ResponseRecord.decode(destinationAgreement.response().encoded()), snapshot);
+        OverlayKeyAgreement.E2eSession destinationSession = destinationAgreement.session();
+        byte[] plaintext = "only A and C can read this".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        OverlayEnvelope envelope = originSession.encrypt(UUID.randomUUID(), plaintext);
+        AtomicReference<OverlayForwardingFrame> delivered = new AtomicReference<>();
+
+        OverlayForwarder destinationForwarder = new OverlayForwarder(destination.nodeId(), snapshot,
+                new OverlayTopologyView(), new OverlayDuplicateGuard(32), Map.of(), frame -> {
+                    delivered.set(frame);
+                    return CompletableFuture.completedFuture(null);
+                });
+        AtomicReference<OverlayForwarder> destinationRef = new AtomicReference<>(destinationForwarder);
+        OverlayForwarder transitForwarder = new OverlayForwarder(transit.nodeId(), snapshot,
+                new OverlayTopologyView(), new OverlayDuplicateGuard(32),
+                Map.of(destination.nodeId(), frame -> destinationRef.get().forward(frame, now)), frame ->
+                        CompletableFuture.failedFuture(new IllegalStateException("transit cannot deliver")));
+        AtomicReference<OverlayForwarder> transitRef = new AtomicReference<>(transitForwarder);
+        OverlayForwarder authorityForwarder = new OverlayForwarder(authority.nodeId(), snapshot,
+                authorityTopology, new OverlayDuplicateGuard(32),
+                Map.of(transit.nodeId(), frame -> transitRef.get().forward(frame, now)), frame ->
+                        CompletableFuture.failedFuture(new IllegalStateException("origin is not destination")));
+
+        OverlayForwardingFrame frame = OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                envelope.messageId(), 2, envelope.encoded());
+        authorityForwarder.forward(frame, now).toCompletableFuture().join();
+        OverlayForwardingFrame finalFrame = delivered.get();
+        assertTrue(finalFrame != null);
+        assertEquals(0, finalFrame.remainingHops());
+        OverlayEnvelope deliveredEnvelope = OverlayEnvelope.decode(finalFrame.innerRecord());
+        assertArrayEquals(plaintext, destinationSession.decrypt(deliveredEnvelope));
+
+        OverlayKeyAgreement.Initiator transitAgreement = OverlayKeyAgreement.start(projectId,
+                destination.nodeId(), UUID.randomUUID(), snapshot.revision(), transit);
+        OverlayKeyAgreement.Responder transitResponse = OverlayKeyAgreement.respond(
+                transitAgreement.init(), destination, snapshot);
+        OverlayKeyAgreement.E2eSession transitSession = OverlayKeyAgreement.finish(transitAgreement,
+                transitResponse.response(), snapshot);
+        assertThrows(GeneralSecurityException.class, () -> transitSession.decrypt(deliveredEnvelope));
+        assertThrows(CompletionException.class,
+                () -> destinationForwarder.forward(finalFrame, now).toCompletableFuture().join());
+
+        OverlayForwardingFrame tooShort = OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                UUID.randomUUID(), 1, envelope.encoded());
+        CompletionException failure = assertThrows(CompletionException.class,
+                () -> authorityForwarder.forward(tooShort, now).toCompletableFuture().join());
+        assertEquals(OverlayForwardingException.Failure.HOP_LIMIT_EXCEEDED,
+                ((OverlayForwardingException) failure.getCause()).failure());
+        originSession.close();
+        destinationSession.close();
+        transitSession.close();
+    }
+
+    @Test
+    void relayAuthorizesLiveNodesForwardsOpaqueFramesAndHasNoOfflineRoute() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity origin = NodeIdentity.generate();
+        NodeIdentity transit = NodeIdentity.generate();
+        NodeIdentity destination = NodeIdentity.generate();
+        NodeIdentity unauthorized = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot snapshot = membership(projectId, authority, origin, transit, destination,
+                unauthorized);
+        OverlayRelayPolicy policy = new OverlayRelayPolicy(Map.of(projectId,
+                Set.of(authority.nodeId(), origin.nodeId(), transit.nodeId(), destination.nodeId())), 8, 8, 8);
+        OverlayRelay relay = new OverlayRelay(policy);
+        AtomicReference<OverlayForwardingFrame> delivered = new AtomicReference<>();
+        OverlayRelay.Registration destinationRegistration = relay.register(destination,
+                frame -> {
+                    delivered.set(frame);
+                    return CompletableFuture.completedFuture(null);
+                });
+        OverlayRelay.Registration originRegistration = relay.register(origin,
+                frame -> CompletableFuture.completedFuture(null));
+        assertEquals(2, relay.connectionCount());
+        assertThrows(GeneralSecurityException.class,
+                () -> relay.register(unauthorized, frame -> CompletableFuture.completedFuture(null)));
+
+        OverlayKeyAgreement.Initiator originAgreement = OverlayKeyAgreement.start(projectId, destination.nodeId(),
+                UUID.randomUUID(), snapshot.revision(), origin);
+        OverlayKeyAgreement.Responder destinationAgreement = OverlayKeyAgreement.respond(originAgreement.init(),
+                destination, snapshot);
+        OverlayKeyAgreement.E2eSession originSession = OverlayKeyAgreement.finish(originAgreement,
+                destinationAgreement.response(), snapshot);
+        OverlayKeyAgreement.E2eSession destinationSession = destinationAgreement.session();
+        byte[] plaintext = "relay keeps this opaque".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        OverlayEnvelope envelope = originSession.encrypt(UUID.randomUUID(), plaintext);
+        OverlayForwardingFrame frame = OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                envelope.messageId(), 2, envelope.encoded());
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        originRegistration.send(frame, now).toCompletableFuture().join();
+        OverlayForwardingFrame deliveredFrame = delivered.get();
+        assertTrue(deliveredFrame != null);
+        assertFalse(Arrays.equals(plaintext, deliveredFrame.innerRecord()));
+        assertArrayEquals(plaintext, destinationSession.decrypt(OverlayEnvelope.decode(deliveredFrame.innerRecord())));
+        CompletionException duplicate = assertThrows(CompletionException.class,
+                () -> originRegistration.send(frame, now).toCompletableFuture().join());
+        assertEquals(OverlayRelayException.Failure.DUPLICATE,
+                ((OverlayRelayException) duplicate.getCause()).failure());
+
+        OverlayKeyAgreement.Initiator transitAgreement = OverlayKeyAgreement.start(projectId,
+                destination.nodeId(), UUID.randomUUID(), snapshot.revision(), transit);
+        OverlayKeyAgreement.Responder transitResponse = OverlayKeyAgreement.respond(transitAgreement.init(),
+                destination, snapshot);
+        OverlayKeyAgreement.E2eSession transitSession = OverlayKeyAgreement.finish(transitAgreement,
+                transitResponse.response(), snapshot);
+        assertThrows(GeneralSecurityException.class,
+                () -> transitSession.decrypt(OverlayEnvelope.decode(deliveredFrame.innerRecord())));
+
+        destinationRegistration.close();
+        CompletionException noRoute = assertThrows(CompletionException.class,
+                () -> originRegistration.send(OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                        UUID.randomUUID(), 2, envelope.encoded()), now).toCompletableFuture().join());
+        assertEquals(OverlayRelayException.Failure.NO_ROUTE,
+                ((OverlayRelayException) noRoute.getCause()).failure());
+        originRegistration.close();
+        originSession.close();
+        destinationSession.close();
+        transitSession.close();
+    }
+
+    @Test
+    void forwarderUsesConfiguredRelayFallbackForOpaqueDelivery() throws Exception {
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity origin = NodeIdentity.generate();
+        NodeIdentity destination = NodeIdentity.generate();
+        NodeIdentity relayIdentity = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot snapshot = membership(projectId, authority, origin, destination);
+        OverlayRelay relay = new OverlayRelay(new OverlayRelayPolicy(Map.of(projectId,
+                Set.of(origin.nodeId(), destination.nodeId()))));
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        AtomicReference<OverlayForwardingFrame> delivered = new AtomicReference<>();
+        OverlayForwarder destinationForwarder = new OverlayForwarder(destination.nodeId(), snapshot,
+                new OverlayTopologyView(), new OverlayDuplicateGuard(32), Map.of(), frame -> {
+                    delivered.set(frame);
+                    return CompletableFuture.completedFuture(null);
+                }, relayIdentity.nodeId(), frame -> CompletableFuture.completedFuture(null));
+        AtomicReference<OverlayForwarder> destinationRef = new AtomicReference<>(destinationForwarder);
+        OverlayRelay.Registration destinationRegistration = relay.register(destination,
+                frame -> destinationRef.get().forwardFrom(relayIdentity.nodeId(), frame, now));
+        AtomicReference<OverlayRelay.Registration> originRegistration = new AtomicReference<>();
+        OverlayRelay.Registration registration = relay.register(origin,
+                frame -> CompletableFuture.completedFuture(null));
+        originRegistration.set(registration);
+        OverlayForwarder originForwarder = new OverlayForwarder(origin.nodeId(), snapshot,
+                new OverlayTopologyView(), new OverlayDuplicateGuard(32), Map.of(), frame ->
+                        CompletableFuture.failedFuture(new IllegalStateException("origin is not destination")),
+                relayIdentity.nodeId(), frame -> originRegistration.get().send(frame, now));
+
+        OverlayKeyAgreement.Initiator agreement = OverlayKeyAgreement.start(projectId, destination.nodeId(),
+                UUID.randomUUID(), snapshot.revision(), origin);
+        OverlayKeyAgreement.Responder response = OverlayKeyAgreement.respond(agreement.init(), destination,
+                snapshot);
+        OverlayKeyAgreement.E2eSession sender = OverlayKeyAgreement.finish(agreement, response.response(), snapshot);
+        OverlayKeyAgreement.E2eSession receiver = response.session();
+        byte[] plaintext = "relay fallback payload".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        OverlayEnvelope envelope = sender.encrypt(UUID.randomUUID(), plaintext);
+        OverlayForwardingFrame frame = OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                envelope.messageId(), 2, envelope.encoded());
+        originForwarder.forward(frame, now).toCompletableFuture().join();
+        assertEquals(0, delivered.get().remainingHops());
+        assertArrayEquals(plaintext, receiver.decrypt(OverlayEnvelope.decode(delivered.get().innerRecord())));
+        destinationRegistration.close();
+        originRegistration.get().close();
+        sender.close();
+        receiver.close();
+    }
+
+    @Test
+    void relayConnectionAndQueueBoundsFailClosedWithoutPoisoningRetry() throws Exception {
+        NodeIdentity origin = NodeIdentity.generate();
+        NodeIdentity destination = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayRelayPolicy policy = new OverlayRelayPolicy(Map.of(projectId,
+                Set.of(origin.nodeId(), destination.nodeId())), 1, 1, 8);
+        OverlayRelay limited = new OverlayRelay(policy);
+        OverlayRelay.Registration only = limited.register(origin,
+                frame -> CompletableFuture.completedFuture(null));
+        OverlayRelayException connectionLimit = assertThrows(OverlayRelayException.class,
+                () -> limited.register(destination, frame -> CompletableFuture.completedFuture(null)));
+        assertEquals(OverlayRelayException.Failure.CONNECTION_LIMIT, connectionLimit.failure());
+        only.close();
+
+        OverlayRelay relay = new OverlayRelay(new OverlayRelayPolicy(Map.of(projectId,
+                Set.of(origin.nodeId(), destination.nodeId())), 2, 1, 8));
+        CompletableFuture<Void> firstDelivery = new CompletableFuture<>();
+        OverlayRelay.Registration destinationRegistration = relay.register(destination,
+                frame -> firstDelivery);
+        OverlayRelay.Registration originRegistration = relay.register(origin,
+                frame -> CompletableFuture.completedFuture(null));
+        byte[] logicalRecord = OverlayKeyAgreement.start(projectId, destination.nodeId(), UUID.randomUUID(), 1,
+                origin).init().encoded();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        OverlayForwardingFrame firstFrame = OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                UUID.randomUUID(), 1, logicalRecord);
+        OverlayForwardingFrame secondFrame = OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                UUID.randomUUID(), 1, logicalRecord);
+        CompletionStage<Void> firstCompletion = originRegistration.send(firstFrame, now);
+        CompletionException queueFailure = assertThrows(CompletionException.class,
+                () -> originRegistration.send(secondFrame, now).toCompletableFuture().join());
+        assertEquals(OverlayRelayException.Failure.QUEUE_FULL,
+                ((OverlayRelayException) queueFailure.getCause()).failure());
+        firstDelivery.complete(null);
+        firstCompletion.toCompletableFuture().join();
+        originRegistration.send(secondFrame, now).toCompletableFuture().join();
+        destinationRegistration.close();
+        originRegistration.close();
+    }
+
+    private static OverlayMembershipSnapshot membership(UUID projectId, NodeIdentity authority,
+            NodeIdentity... additionalMembers) throws GeneralSecurityException {
+        List<OverlayMembershipSnapshot.Member> members = new java.util.ArrayList<>();
+        members.add(new OverlayMembershipSnapshot.Member(authority.nodeId(), OverlayMembershipSnapshot.STATUS_ACTIVE,
+                authority.publicKeyEncoded()));
+        Arrays.stream(additionalMembers).map(identity -> new OverlayMembershipSnapshot.Member(identity.nodeId(),
+                OverlayMembershipSnapshot.STATUS_ACTIVE, identity.publicKeyEncoded())).forEach(members::add);
+        Instant issuedAt = Instant.now().minusSeconds(1).truncatedTo(ChronoUnit.MILLIS);
+        return OverlayMembershipSnapshot.create(projectId, 1, issuedAt, issuedAt.plusSeconds(300), members,
+                authority);
+    }
+
+    private static boolean isConnected(Map<String, List<String>> graph) {
+        String start = graph.keySet().iterator().next();
+        Set<String> seen = new HashSet<>();
+        ArrayDeque<String> pending = new ArrayDeque<>();
+        pending.add(start);
+        while (!pending.isEmpty()) {
+            String current = pending.removeFirst();
+            if (!seen.add(current)) {
+                continue;
+            }
+            graph.getOrDefault(current, List.of()).forEach(pending::addLast);
+        }
+        return seen.size() == graph.size();
+    }
+
+}

@@ -1,14 +1,33 @@
+## SL-D-040
+
+### Distributed project overlay, routed envelopes, and self-hosted relay — activated 2026-09-08
+
+- Status: ACTIVE
+- Verification: PARTIAL; focused logical evidence passes, while configured and
+  localhost socket acceptance remains blocked on this host.
+- Purpose: Extend Synesis Link from authenticated direct physical adjacencies into a bounded project overlay that delivers opaque end-to-end encrypted logical messages by direct path, authorized peer transit, or an optional self-hosted organization relay.
+- Planning basis: explicit distributed-Link goal, current-source re-investigation, and ADR-0066. `SL-D-040` is the next unused Link deferred identifier after the existing `SL-D-031` through `SL-D-039` entries; no existing overlay/routing/relay identifier was found. It is not a repurposed `SL-D-035` or `SL-D-036` task.
+- Dependencies: existing Link identity, handshake, replay, liveness, `PeerSession`, and bounded application-stream seams; a new explicit project-membership authority contract; Java 25 crypto compatibility evidence.
+- Acceptance criteria: lawful project membership is authenticated independently from direct adjacency; direct, bounded peer-transit, and configured relay routes deliver bidirectional logical messages; the origin and destination authenticate/decrypt while transit peers and the relay cannot; topology and routes are bounded/deterministic; duplicates, loops, stale topology, unauthorized traffic, malformed frames, and exhausted hop budgets fail closed; no durable mailbox or generic proxy exists.
+- Required tests: E2E key-agreement and envelope vectors; wrong-recipient, spoofing, substitution, tamper, replay, duplicate, loop, hop-limit, membership, topology-staleness, unauthorized-transit, relay-authentication, size, quota/backpressure, three-peer, six-to-eight-peer, forced-transit, route-fallback, relay, and concurrency tests; existing Link regressions must remain green.
+- Required documentation: ADR, membership/trust model, routed wire format, threat model, relay operations, failure diagnostics, test matrix, and evidence/checkpoints. No browser UI, HTTP control plane, reconnect, or MCP contract changes.
+- Exact next action: on a compatible host, rerun configured `:link:check` and
+  `:relay:check`, the standalone relay socket/concurrency tests, and the
+  independent six-to-eight-member runtime acceptance; then run the existing
+  Link regression before closing this task.
+- Scope exclusions: no `SL-D-036` reconnect/path migration, no generic TCP/UDP proxy, no provider credentials, no hosted Synesis relay, no durable offline queue, no horizontal relay cluster, no frontend/HTTP work, no source `.synesis` mutation, and no push.
+
 ## SL-D-035
 
 ### Coordinated UDP/QUIC hole punching — activated 2026-09-08
 
-- Status: ACTIVE
+- Status: PAUSED / EVIDENCE GATE
 - Purpose: Extend the existing Link candidate/onboarding path with replaceable endpoint discovery, authenticated offer/answer exchange, bounded coordinated simultaneous UDP/QUIC traversal, and direct-path diagnostics while preserving the existing QUIC, identity, handshake, control, and application-stream boundaries.
 - Dependencies: SL-008, SL-012, SL-014; the minimal offer/answer and endpoint-discovery work described by deferred `SL-D-031` and `SL-D-032` is in scope for this bounded task.
 - Acceptance criteria: two independent Link nodes can exchange bounded signed traversal metadata, perform coordinated direct attempts when the topology permits, authenticate the expected durable node identities, exchange bidirectional application-level Link bytes, classify traversal/authentication/timeout failures without false success, and preserve a no-relay/no-authoritative-server core path. Local, simulated-NAT, and physical evidence must be classified separately; reconnect remains deferred under `SL-D-036`.
 - Required tests: candidate/offer-answer/replay/spoofing/state-machine unit tests; local two-process integration; controlled NAT-topology integration where practical; and a physical two-network run when available. Existing Link regressions must remain green.
 - Required documentation: architecture ADR, protocol and wire-format updates, threat-model and operations updates, failure diagnostics, test matrix, and evidence records. No 10-tool MCP contract changes.
-- Exact next action: run controlled-NAT validation where practical and record the exact limitation otherwise; keep relay/reconnect excluded.
+- Exact next action: preserve the verified traversal implementation and resume controlled-NAT evidence after the separately scoped `SL-D-040` slice or when a dedicated validation environment is available; keep relay/reconnect excluded from this task.
 - Scope exclusions: no relay/TURN fallback, no distributed Synesis state, no provider credentials, no source `.synesis` mutation, no acceptance-state surgery, and no push.
 
 ## SYN-049

@@ -1,3 +1,20 @@
+## SL-D-040 distributed project overlay — activated 2026-09-08
+
+Extend the existing Synesis Link implementation into a bounded project overlay
+with authenticated membership, opaque end-to-end logical envelopes, direct and
+peer-transit routing, deterministic topology, and an optional self-hosted live
+organization relay. Preserve `PeerSession` as a physical adjacency. Do not
+build the browser UI, HTTP control plane, generic proxy, durable mailbox, or
+transparent reconnect in this task.
+
+- Status: ACTIVE / partial implementation and verification gate
+- Exact next action: on a compatible host, rerun configured `:link:check` and
+  `:relay:check`, the standalone relay socket/concurrency tests, and the
+  independent six-to-eight-member runtime acceptance; then run the existing
+  Link regression before closing this task.
+- Planning basis: user-provided distributed-Link goal, current-source re-investigation, and proposed `docs/adr/0066-distributed-project-overlay-proposal.md`.
+- Existing `SL-D-035` direct traversal work is paused at its separate controlled-topology evidence gate; `SL-D-036` reconnect remains deferred.
+
 ## SL-D-035 coordinated UDP/QUIC hole punching — activated 2026-09-08
 
 Extend the existing Synesis Link implementation so two independent nodes can

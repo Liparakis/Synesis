@@ -93,6 +93,7 @@ tasks.named("clean") {
     dependsOn(":coordination:clean")
     dependsOn(":mcp:clean")
     dependsOn(":mcp-contract:clean")
+    dependsOn(":relay:clean")
 }
 
 tasks.named("check") {
@@ -103,6 +104,7 @@ tasks.named("check") {
     dependsOn(":coordination:check")
     dependsOn(":mcp:check")
     dependsOn(":mcp-contract:check")
+    dependsOn(":relay:check")
     dependsOn("repositoryHygieneCheck")
 }
 

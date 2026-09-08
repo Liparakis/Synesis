@@ -144,3 +144,45 @@ a result is reported as `UNKNOWN`; there are no retries, reconnects, or
 background workers. These controls provide pairwise two-process evidence only,
 not replay protection across a future synchronization protocol or physical
 network claims.
+
+## SL-D-040 logical overlay and relay mitigations
+
+The distributed overlay keeps five boundaries separate: signed project
+membership, direct `PeerSession` adjacency, logical route selection, E2E
+encryption, and physical transport. A bootstrap inviter is not promoted to
+membership authority, an IP address is not a node identity, and a topology
+advertisement cannot rewrite another node's statement.
+
+`SLM1` membership snapshots are bounded, canonical, revisioned, expiring, and
+Ed25519-signed by the declared authority. `SLT1` topology advertisements are
+similarly bounded, origin-signed, membership-revision-bound, and rejected when
+stale, conflicting, expired, unauthorized, duplicated, or oversized. The
+local topology view stores one newest advertisement per origin and derives
+routes only from currently valid entries. The deterministic policy is a full
+mesh for at most three members and a sorted circular `+/-1` and `+/-2` graph
+otherwise; it has maximum desired degree four and does not require consensus.
+
+`SLK1` signs an ephemeral X25519 transcript with the durable Ed25519 identity.
+The project, exact origin/destination, membership revision, session, nonces,
+and transcript are bound into HKDF-SHA256 output. `SLE1` uses the derived key
+with ChaCha20-Poly1305. Transit peers and relays see only bounded routing
+metadata and ciphertext; they do not receive the E2E key. Wrong-recipient,
+signature, transcript, ciphertext, and replay failures are fail-closed.
+
+`SLF1` is a hop-local wrapper around only `SLK1` or `SLE1`. New frames require a
+positive hop budget; forwarding consumes one hop and a zero-budget frame is
+destination-only. Each forwarder keeps a bounded expiring duplicate key made
+from project, message ID, and inner digest. The E2E receiver also maintains a
+bounded sequence replay window. These controls terminate cycles and prevent a
+duplicate from reaching application delivery twice without retaining an
+unbounded message history.
+
+Peer transit is authorized project traffic only. It uses existing authenticated
+direct peer sessions through `OverlayPeerSessionBridge`; it is not a generic
+TCP/UDP proxy and is not reconnect or path migration. The optional
+`synesis-relay` module is one live Netty event-loop process. Its pinned
+Ed25519 hello handshake, project/node allowlist, connection/frame/rate/queue
+bounds, idle timeout, and live-only destination lookup prevent open-proxy
+behavior. It stores no mailbox and does not claim offline delivery. A relay
+cannot decrypt the immutable inner envelope; localhost socket acceptance is
+separately dependent on the workstation's current JDK loopback compatibility.

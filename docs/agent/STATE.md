@@ -1,3 +1,39 @@
+## 2026-09-08 — SL-D-040 distributed project overlay activation
+
+The explicit user goal requires a capability not represented by the existing
+Link deferred entries. Current-source re-investigation found no overlay,
+transit, topology, routed-envelope, or relay identifier, while `SL-D-035`
+explicitly excludes relay and distributed state and `SL-D-036` remains
+reconnect-only. Proposed ADR-0066 records the evolutionary boundary: retain
+one-hop `PeerSession`s, add a project overlay above them, require a separately
+authenticated signed membership authority, use opaque E2E envelopes, and keep
+the self-hosted relay as bounded live forwarding only.
+
+`SL-D-040` is the next unused Link deferred identifier after `SL-D-031` through
+`SL-D-039`; it is now the sole active task. `SL-D-035` is paused without
+discarding its committed traversal implementation or evidence. At activation,
+no provider credential, `.synesis` state, or remote state was changed.
+
+## Current implementation evidence
+
+The Java 25 X25519, HKDF-SHA256, and ChaCha20-Poly1305 probe passed and is
+recorded at `docs/evidence/sl-d-040-java25-crypto-probe-2026-09-08.md`.
+The accepted v1 contract is recorded at
+`docs/protocol/SYNESIS_OVERLAY_V1.md`. SLM1/SLK1/SLE1/SLF1, signed topology,
+deterministic routing, peer forwarding, bounded relay core, and standalone
+relay wire/client/server code are implemented. Focused direct Java/JUnit
+evidence passes and is recorded at
+`docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`; configured Gradle
+and Netty localhost execution fail before task/event-loop execution on this
+host.
+
+## Exact next action
+
+On a compatible host, rerun configured `:link:check` and `:relay:check`, the
+standalone relay socket/concurrency tests, and the larger six-to-eight-member
+runtime acceptance; then run the existing Link regression before closing
+SL-D-040.
+
 ## 2026-09-08 — SL-D-035 activation and Link re-investigation
 
 The repeated user request activates the already-planned `SL-D-035` capability.
