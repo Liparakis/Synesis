@@ -1,5 +1,15 @@
 # Deferred Functionality Register
 
+## SYN-052 promotion review — 2026-09-08
+
+The explicit user goal promotes a local backend control surface, not the
+cancelled `SL-D-027` production GUI. Current-source and planning
+re-investigation found reusable loopback HTTP, durable projections, provider
+diagnostics, and Link onboarding seams; ADR-0067 records the bounded
+architecture. The activation does not promote remote administration, a
+frontend, a generic proxy, durable browser replay, or any deferred reconnect,
+NAT, or provider capability.
+
 This is the active register of realistic future Synesis capabilities. It is
 not a roadmap, release promise, implementation permission, or evidence that a
 capability exists. Committed implementation work belongs in `TASKS.md`.

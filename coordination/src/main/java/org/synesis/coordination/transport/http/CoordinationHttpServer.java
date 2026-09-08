@@ -48,6 +48,21 @@ public final class CoordinationHttpServer implements AutoCloseable {
      */
     public CoordinationHttpServer(CoordinationService service, InetSocketAddress address,
             HttpHandler codexLifecycleHandler) throws IOException {
+        this(service, address, codexLifecycleHandler, null);
+    }
+
+    /**
+     * Creates the loopback coordination listener with optional lifecycle and
+     * versioned local-control handlers.
+     *
+     * @param service               coordination service
+     * @param address               local loopback address
+     * @param codexLifecycleHandler retained Codex handler, or {@code null}
+     * @param controlPlaneHandler  local control-plane handler, or {@code null}
+     * @throws IOException when the listener cannot be created
+     */
+    public CoordinationHttpServer(CoordinationService service, InetSocketAddress address,
+            HttpHandler codexLifecycleHandler, HttpHandler controlPlaneHandler) throws IOException {
         this.service = java.util.Objects.requireNonNull(service, "service");
         java.util.Objects.requireNonNull(address, "address");
         InetAddress host = address.getAddress();
@@ -65,6 +80,9 @@ public final class CoordinationHttpServer implements AutoCloseable {
         server.createContext("/events", this::events);
         if (codexLifecycleHandler != null) {
             server.createContext("/codex-lifecycle/v1", codexLifecycleHandler);
+        }
+        if (controlPlaneHandler != null) {
+            server.createContext("/api/v1", controlPlaneHandler);
         }
     }
 
@@ -202,6 +220,11 @@ public final class CoordinationHttpServer implements AutoCloseable {
                 var output = exchange.getResponseBody()) {
             while (!Thread.currentThread()
                     .isInterrupted()) {
+                if (subscription.overflowed()) {
+                    output.write(": refresh_required\n\n".getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                    break;
+                }
                 PredictionEvent event = once ? subscription.poll() : subscription.take();
                 if (event == null) {
                     output.write(": empty\n\n".getBytes(StandardCharsets.UTF_8));

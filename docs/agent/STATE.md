@@ -1,3 +1,45 @@
+## 2026-09-08 — SYN-052 local control-plane activation
+
+The explicit user brief activates a new backend control-plane task after
+source-level re-investigation found an existing JDK loopback coordination
+listener, durable coordination projections, provider/doctor services, and the
+Link onboarding façade. The prior `SL-D-040` HTTP exclusion remains true for
+that completed overlay task; `SYN-052` is the separate product-direction
+change. ADR-0067 records the selected in-process versioned HTTP/SSE adapter,
+local session/CSRF boundary, explicit DTO policy, and rejection of a second
+daemon, frontend, cloud API, database, or broker.
+
+Starting HEAD: `d2eaf639494f7132231810bff9aff945523a9991`; working tree was
+clean and `master` was synchronized with its configured remote before this
+planning slice. The implementation foundation now changes the CLI,
+coordination, and workspace production sources; no remote state was changed.
+
+## Exact next action
+
+Review the final diff and create the local verified SYN-052 commits. Do not
+claim Link/overlay acceptance until a real long-lived source supplies those
+views.
+
+## SYN-052 implementation slice
+
+The existing JDK `HttpServer` now mounts `/api/v1` beside the old binary
+coordination and Codex lifecycle routes. `CoordinationService` exposes the
+collaboration, WorkGroup, and contract projections and bounds all live
+subscriptions. The workspace adapter maps project, provider, participant,
+WorkGroup, claim, capability, task, ownership, diagnostics, and injected
+network DTOs explicitly. The CLI creates a control-specific `Onboarding`
+facade, reports a one-time bootstrap token in the ready line, and closes the
+handler with the server.
+
+Focused control-plane tests pass for real persisted WorkGroup/WorkIntent state,
+session bootstrap single-use, CSRF, exact Origin/Host, malformed/oversized
+requests, secret redaction, SSE initial/live events, clean fixture shutdown,
+and a real two-profile HTTP invite/join/answer/connect flow. The disposable
+project CLI smoke also passes. `:link:check`, `:relay:check`, affected strict
+Javadocs, deferred validation, and `git diff --check` pass. A broader
+workspace/CLI test run still has pre-existing fixture failures outside this
+slice; it is not acceptance evidence for the new API.
+
 ## 2026-09-08 — SL-D-040 distributed project overlay activation
 
 The explicit user goal requires a capability not represented by the existing

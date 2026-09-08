@@ -1,3 +1,20 @@
+## 2026-09-08 — SYN-052 local control-plane backend activation
+
+The new active task is `SYN-052`. The user-provided goal requires a local
+versioned HTTP control surface and bounded SSE adapter over existing Synesis
+state; no frontend is included. ADR-0067 selects the existing JDK server and
+JSON utility, loopback-only binding, one-time bootstrap plus session/CSRF
+authorization, explicit DTOs, and bounded subscriber handling.
+
+- Exact next action: preserve the verified SYN-052 slice and keep the live overlay/relay-owner gap as the next explicitly scoped task; do not fabricate live network state.
+- Preserve the old `SL-D-040` overlay boundary; do not reopen its implementation or claim physical traversal.
+- Do not add a public/cloud API, generic proxy, arbitrary filesystem endpoint, database, broker, frontend, reconnect, or browser event log.
+- Current implementation evidence: focused control-plane tests, strict
+  Javadocs, `:link:check`, `:relay:check`, deferred validation, and
+  `git diff --check` pass. The CLI network view remains `UNCONFIGURED` until a
+  real long-lived Link/overlay/relay owner exists.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-09-08 — SL-D-040 activation
 
 `SL-D-040` is now the sole active task for the distributed project overlay.

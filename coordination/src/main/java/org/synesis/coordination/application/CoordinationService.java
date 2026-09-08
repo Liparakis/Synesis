@@ -9,6 +9,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
+import org.synesis.coordination.domain.collaboration.CollaborationProjection;
+import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
+import org.synesis.coordination.domain.contract.ContractProjection;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.domain.integration.ValidationContextRecord;
@@ -29,10 +32,12 @@ import org.synesis.link.identity.NodeIdentity;
  */
 public final class CoordinationService {
 
+    private static final int SUBSCRIBER_CAPACITY = 1024;
+
     private final PredictionEventStore store;
     private final NodeIdentity coordinatorIdentity;
     private final Map<UUID, PredictionEvent> commandResults = new java.util.HashMap<>();
-    private final CopyOnWriteArrayList<LinkedBlockingQueue<PredictionEvent>> subscribers = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Subscription> subscribers = new CopyOnWriteArrayList<>();
 
     /**
      * Creates a service over an opened event store.
@@ -92,7 +97,7 @@ public final class CoordinationService {
         PredictionEvent event = store.append(command.predictionId(), command.type(), coordinatorIdentity.nodeId(),
                 command.encoded(), coordinatorIdentity);
         commandResults.put(command.commandId(), event);
-        subscribers.forEach(queue -> queue.offer(event));
+        subscribers.forEach(subscription -> subscription.offer(event));
         return event;
     }
 
@@ -116,9 +121,28 @@ public final class CoordinationService {
      * @return subscription
      */
     public synchronized Subscription subscribe(long sequence) {
-        LinkedBlockingQueue<PredictionEvent> queue = new LinkedBlockingQueue<>(replayAfter(sequence));
-        subscribers.add(queue);
-        return new Subscription(queue, subscribers);
+        List<PredictionEvent> replay = replayAfter(sequence);
+        LinkedBlockingQueue<PredictionEvent> queue = new LinkedBlockingQueue<>(SUBSCRIBER_CAPACITY);
+        Subscription subscription = new Subscription(queue, subscribers);
+        replay.stream()
+                .limit(SUBSCRIBER_CAPACITY)
+                .forEach(queue::offer);
+        if (replay.size() > SUBSCRIBER_CAPACITY) {
+            subscription.markOverflowed();
+        }
+        subscribers.add(subscription);
+        return subscription;
+    }
+
+    /**
+     * Opens a live-only bounded subscription without durable replay.
+     *
+     * @return live subscription
+     */
+    public synchronized Subscription subscribeLive() {
+        Subscription subscription = new Subscription(new LinkedBlockingQueue<>(SUBSCRIBER_CAPACITY), subscribers);
+        subscribers.add(subscription);
+        return subscription;
     }
 
     /**
@@ -146,6 +170,33 @@ public final class CoordinationService {
      */
     public CoordinationProjection coordinationProjection() {
         return store.coordinationProjection();
+    }
+
+    /**
+     * Returns the durable collaboration projection.
+     *
+     * @return collaboration projection
+     */
+    public CollaborationProjection collaborationProjection() {
+        return store.collaborationProjection();
+    }
+
+    /**
+     * Returns the durable work-group projection.
+     *
+     * @return work-group projection
+     */
+    public WorkGroupProjection workGroupProjection() {
+        return store.workGroupProjection();
+    }
+
+    /**
+     * Returns the durable contract projection.
+     *
+     * @return contract projection
+     */
+    public ContractProjection contractProjection() {
+        return store.contractProjection();
     }
 
     /**
@@ -347,12 +398,23 @@ public final class CoordinationService {
     public static final class Subscription implements AutoCloseable {
 
         private final BlockingQueue<PredictionEvent> queue;
-        private final CopyOnWriteArrayList<LinkedBlockingQueue<PredictionEvent>> owners;
+        private final CopyOnWriteArrayList<Subscription> owners;
+        private volatile boolean overflowed;
 
         private Subscription(BlockingQueue<PredictionEvent> queue,
-                CopyOnWriteArrayList<LinkedBlockingQueue<PredictionEvent>> owners) {
+                CopyOnWriteArrayList<Subscription> owners) {
             this.queue = queue;
             this.owners = owners;
+        }
+
+        private void offer(PredictionEvent event) {
+            if (!queue.offer(event)) {
+                overflowed = true;
+            }
+        }
+
+        private void markOverflowed() {
+            overflowed = true;
         }
 
         /**
@@ -375,11 +437,20 @@ public final class CoordinationService {
         }
 
         /**
+         * Returns whether this subscriber missed events because its bounded queue overflowed.
+         *
+         * @return true when the subscriber must refresh from a durable cursor
+         */
+        public boolean overflowed() {
+            return overflowed;
+        }
+
+        /**
          * Removes this subscription from the live fan-out.
          */
         @Override
         public void close() {
-            owners.removeIf(candidate -> candidate == queue);
+            owners.remove(this);
         }
     }
 }

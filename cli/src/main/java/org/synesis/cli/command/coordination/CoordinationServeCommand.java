@@ -10,7 +10,12 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
+import org.synesis.link.onboarding.Onboarding;
+import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.lifecycle.codex.ProjectRuntimeHost;
+import org.synesis.workspace.transport.control.ControlPlaneEventHub;
+import org.synesis.workspace.transport.control.ControlPlaneHttpHandler;
+import org.synesis.workspace.transport.control.ControlPlaneReadModel;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -58,14 +63,20 @@ public final class CoordinationServeCommand implements Callable<Integer> {
             var node = CoordinationCliSupport.loadIdentity(identityDirectory);
             var store = new PredictionEventStore(projectData, location.projectId());
             var service = new CoordinationService(store, node);
-            if (!"127.0.0.1".equals(host) && !"localhost".equalsIgnoreCase(host)) {
+            if (!"127.0.0.1".equals(host) && !"localhost".equalsIgnoreCase(host) && !"::1".equals(host)) {
                 runtime.terminal()
                         .stderr("COORDINATION_ERROR=LOOPBACK_ONLY");
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
-            try (var lifecycleHost = new ProjectRuntimeHost(location, node);
+            var eventHub = new ControlPlaneEventHub();
+            var controlOnboarding = new Onboarding(location.profile(), eventHub::publish);
+            var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(),
+                    new DoctorService());
+            var control = new ControlPlaneHttpHandler(readModel, service, controlOnboarding, eventHub);
+            try (control;
+                    var lifecycleHost = new ProjectRuntimeHost(location, node);
                     var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port),
-                            lifecycleHost.handler())) {
+                            lifecycleHost.handler(), control)) {
                 server.start();
                 runtime.terminal()
                         .stdout("COORDINATION_SERVE_READY endpoint=http://"
@@ -74,7 +85,8 @@ public final class CoordinationServeCommand implements Callable<Integer> {
                                 .getPort()
                                 + "/ project=" + location.projectId() + " nodeId=" + node.nodeId()
                                 + " hostInstanceId=" + lifecycleHost.hostInstanceId()
-                                + " codexLifecycleRoute=" + lifecycleHost.route());
+                                + " codexLifecycleRoute=" + lifecycleHost.route()
+                                + " controlPlaneRoute=/api/v1 controlBootstrap=" + control.bootstrapToken());
                 if (durationSeconds > 0) {
                     Thread.sleep(Duration.ofSeconds(durationSeconds)
                             .toMillis());

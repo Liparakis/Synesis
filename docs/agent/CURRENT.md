@@ -1,8 +1,79 @@
 # Current Task
 
+## SYN-052 local control-plane backend — implementation and acceptance gate — 2026-09-08
+
+Status: **ACTIVE / IMPLEMENTATION FOUNDATION COMPLETE; ACCEPTANCE IN PROGRESS**.
+The explicit control-plane brief supersedes the previous HTTP exclusion for
+this new task. ADR-0067 selects one in-process versioned loopback adapter over
+the existing coordination listener and authoritative services. The future
+browser remains out of scope.
+
+- Task ID: SYN-052
+
+## Immediate next action
+
+Preserve the verified SYN-052 slice and keep the live overlay/relay-owner gap
+as the next explicitly scoped task; do not fabricate live network state. Keep
+Link overlay/relay state supplied through an explicit read-model seam until a
+long-lived runtime owns those views.
+
+## Current constraints
+
+- Bind only to loopback; validate Host and Origin; never use wildcard CORS.
+- Use the existing JDK HTTP server and JSON utility before adding dependencies.
+- Delegate invite/join/answer behavior to `Onboarding`; do not duplicate SLO1/
+  SLA2 validation.
+- Use explicit safe DTO fields; never serialize internal objects or secrets.
+- Bound request bodies and SSE subscriber queues; disconnect slow clients with
+  refresh semantics.
+- No frontend, cloud API, generic proxy, arbitrary filesystem endpoint,
+  reconnect/path migration, durable browser replay, or push.
+
+## SYN-052 implementation evidence
+
+- Added `ControlPlaneReadModel`, `ControlPlaneHttpHandler`, and bounded
+  `ControlPlaneEventHub` under the workspace control transport package.
+- Mounted `/api/v1` in the existing JDK loopback listener and retained the
+  existing binary `/command`, `/events`, and Codex lifecycle routes.
+- Added one-time bootstrap exchange, short-lived session/CSRF headers, exact
+  loopback Host/Origin validation, bounded JSON bodies, explicit DTO mapping,
+  onboarding command delegation, and live-only SSE snapshot/delta events.
+- Focused control-plane tests pass, including durable WorkGroup/WorkIntent
+  mapping, injected network-view separation, auth/CSRF/origin/Host/bounds,
+  SSE snapshot/live delivery, and real HTTP invite/join/answer onboarding.
+  The real CLI smoke also passes for a disposable Git project. `:link:check`, `:relay:check`, strict
+  Javadocs, and deferred validation pass.
+- The CLI currently supplies `UNCONFIGURED` network state because this source
+  checkout has no production long-lived owner composing Link overlay/relay
+  views. The adapter seam is explicit; no fabricated network state is used.
+
+## Work completed
+
+Implemented the local `/api/v1` control-plane foundation over the existing JDK
+listener and durable project/coordination services. Added explicit read DTOs,
+bounded live subscriptions, one-time bootstrap plus session/CSRF security,
+onboarding command delegation, redacted SSE, API documentation, ADR-0067, and
+focused tests for real persisted coordination state and injected network-view
+separation, and a real two-profile HTTP invite/join/answer/connect flow. A
+disposable initialized Git project also passed real CLI serve, health, session,
+and authenticated snapshot smoke.
+
+## Current failures
+
+Focused control-plane tests, strict Javadocs, `:link:check`, `:relay:check`,
+deferred validation, and `git diff --check` pass. The combined
+`:coordination:test :workspace:test :cli:test` run reported failures in
+existing CLI/workspace fixture tests (`CodexHookProcessTest`, several
+`AgentNextActionServiceTest`/`CapabilityNegotiationTest` cases,
+`WorkspacePatchServiceTest`, `ProviderApplicationServiceTest`, and
+`ProviderSessionBindingServiceTest`); they are outside this slice and remain
+unclassified rather than being called passing. Live Link/overlay/relay-owner
+acceptance remains pending because this checkout has no production
+long-lived owner composing those views.
+
 ## SL-D-040 distributed project overlay — implementation and verification gate — 2026-09-08
 
-Status: **ACTIVE / PARTIAL**. The requested overlay capability is now
+Status: **COMPLETE FOR CURRENT SCOPE**. The requested overlay capability is now
 represented by its own task rather than being folded into direct traversal.
 ADR-0066 records the proposed ownership, membership, E2E, topology, routing,
 and relay boundaries. The bounded Link overlay, monotonic membership view,

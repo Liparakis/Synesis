@@ -1,3 +1,17 @@
+## SYN-052 local control-plane backend — activated 2026-09-08
+
+Build the local Synesis control-plane backend described by the user-provided
+brief. The surface is a thin adapter over authoritative project, coordination,
+provider, Link, overlay, relay, and diagnostic state. It exposes versioned
+localhost HTTP queries and supported commands plus bounded SSE updates for a
+future browser UI; it does not build that UI.
+
+- Status: ACTIVE / implementation foundation and focused real-CLI acceptance complete; broader acceptance gate
+- Exact next action: review and commit the verified local slice; do not claim live overlay/relay acceptance without a real long-lived owner.
+- Planning basis: current-source re-investigation and ADR-0067.
+- Security boundary: loopback-only bind, exact Host/Origin checks, one-time bootstrap, session plus CSRF for mutations, bounded bodies/queues, explicit DTOs, and no secret exposure.
+- Scope exclusions: no frontend, public/cloud API, generic proxy, arbitrary filesystem access, new database/broker, OS URI handler, reconnect/path migration, durable browser event replay, or push.
+
 ## SL-D-040 distributed project overlay — activated 2026-09-08
 
 Extend the existing Synesis Link implementation into a bounded project overlay
@@ -7,7 +21,7 @@ organization relay. Preserve `PeerSession` as a physical adjacency. Do not
 build the browser UI, HTTP control plane, generic proxy, durable mailbox, or
 transparent reconnect in this task.
 
-- Status: ACTIVE / partial implementation and verification gate
+- Status: COMPLETE FOR CURRENT SCOPE; physical traversal remains separately scoped
 - Exact next action: preserve the passing configured/local acceptance and keep
   controlled-NAT or physical traversal under the separately scoped `SL-D-035`
   evidence gate; do not broaden this task into reconnect or path migration.

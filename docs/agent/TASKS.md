@@ -1,9 +1,26 @@
+## SYN-052
+
+### Local Synesis control-plane backend — activated 2026-09-08
+
+- Status: ACTIVE
+- Verification: IMPLEMENTATION FOUNDATION / FOCUSED AND REAL-CLI ACCEPTANCE
+  PASS; broader regression and live overlay-owner acceptance are pending.
+- Purpose: expose authoritative Synesis project, agent, WorkGroup, claim, capability, Link, overlay, route, relay, diagnostic, and onboarding state through a bounded local HTTP/SSE adapter for a future browser UI.
+- Planning basis: explicit user-provided control-plane brief, current-source re-investigation, and ADR-0067. This supersedes the old `SL-D-027` GUI cancellation only for the backend control surface; no frontend is activated.
+- Dependencies: existing `CoordinationService` projections, `ProjectApplicationService`, `ProviderApplicationService`, `DoctorService`, `Onboarding`, `PeerSession`/overlay read models, and the existing loopback HTTP lifecycle host.
+- Acceptance criteria: loopback server starts and reports its actual endpoint; health and authenticated snapshots expose real current state; supported invite/join/answer actions delegate to `Onboarding`; SSE delivers bounded UI-safe updates; Host/Origin/session/CSRF/body/secret controls fail closed; lawful disposable-project and controlled Link/overlay acceptance compare API output with authoritative backend state; shutdown releases HTTP/SSE resources and preserves Link/relay cleanup; API documentation and an ADR are current.
+- Required tests: read-model mapping for project/participant/WorkGroup/claim/capability/network/route/relay state; command delegation and backend rejection; loopback/security/bounds; SSE initial/live/slow/multiple/disconnect behavior; clean shutdown; `:link:check`, `:relay:check`, affected workspace/coordination checks, deferred validation, and `git diff --check`.
+- Exact next action: review and commit the verified local slice; keep the
+  overlay/relay source injectable until a real long-lived runtime owns those
+  views.
+- Scope exclusions: no frontend, public or cloud API, wildcard CORS, arbitrary filesystem endpoint, generic proxy, new database/broker, OS URI handler, Claude support, reconnect/path migration, durable browser event replay, source `.synesis` mutation, or push.
+
 ## SL-D-040
 
 ### Distributed project overlay, routed envelopes, and self-hosted relay — activated 2026-09-08
 
-- Status: ACTIVE
-- Verification: PARTIAL; configured local acceptance passes with a
+- Status: COMPLETE FOR CURRENT SCOPE
+- Verification: PASS FOR CURRENT SCOPE; configured local acceptance passes with a
   process-local loopback workaround, while the inherited environment remains
   blocked before Gradle startup and physical traversal is unrun.
 - Purpose: Extend Synesis Link from authenticated direct physical adjacencies into a bounded project overlay that delivers opaque end-to-end encrypted logical messages by direct path, authorized peer transit, or an optional self-hosted organization relay.

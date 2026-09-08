@@ -10,6 +10,11 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 
 ## Product ADRs
 
+- ADR-0067: Local browser-facing control plane — accepted for SYN-052;
+  one in-process versioned loopback HTTP/SSE adapter reuses authoritative
+  projections and onboarding services, with one-time local bootstrap,
+  session/CSRF protection, explicit DTOs, and bounded subscriber handling.
+
 - ADR-0065: Coordinated direct UDP/QUIC traversal — accepted for
   implementation; preserves the existing authenticated Netty QUIC and Link
   identity/session boundaries while adding optional configured STUN discovery,
