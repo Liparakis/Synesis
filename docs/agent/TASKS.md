@@ -3,18 +3,19 @@
 ### Distributed project overlay, routed envelopes, and self-hosted relay — activated 2026-09-08
 
 - Status: ACTIVE
-- Verification: PARTIAL; focused logical evidence passes, while configured and
-  localhost socket acceptance remains blocked on this host.
+- Verification: PARTIAL; configured local acceptance passes with a
+  process-local loopback workaround, while the inherited environment remains
+  blocked before Gradle startup and physical traversal is unrun.
 - Purpose: Extend Synesis Link from authenticated direct physical adjacencies into a bounded project overlay that delivers opaque end-to-end encrypted logical messages by direct path, authorized peer transit, or an optional self-hosted organization relay.
 - Planning basis: explicit distributed-Link goal, current-source re-investigation, and ADR-0066. `SL-D-040` is the next unused Link deferred identifier after the existing `SL-D-031` through `SL-D-039` entries; no existing overlay/routing/relay identifier was found. It is not a repurposed `SL-D-035` or `SL-D-036` task.
 - Dependencies: existing Link identity, handshake, replay, liveness, `PeerSession`, and bounded application-stream seams; a new explicit project-membership authority contract; Java 25 crypto compatibility evidence.
 - Acceptance criteria: lawful project membership is authenticated independently from direct adjacency; direct, bounded peer-transit, and configured relay routes deliver bidirectional logical messages; the origin and destination authenticate/decrypt while transit peers and the relay cannot; topology and routes are bounded/deterministic; duplicates, loops, stale topology, unauthorized traffic, malformed frames, and exhausted hop budgets fail closed; no durable mailbox or generic proxy exists.
 - Required tests: E2E key-agreement and envelope vectors; wrong-recipient, spoofing, substitution, tamper, replay, duplicate, loop, hop-limit, membership, topology-staleness, unauthorized-transit, relay-authentication, size, quota/backpressure, three-peer, six-to-eight-peer, forced-transit, route-fallback, relay, and concurrency tests; existing Link regressions must remain green.
 - Required documentation: ADR, membership/trust model, routed wire format, threat model, relay operations, failure diagnostics, test matrix, and evidence/checkpoints. No browser UI, HTTP control plane, reconnect, or MCP contract changes.
-- Exact next action: on a compatible host, rerun configured `:link:check` and
-  `:relay:check`, the standalone relay socket/concurrency tests, and the
-  independent six-to-eight-member runtime acceptance; then run the existing
-  Link regression before closing this task.
+- Exact next action: preserve the passing local acceptance and keep physical
+  controlled-NAT/Internet traversal under the separately scoped `SL-D-035`
+  evidence gate; do not broaden this task into reconnect or physical-network
+  claims.
 - Scope exclusions: no `SL-D-036` reconnect/path migration, no generic TCP/UDP proxy, no provider credentials, no hosted Synesis relay, no durable offline queue, no horizontal relay cluster, no frontend/HTTP work, no source `.synesis` mutation, and no push.
 
 ## SL-D-035

@@ -45,8 +45,22 @@ metadata anonymity.
 
 ## Verification boundary
 
-The relay wire codec and in-memory relay policy are covered by focused tests.
-The localhost Netty acceptance requires the host's selector/loopback support;
-on the current workstation, Java 25 fails before event-loop creation with
-`Unable to establish loopback connection` / `Invalid argument: connect`. That
-is recorded as an environment blocker, not as relay success or failure.
+The relay wire codec, in-memory relay policy, real localhost server/client
+path, concurrent forwarding, and the standalone `RelayMain` process are
+covered by the relay test suite. The current workstation's inherited
+environment still fails before Gradle task or Netty event-loop creation with
+`Unable to establish loopback connection` / `Invalid argument: connect`.
+
+The configured checks and localhost tests pass when launched with this
+process-local environment:
+
+```powershell
+$env:TEMP = 'C:\t'
+$env:TMP = 'C:\t'
+$env:GRADLE_OPTS = '-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe'
+.\gradlew :link:check :relay:check --no-daemon
+```
+
+No global settings are changed by this workaround. The result proves the
+bounded Synesis relay path, not physical NAT traversal, TURN compatibility,
+offline delivery, reconnect, or metadata anonymity.

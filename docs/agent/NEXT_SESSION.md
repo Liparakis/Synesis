@@ -3,13 +3,12 @@
 `SL-D-040` is now the sole active task for the distributed project overlay.
 `SL-D-035` remains separately paused at its controlled-NAT evidence gate and
 `SL-D-036` remains deferred. The Link overlay and relay slices are implemented
-with focused direct evidence; configured and localhost socket verification is
-still incomplete.
+with full configured/local evidence passing under a process-local loopback
+workaround. The inherited environment still fails before Gradle startup.
 
-- Exact next action: on a compatible host, rerun configured `:link:check` and
-  `:relay:check`, the standalone relay socket/concurrency tests, and the
-  larger six-to-eight-member runtime acceptance; then run the existing Link
-  regression before closing this task.
+- Exact next action: preserve the passing local acceptance and keep
+  controlled-NAT/physical traversal under the separately scoped `SL-D-035`
+  evidence gate. Do not broaden SL-D-040 into reconnect or path migration.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Do not implement generic proxying, durable mailbox/reconnect, frontend/HTTP work, or unsigned membership/topology trust.
 

@@ -1,3 +1,25 @@
+## 2026-09-08 — SL-D-040 overlay and relay acceptance follow-up
+
+The bounded project overlay follow-up added signed `SLP1` topology
+propagation over authenticated direct peers and wired it into the existing
+`PeerSession` application bridge. The new topology test proves A→B→C
+propagation, bounded budget consumption, and duplicate no-reflood behavior.
+
+The relay tests now prove bidirectional in-process socket delivery and a
+disposable `RelayMain` child process with two authenticated clients. The full
+configured `:link:check :relay:check` passed under a process-local
+`TEMP`/`TMP`/`GRADLE_OPTS` loopback workaround: 78 Link tests and 4 relay
+tests, with strict compilation, Javadocs, static analysis, formatting, and
+zero failures/errors. The inherited environment still fails before Gradle
+startup with `Unable to establish loopback connection`; no global setting was
+changed.
+
+Evidence: `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`.
+Checkpoint: `docs/agent/checkpoints/CP-0740.md`.
+Exact next action: preserve local acceptance and keep controlled-NAT or
+physical traversal under separately scoped `SL-D-035`; do not broaden into
+reconnect or path migration.
+
 ## 2026-09-08 — SL-D-035 activation and Link re-investigation
 
 The repeated bounded user request was mapped to the existing deferred

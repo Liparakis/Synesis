@@ -236,6 +236,27 @@ deduplicated by origin/sequence/digest. Receivers reject invalid signatures,
 wrong projects, stale membership revisions, stale sequences, expired records,
 unknown members, duplicate neighbors, and oversized lists.
 
+Direct-peer propagation uses a separate hop-local `SLP1` wrapper; the signed
+`SLT1` bytes remain unchanged while the wrapper's propagation budget is
+decremented. The wrapper is bounded and contains:
+
+```text
+magic             4 bytes  ASCII SLP1
+version           1 byte   1
+project           16 bytes UUID
+origin            32 bytes node ID
+origin-sequence    8 bytes positive sequence
+remaining-hops     1 byte  0..8
+advertisement-len  2 bytes bounded `SLT1` length
+advertisement      bytes   exact signed `SLT1`
+```
+
+The local topology view admits only the newest verified advertisement for each
+origin. A newly accepted record is sent to authenticated direct peers other
+than its immediate sender; duplicate or stale records do not reflood. The
+propagator does not create sockets, act as a membership authority, or use the
+organization relay for topology gossip.
+
 The initial desired graph is full mesh for three or fewer members and the
 sorted circular offsets `+/-1` and `+/-2` for larger sets, with duplicate/self
 edges removed. This gives a deterministic maximum degree of four while

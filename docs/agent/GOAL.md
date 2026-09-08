@@ -8,10 +8,9 @@ build the browser UI, HTTP control plane, generic proxy, durable mailbox, or
 transparent reconnect in this task.
 
 - Status: ACTIVE / partial implementation and verification gate
-- Exact next action: on a compatible host, rerun configured `:link:check` and
-  `:relay:check`, the standalone relay socket/concurrency tests, and the
-  independent six-to-eight-member runtime acceptance; then run the existing
-  Link regression before closing this task.
+- Exact next action: preserve the passing configured/local acceptance and keep
+  controlled-NAT or physical traversal under the separately scoped `SL-D-035`
+  evidence gate; do not broaden this task into reconnect or path migration.
 - Planning basis: user-provided distributed-Link goal, current-source re-investigation, and proposed `docs/adr/0066-distributed-project-overlay-proposal.md`.
 - Existing `SL-D-035` direct traversal work is paused at its separate controlled-topology evidence gate; `SL-D-036` reconnect remains deferred.
 

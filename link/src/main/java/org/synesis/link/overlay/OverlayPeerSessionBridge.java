@@ -1,6 +1,7 @@
 package org.synesis.link.overlay;
 
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
@@ -48,6 +49,36 @@ public final class OverlayPeerSessionBridge {
                 return forwarder.forwardFrom(remoteNodeId, frame, Instant.now(clock))
                         .thenApply(ignored -> new byte[0]);
             } catch (IOException | RuntimeException failure) {
+                return CompletableFuture.failedFuture(failure);
+            }
+        };
+    }
+
+    /**
+     * Creates an inbound callback that accepts both opaque routed frames and
+     * bounded signed topology propagation frames.
+     *
+     * @param forwarder local logical-message forwarder
+     * @param topologyPropagation local topology propagation component
+     * @param clock time source for expiry and replay checks
+     * @return callback suitable for {@link PeerSession.ApplicationStreamHandler}
+     */
+    public static PeerSession.ApplicationStreamHandler inbound(OverlayForwarder forwarder,
+            OverlayTopologyPropagation topologyPropagation, Clock clock) {
+        Objects.requireNonNull(forwarder, "forwarder");
+        Objects.requireNonNull(topologyPropagation, "topology propagation");
+        Objects.requireNonNull(clock, "clock");
+        return (remoteNodeId, payload) -> {
+            try {
+                if (OverlayTopologyPropagationFrame.hasMagic(payload)) {
+                    OverlayTopologyPropagationFrame frame = OverlayTopologyPropagationFrame.decode(payload);
+                    return topologyPropagation.receive(remoteNodeId, frame, Instant.now(clock))
+                            .thenApply(ignored -> new byte[0]);
+                }
+                OverlayForwardingFrame frame = OverlayForwardingFrame.decode(payload);
+                return forwarder.forwardFrom(remoteNodeId, frame, Instant.now(clock))
+                        .thenApply(ignored -> new byte[0]);
+            } catch (IOException | GeneralSecurityException | RuntimeException failure) {
                 return CompletableFuture.failedFuture(failure);
             }
         };

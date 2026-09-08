@@ -140,6 +140,15 @@ Route calculation must use the current adjacency graph, not blindly assume
 that every desired edge exists. Establishing a fresh desired adjacency remains
 separate from reconnecting a dead session under `SL-D-036`.
 
+The SL-D-040 implementation provides the bounded `SLP1` topology-propagation
+wrapper and `OverlayTopologyPropagation` seam. A newly accepted signed
+advertisement is forwarded only to authenticated direct peers other than the
+immediate sender; the signed `SLT1` bytes are never rewritten, and duplicate,
+stale, malformed, expired, or over-budget records do not reflood. The
+existing `OverlayMembershipSnapshot`, `OverlayTopologyView`, `OverlayRoute`,
+and topology-policy accessors are the internal read-model seams for a future
+adapter; no HTTP or UI transport is part of this task.
+
 ## E2E security and routed framing
 
 Ed25519 is retained as the durable signing identity. It must not be treated as

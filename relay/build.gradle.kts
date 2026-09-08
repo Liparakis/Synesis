@@ -52,18 +52,35 @@ tasks.register("staticAnalysis") {
     dependsOn(tasks.compileJava, tasks.compileTestJava)
 }
 
-tasks.register("formatCheck") {
-    group = "verification"
-    description = "Rejects trailing whitespace in relay sources."
-    doLast {
-        val roots = listOf(layout.projectDirectory.dir("src").asFile, layout.projectDirectory.file("build.gradle.kts").asFile)
-        val files = roots.flatMap { root ->
-            if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in setOf("java", "kt", "kts") }.toList()
-            else listOf(root)
+abstract class TrailingWhitespaceTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val files: ConfigurableFileCollection
+
+    @TaskAction
+    fun check() {
+        val offenders = files.files.filter { source ->
+            source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }
-        val offenders = files.filter { file -> file.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } } }
         require(offenders.isEmpty()) { "Trailing whitespace: ${offenders.joinToString()}" }
     }
+}
+
+val relayFormatRoots = listOf(
+    layout.projectDirectory.dir("src").asFile,
+    layout.projectDirectory.file("build.gradle.kts").asFile
+).filter { it.exists() }
+
+tasks.register<TrailingWhitespaceTask>("formatCheck") {
+    group = "verification"
+    description = "Rejects trailing whitespace in relay sources."
+    files.from(relayFormatRoots.map { root ->
+        if (root.isDirectory) fileTree(root) {
+            include("**/*.java")
+            include("**/*.kt")
+            include("**/*.kts")
+        } else root
+    })
 }
 
 tasks.check {

@@ -5,19 +5,20 @@
 Status: **ACTIVE / PARTIAL**. The requested overlay capability is now
 represented by its own task rather than being folded into direct traversal.
 ADR-0066 records the proposed ownership, membership, E2E, topology, routing,
-and relay boundaries. The bounded Link overlay, peer forwarder, in-memory relay,
-and standalone relay module now have production code; full configured and
-localhost socket verification remains incomplete.
+and relay boundaries. The bounded Link overlay, signed topology propagator,
+peer forwarder, in-memory relay, and standalone relay module now have
+production code. Configured Link/relay checks and localhost socket acceptance
+pass with a process-local loopback workaround; the inherited environment still
+fails before Gradle startup.
 
 - Task ID: SL-D-040
 
 ## Immediate next action
 
-On a compatible verification host, rerun the configured `:link:check` and
-`:relay:check`, the standalone relay socket/concurrency tests, and the
-independent six-to-eight-member runtime acceptance. Then run the existing Link
-regression and keep controlled-NAT traversal as the separately scoped
-`SL-D-035` gate.
+Preserve the passing configured/local acceptance and keep controlled-NAT or
+physical Internet traversal under the separately scoped `SL-D-035` evidence
+gate. Do not broaden this task into reconnect, path migration, or a physical
+network claim.
 
 ## Work completed
 
@@ -26,9 +27,9 @@ Re-investigated the current Link and project-record source. Confirmed that
 application seam is bounded request/response, `ProjectConfig` is only a local
 allowlist, and durable Ed25519 identities currently provide signing rather
 than E2E encryption. Implemented the bounded SLM1/SLK1/SLE1/SLF1 contract,
-signed topology, deterministic route selection, peer forwarding, the
-PeerSession bridge, in-memory relay core, and standalone Netty relay/client
-module. Focused direct Java/JUnit evidence passes are recorded in
+signed topology and SLP1 propagation, deterministic route selection, peer
+forwarding, the PeerSession bridge, in-memory relay core, and standalone Netty
+relay/client module. Configured/local evidence is recorded in
 `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`. The verified
 `SL-D-035`
 traversal slice remains committed and separately paused at its controlled-
@@ -37,12 +38,13 @@ topology evidence gate.
 ## Current failures
 
 The signed membership authority is the new bounded SLM1 contract; its authority
-lifecycle remains explicitly out of scope. Java 25 crypto APIs and focused
-logical route/transit evidence pass. The configured Gradle JVM and standalone
-Netty localhost event loops fail before task/socket execution with
-`Unable to establish loopback connection` / `Invalid argument: connect`; no
-full Link regression, standalone relay socket, or physical multi-network claim
-is made from this host.
+lifecycle remains explicitly out of scope. Java 25 crypto APIs, topology
+propagation, logical route/transit evidence, full configured Link/relay checks,
+and real localhost relay/process acceptance pass with the documented
+process-local loopback workaround. The inherited environment still fails
+before task/socket execution with `Unable to establish loopback connection` /
+`Invalid argument: connect`; no physical multi-network claim is made from this
+host.
 
 ## SL-D-035 coordinated UDP/QUIC hole punching — implementation and evidence gate — 2026-09-08
 

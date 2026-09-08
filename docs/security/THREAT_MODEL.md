@@ -158,7 +158,10 @@ Ed25519-signed by the declared authority. `SLT1` topology advertisements are
 similarly bounded, origin-signed, membership-revision-bound, and rejected when
 stale, conflicting, expired, unauthorized, duplicated, or oversized. The
 local topology view stores one newest advertisement per origin and derives
-routes only from currently valid entries. The deterministic policy is a full
+routes only from currently valid entries. `SLP1` forwards the unchanged signed
+`SLT1` bytes through authenticated direct peers with a separate bounded
+propagation budget; newly accepted records reflood only to peers other than the
+immediate sender. The deterministic policy is a full
 mesh for at most three members and a sorted circular `+/-1` and `+/-2` graph
 otherwise; it has maximum desired degree four and does not require consensus.
 

@@ -19,20 +19,19 @@ no provider credential, `.synesis` state, or remote state was changed.
 The Java 25 X25519, HKDF-SHA256, and ChaCha20-Poly1305 probe passed and is
 recorded at `docs/evidence/sl-d-040-java25-crypto-probe-2026-09-08.md`.
 The accepted v1 contract is recorded at
-`docs/protocol/SYNESIS_OVERLAY_V1.md`. SLM1/SLK1/SLE1/SLF1, signed topology,
-deterministic routing, peer forwarding, bounded relay core, and standalone
-relay wire/client/server code are implemented. Focused direct Java/JUnit
-evidence passes and is recorded at
-`docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`; configured Gradle
-and Netty localhost execution fail before task/event-loop execution on this
-host.
+`docs/protocol/SYNESIS_OVERLAY_V1.md`. SLM1/SLK1/SLE1/SLF1, signed topology
+and SLP1 propagation, deterministic routing, peer forwarding, bounded relay
+core, and standalone relay wire/client/server code are implemented. Full
+configured/local evidence is recorded at
+`docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`; it passes with a
+process-local loopback workaround while the inherited environment still fails
+before task/event-loop execution.
 
 ## Exact next action
 
-On a compatible host, rerun configured `:link:check` and `:relay:check`, the
-standalone relay socket/concurrency tests, and the larger six-to-eight-member
-runtime acceptance; then run the existing Link regression before closing
-SL-D-040.
+Preserve the passing configured/local acceptance. Keep controlled-NAT and
+physical traversal under the separately scoped `SL-D-035` evidence gate, and
+do not broaden SL-D-040 into reconnect or path migration.
 
 ## 2026-09-08 — SL-D-035 activation and Link re-investigation
 

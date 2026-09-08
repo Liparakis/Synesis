@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -21,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
+import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.overlay.OverlayEnvelope;
 import org.synesis.link.overlay.OverlayForwardingFrame;
@@ -50,11 +53,11 @@ final class OverlayRelayServerTest {
                 relayIdentity, core, 2)) {
             InetSocketAddress address = server.start();
             CompletableFuture<OverlayForwardingFrame> inbound = new CompletableFuture<>();
+            CompletableFuture<OverlayForwardingFrame> originInbound = new CompletableFuture<>();
             try (OverlayRelayClient destinationClient = new OverlayRelayClient(destination, address,
                     relayIdentity.nodeId(), relayIdentity.publicKeyEncoded(), inbound::complete);
                     OverlayRelayClient originClient = new OverlayRelayClient(origin, address,
-                            relayIdentity.nodeId(), relayIdentity.publicKeyEncoded(), ignored -> {
-                            });
+                            relayIdentity.nodeId(), relayIdentity.publicKeyEncoded(), originInbound::complete);
                     OverlayRelayClient unauthorizedClient = new OverlayRelayClient(unauthorized, address,
                             relayIdentity.nodeId(), relayIdentity.publicKeyEncoded(), ignored -> {
                             })) {
@@ -81,6 +84,16 @@ final class OverlayRelayServerTest {
                 assertArrayEquals(plaintext, receiver.decrypt(OverlayEnvelope.decode(delivered.innerRecord())));
                 assertThrows(ExecutionException.class,
                         () -> originClient.send(frame).toCompletableFuture().get(10, TimeUnit.SECONDS));
+
+                byte[] reversePlaintext = "localhost relay remains bidirectional".getBytes(StandardCharsets.UTF_8);
+                OverlayEnvelope reverseEnvelope = receiver.encrypt(UUID.randomUUID(), reversePlaintext);
+                OverlayForwardingFrame reverseFrame = OverlayForwardingFrame.create(projectId, origin.nodeId(),
+                        reverseEnvelope.messageId(), 1, reverseEnvelope.encoded());
+                destinationClient.send(reverseFrame).toCompletableFuture().get(10, TimeUnit.SECONDS);
+                OverlayForwardingFrame reverseDelivered = originInbound.get(10, TimeUnit.SECONDS);
+                assertEquals(0, reverseDelivered.remainingHops());
+                assertArrayEquals(reversePlaintext, sender.decrypt(OverlayEnvelope.decode(
+                        reverseDelivered.innerRecord())));
                 sender.close();
                 receiver.close();
             }
@@ -134,6 +147,106 @@ final class OverlayRelayServerTest {
                 sender.close();
                 receiver.close();
             }
+        }
+    }
+
+    @Test
+    void standaloneRelayMainProcessForwardsBidirectionally() throws Exception {
+        Path directory = Files.createTempDirectory("synesis-relay-main-process");
+        Path identityDirectory = directory.resolve("relay-identity");
+        Path output = directory.resolve("relay.out");
+        NodeIdentity relayIdentity = new IdentityBootstrap(identityDirectory).loadOrCreate().identity();
+        NodeIdentity authority = NodeIdentity.generate();
+        NodeIdentity origin = NodeIdentity.generate();
+        NodeIdentity destination = NodeIdentity.generate();
+        UUID projectId = UUID.randomUUID();
+        OverlayMembershipSnapshot membership = membership(projectId, authority, origin, destination);
+        String javaExecutable = Path.of(System.getProperty("java.home"), "bin",
+                System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")
+                        ? "java.exe" : "java").toString();
+        Process relayProcess = null;
+        try {
+            relayProcess = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp",
+                    System.getProperty("java.class.path"), RelayMain.class.getName(), "--project",
+                    projectId.toString(), "--node", origin.nodeId(), "--node", destination.nodeId(), "--host",
+                    "127.0.0.1", "--port", "0", "--workers", "2", "--identity-dir",
+                    identityDirectory.toString()).redirectErrorStream(true).redirectOutput(output.toFile()).start();
+            int port = waitForRelayPort(output);
+            assertTrue(relayProcess.isAlive(), relayOutput(output));
+            InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
+            CompletableFuture<OverlayForwardingFrame> destinationInbound = new CompletableFuture<>();
+            CompletableFuture<OverlayForwardingFrame> originInbound = new CompletableFuture<>();
+            try (OverlayRelayClient destinationClient = new OverlayRelayClient(destination, address,
+                    relayIdentity.nodeId(), relayIdentity.publicKeyEncoded(), destinationInbound::complete);
+                    OverlayRelayClient originClient = new OverlayRelayClient(origin, address,
+                            relayIdentity.nodeId(), relayIdentity.publicKeyEncoded(), originInbound::complete)) {
+                destinationClient.connect().toCompletableFuture().get(10, TimeUnit.SECONDS);
+                originClient.connect().toCompletableFuture().get(10, TimeUnit.SECONDS);
+                OverlayKeyAgreement.Initiator agreement = OverlayKeyAgreement.start(projectId,
+                        destination.nodeId(), UUID.randomUUID(), membership.revision(), origin);
+                OverlayKeyAgreement.Responder response = OverlayKeyAgreement.respond(agreement.init(), destination,
+                        membership);
+                OverlayKeyAgreement.E2eSession sender = OverlayKeyAgreement.finish(agreement, response.response(),
+                        membership);
+                OverlayKeyAgreement.E2eSession receiver = response.session();
+                byte[] forwardPlaintext = "standalone relay A-to-C".getBytes(StandardCharsets.UTF_8);
+                OverlayEnvelope forwardEnvelope = sender.encrypt(UUID.randomUUID(), forwardPlaintext);
+                originClient.send(OverlayForwardingFrame.create(projectId, destination.nodeId(),
+                        forwardEnvelope.messageId(), 1, forwardEnvelope.encoded())).toCompletableFuture()
+                        .get(10, TimeUnit.SECONDS);
+                OverlayForwardingFrame deliveredForward = destinationInbound.get(10, TimeUnit.SECONDS);
+                assertArrayEquals(forwardPlaintext,
+                        receiver.decrypt(OverlayEnvelope.decode(deliveredForward.innerRecord())));
+
+                byte[] reversePlaintext = "standalone relay C-to-A".getBytes(StandardCharsets.UTF_8);
+                OverlayEnvelope reverseEnvelope = receiver.encrypt(UUID.randomUUID(), reversePlaintext);
+                destinationClient.send(OverlayForwardingFrame.create(projectId, origin.nodeId(),
+                        reverseEnvelope.messageId(), 1, reverseEnvelope.encoded())).toCompletableFuture()
+                        .get(10, TimeUnit.SECONDS);
+                OverlayForwardingFrame deliveredReverse = originInbound.get(10, TimeUnit.SECONDS);
+                assertArrayEquals(reversePlaintext, sender.decrypt(OverlayEnvelope.decode(
+                        deliveredReverse.innerRecord())));
+                sender.close();
+                receiver.close();
+            }
+        } finally {
+            if (relayProcess != null && relayProcess.isAlive()) {
+                relayProcess.destroy();
+                if (!relayProcess.waitFor(5, TimeUnit.SECONDS)) {
+                    relayProcess.destroyForcibly();
+                }
+            }
+            try (var paths = Files.walk(directory)) {
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (java.io.IOException ignored) {
+                    }
+                });
+            }
+        }
+    }
+
+    private static int waitForRelayPort(Path output) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (Files.exists(output)) {
+                for (String line : Files.readAllLines(output, StandardCharsets.UTF_8)) {
+                    if (line.startsWith("RELAY_PORT=")) {
+                        return Integer.parseInt(line.substring("RELAY_PORT=".length()).trim());
+                    }
+                }
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("relay process did not publish a port: " + relayOutput(output));
+    }
+
+    private static String relayOutput(Path output) {
+        try {
+            return Files.exists(output) ? Files.readString(output, StandardCharsets.UTF_8) : "<no output>";
+        } catch (java.io.IOException failure) {
+            return "<unreadable output: " + failure.getMessage() + ">";
         }
     }
 
