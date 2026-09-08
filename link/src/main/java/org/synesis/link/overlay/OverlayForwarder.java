@@ -57,10 +57,10 @@ public final class OverlayForwarder {
     }
 
     private final String localNodeId;
-    private final OverlayMembershipSnapshot membership;
+    private final OverlayMembershipView membership;
     private final OverlayTopologyView topology;
     private final OverlayDuplicateGuard duplicateGuard;
-    private final Map<String, PeerTransport> peers;
+    private final OverlayPeerRegistry<PeerTransport> peers;
     private final DeliveryHandler deliveryHandler;
     private final String relayNodeId;
     private final RelayTransport relayTransport;
@@ -97,13 +97,49 @@ public final class OverlayForwarder {
             OverlayTopologyView topology, OverlayDuplicateGuard duplicateGuard,
             Map<String, PeerTransport> peers, DeliveryHandler deliveryHandler, String relayNodeId,
             RelayTransport relayTransport) {
+        this(localNodeId, new OverlayMembershipView(membership), topology, duplicateGuard,
+                new OverlayPeerRegistry<>(peers), deliveryHandler, relayNodeId, relayTransport);
+    }
+
+    /**
+     * Creates a forwarder backed by refreshable membership and direct-peer
+     * views.
+     *
+     * @param localNodeId local node ID
+     * @param membership current signed membership view
+     * @param topology signed topology view
+     * @param duplicateGuard bounded duplicate guard
+     * @param peers mutable direct-peer binding registry
+     * @param deliveryHandler local destination callback
+     */
+    public OverlayForwarder(String localNodeId, OverlayMembershipView membership,
+            OverlayTopologyView topology, OverlayDuplicateGuard duplicateGuard,
+            OverlayPeerRegistry<PeerTransport> peers, DeliveryHandler deliveryHandler) {
+        this(localNodeId, membership, topology, duplicateGuard, peers, deliveryHandler, null, null);
+    }
+
+    /**
+     * Creates a refreshable forwarder with an optional live relay fallback.
+     *
+     * @param localNodeId local node ID
+     * @param membership current signed membership view
+     * @param topology signed topology view
+     * @param duplicateGuard bounded duplicate guard
+     * @param peers mutable direct-peer binding registry
+     * @param deliveryHandler local destination callback
+     * @param relayNodeId configured relay node ID
+     * @param relayTransport authenticated live relay transport
+     */
+    public OverlayForwarder(String localNodeId, OverlayMembershipView membership,
+            OverlayTopologyView topology, OverlayDuplicateGuard duplicateGuard,
+            OverlayPeerRegistry<PeerTransport> peers, DeliveryHandler deliveryHandler, String relayNodeId,
+            RelayTransport relayTransport) {
         OverlayCodecSupport.requireNodeId(localNodeId);
         this.localNodeId = localNodeId;
         this.membership = Objects.requireNonNull(membership, "membership");
         this.topology = Objects.requireNonNull(topology, "topology");
         this.duplicateGuard = Objects.requireNonNull(duplicateGuard, "duplicate guard");
-        this.peers = Map.copyOf(Objects.requireNonNull(peers, "peers"));
-        this.peers.keySet().forEach(OverlayCodecSupport::requireNodeId);
+        this.peers = Objects.requireNonNull(peers, "peers");
         this.deliveryHandler = Objects.requireNonNull(deliveryHandler, "delivery handler");
         if ((relayNodeId == null) != (relayTransport == null)) {
             throw new IllegalArgumentException("relay identity and transport must be supplied together");
@@ -113,6 +149,24 @@ public final class OverlayForwarder {
         }
         this.relayNodeId = relayNodeId;
         this.relayTransport = relayTransport;
+    }
+
+    /**
+     * Returns the newest membership snapshot used for validation and routing.
+     *
+     * @return current signed membership snapshot
+     */
+    public OverlayMembershipSnapshot membership() {
+        return membership.current();
+    }
+
+    /**
+     * Returns the currently bound direct peer IDs.
+     *
+     * @return immutable direct-peer IDs
+     */
+    public java.util.Set<String> directPeerIds() {
+        return peers.nodeIds();
     }
 
     /**
@@ -140,9 +194,12 @@ public final class OverlayForwarder {
         Objects.requireNonNull(now, "now");
         try {
             validateFrame(frame, now);
-            if (immediateSenderNodeId != null && (!isNodeId(immediateSenderNodeId)
-                    || (!peers.containsKey(immediateSenderNodeId)
-                            && !immediateSenderNodeId.equals(relayNodeId)))) {
+            OverlayMembershipSnapshot currentMembership = membership.current();
+            boolean authorizedImmediateSender = immediateSenderNodeId != null && isNodeId(immediateSenderNodeId)
+                    && (immediateSenderNodeId.equals(relayNodeId)
+                            || (currentMembership.allows(immediateSenderNodeId)
+                                    && peers.contains(immediateSenderNodeId)));
+            if (immediateSenderNodeId != null && !authorizedImmediateSender) {
                 return failed(new OverlayForwardingException(OverlayForwardingException.Failure.UNAUTHORIZED_PROJECT,
                         "physical sender is not an authorized direct peer"));
             }
@@ -160,8 +217,8 @@ public final class OverlayForwarder {
                 return failed(new OverlayForwardingException(OverlayForwardingException.Failure.HOP_LIMIT_EXCEEDED,
                         "overlay hop budget exhausted"));
             }
-            OverlayRoute route = OverlayRouteSelector.select(localNodeId, frame.destinationNodeId(), membership,
-                    peers.keySet(), topology, now, relayNodeId);
+            OverlayRoute route = OverlayRouteSelector.select(localNodeId, frame.destinationNodeId(), currentMembership,
+                    peers.nodeIds(), topology, now, relayNodeId);
             if (route.kind() == OverlayRoute.Kind.ORGANIZATION_RELAY) {
                 if (relayTransport == null) {
                     return failed(new OverlayForwardingException(
@@ -183,7 +240,7 @@ public final class OverlayForwarder {
             }
             String nextHop = route.nextHop().orElseThrow(() -> new OverlayForwardingException(
                     OverlayForwardingException.Failure.NEXT_HOP_UNAVAILABLE, "route has no next hop"));
-            PeerTransport transport = peers.get(nextHop);
+            PeerTransport transport = peers.binding(nextHop);
             if (transport == null) {
                 return failed(new OverlayForwardingException(OverlayForwardingException.Failure.NEXT_HOP_UNAVAILABLE,
                         "selected next hop is unavailable"));
@@ -206,12 +263,13 @@ public final class OverlayForwarder {
     }
 
     private void validateFrame(OverlayForwardingFrame frame, Instant now) throws GeneralSecurityException {
-        if (!membership.projectId().equals(frame.projectId())) {
+        OverlayMembershipSnapshot currentMembership = membership.current();
+        if (!currentMembership.projectId().equals(frame.projectId())) {
             throw new OverlayForwardingException(OverlayForwardingException.Failure.PROJECT_MISMATCH,
                     "overlay frame project mismatch");
         }
-        if (!membership.isUsableAt(now) || !membership.allows(localNodeId)
-                || !membership.allows(frame.destinationNodeId())) {
+        if (!currentMembership.isUsableAt(now) || !currentMembership.allows(localNodeId)
+                || !currentMembership.allows(frame.destinationNodeId())) {
             throw new OverlayForwardingException(OverlayForwardingException.Failure.UNAUTHORIZED_PROJECT,
                     "overlay frame member is unauthorized");
         }

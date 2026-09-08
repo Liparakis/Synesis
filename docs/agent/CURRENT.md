@@ -5,11 +5,12 @@
 Status: **ACTIVE / PARTIAL**. The requested overlay capability is now
 represented by its own task rather than being folded into direct traversal.
 ADR-0066 records the proposed ownership, membership, E2E, topology, routing,
-and relay boundaries. The bounded Link overlay, signed topology propagator,
-peer forwarder, in-memory relay, and standalone relay module now have
-production code. Configured Link/relay checks and localhost socket acceptance
-pass with a process-local loopback workaround; the inherited environment still
-fails before Gradle startup.
+and relay boundaries. The bounded Link overlay, monotonic membership view,
+mutable authenticated-peer registry, signed topology propagator, peer
+forwarder, in-memory relay, and standalone relay module now have production
+code. Configured Link/relay checks and localhost socket acceptance pass with a
+process-local loopback workaround; the inherited environment still fails
+before Gradle startup.
 
 - Task ID: SL-D-040
 
@@ -27,6 +28,7 @@ Re-investigated the current Link and project-record source. Confirmed that
 application seam is bounded request/response, `ProjectConfig` is only a local
 allowlist, and durable Ed25519 identities currently provide signing rather
 than E2E encryption. Implemented the bounded SLM1/SLK1/SLE1/SLF1 contract,
+monotonic same-authority membership refresh, bounded direct-peer binding,
 signed topology and SLP1 propagation, deterministic route selection, peer
 forwarding, the PeerSession bridge, in-memory relay core, and standalone Netty
 relay/client module. Configured/local evidence is recorded in

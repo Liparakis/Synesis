@@ -33,9 +33,9 @@ public final class OverlayTopologyPropagation {
     }
 
     private final String localNodeId;
-    private final OverlayMembershipSnapshot membership;
+    private final OverlayMembershipView membership;
     private final OverlayTopologyView topology;
-    private final Map<String, PeerTransport> peers;
+    private final OverlayPeerRegistry<PeerTransport> peers;
 
     /**
      * Creates one bounded topology propagator.
@@ -47,17 +47,25 @@ public final class OverlayTopologyPropagation {
      */
     public OverlayTopologyPropagation(String localNodeId, OverlayMembershipSnapshot membership,
             OverlayTopologyView topology, Map<String, PeerTransport> peers) {
+        this(localNodeId, new OverlayMembershipView(membership), topology, new OverlayPeerRegistry<>(peers));
+    }
+
+    /**
+     * Creates a propagator backed by refreshable membership and direct-peer
+     * views.
+     *
+     * @param localNodeId local member node ID
+     * @param membership current signed membership view
+     * @param topology local topology read model
+     * @param peers mutable authenticated direct-peer registry
+     */
+    public OverlayTopologyPropagation(String localNodeId, OverlayMembershipView membership,
+            OverlayTopologyView topology, OverlayPeerRegistry<PeerTransport> peers) {
         OverlayCodecSupport.requireNodeId(localNodeId);
         this.localNodeId = localNodeId;
         this.membership = Objects.requireNonNull(membership, "membership");
         this.topology = Objects.requireNonNull(topology, "topology");
-        this.peers = Map.copyOf(Objects.requireNonNull(peers, "peers"));
-        this.peers.keySet().forEach(peer -> {
-            OverlayCodecSupport.requireNodeId(peer);
-            if (!membership.allows(peer)) {
-                throw new IllegalArgumentException("topology peer is not a project member");
-            }
-        });
+        this.peers = Objects.requireNonNull(peers, "peers");
     }
 
     /**
@@ -73,10 +81,13 @@ public final class OverlayTopologyPropagation {
             throws GeneralSecurityException {
         Objects.requireNonNull(advertisement, "advertisement");
         Objects.requireNonNull(now, "now");
+        OverlayMembershipSnapshot currentMembership = membership.current();
         if (!localNodeId.equals(advertisement.originNodeId())) {
             throw new GeneralSecurityException("topology publisher is not the signed origin");
         }
-        if (topology.accept(advertisement, membership, now) != OverlayTopologyView.Acceptance.ACCEPTED) {
+        if (!currentMembership.allows(localNodeId)
+                || topology.accept(advertisement, currentMembership, now)
+                        != OverlayTopologyView.Acceptance.ACCEPTED) {
             return CompletableFuture.completedFuture(null);
         }
         return sendToPeers(OverlayTopologyPropagationFrame.create(advertisement,
@@ -99,10 +110,11 @@ public final class OverlayTopologyPropagation {
         Objects.requireNonNull(immediateSenderNodeId, "immediate sender node ID");
         Objects.requireNonNull(frame, "frame");
         Objects.requireNonNull(now, "now");
-        if (!peers.containsKey(immediateSenderNodeId)) {
+        OverlayMembershipSnapshot currentMembership = membership.current();
+        if (!currentMembership.allows(immediateSenderNodeId) || !peers.contains(immediateSenderNodeId)) {
             throw new GeneralSecurityException("topology sender is not a direct project peer");
         }
-        if (topology.accept(frame.advertisement(), membership, now) != OverlayTopologyView.Acceptance.ACCEPTED
+        if (topology.accept(frame.advertisement(), currentMembership, now) != OverlayTopologyView.Acceptance.ACCEPTED
                 || frame.remainingHops() == 0) {
             return CompletableFuture.completedFuture(null);
         }
@@ -111,8 +123,8 @@ public final class OverlayTopologyPropagation {
 
     private CompletionStage<Void> sendToPeers(OverlayTopologyPropagationFrame frame, String excludedPeer) {
         List<CompletableFuture<Void>> sends = new ArrayList<>();
-        for (Map.Entry<String, PeerTransport> entry : peers.entrySet()) {
-            if (entry.getKey().equals(excludedPeer)) {
+        for (var entry : peers.snapshot().entrySet()) {
+            if (entry.getKey().equals(excludedPeer) || !membership.current().allows(entry.getKey())) {
                 continue;
             }
             try {

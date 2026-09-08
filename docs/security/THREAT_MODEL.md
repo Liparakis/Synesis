@@ -165,6 +165,11 @@ immediate sender. The deterministic policy is a full
 mesh for at most three members and a sorted circular `+/-1` and `+/-2` graph
 otherwise; it has maximum desired degree four and does not require consensus.
 
+Membership refresh is monotonic and same-authority only. A new peer binding is
+accepted as a transport fact only after the refreshed signed snapshot permits
+that node; the registry itself does not grant membership or revive a dead
+session.
+
 `SLK1` signs an ephemeral X25519 transcript with the durable Ed25519 identity.
 The project, exact origin/destination, membership revision, session, nonces,
 and transcript are bound into HKDF-SHA256 output. `SLE1` uses the derived key

@@ -74,6 +74,13 @@ public final class OverlayTopologyView {
             return Acceptance.CAPACITY_REJECTED;
         }
         if (current != null) {
+            if (advertisement.membershipRevision() < current.membershipRevision()) {
+                return Acceptance.STALE;
+            }
+            if (advertisement.membershipRevision() > current.membershipRevision()) {
+                advertisements.put(advertisement.originNodeId(), advertisement);
+                return Acceptance.ACCEPTED;
+            }
             if (advertisement.sequence() < current.sequence()) {
                 return Acceptance.STALE;
             }
@@ -133,6 +140,27 @@ public final class OverlayTopologyView {
         advertisements.values().stream().sorted(java.util.Comparator.comparing(
                 OverlayTopologyAdvertisement::originNodeId)).forEach(advertisement ->
                 result.put(advertisement.originNodeId(), List.copyOf(new ArrayList<>(advertisement.adjacentNodeIds()))));
+        return Map.copyOf(result);
+    }
+
+    /**
+     * Builds the graph for one current membership revision.
+     *
+     * @param membership current verified membership snapshot
+     * @param now current time
+     * @return immutable graph with current-revision neighbor lists
+     */
+    public synchronized Map<String, List<String>> adjacencyGraph(OverlayMembershipSnapshot membership,
+            Instant now) {
+        Objects.requireNonNull(membership, "membership");
+        Objects.requireNonNull(now, "now");
+        pruneExpired(now);
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        advertisements.values().stream()
+                .filter(advertisement -> advertisement.membershipRevision() == membership.revision())
+                .sorted(java.util.Comparator.comparing(OverlayTopologyAdvertisement::originNodeId))
+                .forEach(advertisement -> result.put(advertisement.originNodeId(),
+                        List.copyOf(new ArrayList<>(advertisement.adjacentNodeIds()))));
         return Map.copyOf(result);
     }
 

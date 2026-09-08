@@ -74,6 +74,13 @@ The v1 contract does not define automatic authority succession. Loss or
 compromise of the authority is an explicit project-management failure requiring
 a separately authorized membership update.
 
+The local `OverlayMembershipView` accepts a newer snapshot only when the
+project and authority remain unchanged, the signature is valid, and the
+candidate is currently usable. Lower revisions are stale, identical revisions
+are idempotent, and conflicting same-revision bytes are rejected. Updating
+this view does not establish sockets or reconnect a dead transport; the
+direct-peer registry is refreshed only by authenticated Link/session owners.
+
 ## SLK1 end-to-end key agreement
 
 `SLK1` records are logical messages. Transit peers forward them unchanged.

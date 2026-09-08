@@ -1,3 +1,25 @@
+## 2026-09-08 — SL-D-040 membership refresh and transit follow-up
+
+The bounded follow-up kept the existing one-hop `PeerSession` boundary and
+added `OverlayMembershipView` plus `OverlayPeerRegistry`. Newer signed
+same-project/same-authority membership snapshots replace older local views;
+stale/conflicting revisions fail closed, and direct bindings remain transport
+facts rather than membership grants. Topology views now replace stale-revision
+advertisements and route only on the current membership revision. Focused tests
+cover newcomer refresh, peer binding, transit-carried `SLK1` establishment,
+bidirectional direct/peer-transit delivery, and transit opacity.
+
+The configured `:link:check :relay:check --rerun-tasks --no-daemon` pass used
+only the documented process-local loopback environment and reported 80 Link
+tests plus 4 relay tests with zero failures/errors. The inherited environment
+still fails before Gradle startup; controlled-NAT/physical traversal remains
+under `SL-D-035`, authority succession remains outside this task, and no
+reconnect/path migration was added. No push occurred.
+
+Evidence: `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`.
+Exact next action: preserve the passing local acceptance and keep physical
+traversal under `SL-D-035`; do not broaden `SL-D-040` into reconnect.
+
 ## 2026-09-08 — SL-D-040 overlay and relay acceptance follow-up
 
 The bounded project overlay follow-up added signed `SLP1` topology

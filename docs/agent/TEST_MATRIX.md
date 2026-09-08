@@ -4,13 +4,14 @@
 |---|---|---|---|
 | Java 25 crypto compatibility | X25519, HKDF-SHA256, ChaCha20-Poly1305 probe | PASS | `docs/evidence/sl-d-040-java25-crypto-probe-2026-09-08.md` |
 | Signed membership and E2E records | SLM1/SLK1/SLE1 round trip, signatures, substitution, tamper, replay | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Membership refresh and newcomer seam | monotonic same-authority revision, stale rejection, topology replacement, bounded peer binding | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | Topology policy and advertisements | bounded ring connectivity, stale/conflicting sequence, signed topology | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | Topology propagation | signed `SLT1` over bounded `SLP1`, direct-peer multi-hop convergence, duplicate no-reflood | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
-| Peer transit | A→B→C opaque forwarding, destination decrypt, transit decrypt rejection, duplicate/hop bounds | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Peer transit | A→B→C opaque `SLK1`/`SLE1` forwarding, destination decrypt, transit decrypt rejection, duplicate/hop bounds | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | In-memory relay | allowlist, opaque live forwarding, duplicate/no-route, bounded policy | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | Relay wire/auth codec | pinned Ed25519 hello/ack and SLF1 frame vectors | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | Standalone Netty relay socket | real client/server/concurrency acceptance, bidirectional `RelayMain` subprocess | PASS with process-local workaround | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
-| Gradle Link/relay checks | configured build/test/Javadoc/static-analysis tasks | PASS with process-local workaround; 78 Link + 4 relay tests | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Gradle Link/relay checks | configured build/test/Javadoc/static-analysis tasks | PASS with process-local workaround; 80 Link + 4 relay tests | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 
 Exact next action: preserve the passing local acceptance, keep the inherited
 loopback limitation classified separately, and obtain controlled-NAT evidence

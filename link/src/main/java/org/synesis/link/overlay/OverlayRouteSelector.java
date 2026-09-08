@@ -57,7 +57,7 @@ public final class OverlayRouteSelector {
             return OverlayRoute.direct(destinationNodeId);
         }
 
-        Map<String, List<String>> advertised = topology.adjacencyGraph(now);
+        Map<String, List<String>> advertised = topology.adjacencyGraph(membership, now);
         List<String> peerPath = shortestPath(localNodeId, destinationNodeId, directNeighbors, advertised, membership);
         if (!peerPath.isEmpty()) {
             return OverlayRoute.peerTransit(peerPath);

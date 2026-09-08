@@ -104,6 +104,13 @@ architecture-changing decisions and require a separate activated task. Do not
 derive membership from an inviter, a topology advertisement, an IP address,
 or an unsigned peer claim.
 
+The implementation keeps this boundary explicit with a monotonic
+`OverlayMembershipView`: a current overlay can accept a newer same-authority
+snapshot without reconstructing its logical router. A bounded
+`OverlayPeerRegistry` lets the authenticated Link/session owner bind or remove
+direct transports for the refreshed member set. Neither type performs
+admission, authority succession, or reconnect.
+
 ## Topology and route selection
 
 For a small project, a deterministic full mesh is acceptable. Above that

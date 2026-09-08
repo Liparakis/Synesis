@@ -2,8 +2,9 @@
 
 - Date: 2026-09-08
 - Scope: SL-D-040 implementation from `d9f7696`, checkpointed at
-  `3bb5e28`, plus the bounded topology-propagation, runtime-acceptance, and
-  configuration-cache verification follow-up in this slice
+  `3bb5e28`/`692b588`, plus bounded topology-propagation, newcomer-refresh,
+  transit-handshake, runtime-acceptance, and configuration-cache verification
+  follow-up in this slice
 - Runtime: Java 25; configured Gradle execution was verified with the
   process-local loopback workaround documented below
 
@@ -13,20 +14,22 @@
 |---|---|
 | Link and relay main/test compilation, strict `-Xlint:all -Werror` | PASS |
 | Link and relay public/protected Javadocs, `-Xdoclint:all -Werror` | PASS |
-| `OverlayProtocolTest` | PASS; 11 found, 11 succeeded, 0 failed |
+| `OverlayProtocolTest` | PASS; 13 found, 13 succeeded, 0 failed |
 | `RelayWireCodecTest` | PASS; 1 found, 1 succeeded, 0 failed |
 | `OverlayRelayServerTest` | PASS; 3 found, 3 succeeded, 0 failed |
-| Full `:link:check :relay:check` | PASS; 78 Link tests and 4 relay tests, 0 failures/errors |
+| Full `:link:check :relay:check` | PASS; 80 Link tests and 4 relay tests, 0 failures/errors |
 | Java 25 primitive compatibility probe | PASS; see `sl-d-040-java25-crypto-probe-2026-09-08.md` |
 | `git diff --check` | PASS |
 
 The focused Link suite covers signed bounded membership, directional X25519/
 HKDF and ChaCha20-Poly1305 session records for both logical directions, replay
 and tamper rejection, hop limits, deterministic eight-member topology
-degree/connectivity, signed topology propagation through a direct peer, peer
-transit, opaque in-memory relay forwarding, duplicate rejection, relay
-fallback, connection caps, queue backpressure, and retry after queue admission
-becomes available.
+degree/connectivity, signed topology propagation through a direct peer,
+monotonic membership refresh with a newly authorized peer binding, transit-
+carried `SLK1` establishment, direct and peer-transit bidirectional delivery,
+opaque in-memory relay forwarding, duplicate rejection, relay fallback,
+connection caps, queue backpressure, and retry after queue admission becomes
+available.
 
 The real relay suite covers signed hello/ack binding, unauthorized-client
 rejection, opaque bidirectional forwarding, concurrent frame delivery without
