@@ -23,6 +23,7 @@ import org.synesis.cli.command.coordination.CoordinationServeCommand;
 import org.synesis.cli.command.coordination.CoordinationStatusCommand;
 import org.synesis.cli.command.coordination.EventsCommand;
 import org.synesis.cli.command.coordination.EventsFollowCommand;
+import org.synesis.cli.command.coordination.UiCommand;
 import org.synesis.cli.command.hook.HookClaudeCodeCommand;
 import org.synesis.cli.command.hook.HookCodexCommand;
 import org.synesis.cli.command.hook.HookCommand;
@@ -162,6 +163,7 @@ public final class SynesisCli {
         command.getSubcommands()
                 .get("coordination")
                 .addSubcommand("serve", new CoordinationServeCommand(runtime));
+        command.addSubcommand("ui", new UiCommand(runtime));
         command.getSubcommands()
                 .get("coordination")
                 .addSubcommand("status", new CoordinationStatusCommand(runtime));

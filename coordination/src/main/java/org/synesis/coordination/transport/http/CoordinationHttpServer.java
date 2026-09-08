@@ -63,6 +63,23 @@ public final class CoordinationHttpServer implements AutoCloseable {
      */
     public CoordinationHttpServer(CoordinationService service, InetSocketAddress address,
             HttpHandler codexLifecycleHandler, HttpHandler controlPlaneHandler) throws IOException {
+        this(service, address, codexLifecycleHandler, controlPlaneHandler, null);
+    }
+
+    /**
+     * Creates the loopback coordination listener with optional lifecycle,
+     * versioned local-control, and packaged web UI handlers.
+     *
+     * @param service               coordination service
+     * @param address               local loopback address
+     * @param codexLifecycleHandler retained Codex handler, or {@code null}
+     * @param controlPlaneHandler  local control-plane handler, or {@code null}
+     * @param webUiHandler         packaged static UI handler, or {@code null}
+     * @throws IOException when the listener cannot be created
+     */
+    public CoordinationHttpServer(CoordinationService service, InetSocketAddress address,
+            HttpHandler codexLifecycleHandler, HttpHandler controlPlaneHandler,
+            HttpHandler webUiHandler) throws IOException {
         this.service = java.util.Objects.requireNonNull(service, "service");
         java.util.Objects.requireNonNull(address, "address");
         InetAddress host = address.getAddress();
@@ -83,6 +100,9 @@ public final class CoordinationHttpServer implements AutoCloseable {
         }
         if (controlPlaneHandler != null) {
             server.createContext("/api/v1", controlPlaneHandler);
+        }
+        if (webUiHandler != null) {
+            server.createContext("/", webUiHandler);
         }
     }
 
