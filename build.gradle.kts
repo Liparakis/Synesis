@@ -64,10 +64,12 @@ abstract class RepositoryHygieneTask : DefaultTask() {
                 val resolved = file.parentFile.resolve(target).normalize()
                 if (!resolved.exists()) failures += "$relative: missing Markdown target $raw"
             }
+
             scriptPattern.findAll(text).forEach { match ->
                 val script = repoRoot.resolve(match.value.replace('/', File.separatorChar))
                 if (!script.isFile) failures += "$relative: missing script ${match.value}"
             }
+
             if (staleProviderPattern.containsMatchIn(text)) failures += "$relative: canonical provider command uses claude-code"
             countPattern.findAll(text).forEach { match ->
                 if (match.groupValues[1] != "10") failures += "$relative: MCP tool count is ${match.groupValues[1]}, expected 10"
@@ -75,11 +77,15 @@ abstract class RepositoryHygieneTask : DefaultTask() {
         }
         val scripts = scriptsDirectory.get().asFile.listFiles()
             ?.filter { it.isFile && it.extension in setOf("ps1", "cmd", "bat", "sh") }
-            ?.map { it.nameWithoutExtension.lowercase() }
-            ?: emptyList()
-        val duplicateNames = scripts.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
-            .filterNot { it == "install" }
-        if (duplicateNames.isNotEmpty()) failures += "duplicate active script entrypoints: ${duplicateNames.joinToString()}"
+            ?.map { it.nameWithoutExtension.lowercase() } ?: emptyList()
+
+        val duplicateNames =
+            scripts.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.filterNot { it == "install" }
+
+        if (duplicateNames.isNotEmpty()) {
+            failures += "duplicate active script entrypoints: ${duplicateNames.joinToString()}"
+        }
+
         require(failures.isEmpty()) { "Repository hygiene failures:\n${failures.joinToString("\n")}" }
         logger.lifecycle("Repository hygiene: ${files.size} maintained Markdown files checked; script references and 10-tool claims are valid.")
     }
@@ -94,6 +100,7 @@ tasks.named("clean") {
     dependsOn(":mcp:clean")
     dependsOn(":mcp-contract:clean")
     dependsOn(":relay:clean")
+    dependsOn(":web-ui:clean")
 }
 
 tasks.named("check") {
@@ -105,6 +112,7 @@ tasks.named("check") {
     dependsOn(":mcp:check")
     dependsOn(":mcp-contract:check")
     dependsOn(":relay:check")
+    dependsOn(":web-ui:check")
     dependsOn("repositoryHygieneCheck")
 }
 

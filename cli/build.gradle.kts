@@ -111,6 +111,7 @@ dependencies {
     implementation(project(":project-record"))
     implementation(project(":workspace"))
     implementation(project(":coordination"))
+    implementation(project(":web-ui"))
     // The CLI keeps the compile-time boundary via reflection, but the installed
     // distribution must carry the MCP server so `synesis mcp` is runnable.
     runtimeOnly(project(":mcp"))

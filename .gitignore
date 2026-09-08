@@ -3,6 +3,7 @@
 build/
 out/
 **/build/
+**/node_modules/
 bootstrap/dist/
 dist/
 release/
