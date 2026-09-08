@@ -89,10 +89,8 @@ termination during control-plane shutdown. `LinkNetworkProjectionTest` passes
 real authenticated `PeerSession`, signed membership/topology, peer-transit,
 and relay-fallback inputs through the adapter.
 
-The current local working slice is based on commit
-`2de52ed09561065cac9bec7979ad1a746a318b39` plus the uncommitted projection,
-semantic-event, and acceptance-test changes. These changes have not been
-pushed.
+The completed local slice is commit `b422a7a` on top of
+`2de52ed09561065cac9bec7979ad1a746a318b39`. It has not been pushed.
 
 The combined `:coordination:test :workspace:test :cli:test` run reported
 failures in unrelated existing CLI/workspace fixture tests. Those failures are

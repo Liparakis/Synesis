@@ -10,9 +10,9 @@
 | Security and bounds | loopback Host/Origin, bootstrap/session/CSRF, malformed and oversized request rejection, secret redaction | PASS focused | `ControlPlaneHttpHandlerTest` |
 | Production network owner | CLI composition of long-lived Link/overlay/relay state | PENDING / explicit gap | `docs/evidence/syn-052-local-control-plane-2026-09-08.md` |
 
-Exact next action: review the final local diff, run the checkpoint/evidence
-gates, and commit SYN-052 without claiming the pending production network
-owner.
+Exact next action: preserve committed slice `b422a7a`; if the pending
+production network owner is promoted, record a new bounded architecture
+decision before implementation.
 
 ## SL-D-040 distributed project overlay — foundation and relay gate — 2026-09-08
 

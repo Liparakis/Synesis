@@ -12,10 +12,10 @@ browser remains out of scope.
 
 ## Immediate next action
 
-Review the verified final diff, run the checkpoint/evidence gates, and create
-the local SYN-052 commit. Keep the live overlay/relay-owner gap explicitly
-scoped; do not fabricate live network state or wire a transient onboarding
-operation as a runtime owner.
+Preserve committed slice `b422a7a` and, if the production Link/overlay/relay
+owner is promoted, define that owner in a new bounded architecture decision
+before wiring `LinkNetworkProjection` into it. Do not fabricate live network
+state or wire a transient onboarding operation as a runtime owner.
 
 ## Current constraints
 

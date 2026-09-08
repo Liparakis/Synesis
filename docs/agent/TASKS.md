@@ -10,9 +10,9 @@
 - Dependencies: existing `CoordinationService` projections, `ProjectApplicationService`, `ProviderApplicationService`, `DoctorService`, `Onboarding`, `PeerSession`/overlay read models, and the existing loopback HTTP lifecycle host.
 - Acceptance criteria: loopback server starts and reports its actual endpoint; health and authenticated snapshots expose real current state; supported invite/join/answer actions delegate to `Onboarding`; SSE delivers bounded UI-safe updates; Host/Origin/session/CSRF/body/secret controls fail closed; lawful disposable-project and controlled Link/overlay acceptance compare API output with authoritative backend state; shutdown releases HTTP/SSE resources and preserves Link/relay cleanup; API documentation and an ADR are current.
 - Required tests: read-model mapping for project/participant/WorkGroup/claim/capability/network/route/relay state; command delegation and backend rejection; loopback/security/bounds; SSE initial/live/slow/multiple/disconnect behavior; clean shutdown; `:link:check`, `:relay:check`, affected workspace/coordination checks, deferred validation, and `git diff --check`.
-- Exact next action: review the final diff, run the checkpoint/evidence gates,
-  and commit the verified local slice; keep the overlay/relay source
-  injectable until a real long-lived runtime owns those views.
+- Exact next action: preserve committed slice `b422a7a`; if the production
+  Link/overlay/relay owner is promoted, record a new bounded architecture
+  decision before wiring the injectable source into that owner.
 - Scope exclusions: no frontend, public or cloud API, wildcard CORS, arbitrary filesystem endpoint, generic proxy, new database/broker, OS URI handler, Claude support, reconnect/path migration, durable browser event replay, source `.synesis` mutation, or push.
 
 ## SL-D-040

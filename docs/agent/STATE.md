@@ -16,10 +16,11 @@ coordination, and workspace production sources; no remote state was changed.
 
 ## Exact next action
 
-Review the final diff, run the checkpoint/evidence gates, and create the local
-verified SYN-052 commit. Do not push it without an explicit user request. Do
-not claim production Link/overlay acceptance until a real long-lived source
-supplies those views.
+Preserve committed slice `b422a7a`. If the production Link/overlay/relay owner
+is promoted, define that owner in a new bounded architecture decision before
+wiring `LinkNetworkProjection` into it. Do not push this commit without an
+explicit user request or claim production Link/overlay acceptance until a real
+long-lived source supplies those views.
 
 ## SYN-052 implementation slice
 
