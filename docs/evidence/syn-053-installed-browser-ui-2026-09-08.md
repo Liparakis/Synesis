@@ -40,6 +40,7 @@ JDK loopback workaround against the disposable initialized Git project
 | Security headers | PASS — self-only CSP and `X-Content-Type-Options: nosniff` |
 | Authenticated snapshot | PASS — one real served project |
 | `GET /api/v1/events` | PASS — 200, first event `snapshot`, snapshot data follows |
+| Installed live SSE mutation | PASS — real invite produced `event: link.updated` with bounded data |
 | Node/Vite runtime dependency | PASS — installed command runs from the Java distribution only |
 
 The bootstrap value is one-use: the browser exchanged it for a session, and
