@@ -1,3 +1,26 @@
+## 2026-09-08 — SYN-052 live Link owner and retained HTTP acceptance
+
+ADR-0068 records the smallest legitimate owner boundary. `LinkRuntimeOwner`
+now retains authenticated `PeerSession` instances after HTTP invite/join/answer
+completion, binds the existing overlay peer/propagation bridges, publishes
+signed local topology observations, and supplies one consistent
+`LinkNetworkProjection.LinkState`. The HTTP handler receives a narrow operation
+seam; its legacy `Onboarding` constructor remains one-shot and existing tests
+stay compatible. The CLI composes the owner using the shared Link identity
+directory, but deliberately supplies no membership snapshot because this
+checkout has no signed membership-authority lifecycle.
+
+The new real two-profile HTTP acceptance passed: both owners exposed the
+explicit two-member signed overlay, one direct edge, and a `DIRECT` route after
+the retained session commands returned. Relay state remains safely disabled.
+Focused workspace tests, strict Javadocs/static analysis, `:link:check`, and
+CLI compilation pass under the process-local Windows loopback workaround. No
+push occurred.
+
+Exact next action: run the post-owner verification bundle and checkpoint this
+slice. Keep configured CLI membership, relay lifecycle, reconnect, and path
+migration outside this task.
+
 ## 2026-09-08 — SYN-052 control-plane acceptance tightening
 
 The control-plane slice was re-audited against the user brief and its current
@@ -8,8 +31,8 @@ membership from invitations or addresses. Semantic SSE event names now hide
 internal prediction enum values. Focused HTTP tests pass durable project state,
 real Link membership through `/api/v1/network`, two simultaneous clients, and
 bounded stream termination during shutdown. The CLI remains intentionally
-`UNCONFIGURED` because no production long-lived Link/overlay/relay owner exists
-in this checkout.
+`UNCONFIGURED` for overlay state because no signed membership-authority source
+existed in this checkout.
 
 Verification used the documented process-local Windows loopback workaround:
 the focused workspace control-plane tests passed, including Link projection,
@@ -17,8 +40,9 @@ strict workspace static analysis/Javadocs passed earlier in this slice, and
 the API/ADR/evidence/task-state docs were reconciled. The slice was committed
 locally as `b422a7a`; no push was performed for it.
 
-Exact next action: preserve `b422a7a`; a production network owner requires a
-new bounded architecture decision before implementation.
+Exact next action at that point was to record a bounded owner decision before
+implementation; ADR-0068 and the retained-session slice now satisfy that
+continuation.
 
 ## 2026-09-08 — SL-D-040 signed membership propagation
 

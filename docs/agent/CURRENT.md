@@ -2,7 +2,7 @@
 
 ## SYN-052 local control-plane backend — implementation and acceptance gate — 2026-09-08
 
-Status: **ACTIVE / IMPLEMENTATION FOUNDATION COMPLETE; ACCEPTANCE IN PROGRESS**.
+Status: **ACTIVE / LIVE OWNER SLICE COMPLETE; AUTHORITY SOURCE BOUNDARY OPEN**.
 The explicit control-plane brief supersedes the previous HTTP exclusion for
 this new task. ADR-0067 selects one in-process versioned loopback adapter over
 the existing coordination listener and authoritative services. The future
@@ -12,10 +12,10 @@ browser remains out of scope.
 
 ## Immediate next action
 
-Preserve committed slice `b422a7a` and, if the production Link/overlay/relay
-owner is promoted, define that owner in a new bounded architecture decision
-before wiring `LinkNetworkProjection` into it. Do not fabricate live network
-state or wire a transient onboarding operation as a runtime owner.
+Run the post-owner focused verification and checkpoint the retained-session
+acceptance. Keep membership explicit and signed; leave the CLI overlay
+`UNCONFIGURED` until a legitimate authority source exists. Do not fabricate
+membership or promote the disabled relay projection to connected.
 
 ## Current constraints
 
@@ -42,12 +42,14 @@ state or wire a transient onboarding operation as a runtime owner.
   mapping through HTTP, a real Link membership view through `/api/v1/network`,
   authenticated peer/topology route projection, auth/CSRF/origin/Host/bounds,
   semantic SSE snapshot/live delivery to multiple clients, shutdown
-  termination, and real HTTP invite/join/answer onboarding.
-  The real CLI smoke also passes for a disposable Git project. `:link:check`, `:relay:check`, strict
-  Javadocs, and deferred validation pass.
-- The CLI currently supplies `UNCONFIGURED` network state because this source
-  checkout has no production long-lived owner composing Link overlay/relay
-  views. The adapter seam is explicit; no fabricated network state is used.
+  termination, one-shot HTTP onboarding, and retained-session HTTP onboarding
+  through `LinkRuntimeOwner`. The real CLI smoke also passes for a disposable
+  Git project. `:link:check`, `:relay:check`, strict Javadocs, and deferred
+  validation pass.
+- The CLI now composes the long-lived owner and reports authenticated physical
+  sessions when present. Its overlay remains `UNCONFIGURED` because the
+  checkout has no legitimate signed membership-authority source; no fabricated
+  membership or relay connection is used.
 
 ## Work completed
 
@@ -57,9 +59,11 @@ the `LinkNetworkProjection` adapter, bounded live subscriptions, one-time
 bootstrap plus session/CSRF security, onboarding command delegation, semantic
 redacted SSE, API documentation, ADR-0067, and focused tests for real
 persisted coordination state, real Link membership/topology/relay inputs,
-multi-client delivery, clean shutdown, and a real two-profile HTTP
-invite/join/answer/connect flow. A disposable initialized Git project also
-passed real CLI serve, health, session, and authenticated snapshot smoke.
+  multi-client delivery, clean shutdown, and real two-profile one-shot and
+  retained-session HTTP invite/join/answer/connect flows. Added ADR-0068,
+  `LinkRuntimeOwner`, the narrow control operation seam, and the shared CLI
+  identity-directory wiring. A disposable initialized Git project also passed
+  real CLI serve, health, session, and authenticated snapshot smoke.
 
 ## Current failures
 
@@ -70,9 +74,10 @@ existing CLI/workspace fixture tests (`CodexHookProcessTest`, several
 `AgentNextActionServiceTest`/`CapabilityNegotiationTest` cases,
 `WorkspacePatchServiceTest`, `ProviderApplicationServiceTest`, and
 `ProviderSessionBindingServiceTest`); they are outside this slice and remain
-unclassified rather than being called passing. Live Link/overlay/relay-owner
-acceptance remains pending because this checkout has no production
-long-lived owner composing those views.
+  unclassified rather than being called passing. Configured CLI overlay
+  acceptance remains outside this slice because this checkout has no legitimate
+  signed membership-authority source; the owner and retained-session acceptance
+  are focused-pass evidence.
 
 ## SL-D-040 distributed project overlay — implementation and verification gate — 2026-09-08
 

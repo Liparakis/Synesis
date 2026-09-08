@@ -3,8 +3,9 @@
 ## Scope
 
 This record covers the local control-plane foundation over the existing
-coordination listener. It does not claim frontend, public/cloud, physical
-network, or live production overlay/relay-owner acceptance.
+coordination listener plus the bounded live Link owner. It does not claim
+frontend, public/cloud, physical-network traversal, membership-authority
+lifecycle, or live relay-client acceptance.
 
 ## Real CLI smoke
 
@@ -36,6 +37,14 @@ COORDINATION_SERVE_READY endpoint=http://127.0.0.1:62573/ project=c579908b-ad6d-
 
 The process exited successfully after the bounded duration.
 
+After the live-owner wiring, the same installed distribution was rebuilt with
+`:cli:installDist` and rerun against the disposable project with
+`--duration-seconds 1 --port 0`. It again exited `0` and emitted a loopback
+ready line on an ephemeral port (`56155` in this run), proving that the
+`LinkRuntimeOwner` composition and shared Link identity directory do not break
+the real CLI serve lifecycle. The bootstrap value and node/host identifiers
+are intentionally not retained here.
+
 ## Live authenticated query
 
 A second real `coordination serve` process was started on ephemeral port
@@ -56,11 +65,11 @@ The observed safe result was:
 
 No bootstrap or session token is recorded here.
 
-`UNCONFIGURED` is expected for this checkout: source re-investigation found
-Link overlay/relay implementations but no production long-lived owner that
-composes their live views into `coordination serve`. The control adapter keeps
-that source explicit and does not fabricate peer, topology, route, or relay
-state.
+`UNCONFIGURED` remains expected for overlay state in this checkout: the CLI now
+composes `LinkRuntimeOwner`, but no legitimate signed membership-authority
+source is available to configure its overlay. The owner can expose retained
+authenticated physical peers, while the control adapter never fabricates
+membership, topology, route, or relay connection state.
 
 ## Focused verification
 
@@ -80,14 +89,20 @@ scripts/agent-validate-deferred.ps1
 git diff --check
 ```
 
-The focused class includes a real two-profile HTTP invite, join, answer, and
-connect flow over the existing Link `Onboarding` implementation; it passed.
+The focused classes include a real two-profile HTTP invite, join, answer, and
+connect flow over the existing Link `Onboarding` implementation, plus a real
+two-profile retained-session flow through `LinkRuntimeOwner`; both passed.
 The focused class also passes real durable WorkGroup/WorkIntent state through
 the HTTP snapshot, a real verified Link membership view through
 `/api/v1/network`, two simultaneous SSE clients, and bounded stream
 termination during control-plane shutdown. `LinkNetworkProjectionTest` passes
 real authenticated `PeerSession`, signed membership/topology, peer-transit,
 and relay-fallback inputs through the adapter.
+
+The retained-session owner test proves that the HTTP command returns do not
+close the authenticated Link sessions: a follow-up `/api/v1/network` query
+shows one physical peer, the same two signed project members, a distinct direct
+edge, a selected `DIRECT` route, and safe disabled relay state on each side.
 
 The completed local slice is commit `b422a7a` on top of
 `2de52ed09561065cac9bec7979ad1a746a318b39`. It has not been pushed.

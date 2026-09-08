@@ -4,6 +4,7 @@ package org.synesis.cli.command.coordination;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
@@ -16,6 +17,8 @@ import org.synesis.workspace.lifecycle.codex.ProjectRuntimeHost;
 import org.synesis.workspace.transport.control.ControlPlaneEventHub;
 import org.synesis.workspace.transport.control.ControlPlaneHttpHandler;
 import org.synesis.workspace.transport.control.ControlPlaneReadModel;
+import org.synesis.workspace.transport.control.LinkNetworkProjection;
+import org.synesis.workspace.transport.control.LinkRuntimeOwner;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -69,11 +72,13 @@ public final class CoordinationServeCommand implements Callable<Integer> {
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
             var eventHub = new ControlPlaneEventHub();
-            var controlOnboarding = new Onboarding(location.profile(), eventHub::publish);
+            var controlOnboarding = new Onboarding(identityDirectory.resolve("link"), eventHub::publish);
+            var linkOwner = new LinkRuntimeOwner(controlOnboarding, node, Optional.empty(), eventHub::publish);
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(),
-                    new DoctorService());
-            var control = new ControlPlaneHttpHandler(readModel, service, controlOnboarding, eventHub);
+                    new DoctorService(), new LinkNetworkProjection(linkOwner));
+            var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub);
             try (control;
+                    linkOwner;
                     var lifecycleHost = new ProjectRuntimeHost(location, node);
                     var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port),
                             lifecycleHost.handler(), control)) {

@@ -22,11 +22,13 @@ Evolve the existing loopback coordination listener with a versioned
 project, coordination, provider, diagnostic, Link, overlay, and relay seams.
 `LinkNetworkProjection` is the thin mapping seam from one consistent runtime
 source of authenticated `PeerSession` objects, verified membership/topology
-views, and safe relay state. It owns no Link lifecycle. The current CLI has no
-production long-lived owner for those views and therefore exposes
-`UNCONFIGURED` network state until one exists. Commands delegate to existing
-application services, especially the Link onboarding façade; HTTP handlers do
-not reimplement protocol validation or state transitions.
+views, and safe relay state. It owns no Link lifecycle. ADR-0068 supplies the
+small in-process `LinkRuntimeOwner` that composes those views and retains
+authenticated sessions; the CLI uses it with no membership source, so its
+overlay remains explicitly `UNCONFIGURED` until a signed authority snapshot is
+available. Commands delegate to existing application services, especially the
+Link onboarding façade; HTTP handlers do not reimplement protocol validation or
+state transitions.
 
 The default bind is loopback only. The existing deterministic coordination
 port remains the default, with the already-supported ephemeral-port option for

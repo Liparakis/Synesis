@@ -41,6 +41,8 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.onboarding.Onboarding;
+import org.synesis.link.onboarding.OnboardingEvent;
+import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.overlay.OverlayMembershipSnapshot;
 import org.synesis.link.overlay.OverlayMembershipView;
 import org.synesis.link.overlay.OverlayTopologyView;
@@ -286,6 +288,29 @@ class ControlPlaneHttpHandlerTest {
 
     @Test
     @Timeout(20)
+    void liveStreamMapsPeerLifecycleToSemanticEvents() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Map<String, Object> credentials = login(fixture);
+            HttpResponse<java.io.InputStream> stream = fixture.client.send(
+                    request(fixture, "/api/v1/events")
+                            .header(ControlPlaneHttpHandler.SESSION_HEADER,
+                                    (String) credentials.get("sessionToken"))
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofInputStream());
+            assertEquals(200, stream.statusCode());
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream.body()))) {
+                assertSnapshotEvent(reader);
+                fixture.eventHub.publish(new OnboardingEvent(OnboardingEventType.PEER_CONNECTED, ""));
+                assertEquals("event: peer.connected", reader.readLine());
+                assertTrue(reader.readLine().startsWith("id: "));
+                assertTrue(reader.readLine().contains("\"type\":\"peer.connected\""));
+                assertEquals("", reader.readLine());
+            }
+        }
+    }
+
+    @Test
+    @Timeout(20)
     void closingControlPlaneTerminatesLiveStream() throws Exception {
         Fixture fixture = new Fixture();
         try {
@@ -423,6 +448,7 @@ class ControlPlaneHttpHandlerTest {
         private final ControlPlaneHttpHandler handler;
         private final CoordinationHttpServer server;
         private final CoordinationService coordination;
+        private final ControlPlaneEventHub eventHub;
         private final UUID projectId;
         private UUID seededGroupId;
         private UUID seededIntentId;
@@ -458,7 +484,7 @@ class ControlPlaneHttpHandlerTest {
             }
             coordination = new CoordinationService(
                     new PredictionEventStore(coordinationRoot, projectId), signer);
-            ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
+            eventHub = new ControlPlaneEventHub();
             Onboarding onboarding = new Onboarding(profile, eventHub::publish);
             ControlPlaneReadModel readModel = network == null
                     ? new ControlPlaneReadModel(location, coordination,

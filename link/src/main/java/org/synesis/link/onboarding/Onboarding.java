@@ -381,6 +381,22 @@ public final class Onboarding {
          * @throws OnboardingFailure if the answer is invalid, reused, or the session fails
          */
         public void importAnswer(String link) throws OnboardingFailure {
+            importAnswer(link, false);
+        }
+
+        /**
+         * Imports one exact answer and returns after authentication while
+         * retaining the live Link endpoint and session for an owning runtime.
+         *
+         * @param link exact answer link returned by the other user
+         * @return authenticated control-ready session
+         * @throws OnboardingFailure if the answer is invalid, reused, or the session fails
+         */
+        public PeerSession importAnswerAndKeepAlive(String link) throws OnboardingFailure {
+            return importAnswer(link, true);
+        }
+
+        private PeerSession importAnswer(String link, boolean keepAlive) throws OnboardingFailure {
             try {
                 TraversalAnswer answer = TraversalAnswer.fromShareLink(link);
                 if (!answer.verifyAt(Instant.now(), TraversalAnswer.DEFAULT_CLOCK_SKEW, offer)) {
@@ -398,8 +414,11 @@ public final class Onboarding {
                         TimeUnit.SECONDS);
                 emitSession(session);
                 sessionAction.accept(session);
-                session.terminalCompletion().toCompletableFuture().get(30, TimeUnit.SECONDS);
-                emit(OnboardingEventType.SESSION_CLOSED, "");
+                if (!keepAlive) {
+                    session.terminalCompletion().toCompletableFuture().get(30, TimeUnit.SECONDS);
+                    emit(OnboardingEventType.SESSION_CLOSED, "");
+                }
+                return session;
             } catch (java.util.concurrent.TimeoutException timeout) {
                 throw failure(OnboardingFailureCode.HOST_TIMEOUT, timeout);
             } catch (Exception failure) {
@@ -470,6 +489,22 @@ public final class Onboarding {
          * @throws OnboardingFailure if the answer is reused, candidates are unusable, or connection fails
          */
         public void connect() throws OnboardingFailure {
+            connect(false);
+        }
+
+        /**
+         * Starts the bounded candidate race and returns after authentication
+         * while retaining the live Link endpoint and session for an owning
+         * runtime.
+         *
+         * @return authenticated control-ready session
+         * @throws OnboardingFailure if the answer is reused, candidates are unusable, or connection fails
+         */
+        public PeerSession connectAndKeepAlive() throws OnboardingFailure {
+            return connect(true);
+        }
+
+        private PeerSession connect(boolean keepAlive) throws OnboardingFailure {
             if (!started.compareAndSet(false, true)) {
                 throw failure(OnboardingFailureCode.ANSWER_INVALID,
                         new IllegalStateException("answer has already been used"));
@@ -510,10 +545,13 @@ public final class Onboarding {
                     emit(OnboardingEventType.PATH_SELECTED, pairs.getFirst().identifier());
                     emitSession(session);
                     sessionAction.accept(session);
-                    session.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
-                            .toCompletableFuture()
-                            .get(10, TimeUnit.SECONDS);
-                    emit(OnboardingEventType.SESSION_CLOSED, "");
+                    if (!keepAlive) {
+                        session.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
+                                .toCompletableFuture()
+                                .get(10, TimeUnit.SECONDS);
+                        emit(OnboardingEventType.SESSION_CLOSED, "");
+                    }
+                    return session;
                 }
             } catch (OnboardingFailure failure) {
                 throw failure;

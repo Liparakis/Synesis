@@ -26,6 +26,7 @@ import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.onboarding.Onboarding;
+import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -33,9 +34,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 /**
  * Authenticated versioned local-control HTTP and SSE adapter.
  *
- * <p>The handler owns only browser-session state and bounded onboarding
- * handles. Durable project and coordination state remains in the existing
- * application services and event projections. It accepts loopback requests
+ * <p>The handler owns only browser-session state and bounded control-plane
+ * operation handles. Durable project and coordination state remains in the
+ * existing application services and event projections. It accepts loopback requests
  * with an exact local {@code Host} and, when present, an exact loopback
  * {@code Origin}; it never enables wildcard CORS or arbitrary filesystem
  * operations.
@@ -58,14 +59,14 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
 
     private final ControlPlaneReadModel readModel;
     private final CoordinationService coordination;
-    private final Onboarding onboarding;
+    private final ControlPlaneLinkOperations linkOperations;
     private final ControlPlaneEventHub eventHub;
     private final String bootstrapToken = token();
     private final Instant bootstrapExpiresAt = Instant.now().plus(BOOTSTRAP_LIFETIME);
     private final Object operationLock = new Object();
     private final Object onboardingLock = new Object();
-    private final Map<String, Onboarding.PreparedHost> hosts = new HashMap<>();
-    private final Map<String, Onboarding.PreparedJoin> joins = new HashMap<>();
+    private final Map<String, ControlPlaneLinkOperations.PendingHost> hosts = new HashMap<>();
+    private final Map<String, ControlPlaneLinkOperations.PendingJoin> joins = new HashMap<>();
     private final Map<String, Instant> operationExpiry = new HashMap<>();
     private final Set<String> activeOperations = new HashSet<>();
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -82,9 +83,23 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
      */
     public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination,
             Onboarding onboarding, ControlPlaneEventHub eventHub) {
+        this(readModel, coordination, new OnboardingControlPlaneOperations(onboarding), eventHub);
+    }
+
+    /**
+     * Creates a local control-plane handler with an explicit Link operation
+     * owner.
+     *
+     * @param readModel explicit public-safe read model
+     * @param coordination durable coordination service
+     * @param linkOperations supported Link operation owner
+     * @param eventHub bounded onboarding event hub
+     */
+    public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination,
+            ControlPlaneLinkOperations linkOperations, ControlPlaneEventHub eventHub) {
         this.readModel = java.util.Objects.requireNonNull(readModel, "read model");
         this.coordination = java.util.Objects.requireNonNull(coordination, "coordination");
-        this.onboarding = java.util.Objects.requireNonNull(onboarding, "onboarding");
+        this.linkOperations = java.util.Objects.requireNonNull(linkOperations, "link operations");
         this.eventHub = java.util.Objects.requireNonNull(eventHub, "event hub");
     }
 
@@ -193,6 +208,7 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
                 activeOperations.clear();
             }
             pending.forEach(ControlPlaneHttpHandler::closeQuietly);
+            linkOperations.close();
         }
     }
 
@@ -339,10 +355,10 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     private void invite(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         String expectedPeer = optionalText(body, "expectedPeer", 256);
         ensureCapacity();
-        Onboarding.PreparedHost prepared;
+        ControlPlaneLinkOperations.PendingHost prepared;
         try {
             synchronized (onboardingLock) {
-                prepared = onboarding.createInvitation(expectedPeer);
+                prepared = linkOperations.createInvitation(expectedPeer);
             }
         } catch (OnboardingFailure failure) {
             throw onboardingFailure(failure);
@@ -368,10 +384,10 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         String link = text(body, "inviteUri", true, 65_536);
         TraversalInvitation parsed = parseInvitation(link);
         ensureCapacity();
-        Onboarding.PreparedJoin prepared;
+        ControlPlaneLinkOperations.PendingJoin prepared;
         try {
             synchronized (onboardingLock) {
-                prepared = onboarding.importInvitation(link);
+                prepared = linkOperations.importInvitation(link);
             }
         } catch (OnboardingFailure failure) {
             throw onboardingFailure(failure);
@@ -394,31 +410,35 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     private void answer(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         String operationId = text(body, "operationId", true, 128);
         String answer = text(body, "answerUri", true, 65_536);
-        Onboarding.PreparedHost prepared = beginHost(operationId);
+        ControlPlaneLinkOperations.PendingHost prepared = beginHost(operationId);
+        boolean retain = false;
         try {
             synchronized (onboardingLock) {
                 prepared.importAnswer(answer);
             }
+            retain = prepared.retainsSession();
             sendJson(exchange, 200, operationResult(operationId, "CONNECTED"));
         } catch (OnboardingFailure failure) {
             throw onboardingFailure(failure);
         } finally {
-            finishHost(operationId, prepared);
+            finishHost(operationId, prepared, retain);
         }
     }
 
     private void connect(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         String operationId = text(body, "operationId", true, 128);
-        Onboarding.PreparedJoin prepared = beginJoin(operationId);
+        ControlPlaneLinkOperations.PendingJoin prepared = beginJoin(operationId);
+        boolean retain = false;
         try {
             synchronized (onboardingLock) {
                 prepared.connect();
             }
+            retain = prepared.retainsSession();
             sendJson(exchange, 200, operationResult(operationId, "CONNECTED"));
         } catch (OnboardingFailure failure) {
             throw onboardingFailure(failure);
         } finally {
-            finishJoin(operationId, prepared);
+            finishJoin(operationId, prepared, retain);
         }
     }
 
@@ -450,9 +470,9 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         return result;
     }
 
-    private Onboarding.PreparedHost beginHost(String operationId) throws ApiFailure {
+    private ControlPlaneLinkOperations.PendingHost beginHost(String operationId) throws ApiFailure {
         synchronized (operationLock) {
-            Onboarding.PreparedHost result = hosts.get(operationId);
+            ControlPlaneLinkOperations.PendingHost result = hosts.get(operationId);
             if (result == null) {
                 throw failure(404, "OPERATION_NOT_FOUND", "host operation is not available");
             }
@@ -463,9 +483,9 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         }
     }
 
-    private Onboarding.PreparedJoin beginJoin(String operationId) throws ApiFailure {
+    private ControlPlaneLinkOperations.PendingJoin beginJoin(String operationId) throws ApiFailure {
         synchronized (operationLock) {
-            Onboarding.PreparedJoin result = joins.get(operationId);
+            ControlPlaneLinkOperations.PendingJoin result = joins.get(operationId);
             if (result == null) {
                 throw failure(404, "OPERATION_NOT_FOUND", "join operation is not available");
             }
@@ -476,22 +496,26 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         }
     }
 
-    private void finishHost(String operationId, Onboarding.PreparedHost prepared) {
+    private void finishHost(String operationId, ControlPlaneLinkOperations.PendingHost prepared, boolean retain) {
         synchronized (operationLock) {
             hosts.remove(operationId, prepared);
             operationExpiry.remove(operationId);
             activeOperations.remove(operationId);
         }
-        closeQuietly(prepared);
+        if (!retain) {
+            closeQuietly(prepared);
+        }
     }
 
-    private void finishJoin(String operationId, Onboarding.PreparedJoin prepared) {
+    private void finishJoin(String operationId, ControlPlaneLinkOperations.PendingJoin prepared, boolean retain) {
         synchronized (operationLock) {
             joins.remove(operationId, prepared);
             operationExpiry.remove(operationId);
             activeOperations.remove(operationId);
         }
-        closeQuietly(prepared);
+        if (!retain) {
+            closeQuietly(prepared);
+        }
     }
 
     private void ensureCapacity() throws ApiFailure {
@@ -508,8 +532,8 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         synchronized (operationLock) {
             operationExpiry.entrySet().removeIf(entry -> {
                 if (!now.isBefore(entry.getValue()) && !activeOperations.contains(entry.getKey())) {
-                    Onboarding.PreparedHost host = hosts.remove(entry.getKey());
-                    Onboarding.PreparedJoin join = joins.remove(entry.getKey());
+                    ControlPlaneLinkOperations.PendingHost host = hosts.remove(entry.getKey());
+                    ControlPlaneLinkOperations.PendingJoin join = joins.remove(entry.getKey());
                     if (host != null) {
                         expired.add(host);
                     }
@@ -550,13 +574,14 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
                 }
                 ControlPlaneEventHub.Event onboardingEvent = onboardingSubscription.poll();
                 if (onboardingEvent != null) {
+                    String eventType = uiLinkEventType(onboardingEvent.type());
                     Map<String, Object> data = new LinkedHashMap<>();
                     data.put("apiVersion", "v1");
-                    data.put("type", onboardingEvent.type());
+                    data.put("type", eventType);
                     if (!onboardingEvent.value().isEmpty()) {
                         data.put("value", onboardingEvent.value());
                     }
-                    writeEvent(output, "link.updated", Long.toString(onboardingEvent.sequence()), data);
+                    writeEvent(output, eventType, Long.toString(onboardingEvent.sequence()), data);
                     keepaliveAt = System.nanoTime() + SSE_KEEPALIVE.toNanos();
                     continue;
                 }
@@ -608,6 +633,19 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
                     INTEGRATION_BLOCKED, REVIEW_VALIDATION_RECORDED -> "task.updated";
             default -> "coordination.updated";
         };
+    }
+
+    private static String uiLinkEventType(String type) {
+        try {
+            return switch (OnboardingEventType.valueOf(type)) {
+                case PEER_CONNECTED -> "peer.connected";
+                case SESSION_CLOSED -> "peer.disconnected";
+                case LIVENESS -> "peer.updated";
+                default -> "link.updated";
+            };
+        } catch (IllegalArgumentException invalid) {
+            return "link.updated";
+        }
     }
 
     private static void writeEvent(java.io.OutputStream output, String type, String id,

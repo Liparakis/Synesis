@@ -8,11 +8,12 @@
 | SSE semantics | snapshot plus UI-safe semantic event names, two independent clients, bounded queues | PASS focused | `ControlPlaneHttpHandlerTest` |
 | Shutdown | control-plane close terminates an active SSE stream and releases the existing server lifecycle | PASS focused | `ControlPlaneHttpHandlerTest.closingControlPlaneTerminatesLiveStream` |
 | Security and bounds | loopback Host/Origin, bootstrap/session/CSRF, malformed and oversized request rejection, secret redaction | PASS focused | `ControlPlaneHttpHandlerTest` |
-| Production network owner | CLI composition of long-lived Link/overlay/relay state | PENDING / explicit gap | `docs/evidence/syn-052-local-control-plane-2026-09-08.md` |
+| Live Link/overlay owner | retained authenticated HTTP sessions, explicit signed membership, direct adjacency, selected route, safe disabled relay state | PASS focused | `LinkRuntimeOwnerControlPlaneTest` |
+| CLI authority boundary | CLI composes the owner but has no legitimate signed membership source | PASS / safely `UNCONFIGURED` | `docs/evidence/syn-052-local-control-plane-2026-09-08.md` |
 
-Exact next action: preserve committed slice `b422a7a`; if the pending
-production network owner is promoted, record a new bounded architecture
-decision before implementation.
+Exact next action: run the post-owner focused verification and checkpoint the
+retained-session acceptance; do not invent a CLI membership authority or relay
+connection.
 
 ## SL-D-040 distributed project overlay — foundation and relay gate — 2026-09-08
 

@@ -16,6 +16,12 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   one-time local bootstrap, session/CSRF protection, semantic explicit DTOs,
   and bounded subscriber handling.
 
+- ADR-0068: Bounded live Link/overlay control owner — accepted for SYN-052
+  continuation; a small in-process owner retains authenticated Link sessions,
+  composes existing overlay views and propagation seams, requires an explicit
+  signed membership snapshot, and keeps the CLI `UNCONFIGURED` until a real
+  authority source exists.
+
 - ADR-0065: Coordinated direct UDP/QUIC traversal — accepted for
   implementation; preserves the existing authenticated Netty QUIC and Link
   identity/session boundaries while adding optional configured STUN discovery,

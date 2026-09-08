@@ -3,17 +3,17 @@
 ### Local Synesis control-plane backend — activated 2026-09-08
 
 - Status: ACTIVE
-- Verification: IMPLEMENTATION FOUNDATION / FOCUSED AND REAL-CLI ACCEPTANCE
-  PASS; broader regression and live overlay-owner acceptance are pending.
+- Verification: IMPLEMENTATION FOUNDATION / FOCUSED, REAL-CLI, AND RETAINED
+  LINK-OWNER ACCEPTANCE PASS; configured CLI membership authority remains open.
 - Purpose: expose authoritative Synesis project, agent, WorkGroup, claim, capability, Link, overlay, route, relay, diagnostic, and onboarding state through a bounded local HTTP/SSE adapter for a future browser UI.
 - Planning basis: explicit user-provided control-plane brief, current-source re-investigation, and ADR-0067. This supersedes the old `SL-D-027` GUI cancellation only for the backend control surface; no frontend is activated.
 - Dependencies: existing `CoordinationService` projections, `ProjectApplicationService`, `ProviderApplicationService`, `DoctorService`, `Onboarding`, `PeerSession`/overlay read models, and the existing loopback HTTP lifecycle host.
 - Acceptance criteria: loopback server starts and reports its actual endpoint; health and authenticated snapshots expose real current state; supported invite/join/answer actions delegate to `Onboarding`; SSE delivers bounded UI-safe updates; Host/Origin/session/CSRF/body/secret controls fail closed; lawful disposable-project and controlled Link/overlay acceptance compare API output with authoritative backend state; shutdown releases HTTP/SSE resources and preserves Link/relay cleanup; API documentation and an ADR are current.
 - Required tests: read-model mapping for project/participant/WorkGroup/claim/capability/network/route/relay state; command delegation and backend rejection; loopback/security/bounds; SSE initial/live/slow/multiple/disconnect behavior; clean shutdown; `:link:check`, `:relay:check`, affected workspace/coordination checks, deferred validation, and `git diff --check`.
-- Exact next action: preserve committed slice `b422a7a`; if the production
-  Link/overlay/relay owner is promoted, record a new bounded architecture
-  decision before wiring the injectable source into that owner.
-- Scope exclusions: no frontend, public or cloud API, wildcard CORS, arbitrary filesystem endpoint, generic proxy, new database/broker, OS URI handler, Claude support, reconnect/path migration, durable browser event replay, source `.synesis` mutation, or push.
+- Exact next action: run post-owner focused verification and checkpoint the
+  retained-session acceptance; keep the CLI overlay `UNCONFIGURED` until a
+  legitimate signed membership-authority source exists.
+- Scope exclusions: no frontend, public or cloud API, wildcard CORS, arbitrary filesystem endpoint, generic proxy, new database/broker, OS URI handler, Claude support, reconnect/path migration, durable browser event replay, membership-authority lifecycle, relay client lifecycle, source `.synesis` mutation, or push.
 
 ## SL-D-040
 

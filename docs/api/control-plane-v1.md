@@ -51,8 +51,8 @@ The snapshot is assembled explicitly from `ProjectApplicationService`, the
 durable coordination projections, provider status, and `DoctorService`.
 Private keys, provider credentials, authority lineages, recovery references,
 raw event payloads, and arbitrary file contents are not DTO fields. Network
-state is `UNCONFIGURED` until a long-lived Link/overlay/relay runtime injects
-its read model; the endpoint does not invent connection state.
+state is `UNCONFIGURED` until a signed membership source configures the
+long-lived Link/overlay owner; the endpoint does not invent connection state.
 
 `/api/v1/projects` reports the one project served by this listener. It is not a
 project registry and does not scan the filesystem for additional projects.
@@ -64,8 +64,10 @@ Link peers separate from overlay membership and topology. It can expose
 authenticated peer/liveness health, membership nodes, direct edges, desired
 edges, selected routes (`DIRECT`, `PEER_TRANSIT`, `ORGANIZATION_RELAY`,
 `UNREACHABLE`), and relay configured/connected/authorized/usage state without
-exposing cryptographic material. The CLI currently has no long-lived owner for
-these Link views, so it intentionally supplies `UNCONFIGURED`.
+exposing cryptographic material. `LinkRuntimeOwner` owns retained sessions and
+composes these views; the CLI deliberately supplies no membership snapshot, so
+its overlay remains `UNCONFIGURED` while physical Link state remains real when
+connected.
 
 ## Supported commands
 
@@ -78,7 +80,10 @@ They do not duplicate SLO1/SLA2 validation or create a second Link runtime.
 {"expectedPeer":"optional-node-id"}
 ```
 
-Delegates to `Onboarding.createInvitation`. The response contains an opaque
+Delegates to `Onboarding.createInvitation`. When the listener has the live
+`LinkRuntimeOwner`, the authenticated session remains owned after the later
+answer command returns; the compatibility adapter retains the original
+one-shot behavior. The response contains an opaque
 `operationId`, the exact `inviteUri` for the operator to copy, the authenticated
 peer identity, expiry, and `WAITING_FOR_ANSWER` state. The link is returned only
 to the authenticated caller and is never emitted through SSE.
@@ -89,7 +94,10 @@ to the authenticated caller and is never emitted through SSE.
 {"inviteUri":"synesis://join/SLO1-..."}
 ```
 
-Delegates to `Onboarding.importInvitation`. The response contains an opaque
+Delegates to `Onboarding.importInvitation`. When the listener has the live
+`LinkRuntimeOwner`, the authenticated session remains owned after the later
+connect command returns; the compatibility adapter retains the original
+one-shot behavior. The response contains an opaque
 `operationId`, the exact `answerUri`, the pinned host identity, expiry, and
 `WAITING_FOR_CONNECT` state.
 
@@ -132,7 +140,8 @@ completed handles are closed; links are not written to project state.
 - semantic coordination events named `agent.updated`, `workgroup.updated`,
   `claim.updated`, `capability.updated`, `task.updated`, or the fallback
   `coordination.updated`, containing only sequence and the UI event type;
-- `link.updated` events containing only redacted onboarding lifecycle facts;
+- `peer.connected`, `peer.disconnected`, `peer.updated`, or bounded
+  `link.updated` events containing only redacted onboarding lifecycle facts;
 - `refresh_required` followed by disconnect when a bounded subscriber queue
   overflows.
 

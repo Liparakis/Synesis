@@ -16,11 +16,10 @@ coordination, and workspace production sources; no remote state was changed.
 
 ## Exact next action
 
-Preserve committed slice `b422a7a`. If the production Link/overlay/relay owner
-is promoted, define that owner in a new bounded architecture decision before
-wiring `LinkNetworkProjection` into it. Do not push this commit without an
-explicit user request or claim production Link/overlay acceptance until a real
-long-lived source supplies those views.
+Run the post-owner focused verification and checkpoint the retained-session
+acceptance. Preserve the explicit signed-membership boundary; do not push
+without an explicit user request or claim configured CLI overlay acceptance
+until a legitimate authority source supplies membership.
 
 ## SYN-052 implementation slice
 
@@ -31,15 +30,19 @@ subscriptions. The workspace adapter maps project, provider, participant,
 WorkGroup, claim, capability, task, ownership, diagnostics, and injected
 network DTOs explicitly. The CLI creates a control-specific `Onboarding`
 facade, reports a one-time bootstrap token in the ready line, and closes the
-handler with the server.
+handler with the server. ADR-0068 adds `LinkRuntimeOwner`, a small in-process
+owner that retains authenticated onboarding sessions and composes the existing
+membership, topology, propagation, and route seams. The CLI wires that owner
+with an empty membership source, so it remains safely `UNCONFIGURED` for
+overlay state until a signed authority snapshot is supplied.
 
 Focused control-plane tests pass for real persisted WorkGroup/WorkIntent state
 through HTTP, a real Link membership view through `/api/v1/network`,
 authenticated peer/topology route projection, session bootstrap single-use,
 CSRF, exact Origin/Host, malformed/oversized requests, secret redaction,
 semantic SSE initial/live events to multiple clients, clean stream shutdown,
-and a real two-profile HTTP invite/join/answer/connect flow. The disposable
-project CLI smoke also passes. `:link:check`, `:relay:check`, affected strict
+and real two-profile one-shot and retained-session HTTP invite/join/answer/
+connect flows. The disposable project CLI smoke also passes. `:link:check`, `:relay:check`, affected strict
 Javadocs, deferred validation, and `git diff --check` pass. A broader
 workspace/CLI test run still has pre-existing fixture failures outside this
 slice; it is not acceptance evidence for the new API.
