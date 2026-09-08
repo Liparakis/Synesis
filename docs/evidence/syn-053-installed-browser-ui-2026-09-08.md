@@ -34,6 +34,7 @@ JDK loopback workaround against the disposable initialized Git project
 | Check | Result |
 |---|---|
 | `synesis ui --no-browser` ready line | PASS; reports `controlPlaneRoute=/api/v1` and `uiRoute=/` |
+| `synesis ui` browser startup path | PASS — packaged run emitted `SYNESIS_UI_OPENED` |
 | `GET /` | PASS — 200 HTML, `Cache-Control: no-cache` |
 | Static asset | PASS — 200 JavaScript, 222027 bytes |
 | Security headers | PASS — self-only CSP and `X-Content-Type-Options: nosniff` |
