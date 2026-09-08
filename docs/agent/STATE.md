@@ -19,10 +19,11 @@ no provider credential, `.synesis` state, or remote state was changed.
 The Java 25 X25519, HKDF-SHA256, and ChaCha20-Poly1305 probe passed and is
 recorded at `docs/evidence/sl-d-040-java25-crypto-probe-2026-09-08.md`.
 The accepted v1 contract is recorded at
-`docs/protocol/SYNESIS_OVERLAY_V1.md`. SLM1/SLK1/SLE1/SLF1, monotonic
-same-authority membership refresh, bounded direct-peer registry, signed
-topology and SLP1 propagation, deterministic routing, peer forwarding, bounded
-relay core, and standalone relay wire/client/server code are implemented. Full
+`docs/protocol/SYNESIS_OVERLAY_V1.md`. SLM1/SLK1/SLE1/SLF1, bounded SLP2
+membership propagation, monotonic same-authority membership refresh, bounded
+direct-peer registry, signed topology and SLP1 propagation, deterministic
+routing, peer forwarding, bounded relay core, and standalone relay
+wire/client/server code are implemented. Full
 configured/local evidence is recorded at
 `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`; it passes with a
 process-local loopback workaround while the inherited environment still fails

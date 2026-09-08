@@ -4,7 +4,7 @@
 |---|---|---|---|
 | Java 25 crypto compatibility | X25519, HKDF-SHA256, ChaCha20-Poly1305 probe | PASS | `docs/evidence/sl-d-040-java25-crypto-probe-2026-09-08.md` |
 | Signed membership and E2E records | SLM1/SLK1/SLE1 round trip, signatures, substitution, tamper, replay | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
-| Membership refresh and newcomer seam | monotonic same-authority revision, stale rejection, topology replacement, bounded peer binding | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
+| Membership refresh and newcomer seam | monotonic same-authority revision, bounded `SLP2` propagation, stale rejection, topology replacement, bounded peer binding | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | Topology policy and advertisements | bounded ring connectivity, stale/conflicting sequence, signed topology | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | Topology propagation | signed `SLT1` over bounded `SLP1`, direct-peer multi-hop convergence, duplicate no-reflood | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |
 | Peer transit | A→B→C opaque `SLK1`/`SLE1` forwarding, destination decrypt, transit decrypt rejection, duplicate/hop bounds | PASS focused | `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md` |

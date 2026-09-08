@@ -148,13 +148,15 @@ that every desired edge exists. Establishing a fresh desired adjacency remains
 separate from reconnecting a dead session under `SL-D-036`.
 
 The SL-D-040 implementation provides the bounded `SLP1` topology-propagation
-wrapper and `OverlayTopologyPropagation` seam. A newly accepted signed
-advertisement is forwarded only to authenticated direct peers other than the
-immediate sender; the signed `SLT1` bytes are never rewritten, and duplicate,
-stale, malformed, expired, or over-budget records do not reflood. The
-existing `OverlayMembershipSnapshot`, `OverlayTopologyView`, `OverlayRoute`,
-and topology-policy accessors are the internal read-model seams for a future
-adapter; no HTTP or UI transport is part of this task.
+wrapper and `OverlayTopologyPropagation` seam. It also provides the bounded
+`SLP2` membership-propagation wrapper and `OverlayMembershipPropagation` seam.
+A newly accepted signed record is forwarded only to authenticated direct peers
+other than the immediate sender; the signed `SLT1` or `SLM1` bytes are never
+rewritten, and duplicate, stale, malformed, expired, unauthorized, or
+over-budget records do not reflood. The existing
+`OverlayMembershipSnapshot`, `OverlayMembershipView`, `OverlayTopologyView`,
+`OverlayRoute`, and topology-policy accessors are the internal read-model seams
+for a future adapter; no HTTP or UI transport is part of this task.
 
 ## E2E security and routed framing
 

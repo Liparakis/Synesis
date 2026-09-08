@@ -2,11 +2,11 @@
 
 `SL-D-040` is now the sole active task for the distributed project overlay.
 `SL-D-035` remains separately paused at its controlled-NAT evidence gate and
-`SL-D-036` remains deferred. The Link overlay now includes a monotonic
-same-authority membership refresh seam and bounded direct-peer registry; the
-newcomer/topology/transit follow-up and full configured/local evidence pass
-under a process-local loopback workaround. The inherited environment still
-fails before Gradle startup.
+`SL-D-036` remains deferred. The Link overlay now includes bounded `SLP2`
+membership propagation, a monotonic same-authority membership refresh seam,
+and a bounded direct-peer registry; the newcomer/topology/transit follow-up
+and full configured/local evidence pass under a process-local loopback
+workaround. The inherited environment still fails before Gradle startup.
 
 - Exact next action: preserve the passing local acceptance and keep
   controlled-NAT/physical traversal under the separately scoped `SL-D-035`

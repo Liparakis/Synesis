@@ -165,6 +165,11 @@ immediate sender. The deterministic policy is a full
 mesh for at most three members and a sorted circular `+/-1` and `+/-2` graph
 otherwise; it has maximum desired degree four and does not require consensus.
 
+`SLP2` distributes an unchanged signed `SLM1` snapshot through the same
+authenticated direct-peer boundary. Only a newer same-authority revision is
+installed and reflooded; the wrapper has a separate finite budget and does not
+create authority succession or transport reconnection.
+
 Membership refresh is monotonic and same-authority only. A new peer binding is
 accepted as a transport fact only after the refreshed signed snapshot permits
 that node; the registry itself does not grant membership or revive a dead

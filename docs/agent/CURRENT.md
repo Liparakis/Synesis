@@ -28,8 +28,9 @@ Re-investigated the current Link and project-record source. Confirmed that
 application seam is bounded request/response, `ProjectConfig` is only a local
 allowlist, and durable Ed25519 identities currently provide signing rather
 than E2E encryption. Implemented the bounded SLM1/SLK1/SLE1/SLF1 contract,
-monotonic same-authority membership refresh, bounded direct-peer binding,
-signed topology and SLP1 propagation, deterministic route selection, peer
+bounded SLP2 membership propagation, monotonic same-authority membership
+refresh, bounded direct-peer binding, signed topology and SLP1 propagation,
+deterministic route selection, peer
 forwarding, the PeerSession bridge, in-memory relay core, and standalone Netty
 relay/client module. Configured/local evidence is recorded in
 `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`. The verified

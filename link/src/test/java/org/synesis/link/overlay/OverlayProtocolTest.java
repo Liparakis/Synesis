@@ -73,6 +73,47 @@ final class OverlayProtocolTest {
         assertEquals(OverlayMembershipView.Acceptance.DUPLICATE, membershipView.accept(refreshed, now));
         assertEquals(OverlayMembershipView.Acceptance.STALE, membershipView.accept(initial, now));
 
+        OverlayMembershipView authorityMembership = new OverlayMembershipView(initial);
+        OverlayMembershipView originMembership = new OverlayMembershipView(initial);
+        OverlayMembershipView existingPeerMembership = new OverlayMembershipView(initial);
+        AtomicReference<OverlayMembershipPropagation> authorityPropagationRef = new AtomicReference<>();
+        AtomicReference<OverlayMembershipPropagation> originPropagationRef = new AtomicReference<>();
+        AtomicReference<OverlayMembershipPropagation> existingPeerPropagationRef = new AtomicReference<>();
+        AtomicInteger existingPeerReceives = new AtomicInteger();
+        OverlayPeerRegistry<OverlayMembershipPropagation.PeerTransport> authorityPeers = new OverlayPeerRegistry<>();
+        OverlayPeerRegistry<OverlayMembershipPropagation.PeerTransport> originPeers = new OverlayPeerRegistry<>();
+        OverlayPeerRegistry<OverlayMembershipPropagation.PeerTransport> existingPeerPeers = new OverlayPeerRegistry<>();
+        authorityPeers.bind(origin.nodeId(), frame -> receive(originPropagationRef.get(), authority.nodeId(), frame,
+                now));
+        originPeers.bind(authority.nodeId(), frame -> receive(authorityPropagationRef.get(), origin.nodeId(), frame,
+                now));
+        originPeers.bind(existingPeer.nodeId(), frame -> {
+            existingPeerReceives.incrementAndGet();
+            return receive(existingPeerPropagationRef.get(), origin.nodeId(), frame, now);
+        });
+        existingPeerPeers.bind(origin.nodeId(), frame -> receive(originPropagationRef.get(), existingPeer.nodeId(),
+                frame, now));
+        OverlayMembershipPropagation authorityPropagation = new OverlayMembershipPropagation(authority.nodeId(),
+                authorityMembership, authorityPeers);
+        OverlayMembershipPropagation originPropagation = new OverlayMembershipPropagation(origin.nodeId(),
+                originMembership, originPeers);
+        OverlayMembershipPropagation existingPeerPropagation = new OverlayMembershipPropagation(existingPeer.nodeId(),
+                existingPeerMembership, existingPeerPeers);
+        authorityPropagationRef.set(authorityPropagation);
+        originPropagationRef.set(originPropagation);
+        existingPeerPropagationRef.set(existingPeerPropagation);
+        OverlayMembershipPropagationFrame encodedPropagation = OverlayMembershipPropagationFrame.create(refreshed, 2);
+        assertArrayEquals(encodedPropagation.encoded(),
+                OverlayMembershipPropagationFrame.decode(encodedPropagation.encoded()).encoded());
+        authorityPropagation.publish(refreshed, now).toCompletableFuture().join();
+        assertEquals(2, authorityMembership.current().revision());
+        assertEquals(2, originMembership.current().revision());
+        assertEquals(2, existingPeerMembership.current().revision());
+        assertTrue(existingPeerMembership.current().allows(newcomer.nodeId()));
+        assertEquals(1, existingPeerReceives.get());
+        originPropagation.receive(authority.nodeId(), encodedPropagation, now).toCompletableFuture().join();
+        assertEquals(1, existingPeerReceives.get(), "duplicate membership snapshots must not reflood");
+
         OverlayTopologyView topology = new OverlayTopologyView();
         OverlayTopologyAdvertisement oldAdvertisement = OverlayTopologyAdvertisement.create(projectId, 1, 1,
                 now.plusSeconds(60), List.of(existingPeer.nodeId()), origin);
@@ -836,6 +877,15 @@ final class OverlayProtocolTest {
 
     private static CompletionStage<Void> receive(OverlayTopologyPropagation propagation, String senderNodeId,
             OverlayTopologyPropagationFrame frame, Instant now) {
+        try {
+            return propagation.receive(senderNodeId, frame, now);
+        } catch (GeneralSecurityException failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    private static CompletionStage<Void> receive(OverlayMembershipPropagation propagation, String senderNodeId,
+            OverlayMembershipPropagationFrame frame, Instant now) {
         try {
             return propagation.receive(senderNodeId, frame, now);
         } catch (GeneralSecurityException failure) {

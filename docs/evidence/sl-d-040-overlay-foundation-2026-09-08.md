@@ -2,8 +2,9 @@
 
 - Date: 2026-09-08
 - Scope: SL-D-040 implementation from `d9f7696`, checkpointed at
-  `3bb5e28`/`692b588`, plus bounded topology-propagation, newcomer-refresh,
-  transit-handshake, runtime-acceptance, and configuration-cache verification
+  `3bb5e28`/`692b588`, plus bounded membership/topology-propagation,
+  newcomer-refresh, transit-handshake, runtime-acceptance, and
+  configuration-cache verification
   follow-up in this slice
 - Runtime: Java 25; configured Gradle execution was verified with the
   process-local loopback workaround documented below
@@ -24,8 +25,9 @@
 The focused Link suite covers signed bounded membership, directional X25519/
 HKDF and ChaCha20-Poly1305 session records for both logical directions, replay
 and tamper rejection, hop limits, deterministic eight-member topology
-degree/connectivity, signed topology propagation through a direct peer,
-monotonic membership refresh with a newly authorized peer binding, transit-
+degree/connectivity, signed topology propagation through a direct peer, bounded
+signed membership propagation through direct peers, monotonic membership
+refresh with a newly authorized peer binding, transit-
 carried `SLK1` establishment, direct and peer-transit bidirectional delivery,
 opaque in-memory relay forwarding, duplicate rejection, relay fallback,
 connection caps, queue backpressure, and retry after queue admission becomes

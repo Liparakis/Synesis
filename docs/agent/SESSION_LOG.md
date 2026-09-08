@@ -1,3 +1,23 @@
+## 2026-09-08 — SL-D-040 signed membership propagation
+
+The overlay now distributes a newer signed `SLM1` snapshot through bounded
+`SLP2` wrappers over authenticated direct peers. Only the declared authority
+may publish; each receiver verifies the unchanged snapshot through its
+monotonic membership view and refloods only newly accepted revisions, with a
+finite budget and no authority succession or socket/reconnect behavior. The
+focused newcomer test proves authority → peer → peer propagation and duplicate
+no-reflood behavior.
+
+The configured `:link:check :relay:check --rerun-tasks --no-daemon` pass again
+reported 80 Link tests and 4 relay tests with zero failures/errors under the
+documented process-local loopback environment. The inherited environment still
+fails before Gradle startup; controlled-NAT/physical traversal remains under
+`SL-D-035`. No push occurred.
+
+Evidence: `docs/evidence/sl-d-040-overlay-foundation-2026-09-08.md`.
+Exact next action: preserve local acceptance and keep physical traversal under
+`SL-D-035`; do not broaden `SL-D-040` into reconnect.
+
 ## 2026-09-08 — SL-D-040 membership refresh and transit follow-up
 
 The bounded follow-up kept the existing one-hop `PeerSession` boundary and

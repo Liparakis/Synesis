@@ -81,6 +81,28 @@ are idempotent, and conflicting same-revision bytes are rejected. Updating
 this view does not establish sockets or reconnect a dead transport; the
 direct-peer registry is refreshed only by authenticated Link/session owners.
 
+Membership updates use a separate bounded `SLP2` wrapper when the authority
+needs to distribute a newer snapshot through currently authenticated peers:
+
+```text
+magic             4 bytes  ASCII SLP2
+version           1 byte   1
+project           16 bytes UUID
+authority         32 bytes node ID
+revision          8 bytes accepted SLM1 revision
+remaining-hops    1 byte   0..8
+snapshot-length   2 bytes bounded to the Link application-frame budget
+snapshot          bytes   exact signed SLM1 record
+```
+
+The wrapper is hop-local and consumes one propagation hop at each forwarding
+peer. A receiver first verifies the unchanged `SLM1` through its
+`OverlayMembershipView`; only a newly accepted revision is reflooded to
+authenticated direct peers other than the immediate sender. Duplicate, stale,
+conflicting, expired, unauthorized, or over-budget updates do not reflood.
+Only the declared authority may originate a new update. This distributes
+membership knowledge without electing a new authority or creating a socket.
+
 ## SLK1 end-to-end key agreement
 
 `SLK1` records are logical messages. Transit peers forward them unchanged.
