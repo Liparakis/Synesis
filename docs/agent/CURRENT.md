@@ -7,6 +7,8 @@ The user-provided browser goal now activates the first product UI over the
 verified local control plane. ADR-0069 selects an install-bundled `web-ui`
 module, same-origin static serving from the existing JDK listener, fragment
 bootstrap, a typed snapshot/SSE client, and a dedicated `synesis ui` command.
+The Windows self-contained runtime packaging was corrected to include
+`java.desktop`, which is required by the supported browser-opening boundary.
 
 - Task ID: SYN-053
 - Baseline: backend commit `2be88cf` was clean and pushed to `origin/master`
@@ -52,7 +54,10 @@ typed control-plane client, fetch-based SSE, real-state screens, empty and
 `UNCONFIGURED` states, onboarding controls, same-origin static resource
 handler, `synesis ui` startup, browser opening, security headers, packaging,
 focused tests, installed acceptance, and browser functional/visual QA. Added
-the architecture, API, README, test-matrix, and evidence documentation.
+the architecture, API, README, test-matrix, and evidence documentation. Fixed
+the Windows jlink runtime module list to include `java.desktop`; a fresh
+platform-bundle smoke run now starts `synesis ui` with browser opening enabled
+and exits cleanly after the bounded duration.
 
 ## Current failures
 

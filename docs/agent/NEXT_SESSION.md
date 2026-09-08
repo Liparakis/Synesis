@@ -1,3 +1,16 @@
+## 2026-09-09 — packaged browser-opening runtime correction
+
+The Windows jlink runtime previously omitted `java.desktop`, causing the
+installed `synesis ui` command to start the control plane and then fail with
+`NoClassDefFoundError: java/awt/HeadlessException` while opening the browser.
+`cli/build.gradle.kts` now includes `java.desktop` in the runtime image. The
+fresh platform bundle was verified with `java --list-modules` and a bounded
+browser-opening `synesis ui` run that emitted `SYNESIS_UI_OPENED`.
+
+- Exact next action: preserve the local runtime-packaging fix and the rebuilt
+  installer; do not push UI changes without a separate explicit instruction.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-09-08 — SYN-053 first installed Synesis browser UI activation
 
 The new active task is `SYN-053`. The backend baseline at `2be88cf` was clean,
