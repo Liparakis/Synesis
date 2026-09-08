@@ -1,3 +1,23 @@
+## SYN-053 installed browser UI — acceptance — 2026-09-08
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Frontend types | `npm run typecheck` | PASS | `web-ui` gate |
+| Frontend lint | `npm run lint -- --max-warnings 0` | PASS | `web-ui` gate |
+| Frontend tests | Vitest | PASS — 2 files, 4 tests | `web-ui` gate |
+| Production bundle | `npm run build` | PASS | `web-ui/dist` output |
+| Java/resource seam | `:web-ui:check`, coordination and CLI compile | PASS | Gradle focused gate |
+| Static serving | `StaticResourceHandlerTest` | PASS | CLI focused test |
+| Installed package | `:cli:installDist`, real disposable Git project | PASS | `docs/evidence/syn-053-installed-browser-ui-2026-09-08.md` |
+| Authenticated state | session plus real snapshot | PASS — one served project | installed HTTP acceptance |
+| Live stream | initial SSE snapshot | PASS | installed HTTP acceptance |
+| Browser UI | navigation, empty states, network posture, diagnostics | PASS | in-app browser functional/visual pass |
+| Onboarding | invite, join, host-answer failure boundary | PASS — backend-owned result preserved | in-app browser pass |
+| Offline/security | no CDN bundle, CSP, nosniff, same-origin assets | PASS | installed HTTP acceptance |
+
+Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
+commit boundary, and do not push UI commits without separate authorization.
+
 ## SYN-052 local control-plane backend — HTTP/SSE acceptance — 2026-09-08
 
 | Area | Check | Result | Evidence |

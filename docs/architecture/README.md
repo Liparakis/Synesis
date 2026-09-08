@@ -11,6 +11,7 @@ these modules.
 - [Current repository state](../development/current-state.md)
 - [AGENTS.md contract](agents-md-contract.md)
 - [Zero-touch provider maturity](zero-touch-provider-maturity.md)
+- [Installed browser UI](installed-browser-ui.md)
 
 Serverless direct internet connectivity, operator-exchanged invitations,
 manual forwarding, optional router mapping, and coordinated hole punching are

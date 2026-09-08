@@ -13,9 +13,22 @@ will consume typed snapshot/SSE DTOs and keep domain authority in Synesis.
 
 ## Exact next action
 
-Create the `web-ui` module and deterministic resource-packaging seam, then add
-the smallest static-serving and `synesis ui` startup slice. Preserve the
-control-plane security boundary and truthful `UNCONFIGURED` behavior.
+Run `scripts/agent-checkpoint.ps1` for the verified local SYN-053 slice, review
+the local UI commit boundary, and leave UI commits unpushed unless separately
+authorized.
+
+## SYN-053 implementation evidence
+
+`web-ui` is now a locked TypeScript/React/Vite/Tailwind/Lucide module packaged
+as static resources in the CLI distribution. The JDK listener serves the UI
+same-origin and `synesis ui` starts it with one-time fragment bootstrap. The
+typed client consumes the real snapshot and fetch-based SSE contract. Focused
+frontend gates, Java compile/static-handler tests, installed static/session/
+snapshot/SSE acceptance, and in-app browser functional/visual QA pass. The
+CLI overlay remains truthfully `UNCONFIGURED` and relay `DISABLED` because no
+signed membership authority exists in this checkout.
+
+Evidence: `docs/evidence/syn-053-installed-browser-ui-2026-09-08.md`.
 
 ## 2026-09-08 — SYN-052 local control-plane activation
 

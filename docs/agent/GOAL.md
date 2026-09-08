@@ -7,13 +7,13 @@ diagnostic state; use the existing authenticated snapshot/SSE/onboarding
 contract; remain truthful for empty and `UNCONFIGURED` states; and require no
 Node runtime or development server after installation.
 
-- Status: ACTIVE / architecture accepted; implementation not yet started
+- Status: ACTIVE / implementation complete for current local scope; final checkpoint pending
 - Baseline: backend commit `2be88cf` was pushed to `origin/master` before UI
   work. UI commits remain local until separately authorized.
 - Planning basis: user-provided browser-UI goal, current-source investigation,
   and ADR-0069.
-- Exact next action: create the `web-ui` module and static packaging seam,
-  then integrate same-origin static serving and `synesis ui` startup.
+- Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
+  commit boundary, and do not push UI commits without explicit authorization.
 - Security boundary: preserve loopback-only binding, exact Host/Origin checks,
   one-time fragment bootstrap, session/CSRF headers, explicit DTOs, bounded
   SSE, and no secret exposure.

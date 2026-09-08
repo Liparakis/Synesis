@@ -1,9 +1,12 @@
 # Synesis local control-plane API v1
 
-The control plane is a local backend for a future browser UI. It is served by
-`synesis coordination serve` from the existing loopback coordination listener;
-it is not a public API, hosted service, frontend, generic proxy, or arbitrary
-filesystem browser.
+The control plane is the local backend for the installed Synesis browser UI.
+It is served from the existing loopback coordination listener; it is not a
+public API, hosted service, generic proxy, or arbitrary filesystem browser.
+
+`synesis ui` starts this listener with the packaged static UI mounted at `/`
+and optionally opens the browser. `synesis coordination serve` remains
+available as the lower-level server command.
 
 ## Base URL and bootstrap
 
@@ -31,6 +34,24 @@ Every request must have an exact local `Host` and an exact loopback `Origin`
 when `Origin` is present. Untrusted origins, wildcard CORS, non-loopback
 listeners, and missing mutation CSRF are rejected. The only unauthenticated
 read is health.
+
+## Installed browser UI
+
+The `web-ui` Gradle module builds a static TypeScript/React application. Its
+production resources are packaged into the CLI distribution and served by the
+same listener through a classpath allowlist. The installed command does not
+start Node, npm, Vite, Electron, or a second HTTP server.
+
+The UI is launched with a one-time fragment bootstrap URL. The fragment is
+consumed by the browser, exchanged through `/api/v1/session`, and removed from
+history. The UI uses the session header for reads and the existing CSRF header
+for mutations. Its fetch-based SSE client receives the initial snapshot and
+live semantic updates without replaying a browser event log.
+
+The static handler sends a self-only CSP, `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY`, and `Referrer-Policy: no-referrer`. UI routes fall
+back to `index.html`; API, lifecycle, legacy coordination, traversal, and
+missing asset paths do not.
 
 ## Read endpoints
 

@@ -3,7 +3,7 @@
 ### First installed Synesis browser UI — activated 2026-09-08
 
 - Status: ACTIVE
-- Verification: ARCHITECTURE ACCEPTED; implementation not yet started
+- Verification: IMPLEMENTED; focused, packaged, installed, and browser acceptance pass; final local checkpoint pending
 - Purpose: build and integrate the first real browser UI as an install-bundled
   static frontend over the existing authenticated local control plane.
 - Planning basis: explicit user-provided browser-UI goal, current-source
@@ -26,8 +26,8 @@
   root packaging, installed CLI/static HTTP smoke, real session and snapshot,
   SSE update, invite flow, Link/relay/control-plane regressions, deferred
   validation, and `git diff --check`.
-- Exact next action: create the `web-ui` module and resource-packaging build
-  seam, then add the smallest static-serving and `synesis ui` startup slice.
+- Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
+  commit boundary, and keep UI commits unpushed until separately authorized.
 - Scope exclusions: no Electron/native GUI, cloud dashboard, SaaS login,
   telemetry, external CDN, browser-side P2P, OS URI registration, fake
   production data, Link/overlay redesign, WorkGroup semantics redesign, or

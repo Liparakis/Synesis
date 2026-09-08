@@ -1,3 +1,23 @@
+## 2026-09-08 — SYN-053 browser UI implementation and installed acceptance
+
+The first real installed browser UI is implemented locally. `web-ui` is a
+locked TypeScript/React/Vite/Tailwind/Lucide module whose production output is
+packaged into the CLI distribution. The existing loopback listener serves the
+static resources same-origin, and `synesis ui` composes the runtime and
+optional browser open with one-time fragment bootstrap.
+
+Frontend typecheck, lint, tests, build, Java compilation, static resource
+tests, installed static/session/snapshot/SSE acceptance, and in-app browser
+functional/visual QA pass. The browser displayed the real disposable project,
+explicit empty Agents/WorkGroups, `UNCONFIGURED` overlay, `DISABLED` relay,
+real diagnostics, and real invite/join operation state. The single-runtime
+host-answer action remained backend-owned and reported no available host
+operation; no false completion was shown.
+
+Evidence: `docs/evidence/syn-053-installed-browser-ui-2026-09-08.md`.
+Exact next action: run `scripts/agent-checkpoint.ps1`, review the local UI
+commit boundary, and leave UI commits unpushed.
+
 ## 2026-09-08 — SYN-052 live Link owner and retained HTTP acceptance
 
 ADR-0068 records the smallest legitimate owner boundary. `LinkRuntimeOwner`

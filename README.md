@@ -62,6 +62,16 @@ synesis provider list
 synesis doctor
 ```
 
+After initialization, start the installed local browser UI with:
+
+```powershell
+synesis ui
+```
+
+The command serves the UI and control plane from the same loopback listener,
+uses the real project state, and opens the browser when the platform permits.
+The installed runtime does not require Node or a frontend development server.
+
 Install one provider integration with its canonical ID, for example:
 
 ```powershell
@@ -104,6 +114,7 @@ generated files, transcripts, and machine-specific paths out of commits.
 | Getting started            | [docs/getting-started/README.md](docs/getting-started/README.md)         |
 | Provider guides            | [docs/providers/README.md](docs/providers/README.md)                     |
 | Architecture               | [docs/architecture/README.md](docs/architecture/README.md)               |
+| Installed browser UI       | [docs/architecture/installed-browser-ui.md](docs/architecture/installed-browser-ui.md) |
 | Operations                 | [docs/operations/README.md](docs/operations/README.md)                   |
 | Current repository state   | [docs/development/current-state.md](docs/development/current-state.md)   |
 | Development & verification | [docs/development/build-and-test.md](docs/development/build-and-test.md) |

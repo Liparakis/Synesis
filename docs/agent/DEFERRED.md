@@ -14,6 +14,10 @@ real control-plane/session/SSE evidence, frontend quality gates, and explicit
 empty/unconfigured/security checks. It does not promote Electron, a native
 GUI, cloud hosting, OS URI registration, telemetry, or a Link/overlay redesign.
 
+Current evidence passes for the implemented local scope; the remaining
+checkpoint is to record the local commit boundary. The CLI overlay remains
+`UNCONFIGURED` until a legitimate signed membership authority is supplied.
+
 ## SYN-052 promotion review — 2026-09-08
 
 The explicit user goal promotes a local backend control surface, not the

@@ -1,10 +1,8 @@
 # Current Task
 
-# Current Task
-
 ## SYN-053 first installed Synesis browser UI — implementation and acceptance gate — 2026-09-08
 
-Status: **ACTIVE / ARCHITECTURE ACCEPTED; IMPLEMENTATION NOT STARTED**.
+Status: **ACTIVE / IMPLEMENTED; FINAL LOCAL COMMIT AND ACCEPTANCE CHECKPOINT**.
 The user-provided browser goal now activates the first product UI over the
 verified local control plane. ADR-0069 selects an install-bundled `web-ui`
 module, same-origin static serving from the existing JDK listener, fragment
@@ -16,10 +14,9 @@ bootstrap, a typed snapshot/SSE client, and a dedicated `synesis ui` command.
 
 ## Immediate next action
 
-Create the `web-ui` module and deterministic resource-packaging seam, then add
-the smallest static-serving and `synesis ui` startup slice. Keep browser state
-server-backed and preserve the existing session, CSRF, Host, Origin, loopback,
-and `UNCONFIGURED` boundaries.
+Run `scripts/agent-checkpoint.ps1` for the verified local SYN-053 slice, then
+review the local commit boundary. Do not push UI commits without a separate
+explicit instruction.
 
 ## Current constraints
 
@@ -38,11 +35,14 @@ and `UNCONFIGURED` boundaries.
 
 ## SYN-053 implementation evidence
 
-Architecture and packaging investigation is complete. The repository currently
-has no Node manifest, web module, static-resource handler, or browser-opening
-command. The existing `CoordinationHttpServer` already accepts injected
-handlers and the control plane already exposes the required versioned routes,
-one-time bootstrap, session/CSRF headers, and live-only SSE semantics.
+The `web-ui` module now contains the locked React/Vite/Tailwind/Lucide client,
+typed control-plane client, fetch-based SSE, truthful screens, onboarding
+controls, and focused tests. Gradle packages its production resources into the
+CLI distribution. The existing JDK listener now serves the classpath UI with
+security headers, and `synesis ui` composes the server and optional browser
+open. Frontend typecheck, lint, tests, build, Java compilation, static-handler
+tests, installed static/session/snapshot/SSE acceptance, and browser visual/
+functional QA pass. See `docs/evidence/syn-053-installed-browser-ui-2026-09-08.md`.
 
 ## SYN-052 local control-plane backend — implementation and acceptance gate — 2026-09-08
 
