@@ -1,6 +1,7 @@
 package org.synesis.cli.terminal;
 
 import java.io.PrintWriter;
+import java.io.IOException;
 
 /**
  * Narrow terminal boundary used by commands and renderers.
@@ -53,6 +54,14 @@ public interface Terminal {
         err().println(line);
         err().flush();
     }
+
+    /**
+     * Reads one line from the operator input channel.
+     *
+     * @return next line, or {@code null} when input is closed
+     * @throws IOException if the input channel cannot be read
+     */
+    String readLine() throws IOException;
 
     /**
      * Returns the detected terminal width.

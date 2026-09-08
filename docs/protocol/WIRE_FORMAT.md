@@ -66,8 +66,34 @@ diagnostics are local implementation state and are not wire fields.
 decoding. SL-008 direct racing rejects it; no relay transport is implemented.
 Runtime normalization canonicalizes IPv4-mapped IPv6 and rejects unspecified,
 multicast, disallowed loopback/private scopes, and ambiguous link-local input
-before pair generation. Unsupported PCP, NAT-PMP, UPnP, STUN, TURN, and DHT
-discovery do not produce wire claims or placeholder candidates.
+before pair generation. The optional server-reflexive provider uses bounded
+RFC 8489 STUN Binding request/response messages. Its transaction ID and mapped
+address are routing inputs only, never node identity, and it must use the same
+caller-owned UDP transport as the eventual QUIC path. Unsupported PCP,
+NAT-PMP, UPnP, TURN, and DHT discovery do not produce wire claims or
+placeholder candidates.
+
+## SL-D-035 human-mediated traversal links
+
+Traversal signaling is a human-mediated signed exchange. The host emits
+`synesis://join/SLO1-...`, a URL-safe base64 wrapper with magic `SLO1`,
+wrapper version `1`, a bounded canonical `SIN1` invitation, and a bounded
+canonical signed traversal offer. The offer contains protocol version,
+session UUID, durable initiator ID and public key, optional expected
+responder ID, invitation SHA-256 binding, validity interval, fresh 32-byte
+attempt nonce, and the complete signed initiator descriptor. The wrapper is
+bounded to 36,928 raw bytes and 65,536 URI characters.
+
+The joiner emits `synesis://answer/SLA2-...`, a URL-safe base64 canonical
+signed answer capped at 24,576 raw bytes and 49,152 URI characters. It
+contains the exact offer SHA-256 digest, both durable IDs, responder public
+key, validity interval, fresh 32-byte answer nonce, and the complete signed
+responder descriptor. Both records are signed over every preceding field;
+the wrapper adds no trust of its own. Importing SLA2 is the final signaling
+step and directly makes the candidate matrix eligible for the existing
+bounded race. No Synesis rendezvous transport, mailbox, directory, or
+central service is required. Existing `SLT1` mutual proof and `SLH1` control
+readiness remain mandatory before application bytes.
 
 ## `synesis://join/SYN1-...` invitation
 

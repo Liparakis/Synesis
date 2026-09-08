@@ -1,3 +1,16 @@
+## SL-D-035
+
+### Coordinated UDP/QUIC hole punching — activated 2026-09-08
+
+- Status: ACTIVE
+- Purpose: Extend the existing Link candidate/onboarding path with replaceable endpoint discovery, authenticated offer/answer exchange, bounded coordinated simultaneous UDP/QUIC traversal, and direct-path diagnostics while preserving the existing QUIC, identity, handshake, control, and application-stream boundaries.
+- Dependencies: SL-008, SL-012, SL-014; the minimal offer/answer and endpoint-discovery work described by deferred `SL-D-031` and `SL-D-032` is in scope for this bounded task.
+- Acceptance criteria: two independent Link nodes can exchange bounded signed traversal metadata, perform coordinated direct attempts when the topology permits, authenticate the expected durable node identities, exchange bidirectional application-level Link bytes, classify traversal/authentication/timeout failures without false success, and preserve a no-relay/no-authoritative-server core path. Local, simulated-NAT, and physical evidence must be classified separately; reconnect remains deferred under `SL-D-036`.
+- Required tests: candidate/offer-answer/replay/spoofing/state-machine unit tests; local two-process integration; controlled NAT-topology integration where practical; and a physical two-network run when available. Existing Link regressions must remain green.
+- Required documentation: architecture ADR, protocol and wire-format updates, threat-model and operations updates, failure diagnostics, test matrix, and evidence records. No 10-tool MCP contract changes.
+- Exact next action: run controlled-NAT validation where practical and record the exact limitation otherwise; keep relay/reconnect excluded.
+- Scope exclusions: no relay/TURN fallback, no distributed Synesis state, no provider credentials, no source `.synesis` mutation, no acceptance-state surgery, and no push.
+
 ## SYN-049
 
 ### Fresh unattended two-worker acceptance — run #81 — 2026-09-06
@@ -37,7 +50,7 @@ while B was COMPLETED with an accepted unconsumed review grant. The WorkGroup
 remained ACTIVE; independent integrated compilation failed because A's
 domain/persistence source was absent.
 
-- Status: ACTIVE
+ - Status: HISTORICAL / ACTIVE
 - Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69.md`
 - Exact next action: diagnose owner/reviewer snapshot ordering read-only.
 - Scope exclusions: no `.synesis` surgery, snapshot/worktree copying, forced
@@ -52,7 +65,7 @@ mutation or capability request; #58 had no run-scoped Synesis MCP child. B
 wake, downstream work, review, integration, and WorkGroup terminalization
 remain unproven.
 
-- Status: ACTIVE
+ - Status: HISTORICAL / ACTIVE
 - Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs55-58.md`
 - Exact next action: diagnose the run-scoped Codex App-Server-to-Synesis-MCP
   tool-admission boundary read-only; do not bypass MCP, reuse or repair a
@@ -69,7 +82,7 @@ Synesis MCP children closed during `initialize`; no Synesis MCP tool was
 callable. No capability, coding, integration, or terminalization evidence was
 created.
 
-- Status: ACTIVE
+ - Status: HISTORICAL / ACTIVE
 
 - Exact next action: diagnose the native Synesis MCP child-startup handshake
   read-only before another fresh target; do not reuse or repair run #44.
@@ -86,7 +99,7 @@ integrated producer types; supported refresh correctly returned
 `overlapping_claim` / self-overlap. Final review/integration and WorkGroup
 terminalization remain unproven.
 
-- Status: ACTIVE
+ - Status: HISTORICAL / ACTIVE
 
 - Exact next action: diagnose managed dependent-worktree snapshot consumption
   and the self-overlap recovery boundary read-only before another fresh target;

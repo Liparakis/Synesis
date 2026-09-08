@@ -13,7 +13,7 @@ support.
 | PCP                                 | Optional router mapping adapter                                        | Not implemented                             | `SL-D-034`                              |
 | NAT-PMP                             | Optional router mapping adapter                                        | Not implemented                             | `SL-D-034`                              |
 | UPnP IGD                            | Optional, consentful router mapping adapter                            | Not implemented                             | `SL-D-034`                              |
-| Cone-NAT hole punching              | Bounded coordinated attempts                                           | Not implemented; physical evidence required | `SL-D-035`                              |
+| Cone-NAT hole punching              | Bounded coordinated attempts                                           | Same-socket loopback codec/provider/coordinator evidence; controlled/physical evidence required | `SL-D-035`                      |
 | Symmetric NAT                       | Explicit unsupported or failed result unless evidence proves otherwise | Not verified                                | `SL-D-035`                              |
 | CGNAT                               | Explicit unsupported or failed result unless evidence proves otherwise | Not verified                                | `SL-D-031`, `SL-D-035`                  |
 | VPN/overlay                         | Interface/provider-specific behavior                                   | Not verified                                | `SL-D-031`                              |
@@ -25,6 +25,9 @@ support.
 | QUIC path migration                 | Evidence claim boundary, not a feature                                 | Not verified                                | Historical `SL-D-012`, research archive |
 | Application-silence fault injection | Evidence claim boundary, not a feature                                 | Not verified                                | Historical `SL-D-017`, research archive |
 
-Unsupported topologies must produce a bounded diagnostic result. The matrix
-does not authorize STUN, TURN, relay, hosted rendezvous, or production peer
-discovery infrastructure.
+Unsupported topologies must produce a bounded diagnostic result. SL-D-035
+authorizes only configured STUN Binding discovery and opaque signed
+offer/answer transport; it does not authorize TURN, relay, hosted rendezvous,
+or implicit production peer-discovery infrastructure. Same-socket Netty
+integration is verified on loopback; controlled-NAT and physical topology
+evidence remain open gates.

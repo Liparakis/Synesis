@@ -62,13 +62,19 @@ cancellation, invalid output, and failure are separate outcomes, so a broken
 optional provider cannot suppress a usable provider or silently expand resource
 use.
 
-Only same-family non-relay pairs enter the race. Attempt count, concurrency,
+Only same-family non-relay pairs enter the race. Optional STUN Binding
+responses are matched to their transaction and parsed under a strict size
+bound; the provider is caller-owned and must share the eventual QUIC UDP
+socket. Attempt count, concurrency,
 staggering, per-attempt timeout, total timeout, and diagnostic count are
 bounded. The success boundary is authenticated expected identity plus
 control-ready `PeerSession`; raw transport success cannot win. Losers are
-cancelled and late sessions are locally closed. Router discovery, STUN/TURN,
+cancelled and late sessions are locally closed. Router discovery, TURN,
 relays, hole punching, physical reachability, and path migration remain
 unverified or unsupported rather than being represented as successful paths.
+Signed traversal offers/answers bind session, both durable identities,
+invitation context, expiry, nonce, and descriptors; rendezvous metadata is
+untrusted routing input and cannot carry normal Link application traffic.
 
 ## Invitation and bootstrap mitigations
 

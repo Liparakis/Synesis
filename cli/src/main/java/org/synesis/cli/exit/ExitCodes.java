@@ -31,6 +31,10 @@ public final class ExitCodes {
      */
     public static final int HOST_IDENTITY_MISMATCH = 12;
     /**
+     * Invalid or replayed human-mediated answer link.
+     */
+    public static final int ANSWER_INVALID = 14;
+    /**
      * Bounded session/network failure.
      */
     public static final int SESSION_FAILED = 13;

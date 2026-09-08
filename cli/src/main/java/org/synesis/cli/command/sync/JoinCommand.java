@@ -11,7 +11,7 @@ import picocli.CommandLine.Parameters;
 /**
  * Adapts {@code synesis join <link>} to the Link façade.
  */
-@Command(name = "join", description = "Join one signed onboarding invitation.", mixinStandardHelpOptions = true)
+@Command(name = "join", description = "Import SLO1, emit SLA2, and start direct onboarding.", mixinStandardHelpOptions = true)
 public final class JoinCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
@@ -34,8 +34,9 @@ public final class JoinCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            runtime.onboarding()
-                    .join(link);
+            try (var join = runtime.onboarding().importInvitation(link)) {
+                join.connect();
+            }
             return ExitCodes.OK;
         } catch (OnboardingFailure failure) {
             return FailureMapper.map(failure, runtime.terminal());

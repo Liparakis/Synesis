@@ -20,34 +20,32 @@ import org.junit.jupiter.api.Timeout;
 @Timeout(120)
 final class GeneratedOnboardingTest {
 
-    private static CapturedHost captureHost(Process host, CompletableFuture<String> linkFuture) {
-        StringBuilder output = new StringBuilder();
-        String link = null;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(host.getInputStream(),
-                StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line)
-                        .append(System.lineSeparator());
-                if (line.startsWith("SHARE_LINK=")) {
-                    link = line.substring("SHARE_LINK=".length());
-                    linkFuture.complete(link);
+    private static CompletableFuture<CapturedProcess> capture(Process process, String marker,
+            CompletableFuture<String> linkFuture) {
+        return CompletableFuture.supplyAsync(() -> {
+            StringBuilder output = new StringBuilder();
+            String link = null;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(),
+                    StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line)
+                            .append(System.lineSeparator());
+                    if (line.startsWith(marker + "=")) {
+                        link = line.substring((marker + "=").length());
+                        linkFuture.complete(link);
+                    }
                 }
+                if (link == null) {
+                    IllegalStateException failure = new IllegalStateException("launcher emitted no " + marker);
+                    linkFuture.completeExceptionally(failure);
+                    throw failure;
+                }
+                return new CapturedProcess(link, output.toString());
+            } catch (IOException failure) {
+                throw new IllegalStateException("launcher output capture failed", failure);
             }
-            if (link == null) {
-                IllegalStateException failure = new IllegalStateException("launcher host emitted no invitation");
-                linkFuture.completeExceptionally(failure);
-                throw failure;
-            }
-            if (!host.waitFor(60, TimeUnit.SECONDS)) {
-                linkFuture.completeExceptionally(new IllegalStateException("launcher host did not close"));
-            }
-            return new CapturedHost(link, output.toString());
-        } catch (IOException | InterruptedException failure) {
-            Thread.currentThread()
-                    .interrupt();
-            throw new IllegalStateException("launcher host capture failed", failure);
-        }
+        });
     }
 
     @Test
@@ -58,24 +56,31 @@ final class GeneratedOnboardingTest {
         Process join = null;
         try {
             CompletableFuture<String> linkFuture = new CompletableFuture<>();
-            CompletableFuture<CapturedHost> hostFuture = CompletableFuture.supplyAsync(() -> captureHost(host,
-                    linkFuture));
+            CompletableFuture<CapturedProcess> hostFuture = capture(host, "SHARE_LINK", linkFuture);
             String link = linkFuture.get(45, TimeUnit.SECONDS);
             join = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), joinProfile, "join", link);
-            boolean joinExited = join.waitFor(60, TimeUnit.SECONDS);
-            CapturedHost capturedHost = hostFuture.get(60, TimeUnit.SECONDS);
-            assertTrue(joinExited);
+            CompletableFuture<String> answerFuture = new CompletableFuture<>();
+            CompletableFuture<CapturedProcess> joinFuture = capture(join, "ANSWER_LINK", answerFuture);
+            String answer = answerFuture.get(45, TimeUnit.SECONDS);
+            host.getOutputStream().write((answer + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
+            host.getOutputStream().flush();
+            CapturedProcess capturedHost = hostFuture.get(75, TimeUnit.SECONDS);
+            CapturedProcess capturedJoin = joinFuture.get(75, TimeUnit.SECONDS);
             assertEquals(0, join.exitValue());
             assertEquals(0, host.exitValue());
-            String joinOutput = new String(join.getInputStream()
-                    .readAllBytes(), StandardCharsets.UTF_8);
+            String joinOutput = capturedJoin.output();
             assertTrue(capturedHost.output()
                     .contains("SHARE_LINK="));
+            assertTrue(capturedHost.output()
+                    .contains("AWAITING_ANSWER=true"));
+            assertTrue(capturedHost.output()
+                    .contains("ANSWER_VERIFIED"));
             assertTrue(capturedHost.output()
                     .contains("CONTROL_READY=true"));
             assertTrue(capturedHost.output()
                     .contains("SESSION_CLOSED"));
             assertTrue(joinOutput.contains("INVITE_VERIFIED"));
+            assertTrue(joinOutput.contains("ANSWER_LINK="));
             assertTrue(joinOutput.contains("WORK_RESULT=OK"));
             assertTrue(joinOutput.contains("SESSION_CLOSED"));
         } finally {
@@ -91,7 +96,7 @@ final class GeneratedOnboardingTest {
     /**
      * Captures one generated onboarding host result for assertions.
      */
-    private record CapturedHost(String link, String output) {
+    private record CapturedProcess(String link, String output) {
 
     }
 }

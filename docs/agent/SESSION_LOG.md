@@ -1,3 +1,43 @@
+## 2026-09-08 — SL-D-035 activation and Link re-investigation
+
+The repeated bounded user request was mapped to the existing deferred
+`SL-D-035` capability. Read-only inspection covered Link source symbols, tests,
+protocol and wire documentation, security/operations limits, ADRs, and the
+deferred register. Existing Link infrastructure is retained as the extension
+seam. The task is activated for architecture review; reconnect remains the
+separate deferred `SL-D-036` capability.
+
+Starting HEAD: `c9d8d538b47619287faf01e1aecf6bc0302d0775`. Starting working
+tree: clean. No push or production-code mutation occurred.
+
+ADR-0065 is now recorded and accepts an evolutionary implementation: optional
+configured STUN discovery, signed bilateral traversal records, bounded
+simultaneous attempts over the existing Netty QUIC boundary, and explicit
+unsupported-topology diagnostics. Relays, reconnect, distributed state, and
+MCP changes remain excluded. Production code is still unchanged; the next
+slice starts with canonical record and coordinator tests.
+
+The first implementation slice is verified. `SLO1`/`SLA2` signed records,
+RFC 8489 Binding vectors, the caller-owned STUN provider seam, the same-socket
+Netty adapter, the bounded deterministic coordinator, and the explicit
+Onboarding traversal path are covered by focused tests; `:link:check` passes.
+Embedded and real-loopback UDP tests prove handler coexistence with QUIC and
+local-port continuity. Evidence is recorded in
+`docs/evidence/sld035-traversal-foundation-2026-09-08.md`. External STUN, NAT
+simulation, and physical two-network evidence remain open.
+
+The human-mediated continuation is now verified. `synesis host` creates a
+bounded `synesis://join/SLO1-...` wrapper containing the existing signed
+invitation and host offer, keeps its bound UDP/QUIC endpoint alive, and waits
+for one answer line. `synesis join <SLO1>` verifies the wrapper, gathers B's
+candidates on B's bound endpoint, emits `synesis://answer/SLA2-...`, and starts
+the existing direct authenticated race. A then pastes SLA2 into the waiting
+host; no Synesis rendezvous service is involved. The local Link lifecycle,
+replay/mismatch/expiry/tamper checks, CLI two-process sequence, and strict
+`:link:check` pass. Observed local-interface URI sizes were 1,499 characters
+for SLO1 and 945 for SLA2. Controlled-NAT and physical two-network evidence
+remain open.
+
 ## 2026-09-06 — SYN-049 fresh unattended two-worker acceptance run #81
 
 Run #81 passed the full bounded acceptance: fresh generation-1 managed A/B

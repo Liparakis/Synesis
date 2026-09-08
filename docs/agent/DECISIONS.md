@@ -10,6 +10,13 @@ Product decisions are indexed in ADRs under `docs/adr/`.
 
 ## Product ADRs
 
+- ADR-0065: Coordinated direct UDP/QUIC traversal — accepted for
+  implementation; preserves the existing authenticated Netty QUIC and Link
+  identity/session boundaries while adding optional configured STUN discovery,
+  signed bilateral offer/answer signaling, bounded simultaneous attempts, and
+  explicit unsupported-topology diagnostics. Relays, reconnect, and
+  distributed state remain excluded.
+
 - ADR-0009: Zero-configuration terminal onboarding — accepted; listener-first
   signed invitations with one-use capability admission, authentication-time
   consumption, bounded pre-auth reservation release, ephemeral transport TLS,

@@ -1,5 +1,41 @@
 # Current Task
 
+## SL-D-035 coordinated UDP/QUIC hole punching — implementation and evidence gate — 2026-09-08
+
+Status: **ACTIVE / EVIDENCE GATE**. Read-only re-investigation confirmed
+that Link already owns Ed25519 identities, signed descriptors and invitations,
+Netty native QUIC, authenticated control/application streams, bounded candidate
+racing, replay checks, liveness, and two-process evidence. The remaining gate
+is controlled-topology evidence for endpoint discovery and coordinated
+traversal; reconnect remains separately deferred under `SL-D-036`.
+
+- Task ID: SL-D-035
+
+## Immediate next action
+
+Run or add controlled-NAT and, if available, physical two-network evidence
+for the now-wired direct traversal path. Keep relay/reconnect out of scope.
+Do not claim Internet NAT success from localhost evidence.
+
+## Work completed
+
+Recorded starting HEAD/status and mapped the Link source, tests, protocol,
+security, operations, ADR, and deferred-capability boundaries. Completed ADR-
+0065 and implemented the bounded signed exchange, RFC 8489 Binding codec,
+caller-owned provider seam, same-socket Netty adapter, deterministic
+coordinator, and human-mediated two-link onboarding path. The normal `host`
+command emits SLO1 and waits for one SLA2 line; the normal `join` command
+emits SLA2 and immediately starts the existing direct race. Real loopback UDP,
+CLI two-process, and full Link checks pass; no physical or Internet traversal
+claim is made.
+
+## Current failures
+
+The same-socket STUN and traversal handlers are verified over real loopback
+UDP parents with QUIC codecs, but controlled NAT, Internet NAT behavior, and
+physical two-network evidence do not exist yet. Reconnect is not part of this
+bounded activation.
+
 ## SYN-049 fresh unattended two-worker acceptance — run #81 — 2026-09-06
 
 Status: **COMPLETE / PASS**. Fresh run #81 passed generation-1 managed A/B

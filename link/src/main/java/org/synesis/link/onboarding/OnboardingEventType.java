@@ -43,6 +43,14 @@ public enum OnboardingEventType {
      */
     INVITE_VERIFIED,
     /**
+     * A human-mediated answer was accepted and traversal may begin.
+     */
+    ANSWER_VERIFIED,
+    /**
+     * Direct traversal has started after the two-link exchange.
+     */
+    TRAVERSAL_STARTED,
+    /**
      * The invitation's host identity was pinned.
      */
     HOST_IDENTITY_PINNED,
@@ -58,6 +66,10 @@ public enum OnboardingEventType {
      * The exact invitation share link.
      */
     SHARE_LINK,
+    /**
+     * The exact signed answer link for the human-mediated flow.
+     */
+    ANSWER_LINK,
     /**
      * An authenticated peer session was connected.
      */

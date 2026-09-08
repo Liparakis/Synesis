@@ -13,6 +13,10 @@ public enum OnboardingFailureCode {
      */
     INVITE_INVALID,
     /**
+     * The supplied answer is malformed, mismatched, expired, or reused.
+     */
+    ANSWER_INVALID,
+    /**
      * The invitation's authenticated host identity did not match.
      */
     HOST_IDENTITY_MISMATCH,

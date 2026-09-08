@@ -14,6 +14,7 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -100,12 +101,15 @@ public final class CandidateDescriptor {
     public static CandidateDescriptor create(NodeIdentity identity, Instant issuedAt, Instant expiresAt,
             Collection<Candidate> candidates) throws GeneralSecurityException {
         Objects.requireNonNull(identity, "identity");
-        Objects.requireNonNull(issuedAt, "issued at");
-        Objects.requireNonNull(expiresAt, "expires at");
+        Instant canonicalIssuedAt = Objects.requireNonNull(issuedAt, "issued at")
+                .truncatedTo(ChronoUnit.SECONDS);
+        Instant canonicalExpiresAt = Objects.requireNonNull(expiresAt, "expires at")
+                .truncatedTo(ChronoUnit.SECONDS);
         List<Candidate> normalized = normalize(candidates);
         byte[] publicKey = identity.publicKeyEncoded();
-        byte[] unsigned = encodeUnsigned(identity.nodeId(), publicKey, issuedAt, expiresAt, normalized);
-        return new CandidateDescriptor(identity.nodeId(), publicKey, issuedAt, expiresAt, normalized,
+        byte[] unsigned = encodeUnsigned(identity.nodeId(), publicKey, canonicalIssuedAt, canonicalExpiresAt,
+                normalized);
+        return new CandidateDescriptor(identity.nodeId(), publicKey, canonicalIssuedAt, canonicalExpiresAt, normalized,
                 identity.sign(unsigned));
     }
 

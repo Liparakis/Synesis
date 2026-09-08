@@ -1,3 +1,16 @@
+## 2026-09-08 — SL-D-035 activation
+
+The existing deferred `SL-D-035` capability is now the single active task after
+the Link re-investigation. Link already has authenticated QUIC sessions,
+identities, invitations, candidate racing, control/application framing,
+liveness, and local/two-process evidence. The human-mediated SLO1/SLA2 flow is
+implemented and verified; the remaining evidence gate is controlled-NAT and,
+if available, physical two-network traversal. Reconnect remains deferred under
+`SL-D-036`.
+
+- Exact next action: run controlled-NAT validation where practical and record the exact limitation otherwise; do not claim Internet NAT success yet.
+- Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-09-06 — SYN-049 run #81 PASS
 
 Run #81 completed the fresh unattended two-worker acceptance with generation-1

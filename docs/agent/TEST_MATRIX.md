@@ -1,3 +1,24 @@
+## SL-D-035 coordinated direct traversal — architecture gate — 2026-09-08
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Existing Link baseline | Source/tests/docs re-investigation | PASS | `docs/adr/0065-coordinated-direct-traversal.md` context and prior test suite |
+| Architecture decision | Evolutionary extension preserving Netty QUIC and Link auth boundaries | PASS | ADR-0065 |
+| Signed traversal records | Canonical round trip, peer/session binding, tamper, expiry, and replay vectors | PASS | `TraversalExchangeTest` |
+| Human-mediated pairing | SLO1 copy/paste to B, SLA2 copy/paste back to A, exact offer binding, one-use import | PASS | `HumanMediatedLinkTest`; `HumanMediatedOnboardingTest`; `GeneratedOnboardingTest` |
+| STUN discovery foundation | RFC 8489 Binding vector parsing and caller-owned provider | PASS | `StunCandidateProviderTest` |
+| Bounded coordinator | Exchange admission, pair cap, authenticated identity gate, deterministic winner | PASS | `TraversalExchangeTest` |
+| Concrete STUN/socket adapter | Embedded and real Netty channels prove same parent-channel request/response, mapping continuity, and non-STUN forwarding | PASS | `NettyStunBindingTransportTest`; `NettyStunRealSocketTest`; Netty dispatcher API inspection |
+| Onboarding STUN configuration | Optional configured provider is installed after the bound Link UDP channel | PASS | `Onboarding` constructor/path; focused compilation |
+| Traversal exchange transport | Signed offer/answer exchange over two real UDP parent channels carrying QUIC codecs | PASS | `NettyTraversalRealSocketTest`; `NettyTraversalExchangeTest` |
+| Onboarding traversal wiring | Host waits for one human-imported SLA2; join emits SLA2 and uses the same bound parent with existing `CandidateRacer`/handshake path | PASS | `Onboarding`; `HumanMediatedOnboardingTest`; `GeneratedOnboardingTest` |
+| Live STUN endpoint | Real loopback Binding request/response and mapping continuity | PASS | `NettyStunRealSocketTest`; external Internet STUN remains unrun |
+| Internet/NAT traversal | Physical or controlled-topology evidence | NOT RUN | no claim permitted |
+
+Exact next action: run controlled-NAT validation where practical and record the
+exact limitation otherwise; physical two-network evidence remains optional
+until an appropriate environment is available.
+
 ## SYN-051 build-JVM compatibility and provenance — 2026-09-05
 
 | Area                    | Check                                        | Result                                | Evidence                  |

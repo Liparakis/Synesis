@@ -105,6 +105,7 @@ public final class SyncApplicationService {
     private static String mapOnboarding(OnboardingFailureCode code) {
         return switch (code) {
             case INVITE_INVALID -> "INVITE_INVALID";
+            case ANSWER_INVALID -> "INVITE_INVALID";
             case HOST_IDENTITY_MISMATCH -> "AUTH_FAILED";
             case IDENTITY_FAILED -> "IDENTITY_FAILED";
             case HOST_TIMEOUT, NO_USABLE_CANDIDATE, CONNECTION_FAILED, INTERNAL -> "TRANSPORT_FAILED";

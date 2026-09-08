@@ -20,11 +20,14 @@ tests remain `TWO_PROCESS_VERIFIED` and must not be relabeled.
 
 For launcher validation, build with
 `./gradlew.bat :cli:installDist --dependency-verification=strict` and run the
-generated `cli\build\install\synesis\bin\synesis.bat` on both machines. Use a
-temporary PATH change only in the current shell if desired; do not record a
-permanent PATH or installation claim. Pass the complete invitation as one
-quoted argument to `synesis join "<link>"`. Capture sanitized launcher output
-in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; the existing
+generated `cli\build\install\synesis\bin\synesis.bat` on both machines. The
+human-mediated flow is `synesis host`, copy its
+`synesis://join/SLO1-...` output to the other machine, run
+`synesis join "<link>"`, and paste the resulting
+`synesis://answer/SLA2-...` line into the waiting host process. No signaling
+server or mailbox is used. Use a temporary PATH change only in the current
+shell if desired; do not record a permanent PATH or installation claim.
+Capture sanitized launcher output in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; the existing
 `PHYSICAL-DEMO-2026-07-20.md` is diagnostic `DemoCli` evidence and does not
 prove the generated launcher path.
 

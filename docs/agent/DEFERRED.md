@@ -145,8 +145,8 @@ forged-gateway tests, exposure review, and physical router matrix results.
 
 **Status:** DEFERRED
 **Area:** Connectivity
-**Current verified capability:** Direct candidate racing exists; coordinated simultaneous outbound attempts do not.
-**Missing capability:** Bounded, authenticated simultaneous attempts using exchanged invitation candidates.
+**Current verified capability:** Human-mediated signed SLO1/SLA2 exchange, bounded candidate pairing, and coordinated direct attempts exist on the existing Link UDP/QUIC endpoint.
+**Missing capability:** Controlled-NAT and physical two-network evidence for compatible and unsupported topologies.
 **Reason deferred:** NAT behavior, consent, resource limits, and failure classification are not physically verified.
 **Activation trigger:** A serverless direct-connectivity task requires traversal of compatible NATs without relay
 infrastructure.

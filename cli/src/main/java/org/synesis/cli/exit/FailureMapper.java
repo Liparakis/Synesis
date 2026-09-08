@@ -26,6 +26,7 @@ public final class FailureMapper {
         return switch (code) {
             case IDENTITY_FAILED -> ExitCodes.LOCAL_CONFIGURATION;
             case INVITE_INVALID -> ExitCodes.INVITE_INVALID;
+            case ANSWER_INVALID -> ExitCodes.ANSWER_INVALID;
             case HOST_IDENTITY_MISMATCH -> ExitCodes.HOST_IDENTITY_MISMATCH;
             case NO_USABLE_CANDIDATE, HOST_TIMEOUT, CONNECTION_FAILED -> ExitCodes.SESSION_FAILED;
             case INTERNAL -> ExitCodes.INTERNAL;
@@ -48,6 +49,7 @@ public final class FailureMapper {
         return switch (code) {
             case IDENTITY_FAILED -> "Local identity configuration failed.";
             case INVITE_INVALID -> "The invitation is invalid or expired.";
+            case ANSWER_INVALID -> "The answer is invalid, expired, mismatched, or already used.";
             case HOST_IDENTITY_MISMATCH -> "The authenticated host identity did not match the invitation.";
             case NO_USABLE_CANDIDATE -> "No usable direct candidate was available.";
             case HOST_TIMEOUT -> "The host wait expired.";

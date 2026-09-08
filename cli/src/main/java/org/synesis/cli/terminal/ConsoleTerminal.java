@@ -2,6 +2,10 @@ package org.synesis.cli.terminal;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 
 /**
@@ -14,6 +18,7 @@ public final class ConsoleTerminal implements Terminal {
     private static final int DEFAULT_WIDTH = 120;
     private final PrintWriter out;
     private final PrintWriter err;
+    private final BufferedReader input;
     private final int width;
     private final boolean unicodeSupported;
 
@@ -31,9 +36,21 @@ public final class ConsoleTerminal implements Terminal {
      * @param err stderr stream
      */
     public ConsoleTerminal(PrintStream out, PrintStream err) {
+        this(out, err, System.in);
+    }
+
+    /**
+     * Creates a console terminal with injected output and input streams.
+     *
+     * @param out   stdout stream
+     * @param err   stderr stream
+     * @param input stdin stream
+     */
+    public ConsoleTerminal(PrintStream out, PrintStream err, InputStream input) {
         Charset outputCharset = out.charset();
         this.out = new PrintWriter(out, true);
         this.err = new PrintWriter(err, true);
+        this.input = new BufferedReader(new InputStreamReader(input, Charset.defaultCharset()));
         this.width = detectWidth();
         this.unicodeSupported = outputCharset.newEncoder()
                 .canEncode("█▀▄");
@@ -70,5 +87,10 @@ public final class ConsoleTerminal implements Terminal {
     @Override
     public boolean unicodeSupported() {
         return unicodeSupported;
+    }
+
+    @Override
+    public String readLine() throws IOException {
+        return input.readLine();
     }
 }

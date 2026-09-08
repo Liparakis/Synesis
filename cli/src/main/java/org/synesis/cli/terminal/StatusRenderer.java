@@ -31,8 +31,8 @@ public final class StatusRenderer implements Consumer<OnboardingEvent> {
     @Override
     public void accept(OnboardingEvent event) {
         OnboardingEventType type = event.type();
-        if (type == OnboardingEventType.SHARE_LINK) {
-            terminal.stdout("SHARE_LINK=" + event.value());
+        if (type == OnboardingEventType.SHARE_LINK || type == OnboardingEventType.ANSWER_LINK) {
+            terminal.stdout(type.name() + "=" + event.value());
             try {
                 String rendered = qr.render(event.value());
                 terminal.stdout("QR_RENDERED=COMPACT");
@@ -50,7 +50,8 @@ public final class StatusRenderer implements Consumer<OnboardingEvent> {
         String line = switch (type) {
             case IDENTITY_CREATED, IDENTITY_LOADED, SESSION_CREATED, LISTENER_READY,
                  DESCRIPTOR_CREATED, INVITE_CREATED, INVITE_PARSED, INVITE_VERIFIED,
-                 LOCAL_DESCRIPTOR_CREATED, PEER_CONNECTED, SESSION_CLOSED -> type.name();
+                 ANSWER_VERIFIED, TRAVERSAL_STARTED, LOCAL_DESCRIPTOR_CREATED,
+                 PEER_CONNECTED, SESSION_CLOSED -> type.name();
             default -> type.name() + "=" + event.value();
         };
         terminal.stdout(line);

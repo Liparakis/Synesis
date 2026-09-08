@@ -15,6 +15,7 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
@@ -115,11 +116,15 @@ public final class SessionInvitation {
                 || !Arrays.equals(host.publicKeyEncoded(), descriptor.publicKeyEncoded())) {
             throw new IllegalArgumentException("descriptor is not bound to host identity");
         }
+        Instant canonicalIssuedAt = Objects.requireNonNull(issuedAt, "issued at")
+                .truncatedTo(ChronoUnit.SECONDS);
+        Instant canonicalExpiresAt = Objects.requireNonNull(expiresAt, "expires at")
+                .truncatedTo(ChronoUnit.SECONDS);
         byte[] cap = Objects.requireNonNull(capability, "capability")
                 .clone();
-        SessionInvitation unsigned = new SessionInvitation(version, sessionId, issuedAt, expiresAt, cap,
+        SessionInvitation unsigned = new SessionInvitation(version, sessionId, canonicalIssuedAt, canonicalExpiresAt, cap,
                 descriptor.encoded(), new byte[]{1});
-        return new SessionInvitation(version, sessionId, issuedAt, expiresAt, cap, descriptor.encoded(),
+        return new SessionInvitation(version, sessionId, canonicalIssuedAt, canonicalExpiresAt, cap, descriptor.encoded(),
                 host.sign(unsigned.unsigned));
     }
 

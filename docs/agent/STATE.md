@@ -1,3 +1,48 @@
+## 2026-09-08 — SL-D-035 activation and Link re-investigation
+
+The repeated user request activates the already-planned `SL-D-035` capability.
+Read-only investigation confirmed the existing Link architecture: persistent
+Ed25519 node identities; signed descriptors and single-use invitations; bounded
+candidate gathering and racing; Netty native QUIC; transcript-bound identity
+proofs and replay protection; authenticated control/application streams; and
+bounded liveness. The implementation gap is now reduced to controlled-topology
+evidence for endpoint discovery and simultaneous traversal. No NAT, physical
+two-network, or reconnect evidence exists.
+
+Starting HEAD is `c9d8d538b47619287faf01e1aecf6bc0302d0775`; the working tree
+was clean before activation. No production source, `.synesis` state, provider
+credential, global setting, or remote state was changed.
+
+## Architecture decision recorded
+
+ADR-0065 accepts an evolutionary Link extension: optional configured STUN
+server-reflexive discovery, signed bilateral traversal offer/answer records,
+bounded coordinated attempts over the existing Netty QUIC boundary, and
+explicit diagnostics. It excludes relays, reconnect, distributed state, and
+MCP changes. The concrete STUN/socket adapter remains a compatibility-gated
+implementation decision.
+
+## Verified implementation slice
+
+The human-mediated `SLO1`/`SLA2` links, exact offer-digest binding, RFC 8489
+Binding codec, caller-owned `StunCandidateProvider`, same-socket
+`NettyStunBindingTransport`, `directTraversalDefaults`, and bounded
+`TraversalCoordinator` are implemented. The normal CLI flow is host emits
+SLO1, join imports it and emits SLA2, and host imports SLA2 from stdin; no
+signaling service is involved. The adapter is wired into optional `Onboarding`
+STUN configuration, and the same parent-channel traversal exchange remains
+available to the existing compatibility path. Embedded, real-loopback, and
+two-process CLI tests prove STUN and signed offer/answer traffic use parent
+channels carrying QUIC codecs while unrelated datagrams continue to the QUIC
+pipeline. Focused tests and `:link:check` pass. This remains localhost
+evidence only; controlled NAT and physical two-network evidence remain open.
+
+## Immediate next action
+
+Run controlled-NAT validation where the environment supports it, and record
+the exact limitation if it does not. Keep reconnect under deferred `SL-D-036`
+unless separately promoted.
+
 ## 2026-09-06 — SYN-049 full unattended two-worker acceptance run #81
 
 Run #81 passed fresh lawful generation-1 managed A/B preparation/START,

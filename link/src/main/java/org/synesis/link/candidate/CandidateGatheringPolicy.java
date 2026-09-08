@@ -54,4 +54,18 @@ public record CandidateGatheringPolicy(
         return new CandidateGatheringPolicy(8, 16, 32, Duration.ofSeconds(2), Duration.ofSeconds(5),
                 false, true, true, true, false);
     }
+
+    /**
+     * Returns bounded defaults for an explicitly configured direct-traversal operation.
+     *
+     * <p>Server-reflexive candidates are accepted only when a caller supplies
+     * an actual provider, such as {@link StunCandidateProvider}; no discovery
+     * service is enabled implicitly.
+     *
+     * @return immutable traversal gathering policy
+     */
+    public static CandidateGatheringPolicy directTraversalDefaults() {
+        return new CandidateGatheringPolicy(8, 16, 32, Duration.ofSeconds(2), Duration.ofSeconds(5),
+                false, true, true, true, true);
+    }
 }

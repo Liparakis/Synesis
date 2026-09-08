@@ -1,3 +1,16 @@
+## SL-D-035 coordinated UDP/QUIC hole punching — activated 2026-09-08
+
+Extend the existing Synesis Link implementation so two independent nodes can
+discover bounded endpoint candidates, coordinate direct UDP/QUIC traversal,
+authenticate the intended durable peer, and exchange Link traffic directly
+when the topology permits. Preserve the existing Link architecture and fail
+closed on unsupported NAT/firewall conditions. No relay/TURN fallback,
+distributed Synesis state, or transparent reconnect is included in this task.
+
+- Status: ACTIVE / implementation and network-evidence gate
+- Exact next action: run controlled-NAT validation where practical and record the exact limitation otherwise; do not claim physical P2P from localhost evidence.
+- Existing planning basis: `SL-D-031`, `SL-D-032`, and `SL-D-035` in `docs/agent/DEFERRED.md`.
+
 ## SYN-049 fresh unattended two-worker acceptance — runs #55–#58 — 2026-09-06
 
 Complete one fresh real two-worker acceptance through the supported Synesis
