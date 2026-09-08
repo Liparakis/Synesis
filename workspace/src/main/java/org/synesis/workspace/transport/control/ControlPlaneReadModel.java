@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.synesis.coordination.application.CoordinationService;
@@ -79,9 +80,10 @@ public final class ControlPlaneReadModel {
      * @return JSON-compatible snapshot map
      */
     public Map<String, Object> snapshot() {
+        NetworkSnapshot networkSnapshot = network.get();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("apiVersion", "v1");
-        result.put("runtime", runtime());
+        result.put("runtime", runtime(networkSnapshot));
         result.put("project", project());
         result.put("providers", providers());
         result.put("agents", agents());
@@ -90,7 +92,7 @@ public final class ControlPlaneReadModel {
         result.put("capabilities", capabilities());
         result.put("tasks", tasks());
         result.put("ownerships", ownerships());
-        result.put("network", networkMap());
+        result.put("network", networkMap(networkSnapshot));
         result.put("diagnostics", diagnostics());
         return result;
     }
@@ -128,13 +130,18 @@ public final class ControlPlaneReadModel {
         return location.projectId();
     }
 
-    private Map<String, Object> runtime() {
+    private Map<String, Object> runtime(NetworkSnapshot networkSnapshot) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", "RUNNING");
         result.put("apiVersion", "v1");
+        result.put("version", Optional.ofNullable(ControlPlaneReadModel.class.getPackage()
+                .getImplementationVersion()).orElse("development"));
+        result.put("activeProjectCount", 1);
         result.put("headSequence", coordination.headSequence());
         result.put("activeAgentCount", coordination.collaborationProjection().participants().size());
-        result.put("connectedPeerCount", network.get().peers().size());
+        result.put("connectedPeerCount", networkSnapshot.peers().size());
+        result.put("networkStatus", networkSnapshot.status());
+        result.put("relayStatus", networkSnapshot.relay().status());
         return result;
     }
 
@@ -296,8 +303,7 @@ public final class ControlPlaneReadModel {
                 }).toList();
     }
 
-    private Map<String, Object> networkMap() {
-        NetworkSnapshot snapshot = network.get();
+    private Map<String, Object> networkMap(NetworkSnapshot snapshot) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", snapshot.status());
         result.put("peers", snapshot.peers().stream().map(peer -> Map.of(

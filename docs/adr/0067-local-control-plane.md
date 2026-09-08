@@ -20,9 +20,13 @@ orchestrator.
 Evolve the existing loopback coordination listener with a versioned
 `/api/v1` adapter. The adapter reads explicit DTO fields from existing
 project, coordination, provider, diagnostic, Link, overlay, and relay seams.
-Commands delegate to existing application services, especially the Link
-onboarding façade; HTTP handlers do not reimplement protocol validation or
-state transitions.
+`LinkNetworkProjection` is the thin mapping seam from one consistent runtime
+source of authenticated `PeerSession` objects, verified membership/topology
+views, and safe relay state. It owns no Link lifecycle. The current CLI has no
+production long-lived owner for those views and therefore exposes
+`UNCONFIGURED` network state until one exists. Commands delegate to existing
+application services, especially the Link onboarding façade; HTTP handlers do
+not reimplement protocol validation or state transitions.
 
 The default bind is loopback only. The existing deterministic coordination
 port remains the default, with the already-supported ephemeral-port option for
@@ -38,8 +42,10 @@ rejected, and CORS is never wildcarded. Health is the only unauthenticated
 read.
 
 The live channel is SSE. It sends a bounded initial snapshot marker and
-UI-safe, versioned resource-change events. A slow subscriber is disconnected
-with a refresh condition rather than growing backend memory without bound.
+UI-safe, versioned resource-change events whose names are semantic resource
+families rather than raw internal Java enum values. A slow subscriber is
+disconnected with a refresh condition rather than growing backend memory
+without bound.
 The browser reloads the current snapshot after reconnect; durable event replay
 is not added for the browser surface.
 

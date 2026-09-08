@@ -1,3 +1,25 @@
+## 2026-09-08 — SYN-052 control-plane acceptance tightening
+
+The control-plane slice was re-audited against the user brief and its current
+Link boundary. Added `LinkNetworkProjection` as a thin adapter over one
+consistent source of authenticated `PeerSession`, verified membership and
+topology views, and safe relay state; it does not own Link lifecycle or derive
+membership from invitations or addresses. Semantic SSE event names now hide
+internal prediction enum values. Focused HTTP tests pass durable project state,
+real Link membership through `/api/v1/network`, two simultaneous clients, and
+bounded stream termination during shutdown. The CLI remains intentionally
+`UNCONFIGURED` because no production long-lived Link/overlay/relay owner exists
+in this checkout.
+
+Verification used the documented process-local Windows loopback workaround:
+the focused workspace control-plane tests passed, including Link projection,
+strict workspace static analysis/Javadocs passed earlier in this slice, and
+the API/ADR/evidence/task-state docs were reconciled. The current changes are
+local and uncommitted; no push was performed for them.
+
+Exact next action: run the final checkpoint and affected module gates, then
+create the local SYN-052 commit without claiming production network ownership.
+
 ## 2026-09-08 — SL-D-040 signed membership propagation
 
 The overlay now distributes a newer signed `SLM1` snapshot through bounded

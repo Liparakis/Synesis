@@ -6,13 +6,14 @@ state; no frontend is included. ADR-0067 selects the existing JDK server and
 JSON utility, loopback-only binding, one-time bootstrap plus session/CSRF
 authorization, explicit DTOs, and bounded subscriber handling.
 
-- Exact next action: preserve the verified SYN-052 slice and keep the live overlay/relay-owner gap as the next explicitly scoped task; do not fabricate live network state.
+- Exact next action: review the final SYN-052 diff, run the checkpoint/evidence gates, and create the local verified commit; keep the live overlay/relay-owner gap explicit and do not fabricate live network state.
 - Preserve the old `SL-D-040` overlay boundary; do not reopen its implementation or claim physical traversal.
 - Do not add a public/cloud API, generic proxy, arbitrary filesystem endpoint, database, broker, frontend, reconnect, or browser event log.
-- Current implementation evidence: focused control-plane tests, strict
-  Javadocs, `:link:check`, `:relay:check`, deferred validation, and
-  `git diff --check` pass. The CLI network view remains `UNCONFIGURED` until a
-  real long-lived Link/overlay/relay owner exists.
+- Current implementation evidence: focused control-plane tests cover durable
+  HTTP project state, real Link membership projection, semantic multi-client
+  SSE, and shutdown; strict Javadocs, `:link:check`, `:relay:check`, deferred
+  validation, and `git diff --check` pass. The CLI network view remains
+  `UNCONFIGURED` until a real long-lived Link/overlay/relay owner exists.
 - Exact continuation command: `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 
 ## 2026-09-08 — SL-D-040 activation

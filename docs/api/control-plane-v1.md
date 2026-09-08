@@ -38,7 +38,7 @@ read is health.
 | --- | --- | --- |
 | GET | `/api/v1/health` | Listener, project ID, and durable sequence health |
 | GET | `/api/v1/snapshot` | Complete bounded public-safe project snapshot |
-| GET | `/api/v1/projects` | The served project identity |
+| GET | `/api/v1/projects` | The currently served project identity |
 | GET | `/api/v1/agents` | Participant and current work summaries |
 | GET | `/api/v1/workgroups` | WorkGroup status and participant summaries |
 | GET | `/api/v1/claims` | Work-intent selectors and conflict summaries |
@@ -54,11 +54,18 @@ raw event payloads, and arbitrary file contents are not DTO fields. Network
 state is `UNCONFIGURED` until a long-lived Link/overlay/relay runtime injects
 its read model; the endpoint does not invent connection state.
 
-The network DTO keeps physical Link peers separate from overlay membership and
-topology. It can expose authenticated peer/liveness health, membership nodes,
-direct edges, desired edges, selected routes (`DIRECT`, `PEER_TRANSIT`,
-`ORGANIZATION_RELAY`, `UNREACHABLE`), and relay configured/connected/
-authorized/usage state without exposing cryptographic material.
+`/api/v1/projects` reports the one project served by this listener. It is not a
+project registry and does not scan the filesystem for additional projects.
+
+The `LinkNetworkProjection` adapter maps a single consistent runtime source of
+`PeerSession`, verified `OverlayMembershipView`, verified
+`OverlayTopologyView`, and safe relay state into that DTO. It keeps physical
+Link peers separate from overlay membership and topology. It can expose
+authenticated peer/liveness health, membership nodes, direct edges, desired
+edges, selected routes (`DIRECT`, `PEER_TRANSIT`, `ORGANIZATION_RELAY`,
+`UNREACHABLE`), and relay configured/connected/authorized/usage state without
+exposing cryptographic material. The CLI currently has no long-lived owner for
+these Link views, so it intentionally supplies `UNCONFIGURED`.
 
 ## Supported commands
 
@@ -122,7 +129,9 @@ completed handles are closed; links are not written to project state.
 `GET /api/v1/events` sends `text/event-stream` with:
 
 - one `snapshot` event containing the current public-safe snapshot;
-- `coordination.updated` events containing only sequence and event type;
+- semantic coordination events named `agent.updated`, `workgroup.updated`,
+  `claim.updated`, `capability.updated`, `task.updated`, or the fallback
+  `coordination.updated`, containing only sequence and the UI event type;
 - `link.updated` events containing only redacted onboarding lifecycle facts;
 - `refresh_required` followed by disconnect when a bounded subscriber queue
   overflows.
@@ -130,6 +139,8 @@ completed handles are closed; links are not written to project state.
 The control stream is live-only. A reconnect receives a new snapshot; it does
 not create a browser event log or replay raw durable events. Coordination's
 internal binary `/events` endpoint remains a separate compatibility surface.
+Closing the control handler terminates active streams and lets the existing
+coordination listener release its executor and socket.
 
 ## Errors and limits
 

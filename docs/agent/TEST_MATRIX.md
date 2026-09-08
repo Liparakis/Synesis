@@ -1,3 +1,19 @@
+## SYN-052 local control-plane backend — HTTP/SSE acceptance — 2026-09-08
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Durable project read model | real WorkGroup/WorkIntent seeded in the event store and read through `/api/v1/snapshot` | PASS focused | `ControlPlaneHttpHandlerTest.snapshotExposesDurableProjectStateThroughHttp` |
+| Link network projection | authenticated `PeerSession`, signed membership/topology, peer-transit and relay fallback mapped into safe DTOs | PASS focused | `LinkNetworkProjectionTest` |
+| HTTP network route | verified membership projected through authenticated `/api/v1/network` | PASS focused | `ControlPlaneHttpHandlerTest.networkEndpointProjectsRealLinkMembership` |
+| SSE semantics | snapshot plus UI-safe semantic event names, two independent clients, bounded queues | PASS focused | `ControlPlaneHttpHandlerTest` |
+| Shutdown | control-plane close terminates an active SSE stream and releases the existing server lifecycle | PASS focused | `ControlPlaneHttpHandlerTest.closingControlPlaneTerminatesLiveStream` |
+| Security and bounds | loopback Host/Origin, bootstrap/session/CSRF, malformed and oversized request rejection, secret redaction | PASS focused | `ControlPlaneHttpHandlerTest` |
+| Production network owner | CLI composition of long-lived Link/overlay/relay state | PENDING / explicit gap | `docs/evidence/syn-052-local-control-plane-2026-09-08.md` |
+
+Exact next action: review the final local diff, run the checkpoint/evidence
+gates, and commit SYN-052 without claiming the pending production network
+owner.
+
 ## SL-D-040 distributed project overlay — foundation and relay gate — 2026-09-08
 
 | Area | Check | Result | Evidence |

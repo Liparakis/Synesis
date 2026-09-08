@@ -8,7 +8,8 @@ network, or live production overlay/relay-owner acceptance.
 
 ## Real CLI smoke
 
-Starting repository commit: `d2eaf639494f7132231810bff9aff945523a9991`.
+Starting repository commit for the original implementation slice:
+`d2eaf639494f7132231810bff9aff945523a9991`.
 
 A disposable Git repository was initialized at:
 
@@ -81,6 +82,17 @@ git diff --check
 
 The focused class includes a real two-profile HTTP invite, join, answer, and
 connect flow over the existing Link `Onboarding` implementation; it passed.
+The focused class also passes real durable WorkGroup/WorkIntent state through
+the HTTP snapshot, a real verified Link membership view through
+`/api/v1/network`, two simultaneous SSE clients, and bounded stream
+termination during control-plane shutdown. `LinkNetworkProjectionTest` passes
+real authenticated `PeerSession`, signed membership/topology, peer-transit,
+and relay-fallback inputs through the adapter.
+
+The current local working slice is based on commit
+`2de52ed09561065cac9bec7979ad1a746a318b39` plus the uncommitted projection,
+semantic-event, and acceptance-test changes. These changes have not been
+pushed.
 
 The combined `:coordination:test :workspace:test :cli:test` run reported
 failures in unrelated existing CLI/workspace fixture tests. Those failures are

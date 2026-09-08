@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.protocol.TraversalInvitation;
@@ -541,8 +542,9 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
                 }
                 PredictionEvent event = coordinationSubscription.poll();
                 if (event != null) {
-                    writeEvent(output, "coordination.updated", Long.toString(event.sequence()), Map.of(
-                            "apiVersion", "v1", "sequence", event.sequence(), "type", event.type().name()));
+                    String eventType = uiEventType(event.type());
+                    writeEvent(output, eventType, Long.toString(event.sequence()), Map.of(
+                            "apiVersion", "v1", "sequence", event.sequence(), "type", eventType));
                     keepaliveAt = System.nanoTime() + SSE_KEEPALIVE.toNanos();
                     continue;
                 }
@@ -579,6 +581,33 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         event.put("headSequence", coordination.headSequence());
         event.put("snapshot", readModel.snapshot());
         return event;
+    }
+
+    private static String uiEventType(PredictionEventType type) {
+        return switch (type) {
+            case WORK_INTENT_ANNOUNCED, WORK_INTENT_RELEASED, COORDINATION_REQUESTED,
+                    COORDINATION_RESPONDED, PARTICIPANT_HEARTBEAT, CLAIM_HANDOFF_ACCEPTED,
+                    PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED, PARTICIPANT_REVOKED,
+                    PARTICIPANT_CANCELLED, PARTICIPANT_DETACHED, SESSION_FINALIZED,
+                    SESSION_ABANDONED -> "agent.updated";
+            case WORK_GROUP_CREATED, WORK_GROUP_STATUS_CHANGED, LANE_GRANT_ISSUED,
+                    LANE_GRANT_CONSUMED, LANE_REVOKED, LANE_CONTINUATION_ACCEPTED -> "workgroup.updated";
+            case TASK_CLAIMED, TASK_RELEASED, OWNERSHIP_CLAIMED, OWNERSHIP_RELEASED,
+                    COMPLETION_PREPARED, COMPLETION_UNWOUND, REPAIR_REQUIRED, REPAIR_LANE_CREATED -> "claim.updated";
+            case CAPABILITY_REQUEST_CREATED, CAPABILITY_REQUEST_CONTRACT_REVISED,
+                    CAPABILITY_REQUEST_ACCEPTED, CAPABILITY_REQUEST_REJECTED,
+                    CAPABILITY_REQUEST_CANCELLED, CAPABILITY_REQUEST_SUPERSEDED,
+                    CAPABILITY_IMPLEMENTATION_PUBLISHED, CAPABILITY_VALIDATION_STARTED,
+                    CAPABILITY_IMPLEMENTATION_VALIDATED, CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
+                    CONTRACT_PUBLISHED, CONTRACT_DEPENDENCY_BOUND, CONTRACT_SUPERSEDED,
+                    CAPABILITY_AVAILABLE, DEPENDENCY_INVALIDATED -> "capability.updated";
+            case TASK_CREATED, TASK_COMPLETION_REQUESTED, TASK_SNAPSHOT_CREATED,
+                    TASK_WAITING_FOR_DEPENDENCIES, TASK_CANCELLATION_REQUESTED, TASK_CANCELLED,
+                    INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
+                    INTEGRATION_COMMIT_CREATED, CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED,
+                    INTEGRATION_BLOCKED, REVIEW_VALIDATION_RECORDED -> "task.updated";
+            default -> "coordination.updated";
+        };
     }
 
     private static void writeEvent(java.io.OutputStream output, String type, String id,

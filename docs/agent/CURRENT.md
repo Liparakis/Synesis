@@ -12,10 +12,10 @@ browser remains out of scope.
 
 ## Immediate next action
 
-Preserve the verified SYN-052 slice and keep the live overlay/relay-owner gap
-as the next explicitly scoped task; do not fabricate live network state. Keep
-Link overlay/relay state supplied through an explicit read-model seam until a
-long-lived runtime owns those views.
+Review the verified final diff, run the checkpoint/evidence gates, and create
+the local SYN-052 commit. Keep the live overlay/relay-owner gap explicitly
+scoped; do not fabricate live network state or wire a transient onboarding
+operation as a runtime owner.
 
 ## Current constraints
 
@@ -39,8 +39,10 @@ long-lived runtime owns those views.
   loopback Host/Origin validation, bounded JSON bodies, explicit DTO mapping,
   onboarding command delegation, and live-only SSE snapshot/delta events.
 - Focused control-plane tests pass, including durable WorkGroup/WorkIntent
-  mapping, injected network-view separation, auth/CSRF/origin/Host/bounds,
-  SSE snapshot/live delivery, and real HTTP invite/join/answer onboarding.
+  mapping through HTTP, a real Link membership view through `/api/v1/network`,
+  authenticated peer/topology route projection, auth/CSRF/origin/Host/bounds,
+  semantic SSE snapshot/live delivery to multiple clients, shutdown
+  termination, and real HTTP invite/join/answer onboarding.
   The real CLI smoke also passes for a disposable Git project. `:link:check`, `:relay:check`, strict
   Javadocs, and deferred validation pass.
 - The CLI currently supplies `UNCONFIGURED` network state because this source
@@ -51,12 +53,13 @@ long-lived runtime owns those views.
 
 Implemented the local `/api/v1` control-plane foundation over the existing JDK
 listener and durable project/coordination services. Added explicit read DTOs,
-bounded live subscriptions, one-time bootstrap plus session/CSRF security,
-onboarding command delegation, redacted SSE, API documentation, ADR-0067, and
-focused tests for real persisted coordination state and injected network-view
-separation, and a real two-profile HTTP invite/join/answer/connect flow. A
-disposable initialized Git project also passed real CLI serve, health, session,
-and authenticated snapshot smoke.
+the `LinkNetworkProjection` adapter, bounded live subscriptions, one-time
+bootstrap plus session/CSRF security, onboarding command delegation, semantic
+redacted SSE, API documentation, ADR-0067, and focused tests for real
+persisted coordination state, real Link membership/topology/relay inputs,
+multi-client delivery, clean shutdown, and a real two-profile HTTP
+invite/join/answer/connect flow. A disposable initialized Git project also
+passed real CLI serve, health, session, and authenticated snapshot smoke.
 
 ## Current failures
 

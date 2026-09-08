@@ -16,9 +16,10 @@ coordination, and workspace production sources; no remote state was changed.
 
 ## Exact next action
 
-Review the final diff and create the local verified SYN-052 commits. Do not
-claim Link/overlay acceptance until a real long-lived source supplies those
-views.
+Review the final diff, run the checkpoint/evidence gates, and create the local
+verified SYN-052 commit. Do not push it without an explicit user request. Do
+not claim production Link/overlay acceptance until a real long-lived source
+supplies those views.
 
 ## SYN-052 implementation slice
 
@@ -31,9 +32,11 @@ network DTOs explicitly. The CLI creates a control-specific `Onboarding`
 facade, reports a one-time bootstrap token in the ready line, and closes the
 handler with the server.
 
-Focused control-plane tests pass for real persisted WorkGroup/WorkIntent state,
-session bootstrap single-use, CSRF, exact Origin/Host, malformed/oversized
-requests, secret redaction, SSE initial/live events, clean fixture shutdown,
+Focused control-plane tests pass for real persisted WorkGroup/WorkIntent state
+through HTTP, a real Link membership view through `/api/v1/network`,
+authenticated peer/topology route projection, session bootstrap single-use,
+CSRF, exact Origin/Host, malformed/oversized requests, secret redaction,
+semantic SSE initial/live events to multiple clients, clean stream shutdown,
 and a real two-profile HTTP invite/join/answer/connect flow. The disposable
 project CLI smoke also passes. `:link:check`, `:relay:check`, affected strict
 Javadocs, deferred validation, and `git diff --check` pass. A broader
