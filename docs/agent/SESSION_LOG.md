@@ -14,11 +14,13 @@ The new real two-profile HTTP acceptance passed: both owners exposed the
 explicit two-member signed overlay, one direct edge, and a `DIRECT` route after
 the retained session commands returned. Relay state remains safely disabled.
 Focused workspace tests, strict Javadocs/static analysis, `:link:check`, and
-CLI compilation pass under the process-local Windows loopback workaround. No
+CLI compilation pass under the process-local Windows loopback workaround.
+Commit `36de136` and checkpoint `CP-0752` record the clean local state. No
 push occurred.
 
-Exact next action: run the post-owner verification bundle and checkpoint this
-slice. Keep configured CLI membership, relay lifecycle, reconnect, and path
+Exact next action: preserve this verified bounded slice. If SYN-052 resumes,
+first obtain or define a legitimate signed membership-authority source before
+configured CLI overlay work. Keep relay lifecycle, reconnect, and path
 migration outside this task.
 
 ## 2026-09-08 — SYN-052 control-plane acceptance tightening

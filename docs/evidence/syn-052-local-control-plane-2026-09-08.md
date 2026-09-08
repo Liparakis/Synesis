@@ -104,8 +104,9 @@ close the authenticated Link sessions: a follow-up `/api/v1/network` query
 shows one physical peer, the same two signed project members, a distinct direct
 edge, a selected `DIRECT` route, and safe disabled relay state on each side.
 
-The completed local slice is commit `b422a7a` on top of
-`2de52ed09561065cac9bec7979ad1a746a318b39`. It has not been pushed.
+The control-plane foundation was commit `b422a7a`; the live-owner continuation
+is commit `36de136` on top of `b422a7a`. Checkpoint `CP-0752` records the clean
+post-verification state. Neither commit has been pushed.
 
 The combined `:coordination:test :workspace:test :cli:test` run reported
 failures in unrelated existing CLI/workspace fixture tests. Those failures are

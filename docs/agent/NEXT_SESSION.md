@@ -6,7 +6,7 @@ state; no frontend is included. ADR-0067 selects the existing JDK server and
 JSON utility, loopback-only binding, one-time bootstrap plus session/CSRF
 authorization, explicit DTOs, and bounded subscriber handling.
 
-- Exact next action: run post-owner focused verification and checkpoint the retained-session acceptance. Preserve the signed-membership boundary and do not fabricate live overlay or relay state.
+- Exact next action: preserve the verified retained-session acceptance. If this task resumes, first obtain or define a legitimate signed membership-authority source before configured CLI overlay work. Preserve the signed-membership boundary and do not fabricate live overlay or relay state.
 - Preserve the old `SL-D-040` overlay boundary; do not reopen its implementation or claim physical traversal.
 - Do not add a public/cloud API, generic proxy, arbitrary filesystem endpoint, database, broker, frontend, reconnect, or browser event log.
 - Current implementation evidence in the local owner slice: focused

@@ -12,10 +12,11 @@ browser remains out of scope.
 
 ## Immediate next action
 
-Run the post-owner focused verification and checkpoint the retained-session
-acceptance. Keep membership explicit and signed; leave the CLI overlay
-`UNCONFIGURED` until a legitimate authority source exists. Do not fabricate
-membership or promote the disabled relay projection to connected.
+Preserve the verified retained-session acceptance. If this task resumes, first
+obtain or define a legitimate signed membership-authority source before any
+configured CLI overlay work; keep the CLI overlay `UNCONFIGURED` until then.
+Do not fabricate membership or promote the disabled relay projection to
+connected.
 
 ## Current constraints
 
