@@ -212,6 +212,8 @@ acceptance.
 This continuation added the following verified slices after the earlier
 release-hardening work:
 
+- `435d6451` — component-scoped native recovery and third-party-native audit
+  gate for CLI/relay maximum records;
 - `35e8bf6b` — release provenance comparison;
 - `9de90337` — complete adapter provenance echo binding;
 - `18092671` — CLI source-commit verification;
