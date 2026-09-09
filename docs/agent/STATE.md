@@ -4,7 +4,7 @@ The release-only maximum boundary now has a versioned external protector
 adapter contract for both the CLI and standalone relay. The two
 `maximumReleasePrepare` tasks require a real executable adapter, private
 configuration, explicit release ID/seed, all six ring evidence records,
-private retrace/native symbols, and a separated customer bundle. Each
+private mapping/retrace/native symbols, and a separated customer bundle. Each
 candidate task archives the protected output, invokes the existing bootstrap
 manifest signer with an injected key, and verifies the detached signature
 against the public key embedded in `bootstrap/main.go`.
@@ -114,8 +114,10 @@ cross-platform release acceptance. Details are in
 The CLI and relay maximum-release seams now bind the adapter request and
 private release record to a sorted lockfile snapshot, Gradle/Java/Node/npm/Go
 toolchain versions, configuration digest, release seed/identity, and later
-detached-signature/public-key provenance. The maximum task fails closed when
-Node, npm, or Go provenance is unavailable. Gradle task evaluation passed with the
+detached-signature/public-key provenance; the adapter must also produce a
+private mapping file alongside retrace/native recovery material. The maximum
+task fails closed when Node, npm, or Go provenance is unavailable. Gradle task
+evaluation passed with the
 documented process-local loopback workaround; no commercial maximum execution
 or signed record exists yet.
 

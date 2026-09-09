@@ -225,7 +225,7 @@ The following must be separately evidenced before a customer release can be
 called maximum:
 
 1. a licensed, version-pinned adapter must produce the exact JVM/native/UI/relay
-   inputs, all six commercial ring evidence records, private retrace/native
+   inputs, all six commercial ring evidence records, private mapping/retrace/native
    symbols, a release-specific transformation seed, and a customer/private
    boundary that passes the Gradle adapter gate;
 2. all six vendor transformation rings on the exact JVM/native/UI/relay

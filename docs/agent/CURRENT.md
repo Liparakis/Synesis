@@ -131,7 +131,7 @@ resuming after a stop.
 Added the provider-agnostic maximum-protector adapter contract and ADR-0071.
 The release-only CLI and relay tasks now require an explicit licensed adapter,
 version-pinned private configuration, release ID/seed, six ring evidence
-records, diversification, private retrace/native symbols, and separated
+records, diversification, private mapping/retrace/native symbols, and separated
 customer/private output. It now also binds the request/result to the current
 Tier 0–3 source inventory, keep-rule inventory, and acceptance procedure,
 requires a clean reviewed release checkout, creates a private artifact

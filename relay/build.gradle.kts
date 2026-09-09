@@ -636,9 +636,13 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
             "Maximum relay protector did not verify release diversification"
         }
         val retraceFile = project.file(resultValue("retraceFile"))
+        val mappingFile = project.file(resultValue("mappingFile"))
         val nativeSymbolsDirectory = project.file(resultValue("nativeSymbolsDirectory"))
         require(isUnder(retraceFile, privateDirectory) && retraceFile.isFile) {
             "Maximum relay private retrace output is missing or outside the private boundary"
+        }
+        require(isUnder(mappingFile, privateDirectory) && mappingFile.isFile) {
+            "Maximum relay private mapping output is missing or outside the private boundary"
         }
         require(isUnder(nativeSymbolsDirectory, privateDirectory) && nativeSymbolsDirectory.isDirectory) {
             "Maximum relay native symbols are missing or outside the private boundary"
@@ -697,6 +701,7 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "commercialRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "diversification" to resultValue("diversification"),
                 "privateRetraceFile" to resultValue("retraceFile"),
+                "privateMappingFile" to resultValue("mappingFile"),
                 "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
                 "artifactManifest" to relayMaximumReleaseArtifactManifest.get().asFile.name,
                 "artifactManifestSha256" to relayMaximumSha256(relayMaximumReleaseArtifactManifest.get().asFile),

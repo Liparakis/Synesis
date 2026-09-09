@@ -1162,14 +1162,19 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
             "Maximum protector did not verify release diversification"
         }
         require(resultValue("retraceFile").isNotBlank()) { "Private JVM retrace output is missing" }
+        require(resultValue("mappingFile").isNotBlank()) { "Private JVM mapping output is missing" }
         require(resultValue("nativeSymbolsDirectory").isNotBlank()) { "Private native symbols output is missing" }
         require(isUnder(project.file(resultValue("retraceFile")), privateDirectory)) {
             "Private retrace output escapes the private boundary"
+        }
+        require(isUnder(project.file(resultValue("mappingFile")), privateDirectory)) {
+            "Private mapping output escapes the private boundary"
         }
         require(isUnder(project.file(resultValue("nativeSymbolsDirectory")), privateDirectory)) {
             "Private native symbols escape the private boundary"
         }
         require(project.file(resultValue("retraceFile")).isFile) { "Private retrace output is not a file" }
+        require(project.file(resultValue("mappingFile")).isFile) { "Private mapping output is not a file" }
         require(project.file(resultValue("nativeSymbolsDirectory")).isDirectory) {
             "Private native symbols output is not a directory"
         }
@@ -1234,6 +1239,7 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "commercialRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "diversification" to resultValue("diversification"),
                 "privateRetraceFile" to resultValue("retraceFile"),
+                "privateMappingFile" to resultValue("mappingFile"),
                 "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
                 "artifactManifest" to maximumReleaseArtifactManifest.get().asFile.name,
                 "artifactManifestSha256" to maximumSha256(maximumReleaseArtifactManifest.get().asFile),

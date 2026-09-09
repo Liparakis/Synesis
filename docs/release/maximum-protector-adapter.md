@@ -117,6 +117,7 @@ diversification=verified
 bundleDirectory=<the requested outputBundle>
 privateDirectory=<the requested privateDirectory>
 retraceFile=<file below privateDirectory>
+mappingFile=<file below privateDirectory>
 nativeSymbolsDirectory=<directory below privateDirectory>
 evidence.controlFlow=<file below privateDirectory>
 evidence.virtualization=<file below privateDirectory>
@@ -127,9 +128,10 @@ evidence.antiDebug=<file below privateDirectory>
 ```
 
 The adapter result therefore proves the six vendor transformation classes,
-release diversification, and private recovery material. The signed-integrity
-layer is proved by the later Gradle/bootstrap manifest verification and is
-recorded separately in the private release record.
+release diversification, and private mapping/retrace/native recovery
+material. The signed-integrity layer is proved by the later Gradle/bootstrap
+manifest verification and is recorded separately in the private release
+record.
 
 The maximum request also carries a reproducibility snapshot for the exact
 source checkout: the sorted lockfile digest/count, Gradle version, Java

@@ -1,3 +1,21 @@
+## 2026-09-09 — SYN-009E private mapping boundary
+
+Tightened both CLI and standalone-relay maximum-release adapter tasks so a
+successful commercial result must provide a mapping file below the private
+release directory, in addition to retrace information and native recovery
+symbols. The task records the path only in the private release record and
+rejects missing, non-file, or customer-bundle mapping outputs. This keeps
+mapping material available for lawful recovery without allowing it into the
+shipped archive.
+
+The release adapter documentation and task matrix now describe the mapping
+requirement explicitly. No commercial adapter or maximum artifact is installed,
+so this is a fail-closed contract seam rather than maximum-release evidence.
+
+Exact next action: run the contract against a clean licensed maximum release,
+then verify that the private mapping/retrace/native recovery material remains
+outside the customer archive and matches the final provenance record.
+
 ## 2026-09-09 — SYN-009E portable native hardening parser
 
 Extended `scripts/release-native-hardening-audit.ps1` from Windows PE-only
