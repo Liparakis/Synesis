@@ -219,6 +219,8 @@ release-hardening work:
 
 - `435d6451` — component-scoped native recovery and third-party-native audit
   gate for CLI/relay maximum records;
+- `f59f02b2` — post-archive native hardening/signing audit gate before manifest
+  creation and private evidence hashing;
 - `35e8bf6b` — release provenance comparison;
 - `9de90337` — complete adapter provenance echo binding;
 - `18092671` — CLI source-commit verification;
