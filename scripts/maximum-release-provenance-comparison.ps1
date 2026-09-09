@@ -189,11 +189,33 @@ function ReadPrivateRelease([string]$Path, [string]$Label)
   Require ((Get-Item -LiteralPath $diversificationPath).Length -gt 0) "$Label diversification evidence is empty"
   Require ((Sha256 $diversificationPath) -eq (RequiredValue $properties 'privateDiversificationEvidenceSha256').ToLowerInvariant()) (
     "$Label diversification evidence hash does not match release-record.properties")
+  $mappingPath = $null
   foreach ($recovery in @('privateRetraceFile', 'privateMappingFile'))
   {
     $recoveryPath = ResolvePrivateFile (RequiredValue $properties $recovery) "$Label $recovery"
     Require (IsUnder $recoveryPath $privateRoot) "$Label $recovery escapes the private release directory"
     Require ((Get-Item -LiteralPath $recoveryPath).Length -gt 0) "$Label $recovery is empty"
+    if ($recovery -eq 'privateMappingFile') { $mappingPath = $recoveryPath }
+  }
+  Require ($null -ne $mappingPath) "$Label private mapping path was not resolved"
+  $retraceAcceptancePath = ResolvePrivateFile (RequiredValue $properties 'privateRetraceAcceptanceEvidence') (
+    "$Label retrace acceptance evidence")
+  Require (IsUnder $retraceAcceptancePath $privateRoot) "$Label retrace acceptance evidence escapes the private release directory"
+  Require ((Get-Item -LiteralPath $retraceAcceptancePath).Length -gt 0) "$Label retrace acceptance evidence is empty"
+  Require ((Sha256 $retraceAcceptancePath) -eq (RequiredValue $properties 'privateRetraceAcceptanceEvidenceSha256').ToLowerInvariant()) (
+    "$Label retrace acceptance evidence hash does not match release-record.properties")
+  $retraceProperties = ReadProperties $retraceAcceptancePath
+  Require ((RequiredValue $retraceProperties 'schema') -eq '1') "$Label retrace acceptance evidence schema is unsupported"
+  Require ((RequiredValue $retraceProperties 'status') -eq 'verified') "$Label retrace acceptance evidence is not verified"
+  [void](RequiredValue $retraceProperties 'retraceTool')
+  [void](RequiredValue $retraceProperties 'testCase')
+  $mappingHash = RequiredValue $retraceProperties 'mappingSha256'
+  Require ($mappingHash -match '^[0-9a-fA-F]{64}$') "$Label retrace evidence mapping hash is malformed"
+  Require ($mappingHash.ToLowerInvariant() -eq (Sha256 $mappingPath)) "$Label retrace evidence does not bind to the private mapping"
+  foreach ($stackTraceHash in @('inputStackTraceSha256', 'outputStackTraceSha256'))
+  {
+    $hash = RequiredValue $retraceProperties $stackTraceHash
+    Require ($hash -match '^[0-9a-fA-F]{64}$') "$Label retrace evidence $stackTraceHash is malformed"
   }
   $nativeSymbolsScope = RequiredValue $properties 'nativeSymbolsScope'
   Require ($nativeSymbolsScope -in @('owned', 'not-applicable')) (

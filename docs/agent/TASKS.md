@@ -6,7 +6,8 @@
 - Status: ACTIVE
 - Verification: `PROTECTION_LITE` CLI/relay archive acceptance, private
   manifest, leakage, and provenance checks pass; maximum customer/private
-  output rejects symbolic links before manifesting/signing; the external CLI/relay
+  output rejects symbolic links before manifesting/signing and requires
+  structured private retrace acceptance; the external CLI/relay
   maximum-protector adapter and existing bootstrap-signing seam are implemented
   but commercial execution remains blocked. The reusable profile comparison
   harness has recorded five cold CLI developer/protection-lite samples and

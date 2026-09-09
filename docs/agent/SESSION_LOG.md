@@ -6410,3 +6410,16 @@ The slice is committed as `edfd155f`, and post-commit checkpoint `CP-0796`
 records the active task and preserved unrelated worktree. Exact next action:
 obtain a licensed protector, reviewed adapter, and signing authority before
 attempting the still-fail-closed maximum gate.
+## 2026-09-09 — SYN-009E structured private retrace acceptance gate
+
+The maximum CLI and relay contracts previously required non-empty mapping and
+retrace files but did not prove that retracing had actually been exercised.
+Added a schema-1 private retrace-acceptance record with verified status,
+retrace-tool/test-case identity, the exact mapping SHA-256, and hashes for the
+input and translated stack traces. Both Gradle records and the
+release-to-release provenance comparator validate and retain its hash; the
+record never enters the customer bundle.
+
+Exact next action: configure a real licensed adapter to emit this record and
+run the positive retrace acceptance; until then, retain the fail-closed
+maximum gate and do not upgrade Ring 7.

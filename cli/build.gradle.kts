@@ -104,6 +104,24 @@ fun maximumSha256(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
+fun validateMaximumRetraceEvidence(file: File, mappingFile: File, label: String) {
+    val properties = Properties()
+    file.inputStream().use { properties.load(it) }
+    fun value(key: String): String = properties.getProperty(key)?.trim().orEmpty()
+    require(value("schema") == "1") { "$label retrace evidence schema must be 1" }
+    require(value("status") == "verified") { "$label retrace evidence is not verified" }
+    require(value("retraceTool").isNotBlank()) { "$label retrace tool is missing" }
+    require(value("testCase").isNotBlank()) { "$label retrace test case is missing" }
+    require(value("mappingSha256").equals(maximumSha256(mappingFile), ignoreCase = true)) {
+        "$label retrace evidence does not bind to the private mapping hash"
+    }
+    listOf("inputStackTraceSha256", "outputStackTraceSha256").forEach { key ->
+        require(value(key).matches(Regex("[0-9a-fA-F]{64}"))) {
+            "$label retrace evidence $key is missing or malformed"
+        }
+    }
+}
+
 fun maximumNativeAuditValue(file: File, key: String): String {
     val pattern = Regex("\\\"${Regex.escape(key)}\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
     return pattern.find(file.readText())?.groupValues?.get(1).orEmpty()
@@ -1104,6 +1122,7 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedure" to acceptanceProcedure.absolutePath,
                 "acceptanceProcedureSha256" to maximumSha256(acceptanceProcedure),
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "retraceEvidenceFormat" to "properties-v1:schema,status,retraceTool,testCase,mappingSha256,inputStackTraceSha256,outputStackTraceSha256",
                 "nativeSymbolsScope" to "owned",
                 "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
                 "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
@@ -1226,6 +1245,9 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         }
         require(resultValue("retraceFile").isNotBlank()) { "Private JVM retrace output is missing" }
         require(resultValue("mappingFile").isNotBlank()) { "Private JVM mapping output is missing" }
+        require(resultValue("retraceAcceptanceEvidence").isNotBlank()) {
+            "Private retrace acceptance evidence is missing"
+        }
         require(resultValue("nativeSymbolsDirectory").isNotBlank()) { "Private native symbols output is missing" }
         require(isUnder(project.file(resultValue("retraceFile")), privateDirectory)) {
             "Private retrace output escapes the private boundary"
@@ -1238,9 +1260,15 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         }
         val retraceFile = project.file(resultValue("retraceFile"))
         val mappingFile = project.file(resultValue("mappingFile"))
+        val retraceAcceptanceEvidence = project.file(resultValue("retraceAcceptanceEvidence"))
         val nativeSymbolsDirectory = project.file(resultValue("nativeSymbolsDirectory"))
         require(retraceFile.isFile && retraceFile.length() > 0L) { "Private retrace output is not a non-empty file" }
         require(mappingFile.isFile && mappingFile.length() > 0L) { "Private mapping output is not a non-empty file" }
+        require(
+            isUnder(retraceAcceptanceEvidence, privateDirectory) &&
+                    retraceAcceptanceEvidence.isFile && retraceAcceptanceEvidence.length() > 0L
+        ) { "Private retrace acceptance evidence is missing or outside the private boundary" }
+        validateMaximumRetraceEvidence(retraceAcceptanceEvidence, mappingFile, "Maximum CLI")
         require(nativeSymbolsDirectory.isDirectory) {
             "Private native symbols output is not a directory"
         }
@@ -1321,6 +1349,8 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "nativeSymbolsScope" to resultValue("nativeSymbolsScope"),
                 "privateRetraceFile" to resultValue("retraceFile"),
                 "privateMappingFile" to resultValue("mappingFile"),
+                "privateRetraceAcceptanceEvidence" to retraceAcceptanceEvidence.absolutePath,
+                "privateRetraceAcceptanceEvidenceSha256" to maximumSha256(retraceAcceptanceEvidence),
                 "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
                 "privateThirdPartyNativeAudit" to thirdPartyNativeAudit.absolutePath,
                 "privateThirdPartyNativeAuditSha256" to maximumSha256(thirdPartyNativeAudit),

@@ -141,6 +141,7 @@ bundleDirectory=<the requested outputBundle>
 privateDirectory=<the requested privateDirectory>
 retraceFile=<file below privateDirectory>
 mappingFile=<file below privateDirectory>
+retraceAcceptanceEvidence=<properties-v1 file below privateDirectory proving a retrace test>
 nativeSymbolsScope=owned (cli) or owned/not-applicable (relay, based on the shipped output)
 nativeSymbolsDirectory=<directory below privateDirectory, required only when nativeSymbolsScope=owned; otherwise not-applicable>
 thirdPartyNativeAudit=<non-empty audit file below privateDirectory for every shipped native dependency>
@@ -156,8 +157,12 @@ The adapter result therefore proves the six vendor transformation classes,
 release diversification, and non-empty private evidence for each of those
 claims. The Gradle task hashes every private ring/diversification evidence
 file into `release-record.properties`, and requires non-empty mapping and
-retrace material, owned native-symbol recovery when the component owns native
-launchers, and a third-party-native audit for shipped dependency binaries. The
+retrace material plus a structured private retrace-acceptance record. That
+record uses schema `1`, reports `status=verified`, names the retrace tool and
+private test case, binds `mappingSha256` to the exact mapping file, and records
+hashes for the input and translated stack traces. The Gradle task hashes this
+record too. Owned native-symbol recovery is required when the component owns
+native launchers, as is a third-party-native audit for shipped dependency binaries. The
 signed-integrity layer is proved by
 the later Gradle/bootstrap manifest verification and is recorded separately in
 the private release record.
@@ -220,8 +225,9 @@ per-platform release manifest, invokes the existing
 `bootstrap/cmd/sign-manifest` signer, and verifies the detached Ed25519
 signature against the public key embedded in `bootstrap/main.go`. The
 candidate archive, manifest, and signature are the only customer-facing
-outputs. Mappings, retrace information, owned native symbols when applicable,
-third-party-native audit, native-hardening evidence, ring evidence,
+outputs. Mappings, retrace information, structured retrace-acceptance evidence,
+owned native symbols when applicable, third-party-native audit,
+native-hardening evidence, ring evidence,
 configuration, seed, and provenance remain under the private release directory.
 
 The current task is a release seam, not maximum-profile acceptance. Acceptance

@@ -89,6 +89,13 @@ Reproducibility requires equal provenance, release ID, seed, and manifest hash.
 The harness does not expose private recovery material and does not compare ZIP
 container timestamps.
 
+Private retrace acceptance is a separate gate from merely retaining a mapping
+file. The maximum adapter must provide a schema-1 private retrace-acceptance
+record with `status=verified`, a mapping hash bound to the exact private
+mapping, a pinned retrace-tool identity, and hashes for both the input and
+translated stack traces. Gradle and the provenance comparator validate and hash
+this record without exposing its contents in the customer archive.
+
 ## Static reverse-engineering comparison
 
 Run the archive-only comparison against customer-style ZIPs:
@@ -273,7 +280,7 @@ called maximum:
    provider-boundary behavior;
 4. tamper detection/refusal for the signed immutable payload and protected
    loader;
-5. private JVM retrace, owned native symbol recovery where applicable,
+5. private JVM retrace acceptance, owned native symbol recovery where applicable,
    third-party native audit, release diversification, and leakage scans;
 6. performance, startup, memory, and archive-size comparisons against the
    developer baseline; and

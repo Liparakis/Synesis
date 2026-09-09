@@ -163,6 +163,13 @@ callable DashO, Zelix/KlassMaster, or external maximum adapter on `PATH`, and
 has no configured maximum-release or signing inputs; no commercial artifact was
 run or claimed.
 
+The maximum adapter contract now also requires a schema-1 private
+retrace-acceptance properties file. It must report verified status, identify the
+retrace tool and test case, bind the exact private mapping hash, and hash the
+input and translated stack traces. CLI/relay Gradle records and the provenance
+comparator retain and verify that evidence; no positive commercial retrace run
+exists yet.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files

@@ -60,6 +60,13 @@ leakage. This keeps the lexical path-boundary checks from being bypassed by an
 adapter or configuration that resolves a file outside the requested output
 root.
 
+Non-empty mapping and retrace files are not sufficient recovery evidence. The
+adapter must also provide a private schema-1 retrace-acceptance properties
+file. It records a verified retrace test, the retrace tool and test-case
+identity, the exact mapping-file SHA-256, and hashes of the input and translated
+stack traces. The Gradle gate validates those bindings and retains the evidence
+hash in the private release record.
+
 The signer now accepts explicit manifest and signature paths while preserving
 its existing defaults. This lets the release task sign a build-directory
 candidate without mutating the source checkout or creating a second signing
@@ -78,6 +85,8 @@ implementation.
 - A symbolic link in the customer or private output tree fails the release
   before manifesting or signing; the adapter must emit ordinary files and
   directories within the requested roots.
+- A missing or malformed retrace-acceptance record fails the release; a
+  non-empty mapping file alone cannot be presented as proven recovery.
 - The adapter contract is intentionally vendor-neutral; a release engineer
   still must write or obtain the vendor-specific wrapper and review its exact
   configuration.

@@ -78,6 +78,10 @@ disposable install, exercises the installed stable-launcher and packaged
   `SYNESIS_DEVELOPER_ARCHIVE` supplied, and verify the private record against
   the final manifest/signature. The scope inspection is recorded in
   `docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
+- The maximum adapter now requires a schema-1 private retrace-acceptance
+  record bound to the mapping SHA-256, with hashed input/translated stack
+  traces. The Gradle records and provenance comparator validate this record;
+  no commercial retrace evidence exists until the adapter is supplied.
 - The release-to-release harness is
   `scripts/maximum-release-provenance-comparison.ps1`. Run it in both
   `Diversification` and `Reproducibility` modes against two clean licensed

@@ -98,7 +98,8 @@ path pass, but no commercial maximum records are available for a positive run.
 The CLI release task also rejects a non-matching `GITHUB_SHA` instead of
 allowing CI metadata to override the actual checkout commit.
 Both maximum tasks now require non-empty private evidence for every ring and
-diversification, non-empty mapping/retrace files, and component-scoped native
+diversification, non-empty mapping/retrace files, a structured retrace-
+acceptance record bound to the mapping hash, and component-scoped native
 recovery: CLI-owned symbols plus a third-party-native audit, or relay's
 explicit not-applicable owned-symbol scope plus that audit. Their hashes are
 retained only in the private release record. The relay scope is evidenced in

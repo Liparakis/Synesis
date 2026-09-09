@@ -137,7 +137,8 @@ Evidence: `docs/evidence/syn-009e-native-hardening-2026-09-09.md` and
 The maximum Gradle seams require an executable version-pinned external
 adapter, private configuration, explicit release ID/seed, a clean checkout,
 all six ring records, non-empty diversification/ring evidence, non-empty
-mapping/retrace outputs, owned native-symbol material where the component owns
+mapping/retrace outputs, and a structured private retrace-acceptance record
+bound to the mapping hash. Owned native-symbol material is required where the component owns
 native launchers, a private audit of shipped third-party native dependencies,
 and a customer/private boundary. Results must echo the source, seed, lockfile
 snapshot, Java/Gradle/Node/npm/Go toolchains, protector configuration, Tier
@@ -216,7 +217,7 @@ SourceFile metadata remains an open commercial leakage decision. No commercial
 secret, mapping, seed, production signing key, or private recovery file was
 committed.
 
-Private retrace, mapping, owned native-symbol recovery where applicable,
+Private retrace acceptance, mapping, owned native-symbol recovery where applicable,
 third-party native audit, and ring evidence are contracted and fail closed, but
 no positive licensed adapter output exists to exercise retrace or native
 acceptance.

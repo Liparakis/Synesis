@@ -172,6 +172,24 @@ fun relayMaximumSha256(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
+fun validateRelayMaximumRetraceEvidence(file: File, mappingFile: File, label: String) {
+    val properties = Properties()
+    file.inputStream().use { input -> properties.load(input) }
+    fun value(key: String): String = properties.getProperty(key)?.trim().orEmpty()
+    require(value("schema") == "1") { "$label retrace evidence schema must be 1" }
+    require(value("status") == "verified") { "$label retrace evidence is not verified" }
+    require(value("retraceTool").isNotBlank()) { "$label retrace tool is missing" }
+    require(value("testCase").isNotBlank()) { "$label retrace test case is missing" }
+    require(value("mappingSha256").equals(relayMaximumSha256(mappingFile), ignoreCase = true)) {
+        "$label retrace evidence does not bind to the private mapping hash"
+    }
+    listOf("inputStackTraceSha256", "outputStackTraceSha256").forEach { key ->
+        require(value(key).matches(Regex("[0-9a-fA-F]{64}"))) {
+            "$label retrace evidence $key is missing or malformed"
+        }
+    }
+}
+
 fun relayMaximumNativeAuditValue(file: File, key: String): String {
     val pattern = Regex("\\\"${Regex.escape(key)}\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
     return pattern.find(file.readText())?.groupValues?.get(1).orEmpty()
@@ -572,6 +590,7 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedure" to acceptanceProcedure.absolutePath,
                 "acceptanceProcedureSha256" to relayMaximumSha256(acceptanceProcedure),
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "retraceEvidenceFormat" to "properties-v1:schema,status,retraceTool,testCase,mappingSha256,inputStackTraceSha256,outputStackTraceSha256",
                 "nativeSymbolsScopePolicy" to "owned-or-not-applicable",
                 "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
                 "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
@@ -695,12 +714,21 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         }
         val retraceFile = project.file(resultValue("retraceFile"))
         val mappingFile = project.file(resultValue("mappingFile"))
+        val retraceAcceptanceEvidence = project.file(resultValue("retraceAcceptanceEvidence"))
+        require(resultValue("retraceAcceptanceEvidence").isNotBlank()) {
+            "Private relay retrace acceptance evidence is missing"
+        }
         require(isUnder(retraceFile, privateDirectory) && retraceFile.isFile && retraceFile.length() > 0L) {
             "Maximum relay private retrace output is missing or outside the private boundary"
         }
         require(isUnder(mappingFile, privateDirectory) && mappingFile.isFile && mappingFile.length() > 0L) {
             "Maximum relay private mapping output is missing or outside the private boundary"
         }
+        require(
+            isUnder(retraceAcceptanceEvidence, privateDirectory) &&
+                    retraceAcceptanceEvidence.isFile && retraceAcceptanceEvidence.length() > 0L
+        ) { "Maximum relay retrace acceptance evidence is missing or outside the private boundary" }
+        validateRelayMaximumRetraceEvidence(retraceAcceptanceEvidence, mappingFile, "Maximum relay")
         val nativeSymbolsLocation = resultValue("nativeSymbolsDirectory")
         if (nativeSymbolsScope == "owned") {
             val nativeSymbolsDirectory = project.file(nativeSymbolsLocation)
@@ -782,6 +810,8 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "nativeSymbolsScope" to resultValue("nativeSymbolsScope"),
                 "privateRetraceFile" to resultValue("retraceFile"),
                 "privateMappingFile" to resultValue("mappingFile"),
+                "privateRetraceAcceptanceEvidence" to retraceAcceptanceEvidence.absolutePath,
+                "privateRetraceAcceptanceEvidenceSha256" to relayMaximumSha256(retraceAcceptanceEvidence),
                 "privateNativeSymbolsDirectory" to if (nativeSymbolsScope == "owned") nativeSymbolsLocation else "not-applicable",
                 "privateThirdPartyNativeAudit" to thirdPartyNativeAudit.absolutePath,
                 "privateThirdPartyNativeAuditSha256" to relayMaximumSha256(thirdPartyNativeAudit),
