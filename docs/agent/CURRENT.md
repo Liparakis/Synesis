@@ -204,8 +204,9 @@ resuming after a stop.
 - Use existing installer/payload integrity rather than creating a parallel
   trust system; mutable user state must not be covered as immutable payload.
 - No home-grown VM, packer, hostile anti-debug, debugger attack, arbitrary
-  process killing, host surveillance, secret/key/license commit, push, tag,
-  release, or remote mutation.
+  process killing, host surveillance, or secret/key/license commit. The
+  explicitly authorized closeout push is the only current remote mutation;
+  future commercial release signing remains private and injected.
 - Record `developer`, `protection-lite`, and `maximum-release` separately in
   every result; unavailable commercial execution remains a blocker.
 
@@ -328,6 +329,10 @@ establishing Rings 1–6 or any maximum Seven Ring result.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.
 - `git diff --check` passed for the scoped changes; `agent-resume.ps1` and the
   deferred validator passed.
+- The free protection stage is now closed: `:link:check`, `:relay:check`, CLI
+  and relay protection-lite acceptance, and the clean-tree maximum fail-closed
+  gate all passed with their documented expected outcomes. The remaining
+  commercial maximum dependency is deferred, not an unfinished lite task.
 
 ## Current failures
 
@@ -337,11 +342,9 @@ platform bundle with only a synthetic maximum marker and does not prove any
 commercial transformation or Seven Ring completion. The synthetic marker-only
 harness is artifact/bootstrap evidence only; Rings 1–6 remain blocked and Ring
 7 remains partial until a licensed commercial release is signed, diversified,
-and retrace-validated. Preserved
-`CP-0758`, `.editorconfig`, and unrelated relay source changes remain
-untouched. A stable formatter-like rewrite of 1,532 other tracked files is
-also present outside this slice; it remains unstaged and is not release
-evidence.
+and retrace-validated. The repository-wide legitimate formatter/implementation
+changes and checkpoint history were audited, committed, and are included in
+the authorized closeout; no unstaged changes remain.
 The native audit parser covers PE, ELF, and Mach-O, but actual Linux, macOS,
 and ARM64 customer archives, third-party native inspection, production native
 signing, and clean maximum-artifact provenance remain open. The portable
