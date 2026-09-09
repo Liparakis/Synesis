@@ -184,7 +184,7 @@ synthetic or protection-lite evidence.
 
 ## Immediate next action
 
-Continue with the next product stage, UI polish. Resume the deferred
+Next product stage: UI polish. Resume the deferred
 commercial maximum capability only after an installed, licensed,
 version-pinned commercial protector and its reviewed adapter/configuration are
 available; inject the release signing authority then and run the maximum-
