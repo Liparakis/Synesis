@@ -72,7 +72,13 @@ The capability matrix is in
   metadata, and browser assets are excluded by default.
 
 The source inventory is `docs/release/protection-tier-inventory.md`; narrow
-compatibility rules are in `docs/release/protection-keep-rules.md`.
+compatibility rules are in `docs/release/protection-keep-rules.md`. A current
+read-only audit resolved all 21 named paths and all 12 method-scoped Tier 3
+signatures; it also recorded the concrete reflective/resource boundaries and
+the absence of selected-source `ServiceLoader` registrations or Java native
+declarations in
+`docs/evidence/syn-009e-protection-scope-audit-2026-09-09.md`. This confirms
+scope freshness only; it does not prove commercial compatibility or a ring.
 
 ## Seven Rings
 

@@ -6502,3 +6502,23 @@ Exact next action: obtain an installed, licensed, version-pinned commercial
 protector and release-signing authority, then run the complete maximum
 artifact and shipped acceptance from a clean reviewed checkout; keep Rings 1–6
 blocked and Ring 7 partial until that evidence exists.
+## 2026-09-09 — SYN-009E current-source protection-scope audit
+
+Audited the actual current source against `protection-tier-inventory.md` and
+`protection-keep-rules.md`. All 21 named Tier 0–3 paths/directories exist and
+all 12 method-scoped Tier 3 candidates have current declarations. The selected
+owned Java/resource inputs contain two `Class.forName` boundaries, two
+classpath-resource loading boundaries, no `ServiceLoader` registrations, and
+no actual Java `native` declarations. The concrete CLI/relay ProGuard files do
+not contain a broad `-keep org.synesis.**` directive; that pattern remains a
+prohibited policy statement in the inventory.
+
+Recorded the result in
+`docs/evidence/syn-009e-protection-scope-audit-2026-09-09.md` and linked it from
+the test matrix and maximum status report. This is source/compatibility scope
+evidence only; no commercial transformation or ring was claimed.
+
+Verification: read-only source/path/signature scan, boundary search, scoped
+diff check, and deferred-register validation. Exact next action: obtain the
+licensed commercial protector and repeat the compatibility review against its
+complete input closure before selecting shipped Tier 3 transformations.

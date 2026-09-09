@@ -187,6 +187,14 @@ Vite/local-development markers. The existing protection-lite JAR passed this
 inspection; the gate remains unexecuted against a real licensed maximum
 archive and does not promote the lite artifact.
 
+The current-source protection-scope audit resolved all 21 inventory
+paths/directories and all 12 method-scoped Tier 3 declarations. It also
+recorded the concrete `Class.forName`, resource-loading, `ServiceLoader`, and
+Java-native findings in
+`docs/evidence/syn-009e-protection-scope-audit-2026-09-09.md`. This refreshes
+planning evidence only; the commercial protector must repeat the scan over
+its complete input closure.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files

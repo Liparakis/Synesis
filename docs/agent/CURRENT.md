@@ -17,6 +17,10 @@ bind adapter results to the tier, keep-rule, acceptance-procedure, and full
 reproducibility digests requested by the release. The current brief's six
 commercial adapter classes are Rings 1–6; Ring 7 is the signed-integrity,
 diversification, and private-retrace boundary owned by the release pipeline.
+The latest read-only source-scope audit resolved all 21 inventory paths and all
+12 method-scoped Tier 3 signatures, and recorded the concrete reflection,
+resource, ServiceLoader, and native-declaration findings; this is planning
+evidence only and does not close commercial transformation compatibility.
 An independent `scripts/maximum-release-acceptance.ps1` harness now exercises
 only extracted customer archives, rejects lite/profile and private-material
 leakage, optionally verifies the private artifact manifest, and records

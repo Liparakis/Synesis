@@ -6,7 +6,7 @@
 | Starting checkout | activation HEAD/status/remote parity | PASS | activation `8a5d090`; current local release head `4ae2fe4f`; CP-0758 preserved; no push |
 | Developer profile | readable normal build and existing bundle smoke | PASS baseline | prior bundle smoke; must remain unchanged |
 | Protection-lite profile | opt-in Gradle task, narrow keep rules, mapping/provenance | PASS | ProGuard 7.10.0; `docs/evidence/syn-009e-protection-lite-2026-09-09.md` |
-| Tier 0–3 source inventory | current-source public boundaries, Tier 1/2 areas, method-scoped Tier 3 candidates | PASS planning boundary / NOT EXECUTED | `docs/release/protection-tier-inventory.md`; commercial target review remains required |
+| Tier 0–3 source inventory | current-source public boundaries, Tier 1/2 areas, method-scoped Tier 3 candidates | PASS source-presence audit / COMMERCIAL NOT EXECUTED | `docs/release/protection-tier-inventory.md`, `docs/evidence/syn-009e-protection-scope-audit-2026-09-09.md`; commercial target and performance review remain required |
 | Protected CLI archive | extracted version/help, UI, provider, MCP/Link, doctor, native installer | PASS | `:cli:protectionLiteBundleSmokeTest` |
 | Protected relay archive | transformed entrypoint reaches guarded parser; extracted launcher authenticates/forwards/shuts down through the external observer | PASS bounded / SYNTHETIC MARKER-ONLY EXECUTED | `:relay:protectionLiteSmokeTest`, `:relay:relayArtifactAcceptanceClient`, `docs/evidence/syn-009e-relay-shipped-acceptance-2026-09-09.md`; commercial maximum archive still required |
 | Protected manifest/leakage | private manifest, no source/maps/private records, UI resource retained | PASS | `:cli:protectionLiteIntegrityCheck` |
