@@ -16,9 +16,9 @@ packing, anti-debug, or commercial maximum protection.
 
 ## Exact next action
 
-Run the post-change developer bundle regression, relay and CLI protection-lite
-acceptance/metrics, then checkpoint and commit only the scoped release slice;
-keep maximum-release claims blocked without commercial execution.
+Obtain an installed, licensed, version-pinned commercial protector integration
+and run the maximum-release acceptance; absent that external tool, preserve
+the passing lite evidence and keep maximum-release claims blocked.
 
 ## Current evidence boundary
 

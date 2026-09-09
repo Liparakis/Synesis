@@ -5,9 +5,9 @@ activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
 no push has occurred. `SYN-009E` is now the sole
 current release-hardening task in the existing `SYN-009*` lineage.
 
-- Exact next action: run the post-change developer regression, relay/CLI
-  protection-lite acceptance and size/startup metrics, then checkpoint and
-  commit only the scoped release-hardening files without pushing.
+- Exact next action: obtain an installed, licensed, version-pinned commercial
+  protector integration and run the maximum-release acceptance; absent that
+  tool, keep the maximum gate fail-closed and preserve the lite evidence.
 - Required continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Do not claim virtualization, packing, anti-VM, or anti-debug from open-source

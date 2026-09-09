@@ -19,8 +19,16 @@ non-mutating tamper-difference checks. The protected relay archive reaches its
 guarded parser. Provenance records the source/dirty state, rules/library image,
 artifact and archive hashes; no commercial maximum claim is made.
 
-Exact next action: run the post-change developer regression and capture the
-remaining size/startup evidence, then checkpoint and commit. Do not push.
+The scoped release slice was committed locally as `654d229`; `origin/master`
+remains untouched. The developer bundle regression, CLI/relay lite acceptance,
+private manifest/leakage checks, bounded startup/size measurements, and relay
+compile/tests/Javadocs/static analysis are recorded as passing or separately
+bounded in the evidence. `maximumRelease` fails closed because no licensed
+commercial protector is installed.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector integration and run maximum-release acceptance; absent that tool,
+preserve the lite evidence and do not invent a replacement. Do not push.
 
 ## 2026-09-08 — SYN-053 browser UI implementation and installed acceptance
 

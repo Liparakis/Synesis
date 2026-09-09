@@ -23,9 +23,10 @@ protector output is installed and exercised.
 
 ## Immediate next action
 
-Run the post-change `:cli:bundleSmokeTest`, the protected CLI and relay archive
-acceptance tasks, and a size/startup comparison; then record the results in
-the evidence and checkpoint files. Use
+To advance `SYN-009E` beyond `PARTIAL`, obtain an installed, licensed,
+version-pinned commercial protector integration and run the maximum-release
+acceptance. Until that external tool is available, preserve the passing lite
+evidence and keep the maximum gate fail-closed. Use
 `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
 resuming after a stop.
 

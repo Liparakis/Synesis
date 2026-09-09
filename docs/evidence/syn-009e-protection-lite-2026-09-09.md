@@ -3,6 +3,8 @@
 ## Baseline
 
 - checkout at the start of this slice: `8a5d0901b4859c9a504f7fc7009def23177f1d43`;
+- scoped release-hardening commit: `654d229` (`Add release-only protection
+  profiles`); `origin/master` remains unchanged;
 - normal developer bundle smoke remained passing before protection work;
 - developer install tree: 23 files / 10,346,001 bytes;
 - developer platform bundle: 197 files / 69,542,918 bytes;

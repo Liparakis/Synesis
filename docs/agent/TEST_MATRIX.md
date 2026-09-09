@@ -23,9 +23,9 @@
 | Leakage audit | strings, source maps, mappings, paths, symbols, secrets | PASS lite boundary | archive excludes private/source material; commercial leakage audit open |
 | Performance/size | startup, UI, route, Link, relay, provider, memory, artifacts | PARTIAL | artifact sizes captured; timed comparison still pending |
 
-Exact next action: run the post-change developer regression and timed
-developer/protected size-startup comparison; keep all commercial-only rows
-explicitly blocked until the licensed tool is exercised.
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector integration and run the maximum-release acceptance; keep all
+commercial-only rows explicitly blocked until that tool is exercised.
 
 ## SYN-053 installed browser UI — acceptance — 2026-09-08
 

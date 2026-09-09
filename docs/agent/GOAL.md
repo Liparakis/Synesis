@@ -16,9 +16,10 @@ artifact and installed-runtime evidence rather than marketing terminology.
   system. `SYN-010B` remains a separate historical aggregation task.
 - Planning basis: the user-provided maximum-protection goal, current-source
   and bundle investigation, and ADR-0070.
-- Exact next action: run the post-change developer regression, relay/CLI
-  protection-lite acceptance, and release metrics; then checkpoint and commit
-  only the scoped release-hardening files without pushing.
+- Exact next action: obtain an installed, licensed, version-pinned commercial
+  protector integration and run the maximum-release acceptance; until that
+  authority/tool exists, keep the maximum gate fail-closed and do not invent
+  a replacement implementation.
 - Required rings: control-flow hardening, genuine virtualization, runtime
   string/constant protection, safe analysis-environment detection, protected
   payload packaging, safe anti-debug/instrumentation handling, and signed

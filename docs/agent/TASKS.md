@@ -47,9 +47,9 @@
   destructive anti-debug, host surveillance, customer downgrade flag, product
   protocol redesign, frontend concealment project, production key creation,
   commercial-license commit, public release, push, tag, or remote mutation.
-- Exact next action: run the post-change developer regression and capture
-  relay/CLI protection-lite size/startup evidence, then checkpoint and commit
-  the scoped release-hardening slice without pushing.
+- Exact next action: obtain an installed, licensed, version-pinned commercial
+  protector integration and run the maximum-release acceptance; absent that
+  tool, preserve the passing lite evidence and keep maximum fail-closed.
 
 ## SYN-053
 
