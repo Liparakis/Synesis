@@ -1,4 +1,5 @@
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.security.MessageDigest
 import java.security.KeyFactory
@@ -166,6 +167,90 @@ fun relayMaximumSha256(file: File): String {
         }
     }
     return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+private val releaseLockfileNames = setOf(
+    "gradle.lockfile",
+    "settings-gradle.lockfile",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "gradle-wrapper.properties",
+    "libs.versions.toml",
+)
+
+fun releaseToolVersion(vararg command: String): String {
+    return try {
+        val process = ProcessBuilder(command.toList())
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        if (process.waitFor() == 0 && output.isNotBlank()) {
+            output.lineSequence().first().trim()
+        } else {
+            "NOT_AVAILABLE"
+        }
+    } catch (_: Exception) {
+        "NOT_AVAILABLE"
+    }
+}
+
+fun releaseLockfileSnapshot(root: File): Pair<Int, String> {
+    val excludedDirectories = setOf(".git", "build", "node_modules")
+    val files = root.walkTopDown()
+        .onEnter { directory -> directory.name !in excludedDirectories }
+        .filter { file ->
+            file.isFile && file.name in releaseLockfileNames &&
+                    file.relativeTo(root).invariantSeparatorsPath.split('/').none { it in excludedDirectories }
+        }
+        .sortedBy { it.relativeTo(root).invariantSeparatorsPath }
+        .toList()
+    val lines = files.joinToString("\n", postfix = if (files.isEmpty()) "" else "\n") { file ->
+        "${file.relativeTo(root).invariantSeparatorsPath}\t${relayMaximumSha256(file)}"
+    }
+    val digest = MessageDigest.getInstance("SHA-256")
+        .digest(lines.toByteArray(StandardCharsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+    return files.size to digest
+}
+
+fun maximumReleaseProvenance(
+    root: File,
+    sourceCommit: String,
+    dirtyTree: Boolean,
+    releaseId: String,
+    seed: String,
+    protectorName: String,
+    protectorVersion: String,
+    configuration: File,
+): Map<String, String> {
+    val (lockfileCount, lockfilesSha256) = releaseLockfileSnapshot(root)
+    val nodeVersion = releaseToolVersion("node", "--version")
+    val nativeToolchain = releaseToolVersion("go", "version")
+    require(nodeVersion != "NOT_AVAILABLE") {
+        "Maximum release provenance requires the Node.js toolchain to be available"
+    }
+    require(nativeToolchain != "NOT_AVAILABLE") {
+        "Maximum release provenance requires the Go native toolchain to be available"
+    }
+    return linkedMapOf(
+        "sourceCommit" to sourceCommit,
+        "dirtyTree" to dirtyTree.toString(),
+        "releaseId" to releaseId,
+        "seed" to seed,
+        "protectorName" to protectorName,
+        "protectorVersion" to protectorVersion,
+        "configuration" to configuration.absolutePath,
+        "configurationSha256" to relayMaximumSha256(configuration),
+        "lockfileCount" to lockfileCount.toString(),
+        "lockfilesSha256" to lockfilesSha256,
+        "gradleVersion" to gradle.gradleVersion,
+        "javaRuntime" to Runtime.version().toString(),
+        "javaToolchain" to "25",
+        "nodeVersion" to nodeVersion,
+        "npmVersion" to releaseToolVersion("npm", "--version"),
+        "nativeToolchain" to nativeToolchain,
+    )
 }
 
 fun relayMaximumHexDecode(value: String): ByteArray {
@@ -432,6 +517,16 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         privateDirectory.mkdirs()
         val requestFile = relayMaximumReleaseRequest.get().asFile.absoluteFile
         val resultFile = relayMaximumReleaseResult.get().asFile.absoluteFile
+        val requestedProvenance = maximumReleaseProvenance(
+            rootProject.layout.projectDirectory.asFile,
+            sourceCommit,
+            dirtyTree,
+            releaseId,
+            seed,
+            "pending-adapter",
+            "pending-adapter",
+            configFile,
+        )
         writeRelayMaximumProperties(
             requestFile,
             linkedMapOf(
@@ -453,6 +548,15 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "keepRuleInventory" to keepRuleInventory.absolutePath,
                 "acceptanceProcedure" to acceptanceProcedure.absolutePath,
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
+                "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
+                "gradleVersion" to requestedProvenance.getValue("gradleVersion"),
+                "javaRuntime" to requestedProvenance.getValue("javaRuntime"),
+                "javaToolchain" to requestedProvenance.getValue("javaToolchain"),
+                "nodeVersion" to requestedProvenance.getValue("nodeVersion"),
+                "npmVersion" to requestedProvenance.getValue("npmVersion"),
+                "nativeToolchain" to requestedProvenance.getValue("nativeToolchain"),
+                "configurationSha256" to requestedProvenance.getValue("configurationSha256"),
                 "invocation" to "The adapter must invoke the selected commercial protector; this task does not implement protection.",
             ),
         )
@@ -573,17 +677,19 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         )
         writeRelayMaximumProperties(
             privateDirectory.resolve("release-record.properties"),
-            linkedMapOf(
+            maximumReleaseProvenance(
+                rootProject.layout.projectDirectory.asFile,
+                sourceCommit,
+                dirtyTree,
+                releaseId,
+                seed,
+                resultValue("protectorName"),
+                resultValue("protectorVersion"),
+                configFile,
+            ) + linkedMapOf(
                 "schema" to "1",
                 "profile" to "maximum-release",
                 "component" to "relay",
-                "releaseId" to releaseId,
-                "sourceCommit" to sourceCommit,
-                "dirtyTree" to dirtyTree.toString(),
-                "protectorName" to resultValue("protectorName"),
-                "protectorVersion" to resultValue("protectorVersion"),
-                "configuration" to configFile.absolutePath,
-                "seed" to seed,
                 "commercialRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "diversification" to resultValue("diversification"),
                 "privateRetraceFile" to resultValue("retraceFile"),
@@ -695,6 +801,9 @@ tasks.register("maximumRelease") {
             ?: error("Embedded bootstrap manifest public key is missing")
         val publicKeyBytes = relayMaximumHexDecode(publicKeyHex)
         require(publicKeyBytes.size == 32) { "Embedded bootstrap manifest public key must be 32 bytes" }
+        val bootstrapPublicKeySha256 = MessageDigest.getInstance("SHA-256")
+            .digest(publicKeyBytes)
+            .joinToString("") { "%02x".format(it) }
         val x509Prefix = byteArrayOf(
             0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
         )
@@ -720,12 +829,22 @@ tasks.register("maximumRelease") {
 
         val record = relayMaximumReleasePrivateDirectory.get().asFile.resolve("release-record.properties")
         val properties = readRelayMaximumProperties(record)
+        val signingKeyId = project.providers.gradleProperty("synesisSigningKeyId")
+            .orElse(project.providers.environmentVariable("SYNESIS_MANIFEST_SIGNING_KEY_ID"))
+            .orNull?.trim().orEmpty()
+        val publishedAt = project.providers.gradleProperty("synesisPublishedAt")
+            .orElse(project.providers.environmentVariable("SYNESIS_RELEASE_PUBLISHED_AT"))
+            .orNull?.trim().orEmpty()
         properties.setProperty("manifest", relayMaximumReleaseManifest.get().asFile.name)
         properties.setProperty("manifestSha256", relayMaximumSha256(relayMaximumReleaseManifest.get().asFile))
         properties.setProperty("signature", relayMaximumReleaseSignature.get().asFile.name)
         properties.setProperty("signatureSha256", relayMaximumSha256(relayMaximumReleaseSignature.get().asFile))
         properties.setProperty("signedIntegrity", "verified")
         properties.setProperty("signedAgainstBootstrapKey", "true")
+        properties.setProperty("signingKeyId", signingKeyId)
+        properties.setProperty("publishedAt", publishedAt)
+        properties.setProperty("bootstrapPublicKeySha256", bootstrapPublicKeySha256)
+        properties.setProperty("signingProvenance", "Ed25519 detached manifest signature verified against bootstrap/main.go trust root")
         record.outputStream().use { properties.store(it, "Synesis maximum-relay private record") }
         logger.lifecycle(
             "Maximum relay candidate verified: ${relayMaximumReleaseArchiveTask.get().archiveFile.get().asFile.absolutePath}"

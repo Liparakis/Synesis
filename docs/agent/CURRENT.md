@@ -78,6 +78,12 @@ was not supplied, and the current samples record dirty Go VCS metadata; this
 is therefore baseline evidence only and does not close native signing,
 cross-platform, or commercial maximum acceptance.
 
+The CLI and relay maximum-release request/private-record seams now capture a
+reproducibility snapshot: sorted lockfile count/digest, Gradle, Java, Node/npm,
+and Go toolchain versions, protector configuration digest, release identity and
+seed, plus post-signing key/public-provenance fields. Missing Node or Go fails
+the maximum provenance gate; ordinary developer tasks are unchanged.
+
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
   local release commits remain unpublished, and the working tree contains this
@@ -196,6 +202,11 @@ open.
   passed the structural native-hardening checks; native signing remained
   `OPEN_NOT_SIGNED_OR_UNTRUSTED`, the maximum archive was absent, and the
   script returned the expected partial status.
+- `:cli:tasks :relay:tasks --no-configuration-cache --no-daemon` passed with
+  the documented process-local JDK loopback override after the inherited host
+  environment failed before Gradle evaluation. This evaluated the new
+  reproducibility helpers and exposed both maximum task seams; no customer
+  artifact or release record was produced.
 - `go test ./...` in `bootstrap` now passes after the test fixture helper
   isolated `HOME`/`USERPROFILE` from the developer's real provider state.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.
@@ -218,6 +229,9 @@ evidence.
 The native audit is Windows PE-only; Linux ELF, macOS Mach-O, ARM64,
 third-party native inspection, production native signing, and clean
 maximum-artifact provenance remain open.
+The new reproducibility record is implemented but unexecuted for a real
+maximum candidate because the commercial adapter, licensed configuration, and
+production signing authority remain unavailable.
 
 ## SYN-053 first installed Synesis browser UI — completed current scope — 2026-09-08
 

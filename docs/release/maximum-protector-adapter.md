@@ -131,6 +131,16 @@ release diversification, and private recovery material. The signed-integrity
 layer is proved by the later Gradle/bootstrap manifest verification and is
 recorded separately in the private release record.
 
+The maximum request also carries a reproducibility snapshot for the exact
+source checkout: the sorted lockfile digest/count, Gradle version, Java
+runtime/toolchain, Node/npm versions, native Go toolchain, and protector
+configuration digest. The private `release-record.properties` repeats those
+values together with the release ID, seed, protector identity, artifact
+manifest hashes, and—after signing—the signing key ID, fixed publication time,
+SHA-256 of the bootstrap public key, and detached-signature provenance. A
+missing Node or Go toolchain fails the maximum provenance gate; values are
+never copied into the customer bundle.
+
 The Gradle gate additionally requires the protected profile marker, the
 customer CLI/runtime/native launcher files for `cli`, or the protected relay
 launcher/application JARs for `relay`, with no mappings/seeds/private records,

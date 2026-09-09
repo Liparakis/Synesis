@@ -62,6 +62,12 @@ disposable install, exercises the installed stable-launcher and packaged
   ELF/Mach-O inspection before marking Linux/macOS or ARM64 native coverage.
   Run it again for the licensed maximum candidate; do not treat unsigned
   developer/lite output as release evidence.
+- The CLI and relay maximum request/private records now capture lockfile
+  digest/count, Gradle/Java/Node/npm/Go versions, configuration SHA-256, seed,
+  and post-signing public-key provenance. The helpers were syntax/evaluation
+  checked through `:cli:tasks :relay:tasks`; execute the fields only in a clean
+  licensed maximum release and verify the private record against the final
+  manifest/signature.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.

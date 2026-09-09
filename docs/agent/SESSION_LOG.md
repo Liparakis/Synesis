@@ -1,3 +1,22 @@
+## 2026-09-09 — SYN-009E reproducibility and signing provenance seam
+
+Extended both CLI and relay maximum-release adapter requests/private records
+with a sorted lockfile snapshot and Gradle, Java, Node/npm, and Go toolchain
+versions. The record now includes the protector configuration digest, release
+identity/seed, and post-signing key ID, fixed publication time, bootstrap public
+key digest, and detached-signature provenance. Missing Node or Go fails the
+maximum provenance gate; no ordinary developer task was changed.
+
+The Gradle scripts evaluated successfully through `:cli:tasks :relay:tasks`
+with the documented process-local JDK loopback workaround. The inherited host
+environment still fails before Gradle evaluation without that override. No
+commercial adapter, maximum artifact, production signing authority, or signed
+release record was available, so no ring status changed.
+
+Exact next action: run the new provenance fields in a clean licensed maximum
+release, verify the private record against the final manifest/signature, and
+continue the complete shipped-artifact acceptance.
+
 ## 2026-09-09 — SYN-009E native hardening audit
 
 Added `scripts/release-native-hardening-audit.ps1` for extracted customer ZIPs.

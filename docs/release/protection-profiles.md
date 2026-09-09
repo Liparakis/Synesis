@@ -68,8 +68,11 @@ relay lite output is under `relay/build/protection-lite/`:
   `private/provenance.json`, and `private/artifact-manifest.txt` are support/
   retrace material and must not be copied
   into a customer bundle; and
-- the provenance record binds the source commit, dirty-tree state, protector,
-  JDK library image, rules hash, seed, artifact hash, and archive hash.
+- the lite provenance record binds the source commit, dirty-tree state,
+  protector, JDK library image, rules hash, seed, artifact hash, and archive
+  hash; the maximum private record additionally binds the complete lockfile
+  snapshot, Gradle/Java/Node/native toolchains, protector configuration digest,
+  release seed, and signing/public-key provenance.
 
 The current local run used ProGuard 7.10.0 with Java 25 as the execution
 runtime and an explicit Java 21 JMOD directory as the analysis library image.

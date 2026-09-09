@@ -109,6 +109,14 @@ This remains baseline evidence rather than commercial or cross-platform
 release acceptance. Details are in
 `docs/evidence/syn-009e-native-hardening-2026-09-09.md`.
 
+The CLI and relay maximum-release seams now bind the adapter request and
+private release record to a sorted lockfile snapshot, Gradle/Java/Node/npm/Go
+toolchain versions, configuration digest, release seed/identity, and later
+detached-signature/public-key provenance. The maximum task fails closed when
+Node or Go provenance is unavailable. Gradle task evaluation passed with the
+documented process-local loopback workaround; no commercial maximum execution
+or signed record exists yet.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files
