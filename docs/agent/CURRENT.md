@@ -17,6 +17,9 @@ bind adapter results to the tier, keep-rule, acceptance-procedure, and full
 reproducibility digests requested by the release. The current brief's six
 commercial adapter classes are Rings 1–6; Ring 7 is the signed-integrity,
 diversification, and private-retrace boundary owned by the release pipeline.
+The adapter documentation now explicitly maps a future Virbox Java VME/BCE
+wrapper to Rings 2 and 5 while keeping those results evidence-gated; no
+vendor-specific Virbox command or configuration is committed.
 The latest read-only source-scope audit resolved all 21 inventory paths and all
 12 method-scoped Tier 3 signatures, and recorded the concrete reflection,
 resource, ServiceLoader, and native-declaration findings; this is planning

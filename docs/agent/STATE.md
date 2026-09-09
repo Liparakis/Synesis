@@ -20,7 +20,9 @@ toolchain values, and protector configuration digest. Both maximum tasks reject
 dirty source checkouts before invoking the adapter and require the result to
 echo that complete provenance. A vendor-neutral private configuration skeleton
 records the six Ring 1–6 capabilities and the legitimate-VM/fail-safe policy;
-the release report separately classifies Ring 7.
+the release report separately classifies Ring 7. The adapter documentation now
+also records how a future Virbox VME/BCE wrapper would map Rings 2 and 5
+without committing a vendor-specific command or treating settings as evidence.
 
 The independent `scripts/maximum-release-acceptance.ps1` harness now runs
 against extracted customer archives only. It enforces the maximum profile

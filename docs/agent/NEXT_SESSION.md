@@ -29,6 +29,8 @@ fields remain a compatibility schema for those six classes.
 - The provider-agnostic CLI/relay adapter contract is in
   `docs/release/maximum-protector-adapter.md`; ADR-0071 records why it is only
   a release seam and not evidence of the commercial capabilities or Seven Rings.
+  It now explicitly maps a future Virbox Java VME/BCE wrapper to Rings 2 and 5;
+  no vendor-specific Virbox command or configuration is committed.
 - The current-source Tier 0–3 boundary is in
   `docs/release/protection-tier-inventory.md`; the vendor-neutral config
   skeleton is `docs/release/maximum-protector-config.template.properties`.

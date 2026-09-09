@@ -3,10 +3,20 @@
 The repository does not contain a commercial protector. The maximum-release
 Gradle task therefore accepts one explicit release-environment adapter and
 fails closed when it is absent. The adapter is a wrapper supplied by the
-licensed release environment; it owns the vendor-specific DashO, Zelix, or
-later approved protector invocation. The Gradle task does not implement a
+licensed release environment; it owns the vendor-specific DashO, Zelix, Virbox,
+or later approved protector invocation. The Gradle task does not implement a
 home-grown obfuscator, virtual machine, packer, anti-debugger, or host
 surveillance layer.
+
+The contract is also compatible with a Virbox evaluation, but no Virbox
+configuration or command line is committed here. If that candidate is chosen,
+the external wrapper must map Java VME evidence to `ring.virtualization` and
+the separately licensed Java BCE/protected-bytecode boundary to
+`ring.protectedPayload`. Each result still requires independent private
+evidence and shipped-artifact acceptance; a VME/BCE setting or vendor report
+cannot prove a ring by assertion. Virbox native VM-detection, kernel/RASP, or
+other application-mode features are not imported into this JVM profile unless
+their safety, platform scope, and legitimate-VM behavior are separately proven.
 
 ## Invocation
 

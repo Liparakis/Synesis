@@ -9,7 +9,8 @@
 
 ADR-0070 separates the readable developer build, the open-source
 `protection-lite` baseline, and the commercial `maximum-release` profile. The
-repository has no DashO, Zelix, or equivalent commercial protector installed.
+repository has no DashO, Zelix, Virbox, or equivalent commercial protector
+installed.
 Leaving only an unconditional placeholder task makes the intended release
 boundary underspecified, but embedding a fake protector or inventing a
 home-grown virtual machine would make the security claim worse.
