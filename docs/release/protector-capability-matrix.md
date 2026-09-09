@@ -14,6 +14,23 @@ not claim the capability.
 | [DashO](https://support.preemptive.com/hc/en-us) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
 | [Zelix KlassMaster](https://www.zelix.com/klassmaster/docs/obfuscateOptions.html) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
 
+## Documentation-only candidate pre-screen
+
+The claim table above remains deliberately `UNVERIFIED` for commercial
+candidates. The following is a first-party documentation pre-screen, not
+Synesis artifact evidence and not permission to mark any ring `PASS`.
+
+| Candidate | Documentation signals found | Limits that remain for SYN-009E |
+| --- | --- | --- |
+| DashO 12.8 | PreEmptive's changelog records Java 25 bytecode/JEP support in 12.6, Java 26 bytecode support in 12.8, Gradle/CLI integration, and runtime self-protection improvements. Its project reference documents scoped control-flow and string-encryption transforms. | The reviewed material does not establish genuine JVM code virtualization or a protected customer payload loader. Java 25 Gradle, reflection/ServiceLoader/JNI/native-QUIC compatibility, shipped artifact inspection, safe debugger/VM behavior, and private recovery remain unexecuted. |
+| Zelix KlassMaster 26 | Zelix documents processing bytecode through Java 26, script/Gradle invocation, flow obfuscation, string/integer/long encryption, reference/reflection handling, change logs/stack-trace translation, and a reproducible-obfuscated-output tutorial. | The reviewed material does not establish genuine virtual execution, a protected payload loader/packing mechanism, or Synesis-safe anti-debug/instrumentation behavior. The exact Java 25 Gradle/native/Link acceptance, shipped inspection, and private recovery remain unexecuted. |
+
+Detailed links and the exact distinction between vendor documentation and local
+artifact evidence are recorded in
+`docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. Neither candidate
+is selected as the maximum protector until a licensed version is installed and
+the missing Ring 2/Ring 5 and compatibility gates are exercised.
+
 ## Required evaluation dimensions
 
 The ring table above is the claim boundary. The following dimensions are the

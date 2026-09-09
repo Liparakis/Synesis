@@ -39,6 +39,12 @@ disposable install, exercises the installed stable-launcher and packaged
   partial until a licensed maximum ZIP is supplied. The current wrapper cannot
   expose reliable peak memory, and the cold startup delta must not be reported
   as a performance win.
+- The documentation-only commercial pre-screen is in
+  `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. DashO is the
+  first Java 25/Gradle candidate to evaluate when licensed; Zelix remains a
+  Java 26 flow/string/constant candidate. Neither documentation set proves
+  Ring 2 virtualization or Ring 5 protected loading, so do not change the
+  commercial matrix until a shipped artifact is exercised.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.

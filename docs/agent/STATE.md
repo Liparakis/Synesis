@@ -80,6 +80,17 @@ is not a performance-win claim, wrapper peak memory is `NOT_AVAILABLE`, and
 UI/route/Link/relay/provider timing remains open. A real maximum archive is
 still required for the three-profile comparison.
 
+A first-party documentation pre-screen now distinguishes vendor-described
+features from Synesis evidence. DashO's reviewed documentation supports a
+credible Java 25/Gradle evaluation path with scoped control-flow,
+string-encryption, and runtime-protection features. Zelix's reviewed
+documentation supports Java 26 bytecode handling, flow/string/constant
+transforms, scripting, and reproducibility guidance. Neither reviewed set
+establishes genuine JVM virtualization or protected payload loading, so no
+commercial ring status changed; the matrix and evidence are in
+`docs/release/protector-capability-matrix.md` and
+`docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files

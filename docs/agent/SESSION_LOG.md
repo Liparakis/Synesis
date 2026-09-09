@@ -1,3 +1,28 @@
+## 2026-09-09 — SYN-009E first-party commercial protector pre-screen
+
+Reviewed current first-party DashO and Zelix documentation to refine the
+commercial candidate matrix without treating vendor claims as Synesis artifact
+evidence. DashO's reviewed materials record Java 25/26 bytecode support,
+Gradle/CLI integration, scoped control-flow and string encryption, and runtime
+protection. Zelix KlassMaster 26 documents Java 26 bytecode handling,
+flow/string/integer/long transforms, scripting/Gradle integration, and
+reproducibility guidance.
+
+Neither reviewed documentation set establishes genuine JVM code virtualization
+or a protected payload loader/packing mechanism for this release. Exact
+Java 25/Gradle, reflection/ServiceLoader/JNI/native QUIC, Link, relay,
+provider, debugger/VM, shipped-artifact, diversification, and private-retrace
+acceptance remain unexecuted. The matrix remains `UNVERIFIED` for commercial
+rows and Rings 1–6 remain blocked; no vendor was selected or licensed.
+
+Evidence: `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
+No license, key, production signing authority, push, tag, release, or remote
+mutation occurred.
+
+Exact next action: obtain a licensed, version-pinned candidate and exercise the
+adapter against the actual shipped CLI and relay artifacts, with Ring 2 and
+Ring 5 capability proven rather than inferred from documentation.
+
 ## 2026-09-09 — SYN-009E release-profile comparison harness
 
 Added `scripts/release-profile-comparison.ps1` to compare extracted customer

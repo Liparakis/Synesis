@@ -53,6 +53,15 @@ is not a performance claim, wrapper peak memory is `NOT_AVAILABLE`, and UI,
 route, Link, relay, provider, AV/EDR, and commercial maximum measurements
 remain open.
 
+The first-party DashO/Zelix documentation pre-screen is now recorded
+separately from artifact evidence. It narrows the next licensed evaluation:
+DashO documents Java 25/26 bytecode support, scoped control-flow/string
+transforms, Gradle/CLI integration, and runtime protection; Zelix documents
+Java 26 bytecode handling, flow/string/constant transforms, Gradle scripting,
+and reproducibility guidance. Neither reviewed candidate establishes genuine
+virtual execution or protected payload loading in the evidence set, so the
+commercial matrix and Ring 2/Ring 5 gates remain unverified.
+
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
   local release commits remain unpublished, and the working tree contains this
@@ -149,6 +158,10 @@ commercial protection capability is claimed.
   `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no memory or performance-win claim
   is made from the non-isolated sample, and broader UI/route/Link/relay/
   provider timing remains open.
+- The first-party commercial protector documentation pre-screen was recorded
+  in `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`; it refines
+  candidate selection without changing any commercial row to `PASS` or
+  establishing Ring 2/Ring 5.
 - `go test ./...` in `bootstrap` now passes after the test fixture helper
   isolated `HOME`/`USERPROFILE` from the developer's real provider state.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.
