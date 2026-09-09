@@ -25,6 +25,7 @@ process-tree working set for lite versus `629.620 ms` and `108,498,944` for
 developer. These are bounded baseline measurements, not performance or
 physical-memory claims.
 
+This follow-up is recorded in commit `ae4b9852` and checkpoint `CP-0816`.
 This remains compatibility/artifact hardening only. It does not claim string
 encryption, control-flow obfuscation, virtualization, protected packing,
 anti-VM, anti-debugging, anti-instrumentation, or commercial maximum release.

@@ -329,6 +329,9 @@ release-hardening work:
   adapter results and release-to-release comparison records.
 - `4cc8fec0` — recorded bounded Windows process-tree working-set evidence in
   the profile comparison harness and refreshed the partial performance record.
+- `ae4b9852` — enabled free protection-lite optimization, mixed-case renaming,
+  and source/line metadata hardening for CLI/relay and refreshed the partial
+  archive, reverse-engineering, and profile evidence; checkpoint `CP-0816`.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,

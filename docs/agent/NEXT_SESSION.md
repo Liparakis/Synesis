@@ -4,8 +4,11 @@
 activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
 no push has occurred. `SYN-009E` is now the sole
 current release-hardening task in the existing `SYN-009*` lineage.
-The latest implementation commits are `4cc8fec0` (bounded profile memory
-evidence), `974380fd` (private license provenance), and `690c691a` (external
+The latest implementation commit is `ae4b9852` (free protection-lite
+optimizer, mixed-case renaming, metadata hardening, and refreshed evidence),
+checkpointed as `CP-0816`; preceding commits include `4cc8fec0` (bounded
+profile memory evidence), `974380fd` (private license provenance), and
+`690c691a` (external
 commercial-tool path boundary); the
 availability evidence-only refresh is `18da2f4b` at checkpoint `CP-0807`, and
 the candidate-capability review is `4b2836a2` at checkpoint `CP-0810`; the maximum

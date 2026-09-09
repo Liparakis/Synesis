@@ -150,8 +150,10 @@ synthetic or protection-lite evidence.
   local release commits remain unpublished, and the working tree contains the
   preserved `CP-0758` plus unrelated pre-existing local work that remains
   uncommitted.
-- Latest implementation commits: `4cc8fec0` (bounded profile memory evidence),
-  `974380fd` (private license provenance), and `690c691a` (external
+- Latest implementation commits: `ae4b9852` (free protection-lite optimizer,
+  mixed-case renaming, metadata hardening, and refreshed evidence),
+  `4cc8fec0` (bounded profile memory evidence), `974380fd` (private license
+  provenance), and `690c691a` (external
   commercial-tool path boundary); the earlier
   post-archive native-audit, symlink-boundary, structured private-retrace,
   exact-brief Seven Ring taxonomy, bounded acceptance-timing, and packaged
@@ -161,6 +163,8 @@ synthetic or protection-lite evidence.
   `CP-0810`. No licensed adapter, commercial configuration, signing key, or
   release seed is available; this is evidence of the blocker, not a
   commercial-ring result.
+- The free-hardening slice is checkpointed as `CP-0816`; no push, tag, release,
+  or remote mutation occurred.
   No push has occurred.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go
   bootstrap signed-manifest/payload verification, stable flat installation,

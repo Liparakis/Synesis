@@ -24,9 +24,12 @@ source-metadata signals decreased by 849 classes but remain present. Both
 comparison results remain `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no Seven Ring
 or commercial maximum claim changed.
 
-Exact next action: checkpoint and commit this free hardening/evidence slice,
-then keep the maximum gate fail-closed until a licensed protector and release
-signing authority are supplied.
+Commit `ae4b9852` records this slice; checkpoint `CP-0816` was created
+afterward. No push, tag, release, or remote mutation occurred.
+
+Exact next action: obtain a licensed protector and release-signing authority,
+then run the maximum adapter and shipped-artifact acceptance from a clean
+reviewed checkout while keeping the commercial gate fail-closed.
 
 ## 2026-09-09 — SYN-009E bounded profile memory evidence
 
