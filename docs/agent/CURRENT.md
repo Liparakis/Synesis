@@ -92,6 +92,8 @@ The new `scripts/maximum-release-provenance-comparison.ps1` harness compares
 two private maximum records for either controlled diversification or exact
 canonical-manifest reproducibility. Its parser and missing-record fail-closed
 path pass, but no commercial maximum records are available for a positive run.
+The CLI release task also rejects a non-matching `GITHUB_SHA` instead of
+allowing CI metadata to override the actual checkout commit.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;

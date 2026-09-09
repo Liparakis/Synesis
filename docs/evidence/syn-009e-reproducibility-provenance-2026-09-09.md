@@ -57,8 +57,8 @@ The nine files are discovered from the repository while excluding `.git`,
 
 - `:cli:tasks :relay:tasks --no-configuration-cache --no-daemon --console=plain`
   passed with the documented process-local JDK loopback-directory override.
-  This evaluated both Gradle scripts and their new provenance-echo gates; it
-  did not invoke a maximum release.
+  This evaluated both Gradle scripts and their new provenance-echo/source-HEAD
+  gates; it did not invoke a maximum release.
 - The normal inherited host environment still fails before Gradle evaluation
   with the previously recorded loopback-connection error.
 - No maximum request/result, customer bundle, private release record, signed

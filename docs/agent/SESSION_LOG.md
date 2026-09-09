@@ -16,6 +16,10 @@ Exact next action: evaluate both Gradle task graphs, then run the full maximum
 adapter and shipped-artifact acceptance only in a clean licensed release
 environment.
 
+The same slice also made the CLI provenance source authoritative: when
+`GITHUB_SHA` is present it must equal the checkout's local `HEAD`, matching the
+relay behavior; otherwise maximum preparation fails closed.
+
 ## 2026-09-09 — SYN-009E release provenance comparison seam
 
 Added `scripts/maximum-release-provenance-comparison.ps1` to close the gap

@@ -126,6 +126,8 @@ syntax-checked. Its missing-record path returns
 `PARTIAL_MAXIMUM_RECORDS_NOT_SUPPLIED`; positive diversification and
 reproducibility comparisons remain unexecuted because no licensed maximum
 private records or canonical manifests are available.
+The CLI source-commit path now verifies any supplied `GITHUB_SHA` against local
+`HEAD`; mismatched CI metadata fails closed.
 
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits

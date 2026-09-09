@@ -1026,8 +1026,14 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
             return output
         }
 
+        val repositoryHead = gitValue("rev-parse", "HEAD")
         val sourceCommit = githubSha.get().trim().takeIf { it.isNotBlank() && it != "UNKNOWN" }
-            ?: gitValue("rev-parse", "HEAD")
+            ?.also { reported ->
+                require(reported.equals(repositoryHead, ignoreCase = true)) {
+                    "GITHUB_SHA does not match the release checkout HEAD"
+                }
+            }
+            ?: repositoryHead
         val dirtyTree = gitValue("status", "--porcelain", "--untracked-files=all").isNotBlank()
         require(!dirtyTree) {
             "Maximum release requires a clean source checkout; run it from a reviewed release commit, not a dirty developer workspace."
