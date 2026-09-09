@@ -99,21 +99,23 @@ claim decompiler resistance. A real maximum archive, ordinary decompiler
 inspection, and selected-method commercial output review remain open. Details
 are in `docs/evidence/syn-009e-re-comparison-2026-09-09.md`.
 
-The archive-only native hardening audit now checks Synesis-owned Windows PE
-launchers for format, zero COFF symbols, absent debug directories/sections,
-named exports, tested local source-path signals, native private-file leakage,
-and Go `trimpath=true` metadata. Developer/protection-lite Windows x64 passed
-those structural checks; Authenticode/Apple signing is not implemented, the
-current samples carry dirty VCS metadata, and no maximum archive was supplied.
-This remains baseline evidence rather than commercial or cross-platform
-release acceptance. Details are in
-`docs/evidence/syn-009e-native-hardening-2026-09-09.md`.
+The archive-only native hardening audit now checks Synesis-owned PE, ELF, and
+Mach-O launchers for format, symbol/debug information, named exports, tested
+local source-path signals, native private-file leakage, and Go `trimpath=true`
+metadata. Developer/protection-lite Windows x64 passed the PE checks, and
+temporary Linux amd64/macOS arm64 cross-build fixtures passed the portable
+parser. Authenticode/Apple signing is not implemented or verified, the current
+samples carry dirty VCS metadata, and no maximum archive was supplied. This
+remains baseline/parser evidence rather than commercial or shipped
+cross-platform release acceptance. Details are in
+`docs/evidence/syn-009e-native-hardening-2026-09-09.md` and
+`docs/evidence/syn-009e-native-format-parser-2026-09-09.json`.
 
 The CLI and relay maximum-release seams now bind the adapter request and
 private release record to a sorted lockfile snapshot, Gradle/Java/Node/npm/Go
 toolchain versions, configuration digest, release seed/identity, and later
 detached-signature/public-key provenance. The maximum task fails closed when
-Node or Go provenance is unavailable. Gradle task evaluation passed with the
+Node, npm, or Go provenance is unavailable. Gradle task evaluation passed with the
 documented process-local loopback workaround; no commercial maximum execution
 or signed record exists yet.
 

@@ -104,12 +104,13 @@ minimal named exports, tested local-source-path signals, absence of native
 debug/private files, and `trimpath=true` build metadata when the Go tool is
 available. It records native signing status separately. This is static
 hardening evidence only; it does not transform native code, inspect or alter
-third-party native libraries, prove cross-platform coverage, or establish a
-commercial protection ring. Missing maximum input produces
-`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`, and unsigned native files keep the
-signing gate open. The current parser is implemented for Windows PE launchers;
-Linux ELF and macOS Mach-O artifacts remain open until their corresponding
-native inspection and signing checks are run.
+third-party native libraries, prove shipped cross-platform coverage, or
+establish a commercial protection ring. Missing maximum input produces
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`, and unsigned/unverified native files
+keep the signing gate open. The parser recognizes Windows PE, Linux ELF, and
+macOS Mach-O, but each real customer archive still requires its corresponding
+native inspection and platform-signing checks; cross-compiled parser fixtures
+are not release evidence.
 
 ## Maximum-release gates still required
 

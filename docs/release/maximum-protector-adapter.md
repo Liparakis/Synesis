@@ -138,7 +138,7 @@ configuration digest. The private `release-record.properties` repeats those
 values together with the release ID, seed, protector identity, artifact
 manifest hashes, and—after signing—the signing key ID, fixed publication time,
 SHA-256 of the bootstrap public key, and detached-signature provenance. A
-missing Node or Go toolchain fails the maximum provenance gate; values are
+missing Node, npm, or Go toolchain fails the maximum provenance gate; values are
 never copied into the customer bundle.
 
 The Gradle gate additionally requires the protected profile marker, the

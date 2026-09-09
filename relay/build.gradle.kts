@@ -226,9 +226,13 @@ fun maximumReleaseProvenance(
 ): Map<String, String> {
     val (lockfileCount, lockfilesSha256) = releaseLockfileSnapshot(root)
     val nodeVersion = releaseToolVersion("node", "--version")
+    val npmVersion = releaseToolVersion("npm", "--version")
     val nativeToolchain = releaseToolVersion("go", "version")
     require(nodeVersion != "NOT_AVAILABLE") {
         "Maximum release provenance requires the Node.js toolchain to be available"
+    }
+    require(npmVersion != "NOT_AVAILABLE") {
+        "Maximum release provenance requires the npm toolchain to be available"
     }
     require(nativeToolchain != "NOT_AVAILABLE") {
         "Maximum release provenance requires the Go native toolchain to be available"
@@ -248,7 +252,7 @@ fun maximumReleaseProvenance(
         "javaRuntime" to Runtime.version().toString(),
         "javaToolchain" to "25",
         "nodeVersion" to nodeVersion,
-        "npmVersion" to releaseToolVersion("npm", "--version"),
+        "npmVersion" to npmVersion,
         "nativeToolchain" to nativeToolchain,
     )
 }

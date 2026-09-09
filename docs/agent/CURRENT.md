@@ -73,16 +73,19 @@ The archive-only native hardening audit is now implemented in
 scripts/release-native-hardening-audit.ps1. The current Windows x64
 developer/protection-lite CLI archives passed the owned-launcher PE, zero-COFF-
 symbol, no-debug-directory/section, no-named-export, local-path, private-file,
-and Go-trimpath checks. Their native files are unsigned, the maximum archive
-was not supplied, and the current samples record dirty Go VCS metadata; this
-is therefore baseline evidence only and does not close native signing,
-cross-platform, or commercial maximum acceptance.
+and Go-trimpath checks. The parser now also handles ELF and Mach-O; temporary
+Linux amd64 and macOS arm64 cross-build fixtures passed the format,
+debug/export, and trimpath classification. Their native files are unsigned or
+unverified, the maximum archive was not supplied, and the current samples
+record dirty Go VCS metadata; this is therefore baseline/parser evidence only
+and does not close native signing, shipped cross-platform, or commercial
+maximum acceptance.
 
 The CLI and relay maximum-release request/private-record seams now capture a
 reproducibility snapshot: sorted lockfile count/digest, Gradle, Java, Node/npm,
 and Go toolchain versions, protector configuration digest, release identity and
-seed, plus post-signing key/public-provenance fields. Missing Node or Go fails
-the maximum provenance gate; ordinary developer tasks are unchanged.
+seed, plus post-signing key/public-provenance fields. Missing Node, npm, or Go
+fails the maximum provenance gate; ordinary developer tasks are unchanged.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
@@ -226,9 +229,10 @@ retrace-validated. Preserved
 untouched. A stable formatter-like rewrite of 1,532 other tracked files is
 also present outside this slice; it remains unstaged and is not release
 evidence.
-The native audit is Windows PE-only; Linux ELF, macOS Mach-O, ARM64,
-third-party native inspection, production native signing, and clean
-maximum-artifact provenance remain open.
+The native audit parser covers PE, ELF, and Mach-O, but actual Linux, macOS,
+and ARM64 customer archives, third-party native inspection, production native
+signing, and clean maximum-artifact provenance remain open. The portable
+format result is fixture-only evidence.
 The new reproducibility record is implemented but unexecuted for a real
 maximum candidate because the commercial adapter, licensed configuration, and
 production signing authority remain unavailable.

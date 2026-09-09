@@ -1,11 +1,30 @@
+## 2026-09-09 — SYN-009E portable native hardening parser
+
+Extended `scripts/release-native-hardening-audit.ps1` from Windows PE-only
+inspection to PE, ELF, and Mach-O parsing. The audit now records generic native
+format/symbol/debug/export fields, keeps PE COFF checks, recognizes Mach-O fat
+containers, and treats Linux detached-manifest integrity separately from
+per-file OS signing.
+
+The existing Windows x64 developer/protection-lite archives still pass their
+structural checks. Temporary Go cross-build fixtures for Linux amd64 and macOS
+arm64 also passed format, debug/export, and trimpath classification; the
+fixtures were removed and are not release artifacts. Real non-Windows customer
+archives, third-party native inputs, platform signing, and the commercial
+maximum archive remain open.
+
+Exact next action: run the updated audit against every real platform maximum
+archive after licensed protection and signing are available, then complete the
+shipped-artifact acceptance without promoting fixture evidence.
+
 ## 2026-09-09 — SYN-009E reproducibility and signing provenance seam
 
 Extended both CLI and relay maximum-release adapter requests/private records
 with a sorted lockfile snapshot and Gradle, Java, Node/npm, and Go toolchain
 versions. The record now includes the protector configuration digest, release
 identity/seed, and post-signing key ID, fixed publication time, bootstrap public
-key digest, and detached-signature provenance. Missing Node or Go fails the
-maximum provenance gate; no ordinary developer task was changed.
+key digest, and detached-signature provenance. Missing Node, npm, or Go fails
+the maximum provenance gate; no ordinary developer task was changed.
 
 The Gradle scripts evaluated successfully through `:cli:tasks :relay:tasks`
 with the documented process-local JDK loopback workaround. The inherited host

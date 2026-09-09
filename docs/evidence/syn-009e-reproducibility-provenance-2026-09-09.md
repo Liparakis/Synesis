@@ -24,7 +24,8 @@ The maximum-release request and private `release-record.properties` now bind:
   public-key SHA-256, manifest/signature hashes, and detached-signature
   verification provenance.
 
-Missing Node.js or Go toolchain metadata fails the maximum provenance gate.
+Missing Node.js, npm, or Go toolchain metadata fails the maximum provenance
+gate.
 The production signing task separately requires the injected signing key,
 signing key ID, and publication timestamp; no key is generated or committed.
 

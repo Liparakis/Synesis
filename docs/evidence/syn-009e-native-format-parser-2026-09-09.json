@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "status": "PASS_FORMAT_PARSERS_NOT_RELEASE_EVIDENCE",
+  "scope": "TEMPORARY_CROSS_COMPILED_FIXTURES_ONLY",
+  "source": "bootstrap/cmd/synesis-mcp",
+  "toolchain": {
+    "go": "go1.26.5 windows/amd64 host",
+    "cgo": "0",
+    "flags": ["-trimpath", "-ldflags=-s -w"]
+  },
+  "fixtures": [
+    {
+      "target": "linux-amd64",
+      "format": "ELF64",
+      "machine": "0x003e",
+      "nativeSymbolCount": 0,
+      "debugInfoPresent": false,
+      "exportNameCount": 0,
+      "goTrimpath": "true",
+      "signing": "NOT_APPLICABLE",
+      "auditStatus": "PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED"
+    },
+    {
+      "target": "darwin-arm64",
+      "format": "Mach-O64",
+      "machine": "0x0100000c",
+      "nativeSymbolCount": 72,
+      "debugInfoPresent": false,
+      "exportNameCount": 0,
+      "goTrimpath": "true",
+      "signing": "NOT_CHECKED_ON_WINDOWS",
+      "auditStatus": "PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED"
+    }
+  ],
+  "temporaryFixtureDirectory": "DISPOSED_AFTER_AUDIT",
+  "openGates": [
+    "No real Linux/macOS/ARM64 customer archive was supplied.",
+    "Third-party native inputs remain outside the Synesis-owned parser scope.",
+    "Platform signing/notarization and commercial maximum acceptance remain open."
+  ]
+}

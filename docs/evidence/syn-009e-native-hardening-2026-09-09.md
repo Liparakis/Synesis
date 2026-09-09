@@ -12,8 +12,10 @@ overall: PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED
 ```
 
 This is a bounded static audit of Synesis-owned Go launchers. It is not
-commercial maximum evidence, does not inspect third-party Netty binaries, and
-does not claim native anti-reversing or cross-platform coverage.
+commercial maximum evidence and does not inspect third-party Netty binaries.
+The parser now recognizes PE, ELF, and Mach-O, but only the Windows customer
+archives below are release artifacts; the portable-format results are
+fixture-only validation of the parser.
 
 ## Command and inputs
 
@@ -69,6 +71,26 @@ The release build seam already uses `-trimpath` and `-ldflags=-s -w` in
 matching SHA-256 output for `synesis-mcp.exe`; that probe is supporting
 reproducibility evidence, not a release reproducibility claim.
 
+## Portable-format parser validation
+
+To validate the non-Windows parser without misclassifying a synthetic file as a
+release artifact, temporary fixture bundles were built from
+`bootstrap/cmd/synesis-mcp` with Go `go1.26.5`, `CGO_ENABLED=0`,
+`-trimpath`, and `-ldflags=-s -w`. The exact fixture directory was removed
+after the audit. Results:
+
+| Fixture | Format | Machine | Symbols/debug/exports | Trimpath | Signing |
+|---|---|---|---|---|---|
+| Linux cross-build | ELF64 | x86-64 | 0 / none / 0 | `true` | `NOT_APPLICABLE` (detached manifest boundary) |
+| macOS cross-build | Mach-O64 | arm64 | local symbol table observed / none / 0 | `true` | `NOT_CHECKED` on Windows; no host `codesign` verifier |
+
+Both fixture audits returned native hardening `PASS` while remaining
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`. This validates format parsing and
+symbol/export/debug classification only; it does not close Linux/macOS/ARM64
+shipped-artifact, platform-signing, or commercial maximum acceptance.
+Machine-readable fixture details are in
+`docs/evidence/syn-009e-native-format-parser-2026-09-09.json`.
+
 ## Open gates
 
 - No maximum-release archive was supplied, so the audit cannot close the
@@ -78,8 +100,9 @@ reproducibility evidence, not a release reproducibility claim.
   native signing remains an explicit release gate.
 - The current developer/lite archives record `vcs.modified=true` in Go build
   metadata. They are therefore not clean release-provenance artifacts.
-- Linux, macOS, ARM64, third-party native libraries, signed production
-  artifacts, and protected-loader behavior remain unverified.
+- Actual Linux, macOS, and ARM64 customer archives, third-party native
+  libraries, signed production artifacts, and protected-loader behavior remain
+  unverified. The parser fixture is not release evidence.
 
 The machine-readable result is
 `docs/evidence/syn-009e-native-hardening-2026-09-09.json`.
