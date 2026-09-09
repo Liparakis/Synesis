@@ -639,6 +639,7 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(privateDirectory.isDirectory) { "Maximum relay protector did not produce private records: $privateDirectory" }
         require(!isUnder(privateDirectory, outputBundle)) { "Private relay records overlap the customer bundle" }
 
+        val privateRingEvidence = linkedMapOf<String, Pair<File, String>>()
         listOf(
             "controlFlow",
             "virtualization",
@@ -651,25 +652,34 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "Maximum relay protector did not verify the required ring: $ring"
             }
             val evidence = project.file(resultValue("evidence.$ring"))
-            require(isUnder(evidence, privateDirectory) && evidence.isFile) {
+            require(isUnder(evidence, privateDirectory) && evidence.isFile && evidence.length() > 0L) {
                 "Maximum relay evidence for $ring is missing or outside the private boundary"
             }
+            privateRingEvidence[ring] = evidence to relayMaximumSha256(evidence)
         }
         require(resultValue("diversification") == "verified") {
             "Maximum relay protector did not verify release diversification"
         }
+        val diversificationEvidence = project.file(resultValue("diversificationEvidence"))
+        require(isUnder(diversificationEvidence, privateDirectory) && diversificationEvidence.isFile && diversificationEvidence.length() > 0L) {
+            "Maximum relay diversification evidence is missing or outside the private boundary"
+        }
         val retraceFile = project.file(resultValue("retraceFile"))
         val mappingFile = project.file(resultValue("mappingFile"))
         val nativeSymbolsDirectory = project.file(resultValue("nativeSymbolsDirectory"))
-        require(isUnder(retraceFile, privateDirectory) && retraceFile.isFile) {
+        require(isUnder(retraceFile, privateDirectory) && retraceFile.isFile && retraceFile.length() > 0L) {
             "Maximum relay private retrace output is missing or outside the private boundary"
         }
-        require(isUnder(mappingFile, privateDirectory) && mappingFile.isFile) {
+        require(isUnder(mappingFile, privateDirectory) && mappingFile.isFile && mappingFile.length() > 0L) {
             "Maximum relay private mapping output is missing or outside the private boundary"
         }
         require(isUnder(nativeSymbolsDirectory, privateDirectory) && nativeSymbolsDirectory.isDirectory) {
             "Maximum relay native symbols are missing or outside the private boundary"
         }
+        val nativeSymbolCount = Files.walk(nativeSymbolsDirectory.toPath()).use { paths ->
+            paths.filter { Files.isRegularFile(it) }.count()
+        }
+        require(nativeSymbolCount > 0L) { "Maximum relay native symbols directory is empty" }
 
         require(outputBundle.resolve("PROTECTION_PROFILE").run { isFile && readText().trim() == "maximum-release" }) {
             "Maximum relay output is missing PROTECTION_PROFILE=maximum-release"
@@ -706,6 +716,13 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         relayMaximumReleaseArtifactManifest.get().asFile.writeText(
             "# SYNESIS_MAXIMUM_RELAY_MANIFEST_V1\n" + manifestLines.joinToString("\n", postfix = "\n")
         )
+        val privateEvidenceProperties = linkedMapOf<String, String>()
+        privateRingEvidence.forEach { (ring, evidence) ->
+            privateEvidenceProperties["privateEvidence.$ring"] = evidence.first.absolutePath
+            privateEvidenceProperties["privateEvidence.${ring}Sha256"] = evidence.second
+        }
+        privateEvidenceProperties["privateDiversificationEvidence"] = diversificationEvidence.absolutePath
+        privateEvidenceProperties["privateDiversificationEvidenceSha256"] = relayMaximumSha256(diversificationEvidence)
         writeRelayMaximumProperties(
             privateDirectory.resolve("release-record.properties"),
             maximumReleaseProvenance(
@@ -731,7 +748,7 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
                 "artifactManifest" to relayMaximumReleaseArtifactManifest.get().asFile.name,
                 "artifactManifestSha256" to relayMaximumSha256(relayMaximumReleaseArtifactManifest.get().asFile),
-            ),
+            ) + privateEvidenceProperties,
         )
     }
 }

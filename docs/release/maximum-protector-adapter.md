@@ -129,6 +129,7 @@ ring.analysisEnvironment=verified
 ring.protectedPayload=verified
 ring.antiDebug=verified
 diversification=verified
+diversificationEvidence=<non-empty file below privateDirectory>
 bundleDirectory=<the requested outputBundle>
 privateDirectory=<the requested privateDirectory>
 retraceFile=<file below privateDirectory>
@@ -143,10 +144,12 @@ evidence.antiDebug=<file below privateDirectory>
 ```
 
 The adapter result therefore proves the six vendor transformation classes,
-release diversification, and private mapping/retrace/native recovery
-material. The signed-integrity layer is proved by the later Gradle/bootstrap
-manifest verification and is recorded separately in the private release
-record.
+release diversification, and non-empty private evidence for each of those
+claims. The Gradle task hashes every private ring/diversification evidence
+file into `release-record.properties`, and requires non-empty mapping, retrace,
+and native-symbol recovery material. The signed-integrity layer is proved by
+the later Gradle/bootstrap manifest verification and is recorded separately in
+the private release record.
 
 The maximum request also carries a reproducibility snapshot for the exact
 source checkout: the sorted lockfile digest/count, Gradle version, Java

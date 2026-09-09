@@ -1171,6 +1171,7 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(privateDirectory.isDirectory) { "Maximum protector did not produce private release records: $privateDirectory" }
         require(!isUnder(privateDirectory, outputBundle)) { "Private release records overlap the customer bundle" }
 
+        val privateRingEvidence = linkedMapOf<String, Pair<File, String>>()
         listOf(
             "controlFlow",
             "virtualization",
@@ -1183,12 +1184,17 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "Maximum protector did not verify the required ring: $ring"
             }
             val evidence = project.file(resultValue("evidence.$ring"))
-            require(isUnder(evidence, privateDirectory) && evidence.isFile) {
+            require(isUnder(evidence, privateDirectory) && evidence.isFile && evidence.length() > 0L) {
                 "Maximum protector evidence for $ring is missing or outside the private boundary"
             }
+            privateRingEvidence[ring] = evidence to maximumSha256(evidence)
         }
         require(resultValue("diversification") == "verified") {
             "Maximum protector did not verify release diversification"
+        }
+        val diversificationEvidence = project.file(resultValue("diversificationEvidence"))
+        require(isUnder(diversificationEvidence, privateDirectory) && diversificationEvidence.isFile && diversificationEvidence.length() > 0L) {
+            "Maximum protector diversification evidence is missing or outside the private boundary"
         }
         require(resultValue("retraceFile").isNotBlank()) { "Private JVM retrace output is missing" }
         require(resultValue("mappingFile").isNotBlank()) { "Private JVM mapping output is missing" }
@@ -1202,11 +1208,18 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(isUnder(project.file(resultValue("nativeSymbolsDirectory")), privateDirectory)) {
             "Private native symbols escape the private boundary"
         }
-        require(project.file(resultValue("retraceFile")).isFile) { "Private retrace output is not a file" }
-        require(project.file(resultValue("mappingFile")).isFile) { "Private mapping output is not a file" }
-        require(project.file(resultValue("nativeSymbolsDirectory")).isDirectory) {
+        val retraceFile = project.file(resultValue("retraceFile"))
+        val mappingFile = project.file(resultValue("mappingFile"))
+        val nativeSymbolsDirectory = project.file(resultValue("nativeSymbolsDirectory"))
+        require(retraceFile.isFile && retraceFile.length() > 0L) { "Private retrace output is not a non-empty file" }
+        require(mappingFile.isFile && mappingFile.length() > 0L) { "Private mapping output is not a non-empty file" }
+        require(nativeSymbolsDirectory.isDirectory) {
             "Private native symbols output is not a directory"
         }
+        val nativeSymbolCount = Files.walk(nativeSymbolsDirectory.toPath()).use { paths ->
+            paths.filter { Files.isRegularFile(it) }.count()
+        }
+        require(nativeSymbolCount > 0L) { "Private native symbols directory is empty" }
 
         val profileMarker = outputBundle.resolve("PROTECTION_PROFILE")
         require(profileMarker.isFile && profileMarker.readText().trim() == "maximum-release") {
@@ -1250,6 +1263,13 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         maximumReleaseArtifactManifest.get().asFile.writeText(
             "# SYNESIS_MAXIMUM_RELEASE_MANIFEST_V1\n" + manifestLines.joinToString("\n", postfix = "\n")
         )
+        val privateEvidenceProperties = linkedMapOf<String, String>()
+        privateRingEvidence.forEach { (ring, evidence) ->
+            privateEvidenceProperties["privateEvidence.$ring"] = evidence.first.absolutePath
+            privateEvidenceProperties["privateEvidence.${ring}Sha256"] = evidence.second
+        }
+        privateEvidenceProperties["privateDiversificationEvidence"] = diversificationEvidence.absolutePath
+        privateEvidenceProperties["privateDiversificationEvidenceSha256"] = maximumSha256(diversificationEvidence)
         writeMaximumProperties(
             privateDirectory.resolve("release-record.properties"),
             maximumReleaseProvenance(
@@ -1275,7 +1295,7 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
                 "artifactManifest" to maximumReleaseArtifactManifest.get().asFile.name,
                 "artifactManifestSha256" to maximumSha256(maximumReleaseArtifactManifest.get().asFile),
-            ),
+            ) + privateEvidenceProperties,
         )
     }
 }

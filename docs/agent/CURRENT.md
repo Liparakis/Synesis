@@ -94,6 +94,11 @@ canonical-manifest reproducibility. Its parser and missing-record fail-closed
 path pass, but no commercial maximum records are available for a positive run.
 The CLI release task also rejects a non-matching `GITHUB_SHA` instead of
 allowing CI metadata to override the actual checkout commit.
+Both maximum tasks now require non-empty private evidence for every ring and
+diversification, non-empty mapping/retrace files, and at least one native
+symbol file; their hashes are retained only in the private release record.
+The release-to-release comparison now verifies those private hashes and the
+final signed-integrity fields before comparing two records.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;

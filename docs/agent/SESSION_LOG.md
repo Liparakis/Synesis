@@ -20,6 +20,16 @@ The same slice also made the CLI provenance source authoritative: when
 `GITHUB_SHA` is present it must equal the checkout's local `HEAD`, matching the
 relay behavior; otherwise maximum preparation fails closed.
 
+The maximum adapter boundary now also rejects empty private ring or
+diversification evidence, empty mapping/retrace files, and empty native-symbol
+directories. It records SHA-256 values for the accepted private evidence in
+the private release record, without adding any of that material to the
+customer bundle.
+
+The comparison harness now requires the final signed-integrity fields and
+rechecks every private evidence/recovery hash before it accepts either a
+diversification or reproducibility pair.
+
 ## 2026-09-09 — SYN-009E release provenance comparison seam
 
 Added `scripts/maximum-release-provenance-comparison.ps1` to close the gap

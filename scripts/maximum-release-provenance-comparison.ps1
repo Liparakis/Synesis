@@ -48,6 +48,29 @@ function ResolvePrivateFile([string]$Path, [string]$Label)
   return (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
 }
 
+function ResolvePrivateDirectory([string]$Path, [string]$Label)
+{
+  if ([string]::IsNullOrWhiteSpace($Path) -or
+      -not (Test-Path -LiteralPath $Path -PathType Container))
+  {
+    throw "MAXIMUM_RECORDS_NOT_SUPPLIED: $Label is missing"
+  }
+  return (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+}
+
+function Normalized([string]$Path)
+{
+  return [IO.Path]::GetFullPath($Path).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+}
+
+function IsUnder([string]$Child, [string]$Parent)
+{
+  $childPath = Normalized $Child
+  $parentPath = Normalized $Parent
+  return $childPath.Equals($parentPath, [StringComparison]::OrdinalIgnoreCase) -or
+    $childPath.StartsWith($parentPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
+}
+
 function ReadProperties([string]$Path)
 {
   $properties = [ordered]@{}
@@ -125,7 +148,39 @@ function ReadPrivateRelease([string]$Path, [string]$Label)
   Require ((RequiredValue $properties 'component') -eq $Component) "$Label release record component does not match -Component"
   Require ((RequiredValue $properties 'dirtyTree') -eq 'false') "$Label release record is not from a clean checkout"
   Require ((RequiredValue $properties 'diversification') -eq 'verified') "$Label release record lacks verified diversification"
+  Require ((RequiredValue $properties 'signedIntegrity') -eq 'verified') "$Label release record lacks verified signed integrity"
+  Require ((RequiredValue $properties 'signedAgainstBootstrapKey') -eq 'true') "$Label release record lacks bootstrap trust-root verification"
+  foreach ($signedField in @('manifestSha256', 'signatureSha256', 'bootstrapPublicKeySha256', 'signingKeyId', 'publishedAt', 'signingProvenance'))
+  {
+    [void](RequiredValue $properties $signedField)
+  }
   $manifest = ValidateManifest $recordPath $properties
+  $privateRoot = Split-Path -Parent $recordPath
+  foreach ($ring in @('controlFlow', 'virtualization', 'strings', 'analysisEnvironment', 'protectedPayload', 'antiDebug'))
+  {
+    $evidencePath = ResolvePrivateFile (RequiredValue $properties "privateEvidence.$ring") "$Label $ring evidence"
+    Require (IsUnder $evidencePath $privateRoot) "$Label $ring evidence escapes the private release directory"
+    Require ((Get-Item -LiteralPath $evidencePath).Length -gt 0) "$Label $ring evidence is empty"
+    $actualHash = Sha256 $evidencePath
+    Require ($actualHash -eq (RequiredValue $properties "privateEvidence.${ring}Sha256").ToLowerInvariant()) (
+      "$Label $ring evidence hash does not match release-record.properties")
+  }
+  $diversificationPath = ResolvePrivateFile (RequiredValue $properties 'privateDiversificationEvidence') (
+    "$Label diversification evidence")
+  Require (IsUnder $diversificationPath $privateRoot) "$Label diversification evidence escapes the private release directory"
+  Require ((Get-Item -LiteralPath $diversificationPath).Length -gt 0) "$Label diversification evidence is empty"
+  Require ((Sha256 $diversificationPath) -eq (RequiredValue $properties 'privateDiversificationEvidenceSha256').ToLowerInvariant()) (
+    "$Label diversification evidence hash does not match release-record.properties")
+  foreach ($recovery in @('privateRetraceFile', 'privateMappingFile'))
+  {
+    $recoveryPath = ResolvePrivateFile (RequiredValue $properties $recovery) "$Label $recovery"
+    Require (IsUnder $recoveryPath $privateRoot) "$Label $recovery escapes the private release directory"
+    Require ((Get-Item -LiteralPath $recoveryPath).Length -gt 0) "$Label $recovery is empty"
+  }
+  $nativeSymbolsPath = ResolvePrivateDirectory (RequiredValue $properties 'privateNativeSymbolsDirectory') "$Label native symbols"
+  Require (IsUnder $nativeSymbolsPath $privateRoot) "$Label native symbols escape the private release directory"
+  $nativeSymbolCount = @(Get-ChildItem -LiteralPath $nativeSymbolsPath -Recurse -File).Count
+  Require ($nativeSymbolCount -gt 0) "$Label native symbols are empty"
   return [ordered]@{
     label = $Label
     fileName = [IO.Path]::GetFileName($recordPath)

@@ -21,6 +21,8 @@ The maximum-release request and private `release-record.properties` now bind:
 - protector name/version and configuration path/SHA-256;
 - Tier 0–3, keep-rule, and protected-acceptance inventory/procedure
   SHA-256 digests, echoed by the adapter result;
+- non-empty private evidence files for all six rings and diversification,
+  hashed into the private release record;
 - release ID and protection seed; and
 - after manifest signing, signing key ID, fixed publication time, bootstrap
   public-key SHA-256, manifest/signature hashes, and detached-signature

@@ -128,6 +128,11 @@ reproducibility comparisons remain unexecuted because no licensed maximum
 private records or canonical manifests are available.
 The CLI source-commit path now verifies any supplied `GITHUB_SHA` against local
 `HEAD`; mismatched CI metadata fails closed.
+Maximum preparation also rejects empty ring/diversification evidence,
+empty mapping/retrace outputs, and empty native-symbol directories, then hashes
+the accepted private evidence into the release record.
+The comparison harness requires the final signed-integrity fields and checks
+those private hashes before accepting diversification or reproducibility input.
 
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
