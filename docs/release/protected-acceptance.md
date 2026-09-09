@@ -55,12 +55,16 @@ source classes:
 
 The harness extracts only to a disposable directory, requires the
 `maximum-release` marker, rejects source/private material, optionally verifies
-the private per-file SHA-256 manifest, and exercises the shipped CLI/native
-launcher/UI/control-plane/provider/MCP boundaries or the relay guarded
-launcher boundary. It records JSON evidence under the private acceptance
-directory. The relay authentication/forwarding scenario remains an explicit
-open gate until a real protected relay socket test is run; a parser smoke is
-not promoted to full relay acceptance.
+the private per-file SHA-256 manifest, and—when that manifest is supplied—
+mutates one disposable extracted file and proves that the manifest rejects the
+change before restoring the file. That is a static digest-difference check,
+not runtime tamper acceptance. The harness also rejects common private
+mapping, seed, provenance, keystore, and native-debug-file leakage forms. It
+then exercises the shipped CLI/native launcher/UI/control-plane/provider/MCP
+boundaries or the relay guarded launcher boundary. It records JSON evidence
+under the private acceptance directory. The relay authentication/forwarding
+scenario remains an explicit open gate until a real protected relay socket test
+is run; a parser smoke is not promoted to full relay acceptance.
 
 The following must be separately evidenced before a customer release can be
 called maximum:

@@ -129,7 +129,7 @@ function InvokeCaptured(
 
 function InvokeBundle([string[]]$Arguments, [string]$Label, [Nullable[int]]$ExpectedExitCode = 0)
 {
-  if ($script:isWindows)
+  if ($script:maximumAcceptanceIsWindows)
   {
     return InvokeCaptured 'cmd.exe' (@('/d', '/c', $script:launcherPath) + $Arguments) $ExpectedExitCode $Label
   }
@@ -138,7 +138,7 @@ function InvokeBundle([string[]]$Arguments, [string]$Label, [Nullable[int]]$Expe
 
 function EnsureExecutable([string]$Path)
 {
-  if (-not $script:isWindows)
+  if (-not $script:maximumAcceptanceIsWindows)
   {
     & chmod +x -- $Path
     Require ($LASTEXITCODE -eq 0) "Could not make the shipped executable runnable: $Path"
@@ -173,12 +173,62 @@ function VerifyPrivateManifest([string]$ManifestPath, [string]$BundleRoot, [stri
     Require (Test-Path -LiteralPath $file -PathType Leaf) "Manifest file is missing from the bundle: $relative"
     Require ((Sha256 $file) -eq $parts[1]) "Maximum artifact hash mismatch: $relative"
   }
+  $bundleFiles = @(Get-ChildItem -LiteralPath $BundleRoot -Recurse -File -ErrorAction SilentlyContinue)
+  foreach ($bundleFile in $bundleFiles)
+  {
+    $relative = [IO.Path]::GetRelativePath($BundleRoot, $bundleFile.FullName).Replace('\', '/')
+    Require $seen.ContainsKey($relative) "Bundle file is absent from the private manifest: $relative"
+  }
+  Require ($seen.Count -eq $bundleFiles.Count) (
+    "Private manifest entry count $($seen.Count) does not match bundle file count $($bundleFiles.Count)"
+  )
   return $seen.Count
+}
+
+function ExercisePrivateManifestTamper(
+  [string]$ManifestPath,
+  [string]$BundleRoot,
+  [string]$ExpectedHeader
+)
+{
+  $candidate = @(Get-ChildItem -LiteralPath $BundleRoot -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.Length -gt 0 -and $_.Name -notin @('PROTECTION_PROFILE', 'VERSION')
+    } |
+    Sort-Object FullName |
+    Select-Object -First 1)
+  Require ($candidate.Count -eq 1) 'Maximum bundle has no non-marker file for the disposable manifest tamper check'
+  $tamperPath = $candidate[0].FullName
+  $original = [IO.File]::ReadAllBytes($tamperPath)
+  try
+  {
+    $tampered = [byte[]]::new($original.Length + 1)
+    [Array]::Copy($original, $tampered, $original.Length)
+    $tampered[$original.Length] = [byte]0xA5
+    [IO.File]::WriteAllBytes($tamperPath, $tampered)
+    $rejected = $false
+    $detail = ''
+    try
+    {
+      [void](VerifyPrivateManifest $ManifestPath $BundleRoot $ExpectedHeader)
+    }
+    catch
+    {
+      $rejected = $true
+      $detail = $_.Exception.Message
+    }
+    Require $rejected 'The private artifact manifest accepted a modified disposable bundle file'
+    return "Modified $($tamperPath.Substring($BundleRoot.Length)) was rejected: $detail"
+  }
+  finally
+  {
+    [IO.File]::WriteAllBytes($tamperPath, $original)
+  }
 }
 
 try
 {
-  $script:isWindows = $env:OS -eq 'Windows_NT'
+  $script:maximumAcceptanceIsWindows = $env:OS -eq 'Windows_NT'
   Expand-Archive -LiteralPath $archivePath -DestinationPath $tempRoot -Force
   $bundleCandidates = @(Get-ChildItem -LiteralPath $tempRoot -Directory -ErrorAction SilentlyContinue |
     Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'PROTECTION_PROFILE') -PathType Leaf })
@@ -191,9 +241,21 @@ try
   $forbidden = @(Get-ChildItem -LiteralPath $bundleRoot -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object {
       $name = $_.Name.ToLowerInvariant()
-      $name -in @('mapping.txt', 'seeds.txt', 'usage.txt', 'provenance.json', 'artifact-manifest.txt') -or
+      $name -in @(
+        'mapping.txt',
+        'seeds.txt',
+        'usage.txt',
+        'provenance.json',
+        'artifact-manifest.txt',
+        'release-record.properties'
+      ) -or
         $name.EndsWith('.java') -or $name.EndsWith('.sourcemap') -or $name.EndsWith('.pdb') -or
-        $name.EndsWith('.map') -or $_.FullName -match '(?i)[\\/][^\\/]+\.dsym[\\/]'
+        $name.EndsWith('.map') -or $name.EndsWith('.dwo') -or $name.EndsWith('.debug') -or
+        $name.EndsWith('.sym') -or $name.EndsWith('.retrace') -or $name.EndsWith('.mapping') -or
+        $name.EndsWith('.seed') -or $name.EndsWith('.seeds') -or $name.EndsWith('.pem') -or
+        $name.EndsWith('.p12') -or $name.EndsWith('.pfx') -or $name.EndsWith('.jks') -or
+        $name.EndsWith('.keystore') -or $_.FullName -match '(?i)[\\/][^\\/]+\.dsym[\\/]' -or
+        $_.FullName -match '(?i)[\\/](private|mappings?|symbols?)[\\/]'
     })
   Require ($forbidden.Count -eq 0) (
     "Private or source material entered the maximum customer bundle: $($forbidden.FullName -join ', ')"
@@ -206,10 +268,13 @@ try
     $manifestHeader = if ($Component -eq 'relay') { '# SYNESIS_MAXIMUM_RELAY_MANIFEST_V1' } else { '# SYNESIS_MAXIMUM_RELEASE_MANIFEST_V1' }
     $manifestCount = VerifyPrivateManifest $manifestPath $bundleRoot $manifestHeader
     RecordCheck 'private-artifact-manifest' 'PASS' "$manifestCount bundle files matched the private SHA-256 manifest"
+    $tamperDetail = ExercisePrivateManifestTamper $manifestPath $bundleRoot $manifestHeader
+    RecordCheck 'private-artifact-manifest-tamper-difference' 'PASS' $tamperDetail
   }
   else
   {
     RecordCheck 'private-artifact-manifest' 'NOT_SUPPLIED' 'Pass -ArtifactManifest from the private release directory to verify every shipped file'
+    RecordCheck 'private-artifact-manifest-tamper-difference' 'NOT_SUPPLIED' 'Requires -ArtifactManifest; this static digest check is not runtime tamper acceptance'
   }
 
   if ($Component -eq 'cli')
@@ -221,7 +286,7 @@ try
     }
     Require (Test-Path -LiteralPath $script:launcherPath -PathType Leaf) "Maximum CLI launcher is missing"
     EnsureExecutable $script:launcherPath
-    $runtimeName = if ($script:isWindows) { 'java.exe' } else { 'java' }
+    $runtimeName = if ($script:maximumAcceptanceIsWindows) { 'java.exe' } else { 'java' }
     Require (Test-Path -LiteralPath (Join-Path $bundleRoot "runtime/bin/$runtimeName") -PathType Leaf) "Bundled maximum Java runtime is missing"
     $version = InvokeBundle @('version') 'maximum CLI version'
     Require ($version.Output -match 'SYNESIS_VERSION=') 'Maximum CLI version output is invalid'
@@ -233,7 +298,7 @@ try
     Require ($uiHelp.Output -match 'Start Synesis locally') 'Maximum UI command metadata is missing'
     RecordCheck 'ui-command' 'PASS' 'Packaged UI command metadata returned from the shipped launcher'
 
-    $installerName = if ($script:isWindows) { 'synesis-installer.exe' } else { 'synesis-installer' }
+    $installerName = if ($script:maximumAcceptanceIsWindows) { 'synesis-installer.exe' } else { 'synesis-installer' }
     $installer = Join-Path $bundleRoot "bin/$installerName"
     Require (Test-Path -LiteralPath $installer -PathType Leaf) 'Maximum native installer is missing'
     EnsureExecutable $installer
@@ -241,7 +306,7 @@ try
     Require ($installerVersion.Output -match 'SYNESIS_BOOTSTRAP_VERSION=') 'Maximum native installer version output is invalid'
     RecordCheck 'native-installer' 'PASS' $installerVersion.Output.Trim()
 
-    $nativeMcpName = if ($script:isWindows) { 'synesis-mcp.exe' } else { 'synesis-mcp' }
+    $nativeMcpName = if ($script:maximumAcceptanceIsWindows) { 'synesis-mcp.exe' } else { 'synesis-mcp' }
     $nativeMcp = Join-Path $bundleRoot "bin/$nativeMcpName"
     Require (Test-Path -LiteralPath $nativeMcp -PathType Leaf) 'Maximum native MCP launcher is missing'
     EnsureExecutable $nativeMcp
@@ -269,7 +334,7 @@ try
     RecordCheck 'cli-ui-control-plane-provider' 'PASS' 'Disposable project, provider boundary, doctor, and no-browser UI/control-plane smoke passed'
 
     $mcpInfo = [Diagnostics.ProcessStartInfo]::new()
-    if ($script:isWindows)
+    if ($script:maximumAcceptanceIsWindows)
     {
       $mcpInfo.FileName = 'cmd.exe'
       foreach ($argument in (@('/d', '/c', $script:launcherPath, 'mcp', '--provider', 'codex', '--project', $project, '--connection-instance-id', 'maximum-acceptance-1')))
