@@ -297,6 +297,9 @@ release-hardening work:
 - `4b2836a2` — added the first-party Virbox Java VME/BCE candidate review,
   documented its Ring 2/5 evaluation boundary, and confirmed it is not
   installed or callable in this release environment.
+- `1718437d` — made the provider-agnostic adapter documentation explicitly
+  map a future Virbox VME/BCE wrapper to Rings 2 and 5 without adding a
+  vendor-specific command or claiming evidence.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,
