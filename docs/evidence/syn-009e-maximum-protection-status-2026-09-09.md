@@ -13,8 +13,8 @@ claim that a commercial maximum artifact exists.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
 - `CP-0758.md` remains preserved and is not modified by this work.
-- Latest verified local HEAD is `bc37137f6ca8d26e21686bed08b93d9b0c5adaae`
-  at checkpoint `CP-0794`; the post-archive native-audit and output-boundary
+- Latest verified local HEAD is `edfd155f9aacca02fc6b5b9866a33693a985746b`
+  at checkpoint `CP-0796`; the post-archive native-audit and output-boundary
   gates are committed locally.
 - The checkout contains unrelated pre-existing working-tree changes; no staged
   changes or reset were used. The maximum Gradle tasks reject such a dirty

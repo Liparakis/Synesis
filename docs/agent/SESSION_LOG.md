@@ -6406,6 +6406,7 @@ Zelix/KlassMaster, or external maximum adapter and no configured signing
 authority; those inputs remain the exact external blocker. No commercial
 artifact, key, or remote mutation was used.
 
-Exact next action: commit this symlink-boundary slice after the scoped state and
-evidence updates, then preserve the maximum gate until a licensed protector,
-adapter, and signing authority are supplied.
+The slice is committed as `edfd155f`, and post-commit checkpoint `CP-0796`
+records the active task and preserved unrelated worktree. Exact next action:
+obtain a licensed protector, reviewed adapter, and signing authority before
+attempting the still-fail-closed maximum gate.

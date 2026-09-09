@@ -4,7 +4,7 @@
 activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
 no push has occurred. `SYN-009E` is now the sole
 current release-hardening task in the existing `SYN-009*` lineage.
-The latest verified local head is `bc37137f` at `CP-0794`; the maximum
+The last implementation checkpoint is `edfd155f` at `CP-0796`; the maximum
 customer/private output boundary also rejects symbolic links before manifesting
 or signing.
 

@@ -115,9 +115,9 @@ synthetic or protection-lite evidence.
   local release commits remain unpublished, and the working tree contains this
   scoped follow-up, preserved
   `CP-0758`, and unrelated pre-existing local work that remains uncommitted.
-- Latest verified local HEAD: `bc37137f6ca8d26e21686bed08b93d9b0c5adaae`
-  at `CP-0794`; the post-archive native-audit gate and status-report update
-  are committed, with no staged changes and no push.
+- Last implementation checkpoint: `edfd155f9aacca02fc6b5b9866a33693a985746b`
+  at `CP-0796`; the post-archive native-audit and symlink-boundary gates are
+  committed, with no staged changes and no push at that checkpoint.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go
   bootstrap signed-manifest/payload verification, stable flat installation,
   native launcher/installer, packaged frontend resources, and relay's separate

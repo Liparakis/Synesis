@@ -9,9 +9,9 @@ checkout.
 
 ## Repository state
 
-- HEAD: `bc37137f6ca8d26e21686bed08b93d9b0c5adaae`
+- HEAD: `edfd155f9aacca02fc6b5b9866a33693a985746b`
 - Branch: `master`
-- Checkpoint: `CP-0794`
+- Checkpoint: `CP-0796`
 - Remote mutation: none
 
 ## Callable tool probe
