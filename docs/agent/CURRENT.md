@@ -144,10 +144,11 @@ synthetic or protection-lite evidence.
   local release commits remain unpublished, and the working tree contains the
   preserved `CP-0758` plus unrelated pre-existing local work that remains
   uncommitted.
-- Last implementation commit: `cbecbac5`; checkpoint `CP-0804`; the
+- Latest implementation commits: `974380fd` (private license provenance) and
+  `690c691a` (external commercial-tool path boundary); the earlier
   post-archive native-audit, symlink-boundary, structured private-retrace,
   exact-brief Seven Ring taxonomy, bounded acceptance-timing, and packaged
-  frontend static-content acceptance changes are committed.
+  frontend static-content acceptance changes remain committed.
 - The latest release-environment evidence is the availability probe from
   `18da2f4b` / `CP-0807`; the candidate-capability review is `4b2836a2` /
   `CP-0810`. No licensed adapter, commercial configuration, signing key, or
