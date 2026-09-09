@@ -1,3 +1,31 @@
+## 2026-09-09 — SYN-009E exact brief taxonomy reconciliation
+
+Reread the newly referenced brief at
+`C:\Users\Liparakis\.codex\attachments\3aa44bec-cbc3-45bc-a38b-c9ed3be9ee98\pasted-text-1.txt`;
+its SHA-256 is
+`B5D067ABC48D9B78B9CFABDE06E04A7C82E236D7B9944CD9077A49955EEE458C`.
+This brief defines Ring 1 control-flow obfuscation, Ring 2 genuine code
+virtualization, Ring 3 string/constant encryption, Ring 4 anti-VM and
+analysis-environment detection, Ring 5 protected payload/packing, Ring 6
+anti-debug/anti-instrumentation, and Ring 7 signed integrity, diversification,
+and private retrace.
+
+The preceding taxonomy entry in this log was based on an earlier referenced
+brief snapshot and is retained as historical evidence. Current ADRs, adapter
+documentation, acceptance criteria, status, task state, and test matrix were
+corrected to the exact brief above. Shrink/strip/sanitize, symbol/package
+reduction, native hardening, and stable-contract compatibility are now clearly
+supporting distribution gates rather than ring substitutes. No commercial
+capability or maximum artifact was claimed.
+
+Verification: exact brief reread/hash, scoped taxonomy search, and subsequent
+PowerShell/Gradle documentation boundary checks remain required before commit.
+No push, tag, release, or remote mutation occurred.
+
+Exact next action: complete scoped syntax/diff checks, checkpoint, and commit
+this taxonomy correction; then obtain the licensed commercial protector and
+release-signing authority before any maximum execution claim.
+
 ## 2026-09-09 — SYN-009E Seven Ring alignment and acceptance timing seam
 
 Reread the exact referenced brief at

@@ -27,13 +27,13 @@ artifact and installed-runtime evidence rather than marketing terminology.
   acceptance with injected release signing authority; until that
   authority/tool exists, run only from a clean reviewed release checkout, keep
   the maximum gate fail-closed, and do not invent a replacement implementation.
-- Required Seven Rings: shrink/strip/sanitize, symbol obfuscation,
-  string/constant protection, control-flow hardening, native hardening,
-  distribution integrity/signing, and release diversification/private
-  mappings/provenance/retrace. The maximum adapter retains separate optional
-  vendor-capability fields for virtualization, protected loading, safe
-  analysis-risk handling, and anti-debug/instrumentation; those fields are not
-  ring substitutes.
+- Required Seven Rings: Ring 1 control-flow obfuscation, Ring 2 genuine code
+  virtualization, Ring 3 string/constant encryption, Ring 4 anti-VM and
+  analysis-environment detection, Ring 5 protected payload/packing, Ring 6
+  anti-debug/anti-instrumentation, and Ring 7 signed integrity, release
+  diversification, and private retrace. Shrink/strip/sanitize,
+  symbol/package reduction, native hardening, and stable-contract compatibility
+  remain supporting distribution gates rather than ring substitutes.
 - Honest boundary: ProGuard 7.10.0 transformation is only `PROTECTION_LITE`;
   the provider-agnostic CLI/relay maximum adapter and existing bootstrap-
   signer seam are release plumbing, not ring evidence. Commercial Seven Ring

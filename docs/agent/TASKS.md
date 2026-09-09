@@ -40,16 +40,14 @@
   CLI, UI/control plane, Link, overlay, relay, and bounded provider/native
   flows; tamper, mutable-state, secret-leakage, mapping, source-map, size,
   performance, and retrace evidence is recorded.
-- Seven Rings: Ring I (shrink/strip/sanitize), Ring II (symbol obfuscation),
-  Ring III (string/constant protection), and Ring IV (control-flow hardening)
-  require protected-output inspection; Ring V (native hardening) requires
-  owned-binary and third-party-native evidence; Ring VI (integrity/signing)
-  requires signed immutable-artifact verification; and Ring VII requires
-  release diversification, provenance, private mappings, and retrace evidence.
-  Optional vendor capabilities such as virtualization, protected loading,
-  analysis-risk handling, and anti-instrumentation remain separately
-  evidenced. Missing commercial tooling is an explicit blocker, not a passing
-  substitute.
+- Seven Rings: Ring 1 control-flow obfuscation, Ring 2 genuine code
+  virtualization, Ring 3 string/constant encryption, Ring 4 anti-VM and
+  analysis-environment detection, Ring 5 protected payload/packing, Ring 6
+  anti-debug/anti-instrumentation, and Ring 7 signed integrity,
+  diversification, and private retrace. Shrink/strip/sanitize,
+  symbol/package reduction, native hardening, and stable-contract compatibility
+  are supporting acceptance gates. Missing commercial tooling is an explicit
+  blocker, not a passing substitute.
 - Required documentation: ADR-0070, ADR-0071, protection profile/tool capability
   matrix, keep-rule and contract inventory, protected acceptance procedure,
   signing/provenance/retrace guidance, performance/size evidence, and durable

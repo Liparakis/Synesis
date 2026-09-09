@@ -9,6 +9,8 @@ claim that a commercial maximum artifact exists.
 
 ## Starting state and task authority
 
+- Current referenced brief reread: `C:\Users\Liparakis\.codex\attachments\3aa44bec-cbc3-45bc-a38b-c9ed3be9ee98\pasted-text-1.txt`, SHA-256
+  `B5D067ABC48D9B78B9CFABDE06E04A7C82E236D7B9944CD9077A49955EEE458C`.
 - Continuation start: commit `afd83488` on `master`.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
@@ -75,24 +77,27 @@ compatibility rules are in `docs/release/protection-keep-rules.md`.
 
 ## Seven Rings
 
-The release report uses the ring structure from the current brief. The adapter's
-six `requiredRings` fields are retained as optional vendor-capability inputs;
-they are not substituted for this release classification.
+The release report uses the exact ring structure from the current referenced
+brief. The adapter's six `requiredRings` fields are the mandatory commercial
+Ring 1–6 inputs; Ring 7 is completed by the Gradle/bootstrap release boundary
+and private recovery record. Shrink/strip/sanitize, symbol/package reduction,
+native hardening, and stable-contract compatibility are supporting distribution
+gates rather than additional rings.
 
 | Ring | Result | Evidence and exact boundary |
 |---|---|---|
-| I — Shrink, strip, sanitize | **PARTIAL BASELINE** | Developer/lite archive extraction, profile markers, private-material leakage, manifest, and metadata audits exist; a commercial maximum archive has not been inspected. |
-| II — Symbol obfuscation | **PARTIAL BASELINE** | Lite renaming/package reduction is measured and public contracts are scoped; maximum protected symbol inspection remains absent. |
-| III — String/constant protection | **BLOCKED** | Lite does not claim runtime string/constant protection; commercial before/after static evidence is absent. |
-| IV — Control-flow hardening | **BLOCKED** | Commercial transformation and shipped crown-jewel decompiler inspection are absent; renaming is not control-flow hardening. |
-| V — Native hardening | **PARTIAL BASELINE** | Windows x64 Synesis-owned launcher audit passes for developer/lite; maximum cross-platform archives, signing, and private recovery remain open, while relay third-party native audit is separate. |
-| VI — Distribution integrity/signing | **PARTIAL SEAM** | Existing bootstrap signing, immutable manifests, tamper gates, and private manifest generation exist; no signed commercial maximum artifact has been exercised. |
-| VII — Diversification/private recovery | **PARTIAL SEAM** | Release-ID/seed provenance, private mappings, structured retrace-acceptance validation, and comparison tooling exist; no positive commercial pair or installed maximum retrace exists. |
+| 1 — Control-flow obfuscation | **BLOCKED** | No licensed commercial transformation or shipped crown-jewel decompiler comparison is available; lite renaming is not control-flow protection. |
+| 2 — Code virtualization | **BLOCKED** | No protector-defined virtual execution output or artifact inspection is available; wrappers and dispatch tables are not accepted. |
+| 3 — String/constant encryption | **BLOCKED** | Lite does not claim runtime string/constant protection; commercial before/after static extraction evidence is absent. |
+| 4 — Anti-VM/analysis-environment detection | **BLOCKED** | No licensed multi-signal analysis-risk behavior has been exercised; ordinary VM/CI compatibility policy is documented but not commercial evidence. |
+| 5 — Packed/protected code payload | **BLOCKED** | No protected loader/payload archive has been inspected; ZIP compression and ordinary class loading do not count. |
+| 6 — Anti-debug/anti-instrumentation | **BLOCKED** | No controlled debugger, agent, bytecode-instrumentation, or protected-loader tamper run exists; destructive retaliation is prohibited. |
+| 7 — Signed integrity/diversification/private retrace | **PARTIAL SEAM** | Existing bootstrap signing, immutable manifests, tamper gates, release-ID/seed provenance, private mappings, structured retrace acceptance, and comparison tooling exist; no signed commercial maximum artifact or installed maximum retrace exists. |
 
 The exact ring boundary and fail-safe policy are also captured in
 `docs/adr/0070-maximum-protection-commercial-release-profile.md`.
 
-## Keep rules, optional vendor capabilities, and anti-analysis policy
+## Keep rules, supporting hardening, and anti-analysis policy
 
 The keep-rule audit is narrow and source-backed: Picocli metadata, MCP
 reflection, UI resources, Netty/QUIC loading, native/resource names, and public
@@ -103,9 +108,10 @@ Global `org.synesis.**` keeping is prohibited.
 Planned Tier 3 maximum-transformation targets are authority resolution,
 workspace trust, ownership/capability decisions, overlay membership/route
 policy, and relay admission policy. They remain unexecuted until a commercial
-tool proves the selected control-flow/string transformation on the shipped
-artifact. Optional virtualization or protected-loading claims require separate
-vendor evidence and do not replace Ring IV.
+tool proves the selected Ring 1/3 transformations on the shipped artifact.
+Ring 2 virtualization, Ring 5 protected loading, Ring 4 analysis-risk, and
+Ring 6 anti-instrumentation each require their own vendor output and controlled
+acceptance; none can be inferred from another ring.
 
 The anti-analysis policy is fail-safe: ordinary VMware, Hyper-V, Parallels,
 VDI, CI, and development VMs must continue to work. Only documented,
@@ -144,7 +150,7 @@ Evidence: `docs/evidence/syn-009e-native-hardening-2026-09-09.md` and
 
 The maximum Gradle seams require an executable version-pinned external
 adapter, private configuration, explicit release ID/seed, a clean checkout,
-the optional vendor-capability records, non-empty private capability and
+the six mandatory Ring 1–6 records, non-empty private capability and
 diversification evidence, non-empty mapping/retrace outputs, and a structured
 private retrace-acceptance record
 bound to the mapping hash. Owned native-symbol material is required where the component owns
@@ -249,8 +255,8 @@ release-hardening work:
 - `afd83488` — concrete private maximum evidence requirements.
 - `eebc6bcf` — structured private retrace-acceptance evidence bound to the
   exact mapping and trace hashes.
-- `da934163` — aligned the release report to the brief's Seven Ring taxonomy
-  and added bounded acceptance timing fields.
+- `da934163` — added bounded acceptance timing fields; the current taxonomy
+  reconciliation is recorded in this continuation.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,
@@ -260,6 +266,6 @@ candidate evaluation), its reviewed adapter/configuration, platform signing
 authority, and clean release checkout; then run the complete maximum adapter,
 signed-record comparison, native audit, shipped CLI/UI/control-plane/
 Link/overlay/relay/provider acceptance, tamper/retrace/leakage/performance,
-and AV/EDR checks. Until those artifacts and results exist, the maximum
-profile must remain PARTIAL; Rings III–IV remain blocked and Rings V–VII remain
-baseline/partial until the commercial artifact gates pass.
+  and AV/EDR checks. Until those artifacts and results exist, the maximum
+  profile must remain PARTIAL; Rings 1–6 remain blocked and Ring 7 remains a
+  partial seam until the commercial artifact gates pass.

@@ -7,8 +7,8 @@ Date: 2026-09-09
 The maximum CLI and standalone-relay release records now make the release
 boundary explicit:
 
-- `commercialRings` records the six vendor-transformation classes required from
-  the external adapter;
+- `commercialRings` records the six mandatory commercial transformation rings
+  (Rings 1–6) required from the external adapter;
 - `diversification`, `privateRetraceFile`, and
   `privateNativeSymbolsDirectory` preserve the adapter's private recovery and
   release-specific evidence; and
@@ -17,8 +17,8 @@ boundary explicit:
 
 The adapter contract and configuration skeleton now state that signed
 distribution integrity is Gradle/bootstrap-owned. A vendor result property
-cannot promote an integrity setting to evidence, and the six transformation
-rings remain separate from the release-level signed-integrity layer.
+cannot promote an integrity setting to evidence, and Ring 7 combines that
+release-level signed-integrity layer with diversification and private retrace.
 
 ## Verification boundary
 

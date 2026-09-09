@@ -63,9 +63,8 @@ and `component=cli` or `component=relay`. It contains the exact source
 commit/dirty-tree state,
 release ID, release seed, platform, readable developer input bundle, requested
 customer output directory, private-record directory, configuration path, and
-the six optional vendor-capability names. The v1 property is retained as
-`requiredRings` for adapter compatibility; it is not the Seven Ring release
-classification:
+the six mandatory commercial-ring names. The v1 property is retained as
+`requiredRings` for adapter compatibility and maps directly to Rings 1–6:
 
 ```text
 requiredRings=controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug
@@ -73,15 +72,16 @@ nativeSymbolsScope=owned (cli)
 nativeSymbolsScopePolicy=owned-or-not-applicable (relay)
 ```
 
-The Seven Ring release classification is owned by the release pipeline. The
-signed-integrity layer is deliberately not an adapter-reported capability. The
-Gradle release task owns that boundary: it creates the private per-file
-artifact manifest, archives the customer bundle, creates the canonical release
-manifest, invokes the existing bootstrap signer, and verifies the detached
-Ed25519 signature against the embedded bootstrap trust root. The private
-release record receives `signedIntegrity=verified` only after that verification
-passes. This keeps a vendor result from turning a claimed integrity setting
-into evidence.
+The Ring 7 release classification is owned by the release pipeline and private
+release record. The signed-integrity layer is deliberately not an
+adapter-reported capability. The Gradle release task owns that boundary: it
+creates the private per-file artifact manifest, archives the customer bundle,
+creates the canonical release manifest, invokes the existing bootstrap signer,
+and verifies the detached Ed25519 signature against the embedded bootstrap
+trust root. The private release record receives `signedIntegrity=verified` only
+after that verification passes. Diversification, private mappings, private
+retrace, and structured retrace acceptance complete Ring 7; a vendor result
+cannot turn any of those settings into evidence by assertion alone.
 
 It also supplies absolute paths to the current source-scoped inventories:
 
@@ -156,30 +156,29 @@ evidence.protectedPayload=<file below privateDirectory>
 evidence.antiDebug=<file below privateDirectory>
 ```
 
-The adapter result therefore proves the six requested vendor capability
-classes, release diversification, and non-empty private evidence for each of
-those claims. The Gradle task hashes every private capability/diversification evidence
-file into `release-record.properties`, and requires non-empty mapping and
-retrace material plus a structured private retrace-acceptance record. That
-record uses schema `1`, reports `status=verified`, names the retrace tool and
-private test case, binds `mappingSha256` to the exact mapping file, and records
-hashes for the input and translated stack traces. The Gradle task hashes this
-record too. Owned native-symbol recovery is required when the component owns
-native launchers, as is a third-party-native audit for shipped dependency binaries. The
-signed-integrity layer is proved by
-the later Gradle/bootstrap manifest verification and is recorded separately in
-the private release record.
+The adapter result therefore proves the six mandatory commercial-ring classes
+and non-empty private evidence for each claim. The Gradle task hashes every
+private capability/diversification evidence file into
+`release-record.properties`, and requires non-empty mapping and retrace
+material plus a structured private retrace-acceptance record. That record uses
+schema `1`, reports `status=verified`, names the retrace tool and private test
+case, binds `mappingSha256` to the exact mapping file, and records hashes for
+the input and translated stack traces. The Gradle task hashes this record too.
+Owned native-symbol recovery is required when the component owns native
+launchers, as is a third-party-native audit for shipped dependency binaries;
+these are supporting distribution-hardening gates, not replacements for the
+commercial rings.
 
 For the Seven Ring report, the validated outputs are classified as follows:
-Ring I uses the customer-bundle shrink/strip/leakage audit; Ring II uses the
-owned JVM symbol/package comparison; Ring III uses the vendor string/constant
-evidence; Ring IV uses the vendor control-flow evidence and protected-artifact
-inspection; Ring V uses the archive native-hardening audit and private symbols;
-Ring VI uses the Gradle/bootstrap manifest and tamper result; and Ring VII uses
-the release seed/provenance, private mapping, and structured retrace result.
-The optional virtualization, protected-loading, analysis-risk, and
-anti-instrumentation fields remain separate vendor capabilities and cannot
-replace any of those classifications.
+Ring 1 uses the vendor control-flow evidence and selected-method inspection;
+Ring 2 uses genuine vendor virtualization evidence and protected-artifact
+inspection; Ring 3 uses vendor string/constant evidence; Ring 4 uses bounded
+analysis-environment and legitimate-VM behavior; Ring 5 uses protected-payload
+inspection and loader behavior; Ring 6 uses controlled debugger/agent/
+instrumentation behavior; and Ring 7 uses Gradle/bootstrap signed integrity,
+release diversification, private mapping, and structured retrace evidence.
+Shrink/strip/sanitize, symbol/package comparison, native hardening, and stable
+contract compatibility remain required supporting acceptance gates.
 
 The maximum request also carries a reproducibility snapshot for the exact
 source checkout: the sorted lockfile digest/count, Gradle version, Java

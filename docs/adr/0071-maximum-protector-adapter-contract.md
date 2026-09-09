@@ -17,7 +17,9 @@ home-grown virtual machine would make the security claim worse.
 The existing bootstrap signer and detached manifest trust root are the
 authoritative distribution boundary. A maximum candidate must be produced by a
 real licensed protector, retain private recovery material, and be signed only
-after the protected archive is final.
+after the protected archive is final. Its six transformation results are the
+mandatory commercial Rings 1–6 from the current brief; they are not optional
+vendor-capability decorations.
 
 ## Decision
 
@@ -25,8 +27,8 @@ Add one explicit provider-agnostic adapter contract to the release-only Gradle
 pipeline. The adapter is an external executable owned by the release
 environment and receives a versioned request file. It must return a protected
 CLI or standalone relay bundle, private evidence, exact protector
-identity/version, all six optional vendor-capability statuses, diversification
-status, retrace data, and native symbols. The Gradle gate validates path separation,
+identity/version, all six mandatory Ring 1–6 statuses, diversification status,
+retrace data, and native symbols. The Gradle gate validates path separation,
 required customer files, private-material leakage, and a private immutable
 artifact manifest for each component. It never converts the adapter's
 assertions into public marketing claims without the separate artifact and
@@ -80,9 +82,9 @@ implementation.
   boundary without requiring a global `org.synesis.**` keep or whole-system
   virtualization.
 - Missing protector, configuration, explicit release ID/seed, signing key,
-  capability evidence, inventory binding, clean release checkout, or signature
-  causes a fail-closed result; the Seven Ring classification is then recorded
-  separately by the release pipeline.
+  any Ring 1–6 evidence, inventory binding, clean release checkout, or
+  signature causes a fail-closed result; Ring 7 is then recorded separately by
+  the release pipeline and private release record.
 - A symbolic link in the customer or private output tree fails the release
   before manifesting or signing; the adapter must emit ordinary files and
   directories within the requested roots.

@@ -14,7 +14,9 @@ protector output is installed and exercised.
 The current-source Tier 0–3 inventory and vendor-neutral adapter configuration
 skeleton are now explicit; maximum tasks reject dirty release checkouts and
 bind adapter results to the tier, keep-rule, acceptance-procedure, and full
-reproducibility digests requested by the release.
+reproducibility digests requested by the release. The current brief's six
+commercial adapter classes are Rings 1–6; Ring 7 is the signed-integrity,
+diversification, and private-retrace boundary owned by the release pipeline.
 An independent `scripts/maximum-release-acceptance.ps1` harness now exercises
 only extracted customer archives, rejects lite/profile and private-material
 leakage, optionally verifies the private artifact manifest, and records
@@ -65,9 +67,10 @@ DashO documents Java 25/26 bytecode support, scoped control-flow/string
 transforms, Gradle/CLI integration, and runtime protection; Zelix documents
 Java 26 bytecode handling, flow/string/constant transforms, Gradle scripting,
 and reproducibility guidance. Neither reviewed candidate establishes genuine
-virtual execution or protected payload loading in the evidence set, so those
-optional vendor capabilities remain unverified; this does not change the
-Seven Ring classification.
+virtual execution or protected payload loading in the evidence set, so Rings 2
+and 5 remain blocked. Rings 1, 3, 4, and 6 also require shipped commercial
+evidence; the profile remains partial until all six commercial rings and Ring 7
+are exercised.
 
 The archive-only static reverse-engineering comparison is now implemented in
 scripts/release-reverse-engineering-comparison.ps1. Its current developer
@@ -164,8 +167,8 @@ resuming after a stop.
 
 Added the provider-agnostic maximum-protector adapter contract and ADR-0071.
 The release-only CLI and relay tasks now require an explicit licensed adapter,
-version-pinned private configuration, release ID/seed, six optional vendor-
-capability evidence records, diversification, private mapping/retrace, component-scoped native
+version-pinned private configuration, release ID/seed, six mandatory Ring 1–6
+evidence records, diversification, private mapping/retrace, component-scoped native
 recovery/audit, and separated customer/private output. It now also binds the request/result to the current
 Tier 0–3 source inventory, keep-rule inventory, and acceptance procedure,
 requires a clean reviewed release checkout, creates a private artifact
@@ -227,7 +230,7 @@ open.
 - The first-party commercial protector documentation pre-screen was recorded
   in `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`; it refines
   candidate selection without changing any commercial row to `PASS` or
-  establishing optional virtualization/protected-loading capabilities.
+establishing Rings 1–6 or any maximum Seven Ring result.
 - `scripts/release-reverse-engineering-comparison.ps1` parsed and ran against
   the developer and protection-lite CLI ZIPs. It recorded static class/package,
   architecture-term, metadata, path, source-map, private-material, and
@@ -256,9 +259,9 @@ No licensed commercial protector, adapter, private configuration, or release
 signing authority is installed. The marker-only runtime probe used a rebuilt
 platform bundle with only a synthetic maximum marker and does not prove any
 commercial transformation or Seven Ring completion. The synthetic marker-only
-harness is artifact/bootstrap evidence only; Rings III–IV remain blocked and
-Rings V–VII remain baseline/partial until a licensed commercial release is
-signed, diversified, and retrace-validated. Preserved
+harness is artifact/bootstrap evidence only; Rings 1–6 remain blocked and Ring
+7 remains partial until a licensed commercial release is signed, diversified,
+and retrace-validated. Preserved
 `CP-0758`, `.editorconfig`, and unrelated relay source changes remain
 untouched. A stable formatter-like rewrite of 1,532 other tracked files is
 also present outside this slice; it remains unstaged and is not release

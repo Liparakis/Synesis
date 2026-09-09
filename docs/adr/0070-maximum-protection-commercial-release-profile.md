@@ -17,25 +17,26 @@ test tasks.
 The commercial release goal is different. A customer-style protected release
 must materially increase the cost of casual static and dynamic reverse
 engineering while remaining supportable, signed, installable, and safe. The
-requested Seven Rings are:
+current brief defines seven rings:
 
-1. shrink, strip, and sanitize;
-2. symbol obfuscation;
-3. string and constant protection;
-4. control-flow hardening;
-5. native hardening;
-6. distribution integrity and signing; and
-7. release diversification, private mappings, and provenance/retrace.
+1. control-flow obfuscation;
+2. genuine code virtualization;
+3. string and constant encryption;
+4. anti-VM and analysis-environment detection;
+5. packed or otherwise protected code payloads;
+6. anti-debug and anti-instrumentation; and
+7. signed integrity, release diversification, and private retrace.
 
-The adapter also carries optional vendor-capability dimensions for stronger
-control-flow, genuine virtualization, protected loading, safe analysis-risk
-handling, and anti-debug/instrumentation behavior. Those dimensions are not
-substitutes for the Seven Rings. Renaming is not control-flow protection;
-compression is not protected packing; a VM-name check is not an analysis
-policy; and a debug flag is not anti-debugging. A wrapper, method-handle
-dispatch table, or ordinary encrypted class loader is not code virtualization
-unless the selected protector's documented transformation makes it a genuine
-virtual execution boundary.
+The first six are mandatory commercial-protector capabilities and are supplied
+through the external adapter. Ring 7 is owned jointly by the release pipeline
+and the private release record. Shrinking, stripping, metadata/source-path
+sanitization, symbol renaming, native hardening, and stable-contract keep rules
+are supporting distribution hardening, not substitutes for these rings.
+Renaming is not control-flow protection; compression is not protected packing;
+a VM-name check is not an analysis policy; and a debug flag is not
+anti-debugging. A wrapper, method-handle dispatch table, or ordinary encrypted
+class loader is not code virtualization unless the selected protector's
+documented transformation makes it a genuine virtual execution boundary.
 
 The repository already owns the relevant distribution seams:
 
@@ -98,8 +99,9 @@ The source is classified into four protection tiers:
   routing, relay policy, and runtime recovery decisions are candidates for
   stronger control-flow and constant transformations after profiling.
 - **Tier 3 — crown-jewel methods.** Only intentionally selected decision
-  methods may receive maximum control-flow/string protection and, if a vendor
-  proves it safely, an optional virtualization or protected-payload boundary.
+  methods may receive maximum Ring 1/3 protection and the selected Ring 2/5
+  virtualization or protected-payload boundary when the licensed vendor proves
+  it safely.
   Netty/QUIC loops, relay forwarding hot paths, DTO accessors, CLI parsing, and
   browser assets are not default Tier 3 targets.
 
@@ -136,10 +138,11 @@ matrix:
   and [string encryption](https://support.preemptive.com/hc/en-us/articles/32020004710033-String-Encryption).
 
 The capability matrix must record `PASS`, `UNVERIFIED`, or `BLOCKED` for each
-vendor capability and candidate. Marketing descriptions or a successful build
-invocation are not sufficient evidence for virtualization, protected loading,
-anti-analysis, or anti-instrumentation. The Seven Ring result remains a
-separate release-artifact classification.
+candidate capability. Marketing descriptions or a successful build invocation
+are not sufficient evidence for virtualization, protected loading,
+anti-analysis, or anti-instrumentation. The first six matrix capabilities map
+to Rings 1–6; Ring 7 remains a separate release-artifact and private-recovery
+classification.
 
 ### 4. Preserve reflection, resource, and native contracts narrowly
 

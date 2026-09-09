@@ -146,6 +146,8 @@ function ReadPrivateRelease([string]$Path, [string]$Label)
   Require ((RequiredValue $properties 'schema') -eq '1') "$Label release record schema is unsupported"
   Require ((RequiredValue $properties 'profile') -eq 'maximum-release') "$Label release record is not maximum-release"
   Require ((RequiredValue $properties 'component') -eq $Component) "$Label release record component does not match -Component"
+  Require ((RequiredValue $properties 'commercialRings') -eq 'controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug') (
+    "$Label release record does not bind the current mandatory Ring 1-6 commercial classes")
   Require ((RequiredValue $properties 'dirtyTree') -eq 'false') "$Label release record is not from a clean checkout"
   Require ((RequiredValue $properties 'diversification') -eq 'verified') "$Label release record lacks verified diversification"
   Require ((RequiredValue $properties 'signedIntegrity') -eq 'verified') "$Label release record lacks verified signed integrity"

@@ -3,8 +3,8 @@
 The release-only maximum boundary now has a versioned external protector
 adapter contract for both the CLI and standalone relay. The two
 `maximumReleasePrepare` tasks require a real executable adapter, private
-configuration, explicit release ID/seed, all six optional vendor-capability
-evidence records, private mapping/retrace, component-scoped native recovery/audit, and a
+configuration, explicit release ID/seed, all six mandatory Ring 1–6 evidence
+records, private mapping/retrace, component-scoped native recovery/audit, and a
 separated customer bundle. CLI-owned native launchers require private symbols;
 relay's current distribution has no Synesis-owned native binary and therefore
 uses an explicit not-applicable owned-symbol scope plus a third-party audit.
@@ -18,9 +18,9 @@ narrow keep-rule inventory, and protected-acceptance procedure by SHA-256
 digest, plus the requested seed, lockfile snapshot, Java/Gradle/Node/npm/Go
 toolchain values, and protector configuration digest. Both maximum tasks reject
 dirty source checkouts before invoking the adapter and require the result to
-echo that complete provenance. A vendor-neutral private configuration skeleton records
-the six optional vendor capabilities and the legitimate-VM/fail-safe policy;
-the release report separately classifies the Seven Rings.
+echo that complete provenance. A vendor-neutral private configuration skeleton
+records the six Ring 1–6 capabilities and the legitimate-VM/fail-safe policy;
+the release report separately classifies Ring 7.
 
 The independent `scripts/maximum-release-acceptance.ps1` harness now runs
 against extracted customer archives only. It enforces the maximum profile
@@ -99,7 +99,7 @@ string-encryption, and runtime-protection features. Zelix's reviewed
 documentation supports Java 26 bytecode handling, flow/string/constant
 transforms, scripting, and reproducibility guidance. Neither reviewed set
 establishes genuine JVM virtualization or protected payload loading, so no
-optional vendor-capability status changed; the matrix and evidence are in
+Ring 1–6 capability status changed; the matrix and evidence are in
 `docs/release/protector-capability-matrix.md` and
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
 
@@ -259,10 +259,9 @@ tamper-difference checks. The standalone relay protection-lite archive reaches
 its guarded parser. Existing installer signatures, payload manifests, stable
 activation, native `-trimpath`/stripped builds, and packaged frontend assets
 are foundations, not proof of all Seven Rings. No commercial protector or
-license is installed locally, so Rings III and IV remain blocked; Ring V is a
-baseline only; and Rings VI and VII are partial until signed protected-release
-provenance, diversification, private retrace, and installed tamper refusal are
-exercised.
+license is installed locally, so Rings 1–6 remain blocked; Ring 7 is partial
+until signed protected-release provenance, diversification, private retrace,
+and installed tamper refusal are exercised.
 
 ## 2026-09-08 — SYN-053 first installed browser UI activation
 

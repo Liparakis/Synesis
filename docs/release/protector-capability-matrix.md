@@ -6,19 +6,19 @@ scope. `UNVERIFIED` means the candidate may be worth evaluating but has not
 been installed and exercised here. `BLOCKED` means the current checkout must
 not claim the capability.
 
-| Candidate | Shrink/rename/map | Control flow | String/constant protection | Virtualization | Protected loading/packing | Safe anti-analysis | Current decision |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| [ProGuard 7.10.0](https://www.guardsquare.com/manual/home) | `PASS` for the lite JVM payload | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | selected for `protection-lite` only |
-| [yGuard](https://yworks.github.io/yGuard/) | `UNVERIFIED` in this checkout | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | not selected |
-| [R8](https://r8.googlesource.com/r8/) | `UNVERIFIED` for this Java distribution | `UNVERIFIED` | `UNVERIFIED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | not selected; no JVM release proof |
-| [DashO](https://support.preemptive.com/hc/en-us) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
-| [Zelix KlassMaster](https://www.zelix.com/klassmaster/docs/obfuscateOptions.html) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
+| Candidate | Shrink/rename/map | Control flow (Ring 1) | String/constant protection (Ring 3) | Virtualization (Ring 2) | Protected loading/packing (Ring 5) | Anti-VM/analysis (Ring 4) | Anti-debug/instrumentation (Ring 6) | Current decision |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ProGuard 7.10.0](https://www.guardsquare.com/manual/home) | `PASS` for the lite JVM payload | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | selected for `protection-lite` only |
+| [yGuard](https://yworks.github.io/yGuard/) | `UNVERIFIED` in this checkout | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | not selected |
+| [R8](https://r8.googlesource.com/r8/) | `UNVERIFIED` for this Java distribution | `UNVERIFIED` | `UNVERIFIED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | not selected; no JVM release proof |
+| [DashO](https://support.preemptive.com/hc/en-us) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
+| [Zelix KlassMaster](https://www.zelix.com/klassmaster/docs/obfuscateOptions.html) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
 
 ## Documentation-only candidate pre-screen
 
 The claim table above remains deliberately `UNVERIFIED` for commercial
 candidates. The following is a first-party documentation pre-screen, not
-Synesis artifact evidence and not permission to mark any vendor capability or
+Synesis artifact evidence and not permission to mark any Ring 1–6 capability or
 Seven Ring `PASS`.
 
 | Candidate | Documentation signals found | Limits that remain for SYN-009E |
@@ -65,10 +65,10 @@ before that evaluation.
 The commercial candidates remain candidates, not evidence. A future maximum
 release entry requires the exact licensed version, non-interactive Gradle/CI
 invocation, protected artifact inspection, public-contract compatibility,
-tamper behavior, private retrace, and performance/size measurements. Any
-optional virtualization, protected-loading, analysis-risk, or
-anti-instrumentation claim requires its own shipped-artifact evidence and is
-not silently counted as one of the Seven Rings.
+tamper behavior, private retrace, and performance/size measurements. Each
+Ring 1–6 claim requires its own shipped-artifact evidence. Ring 7 additionally
+requires signed integrity, release diversification, and private retrace; it is
+not satisfied by a vendor property alone.
 
 The repository now has a provider-agnostic maximum-protector adapter and
 signed-candidate seam documented in
@@ -78,7 +78,7 @@ change any `UNVERIFIED` commercial row to `PASS`.
 
 The open-source lite result does not satisfy the commercial transformation
 claims. It provides only a bounded shrink/strip/rename compatibility baseline
-and private mapping material. Rings III and IV remain blocked; Ring V is only a
-developer/lite native baseline; and Rings VI–VII remain foundation partials
-until the protected artifact is included in the existing signed manifest and
-its tamper/retrace/diversification gates pass.
+and private mapping material. Rings 1–6 remain blocked; Ring 7 is a partial
+pipeline seam until the protected artifact is included in the existing signed
+manifest and its tamper/retrace/diversification gates pass. Native hardening,
+metadata reduction, and stable-contract checks remain supporting gates.

@@ -7,8 +7,9 @@ current release-hardening task in the existing `SYN-009*` lineage.
 The last implementation commit is `da934163` at checkpoint `CP-0800`; the maximum
 customer/private output boundary also rejects symbolic links before manifesting
 or signing, and the private retrace-acceptance record is bound to its mapping
-hash. The Seven Ring report now follows the current brief, while the adapter's
-six vendor-capability fields remain a compatibility schema.
+hash. The current brief's six commercial transformation fields are Rings 1–6,
+while Ring 7 is owned by the signed release/provenance boundary; the adapter
+fields remain a compatibility schema for those six classes.
 
 - Exact next action: obtain an installed, licensed, version-pinned commercial
   protector and its reviewed adapter/configuration, inject release signing
@@ -18,8 +19,8 @@ six vendor-capability fields remain a compatibility schema.
 - Required continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Do not claim virtualization, packing, anti-VM, or anti-debug from open-source
-  renaming/shrinking. Those are optional vendor capabilities; commercial
-  execution remains required for the blocked/partial Seven Ring evidence.
+  renaming/shrinking. Rings 1–6 require commercial execution; Ring 7 remains
+  partial until the signed, diversified, retrace-validated artifact exists.
 - Preserve the existing installer/payload signing boundary and keep production
   keys, commercial licenses, release seeds, mappings, and native symbols out
   of Git and customer artifacts.
@@ -51,10 +52,9 @@ disposable install, exercises the installed stable-launcher and packaged
 - The documentation-only commercial pre-screen is in
   `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. DashO is the
   first Java 25/Gradle candidate to evaluate when licensed; Zelix remains a
-  Java 26 flow/string/constant candidate. Neither documentation set proves the
-  optional virtualization/protected-loading capabilities or any maximum Seven
-  Ring result, so do not change the commercial matrix until a shipped artifact
-  is exercised.
+  Java 26 flow/string/constant candidate. Neither documentation set proves
+  Rings 1–6 or any maximum Seven Ring result, so do not change the commercial
+  matrix until a shipped artifact is exercised.
 - The archive-only reverse-engineering scanner is
   `scripts/release-reverse-engineering-comparison.ps1`, with current
   developer/lite CLI evidence in

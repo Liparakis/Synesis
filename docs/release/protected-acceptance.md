@@ -279,22 +279,28 @@ called maximum:
    symbols where applicable, and a private audit of shipped third-party native
    dependencies, plus a release-specific seed and customer/private boundary
    that passes the Gradle adapter gate;
-2. Ring I–IV evidence must show shrinking/stripping, symbol protection,
-   runtime string/constant protection, and material control-flow hardening on
-   the shipped backend without relabeling compression, renaming, or wrappers;
-3. Ring V native hardening must cover Synesis-owned binaries, preserve
-   third-party native contracts, and retain private recovery symbols where
-   applicable;
-4. Ring VI must produce a canonical immutable manifest, release signature, and
-   safe tamper refusal while excluding legitimate mutable runtime state;
-5. Ring VII must prove release-specific diversification, private provenance,
-   and a controlled protected-stack-trace retrace using artifacts outside the
-   customer bundle;
-6. relay, overlay/Link, UI/control-plane, provider/native, tamper, leakage,
-   startup, memory, and archive-size acceptance must run against the exact
-   protected artifacts; and
-7. performance comparisons must include the recorded boundary timings plus
-   any required route/throughput/memory measurements, with large regressions
-   investigated before release.
+2. Ring 1 must show material control-flow transformation on selected
+   high-value methods, with ordinary decompiler comparison;
+3. Ring 2 must show genuine protector-defined virtualization on at least one
+   intentionally selected method, not a wrapper, dispatch table, or ordinary
+   class loader;
+4. Ring 3 must show runtime string/constant protection and materially reduced
+   architectural leakage in static extraction;
+5. Ring 4 must show bounded, multi-signal analysis-environment behavior while
+   allowing normal physical hosts, legitimate VMs, CI, and VDI to run;
+6. Ring 5 must show protected payload/loader behavior so selected crown-jewel
+   implementation is not simply recoverable as ordinary class entries;
+7. Ring 6 must show controlled debugger, agent, bytecode-instrumentation, and
+   protected-loader tamper behavior without destructive retaliation;
+8. Ring 7 must produce a canonical immutable manifest, verified release
+   signature, release-specific diversification, private provenance/mappings,
+   and controlled stack-trace retrace outside the customer bundle;
+9. supporting shrink/strip/sanitize, symbol/package, native-hardening,
+   stable-contract, third-party-native, tamper, leakage, UI/control-plane,
+   Link/overlay, relay, provider/native, startup, memory, and archive-size
+   acceptance must run against the exact protected artifacts; and
+10. performance comparisons must include the recorded boundary timings plus
+    route/throughput/memory measurements, with large regressions investigated
+    before release.
 
 No missing maximum gate is replaced by a passing lite smoke test.
